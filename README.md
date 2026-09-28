@@ -78,6 +78,8 @@ The desktop package prepares a matching Python runtime, private background centr
 
 First use opens **Get ready to work → 1. Connect BAT**. Paste BAT’s connection URL, check the **Host ID**, then **Verify and save host**. After success, choose **View sessions**. Repository binding and verification commands are optional collapsed steps; configure them when the work needs them.
 
+For managed work, keep `BATC_TASK_SETTINGS` private with mode 0600. Configure `[task_service.base_branches]` per project, `[verification.ssh_hosts]` per task host (required when using configured base branches), and `[verification.commands]` for trusted tests.
+
 **Joining an existing central is an explicit advanced option.** A failed connection never creates a replacement project database. Closing the Dashboard window does not stop central work.
 
 **PM analysis has separate runtime requirements.** The current bounded analysis paths run on a configured Linux central or eligible Linux BAT host, using the pinned PM Codex runtime and confinement described in the guide. A Windows or Mac client can use those remote capabilities; its local desktop installation does not provide native Windows/Mac PM execution. PM analysis support is distinct from a general coding CLI adapter.
