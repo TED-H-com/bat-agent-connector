@@ -39,6 +39,8 @@ def schema(journal):
         for verb in ("UPDATE", "DELETE"):
             journal.db.execute(f"CREATE TRIGGER IF NOT EXISTS pm_source_lineage_{verb.lower()}_immutable "
                 f"BEFORE {verb} ON pm_source_lineage BEGIN SELECT RAISE(ABORT, 'PM source lineage is immutable'); END")
+        journal.db.execute("CREATE INDEX IF NOT EXISTS pm_source_original_lookup ON pm_source_lineage "
+            "(original_operation_id,resource_type,resource_id)")
         from .pm_delivery_lineage import schema as delivery_schema
         delivery_schema(journal)
 
@@ -68,15 +70,22 @@ def roots(db, kind, identity, *, _seen=None):
         refs.append(("operation", identity))
     elif kind in {"delivery_preview", "integration_preview"} and identity.startswith("ipv_"):
         refs.append(("operation", "op_" + identity[4:]))
+        if _table(db, "integration_previews"):
+            row = db.execute("SELECT document FROM integration_previews WHERE preview_id=?", (identity,)).fetchone()
+            if row:
+                from .pm_delivery_lineage import references as delivery_references
+                refs.extend(delivery_references(json.loads(row[0])))
     elif kind in {"delivery_preview", "pr_merge_preview"} and _table(db, "pr_merge_previews"):
         row = db.execute("SELECT document FROM pr_merge_previews WHERE preview_id=?", (identity,)).fetchone()
         if row:
             from .pm_delivery_lineage import references as delivery_references
             refs.extend(delivery_references(json.loads(row[0])))
     elif kind == "deployment" and _table(db, "deployments"):
-        row = db.execute("SELECT operation_id FROM deployments WHERE deployment_id=?", (identity,)).fetchone()
+        row = db.execute("SELECT operation_id,recipe_snapshot,identity FROM deployments WHERE deployment_id=?", (identity,)).fetchone()
         if row:
             refs.append(("operation", row[0]))
+            from .pm_delivery_lineage import references as delivery_references
+            refs.extend(delivery_references({**json.loads(row[1]), **json.loads(row[2])}))
     if kind == "artifact" and _table(db, "artifact_revisions"):
         # The whole artifact retains all historical source roots, including an
         # upload appended to a previously captured artifact identity.
@@ -255,11 +264,13 @@ def bind_operation(db, operation_id, target, params, binding):
 
 
 def require_new_effect(ops, operation_id):
+    from .pm_delivery_lineage import require_admitted_sources
+    op = ops._row(operation_id)
+    require_admitted_sources(ops, op)
     originals = roots(ops.db, "operation", operation_id)
     if not originals:
         return
     from .api_auth import Principal
-    op = ops._row(operation_id)
     authority = op["external_refs"]["admission_binding"]["controller_authority"]
     principal = Principal(authority["actor"], frozenset(authority["scopes"]), admin=authority["admin"])
     if not visible_roots(ops.db, principal, originals):
@@ -283,6 +294,8 @@ def require_frame():
     if current is None:
         return
     ops, operation_id = current
+    from .pm_delivery_lineage import require_admitted_sources
+    require_admitted_sources(ops, ops._row(operation_id))
     if not roots(ops.db, "operation", operation_id):
         return
     require_new_effect(ops, operation_id)
