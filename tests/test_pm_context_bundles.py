@@ -244,7 +244,10 @@ async def test_withdrawn_workspace_repository_hides_bundle_run_reply_and_operati
     with pytest.raises(OperationError):
         pm_runs.read(ops, plans.OWNER, w['workspace_id'], run['run_id'])
     assert not bundles.operation_visible(ops.db, plans.OWNER, op)
-    assert message_id not in json.dumps(pm_discussions.get_thread(ops, plans.OWNER, **plans.target(w)))
+    with pytest.raises(OperationError, match='PM_SOURCE_UNAVAILABLE') as unavailable:
+        pm_discussions.get_thread(ops, plans.OWNER, **plans.target(w))
+    assert unavailable.value.status == 404
+    assert ops.db.execute('SELECT 1 FROM pm_messages WHERE message_id=?', (message_id,)).fetchone()
     assert op['operation_id'] not in json.dumps(ops.list(principal=plans.OWNER))
     # Removing access does not rewrite or erase the immutable original receipt.
     assert pm_runs.get(ops.db, run['run_id'])['context_digest'] == run['context_digest']
