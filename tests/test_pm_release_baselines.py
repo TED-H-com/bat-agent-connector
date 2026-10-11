@@ -16,7 +16,7 @@ from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import GitHubConfig, GitHubRepo
 from bat_agent_connector.github import GitHubAmbiguous
 from bat_agent_connector.operations import OpContext, OperationError
-from tests.test_pm_evidence import CONTRIBUTOR, OWNER, READER, act, bind_project, member, project, workspace
+from tests.test_pm_evidence import CONTRIBUTOR, OWNER, READER, bind_project, member, project, workspace
 from tests.test_pm_evidence import ops as evidence_ops
 from tests.test_pm_lifecycle import decide
 
@@ -94,7 +94,9 @@ async def execute(ops, body, *, who=OWNER, success=True):
 
 async def remove_repo(ops, pid):
     p = work_items._get_project(ops.db, pid)
-    await act(ops, "project.update", {"project_id": pid}, {"repositories": ["other/product"]}, {"expected_version": p["version"]})
+    await execute(ops, {"action": "project.update", "target": {"project_id": pid},
+                       "params": {"repositories": ["other/product"]},
+                       "preconditions": {"expected_version": p["version"]}, "idempotency_key": uuid.uuid4().hex})
 
 
 async def test_fixed_release_not_target_commitish_or_package_or_quality_or_maintain(ops):
@@ -238,8 +240,8 @@ async def test_selection_cas_and_lost_reply_original_receipt_never_reread_provid
     assert ops.get(op2["operation_id"])["error_code"] == "PM_BASELINE_VERSION_CONFLICT"
     saved = ops.get(op1["operation_id"])
     count = len(ops.context["github"].calls)
-    replay, existing = ops.create(Principal(OWNER.actor, frozenset({"manage"})), **first)
-    assert existing and replay["operation_id"] == op1["operation_id"]
+    replay, created = ops.create(Principal(OWNER.actor, frozenset({"manage"})), **first)
+    assert not created and replay["operation_id"] == op1["operation_id"]
     # The worker can recover the exact committed result even after stop and loss
     # of authority, while external read surfaces independently deny the source.
     await decide(ops, target["workspace_id"])
@@ -365,8 +367,11 @@ async def test_whole_utf8_record_paging_progresses_without_skipping_and_rejects_
         await execute(ops, body)
     wid = target["workspace_id"]
     all_rows = baselines.list_baselines(ops, OWNER, wid)["baselines"]
-    one_page = {"workspace_id": wid, "baselines": [all_rows[0]], "next_cursor": all_rows[0]["sequence"], "visibility_filtered": False}
-    monkeypatch.setattr(baselines, "MAX_READ_BYTES", baselines._size(one_page) + 100)
+    # Later revisions include predecessor references; allow every whole single
+    # record while forcing a two-record page to cross the wire limit.
+    one_pages = [{"workspace_id": wid, "baselines": [row], "next_cursor": row["sequence"], "visibility_filtered": False}
+                 for row in all_rows]
+    monkeypatch.setattr(baselines, "MAX_READ_BYTES", max(map(baselines._size, one_pages)) + 100)
     page1 = baselines.list_baselines(ops, OWNER, wid)
     assert len(page1["baselines"]) == 1 and page1["next_cursor"] == all_rows[0]["sequence"]
     page2 = baselines.list_baselines(ops, OWNER, wid, after=page1["next_cursor"])
