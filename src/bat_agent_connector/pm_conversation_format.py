@@ -24,7 +24,8 @@ def requirements(values, keys):
     ids = set()
     for item in values:
         fmt._object(item, ("id", "source_key", "acceptance_keys", "priority", "depends_on"), "requirement")
-        _key(item["id"])
+        if not isinstance(item["id"], str) or not pm_plans.ITEM_ID.fullmatch(item["id"]):
+            fmt._bad("Requirement IDs must be stable lowercase keys of at most 80 characters")
         if item["id"] in ids:
             fmt._bad("Requirement IDs must be distinct")
         ids.add(item["id"])

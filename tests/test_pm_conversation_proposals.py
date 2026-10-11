@@ -164,6 +164,95 @@ async def test_conflicting_discussion_and_revoked_owner_stop_new_children(propos
         ops.create(OWNER, **request)
 
 
+@pytest.mark.parametrize("stop", ["credential", "cancel", "discussion"])
+async def test_queued_local_child_rechecks_whole_original_owner_decision(proposal_world, stop):
+    w, ops = proposal_world, proposal_world["d"].ops
+    proposal = await proposed(w)
+    parent = ops.create(OWNER, **adoption_request(w, proposal))[0]
+    await ops._execute(parent["operation_id"])
+    child = ops.db.execute("SELECT operation_id FROM pm_conversation_children WHERE parent_id=?", (parent["operation_id"],)).fetchone()[0]
+    before = ops.db.execute("SELECT COUNT(*) FROM pm_inputs").fetchone()[0]
+    if stop == "credential":
+        api_auth.revoke(ops.db, OWNER.actor)
+    elif stop == "cancel":
+        ops.cancel(OWNER, parent["operation_id"])
+    else:
+        note = ops.create(OWNER, action="pm.message.append", target=plans.target(w), params={"content": "A new direction"},
+            preconditions={"expected_version": plans.version(w)}, idempotency_key=uuid.uuid4().hex)[0]
+        await ops._execute(note["operation_id"])
+    await ops._execute(child)
+    assert ops.get(child)["status"] == "failed", ops.get(child)
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_inputs").fetchone()[0] == before
+    assert not pm_plans.head(ops.db, w["workspace_id"])["accepted_revision_id"]
+
+
+async def test_lost_git_ack_and_lost_parent_receipt_recover_original_adoption(proposal_world):
+    w, ops = proposal_world, proposal_world["d"].ops
+    proposal = await proposed(w)
+    parent = ops.create(OWNER, **adoption_request(w, proposal))[0]
+    w["runner"].after["pm-revision"] = plans.lose
+    child = None
+    for _ in range(12):
+        await ops._execute(parent["operation_id"])
+        rows = ops.db.execute("SELECT operation_id FROM pm_conversation_children WHERE parent_id=? ORDER BY ordinal", (parent["operation_id"],)).fetchall()
+        child = ops.get(rows[-1][0])
+        await ops._execute(child["operation_id"])
+        child = ops.get(child["operation_id"])
+        if child["action"] == "pm.plan.adopt":
+            break
+    assert child["status"] == "uncertain", child
+    commit = git(w["plan"]["worktree_path"], "rev-parse", "HEAD")
+    original_children = [row[0] for row in rows]
+    assert pm_runs.get_by_operation(ops.db, child["operation_id"])["state"] not in pm_runs.TERMINAL
+    # Recover the one original child without allowing the parent worker to run.
+    await ops._execute(child["operation_id"])
+    assert ops.get(child["operation_id"])["status"] == "succeeded", ops.get(child["operation_id"])
+    assert ops.get(parent["operation_id"])["result"] is None
+    api_auth.revoke(ops.db, OWNER.actor)
+    await ops._execute(parent["operation_id"])
+    done = ops.get(parent["operation_id"])
+    assert done["status"] == "succeeded" and done["result"]["commit_sha"] == commit, done
+    assert done["result"]["child_operation_ids"] == original_children
+    assert w["runner"].phases.count("pm-revision") == 1
+    assert git(w["plan"]["worktree_path"], "rev-list", "--count", w["sha"] + "..HEAD") == "1"
+
+
+async def test_http_rpc_mcp_share_exact_read_contract_and_bounded_queries(proposal_world, monkeypatch):
+    from bat_agent_connector import mcp_server
+    from tests.test_api_v1 import http, token
+    from tests.test_pm_run_api import unpack
+    w, d = proposal_world, proposal_world["d"]
+    proposal = await proposed(w)
+    auth = token(d, OWNER.actor, "observe")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{w['port']}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(d.fleet.config, read_only=True, principal_only=True)
+    root = f"/api/v1/pm/workspaces/{w['workspace_id']}/conversation-proposals"
+    try:
+        tools = {tool.name: tool for tool in await server.list_tools()}
+        for method, values, suffix in [
+            ("pm_conversation_proposals_list", {"thread_id": proposal["thread_id"], "limit": 1}, "?thread_id=" + proposal["thread_id"] + "&limit=1"),
+            ("pm_conversation_proposal_get", {"proposal_id": proposal["proposal_id"]}, "/" + proposal["proposal_id"]),
+        ]:
+            assert tools[method].annotations.read_only_hint
+            status, expected = await http(w["port"], "GET", root + suffix, tok=auth)
+            assert status == 200, expected
+            params = {"workspace_id": w["workspace_id"], **values}
+            assert await d.call_api(method, params, OWNER) == expected
+            assert unpack(await server.call_tool(method, params)) == expected
+        for suffix in ["?actor=", "?after=0&after=1", "?after=9223372036854775808", "?after=-1", "?limit=101",
+                "?thread_id=", "/" + proposal["proposal_id"] + "?limit=1"]:
+            assert (await http(w["port"], "GET", root + suffix, tok=auth))[0] in {404, 422}, suffix
+        assert (await http(w["port"], "GET", root + "?after=9223372036854775807", tok=auth))[0] == 200
+        for value in (True, "0", None):
+            with pytest.raises(OperationError):
+                await d.call_api("pm_conversation_proposals_list", {"workspace_id": w["workspace_id"], "after": value}, OWNER)
+        global_caps = (await http(w["port"], "GET", "/api/v1/capabilities", tok=auth))[1]
+        assert global_caps["features"]["pm_workspaces"]["conversation_proposals"]["adoption_scopes"] == ["observe", "manage", "start"]
+    finally:
+        await fleet.close()
+
+
 def test_removed_commitments_require_explicit_original_ids_and_cycles_are_rejected():
     doc = envelope("message.original")
     raw = json.dumps(doc)
