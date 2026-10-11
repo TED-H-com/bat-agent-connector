@@ -129,10 +129,43 @@ try {
   assert.equal(newRevision.plan.document.sections.scope.statements[0].input_id, confirmed.input_id);
   const unchanged = await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans/${plans.revisions[0].revision_id}`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.deepEqual(unchanged.plan.document, revision.plan.document);
+  const submit = async (action, target, params) => {
+    const response = await fetch(`${origin}/api/v1/operations?wait=3`, {method:'POST',
+      headers:{Authorization:'Bearer '+fixture.token, 'Content-Type':'application/json', 'Idempotency-Key':crypto.randomUUID()},
+      body:JSON.stringify({action,target,params,preconditions:{}})});
+    assert.ok([200,202].includes(response.status)); let {operation} = await response.json();
+    for (let attempt=0; attempt<100 && ['queued','running','pending'].includes(operation.status); attempt++) {
+      await new Promise(resolve=>setTimeout(resolve,100));
+      ({operation}=await (await fetch(`${origin}/api/v1/operations/${operation.operation_id}`, {headers:{Authorization:'Bearer '+fixture.token}})).json());
+    }
+    assert.equal(operation.status,'succeeded',JSON.stringify(operation)); return operation.result;
+  };
+  const project = await submit('project.create', {}, {name:'Reader experience'});
+  const work = await submit('work_item.create', {project_id:project.project_id}, {title:'First useful action'});
+  await page.reload();
+  await page.getByLabel('Connector project',{exact:true}).selectOption(project.project_id);
+  const projectForm=page.locator('[data-pm-action="pm.project.bind"]');
+  await projectForm.getByLabel('Why associate this work?',{exact:true}).fill('Track this existing project in the PM workspace');
+  await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
+  await page.locator('[data-pm-work] > summary').click();
+  await page.getByText('Track this work',{exact:true}).first().click();
+  const workForm=page.locator('[data-pm-action="pm.work.bind"]');
+  await workForm.getByLabel('Why associate this work?',{exact:true}).fill('Preserve the actual work identity');
+  await workForm.getByRole('button',{name:'Track this work',exact:true}).click();
+  await expect(page.locator('[data-pm-work] > summary')).toContainText('Tracked here');
+  await page.locator('[data-pm-work] > summary').click();
+  await page.locator('[data-pm-action="pm.evidence.capture"] button[type="submit"]').click();
+  await expect(page.locator('[data-pm-evidence]')).toContainText('Definition of Done has not been assessed.');
+  await page.locator('[data-pm-fact] > summary').click();
+  await expect(page.locator('[data-pm-fact]')).toContainText('To do');
+  const captured=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/work/${work.work_item_id}/capture`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
+  assert.equal(captured.capture.work_item_id,work.work_item_id); assert.equal(captured.capture.dod,'unassessed');
+  assert.equal(captured.capture.evidence.length,1); assert.equal(captured.capture.evidence[0].source_kind,'work_claim');
+  assert.equal(captured.capture.execution_authorized,false);
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
-  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft'].sort());
+  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association and fixed evidence; zero hosts or tasks.');
 } finally {
   try {await browser?.close();}
   finally {

@@ -66,7 +66,7 @@ async def serve(commands):
                 assert not daemon._config.hosts
                 assert daemon.journal.db.execute("SELECT count(*) FROM tasks").fetchone()[0] == 0
                 actions = [row[0] for row in daemon.journal.db.execute("SELECT action FROM operations")]
-                assert actions and all(action.startswith("pm.") for action in actions)
+                assert actions and all(action.startswith("pm.") or action in {"project.create", "work_item.create"} for action in actions)
                 print(json.dumps({"actions": actions, "tasks": 0, "hosts": 0}), flush=True)
         finally:
             if worker is not None:

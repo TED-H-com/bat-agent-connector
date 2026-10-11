@@ -63,6 +63,7 @@ READ_TOOLS = [
     "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_profiles_get",
     "pm_runs_list", "pm_run_get", "pm_capabilities_get",
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
+    "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
     "project_get",
     "work_items_list",
     "work_item_get", "artifacts_list", "artifact_get", "artifact_capture_preview", "artifact_managed_capture_preview", "approval_preview", "cleanup_preview", "cleanup_retained", "cleanup_tombstones",
@@ -556,6 +557,32 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read current plan version, latest document ID and accepted document ID without loading full content."""
         return await pm_daemon("pm_plan_head_get", workspace_id=workspace_id)
 
+    async def pm_projects_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Explicitly associated Connector projects; repository names never infer a PM association."""
+        return await pm_daemon("pm_projects_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_work_list(workspace_id: str, project_id: str | None = None,
+                           after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Fixed work associations and their selected plan/requirement versions; this grants no execution."""
+        return await pm_daemon("pm_work_list", workspace_id=workspace_id, project_id=project_id, after=after, limit=limit)
+
+    async def pm_evidence_list(workspace_id: str, work_item_id: str | None = None,
+                               after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Immutable central evidence summaries. Claims, verification, merge and deploy remain separate facts."""
+        return await pm_daemon("pm_evidence_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+
+    async def pm_evidence_get(workspace_id: str, evidence_id: str) -> dict[str, Any]:
+        """Read one original fact with its digest and capture time, subject to current source visibility."""
+        return await pm_daemon("pm_evidence_get", workspace_id=workspace_id, evidence_id=evidence_id)
+
+    async def pm_capture_get(workspace_id: str, capture_id: str) -> dict[str, Any]:
+        """Read a fixed evidence snapshot and coverage gaps; collection is not Definition of Done acceptance."""
+        return await pm_daemon("pm_capture_get", workspace_id=workspace_id, capture_id=capture_id)
+
+    async def pm_capture_latest_get(workspace_id: str, work_item_id: str) -> dict[str, Any]:
+        """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
+        return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
+
     async def projects_list(include_archived: bool = False) -> dict[str, Any]:
         """The project tree in display order (pinned first, then the saved order), with work item counts per
         state. Projects and work items are the connector's own records; change them with operation_submit
@@ -650,6 +677,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_profiles_get,
                pm_runs_list, pm_run_get, pm_capabilities_get,
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
+               pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 

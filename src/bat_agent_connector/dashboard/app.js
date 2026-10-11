@@ -141,6 +141,303 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-evidence.js
+var flatten = (rows) => (rows || []).flatMap((row) => [row, ...flatten(row.children)]);
+function workspaceEvidence({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = "", active = null;
+	const rows = h("div", { class: "pm-evidence-rows" }), status = h("div", { role: "status" });
+	const choose = h("select", {
+		"aria-label": t("pm_evidence_project"),
+		onchange: () => {
+			selected = choose.value;
+			loadProject();
+		}
+	});
+	const box = h("section", {
+		class: "panel pm-evidence",
+		"data-pm-evidence": ""
+	}, h("h2", {}, t("pm_evidence_title")), h("p", { class: "muted" }, t("pm_evidence_intro")), labelled("pm_evidence_project", choose), status, rows);
+	const stateText = (value) => {
+		const key = "pm_evidence_state_" + value, translated = t(key);
+		return translated === key ? String(value) : translated;
+	};
+	const sourceTime = (value) => typeof value === "number" ? new Date(value * 1e3).toLocaleString() : t("pm_evidence_time_unknown");
+	const verify = (data) => {
+		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return data;
+	};
+	const can = (decide) => loaded && permitted(decide);
+	function bindingForm(action, target, preconditions, label, extraParams = {}, alreadyBound = false) {
+		const rationale = input("pm_evidence_rationale", { max: 4e3 });
+		let result;
+		result = form({
+			action,
+			target: {
+				workspace_id: workspaceId,
+				...target
+			},
+			fields: { rationale },
+			params: (values) => ({
+				rationale: values.rationale,
+				...extraParams
+			}),
+			preconditions,
+			permitted: () => can(true) && !alreadyBound,
+			recoverPermitted: () => can(true),
+			label,
+			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (result) result.box.hidden = alreadyBound && !result.locked();
+			},
+			extra: labelled("pm_evidence_rationale", rationale)
+		});
+		result.update();
+		return result;
+	}
+	async function loadEvidence(item, holder) {
+		const workId = item.work_item_id;
+		const last = await api("GET", `${endpoint}/work/${workId}/capture`);
+		alive();
+		verify(last);
+		if (!holder.isConnected) return;
+		holder.replaceChildren();
+		if (!last.capture) {
+			holder.append(h("p", { class: "muted" }, t("pm_evidence_empty")));
+			return;
+		}
+		if (last.capture.work_item_id !== workId) throw Error(t("pm_scope_mismatch"));
+		const capture = last.capture, coverage = capture.coverage;
+		holder.append(h("p", {}, t("pm_evidence_saved_at", { time: sourceTime(capture.captured_at) })), h("p", { class: "muted" }, t("pm_evidence_coverage", {
+			count: coverage.links_examined,
+			missing: coverage.unavailable_sources + coverage.unsupported_sources
+		})), h("p", { class: "muted" }, t("pm_evidence_quality_unknown")));
+		if (coverage.truncated || coverage.inaccessible_sources) holder.append(h("p", { class: "muted" }, t("pm_partial")));
+		const facts = h("div");
+		holder.append(facts);
+		function render(page) {
+			for (const evidence of page.evidence || []) {
+				const body = h("div"), row = h("details", { "data-pm-fact": evidence.evidence_id }, h("summary", {}, t("pm_evidence_kind_" + evidence.source_kind), " · ", sourceTime(evidence.source_observed_at)), body);
+				let fetched = false, busy = false;
+				row.addEventListener("toggle", async () => {
+					if (!row.open || fetched || busy) return;
+					busy = true;
+					try {
+						const detail = await api("GET", `${endpoint}/evidence/${evidence.evidence_id}`);
+						alive();
+						if (!row.isConnected) return;
+						if (detail.evidence.workspace_id !== workspaceId || detail.evidence.evidence_id !== evidence.evidence_id) throw Error(t("pm_scope_mismatch"));
+						const fact = detail.evidence.document.facts;
+						const brief = [
+							"state",
+							"status",
+							"head_sha",
+							"merged_sha",
+							"version",
+							"deployment",
+							"verification"
+						].filter((key) => fact[key] !== null && fact[key] !== void 0);
+						body.replaceChildren(h("dl", { class: "pm-evidence-fields" }, ...brief.flatMap((key) => [h("dt", {}, t("pm_evidence_field_" + key)), h("dd", {}, ["state", "status"].includes(key) ? stateText(fact[key]) : String(fact[key]))])), h("details", { class: "pm-evidence-original" }, h("summary", {}, t("pm_evidence_original")), h("dl", { class: "pm-evidence-fields" }, ...Object.entries(fact).flatMap(([key, value]) => [h("dt", {}, key), h("dd", {}, value === null ? t("pm_evidence_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value))]))), h("small", { class: "muted" }, t("pm_evidence_saved_at", { time: sourceTime(detail.evidence.captured_at) })));
+						fetched = true;
+					} catch (error) {
+						if (row.isConnected) body.replaceChildren(errorBox(error));
+					} finally {
+						busy = false;
+					}
+				});
+				facts.append(row);
+			}
+		}
+		render({ evidence: capture.evidence || [] });
+	}
+	function workRow(item) {
+		const binding = workBindings.find((row) => row.work_item_id === item.work_item_id);
+		const detail = h("div"), row = h("details", { "data-pm-work": item.work_item_id }, h("summary", {}, item.title, h("small", { class: "muted" }, " · " + t(binding ? "pm_evidence_associated" : "pm_evidence_unassociated"))), detail);
+		let opened = false;
+		row.addEventListener("toggle", async () => {
+			if (!row.open || opened) return;
+			opened = true;
+			detail.append(h("a", { href: `#/work/${item.work_item_id}` }, t("pm_evidence_open_work")));
+			if (can(true)) {
+				const editor = h("details", {}, h("summary", {}, t(binding ? "pm_evidence_reassociate" : "pm_evidence_associate_work")));
+				detail.append(editor);
+				try {
+					const accepted = await api("GET", `${endpoint}/plans/accepted`);
+					alive();
+					if (!row.isConnected) return;
+					if (accepted.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+					const plan = accepted.plan, rationale = input("pm_evidence_rationale", { max: 4e3 });
+					const planId = h("select", { "aria-label": t("pm_evidence_plan_choice") }, h("option", { value: "" }, t("pm_evidence_no_plan_choice")));
+					if (plan) planId.append(h("option", { value: plan.revision_id }, plan.document.title));
+					if (binding?.plan_revision_id && binding.plan_revision_id !== plan?.revision_id) planId.append(h("option", { value: binding.plan_revision_id }, t("pm_evidence_keep_plan")));
+					planId.value = binding?.plan_revision_id || "";
+					const selectedIds = h("input", {
+						type: "hidden",
+						value: JSON.stringify(binding?.requirement_ids || [])
+					});
+					const choices = h("div", { class: "pm-evidence-requirements" });
+					let bind;
+					const showRequirements = () => {
+						const ids = JSON.parse(selectedIds.value || "[]");
+						choices.replaceChildren();
+						if (planId.value === plan?.revision_id) for (const requirement of plan.document.requirements || []) {
+							const checkbox = h("input", {
+								type: "checkbox",
+								checked: ids.includes(requirement.id),
+								disabled: bind?.locked() || !can(true)
+							});
+							checkbox.addEventListener("change", () => {
+								if (bind.locked()) return;
+								const current = new Set(JSON.parse(selectedIds.value || "[]"));
+								if (checkbox.checked) current.add(requirement.id);
+								else current.delete(requirement.id);
+								selectedIds.value = JSON.stringify([...current]);
+								bind.changed();
+							});
+							choices.append(h("label", {}, checkbox, requirement.text));
+						}
+					};
+					bind = form({
+						action: "pm.work.bind",
+						target: {
+							workspace_id: workspaceId,
+							work_item_id: item.work_item_id
+						},
+						fields: {
+							rationale,
+							plan_revision_id: planId,
+							requirement_ids: selectedIds
+						},
+						params: (values) => ({
+							rationale: values.rationale,
+							plan_revision_id: values.plan_revision_id || null,
+							requirement_ids: values.plan_revision_id ? JSON.parse(values.requirement_ids || "[]") : []
+						}),
+						preconditions: () => ({
+							expected_work_version: item.version,
+							expected_binding_id: binding?.binding_id || null
+						}),
+						permitted: () => can(true),
+						label: "pm_evidence_associate_work",
+						onSaved: () => refresh(),
+						onStateChange: showRequirements,
+						extra: h("div", {}, labelled("pm_evidence_rationale", rationale), labelled("pm_evidence_plan_choice", planId), selectedIds, choices)
+					});
+					planId.addEventListener("change", () => {
+						if (bind.locked()) return;
+						selectedIds.value = "[]";
+						bind.changed();
+						showRequirements();
+					});
+					editor.append(bind.box);
+					showRequirements();
+				} catch (error) {
+					if (row.isConnected) editor.append(errorBox(error));
+				}
+			}
+			if (!binding) return;
+			detail.append(h("p", { class: "muted" }, t(binding.plan_revision_id ? "pm_evidence_fixed_plan" : "pm_evidence_no_plan")));
+			if (binding.plan_revision_id) detail.append(h("code", {}, binding.plan_revision_id), h("p", {}, (binding.requirement_ids || []).join(", ")));
+			const holder = h("div");
+			const capture = form({
+				action: "pm.evidence.capture",
+				target: {
+					workspace_id: workspaceId,
+					work_item_id: item.work_item_id
+				},
+				fields: {},
+				params: () => ({}),
+				preconditions: () => ({ expected_binding_id: binding.binding_id }),
+				permitted: () => can(false),
+				label: "pm_evidence_capture",
+				onSaved: () => loadEvidence(item, holder)
+			});
+			detail.append(capture.box, holder);
+			try {
+				await loadEvidence(item, holder);
+			} catch (error) {
+				if (holder.isConnected) holder.replaceChildren(errorBox(error));
+			}
+		});
+		return row;
+	}
+	async function loadProject() {
+		const ticket = ++generation;
+		loaded = false;
+		status.replaceChildren();
+		if (!selected) {
+			rows.replaceChildren();
+			active = null;
+			return;
+		}
+		try {
+			const data = await api("GET", `/projects/${encodeURIComponent(selected)}`);
+			alive();
+			if (ticket !== generation) return;
+			if (data.project?.project_id !== selected) throw Error(t("pm_scope_mismatch"));
+			const signature = JSON.stringify([
+				data,
+				bindings,
+				workBindings
+			]);
+			loaded = true;
+			if (active?.signature === signature) return;
+			active = { signature };
+			rows.replaceChildren();
+			const bound = bindings.some((row) => row.project_id === selected);
+			if (can(true)) rows.append(bindingForm("pm.project.bind", { project_id: selected }, () => ({
+				expected_workspace_version: workspace().version,
+				expected_project_version: data.project.version
+			}), "pm_evidence_associate_project", {}, bound).box);
+			if (!bound) rows.append(h("p", { class: "muted" }, t("pm_evidence_bind_help")));
+			else {
+				rows.append(...flatten(data.work_items).map(workRow));
+				if (!data.work_items?.length) rows.append(h("p", { class: "muted" }, t("pm_evidence_no_work")));
+			}
+		} catch (error) {
+			if (ticket === generation) status.replaceChildren(errorBox(error));
+		}
+	}
+	async function allBindings(suffix) {
+		let cursor = 0, records = [];
+		for (let page = 0; page < 20; page++) {
+			const data = verify(await api("GET", `${endpoint}/${suffix}?after=${cursor}&limit=100`));
+			alive();
+			records.push(...data.bindings);
+			if (data.next_cursor === null) return records;
+			if (data.next_cursor <= cursor) throw Error(t("pm_stale"));
+			cursor = data.next_cursor;
+		}
+		throw Error(t("pm_partial"));
+	}
+	async function refresh() {
+		const ticket = ++generation;
+		loaded = false;
+		try {
+			const [catalog, associated, work] = await Promise.all([
+				api("GET", "/projects"),
+				allBindings("projects"),
+				allBindings("work")
+			]);
+			alive();
+			if (ticket !== generation) return;
+			projects = flatten(catalog.projects);
+			bindings = associated;
+			workBindings = work;
+			choose.replaceChildren(h("option", { value: "" }, t("pm_evidence_choose")), ...projects.map((project) => h("option", { value: project.project_id }, project.name)));
+			choose.value = projects.some((project) => project.project_id === selected) ? selected : "";
+			selected = choose.value;
+			await loadProject();
+		} catch (error) {
+			if (ticket === generation) status.replaceChildren(errorBox(error));
+		}
+	}
+	return {
+		box,
+		refresh
+	};
+}
+//#endregion
 //#region src/pm-plans.js
 function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
 	let head = null, capability = null, signature = "", busy = false;
@@ -703,6 +1000,20 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
 	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null;
+	const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence ? workspaceEvidence({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox
+	}) : null;
+	if (evidence) body.append(evidence.box);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
 	const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide && (threadData.thread.mode === "idea" || Boolean(planningRevisionForm));
@@ -1261,6 +1572,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
 			worktreeChoice?.update();
+			if (evidence) await evidence.refresh();
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -1282,7 +1594,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_workspace",
 			"pm_thread",
 			"pm_run",
-			"pm_plan"
+			"pm_plan",
+			"pm_evidence"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -5147,6 +5460,73 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_evidence_state_accepted: "Accepted for execution",
+		pm_evidence_state_queued: "Queued",
+		pm_evidence_state_dispatching: "Dispatching",
+		pm_evidence_state_waiting_checks: "Waiting for checks",
+		pm_evidence_state_waiting_external: "Waiting for external result",
+		pm_evidence_state_waiting_permission: "Waiting for permission",
+		pm_evidence_state_needs_attention: "Needs attention",
+		pm_evidence_state_uncertain: "Result uncertain",
+		pm_evidence_state_quota_limited: "Quota limited",
+		pm_evidence_state_human_owned: "Human controlled",
+		pm_evidence_state_needs_ted: "Needs owner decision",
+		pm_evidence_state_verifying: "Verifying",
+		pm_evidence_original: "Inspect original evidence",
+		pm_evidence_field_state: "Recorded state",
+		pm_evidence_field_status: "Recorded status",
+		pm_evidence_field_head_sha: "Verified PR commit",
+		pm_evidence_field_merged_sha: "Merge commit",
+		pm_evidence_field_version: "Source version",
+		pm_evidence_field_deployment: "Deployment assessment",
+		pm_evidence_field_verification: "Test assessment",
+		pm_evidence_state_done: "Reported done",
+		pm_evidence_state_succeeded: "Operation succeeded",
+		pm_evidence_state_failed: "Failed",
+		pm_evidence_state_merged: "Merged",
+		pm_evidence_state_running: "Running",
+		pm_evidence_state_todo: "To do",
+		pm_evidence_state_doing: "In progress",
+		pm_evidence_state_waiting: "Waiting",
+		pm_evidence_state_cancelled: "Cancelled",
+		pm_evidence_reassociate: "Update plan association",
+		pm_evidence_plan_choice: "Plan version for this work",
+		pm_evidence_no_plan_choice: "Track without a plan association",
+		pm_evidence_keep_plan: "Keep the existing fixed plan",
+		pm_evidence_title: "Work and delivery evidence",
+		pm_evidence_intro: "Associate existing work, then inspect saved results and gaps alongside the discussion.",
+		pm_evidence_project: "Connector project",
+		pm_evidence_choose: "Choose a project",
+		pm_evidence_rationale: "Why associate this work?",
+		pm_evidence_bind_help: "Associate this exact project with the PM workspace. Existing work and sessions keep their original owners.",
+		pm_evidence_associate_project: "Associate project",
+		pm_evidence_associate_work: "Track this work",
+		pm_evidence_capture: "Collect saved evidence",
+		pm_evidence_associated: "Tracked here",
+		pm_evidence_unassociated: "Not associated",
+		pm_evidence_no_work: "This project has no active work items.",
+		pm_evidence_open_work: "Open work and operations",
+		pm_evidence_no_plan: "No plan revision is associated with this work yet.",
+		pm_evidence_fixed_plan: "This work references a fixed adopted plan revision.",
+		pm_evidence_empty: "No evidence snapshot collected yet.",
+		pm_evidence_saved_at: "Captured {time}",
+		pm_evidence_coverage: "Examined {count} saved links · {missing} unavailable or unsupported sources. No live provider check.",
+		pm_evidence_quality_unknown: "Definition of Done has not been assessed. A completion claim, test, merge and deployment are separate facts.",
+		pm_evidence_more: "More saved facts",
+		pm_evidence_time_unknown: "Source time unknown",
+		pm_evidence_unknown: "Unknown",
+		pm_evidence_kind_operation_status: "Operation result",
+		pm_evidence_kind_work_claim: "Work completion claim",
+		pm_evidence_kind_work_link: "Saved association",
+		pm_evidence_kind_execution_state: "Execution state",
+		pm_evidence_kind_execution_command: "Execution command",
+		pm_evidence_kind_observed_verification: "Observed test verification",
+		pm_evidence_kind_pr_merge: "Verified PR merge",
+		pm_evidence_kind_resource_relation: "Resource association",
+		pm_evidence_kind_session_observation: "Session observation",
+		pm_evidence_kind_integration_delivery: "Integration result",
+		pm_evidence_kind_pr_observation: "PR observation",
+		pm_evidence_kind_deployment: "Deployment evidence",
 		pm_planning_revision_title: "Update selected planning inputs",
 		pm_planning_revision_rationale: "Why update this direction?",
 		pm_planning_revision_save: "Save updated Planning draft",
@@ -5291,6 +5671,73 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_evidence_state_accepted: "已受理執行",
+		pm_evidence_state_queued: "排隊中",
+		pm_evidence_state_dispatching: "派送中",
+		pm_evidence_state_waiting_checks: "等待檢查",
+		pm_evidence_state_waiting_external: "等待外部結果",
+		pm_evidence_state_waiting_permission: "等待權限",
+		pm_evidence_state_needs_attention: "需要處理",
+		pm_evidence_state_uncertain: "結果尚未確定",
+		pm_evidence_state_quota_limited: "額度受限",
+		pm_evidence_state_human_owned: "由人控制",
+		pm_evidence_state_needs_ted: "需要負責人決定",
+		pm_evidence_state_verifying: "驗證中",
+		pm_evidence_original: "查閱原始證據",
+		pm_evidence_field_state: "紀錄狀態",
+		pm_evidence_field_status: "紀錄結果",
+		pm_evidence_field_head_sha: "已驗證的 PR commit",
+		pm_evidence_field_merged_sha: "合併 commit",
+		pm_evidence_field_version: "來源版本",
+		pm_evidence_field_deployment: "部署判定",
+		pm_evidence_field_verification: "測試判定",
+		pm_evidence_state_done: "回報完成",
+		pm_evidence_state_succeeded: "操作成功",
+		pm_evidence_state_failed: "失敗",
+		pm_evidence_state_merged: "已合併",
+		pm_evidence_state_running: "執行中",
+		pm_evidence_state_todo: "待辦",
+		pm_evidence_state_doing: "進行中",
+		pm_evidence_state_waiting: "等待中",
+		pm_evidence_state_cancelled: "已取消",
+		pm_evidence_reassociate: "更新計畫關聯",
+		pm_evidence_plan_choice: "這項工作的計畫版本",
+		pm_evidence_no_plan_choice: "先追蹤工作，不連結計畫",
+		pm_evidence_keep_plan: "保留原本的固定計畫",
+		pm_evidence_title: "工作與交付證據",
+		pm_evidence_intro: "連結既有工作，在討論旁查看已保存的成果與資訊缺口。",
+		pm_evidence_project: "Connector 專案",
+		pm_evidence_choose: "選擇專案",
+		pm_evidence_rationale: "連結此工作的理由",
+		pm_evidence_bind_help: "將這個指定專案連結到 PM 工作空間；原有工作與 session 保留原控制者。",
+		pm_evidence_associate_project: "連結專案",
+		pm_evidence_associate_work: "追蹤這項工作",
+		pm_evidence_capture: "整理已保存的證據",
+		pm_evidence_associated: "已納入追蹤",
+		pm_evidence_unassociated: "尚未連結",
+		pm_evidence_no_work: "此專案目前沒有工作項目。",
+		pm_evidence_open_work: "開啟工作與操作紀錄",
+		pm_evidence_no_plan: "這項工作尚未連結計畫版本。",
+		pm_evidence_fixed_plan: "這項工作引用固定的已採用計畫版本。",
+		pm_evidence_empty: "尚未整理證據快照。",
+		pm_evidence_saved_at: "整理時間：{time}",
+		pm_evidence_coverage: "已查閱 {count} 個既有關聯 · {missing} 個來源無法取得或尚不支援；未查詢即時外部服務。",
+		pm_evidence_quality_unknown: "尚未評估完成定義。完成回報、測試、合併與部署各有獨立證據。",
+		pm_evidence_more: "更多已保存事實",
+		pm_evidence_time_unknown: "來源時間未知",
+		pm_evidence_unknown: "未知",
+		pm_evidence_kind_operation_status: "操作結果",
+		pm_evidence_kind_work_claim: "工作完成回報",
+		pm_evidence_kind_work_link: "已保存關聯",
+		pm_evidence_kind_execution_state: "執行狀態",
+		pm_evidence_kind_execution_command: "執行指令",
+		pm_evidence_kind_observed_verification: "已觀察的測試驗證",
+		pm_evidence_kind_pr_merge: "已查驗 PR 合併",
+		pm_evidence_kind_resource_relation: "資源關聯",
+		pm_evidence_kind_session_observation: "Session 觀察",
+		pm_evidence_kind_integration_delivery: "整合結果",
+		pm_evidence_kind_pr_observation: "PR 觀察",
+		pm_evidence_kind_deployment: "部署證據",
 		pm_planning_revision_title: "更新選定的規劃資料",
 		pm_planning_revision_rationale: "調整規劃方向的理由",
 		pm_planning_revision_save: "儲存更新後的規劃草稿",

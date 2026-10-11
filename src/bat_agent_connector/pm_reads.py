@@ -18,6 +18,12 @@ FIELDS = {
     "pm_plan_get": ("workspace_id", "revision_id"),
     "pm_plan_accepted_get": ("workspace_id",),
     "pm_plan_head_get": ("workspace_id",),
+    "pm_projects_list": ("workspace_id", "after", "limit"),
+    "pm_work_list": ("workspace_id", "project_id", "after", "limit"),
+    "pm_evidence_list": ("workspace_id", "work_item_id", "after", "limit"),
+    "pm_evidence_get": ("workspace_id", "evidence_id"),
+    "pm_capture_get": ("workspace_id", "capture_id"),
+    "pm_capture_latest_get": ("workspace_id", "work_item_id"),
 }
 
 
@@ -27,6 +33,21 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get",
+                  "pm_capture_get", "pm_capture_latest_get"}:
+        from . import pm_evidence
+        page = {"after": params.get("after", 0), "limit": params.get("limit", 50)}
+        if method == "pm_projects_list":
+            return pm_evidence.list_projects(ops, principal, workspace_id, **page)
+        if method == "pm_work_list":
+            return pm_evidence.list_work(ops, principal, workspace_id, project_id=params.get("project_id"), **page)
+        if method == "pm_evidence_list":
+            return pm_evidence.list_evidence(ops, principal, workspace_id, work_item_id=params.get("work_item_id"), **page)
+        if method == "pm_evidence_get":
+            return pm_evidence.get_evidence(ops, principal, workspace_id, params.get("evidence_id"))
+        if method == "pm_capture_get":
+            return pm_evidence.get_capture(ops, principal, workspace_id, params.get("capture_id"))
+        return pm_evidence.latest_capture(ops, principal, workspace_id, params.get("work_item_id"))
     if method in {"pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get"}:
         from . import pm_plans
         pm_workspace.require_member(ops.db, principal, workspace_id)
