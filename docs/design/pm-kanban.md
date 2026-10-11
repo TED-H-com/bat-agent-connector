@@ -146,6 +146,12 @@ reason note or hidden source ID is copied into the board.
 
 ## Deliberate remaining capabilities
 
+Shared HTTP reads are `/api/v1/pm/workspaces/{workspace_id}/kanban` with optional
+`project_id`, `after`, `limit`, and `/kanban/{work_item_id}` without selectors.
+MCP/RPC expose `pm_kanban_get` and `pm_kanban_card_get`. All use the same read
+projection and current workspace/source checks. Tauri accepts only these exact
+routes and query fields; reads accept no operation key or actor override.
+
 This foundation advertises read-only projection. Ready admission, assignments,
 work dependencies, configurable WIP limits/resource capacity, drag mutations,
 dispatch, quality assessment and throughput remain unavailable here. Parent IDs

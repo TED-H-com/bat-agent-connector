@@ -139,7 +139,7 @@ async def test_explicit_distinct_commitments_fixed_source_revisions_and_truthful
     assert artifacts_doc['dod']['document']['acceptance_criteria'] == 'separate_requirement_data'
     assert artifacts_doc['product_goal']['document']['plan_ref']['revision_id'] == data['plan']
     assert definition['scrum_conformance'] == 'not_established'
-    assert 'events not yet implemented' in definition['mode_label']
+    assert 'conformance not established' in definition['mode_label']
     assert read['selected_items'] == [] and read['quality'] == 'unassessed'
     assert not read['execution_authorized'] and not read['review_available'] and not read['retro_available']
     assert not read['owner_reassignment_available']

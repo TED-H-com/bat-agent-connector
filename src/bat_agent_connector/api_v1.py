@@ -124,6 +124,7 @@ class ApiV1:
         from . import (
             pm_discussions,
             pm_evidence,
+            pm_meetings,
             pm_native_operations,
             pm_plan_operations,
             pm_roadmap,
@@ -141,6 +142,7 @@ class ApiV1:
         pm_snapshots.install(daemon.ops)
         pm_roadmap.install(daemon.ops)
         pm_sprints.install(daemon.ops)
+        pm_meetings.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -168,6 +170,11 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-comparison", self.pm_plan_comparison, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban", self.pm_kanban, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban/(?P<work_item_id>wi_[0-9a-f]{20})", self.pm_kanban_card, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/meetings", self.pm_meetings, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/meetings/(?P<meeting_id>pmmeet_[0-9a-f]{32})", self.pm_meeting, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/meetings/(?P<meeting_id>pmmeet_[0-9a-f]{32})/history/(?P<kind>contexts|notes|drafts|follow_ups)", self.pm_meeting_history, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/sprint-artifacts", self.pm_sprint_artifacts, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/sprint-artifacts/(?P<kind>product_goal|dod|backlog)", self.pm_sprint_artifact_revisions, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/sprint-artifacts/(?P<kind>product_goal|dod|backlog)/(?P<revision_id>(?:pmgoal|pmdod|pmbkl)_[0-9a-f]{32})", self.pm_sprint_artifact, "observe"),
@@ -530,7 +537,7 @@ class ApiV1:
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
-        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list"}:
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list"}:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
@@ -600,6 +607,21 @@ class ApiV1:
 
     async def pm_plan_comparison(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_plan_compare", query, workspace_id=workspace_id)
+
+    async def pm_kanban(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_kanban_get", query, workspace_id=workspace_id)
+
+    async def pm_kanban_card(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, "pm_kanban_card_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_meetings(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_meetings_list", query, workspace_id=workspace_id)
+
+    async def pm_meeting(self, principal, query, workspace_id, meeting_id, **_):
+        return self._pm_read(principal, "pm_meeting_get", query, workspace_id=workspace_id, meeting_id=meeting_id)
+
+    async def pm_meeting_history(self, principal, query, workspace_id, meeting_id, kind, **_):
+        return self._pm_read(principal, "pm_meeting_history_list", query, workspace_id=workspace_id, meeting_id=meeting_id, kind=kind)
 
     async def pm_sprint_artifacts(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_sprint_artifacts_get", query, workspace_id=workspace_id)
@@ -687,7 +709,8 @@ class ApiV1:
                                                     "work_evidence": "pm.evidence.capture" in self.daemon.ops.actions,
                                                     "brief_snapshots": "pm.snapshot.create" in self.daemon.ops.actions,
                                                     "roadmap": "pm.roadmap.baseline.set" in self.daemon.ops.actions,
-                                                    "sprints": "pm.sprint.create" in self.daemon.ops.actions, "dispatch": False},
+                                                    "sprints": "pm.sprint.create" in self.daemon.ops.actions,
+                                                    "kanban": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},

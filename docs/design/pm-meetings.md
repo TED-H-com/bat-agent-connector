@@ -2,8 +2,8 @@
 
 W16 builds Planning, Sprint Review and Retrospective records over the W15 Sprint
 commitments and fixed DocumentSnapshot sources. `install(ops)` registers the
-local journal actions below. Public API/MCP routes and the shared frontend are
-integrated separately. Install Sprint and snapshot actions through their existing
+local journal actions below. Public API/MCP routes use the shared API service.
+Install Sprint and snapshot actions through their existing
 hooks when those commands are needed; meetings do not create those artifacts as
 side effects.
 
@@ -154,8 +154,16 @@ for partial history and never silently treats a partial page as complete.
 `list_meetings(..., sprint_id=None, after=0, limit=50)` lists same-workspace meeting
 metadata. `list_history(..., kind, after=0, limit=50)` pages `contexts`, `notes`,
 `drafts` or `follow_ups`. Limits are 1–100; non-boolean nonnegative integer insertion
-sequences provide stable ordering despite clock rollback. The first slice does
-not install a second discussion UI or assign writer control to these records.
+sequences provide stable ordering despite clock rollback. Meeting records do not
+assign writer control to sessions.
+
+Public reads under `/api/v1/pm/workspaces/{workspace_id}` are `/meetings`
+(`sprint_id`, `after`, `limit`), `/meetings/{meeting_id}` (`history_limit`) and
+`/meetings/{meeting_id}/history/{kind}` (`after`, `limit`). Kind is one of
+`contexts`, `notes`, `drafts`, `follow_ups`. MCP/RPC use `pm_meetings_list`,
+`pm_meeting_get` and `pm_meeting_history_list` through the same read service.
+Tauri permits exactly these paths and selectors; no caller identity overrides
+or extra filters are accepted.
 
 
 All meeting read payloads have the shared 2,000,000-byte UTF-8 JSON budget,

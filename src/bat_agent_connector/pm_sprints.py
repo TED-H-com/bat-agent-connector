@@ -255,7 +255,7 @@ def _definition(ops, principal, wid, params):
     dod = _artifact(ops.db, wid, params.get('dod_revision_id'), 'dod')
     starts, ends = _interval(params.get('starts_at'), params.get('ends_at'))
     return {'title': _text(params.get('title'), 'Sprint title', 200), 'mode': mode,
-            'mode_label': 'Scrum artifacts (events not yet implemented)' if mode == 'scrum' else 'Personal iteration',
+            'mode_label': 'Scrum artifacts (conformance not established)' if mode == 'scrum' else 'Personal iteration',
             'scrum_conformance': 'not_established', 'owner_actor': params['owner_actor'],
             'developers': developers, 'scrum_master': master, 'backlog_revision_id': backlog['revision_id'],
             'product_goal_revision_id': backlog['document']['product_goal_revision_id'], 'dod_revision_id': dod['revision_id'],
@@ -557,8 +557,11 @@ def list_history(ops, principal, workspace_id, sprint_id, kind, *, after=0, limi
 
 def get_sprint(ops, principal, workspace_id, sprint_id, *, history_limit=50):
     with ops.journal.tx():
-        _member(ops, principal, workspace_id)
+        workspace = _member(ops, principal, workspace_id)
         sprint = _sprint(ops.db, workspace_id, sprint_id)
+        meetings_available = ('pm.meeting.create' in ops.actions and sprint['started_at'] is not None
+                              and principal.allows('manage')
+                              and (principal.admin or workspace['membership']['role'] in {'owner', 'contributor'}))
         rows = {kind: _history_rows(ops.db, sprint_id, kind, 0, history_limit) for kind in HISTORY}
         goal = dict(ops.db.execute('SELECT * FROM pm_sprint_goal_revisions WHERE revision_id=?', (sprint['goal_revision_id'],)).fetchone())
         coverage = {kind: _coverage(0, entries) for kind, entries in rows.items()}
@@ -566,7 +569,7 @@ def get_sprint(ops, principal, workspace_id, sprint_id, *, history_limit=50):
                 'selection_revisions': [], 'selected_items': _selection(ops.db, sprint),
                 'history': [], 'history_next_cursors': {kind: 0 if entries else None for kind, entries in rows.items()},
                 'timebox_elapsed': time.time() >= _date(sprint['definition']['ends_at']).timestamp(),
-                'quality': 'unassessed', 'review_available': False, 'retro_available': False,
+                'quality': 'unassessed', 'review_available': meetings_available, 'retro_available': meetings_available,
                 'execution_authorized': False, 'owner_reassignment_available': False,
                 'coverage': {'max_bytes': MAX_READ_BYTES, 'histories': coverage}})
         # Deterministic prefix order: Goals, selections, events. Each history has
