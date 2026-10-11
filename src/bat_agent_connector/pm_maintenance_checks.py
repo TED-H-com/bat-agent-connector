@@ -104,7 +104,7 @@ def _owner(ops, principal, wid):
         raise _bad('FORBIDDEN', 'Maintenance checks require an actual workspace owner', 403)
 
 
-def _current_principal(ops, record, now):
+def _current_principal(ops, record, now, *, required=REQUIRED):
     """A policy delegates to a controller, never to an actor name with old scopes.
 
     At least one CURRENT credential must individually carry the required scopes.
@@ -117,7 +117,7 @@ def _current_principal(ops, record, now):
     controller = record['document']['controller']
     actor = controller['actor']
     if (op.get('actor') != actor or original.get('actor') != actor
-            or original.get('admin') is not True and not REQUIRED.issubset(original.get('scopes', []))):
+            or original.get('admin') is not True and not required.issubset(original.get('scopes', []))):
         raise _bad('PM_MAINTENANCE_AUTHORITY_UNAVAILABLE', 'Original policy did not delegate the required authority', 403)
     rows = ops.db.execute('''SELECT token_hash,scopes FROM api_principals WHERE actor=?
         AND revoked_at IS NULL AND created_at<=? AND (expires_at IS NULL OR expires_at>?)
@@ -126,8 +126,8 @@ def _current_principal(ops, record, now):
     for candidate in rows:
         try:
             scopes = json.loads(candidate['scopes'])
-            if isinstance(scopes, list) and REQUIRED.issubset(scopes):
-                live = api_auth.Principal(actor, REQUIRED, credential_id=candidate['token_hash'])
+            if isinstance(scopes, list) and required.issubset(scopes):
+                live = api_auth.Principal(actor, required, credential_id=candidate['token_hash'])
                 break
         except (ValueError, TypeError):
             continue
@@ -292,6 +292,10 @@ def _capacity(ops, wid, intent, now):
             (wid,)).fetchone()[0]
         count += ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_review_windows WHERE policy_id=? AND budget_period=?',
             (intent['workload']['policy_id'], period)).fetchone()[0]
+    from . import pm_maintenance_repairs as repairs
+    repair_concurrent, repair_count = repairs.capacity_counts(ops, wid, intent['workload']['policy_id'], period)
+    concurrent += repair_concurrent
+    count += repair_count
     if concurrent >= intent['limits']['max_parallel'] or count >= intent['limits']['period_runs']:
         raise _bad('PM_MAINTENANCE_BUDGET_EXHAUSTED', 'Current concurrent or period run capacity is exhausted')
     return period

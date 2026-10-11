@@ -57,8 +57,10 @@ def _selection(value, allowed, label, *, empty=False):
 
 def validate_policy(policy, baseline):
     """No caller-provided low-risk label, controller, authority or completeness."""
-    _exact(policy, {"enabled", "after_release_policy", "sources", "allowed_work_kinds", "allowed_paths",
-                    "delivery", "observation", "schedule", "limits", "verification"})
+    required = {"enabled", "after_release_policy", "sources", "allowed_work_kinds", "allowed_paths",
+                "delivery", "observation", "schedule", "limits", "verification"}
+    if not isinstance(policy, dict) or not required <= set(policy) or set(policy) - required - {"repair_rules"}:
+        raise _bad("Use the exact maintenance policy fields and optional explicit repair rules")
     if (type(policy["enabled"]) is not bool or not isinstance(policy["after_release_policy"], str) or policy["after_release_policy"] not in {
             "maintain_when_idle", "continue_development", "manual"}):
         raise _bad("Select an enabled state and explicit after-release behavior")
@@ -129,6 +131,9 @@ def validate_policy(policy, baseline):
         raise _bad("Select 1–40 required acceptance evidence descriptions")
     for item in evidence:
         _text(item, 2000, "Acceptance evidence")
+    if "repair_rules" in policy:
+        from . import pm_maintenance_repair_rules
+        pm_maintenance_repair_rules.validate(policy, baseline)
     # An upper bound is not an override of the repository's required checks.
     return json.loads(baselines._json(policy))
 
@@ -157,7 +162,7 @@ def install(ops):
 
 def capabilities(ops=None):
     return {"version": 1, "sources": sorted(SOURCES), "work_kinds": sorted(WORK_KINDS),
-            "policy_adoption": True, "scheduler_available": ops is not None and "pm.maintenance.check" in ops.actions, "repair_dispatch_available": False,
+            "policy_adoption": True, "scheduler_available": ops is not None and "pm.maintenance.check" in ops.actions, "repair_dispatch_available": ops is not None and "pm.maintenance.repair" in ops.actions,
             "after_release_policies": ["maintain_when_idle", "continue_development", "manual"]}
 
 
@@ -220,6 +225,9 @@ def _check(ops, principal, target, params, pre):
         raise _bad("Select the current primary release baseline", "PM_BASELINE_VERSION_CONFLICT", 409)
     baselines._access(ops, principal, wid, baseline, decide=True)
     policy = validate_policy(params["policy"], baseline)
+    if policy.get("repair_rules"):
+        from . import pm_maintenance_repair_rules
+        pm_maintenance_repair_rules.validate_sources(ops, principal, wid, policy, baseline)
     # The adopting owner's actual server-bound controller is authoritative.
     # An arbitrary role/controller string in a request can never become a worker.
     authority = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
