@@ -215,6 +215,8 @@ async def _run(ctx):
         saved = ops.db.execute("SELECT result FROM pm_evidence_applied WHERE operation_id=?", (ctx.operation_id,)).fetchone()
         if saved:
             return json.loads(saved[0])
+        from .pm_lifecycle_gates import require_local
+        require_local(ctx.service.db, ctx.operation_id)
         principal = pm_workspace.admitted_principal(ctx)
         _, item, binding = _check(ops, principal, action, ctx.target, ctx.params, ctx.preconditions)
         workspace_id, now = ctx.target["workspace_id"], time.time()

@@ -212,6 +212,8 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
                     workspace_id, thread_id, principal.actor, adapter, purpose, expected_version, execution_authority, max_chars):
                 raise _error("Original PM run intent differs")
             return run
+        from .pm_lifecycle_gates import require_local
+        require_local(ops.db, operation_id)
         if not principal.allows("manage"):
             raise _error("PM runs require manage scope", "FORBIDDEN", 403)
         pm_workspace.require_member(ops.db, principal, workspace_id, write=True)

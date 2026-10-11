@@ -222,11 +222,13 @@ def _admitter(action):
 
 
 async def _run(ctx):
-    principal = pm_workspace.admitted_principal(ctx)
     with ctx.service.journal.tx():
         saved = ctx.service.db.execute("SELECT result FROM pm_discussion_applied WHERE operation_id=?", (ctx.operation_id,)).fetchone()
         if saved:
             return json.loads(saved[0])
+        from .pm_lifecycle_gates import require_local
+        require_local(ctx.service.db, ctx.operation_id)
+        principal = pm_workspace.admitted_principal(ctx)
         _member(ctx.service, principal, ctx.op["action"], ctx.target, ctx.params)
         _, thread = _check(ctx.service, principal, ctx.op["action"], ctx.target, ctx.params, ctx.preconditions)
         result = _apply(ctx, thread)

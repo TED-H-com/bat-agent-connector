@@ -1,4 +1,5 @@
 import {pmGovernanceStrings} from './pm-governance-strings.js';
+import {pmLifecycleStrings} from './pm-lifecycle-strings.js';
 import {specSourceStrings} from './pm-spec-sources-strings.js';
 import {pmFollowUpStrings} from './pm-follow-up-strings.js';
 import {followUpAnalysisStrings} from './pm-follow-up-analysis-strings.js';
@@ -10,6 +11,7 @@ import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
+    ...pmLifecycleStrings.en,
     ...pmSprintStrings.en,
     ...pmKanbanStrings.en,
     ...pmMeetingStrings.en,
@@ -232,6 +234,7 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    ...pmLifecycleStrings['zh-TW'],
     ...pmSprintStrings['zh-TW'],
     ...pmKanbanStrings['zh-TW'],
     ...pmMeetingStrings['zh-TW'],

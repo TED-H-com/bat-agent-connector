@@ -127,6 +127,7 @@ class ApiV1:
             pm_follow_up,
             pm_follow_up_analysis,
             pm_governance,
+            pm_lifecycle,
             pm_meetings,
             pm_native_operations,
             pm_plan_operations,
@@ -151,6 +152,7 @@ class ApiV1:
         pm_follow_up.install(daemon.ops)
         pm_follow_up_analysis.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
+        pm_lifecycle.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -171,6 +173,10 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces", self.pm_workspaces, "observe"),
             ("GET", r"/api/v1/pm/profiles", self.pm_profiles, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})", self.pm_workspace, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/lifecycle", self.pm_lifecycle, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/lifecycle/transitions", self.pm_lifecycle_transitions, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/lifecycle/transitions/(?P<transition_id>pmlt_[0-9a-f]{32})", self.pm_lifecycle_transition, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/lifecycle/inflight", self.pm_lifecycle_inflight, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads", self.pm_threads, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs", self.pm_runs, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs/(?P<run_id>pmr_[0-9a-f]{32})", self.pm_run, "observe"),
@@ -411,6 +417,7 @@ class ApiV1:
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
                       self.pm_brief_export,
+                      self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
@@ -567,9 +574,13 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list"}:
             integer_fields.add("after")
+        lifecycle_page = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list"}
+        if lifecycle_page:
+            integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
-            if not re.fullmatch(r"[0-9]{1,9}", value):
+            pattern = r"[0-9]{1,19}" if lifecycle_page and key == "after" else r"[0-9]{1,9}"
+            if not re.fullmatch(pattern, value):
                 raise OperationError("INVALID_PARAMS", f"{key} must be a positive integer", 422)
             params[key] = int(value)
         if method == "pm_plan_compare" and "binding_ids" in params:
@@ -659,6 +670,18 @@ class ApiV1:
     async def pm_governance_records(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_governance_list", query, workspace_id=workspace_id)
 
+    async def pm_lifecycle(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_lifecycle_get", query, workspace_id=workspace_id)
+
+    async def pm_lifecycle_transitions(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_lifecycle_transitions_list", query, workspace_id=workspace_id)
+
+    async def pm_lifecycle_transition(self, principal, query, workspace_id, transition_id, **_):
+        return self._pm_read(principal, "pm_lifecycle_transition_get", query, workspace_id=workspace_id, transition_id=transition_id)
+
+    async def pm_lifecycle_inflight(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_lifecycle_inflight_list", query, workspace_id=workspace_id)
+
     async def pm_work_packages(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_work_packages_list", query, workspace_id=workspace_id)
 
@@ -738,6 +761,7 @@ class ApiV1:
         return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
 
     async def capabilities(self, principal, **_):
+        from . import pm_lifecycle
         fleet = self.daemon.fleet
         from . import worktree_merge_operations
         gh_cfg = self.daemon.ops.context["github_config"]
@@ -787,6 +811,7 @@ class ApiV1:
                                                     "work_evidence": "pm.evidence.capture" in self.daemon.ops.actions,
                                                     "brief_snapshots": "pm.snapshot.create" in self.daemon.ops.actions,
                                                     "roadmap": "pm.roadmap.baseline.set" in self.daemon.ops.actions,
+                                                    "lifecycle": pm_lifecycle.capabilities(self.daemon.ops),
                                                     "sprints": "pm.sprint.create" in self.daemon.ops.actions,
                                                     "governance": "pm.governance.record" in self.daemon.ops.actions,
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,

@@ -400,10 +400,10 @@ async def test_committed_ack_then_storage_error_cancel_reopens_for_local_release
 
 async def test_remote_intent_storage_failure_cancel_never_starts_a_new_frame(daemon, mock, carriers, monkeypatch):
     original = daemon.ops._step_start
-    def fail_before_intent(oid, name, request):
+    def fail_before_intent(oid, name, request, **kwargs):
         if name == 'merge.frame':
             raise sqlite3.OperationalError('fixture intent storage unavailable')
-        return original(oid, name, request)
+        return original(oid, name, request, **kwargs)
     monkeypatch.setattr(daemon.ops, '_step_start', fail_before_intent)
     out = await create(daemon)
     assert out['status'] == 'needs_attention' and not api.write_frames(mock)

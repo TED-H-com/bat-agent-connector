@@ -39,6 +39,8 @@ def schema(journal) -> None:
             operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, applied_at REAL NOT NULL)""")
         from .dashboard_sync import install_pm_access
         install_pm_access(journal.db)
+        from .pm_lifecycle import schema as lifecycle_schema
+        lifecycle_schema(journal)
 
 
 def server_id(db) -> str:
@@ -123,6 +125,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'].startswith('pm.lifecycle.'):
+        from .pm_lifecycle import operation_visible as lifecycle_visible
+        return lifecycle_visible(db, principal, op)
     if op['action'].startswith('pm.work_package.'):
         from .pm_work_packages import operation_visible as package_operation_visible
         return package_operation_visible(db, principal, op)
@@ -228,6 +233,8 @@ async def _run_create(ctx):
                    (workspace_id, server_id(db), name, json.dumps(repositories), principal.actor, now, now, ctx.operation_id))
         db.execute("INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
                    (workspace_id, principal.actor, "owner", controller_for(db, principal), now, now))
+        from .pm_lifecycle import initialize
+        initialize(db, workspace_id, now)
         ctx.service.journal.api_event("pm_workspace", workspace_id, "pm.workspace.created",
                                      {"workspace_id": workspace_id, "version": 1, "operation_id": ctx.operation_id}, actor=principal.actor)
         return {"workspace": require_member(db, principal, workspace_id)}

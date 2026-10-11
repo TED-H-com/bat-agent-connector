@@ -868,6 +868,345 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 	};
 }
 //#endregion
+//#region src/pm-lifecycle.js
+function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, form, input, labelled, errorBox, onChange }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/lifecycle`, actor = caps()?.actor;
+	const feature = caps()?.features?.pm_workspaces?.lifecycle;
+	let current = null, ready = false, serial = 0, historyLoaded = false, historyRequest = null, rows = [], cursor = null, historyCursor = null, workFiltered = false;
+	let retentionLocked = () => true;
+	const editors = [], status = h("div", { role: "status" }), summary = h("div"), work = h("div"), historyBody = h("div");
+	const controls = h("details", { "data-pm-lifecycle-controls": "" }, h("summary", {}, t("pm_lifecycle_manage")));
+	const history = h("details", { "data-pm-lifecycle-history": "" }, h("summary", {}, t("pm_lifecycle_history")), historyBody);
+	const element = h("section", {
+		class: "pm-lifecycle",
+		"data-pm-lifecycle": ""
+	}, h("h2", {}, t("pm_lifecycle_title")), status, summary, controls, work, history);
+	const gate = () => ready && current && caps()?.actor === actor && permitted(true);
+	const hidden = () => h("input", { type: "hidden" });
+	const stageName = (value) => t("pm_lifecycle_" + (value || "unclassified"));
+	const canAction = (action) => Array.isArray(feature.gated_actions) && (!feature.gated_actions.includes(action) || Boolean(ready && current && !current.blocked_actions.includes(action)));
+	const notify = () => {
+		for (const editor of editors) editor.update();
+		onChange();
+		for (const field of retentionChoices.querySelectorAll("input")) field.disabled = retentionLocked();
+	};
+	const checkScope = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return value;
+	};
+	const validCursor = (next, previous) => next === null || Number.isSafeInteger(next) && next > previous;
+	const chosen = () => {
+		try {
+			const ids = JSON.parse(retained.value || "[]");
+			return Array.isArray(ids) && ids.every((id) => typeof id === "string") ? ids : [];
+		} catch {
+			return [];
+		}
+	};
+	function makeEditor(kind, { stage = false, extra = null, fields = {}, params = () => ({}), eligible = () => true } = {}) {
+		const reason = input("pm_lifecycle_reason", {
+			max: 4e3,
+			multiline: true
+		}), version = hidden();
+		const choice = stage ? h("select", {
+			"aria-label": t("pm_lifecycle_stage"),
+			required: true
+		}, ...[
+			"idea",
+			"planning",
+			"development"
+		].map((value) => h("option", { value }, stageName(value)))) : null;
+		if (choice) choice.dataset.pmDefault = "idea";
+		const values = {
+			reason,
+			version,
+			...choice ? { stage: choice } : {},
+			...fields
+		};
+		let editor;
+		editor = form({
+			action: `pm.lifecycle.${kind}`,
+			target: { workspace_id: workspaceId },
+			fields: values,
+			params: (data) => ({
+				reason: data.reason,
+				...choice ? { stage: data.stage } : {},
+				...params(data)
+			}),
+			preconditions: () => ({ expected_lifecycle_revision: Number(version.value) }),
+			permitted: () => Boolean(gate() && eligible() && version.value !== "" && Number(version.value) === current.lifecycle.revision),
+			recoverPermitted: () => permitted(true),
+			label: kind === "retain_inflight" ? "pm_lifecycle_retain" : "pm_lifecycle_" + kind,
+			onStateChange: () => {
+				if (kind === "retain_inflight") for (const check of retentionChoices.querySelectorAll("input")) check.disabled = retentionLocked();
+			},
+			onSaved: () => refresh(),
+			extra: h("div", {}, choice ? labelled("pm_lifecycle_stage", choice) : "", extra, labelled("pm_lifecycle_reason", reason), version, ...Object.values(fields))
+		});
+		const rebase = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (!gate() || editor.locked()) return;
+				editor.set("version", String(current.lifecycle.revision));
+				if (kind === "retain_inflight") editor.set("transition", current.lifecycle.transition_id || "");
+				editor.update();
+			}
+		}, t("pm_lifecycle_review_version"));
+		const warning = h("p", {
+			class: "muted",
+			hidden: true
+		}, t("pm_lifecycle_stale"));
+		editor.box.append(warning, rebase);
+		const originalUpdate = editor.update;
+		editor.update = () => {
+			const empty = !reason.value && (!choice || choice.value === choice.dataset.pmDefault) && (!fields.operations || !chosen().length);
+			if (current && !editor.locked() && (version.value === "" || empty)) editor.set("version", String(current.lifecycle.revision));
+			if (kind === "retain_inflight" && current && !editor.locked() && (!fields.transition.value || empty)) editor.set("transition", current.lifecycle.transition_id || "");
+			originalUpdate();
+			const stale = Boolean(current && version.value !== "" && Number(version.value) !== current.lifecycle.revision);
+			warning.hidden = !stale;
+			rebase.hidden = !stale;
+			rebase.disabled = !gate() || editor.locked();
+			if (choice) for (const option of choice.options) option.disabled = Boolean(current && !current.available_stages.includes(option.value));
+		};
+		editors.push(editor);
+		return editor;
+	}
+	const stage = makeEditor("set_stage", {
+		stage: true,
+		extra: h("p", { class: "muted" }, t("pm_lifecycle_no_dispatch")),
+		eligible: () => !["paused", "closed"].includes(current.lifecycle.stage)
+	});
+	const pause = makeEditor("pause", { eligible: () => !["paused", "closed"].includes(current.lifecycle.stage) });
+	const close = makeEditor("close", {
+		extra: h("p", { class: "muted" }, t("pm_lifecycle_close_help")),
+		eligible: () => current.lifecycle.stage !== "closed"
+	});
+	const reopen = makeEditor("reopen", {
+		stage: true,
+		extra: h("p", { class: "muted" }, t("pm_lifecycle_no_dispatch")),
+		eligible: () => ["paused", "closed"].includes(current.lifecycle.stage)
+	});
+	for (const [kind, editor] of [
+		["set_stage", stage],
+		["pause", pause],
+		["close", close],
+		["reopen", reopen]
+	]) controls.append(h("details", { "data-pm-lifecycle-intent": kind }, h("summary", {}, t("pm_lifecycle_" + kind)), editor.box));
+	controls.append(h("p", { class: "muted" }, t("pm_lifecycle_maintenance_unavailable")));
+	const retained = hidden(), transition = hidden(), retentionChoices = h("div");
+	const retain = makeEditor("retain_inflight", {
+		fields: {
+			operations: retained,
+			transition
+		},
+		params: (values) => ({
+			transition_id: values.transition,
+			operation_ids: JSON.parse(values.operations || "[]")
+		}),
+		eligible: () => Boolean(current.lifecycle.transition_id && transition.value === current.lifecycle.transition_id && chosen().length && chosen().every((id) => rows.some((row) => row.operation_id === id && row.disposition === "unresolved"))),
+		extra: h("div", {}, h("p", { class: "muted" }, t("pm_lifecycle_retain_help")), retentionChoices)
+	});
+	retentionLocked = () => !gate() || retain.locked() || Number(retain.fields.version.value) !== current.lifecycle.revision || transition.value !== current.lifecycle.transition_id;
+	const retention = h("details", { "data-pm-lifecycle-retain": "" }, h("summary", {}, t("pm_lifecycle_retain")), retain.box);
+	element.insertBefore(retention, history);
+	function renderRetention() {
+		retentionChoices.replaceChildren();
+		const selected = chosen();
+		const available = rows.filter((row) => row.disposition === "unresolved");
+		for (const id of new Set([...available.map((row) => row.operation_id), ...selected])) {
+			const row = available.find((row) => row.operation_id === id), check = h("input", {
+				type: "checkbox",
+				checked: selected.includes(id),
+				"aria-label": t("pm_lifecycle_select_operation") + " " + id
+			});
+			check.disabled = retentionLocked();
+			check.addEventListener("change", () => {
+				if (retentionLocked()) {
+					check.checked = chosen().includes(id);
+					return;
+				}
+				retain.set("operations", JSON.stringify(check.checked ? [...new Set([...chosen(), id])] : chosen().filter((value) => value !== id)));
+				retain.update();
+			});
+			retentionChoices.append(h("label", {}, check, " ", row ? `${row.action} · ${row.operation_status}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
+		}
+		retention.hidden = !current?.lifecycle.transition_id && !retain.locked() && !selected.length;
+	}
+	function renderWork() {
+		work.replaceChildren(h("h3", {}, t("pm_lifecycle_inflight")));
+		if (!rows.length) work.append(h("p", { class: "muted" }, t("pm_lifecycle_inflight_empty")));
+		if (workFiltered) work.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
+		for (const row of rows) {
+			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, row.action, " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", row.operation_status), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
+			for (const step of row.steps || []) details.append(h("p", { class: "muted" }, `${step.name} · ${step.status}`));
+			if (row.writer) details.append(h("p", { class: "muted" }, `${t("pm_lifecycle_writer")}: ${row.writer.status}`));
+			if (row.retention) details.append(h("p", {}, row.retention.reason));
+			if (row.retention_visibility_filtered) details.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
+			work.append(details);
+		}
+		if (cursor !== null) work.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => void moreWork()
+		}, t("pm_lifecycle_more")));
+		renderRetention();
+	}
+	function verifyRows(page, after) {
+		checkScope(page);
+		if (page.transition_id !== current.lifecycle.transition_id || !Array.isArray(page.inflight) || !validCursor(page.next_cursor, after) || page.inflight.some((row) => !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !Number.isSafeInteger(row.sequence))) throw Error(t("pm_scope_mismatch"));
+		return page;
+	}
+	async function moreWork() {
+		if (cursor === null || !current) return;
+		const ticket = serial, after = cursor;
+		const button = work.querySelector("button");
+		if (button) button.disabled = true;
+		try {
+			const page = await api("GET", `${endpoint}/inflight?transition_id=${current.lifecycle.transition_id}&after=${after}&limit=20`);
+			alive();
+			if (ticket !== serial) return;
+			verifyRows(page, after);
+			const ids = new Set(rows.map((row) => row.operation_id));
+			if (page.inflight.some((row) => ids.has(row.operation_id))) throw Error(t("pm_scope_mismatch"));
+			rows.push(...page.inflight);
+			cursor = page.next_cursor;
+			workFiltered ||= Boolean(page.visibility_filtered);
+			renderWork();
+			notify();
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		}
+	}
+	function render() {
+		const state = current.lifecycle, stopped = ["paused", "closed"].includes(state.stage);
+		summary.replaceChildren(h("p", { class: "pm-lifecycle-stage" }, h("strong", {}, stageName(["pausing", "closing"].includes(state.status) ? state.status : state.stage))), h("p", { class: "muted" }, t(state.stage === null ? "pm_lifecycle_legacy_help" : stopped ? "pm_lifecycle_stopped_help" : "pm_lifecycle_active_help")));
+		if (current.transition?.reason) summary.append(h("p", {}, current.transition.reason));
+		if (!permitted(true)) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_reader")));
+		if (current.inflight_summary.visibility_filtered || current.transition_visibility_filtered) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
+		renderWork();
+		notify();
+		renderRetention();
+	}
+	function withdraw() {
+		++serial;
+		ready = false;
+		current = null;
+		rows = [];
+		cursor = null;
+		historyCursor = null;
+		historyLoaded = false;
+		historyRequest = null;
+		workFiltered = false;
+		summary.replaceChildren();
+		work.replaceChildren();
+		retentionChoices.replaceChildren();
+		historyBody.replaceChildren();
+		status.replaceChildren();
+		notify();
+	}
+	function unavailable(error) {
+		withdraw();
+		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_lifecycle_unknown")));
+	}
+	async function refresh() {
+		withdraw();
+		const ticket = serial;
+		status.replaceChildren(h("p", { class: "muted" }, t("pm_lifecycle_loading")));
+		try {
+			const value = checkScope(await api("GET", endpoint));
+			alive();
+			if (ticket !== serial) return;
+			if (!value.lifecycle || !Number.isSafeInteger(value.lifecycle.revision) || value.lifecycle.revision < 0 || ![
+				null,
+				"idea",
+				"planning",
+				"development",
+				"maintain",
+				"paused",
+				"closed"
+			].includes(value.lifecycle.stage) || ![
+				"active",
+				"pausing",
+				"paused",
+				"closing",
+				"closed",
+				"unclassified"
+			].includes(value.lifecycle.status) || !Array.isArray(value.blocked_actions) || !Array.isArray(value.available_stages) || !value.inflight_summary) throw Error(t("pm_scope_mismatch"));
+			current = value;
+			if (value.lifecycle.transition_id) {
+				const page = await api("GET", `${endpoint}/inflight?transition_id=${value.lifecycle.transition_id}&after=0&limit=20`);
+				alive();
+				if (ticket !== serial) return;
+				verifyRows(page, 0);
+				rows = page.inflight;
+				cursor = page.next_cursor;
+				workFiltered = Boolean(page.visibility_filtered);
+			}
+			ready = true;
+			status.replaceChildren();
+			render();
+			if (history.open) await loadHistory();
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		}
+	}
+	async function loadHistory(after = 0) {
+		if (!current || historyRequest === serial) return;
+		const ticket = serial;
+		historyRequest = ticket;
+		try {
+			const page = checkScope(await api("GET", `${endpoint}/transitions?after=${after}&limit=20`));
+			alive();
+			if (ticket !== serial) return;
+			if (!Array.isArray(page.transitions) || !validCursor(page.next_cursor, after)) throw Error(t("pm_scope_mismatch"));
+			if (!after) historyBody.replaceChildren();
+			else historyBody.querySelector("button")?.remove();
+			for (const row of page.transitions) {
+				if (!/^pmlt_[0-9a-f]{32}$/.test(row.transition_id)) throw Error(t("pm_scope_mismatch"));
+				const detail = h("details", {}, h("summary", {}, row.reason || t("pm_lifecycle_trace")), h("p", { class: "muted" }, row.actor || ""));
+				let done = false;
+				detail.addEventListener("toggle", async () => {
+					if (!detail.open || done) return;
+					done = true;
+					try {
+						const original = checkScope(await api("GET", `${endpoint}/transitions/${row.transition_id}`));
+						alive();
+						if (ticket !== serial || !detail.isConnected) return;
+						if (original.transition?.transition_id !== row.transition_id) throw Error(t("pm_scope_mismatch"));
+						detail.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(original.transition, null, 2)));
+					} catch (error) {
+						if (ticket === serial) unavailable(error);
+					}
+				});
+				historyBody.append(detail);
+			}
+			historyLoaded = true;
+			historyCursor = page.next_cursor;
+			if (historyCursor !== null) historyBody.append(h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => void loadHistory(historyCursor)
+			}, t("pm_lifecycle_more_history")));
+			if (page.visibility_filtered) historyBody.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		} finally {
+			if (historyRequest === ticket) historyRequest = null;
+		}
+	}
+	history.addEventListener("toggle", () => {
+		if (history.open && !historyLoaded) loadHistory();
+	});
+	return {
+		element,
+		refresh,
+		withdraw,
+		newActionAllowed: canAction
+	};
+}
+//#endregion
 //#region src/pm-spec-sources-strings.js
 var specSourceStrings = {
 	en: {
@@ -6566,7 +6905,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		main.append(h("p", {}, t("pm_unavailable")));
 		return;
 	}
-	let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1;
+	let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
 	const disclosureKey = JSON.stringify([
 		namespace,
 		workspaceId,
@@ -6596,7 +6935,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			guard: alive,
 			namespace,
 			errorBox,
-			...options
+			...options,
+			permitted: () => options.permitted() && (lifecycle?.newActionAllowed(options.action) ?? true),
+			recoverPermitted: options.recoverPermitted || options.permitted
 		});
 		forms.push(value);
 		return value;
@@ -6648,6 +6989,21 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
 	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
+	lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1 ? workspaceLifecycle({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		permitted: () => loaded && workspace?.membership?.role === "owner",
+		form,
+		input,
+		labelled,
+		errorBox,
+		onChange: () => updateForms()
+	}) : null;
+	if (lifecycle && !threadId) body.insertBefore(lifecycle.element, content);
 	const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence ? workspaceEvidence({
 		h,
 		t,
@@ -6678,7 +7034,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps,
 		canRead: () => loaded && Boolean(workspace)
 	}) : null;
-	if (brief && !threadId) body.insertBefore(brief.box, content);
+	if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element || content);
 	const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap ? workspaceRoadmap({
 		h,
 		t,
@@ -6784,6 +7140,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	if (engineering) body.insertBefore(engineering.element, specifications?.element || content);
 	const sourceSections = () => [
 		content,
+		lifecycle?.element,
 		evidence?.box,
 		brief?.box,
 		roadmap?.box,
@@ -7087,6 +7444,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"aria-label": t("pm_inputs")
 			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
 			if (brief) inspector.prepend(brief.box);
+			if (lifecycle) inspector.prepend(lifecycle.element);
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
 			const disclosures = threadDisclosures.get(disclosureKey);
 			for (const selector of threadDisclosureSelectors) {
@@ -7291,6 +7649,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (!retired(error) && ticket === sequence) {
 				loaded = false;
 				brief?.withdraw();
+				lifecycle?.withdraw();
 				updateForms();
 				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
 			}
@@ -7306,6 +7665,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
+		lifecycle?.withdraw();
 		try {
 			alive();
 			const list = await api("GET", "/pm/workspaces");
@@ -7388,6 +7748,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
 			worktreeChoice?.update();
 			for (const section of [
+				lifecycle,
 				evidence,
 				brief,
 				roadmap,
@@ -7412,6 +7773,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				workspace = null;
 				threadData = null;
 				brief?.withdraw();
+				lifecycle?.withdraw();
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
 				for (const section of sourceSections()) section.hidden = true;
@@ -7441,7 +7803,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_governance",
 			"pm_follow_up",
 			"pm_follow_up_assessment",
-			"pm_work_package"
+			"pm_work_package",
+			"pm_lifecycle"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -11408,6 +11771,104 @@ var pmGovernanceStrings = {
 	}
 };
 //#endregion
+//#region src/pm-lifecycle-strings.js
+var pmLifecycleStrings = {
+	en: {
+		pm_lifecycle_title: "Project activity",
+		pm_lifecycle_loading: "Checking the current management stage…",
+		pm_lifecycle_idea: "Idea",
+		pm_lifecycle_planning: "Planning",
+		pm_lifecycle_development: "Development",
+		pm_lifecycle_maintain: "Maintain",
+		pm_lifecycle_paused: "Paused",
+		pm_lifecycle_closed: "Closed",
+		pm_lifecycle_unclassified: "Stage not yet selected",
+		pm_lifecycle_pausing: "Paused for new work · existing work needs reconciliation",
+		pm_lifecycle_closing: "Closed to new work · existing work needs reconciliation",
+		pm_lifecycle_active_help: "This stage describes the workspace. Discussions, Sprint commitments and execution permissions keep their own records.",
+		pm_lifecycle_stopped_help: "New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.",
+		pm_lifecycle_legacy_help: "No management stage was recorded for this workspace. Its previous work has not been reclassified.",
+		pm_lifecycle_unknown: "Activity controls are unavailable until the workspace state can be read again.",
+		pm_lifecycle_manage: "Manage project activity",
+		pm_lifecycle_action: "Change",
+		pm_lifecycle_stage: "Management stage",
+		pm_lifecycle_set_stage: "Record stage",
+		pm_lifecycle_pause: "Pause new work",
+		pm_lifecycle_close: "Close this management workspace",
+		pm_lifecycle_reopen: "Reopen workspace",
+		pm_lifecycle_reason: "Reason and retained context",
+		pm_lifecycle_review_version: "Review current activity state",
+		pm_lifecycle_stale: "The activity state changed. Your draft still uses the earlier version; review the current state before submitting it.",
+		pm_lifecycle_no_dispatch: "Selecting a stage does not dispatch work. Reopening leaves old queued requests stopped.",
+		pm_lifecycle_close_help: "Preserve the project history and stop new investment. In-flight work is listed below; closing does not archive the GitHub repository.",
+		pm_lifecycle_maintenance_unavailable: "Maintain becomes available after a release baseline and maintenance policy are configured.",
+		pm_lifecycle_inflight: "Previously admitted work",
+		pm_lifecycle_inflight_empty: "No unresolved work is visible in this recorded management scope.",
+		pm_lifecycle_filtered: "Some records are outside your current source access. Visible rows are not a complete project total.",
+		pm_lifecycle_unresolved: "Needs reconciliation",
+		pm_lifecycle_retained: "Explicitly retained",
+		pm_lifecycle_settled: "Result reconciled",
+		pm_lifecycle_held: "Held",
+		pm_lifecycle_more: "Load more recorded work",
+		pm_lifecycle_more_history: "Load more stage history",
+		pm_lifecycle_history: "Stage history",
+		pm_lifecycle_retain: "Record retained work",
+		pm_lifecycle_retain_help: "Select the exact visible operations to retain, with a reason. This preserves their original unknown status and does not stop or restart them.",
+		pm_lifecycle_select_operation: "Retain this operation",
+		pm_lifecycle_retained_missing: "A selected operation is no longer in this readable view. Remove it explicitly before submitting.",
+		pm_lifecycle_trace: "Original transition record",
+		pm_lifecycle_writer: "Owned PM writer",
+		pm_lifecycle_reader: "Only the current workspace owner can change its management stage."
+	},
+	"zh-TW": {
+		pm_lifecycle_title: "專案投入狀態",
+		pm_lifecycle_loading: "讀取目前的管理階段…",
+		pm_lifecycle_idea: "想法",
+		pm_lifecycle_planning: "規劃",
+		pm_lifecycle_development: "開發",
+		pm_lifecycle_maintain: "維護",
+		pm_lifecycle_paused: "已暫停",
+		pm_lifecycle_closed: "已結案",
+		pm_lifecycle_unclassified: "尚未指定管理階段",
+		pm_lifecycle_pausing: "已停止新投入，既有工作待核對",
+		pm_lifecycle_closing: "已停止新投入，結案工作待核對",
+		pm_lifecycle_active_help: "這是整個工作區的管理階段；各討論、Sprint 承諾與執行授權仍各自保留。",
+		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的 session 保持原狀。",
+		pm_lifecycle_legacy_help: "這個工作區尚未記錄管理階段，系統未重新歸類原有工作。",
+		pm_lifecycle_unknown: "目前無法讀取工作區狀態，重新取得資料後才能調整投入。",
+		pm_lifecycle_manage: "調整專案投入",
+		pm_lifecycle_action: "調整方式",
+		pm_lifecycle_stage: "管理階段",
+		pm_lifecycle_set_stage: "記錄階段",
+		pm_lifecycle_pause: "暫停新投入",
+		pm_lifecycle_close: "結束這個管理工作區",
+		pm_lifecycle_reopen: "重新開啟工作區",
+		pm_lifecycle_reason: "理由與保留脈絡",
+		pm_lifecycle_review_version: "檢視目前投入狀態",
+		pm_lifecycle_stale: "投入狀態已變更；草稿仍以原版本為準，請檢視目前狀態後再送出。",
+		pm_lifecycle_no_dispatch: "指定管理階段不會派工；重開也不會重新執行之前佇列中的請求。",
+		pm_lifecycle_close_help: "保留專案歷史並停止新投入。在途工作列於下方，結案不會封存 GitHub repository。",
+		pm_lifecycle_maintenance_unavailable: "設定發布基準與維護政策後，才可進入維護。",
+		pm_lifecycle_inflight: "先前已受理的工作",
+		pm_lifecycle_inflight_empty: "這次管理範圍的可讀紀錄中，沒有尚待核對的工作。",
+		pm_lifecycle_filtered: "部分紀錄不在你目前的來源權限內；可見列數不是整個專案的總數。",
+		pm_lifecycle_unresolved: "待核對",
+		pm_lifecycle_retained: "已明確保留",
+		pm_lifecycle_settled: "已查回結果",
+		pm_lifecycle_held: "已保留停止",
+		pm_lifecycle_more: "載入更多已受理工作",
+		pm_lifecycle_more_history: "載入更多階段歷史",
+		pm_lifecycle_history: "管理階段歷史",
+		pm_lifecycle_retain: "記錄保留工作",
+		pm_lifecycle_retain_help: "明確勾選要保留的可讀操作並留下理由。原本未知的結果保持未知，不會因此停止或重啟操作。",
+		pm_lifecycle_select_operation: "保留這項操作",
+		pm_lifecycle_retained_missing: "原本勾選的操作已不在可讀清單中；送出前請明確取消該項。",
+		pm_lifecycle_trace: "原始階段變更紀錄",
+		pm_lifecycle_writer: "PM 自有 writer",
+		pm_lifecycle_reader: "目前工作區的 owner 才能調整管理階段。"
+	}
+};
+//#endregion
 //#region src/pm-follow-up-strings.js
 var pmFollowUpStrings = {
 	en: {
@@ -12659,6 +13120,7 @@ var pmMeetingStrings = {
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		...pmLifecycleStrings.en,
 		...pmSprintStrings.en,
 		...pmKanbanStrings.en,
 		...pmMeetingStrings.en,
@@ -12984,6 +13446,7 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		...pmLifecycleStrings["zh-TW"],
 		...pmSprintStrings["zh-TW"],
 		...pmKanbanStrings["zh-TW"],
 		...pmMeetingStrings["zh-TW"],

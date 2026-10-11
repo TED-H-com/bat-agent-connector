@@ -1,0 +1,171 @@
+import {test,expect} from '@playwright/test';
+import {mkdir} from 'node:fs/promises';
+import {pmFixture,workspaceId,pmRoute} from './pm-fixture.ts';
+import {mountConversation} from './conversation-fixture.ts';
+const endpoint=`/pm/workspaces/${workspaceId}/lifecycle`,transitionId='pmlt_'+'a'.repeat(32),operationId='op_'+'b'.repeat(32);
+const gated=['pm.run.prepare','pm.thread.plan','pm.input.confirm','pm.plan.draft','pm.plan.adopt'];
+function fixture(){
+  const base=pmFixture();
+  const state={stage:'idea' as string|null,status:'active',revision:0,epoch:0,transition:null as any,filtered:false,
+    failed:false,admin:false,pageFiltered:false,historyDenied:false,historyGate:null as Promise<void>|null,readGate:null as Promise<void>|null,
+    lost:false,pending:false,writes:[] as any[],reads:[] as any[],ops:new Map<string,any>(),inflight:[] as any[]};
+  const stopped=()=>['paused','closed'].includes(state.stage||'');
+  function stop(){state.stage='paused';state.status='pausing';state.revision++;state.epoch++;state.transition={transition_id:transitionId,reason:'Keep the released version while reviewing unresolved work.',actor:'reader'};
+    state.inflight=[{sequence:1,operation_id:operationId,action:'pm.run.start',actor:'reader',operation_status:'unknown',captured_at:1,disposition:'unresolved',steps:[{name:'pm.native.execute',status:'sent'}],writer:{run_id:'pmr_'+'c'.repeat(32),generation:1,status:'unknown'},retention:null}];}
+  const dispatch=async(input:any)=>{
+    const url=new URL(input.path,'http://fixture'),path=url.pathname;
+    if(path==='/bootstrap'||path==='/capabilities'){
+      const result=await base.dispatch(input),caps=path==='/bootstrap'?result.data.capabilities:result.data;
+      caps.features.pm_workspaces.lifecycle={version:1,gated_actions:gated,record_actions:['pm.message.append','pm.input.record']};
+      if(state.admin)caps.scopes.push('admin');
+      caps.actions.push(...['set_stage','pause','close','reopen','retain_inflight'].map(kind=>({action:'pm.lifecycle.'+kind,allowed:base.state.manage})));
+      return result;
+    }
+    if(path.startsWith(endpoint)){
+      state.reads.push(structuredClone(input));
+      if(state.readGate)await state.readGate;
+      if(state.failed)return {status:403,data:{error:{code:'FORBIDDEN',message:'Workspace source access changed'}}};
+      if(path===endpoint)return {status:200,data:{workspace_id:workspaceId,
+        lifecycle:{stage:state.stage,status:state.status,revision:state.revision,execution_epoch:state.epoch,transition_id:state.transition?.transition_id||null,coverage:state.stage===null?'legacy_unclassified':'recorded'},
+        transition:state.filtered?null:structuredClone(state.transition),transition_visibility_filtered:state.filtered,
+        blocked_actions:stopped()?gated:[],record_actions:['pm.message.append','pm.input.record'],available_stages:['idea','planning','development'],
+        maintenance:{available:false,reason:'release_baseline_and_policy_required'},inflight_summary:{visible_unresolved:state.inflight.filter(row=>row.disposition==='unresolved').length,visible_retained:0,visibility_filtered:state.filtered}}};
+      if(path.endsWith('/inflight'))return {status:200,data:{workspace_id:workspaceId,transition_id:state.transition?.transition_id,inflight:structuredClone(state.inflight),next_cursor:null,visibility_filtered:state.filtered||state.pageFiltered}};
+      if(path.endsWith('/transitions'))return {status:200,data:{workspace_id:workspaceId,transitions:state.filtered?[]:state.transition?[structuredClone(state.transition)]:[],next_cursor:null,visibility_filtered:state.filtered}};
+      if(state.historyGate)await state.historyGate;
+      if(state.historyDenied)return {status:404,data:{error:{code:'NOT_FOUND',message:'Original transition source unavailable'}}};
+      return {status:200,data:{workspace_id:workspaceId,transition:structuredClone(state.transition),inflight_summary:{}}};
+    }
+    if(path.startsWith('/operations/')&&input.method==='GET'){
+      const op=[...state.ops.values()].find(op=>path.endsWith(op.operation_id));if(op)return {status:200,data:{operation:op}};
+    }
+    if(path==='/operations'&&input.method==='POST'&&input.body.action.startsWith('pm.lifecycle.')){
+      state.writes.push(structuredClone(input));let op=state.ops.get(input.idempotency_key);
+      if(!op){
+        const {action,params}=input.body;
+        if(action==='pm.lifecycle.pause')stop();
+        else if(action==='pm.lifecycle.close'){stop();state.stage='closed';state.status='closing';}
+        else if(action==='pm.lifecycle.retain_inflight'){
+          for(const row of state.inflight)if(params.operation_ids.includes(row.operation_id)){row.disposition='retained';row.retention={reason:params.reason,actor:'reader',transition_id:transitionId,created_at:2};}
+          state.revision++;state.status=state.stage==='closed'?'closed':'paused';
+        }else{state.stage=params.stage;state.status='active';state.revision++;}
+        op={...input.body,actor:base.state.actor,idempotency_key:input.idempotency_key,operation_id:'op_'+String(state.ops.size+1).padStart(32,'0'),status:state.pending?'running':'succeeded',result:{workspace_id:workspaceId}};
+        state.ops.set(input.idempotency_key,op);
+      }
+      if(state.lost){state.lost=false;return {status:503,data:{error:{code:'LOST_REPLY',message:'Reply unavailable'}}};}
+      return {status:200,data:{operation:structuredClone(op)}};
+    }
+    return base.dispatch(input);
+  };
+  return {base,state,dispatch,stop};
+}
+const activity=(page:any)=>page.locator('[data-pm-lifecycle]');
+const action=(page:any,kind:string)=>activity(page).locator(`[data-pm-action="pm.lifecycle.${kind}"]`);
+async function edit(page:any,kind:string){
+  await activity(page).locator('[data-pm-lifecycle-controls]>summary').click();
+  await activity(page).locator(`[data-pm-lifecycle-intent="${kind}"]>summary`).click();
+  return action(page,kind);
+}
+for(const native of [false,true])test.describe(native?'native lifecycle':'web lifecycle',()=>{
+  test('Idea remains a readable stage without dispatching or changing its discussion',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await expect(activity(page)).toContainText('Idea');await expect(activity(page)).toContainText('Discussions, Sprint commitments');
+    const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('planning');
+    await editor.getByLabel('Reason and retained context').fill('Organize the selected direction; keep other ideas open.');
+    await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+    await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Planning');
+    expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.preconditions).toEqual({expected_lifecycle_revision:0});
+    expect(f.base.state.thread.mode).toBe('idea');expect(f.base.state.writes).toHaveLength(0);await expect(page.getByRole('tab')).toHaveCount(0);
+  });
+  test('pause distinguishes unknown in-flight results and explicit retention does not restart them',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const editor=await edit(page,'pause');await editor.getByLabel('Reason and retained context').fill('Pause new investment.');
+    await editor.getByRole('button',{name:'Pause new work',exact:true}).click();
+    await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Paused for new work · existing work needs reconciliation');
+    const row=activity(page).locator('[data-pm-lifecycle-operation]');await row.locator('summary').click();await expect(row).toContainText('unknown');
+    await activity(page).locator('[data-pm-lifecycle-retain]>summary').click();
+    await activity(page).getByRole('checkbox',{name:'Retain this operation '+operationId,exact:true}).check();
+    await action(page,'retain_inflight').getByLabel('Reason and retained context').fill('Leave the unknown result for its original controller to reconcile.');
+    await action(page,'retain_inflight').getByRole('button',{name:'Record retained work',exact:true}).click();
+    await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Paused');
+    expect(f.state.inflight[0].operation_status).toBe('unknown');expect(f.state.writes[1].body.params.operation_ids).toEqual([operationId]);
+    expect(f.base.state.writes).toHaveLength(0);
+  });
+  test('lost pause acknowledgement recovers the same key and original revision',async({page})=>{
+    const f=fixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const editor=await edit(page,'pause');await editor.getByLabel('Reason and retained context').fill('Keep this exact stop intent.');
+    await editor.getByRole('button',{name:'Pause new work',exact:true}).click();await expect(editor).toContainText('Reply unavailable');
+    f.base.state.cursor++;await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work',{timeout:10000});
+    await editor.getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
+    expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);expect(f.state.ops.size).toBe(1);
+  });
+  test('a changed revision preserves the draft until the owner explicitly reviews the new state',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const editor=await edit(page,'close');await editor.getByLabel('Reason and retained context').fill('Preserve this closure rationale.');
+    f.state.revision++;f.base.state.cursor++;await expect(editor).toContainText('Your draft still uses the earlier version',{timeout:10000});
+    await expect(editor.getByRole('button',{name:'Close this management workspace',exact:true})).toBeDisabled();
+    await expect(editor.getByLabel('Reason and retained context')).toHaveValue('Preserve this closure rationale.');
+    await editor.getByRole('button',{name:'Review current activity state'}).click();await editor.getByRole('button',{name:'Close this management workspace',exact:true}).click();
+    expect(f.state.writes[0].body.preconditions.expected_lifecycle_revision).toBe(1);
+    expect(f.state.writes.some(call=>call.body.action.includes('archive'))).toBe(false);
+  });
+  test('reopening explicitly selects a stage without replaying stopped requests',async({page})=>{
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const editor=await edit(page,'reopen');await editor.getByLabel('Management stage').selectOption('development');
+    await editor.getByLabel('Reason and retained context').fill('Resume selected development; review old work separately.');
+    await editor.getByRole('button',{name:'Reopen workspace',exact:true}).click();await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Development');
+    expect(f.state.writes.map(call=>call.body.action)).toEqual(['pm.lifecycle.reopen']);expect(f.base.state.writes).toHaveLength(0);
+    expect(f.state.inflight[0].operation_status).toBe('unknown');
+  });
+  test('legacy and filtered states do not infer missing decisions or hide an effective stop',async({page})=>{
+    const f=fixture();f.state.stage=null;f.state.status='unclassified';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await expect(activity(page)).toContainText('Its previous work has not been reclassified.');
+    f.stop();f.state.filtered=true;f.base.state.cursor++;
+    await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work',{timeout:10000});
+    await expect(activity(page)).toContainText('Some records are outside your current source access');
+    await expect(activity(page)).not.toContainText('Keep the released version while reviewing');
+    expect(f.state.writes).toHaveLength(0);
+  });
+  test('source read failure clears prior facts and blocks new investment',async({page})=>{
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await expect(activity(page)).toContainText('Keep the released version');f.state.failed=true;f.base.state.cursor++;
+    await expect(activity(page)).toContainText('Activity controls are unavailable',{timeout:10000});
+    await expect(activity(page)).not.toContainText('Keep the released version');await expect(activity(page).locator('[data-pm-lifecycle-operation]')).toHaveCount(0);
+    const editor=await edit(page,'reopen');await expect(editor.getByRole('button',{name:'Reopen workspace',exact:true})).toBeDisabled();
+  });
+  test('a withdrawn historical source removes its metadata and any late private detail',async({page})=>{
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await activity(page).locator('[data-pm-lifecycle-history]>summary').click();
+    f.state.historyDenied=true;await activity(page).locator('[data-pm-lifecycle-history] details>summary').click();
+    await expect(activity(page)).toContainText('Original transition source unavailable');
+    await expect(activity(page)).not.toContainText('Keep the released version');
+  });
+  test('a non-owner observes the effective stage without management authority',async({page})=>{
+    const f=fixture();f.base.state.role='contributor';f.state.admin=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await expect(activity(page)).toContainText('Only the current workspace owner');
+    const editor=await edit(page,'pause');await expect(editor.getByRole('button',{name:'Pause new work',exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(0);
+  });
+  test('new execution preparation stays gated while manual notes remain available',async({page})=>{
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work');
+    await expect(page.locator('[data-pm-action="pm.run.prepare"] button[type=submit]')).toBeDisabled();
+    await expect(page.locator('[data-pm-action="pm.message.append"] button[type=submit]')).toBeEnabled();
+    expect(f.base.state.writes).toHaveLength(0);
+  });
+  test('filtered inflight pages and withdrawn retention reasons remain visibly incomplete',async({page})=>{
+    const f=fixture();f.stop();f.state.pageFiltered=true;f.state.inflight[0].disposition='retained';f.state.inflight[0].retention_visibility_filtered=true;
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const row=activity(page).locator('[data-pm-lifecycle-operation]');await row.locator('summary').click();
+    await expect(row).toContainText('Some records are outside your current source access');
+    await expect(activity(page).getByText('Some records are outside your current source access. Visible rows are not a complete project total.',{exact:true})).toHaveCount(2);
+  });
+});
+for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`lifecycle layout ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();f.stop();
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await expect(activity(page).locator('.pm-lifecycle-stage')).toBeVisible();
+  await activity(page).locator('[data-pm-lifecycle-controls]>summary').click();await activity(page).locator('[data-pm-lifecycle-intent="reopen"]>summary').click();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.evaluate(()=>scrollTo(0,0));
+  const out=process.env.PM_LIFECYCLE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}await context.close();
+});

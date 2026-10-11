@@ -250,10 +250,34 @@ try {
   assert.deepEqual(await repeatedResponse.json(),fixedComparison);
   await page.reload();
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+  const activity=page.locator('[data-pm-lifecycle]');
+  await expect(activity.locator('.pm-lifecycle-stage')).toHaveText('Idea');
+  // Discussion planning did not change the independent workspace management stage.
+  await activity.locator('[data-pm-lifecycle-controls]>summary').click();
+  for(const [kind,label,reason,stage] of [
+    ['pause','Pause new work','Keep the selected project context without new investment.','Paused'],
+    ['close','Close this management workspace','Retain the completed discussion and original work.','Closed'],
+    ['reopen','Reopen workspace','Resume selected development without replaying old requests.','Development'],
+  ]){
+    await activity.locator(`[data-pm-lifecycle-intent="${kind}"]>summary`).click();
+    const editor=activity.locator(`[data-pm-action="pm.lifecycle.${kind}"]`);
+    if(kind==='reopen')await editor.getByLabel('Management stage',{exact:true}).selectOption('development');
+    await editor.getByLabel('Reason and retained context',{exact:true}).fill(reason);
+    await editor.getByRole('button',{name:label,exact:true}).click();
+    await expect(activity.locator('.pm-lifecycle-stage')).toHaveText(stage);
+    if(kind==='pause'){
+      await expect(page.locator('[data-pm-action="pm.run.prepare"] button[type=submit]')).toBeDisabled();
+      await expect(page.locator('[data-pm-action="pm.message.append"] button[type=submit]')).toBeEnabled();
+    }
+  }
+  const lifecycle=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/lifecycle`,{headers:{Authorization:'Bearer '+fixture.token}})).json();
+  assert.equal(lifecycle.lifecycle.stage,'development');assert.equal(lifecycle.lifecycle.execution_epoch,3);
+  const history=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/lifecycle/transitions`,{headers:{Authorization:'Bearer '+fixture.token}})).json();
+  assert.deepEqual(history.transitions.map(row=>row.to_stage),['paused','closed','development']);
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
-  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create'].sort());
+  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen; zero hosts or tasks.');
 } catch(error) {
   console.error('Synthetic PM fixture state:',await failureDetails().catch(()=>({unavailable:true})));
   throw error;

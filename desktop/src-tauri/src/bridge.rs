@@ -1158,7 +1158,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1285,6 +1285,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let evidence_list = path.ends_with("/evidence");
             let snapshot_list = path.ends_with("/snapshots");
             let brief_export = path.ends_with("/brief-export");
+            let lifecycle_inflight = path.ends_with("/lifecycle/inflight");
+            let lifecycle_list = lifecycle_inflight || path.ends_with("/lifecycle/transitions");
             let comparison = path.ends_with("/plan-comparison");
             let spec_sources = path.ends_with("/spec-sources");
             let roadmap_list = path.ends_with("/roadmap/revisions");
@@ -1307,7 +1309,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 );
             let sprint_detail =
                 path.split('/').nth(4) == Some("sprints") && path.split('/').count() == 6;
-            let sequence_list = plan_list
+            let sequence_list = lifecycle_list
+                || plan_list
                 || project_list
                 || work_list
                 || evidence_list
@@ -1407,6 +1410,19 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                     value.len() == 36
                         && value.starts_with("pmr_")
                         && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "after" if lifecycle_list => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
+                }
+                "transition_id" if lifecycle_inflight => {
+                    value.len() == 37
+                        && value.starts_with("pmlt_")
+                        && value[5..]
                             .bytes()
                             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
@@ -1989,6 +2005,65 @@ mod tests {
         assert!(validate_request(&request("POST", root)).is_err());
         let mut input = get(root);
         input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn lifecycle_reads_have_exact_routes_and_bounded_cursors() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/lifecycle";
+        let id = "pmlt_22222222222222222222222222222222";
+        for path in [root.to_string(), format!("{root}/transitions/{id}")] {
+            assert!(validate_request(&get(&path)).is_ok());
+            assert!(validate_request(&get(&format!("{path}?limit=1"))).is_err());
+        }
+        for suffix in ["transitions", "inflight"] {
+            let path = format!("{root}/{suffix}");
+            for query in [
+                "",
+                "?after=0&limit=1",
+                "?after=9223372036854775807&limit=100",
+            ] {
+                assert!(validate_request(&get(&format!("{path}{query}"))).is_ok());
+            }
+            for query in [
+                "?after=",
+                "?after=-1",
+                "?after=1.0",
+                "?after=9223372036854775808",
+                "?after=0&after=1",
+                "?limit=",
+                "?limit=0",
+                "?limit=101",
+                "?limit=1&limit=2",
+                "?actor=owner",
+                "?stage=closed",
+                "?workspace_id=foreign",
+            ] {
+                assert!(
+                    validate_request(&get(&format!("{path}{query}"))).is_err(),
+                    "{query}"
+                );
+            }
+        }
+        assert!(validate_request(&get(&format!("{root}/inflight?transition_id={id}"))).is_ok());
+        for path in [
+            format!("{root}/transitions?transition_id={id}"),
+            format!("{root}/inflight?transition_id="),
+            format!("{root}/inflight?transition_id=pmlt_bad"),
+            format!("{root}/inflight?transition_id={id}&transition_id={id}"),
+            format!("{root}/transitions/latest"),
+            format!("{root}/transitions/pmlt_bad"),
+            format!("{root}/transitions/{id}/inflight"),
+            format!("{root}/pause"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        assert!(validate_request(&request("POST", root)).is_err());
+        let mut input = get(root);
+        input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+        input.idempotency_key = None;
+        input.body = Some(serde_json::json!({"stage":"closed"}));
         assert!(validate_request(&input).is_err());
     }
 
