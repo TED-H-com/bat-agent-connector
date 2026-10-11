@@ -807,14 +807,22 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 //#endregion
 //#region src/pm-evidence.js
 var flatten = (rows) => (rows || []).flatMap((row) => [row, ...flatten(row.children)]);
-function workspaceEvidence({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
+var projectSelections = new Map();
+function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = "", active = null;
+	const selectionKey = namespace ? JSON.stringify([namespace, workspaceId]) : null;
+	let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = projectSelections.get(selectionKey) || "", active = null;
 	const rows = h("div", { class: "pm-evidence-rows" }), status = h("div", { role: "status" });
 	const choose = h("select", {
 		"aria-label": t("pm_evidence_project"),
 		onchange: () => {
+			alive();
 			selected = choose.value;
+			if (selectionKey) {
+				projectSelections.delete(selectionKey);
+				if (selected) projectSelections.set(selectionKey, selected);
+				if (projectSelections.size > 40) projectSelections.delete(projectSelections.keys().next().value);
+			}
 			loadProject();
 		}
 	});
@@ -2153,6 +2161,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		workspace: () => workspace,
 		permitted,
