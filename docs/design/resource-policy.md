@@ -168,6 +168,12 @@ may read a foreign source folder to create its own separate carrier; this read d
 not claim that source or permit a session start in it. The actual resulting carrier
 still passes the controller checks before later frames.
 
+Explicit source selectors retain their admission-time identity; prefix and automatic
+selection persist the resolved session ID before further reads. Failover, fanout,
+relay and worktree merge do not retarget a pending operation to a replacement with
+the same ID. `SESSION_SOURCE_CHANGED` requires reviewing the current source before
+submitting a new intent. Read-only use of an unchanged foreign planner remains allowed.
+
 Recovery may restore a missing registry row only from original durable controller
 and incarnation evidence, together with the existing session/task identity checks.
 Legacy rows without this evidence remain readable and are not adopted from an actor
@@ -181,5 +187,5 @@ service contract rather than becoming one session controller's checkout.
 New refusal codes include `CONTROLLER_AUTHORITY_REQUIRED`,
 `CONTROLLER_OWNER_UNPROVEN`, `FOREIGN_CONTROLLER`,
 `CONTROLLER_INCARNATION_CHANGED`, `CONTROLLER_WORKSPACE_CHANGED`,
-`CONTROLLER_MEMBERSHIP_CHANGED` and `CONTROLLER_IMMUTABLE`. These restrictions are
+`CONTROLLER_MEMBERSHIP_CHANGED`, `CONTROLLER_IMMUTABLE` and `SESSION_SOURCE_CHANGED`. These restrictions are
 shown per action without rewriting provenance or granting takeover through `force`.
