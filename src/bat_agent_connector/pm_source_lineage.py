@@ -6,6 +6,7 @@ The public read gates are separate from internal original-effect reconciliation.
 """
 from __future__ import annotations
 
+import json
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -22,7 +23,11 @@ DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept",
 _REF_KEYS = {"operation_id": "operation", "execution_operation_id": "operation", "source_operation_id": "operation",
     "start_operation_id": "operation", "capture_operation_id": "operation", "work_item_id": "work_item",
     "worktree_id": "worktree", "checkpoint_id": "checkpoint", "task_id": "execution",
-    "session_resource_id": "session", "execution_id": "execution", "operation": "operation"}
+    "session_resource_id": "session", "execution_id": "execution", "operation": "operation",
+    "apply_operation_id": "operation", "preview_id": "delivery_preview", "deployment_id": "deployment",
+    "retry_of": "deployment", "rollback_of": "deployment"}
+_RESOURCE_KINDS = frozenset({"operation", "session", "worktree", "work_item", "execution", "checkpoint", "artifact",
+    "integration", "integration_preview", "pr_merge_preview", "delivery_preview", "deployment"})
 
 
 def schema(journal):
@@ -34,6 +39,8 @@ def schema(journal):
         for verb in ("UPDATE", "DELETE"):
             journal.db.execute(f"CREATE TRIGGER IF NOT EXISTS pm_source_lineage_{verb.lower()}_immutable "
                 f"BEFORE {verb} ON pm_source_lineage BEGIN SELECT RAISE(ABORT, 'PM source lineage is immutable'); END")
+        from .pm_delivery_lineage import schema as delivery_schema
+        delivery_schema(journal)
 
 
 def installed(db):
@@ -57,6 +64,19 @@ def roots(db, kind, identity, *, _seen=None):
     found = {row[0] for row in db.execute("SELECT original_operation_id FROM pm_source_lineage WHERE resource_type=? AND resource_id=?",
                                          (kind, identity))}
     refs = []
+    if kind == "integration":
+        refs.append(("operation", identity))
+    elif kind in {"delivery_preview", "integration_preview"} and identity.startswith("ipv_"):
+        refs.append(("operation", "op_" + identity[4:]))
+    elif kind in {"delivery_preview", "pr_merge_preview"} and _table(db, "pr_merge_previews"):
+        row = db.execute("SELECT document FROM pr_merge_previews WHERE preview_id=?", (identity,)).fetchone()
+        if row:
+            from .pm_delivery_lineage import references as delivery_references
+            refs.extend(delivery_references(json.loads(row[0])))
+    elif kind == "deployment" and _table(db, "deployments"):
+        row = db.execute("SELECT operation_id FROM deployments WHERE deployment_id=?", (identity,)).fetchone()
+        if row:
+            refs.append(("operation", row[0]))
     if kind == "artifact" and _table(db, "artifact_revisions"):
         # The whole artifact retains all historical source roots, including an
         # upload appended to a previously captured artifact identity.
@@ -103,19 +123,23 @@ def references(value, *, inherited_host=None, depth=0):
         if isinstance(host, str) and isinstance(value.get("session_id"), str):
             refs.add(("session", host + "/" + value["session_id"]))
         kind, identity = value.get("resource_type"), value.get("resource_id")
-        if kind in {"operation", "session", "worktree", "work_item", "execution", "checkpoint", "artifact"} and isinstance(identity, str):
+        if kind in _RESOURCE_KINDS and isinstance(identity, str):
             refs.add((kind, host + "/" + identity if kind == "session" and "/" not in identity and isinstance(host, str) else identity))
         # Work links, integration selections and cleanup items use these exact
         # tagged references rather than the ordinary named identity fields.
         kind, identity = value.get("kind"), value.get("ref", value.get("id"))
-        if kind in {"operation", "session", "worktree", "work_item", "execution", "checkpoint", "artifact"} and isinstance(identity, str):
+        if kind in _RESOURCE_KINDS and isinstance(identity, str):
             refs.add((kind, identity))
         if kind == "execution" and isinstance(identity, str) and identity.startswith("op_"):
             refs.add(("operation", identity))
+        if kind == "checkpoint_run" and isinstance(identity, str):
+            refs.add(("operation", identity))
         for kind_field, id_field in (("source_kind", "source_id"), ("owner_kind", "owner_id")):
             kind, identity = value.get(kind_field), value.get(id_field)
-            if kind in {"operation", "session", "worktree", "work_item", "execution", "checkpoint", "artifact"} and isinstance(identity, str):
+            if kind in _RESOURCE_KINDS and isinstance(identity, str):
                 refs.add(("operation" if kind == "execution" and identity.startswith("op_") else kind, identity))
+        from .pm_delivery_lineage import references as delivery_references
+        refs.update(delivery_references(value))
         for child in value.values():
             if isinstance(child, (dict, list)):
                 refs.update(references(child, inherited_host=host, depth=depth + 1))
@@ -171,11 +195,16 @@ def inherit(ops, principal, action, target, params, binding):
     if not installed(ops.db):
         return binding
     original_ids = document_roots(ops.db, {"target": target, "params": params, "binding": binding})
+    from . import pm_delivery_lineage
+    if action in pm_delivery_lineage.ACTIONS or action == "github.pr.update":
+        original_ids.update(pm_delivery_lineage.action_roots(ops, action, target, params))
+    if len(original_ids) > MAX_ROOTS:
+        raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources for one delivery", 409)
     if not original_ids:
         return binding
     if not visible_roots(ops.db, principal, original_ids):
         raise OperationError("NOT_FOUND", "Original resource sources are unavailable", 404)
-    if action not in DERIVED_ACTIONS and not action.startswith("pm.") and not (action == "repository.continue" and (binding or {}).get("pm_handoff")):
+    if action not in DERIVED_ACTIONS | pm_delivery_lineage.ACTIONS and not action.startswith("pm.") and not (action == "repository.continue" and (binding or {}).get("pm_handoff")):
         raise OperationError("PM_DERIVED_ACTION_UNAVAILABLE", "This action has no fixed PM source handoff contract yet", 409)
     workspaces = set()
     for root in original_ids:
@@ -188,7 +217,8 @@ def inherit(ops, principal, action, target, params, binding):
         raise OperationError("PM_SOURCE_WORKSPACE_MISMATCH", "Original source and requested PM workspace differ", 409)
     if action.startswith("pm.") and target.get("workspace_id") not in workspaces:
         raise OperationError("PM_SOURCE_WORKSPACE_MISMATCH", "Original source and requested PM workspace differ", 409)
-    return {**(binding or {}), "pm_source_roots": sorted(original_ids),
+    delivery = pm_delivery_lineage.admission(ops, principal, action, target, params, original_ids)
+    return {**(binding or {}), **({"pm_delivery": delivery} if delivery else {}), "pm_source_roots": sorted(original_ids),
             "pm_lineage": {"workspace_id": next(iter(workspaces))}}
 
 
@@ -203,9 +233,16 @@ def bind_operation(db, operation_id, target, params, binding):
         original_ids = [operation_id, *original_ids]
         resources.append(("session", target["host"] + "/" + str(uuid.uuid5(_SESSION_NS, operation_id))))
         resources.append(("work_item", params["work_item_id"]))
+    if binding.get("pm_delivery") and "host" in binding["pm_delivery"] and "operation_id" in target:
+        # integration.handoff uses the existing deterministic creation identity.
+        from .checkpoints import _SESSION_NS
+        resources.append(("session", binding["pm_delivery"]["host"] + "/" + str(uuid.uuid5(_SESSION_NS, operation_id))))
     for kind, identity in resources:
         for original in original_ids:
             db.execute("INSERT OR IGNORE INTO pm_source_lineage VALUES(?,?,?,?)", (kind, identity, original, operation_id))
+    if binding.get("pm_delivery"):
+        from .pm_delivery_lineage import bind
+        bind(db, operation_id, binding["pm_delivery"])
 
 
 def require_new_effect(ops, operation_id):
@@ -218,6 +255,8 @@ def require_new_effect(ops, operation_id):
     principal = Principal(authority["actor"], frozenset(authority["scopes"]), admin=authority["admin"])
     if not visible_roots(ops.db, principal, originals):
         raise OperationError("PM_HANDOFF_SOURCE_UNAVAILABLE", "Original sources were withdrawn before a new effect", 404)
+    from .pm_delivery_lineage import require_current
+    require_current(ops, op)
 
 
 @contextmanager
@@ -292,6 +331,9 @@ fixed PM documents are not rewritten into misleading partial descriptions.
         require_document(db, principal, value)
         return value
     result = filter_page(db, principal, value, _COLLECTIONS)
+    if ("next_cursor" in result and isinstance(result.get("items"), list)
+            and all(isinstance(item, dict) and "deployment_id" in item for item in result["items"])):
+        result = filter_page(db, principal, result, {"items"})
     if (isinstance(result.get("snapshot"), dict) and isinstance(result.get("sync"), dict)
             and isinstance(result.get("capabilities"), dict) and "pagination" in result):
         result["snapshot"] = {key: read_response(db, principal, part) if isinstance(part, dict) else part
@@ -319,6 +361,10 @@ def http_selection(name, kwargs, query, body):
         selection["checkpoint_id"] = kwargs["cp"]
     if "op" in kwargs:
         selection["operation_id"] = kwargs["op"]
+    if "pv" in kwargs and name == "integration_preview":
+        selection["preview_id"] = kwargs["pv"]
+    if "dep" in kwargs:
+        selection["deployment_id"] = kwargs["dep"]
     if "task" in kwargs:
         selection["task_id"] = kwargs["task"]
     if "wi" in kwargs:
