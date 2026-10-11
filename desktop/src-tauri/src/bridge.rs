@@ -1111,7 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1239,12 +1239,24 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let snapshot_list = path.ends_with("/snapshots");
             let comparison = path.ends_with("/plan-comparison");
             let roadmap_list = path.ends_with("/roadmap/revisions");
+            let sprint_list = path.ends_with("/sprints");
+            let sprint_history = path.contains("/sprints/") && path.contains("/history/");
+            let artifact_list = path.contains("/sprint-artifacts/")
+                && matches!(
+                    path.rsplit('/').next(),
+                    Some("product_goal" | "dod" | "backlog")
+                );
+            let sprint_detail =
+                path.split('/').nth(4) == Some("sprints") && path.split('/').count() == 6;
             let sequence_list = plan_list
                 || project_list
                 || work_list
                 || evidence_list
                 || snapshot_list
-                || roadmap_list;
+                || roadmap_list
+                || sprint_list
+                || sprint_history
+                || artifact_list;
             let thread_detail = path
                 .split('/')
                 .nth(5)
@@ -1276,6 +1288,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 }
                 "kind" if roadmap_list => {
                     matches!(value.as_ref(), "baseline" | "forecast" | "observation")
+                }
+                "history_limit" if sprint_detail => {
+                    !value.is_empty()
+                        && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
                 "limit" if thread_list || thread_detail || run_list || sequence_list => {
                     !value.is_empty()
@@ -1817,6 +1835,14 @@ mod tests {
             format!("{workspace}/plans?limit=100&after=0"),
             format!("{workspace}/projects?limit=100&after=0"),
             format!("{workspace}/plan-comparison?from_revision_id=pmrev_33333333333333333333333333333333&to_revision_id=pmrev_44444444444444444444444444444444&binding_ids=pmwb_55555555555555555555555555555555&journal_cursor=0"),
+            format!("{workspace}/sprint-artifacts"),
+            format!("{workspace}/sprint-artifacts/product_goal?limit=100&after=0"),
+            format!("{workspace}/sprint-artifacts/product_goal/pmgoal_88888888888888888888888888888888"),
+            format!("{workspace}/sprint-artifacts/dod/pmdod_88888888888888888888888888888888"),
+            format!("{workspace}/sprint-artifacts/backlog/pmbkl_88888888888888888888888888888888"),
+            format!("{workspace}/sprints?after=0&limit=100"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888?history_limit=1"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888/history/events?limit=1&after=0"),
             format!("{workspace}/roadmap"),
             format!("{workspace}/roadmap/revisions?kind=forecast&limit=100&after=0"),
             format!("{workspace}/roadmap/revisions/pmrb_66666666666666666666666666666666"),
@@ -1868,6 +1894,17 @@ mod tests {
             format!("{workspace}/plan-comparison?journal_cursor=1.5"),
             format!("{workspace}/plan-comparison?actor=other"),
             format!("{workspace}/plan-comparison?limit=10"),
+            format!("{workspace}/sprint-artifacts?limit=1"),
+            format!("{workspace}/sprint-artifacts/unknown"),
+            format!("{workspace}/sprint-artifacts/product_goal/pmdod_88888888888888888888888888888888"),
+            format!("{workspace}/sprint-artifacts/dod?after=-1"),
+            format!("{workspace}/sprint-artifacts/backlog?limit=0"),
+            format!("{workspace}/sprints?history_limit=1"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888?limit=1"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888?history_limit=101"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888?actor=other"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888/history/unknown"),
+            format!("{workspace}/sprints/pms_88888888888888888888888888888888/history/events?after=0&after=1"),
             format!("{workspace}/roadmap?kind=forecast"),
             format!("{workspace}/roadmap/revisions?kind=unknown"),
             format!("{workspace}/roadmap/revisions?kind=baseline&kind=forecast"),

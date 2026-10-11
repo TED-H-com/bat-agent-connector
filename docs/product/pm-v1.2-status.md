@@ -79,7 +79,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W12 | P1 | Project Brief | 開發分支：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
 | W13 | P1 | Roadmap 與 scope | 開發分支：固定採用需求、里程碑／依賴、原定／預測／實際證據與歷史；Git materialization、里程碑品質驗收仍待做 |
 | W14 | P1 | Kanban | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W15 | P1 | Sprint artifacts 與時間 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W15 | P1 | Sprint artifacts 與時間 | 開發分支：Product Goal／有序 Backlog／DoD、固定 Sprint Goal／角色／期間、選入工作與關閉歷史；品質驗收與完整事件待做 |
 | W16 | P1 | Planning Review Retro | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W17 | P1 | Risk change decision view | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W18 | P1 | GitHub issue mapping | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -172,3 +172,14 @@ W13 在 workspace 主畫面加入範圍與里程碑。排程基準、預測與�
 API／MCP／Web／Tauri 共用相同 reads 與 operations。回覆遺失保留原 request key、
 版本與內容；編輯草稿可恢復，換用目前基準是明確操作。自動化包含 mock BAT 加真實磁碟 Git
 採用、工作關聯、排程、預測及成果快照串接；這不是使用者機隊實測。
+
+## Sprint 與迭代承諾
+
+Product Goal、Product Backlog、Definition of Done 與 Sprint Goal 分別版本化。
+Sprint 固定角色、期間及承諾引用；選入工作保留 How、原始 binding 與變動理由。
+只有指定且仍有 owner 身分的人能開始、修改尚未開始的 Goal、結束或取消；
+開發者的 How 與自己的工作選擇保留個別責任。
+
+Web／Tauri 在同頁查看及操作；API／MCP 共用服務。結束／取消不停止 session，
+也不自動搬移工作到下一輪。尚未評估 DoD 的工作不計為已驗證 Increment，
+但不因此聲稱實作或測試失敗。Scrum 模式目前提供 artifacts，完整 events 仍在 W16。

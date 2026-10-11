@@ -211,6 +211,40 @@ a later forecast does not rewrite that historical context. Follow sequence
 cursors and current source visibility. Re-baselining resets the current forecast
 and observation pointers, while their immutable history remains readable.
 
+## Sprint commitments and iteration periods
+
+Use `pm_sprint_artifacts_get`, `pm_sprint_artifact_revisions_list` and
+`pm_sprint_artifact_get` for the Product Goal, ordered Product Backlog and DoD.
+These are separate immutable commitments; item acceptance remains in the fixed
+requirement sources. `pm.product_goal.revise`, `pm.dod.revise` and
+`pm.backlog.revise` target the workspace and require `expected_revision_id`
+(null initially), an explicit rationale and the relevant fixed plan/goal/work
+references. A new head does not rewrite an existing Sprint.
+
+`pm.sprint.create` selects `mode` (`personal_iteration` or `scrum`), title, Goal,
+actual workspace `owner_actor`, Developers, optional Scrum Master, fixed backlog
+and DoD IDs, UTC start/end timestamps and capacity note. It requires rationale
+and `expected_workspace_version`. The fixed period is at most one calendar month.
+The Scrum mode identifies artifacts; complete Scrum events/conformance are not
+established merely by choosing that label.
+
+Read `pm_sprints_list`, `pm_sprint_get` and `pm_sprint_history_list`; follow each
+history cursor. `pm.sprint.goal.revise`, `pm.sprint.select`, `pm.sprint.start`,
+`pm.sprint.close` and `pm.sprint.cancel` target the workspace/Sprint and require
+`expected_version` plus rationale. Selection specifies exact backlog binding IDs,
+assignees and How. Developers can edit only their own How/selection; the designated
+owner cannot write another Developer's implementation plan. Changing active Goal,
+roles or dates is not an implicit adaptation. Only the designated actor who is
+still an actual workspace owner may start, revise the planned Goal, close or cancel;
+administrator credentials do not impersonate that actor.
+
+One Sprint can be active per workspace. Start within its fixed interval; close
+after the end, or explicitly cancel an obsolete Goal. These are management changes,
+not session start/stop or execution authority. Unassessed work is not a verified
+Increment and does not automatically carry over. DoD evaluation, Review and Retro
+are separate capabilities; never equate a work claim, management close or report
+with their completion.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)
