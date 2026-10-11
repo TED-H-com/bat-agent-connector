@@ -38,6 +38,7 @@ def _validated(value) -> dict:
         valid = (str(uuid.UUID(value["server_id"])) == value["server_id"]
                  and isinstance(value["controller_id"], str) and _ID.fullmatch(value["controller_id"])
                  and isinstance(value["actor"], str) and bool(value["actor"])
+                 and value["controller_id"] == "ctr_" + uuid.uuid5(uuid.UUID(value["server_id"]), value["actor"]).hex
                  and type(value["admin"]) is bool and isinstance(value["scopes"], list)
                  and all(isinstance(scope, str) for scope in value["scopes"])
                  and (value.get("pm_workspace_id") is None or isinstance(value["pm_workspace_id"], str)
