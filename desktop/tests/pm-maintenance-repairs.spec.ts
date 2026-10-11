@@ -77,3 +77,14 @@ test('cached old draft rules require their original package access after a newer
  const f=repairFixture();await mountRepairs(page,f);await openPolicy(page);const next=structuredClone(f.base.state.policies[0].document.policy);next.repair_rules=[];f.base.addPolicy(next);f.state.packageDeny=true;await page.evaluate(()=>(window as any).policyRefresh());await expect(policyForm(page).locator('.pm-repair-rule')).toHaveCount(0);await expect(policy(page)).toContainText('Original rule package withdrawn');
  f.state.packageDeny=false;await page.evaluate(()=>(window as any).policyRefresh());await expect(policyForm(page).locator('.pm-repair-rule')).toHaveCount(1);await expect(policyForm(page).locator('button[type=submit]')).toBeDisabled();
 });
+
+for(const locale of ['en','zh-TW'])test(`published review outcome retains independent runtime capacity ${locale}`,async({page})=>{
+ const f=repairFixture();const row:any=f.save();row.operation_status='succeeded';row.outcome='published_for_review';row.progress.outcome='published_for_review';row.progress.blocked_reason='PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN';
+ await mountRepairs(page,f,locale);await panel(page).getByLabel(locale==='en'?'Saved repair':'已保存的修復',{exact:true}).selectOption(row.repair_id);
+ const shown=panel(page).locator('[data-repair]');await expect(shown).toContainText(locale==='en'?'Published for review':'已發布供審閱');await expect(shown).toContainText(locale==='en'?'original repair runtime has not been proven ended':'原始修復 runtime 尚未證實結束');
+ await expect(shown).toContainText(locale==='en'?'still holds its capacity reservation':'此修復仍保留工作容量');await expect(shown).not.toContainText(locale==='en'?'no longer holds a capacity reservation':'此修復已釋放工作容量');expect(f.state.writes).toEqual([]);
+ f.state.deny=true;await page.evaluate(()=>(window as any).repairRefresh());await expect(panel(page).locator('[data-repair]')).toHaveCount(0);
+});
+test('succeeded child alone cannot invent a published review outcome',async({page})=>{
+ const f=repairFixture();const row:any=f.save();row.operation_status='succeeded';await mountRepairs(page,f);await selectRepair(page,f);await expect(panel(page).locator('[data-repair]')).not.toContainText('Published for review');expect(f.state.writes).toEqual([]);
+});
