@@ -89,7 +89,8 @@ def _admit(ops, principal, target, params, pre):
 
 
 def _authorize(ops, principal, operation, _verb):
-    if (operation.get("external_refs") or {}).get("admission_binding") != dashboard_sync.identity(ops.journal, principal):
+    saved = (operation.get("external_refs") or {}).get("admission_binding") or {}
+    if {k: v for k, v in saved.items() if k != "controller_authority"} != dashboard_sync.identity(ops.journal, principal):
         raise OperationError("FORBIDDEN", "model preferences belong to the original effective principal", 403)
 
 
