@@ -16,7 +16,7 @@ from .operations import RERUN, ActionDef, AmbiguousOutcome, NeedsAttention, Oper
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 FIELDS = {"source_ref", "source_sha", "agent", "prompt", "title", "model", "artifacts", "project_id", "work_item_id",
-          "pm_package_ref", "pm_code_basis", "pm_spec_ref"}
+          "pm_package_ref", "pm_code_basis", "pm_spec_ref", "pm_requirement_quality_refs"}
 
 
 def project_context(ops, target, params, pre, *, operation_id=None):

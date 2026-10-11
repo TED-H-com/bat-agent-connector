@@ -662,6 +662,16 @@ class ApiV1:
         from .pm_reads import FIELDS, read
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
+        if method == 'pm_work_package_readiness_get' and 'quality_refs' in params:
+            encoded = params['quality_refs']
+            if len(encoded.encode('utf-8')) > 16_384:
+                raise OperationError('INVALID_PARAMS', 'Original quality selectors exceed the read bound', 422)
+            try:
+                params['quality_refs'] = json.loads(encoded)
+            except (ValueError, RecursionError):
+                raise OperationError('INVALID_PARAMS', 'Original quality selectors must be a JSON object', 422) from None
+            if not isinstance(params['quality_refs'], dict):
+                raise OperationError('INVALID_PARAMS', 'Original quality selectors must be a JSON object', 422)
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")

@@ -1135,13 +1135,17 @@ fn valid_spec_source_path(path: &str) -> bool {
 
 pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     // Match raw paths before URL parsing so traversal cannot be normalized into an allowed route.
-    if input.path.len() > 4096
+    let (path, query) = input.path.split_once('?').unwrap_or((&input.path, ""));
+    let package_readiness = input.method == "GET"
+        && path.starts_with("/pm/workspaces/")
+        && path.contains("/work-packages/")
+        && path.ends_with("/readiness");
+    if input.path.len() > if package_readiness { 65_536 } else { 4096 }
         || input.path.contains(['\\', '#', '\r', '\n'])
         || input.path.chars().any(char::is_control)
     {
         return Err("Invalid central route".into());
     }
-    let (path, query) = input.path.split_once('?').unwrap_or((&input.path, ""));
     let mut encoded = query.bytes();
     while let Some(byte) = encoded.next() {
         if byte == b'%'
@@ -1363,6 +1367,11 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
+                "quality_refs" if package_readiness => {
+                    value.len() <= 16_384
+                        && serde_json::from_str::<serde_json::Value>(&value)
+                            .is_ok_and(|selected| selected.is_object())
+                }
                 "after" if workload_list => {
                     !value.is_empty()
                         && value.len() <= 19
@@ -3348,6 +3357,38 @@ mod tests {
         ] {
             let path = format!("{root}{suffix}");
             assert!(validate_request(&request("GET", &path)).is_err(), "{path}");
+        }
+    }
+
+    #[test]
+    fn package_readiness_accepts_only_bounded_original_quality_selector_objects() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/work-packages/pmwp_22222222222222222222222222222222";
+        let query = |value: &str| {
+            url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("quality_refs", value)
+                .finish()
+        };
+        let selected = serde_json::json!({"requirement": "x".repeat(5000)}).to_string();
+        let accepted = format!("{root}/readiness?{}", query(&selected));
+        assert!(accepted.len() > 4096);
+        assert!(validate_request(&request("GET", &accepted)).is_ok());
+        assert!(validate_request(&request("POST", &accepted)).is_err());
+        for value in [
+            "null",
+            "[]",
+            "1",
+            "{",
+            &serde_json::json!({"r": "x".repeat(16_384)}).to_string(),
+        ] {
+            let path = format!("{root}/readiness?{}", query(value));
+            assert!(validate_request(&request("GET", &path)).is_err());
+        }
+        for path in [
+            format!("{root}/readiness?quality_refs=%7B%7D&quality_refs=%7B%7D"),
+            format!("{root}?{}", query(&selected)),
+            format!("{root}/readiness?quality_refs=%7B%7D&passed=true"),
+        ] {
+            assert!(validate_request(&request("GET", &path)).is_err());
         }
     }
 

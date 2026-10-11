@@ -55,8 +55,8 @@ def _package(ops, principal, ref, *, write=False):
     return package
 
 
-def _ready(ops, principal, ref):
-    readiness = pm_work_packages.readiness(ops, principal, ref["workspace_id"], ref["package_id"])
+def _ready(ops, principal, ref, quality_refs=None):
+    readiness = pm_work_packages.readiness(ops, principal, ref["workspace_id"], ref["package_id"], quality_refs=quality_refs)
     # Alignment here asks whether the code already shares the spec's commit.
     # The explicit basis decision authorizes implementing the fixed spec from a
     # distinct base, without claiming semantic compatibility or verified quality.
@@ -100,7 +100,7 @@ def prompt(user_prompt, contract):
 
 def admit(ops, principal, target, params, pre):
     if "pm_package_ref" not in params:
-        if "pm_code_basis" in params or "pm_spec_ref" in params:
+        if "pm_code_basis" in params or "pm_spec_ref" in params or "pm_requirement_quality_refs" in params:
             raise _error("INVALID_PARAMS", "A code-basis decision requires a fixed engineering package", 422)
         return None
     if not principal.allows("observe") or not principal.allows("manage"):
@@ -109,10 +109,12 @@ def admit(ops, principal, target, params, pre):
     package = _package(ops, principal, ref, write=True)
     document = package["document"]
     _matches(document, target, params, pre)
-    _ready(ops, principal, ref)
+    _ready(ops, principal, ref, params.get('pm_requirement_quality_refs'))
     contract = {"contract": CONTRACT, "package_ref": ref, "package": document,
                 "code_basis": basis, "execution_assignment": "this_original_operation_only",
                 "verification": "unassessed", "delivery": "not_observed"}
+    if 'pm_requirement_quality_refs' in params:
+        contract['pm_requirement_quality_refs'] = params['pm_requirement_quality_refs']
     if "pm_spec_ref" in params:
         contract["spec_materialization"] = _materialized(ops, principal, params["pm_spec_ref"], ref, params.get("artifacts", []))
     prompt(params["prompt"], contract)
@@ -137,6 +139,7 @@ def source_visible(db, principal, original):
         return (digest(contract) == saved["contract_digest"]
                 and record["document_digest"] == ref["document_digest"]
                 and contract["package"] == record["document"]
+                and _dependencies_visible(db, principal, record, contract)
                 and _spec_visible(db, principal, contract)
                 and pm_work_packages.operation_visible(db, principal, {"operation_id": record["operation_id"]}))
     except (OperationError, TypeError, KeyError, ValueError):
@@ -154,7 +157,7 @@ def guard(ctx):
     contract = saved["contract"]
     package = _package(ctx.service, principal, contract["package_ref"], write=True)
     _matches(package["document"], ctx.target, ctx.params, ctx.preconditions)
-    _ready(ctx.service, principal, contract["package_ref"])
+    _ready(ctx.service, principal, contract["package_ref"], contract.get('pm_requirement_quality_refs'))
     if "spec_materialization" in contract:
         current = _materialized(ctx.service, principal, ctx.params["pm_spec_ref"], contract["package_ref"], ctx.params.get("artifacts", []))
         if current != contract["spec_materialization"]:
@@ -196,3 +199,12 @@ def _spec_visible(db, principal, contract):
     return (value["document_digest"] == fixed["document_digest"] and value["artifact_ref"] == fixed["artifact_ref"]
             and value["operation_id"] == fixed["operation_id"] and value["document"]["package_ref"] == contract["package_ref"]
             and specs.source_visible(db, principal, {"operation_id": value["operation_id"]}))
+
+
+def _dependencies_visible(db, principal, package, contract):
+    if 'pm_requirement_quality_refs' not in contract:
+        return True
+    from .pm_quality_reviews import _Reader
+    from .pm_requirement_acceptance import access_dependencies
+    access_dependencies(_Reader(db), principal, package, contract['pm_requirement_quality_refs'])
+    return True

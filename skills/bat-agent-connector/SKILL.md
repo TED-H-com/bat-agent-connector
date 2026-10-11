@@ -1444,3 +1444,5 @@ It returns fixed original package references and saved integration, merge and
 deployment receipts without refreshing providers or creating operations. Preserve
 `next_after` through filtered pages. Push, merge, runtime verification and
 requirement acceptance are distinct; delivery does not mark a requirement Done.
+
+For declared requirement prerequisites, select original qualified quality assessments explicitly. `pm_work_package_readiness_get` accepts optional `quality_refs` mapping prerequisite requirement IDs to `{condition, reference, execution_operation_id}`. Pass the same bounded identity map as `pm_requirement_quality_refs` on the reviewed `repository.continue` intent. The server freezes and rechecks the original assessment; passing tests alone do not accept a requirement, and revocation blocks new dependent work without deleting its history.
