@@ -695,7 +695,7 @@ async def test_e01_partial_cleanup_resumes_only_unfinished_unchanged_items(daemo
     assert finished["status"] == "succeeded", finished
     assert len([i for i in mock.invokes if i["channel"] == "claude:stop-session"]) == count
     assert any(s["name"].endswith("remove.worktree.a2") for s in finished["steps"])
-    assert any("cleaner" in r["resumed_by"] for r in cleanup.receipts(daemon.ops, done["operation_id"]))
+    assert any(CLEANER.actor in r["resumed_by"] for r in cleanup.receipts(daemon.ops, done["operation_id"]))
 
 
 async def test_e01_attachment_replicas_are_removed_without_discard_scope(daemon, mock, monkeypatch):
@@ -890,7 +890,7 @@ async def test_e01_cleanup_adapters_share_the_action_contract(daemon, mock, monk
     from bat_agent_connector import cli, mcp_server
     from tests.test_api_v1 import http
     cp, _ = await setup_work(daemon, mock)
-    token = api_auth.issue(daemon.journal.db, "cleaner", ["observe", "cleanup"])
+    token = api_auth.issue(daemon.journal.db, CLEANER.actor, ["observe", "cleanup"])
     server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
