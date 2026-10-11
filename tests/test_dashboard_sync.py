@@ -197,8 +197,10 @@ async def test_b02_http_and_sse_reject_filtered_checkpoint_before_replay(served,
             status, error = await http(port, "GET", route + "?" + urlencode(params), tok=viewer)
             assert status == 422 and error["error"]["code"] == "INVALID_REQUEST"
             assert "unfiltered event feed" in error["error"]["message"]
-            # Authentication still runs; continuity metadata and event queries do not.
-            assert not any("api_events" in sql or "api_sync_metadata" in sql for sql in reads)
+            # Authentication resolves the controller's durable server identity;
+            # filtered requests still cannot read continuity metadata or events.
+            replay_reads = [sql for sql in reads if sql != "SELECT server_id FROM api_sync_metadata WHERE singleton=1"]
+            assert not any("api_events" in sql or "api_sync_metadata" in sql for sql in replay_reads)
             assert d.api._streams == 0 and d.api._streams_by_actor == {}
         finally:
             d.journal.db.set_trace_callback(None)

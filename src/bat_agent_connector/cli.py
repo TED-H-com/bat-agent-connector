@@ -90,7 +90,7 @@ def r_sessions(o):
                 s["agent_kind"],
                 state,
                 pend,
-                "managed" if s.get("api_access") == "managed" else s.get("provenance", "?"),
+                s.get("provenance", "?"),
                 s["last_activity_age"],
                 s["last_activity"],
                 s["title"],
@@ -98,7 +98,7 @@ def r_sessions(o):
         )
     _table(
         rows,
-        ["host", "session", "workspace", "agent", "state", "pending", "access", "age", "last_activity", "title"],
+        ["host", "session", "workspace", "agent", "state", "pending", "source", "age", "last_activity", "title"],
     )
     print(f"({o['count']} of {o['total_matched']})")
     for h, e in o["errors"].items():
@@ -195,6 +195,10 @@ def _parse_answers(items: list[str] | None):
 
 
 async def _run(args) -> Any:
+    if args.cmd == "policy" and os.environ.get("BATC_API_TOKEN"):
+        from .task_daemon import request
+        return await asyncio.to_thread(request, "session_policy", host=args.host, session_id=args.session,
+                                       _auth_token=os.environ["BATC_API_TOKEN"], entry="cli"), r_policy
     if args.cmd in {"read", "wait"}:
         from .session_observation import client_request
         params = {"host": args.host, "session_id": args.session, "after": args.after}

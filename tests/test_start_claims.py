@@ -11,10 +11,17 @@ import stat
 
 import pytest
 
-from bat_agent_connector import confinement, lifecycle, orchestrate, platform_files, registry
+from bat_agent_connector import (
+    confinement,
+    controller_authority,
+    lifecycle,
+    orchestrate,
+    platform_files,
+    registry,
+)
 from bat_agent_connector.fleet import Fleet
 from bat_agent_connector.task_journal import Journal
-from tests.conftest import make_config
+from tests.conftest import controller_scope, make_config
 from tests.test_confinement import MANAGED
 from tests.test_confinement_recovery import reviewer_adapter
 from tests.test_lifecycle import _add_wt_claude
@@ -22,7 +29,7 @@ from tests.test_lifecycle import _add_wt_claude
 SID = "claimed-start"
 
 
-def _recover_process(config, gate, ready, release):
+def _recover_process(config, gate, ready, release, authority):
     """A real connector process; only the winner is paused before its BAT frame."""
     async def run():
         fleet = Fleet(config, idle_timeout=0, actor="test")
@@ -45,11 +52,13 @@ def _recover_process(config, gate, ready, release):
             await fleet.close()
 
     assert gate.wait(15)
-    asyncio.run(run())
+    with controller_authority.use(authority):
+        asyncio.run(run())
 
 
-def _crash_reservation(entry, ready, release=None, replaces=None):
-    registry.reserve("h1", entry, 10, replaces=replaces)
+def _crash_reservation(entry, ready, release=None, replaces=None, *, authority):
+    with controller_authority.use(authority):
+        registry.reserve("h1", entry, 10, replaces=replaces)
     ready.set()
     if release is not None:
         assert release.wait(15)
@@ -58,8 +67,10 @@ def _crash_reservation(entry, ready, release=None, replaces=None):
 
 def _seed_unsent(status):
     path = registry.registry_path()
-    platform_files.atomic_write(path, json.dumps({"sessions": [{"host": "h1", "session_id": SID,
-                                             "status": status, "start_sent": False}]}).encode())
+    # Explicit original creation proof for an abandoned reservation, not a legacy adoption.
+    row = controller_authority.stamp({"host": "h1", "session_id": SID,
+                                      "status": status, "start_sent": False})
+    platform_files.atomic_write(path, json.dumps({"sessions": [row]}).encode())
 
 
 async def _join(process):
@@ -68,13 +79,13 @@ async def _join(process):
 
 
 @pytest.mark.parametrize("status", ["starting", "failed"])
-async def test_two_processes_reclaim_unsent_start_only_once(mock, status):
+async def test_two_processes_reclaim_unsent_start_only_once(mock, status, controller_context):
     """Both a crash-before-frame row and a failed unsent row admit one winner."""
     _seed_unsent(status)
     ctx = mp.get_context("spawn")
     gates, release, ready = [ctx.Event(), ctx.Event()], ctx.Event(), ctx.Queue()
     config = make_config(mock, writes=True, orchestrate=True, safety={"write_min_interval_s": 0}, **MANAGED)
-    processes = [ctx.Process(target=_recover_process, args=(config, gate, ready, release)) for gate in gates]
+    processes = [ctx.Process(target=_recover_process, args=(config, gate, ready, release, controller_context[1])) for gate in gates]
     for process in processes:
         process.start()
     try:
@@ -116,7 +127,8 @@ async def test_two_processes_reclaim_unsent_start_only_once(mock, status):
 async def test_crashed_owner_releases_unsent_start_claim(fleet_factory, mock):
     ctx = mp.get_context("spawn")
     ready = ctx.Event()
-    child = ctx.Process(target=_crash_reservation, args=({"session_id": SID, "start_sent": False}, ready))
+    child = ctx.Process(target=_crash_reservation, args=({"session_id": SID, "start_sent": False}, ready),
+                        kwargs={"authority": controller_authority.require()})
     child.start()
     assert await asyncio.to_thread(ready.wait, 10)
     await _join(child)
@@ -137,63 +149,64 @@ async def test_live_start_claim_refuses_another_coroutine_before_worktree_or_fra
         fleet_factory, mock, tmp_path, monkeypatch, path):
     fleet = fleet_factory(writes=True, orchestrate=True, safety={"write_min_interval_s": 0}, **MANAGED)
     journal = Journal(tmp_path / "claims.db")
-    entered, release = asyncio.Event(), asyncio.Event()
-    client = fleet.client("h1")
-    invoke = client.invoke
-    adapter, task, lead = None, None, None
-    if path == "failover":
-        lead = _add_wt_claude(mock)
-    elif path in {"task_lead", "reviewer"}:
-        adapter, task = reviewer_adapter(fleet, mock, journal, monkeypatch)
-
-    async def paused(channel, params=None, **kwargs):
-        if channel == "claude:start-session":
-            entered.set()
-            await release.wait()
-        return await invoke(channel, params, **kwargs)
-
-    client.invoke = paused
-
-    async def start():
-        if path == "start":
-            return await orchestrate.session_start(fleet, "h1", "demo-project", confirm=True, session_id=SID)
+    with controller_scope(journal):
+        entered, release = asyncio.Event(), asyncio.Event()
+        client = fleet.client("h1")
+        invoke = client.invoke
+        adapter, task, lead = None, None, None
         if path == "failover":
-            return await lifecycle.session_failover(fleet, "h1", lead, confirm=True, successor_session_id=SID)
-        return await adapter.start(task, role="lead" if path == "task_lead" else "reviewer",
-                                   agent="codex", session_id=SID)
+            lead = _add_wt_claude(mock)
+        elif path in {"task_lead", "reviewer"}:
+            adapter, task = reviewer_adapter(fleet, mock, journal, monkeypatch)
 
-    pending = asyncio.create_task(start())
-    try:
-        await asyncio.wait_for(entered.wait(), 10)
-        row = registry.get("h1", SID)
-        baseline = list(mock.invokes)
-        with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS") as refused:
-            await asyncio.create_task(start())
-        assert refused.value.code == "START_IN_PROGRESS" and refused.value.sent is False
-        assert registry.get("h1", SID) == row
-        assert not any(i["channel"].startswith("worktree:") or i["channel"] == "claude:start-session"
-                       for i in mock.invokes[len(baseline):])
-        # An unrelated coroutine also cannot release the live reservation.
-        with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS"):
-            registry.fail_reservation("h1", SID)
-        with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS"):
-            registry.update("h1", SID, status="failed")
-        with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS"):
-            registry.ensure_existing("h1", row)
-        assert registry.get("h1", SID) == row
-        release.set()
-        await pending
-        assert mock.channels().count("claude:start-session") == 1
-    finally:
-        release.set()
-        if not pending.done():
-            pending.cancel()
-        await asyncio.gather(pending, return_exceptions=True)
-        await fleet.close()
-        journal.close()
+        async def paused(channel, params=None, **kwargs):
+            if channel == "claude:start-session":
+                entered.set()
+                await release.wait()
+            return await invoke(channel, params, **kwargs)
+
+        client.invoke = paused
+
+        async def start():
+            if path == "start":
+                return await orchestrate.session_start(fleet, "h1", "demo-project", confirm=True, session_id=SID)
+            if path == "failover":
+                return await lifecycle.session_failover(fleet, "h1", lead, confirm=True, successor_session_id=SID)
+            return await adapter.start(task, role="lead" if path == "task_lead" else "reviewer",
+                                       agent="codex", session_id=SID)
+
+        pending = asyncio.create_task(start())
+        try:
+            await asyncio.wait_for(entered.wait(), 10)
+            row = registry.get("h1", SID)
+            baseline = list(mock.invokes)
+            with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS") as refused:
+                await asyncio.create_task(start())
+            assert refused.value.code == "START_IN_PROGRESS" and refused.value.sent is False
+            assert registry.get("h1", SID) == row
+            assert not any(i["channel"].startswith("worktree:") or i["channel"] == "claude:start-session"
+                           for i in mock.invokes[len(baseline):])
+            # An unrelated coroutine also cannot release the live reservation.
+            with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS"):
+                registry.fail_reservation("h1", SID)
+            with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS"):
+                registry.update("h1", SID, status="failed")
+            with pytest.raises(confinement.ConfinementRefused, match="START_IN_PROGRESS"):
+                registry.ensure_existing("h1", row)
+            assert registry.get("h1", SID) == row
+            release.set()
+            await pending
+            assert mock.channels().count("claude:start-session") == 1
+        finally:
+            release.set()
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+            await fleet.close()
+            journal.close()
 
 
-async def test_child_coroutine_cannot_borrow_parent_start_claim():
+async def test_child_coroutine_cannot_borrow_parent_start_claim(controller_context):
     @registry.start_call
     async def owner():
         registry.reserve("h1", {"session_id": SID, "start_sent": False}, 10)
@@ -212,7 +225,7 @@ async def test_child_coroutine_cannot_borrow_parent_start_claim():
     registry.fail_reservation("h1", SID)
 
 
-async def test_start_claim_survives_failed_status_until_owner_returns():
+async def test_start_claim_survives_failed_status_until_owner_returns(controller_context):
     entered, release = asyncio.Event(), asyncio.Event()
 
     @registry.start_call
@@ -236,7 +249,7 @@ async def test_start_claim_survives_failed_status_until_owner_returns():
     registry.fail_reservation("h1", SID)
 
 
-async def test_nested_start_releases_its_claim_before_owner_retries():
+async def test_nested_start_releases_its_claim_before_owner_retries(controller_context):
     _seed_unsent("failed")
 
     @registry.start_call
@@ -283,7 +296,8 @@ async def test_failover_unsent_recovery_requires_abandoned_claim(fleet_factory, 
         with pytest.raises(confinement.ConfinementRefused, match="HOST_ACCOUNT_UNVERIFIED"):
             await lifecycle.session_failover(fleet, "h1", lead, confirm=True, successor_session_id=SID)
         entry = registry.get("h1", SID)
-        child = ctx.Process(target=_crash_reservation, args=(entry, ready, release, lead))
+        child = ctx.Process(target=_crash_reservation, args=(entry, ready, release, lead),
+                            kwargs={"authority": controller_authority.require()})
         child.start()
         assert await asyncio.to_thread(ready.wait, 10)
         live = registry.get("h1", SID)

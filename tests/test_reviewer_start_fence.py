@@ -10,7 +10,6 @@ import pytest
 from bat_agent_connector import confinement, registry, task_bat
 from bat_agent_connector.errors import ConnectionLost
 from bat_agent_connector.task_core import TaskCoordinator
-from bat_agent_connector.task_journal import Journal
 from tests.test_confinement import MANAGED
 from tests.test_confinement_recovery import reviewer_adapter
 
@@ -35,9 +34,9 @@ async def prepare_reviewer(fleet, mock, journal, monkeypatch, agent):
     return adapter, task
 
 
-async def unsettled_reviewer(fleet_factory, mock, tmp_path, monkeypatch, *, agent, reply, readback):
+async def unsettled_reviewer(fleet_factory, mock, controller_context, monkeypatch, *, agent, reply, readback):
     fleet = fleet_factory(writes=True, orchestrate=True, safety={"write_min_interval_s": 0}, **MANAGED)
-    journal = Journal(tmp_path / "reviewer.db")
+    journal, _ = controller_context
     adapter, task = await prepare_reviewer(fleet, mock, journal, monkeypatch, agent)
     client = fleet.client("h1")
     invoke = client.invoke
@@ -92,30 +91,29 @@ async def unsettled_reviewer(fleet_factory, mock, tmp_path, monkeypatch, *, agen
         assert "claude:send-message" not in mock.channels()
     finally:
         await fleet.close()
-        journal.close()
 
 
 @pytest.mark.parametrize("agent", ["codex", "claude"])
 @pytest.mark.parametrize("readback", ["raises", "null", "non_dict"])
 async def test_reviewer_lost_reply_polls_only_and_recovers_next_tick(
-        fleet_factory, mock, tmp_path, monkeypatch, agent, readback):
-    await unsettled_reviewer(fleet_factory, mock, tmp_path, monkeypatch,
+        fleet_factory, mock, controller_context, monkeypatch, agent, readback):
+    await unsettled_reviewer(fleet_factory, mock, controller_context, monkeypatch,
                              agent=agent, reply="lost", readback=readback)
 
 
 @pytest.mark.parametrize("agent", ["codex", "claude"])
 @pytest.mark.parametrize("reply", ["different_id", "ok_false"])
 async def test_reviewer_unconfirmed_reply_keeps_single_start_frame(
-        fleet_factory, mock, tmp_path, monkeypatch, agent, reply):
-    await unsettled_reviewer(fleet_factory, mock, tmp_path, monkeypatch,
+        fleet_factory, mock, controller_context, monkeypatch, agent, reply):
+    await unsettled_reviewer(fleet_factory, mock, controller_context, monkeypatch,
                              agent=agent, reply=reply, readback="null")
 
 
 @pytest.mark.parametrize("readback", ["raises", "null", "non_dict"])
 async def test_reviewer_readback_backoff_can_settle_without_another_start(
-        fleet_factory, mock, tmp_path, monkeypatch, readback):
+        fleet_factory, mock, controller_context, monkeypatch, readback):
     fleet = fleet_factory(writes=True, orchestrate=True, **MANAGED)
-    journal = Journal(tmp_path / "reviewer.db")
+    journal, _ = controller_context
     adapter, task = reviewer_adapter(fleet, mock, journal, monkeypatch)
     client = fleet.client("h1")
     invoke = client.invoke
@@ -139,14 +137,13 @@ async def test_reviewer_readback_backoff_can_settle_without_another_start(
         assert reads == [sid] * 3 and mock.channels().count("claude:start-session") == 1
     finally:
         await fleet.close()
-        journal.close()
 
 
 @pytest.mark.parametrize("readback", ["raises", "null", "non_dict"])
 async def test_lead_lost_reply_retry_is_fenced_until_readback_recovers(
-        fleet_factory, mock, tmp_path, monkeypatch, readback):
+        fleet_factory, mock, controller_context, monkeypatch, readback):
     fleet = fleet_factory(writes=True, orchestrate=True, **MANAGED)
-    journal = Journal(tmp_path / "lead.db")
+    journal, _ = controller_context
     task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="Start fixture",
                           idempotency_key="lead-single-frame")
     adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
@@ -190,4 +187,3 @@ async def test_lead_lost_reply_retry_is_fenced_until_readback_recovers(
         assert mock.channels().count("claude:start-session") == 1
     finally:
         await fleet.close()
-        journal.close()

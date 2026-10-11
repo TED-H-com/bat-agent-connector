@@ -154,7 +154,7 @@ def test_b01_current_connector_evidence_preserves_policy_refusal_and_has_no_bat_
 
 @pytest.mark.parametrize("marker", [{}, {"worktree_made_by": "connector"}, {"checkpoint_id": "cp"},
                                   {"integration_operation_id": "op"}, {"branch": "batc/task-fixture"}])
-def test_b01_warm_claim_keeps_creation_markers_and_identity(marker):
+def test_b01_warm_claim_keeps_creation_markers_and_identity(marker, controller_context):
     """B01, §08: actual warm reuse transfers task ownership without changing creation evidence."""
     registry.reserve("h1", {"session_id": "root", "workspace_id": "ws", "cwd": "/srv/wt",
                             "worktree_path": "/srv/wt", "branch": "bat/worktree-fixture", "task_id": "old",
@@ -163,7 +163,7 @@ def test_b01_warm_claim_keeps_creation_markers_and_identity(marker):
     before = registry.get("h1", "root")
     intent = registry_worktree_intent([before], "h1", "root")
     registry.claim_warm("h1", "root", previous_task_id="old", task_id="new", workspace_id="ws",
-                        cwd="/srv/wt", branch=before["branch"])
+                        cwd="/srv/wt", branch=before["branch"], expected_incarnation=before["controller_incarnation"])
     after = registry.get("h1", "root")
     assert after["task_id"] == "new" and after["warm_from_task_id"] == "old"
     for key in ("worktree_made_by", "checkpoint_id", "integration_operation_id", "branch", "created_at", "worktree_path"):

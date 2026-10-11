@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import copy
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-from bat_agent_connector import cleanup, lifecycle, registry, task_control
+from bat_agent_connector import api_auth, cleanup, controller_authority, lifecycle, registry, task_control
 from bat_agent_connector.errors import ResourceReadOnly
 from bat_agent_connector.operations import OpContext
 from tests.operation_helpers import settle_operations
@@ -301,3 +302,51 @@ def test_e01_capacity_retirement_only_changes_counted_set(monkeypatch, tmp_path,
     assert registry.registry_path().read_bytes() == before
     assert result == {"capacity_released": False, "registry_status": entry["status"], "capacity_reason":
                       "task_owned" if status == "task" else "start_unsettled" if status == "starting" else "not_counted"}
+
+
+@pytest.mark.parametrize("replacement", ["nonce", "controller", "legacy"])
+@pytest.mark.parametrize("fence", ["incarnation", "expected"])
+@pytest.mark.parametrize("settled", [False, True])
+def test_capacity_retirement_checks_original_controller_inside_registry_lock(controller_context, monkeypatch, replacement, fence, settled):
+    journal, _ = controller_context
+    registry.reserve("h1", {"session_id": "retirement-race"}, 10)
+    registry.update("h1", "retirement-race", status="active")
+    original = registry.get("h1", "retirement-race")
+    foreign = controller_authority.binding(journal.db, api_auth.Principal("other-controller", frozenset({"cleanup"})))
+    locked, replacement_bytes = registry._locked, []
+
+    @contextmanager
+    def replace_before_locked_read(path):
+        with locked(path):
+            document = json.loads(path.read_text())
+            row = next(row for row in document["sessions"] if row["session_id"] == "retirement-race")
+            if replacement == "nonce":
+                row["controller_incarnation"] = "f" * 32
+            elif replacement == "controller":
+                row["controller_authority"] = foreign
+            else:
+                row.pop("controller_authority")
+            if settled:
+                row.update(status="absent_at_cleanup", retirement={"actor": "test-operator", "reason": "confirmed absence",
+                    "operation_id": None, "carrier_resource_id": None})
+            registry._write_document(path, document)
+            replacement_bytes.append(path.read_bytes())
+            yield
+
+    # Ownership was valid before the lock; a concurrent replacement must win.
+    controller_authority.require_entry(original)
+    monkeypatch.setattr(registry, "_locked", replace_before_locked_read)
+    kwargs = {"controller_incarnation": original["controller_incarnation"]} if fence == "incarnation" else {"expected": original}
+    def retire():
+        return registry.retire("h1", "retirement-race", "absent_at_cleanup", created_at=original["created_at"],
+                               actor="test-operator", reason="confirmed absence", **kwargs)
+    if replacement == "nonce":
+        result = retire()
+        assert result == {"capacity_released": False, "registry_status": "absent_at_cleanup" if settled else "active",
+                          "capacity_reason": "generation_changed"}
+    else:
+        code = "FOREIGN_CONTROLLER" if replacement == "controller" else "CONTROLLER_AUTHORITY_REQUIRED"
+        with pytest.raises(ResourceReadOnly, match=code):
+            retire()
+    assert len(replacement_bytes) == 1
+    assert registry.registry_path().read_bytes() == replacement_bytes[0]

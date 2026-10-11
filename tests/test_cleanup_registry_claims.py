@@ -6,30 +6,34 @@ import multiprocessing as mp
 
 import pytest
 
-from bat_agent_connector import cleanup, confinement, platform_files, registry
+from bat_agent_connector import cleanup, confinement, controller_authority, platform_files, registry
 from bat_agent_connector.errors import ResourceReadOnly
 
 SID = "cleanup-race"
+pytestmark = pytest.mark.usefixtures("controller_context")
 
 
 def item(host="h1", kind="session"):
     return {"resource_id": f"cleanup-{host}-{kind}", "generation": "original-generation", "host": host,
-            "kind": kind, "session_id": SID if kind == "session" else None, "path": "/managed/worktree"}
+            "kind": kind, "session_id": SID if kind == "session" else None, "path": "/managed/worktree",
+            "registry": registry.get(host, SID)}
 
 
-def _start_owner(ready, release):
+def _start_owner(ready, release, authority):
     @registry.start_call
     async def start():
         registry.reserve("h1", {"session_id": SID, "start_sent": False, "cwd": "/managed/worktree"}, 10)
         ready.set()
         await asyncio.to_thread(release.wait, 15)
         registry.update("h1", SID, status="active")
-    asyncio.run(start())
+    with controller_authority.use(authority):
+        asyncio.run(start())
 
 
-def _start_contender(result):
+def _start_contender(result, authority):
     try:
-        registry.reserve("h1", {"session_id": SID, "start_sent": False}, 10)
+        with controller_authority.use(authority):
+            registry.reserve("h1", {"session_id": SID, "start_sent": False}, 10)
     except ResourceReadOnly as exc:
         result.put(exc.code)
     else:
@@ -37,10 +41,10 @@ def _start_contender(result):
 
 
 @pytest.mark.parametrize("kind", ["session", "worktree"])
-def test_live_process_start_claim_wins_before_cleanup_reservation(kind):
+def test_live_process_start_claim_wins_before_cleanup_reservation(kind, controller_context):
     ctx = mp.get_context("spawn")
     ready, release = ctx.Event(), ctx.Event()
-    child = ctx.Process(target=_start_owner, args=(ready, release))
+    child = ctx.Process(target=_start_owner, args=(ready, release, controller_context[1]))
     child.start()
     try:
         assert ready.wait(15)
@@ -63,13 +67,13 @@ def test_live_process_start_claim_wins_before_cleanup_reservation(kind):
         child.join(15)
 
 
-def test_cleanup_reservation_wins_before_other_process_start():
+def test_cleanup_reservation_wins_before_other_process_start(controller_context):
     cleanup._mark(item(), "cleanup-op", "reserved")
     path = registry.registry_path()
     before = path.read_bytes()
     ctx = mp.get_context("spawn")
     result = ctx.Queue()
-    child = ctx.Process(target=_start_contender, args=(result,))
+    child = ctx.Process(target=_start_contender, args=(result, controller_context[1]))
     child.start()
     try:
         assert result.get(timeout=15) == "CLEANUP_IN_PROGRESS"

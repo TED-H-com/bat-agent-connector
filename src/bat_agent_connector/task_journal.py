@@ -318,7 +318,7 @@ class Journal:
                                ("verification_failures", "INTEGER NOT NULL DEFAULT 0"),
                                ("verifying_started_at", "REAL"), ("progress_at", "REAL"),
                                ("parent_task_id", "TEXT"), ("continuation", "INTEGER NOT NULL DEFAULT 0"),
-                               ("context_refs", "TEXT"),
+                               ("context_refs", "TEXT"), ("controller_authority", "TEXT"),
                                ("task_path", "TEXT NOT NULL DEFAULT 'standard'")):
             if name not in columns:
                 self.db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {sql_type}")  # noqa: S608 - fixed local identifiers
@@ -330,6 +330,8 @@ class Journal:
         if "uncertain_tries" not in {r[1] for r in self.db.execute("PRAGMA table_info(operations)")}:
             self.db.execute("ALTER TABLE operations ADD COLUMN uncertain_tries INTEGER NOT NULL DEFAULT 0")
         cap_columns = {r[1] for r in self.db.execute("PRAGMA table_info(capabilities)")}
+        if "controller_authority" not in {r[1] for r in self.db.execute("PRAGMA table_info(commands)")}:
+            self.db.execute("ALTER TABLE commands ADD COLUMN controller_authority TEXT")
         if "command_id" not in cap_columns:
             self.db.execute("ALTER TABLE capabilities ADD COLUMN command_id TEXT")
         route_columns = {r[1] for r in self.db.execute("PRAGMA table_info(routing)")}
@@ -585,12 +587,14 @@ class Journal:
             if next_prompt_sha256:
                 next_command_id = str(uuid.uuid4())
                 self.db.execute("""INSERT INTO commands(command_id,task_id,idem_key,session_id,kind,status,
-                    message_id,payload,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    message_id,payload,created_at,updated_at,controller_authority) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (next_command_id, task_id, f"{task_id}:operator:{command_id}", command["session_id"],
                      "send", "needs_review", f"batc-{next_command_id}",
                      json.dumps({"purpose": "operator:" + command_id, "before": next_before,
                                  "control_version": task["control_version"], "operation_id": operation_id,
-                                 "prompt_sha256": next_prompt_sha256}), now, now))
+                                 "controller_incarnation": payload.get("controller_incarnation"),
+                                 "prompt_sha256": next_prompt_sha256}), now, now,
+                     json.dumps(task["controller_authority"], sort_keys=True) if task.get("controller_authority") else None))
                 self._event(task_id, "command_intent", {"command_id": next_command_id, "kind": "send",
                                                          "needs_review": True, "operator_followup": command_id})
             if actor == "ted":
@@ -752,6 +756,11 @@ class Journal:
         if not isinstance(continuation, bool):
             raise ValueError("continuation must be a boolean")
         refs = _context_refs(context_refs)
+        from . import controller_authority
+        authority = controller_authority.current()
+        if authority is not None:
+            with controller_authority.use(authority, self):
+                pass  # Reject a binding inherited from a different central journal.
         if parent_task_id is not None:
             parent = self.db.execute("SELECT project,host,workspace FROM tasks WHERE task_id=?",
                                      (parent_task_id,)).fetchone() if isinstance(parent_task_id, str) else None
@@ -777,20 +786,24 @@ class Journal:
         with self.tx():
             old = self.db.execute("SELECT * FROM tasks WHERE idem_key=?", (idempotency_key,)).fetchone()
             if old:
+                if authority is not None:
+                    controller_authority.require_binding(json.loads(old["controller_authority"])
+                                                         if old["controller_authority"] else None)
                 if old["payload_hash"] != digest:
                     raise ValueError("idempotency_key already belongs to different task content")
-                return dict(old)
+                return self.get(old["task_id"])
             now = time.time()
             task_id = str(uuid.uuid4())
             self.db.execute("""INSERT INTO tasks(task_id,idem_key,payload_hash,project,host,workspace,
                 original_words,interpretation,discord_thread_id,recipe,acceptance,engine,lead_agent,
                 pm_provider,base_branch,task_path,state,submitted_at,updated_at,
-                parent_task_id,continuation,context_refs)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                parent_task_id,continuation,context_refs,controller_authority)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (task_id, idempotency_key, digest, project, host, workspace, original_words,
                  interpretation, discord_thread_id, recipe, acceptance, engine, lead_agent,
                  pm_provider, base_branch, task_path, "queued", now, now,
-                 parent_task_id, int(continuation), json.dumps(refs, sort_keys=True) if refs else None))
+                 parent_task_id, int(continuation), json.dumps(refs, sort_keys=True) if refs else None,
+                 json.dumps(authority, sort_keys=True) if authority else None))
             self._event(task_id, "submitted", {"state": "queued"})
             if engine_decision is not None:
                 self._event(task_id, "engine_decision", engine_decision)
@@ -925,6 +938,7 @@ class Journal:
         if row is None:
             raise KeyError(task_id)
         d = dict(row)
+        d["controller_authority"] = json.loads(d["controller_authority"]) if d.get("controller_authority") else None
         d["continuation"] = bool(d.get("continuation"))
         d["context_refs"] = json.loads(d["context_refs"]) if d.get("context_refs") else None
         d["paused"] = bool(d["paused"])
@@ -1163,11 +1177,16 @@ class Journal:
                 raise ValueError("task has a command requiring reconciliation")
             command_id = str(uuid.uuid4())
             now = time.time()
+            from . import registry
+            owner = registry.get(task["host"], session_id) if session_id else None
+            if owner and owner.get("controller_incarnation"):
+                payload = {**payload, "controller_incarnation": owner["controller_incarnation"]}
             self.db.execute("""INSERT INTO commands(command_id,task_id,idem_key,session_id,kind,status,
-                message_id,payload,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                message_id,payload,created_at,updated_at,controller_authority) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                 (command_id, task_id, idem_key, session_id, kind,
                  "needs_review" if kind == "send" else "intent", f"batc-{command_id}",
-                 json.dumps(payload, ensure_ascii=False), now, now))
+                 json.dumps(payload, ensure_ascii=False), now, now,
+                 json.dumps(task["controller_authority"], sort_keys=True) if task.get("controller_authority") else None))
             self._event(task_id, "command_intent", {"command_id": command_id, "kind": kind,
                                                      "needs_review": kind == "send"})
         return dict(self.db.execute("SELECT * FROM commands WHERE command_id=?", (command_id,)).fetchone()), True
@@ -1194,9 +1213,10 @@ class Journal:
             )
             for command_id, key, kind, status, payload in rows:
                 self.db.execute("""INSERT INTO commands(command_id,task_id,idem_key,session_id,kind,status,
-                    message_id,payload,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    message_id,payload,created_at,updated_at,controller_authority) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (command_id, task_id, key, successor_id, kind, status, f"batc-{command_id}",
-                     json.dumps(payload), now, now))
+                     json.dumps(payload), now, now,
+                     json.dumps(task["controller_authority"], sort_keys=True) if task.get("controller_authority") else None))
                 self._event(task_id, "command_intent", {"command_id": command_id, "kind": kind,
                                                          "needs_review": status == "needs_review"})
         return self.command_get(failover_id), self.command_get(send_id)

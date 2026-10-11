@@ -494,8 +494,11 @@ async def test_legacy_cleanup_and_main_relay_skip_task_owned_sessions(fleet_fact
     assert decision["decisions"][0]["decision"] == "KEEP"
     assert not any(i["channel"] in {"worktree:remove", "claude:stop-session"}
                    and i["params"].get("sessionId") == sid for i in mock.invokes)
-    for old in ("sess-claude-0001", "sess-codex-0002"):
-        registry.ensure_existing("h1", {"session_id": old, "task_id": "task-service-owned"})
+    # Legacy task lookup records are readable evidence, not adoptable controller ownership.
+    with registry._locked(registry.registry_path()):
+        registry._write(registry.registry_path(), registry.list_entries() + [
+            {"host": "h1", "session_id": old, "task_id": "task-service-owned", "status": "active"}
+            for old in ("sess-claude-0001", "sess-codex-0002")])
     assert await lifecycle.main_session(f, "h1", "demo-project") is None
     await f.close()
 
@@ -620,8 +623,11 @@ async def test_cleanup_never_merges_into_a_human_checkout(fleet_factory, mock, m
 async def test_cleanup_keeps_bat_sessions_and_legacy_boundaries(fleet_factory, mock):
     # a legacy registry: a failover successor of the user's BAT session, plus a connector session in his checkout
     sid = _add_wt_claude(mock, managed=False)
-    adopt("succ-0001", cwd="/srv/demo/.bat-worktrees/abc", worktree_path="/srv/demo/.bat-worktrees/abc",
-          origin_cwd="/srv/demo", failover_of=sid, shares_worktree_with=sid, handoff_status="sent")
+    with registry._locked(registry.registry_path()):
+        registry._write(registry.registry_path(), registry.list_entries() + [{
+            "host": "h1", "session_id": "succ-0001", "status": "active", "cwd": "/srv/demo/.bat-worktrees/abc",
+            "worktree_path": "/srv/demo/.bat-worktrees/abc", "origin_cwd": "/srv/demo", "failover_of": sid,
+            "shares_worktree_with": sid, "handoff_status": "sent"}])
     mock.metas["succ-0001"] = {"cwd": "/srv/demo/.bat-worktrees/abc", "isStreaming": False}
     adopt("sess-codex-0002")
     f = fleet_factory(writes=True, orchestrate=True, auto_cleanup=True, safety={"write_min_interval_s": 0})

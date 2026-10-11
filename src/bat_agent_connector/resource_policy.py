@@ -24,10 +24,10 @@ import fnmatch
 import hashlib
 import posixpath
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
-from . import registry
+from . import controller_authority, registry
 from .channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
 from .config import HostConfig
 from .errors import BatError, ResourceReadOnly
@@ -163,6 +163,8 @@ class WriteGrant:
     channels: frozenset[str]
     workdir: str | None = None
     isolation: str | None = None
+    controller_authority: dict | None = None
+    controller_incarnation: str | None = None
 
 
 def check_grant(grant: WriteGrant | None, host: str, channel: str, params: dict | None) -> None:
@@ -174,6 +176,21 @@ def check_grant(grant: WriteGrant | None, host: str, channel: str, params: dict 
             or (channel not in SESSIONLESS_CHANNELS and sid != grant.session_id)):
         raise ResourceReadOnly("GRANT_MISMATCH",
                                f"the policy grant for {grant.action} does not cover {channel!r} on this session")
+    controller_authority.require_binding(grant.controller_authority)
+    row = registry.get(host, grant.session_id)
+    controller_authority.require_entry(row, expected_incarnation=grant.controller_incarnation)
+    if not grant.controller_incarnation:
+        raise ResourceReadOnly("CONTROLLER_OWNER_UNPROVEN", "The grant has no reserved resource incarnation")
+    # Sharing a carrier never transfers its controller, even when a helper omitted
+    # an explicit shared-session relationship during initial admission.
+    source_only = (grant.action == "session.create" and channel == "worktree:create" and grant.workdir is None
+                   and registry.is_pending_worktree_source(row))
+    carrier = None if source_only else grant.workdir or row.get("worktree_path") or row.get("cwd")
+    if carrier:
+        for other in registry.list_entries(host):
+            if other.get("session_id") != grant.session_id and carrier in {
+                    other.get("worktree_path"), None if registry.is_pending_worktree_source(other) else other.get("cwd")}:
+                controller_authority.require_entry(other)
     from .failover_operations import check_writer
     check_writer(host, grant.session_id, channel, workdir=grant.workdir)
     from .worktree_merge_operations import check_writer as check_merge_writer
@@ -448,7 +465,7 @@ async def classify_live(fleet, host: str, t: dict, action: str | None = None
 
 
 async def authorize_session(fleet, host: str, action: str, t: dict, *, live: LiveCheck | None = None,
-                            cls: Classification | None = None) -> WriteGrant:
+                            cls: Classification | None = None, expected_incarnation: str | None = None) -> WriteGrant:
     """Grant one session-scoped action, or raise ResourceReadOnly before any write frame."""
     from .cleanup import guard
     guard(host, session_id=t["id"], path=t.get("cwd") or t.get("worktreePath"),
@@ -456,17 +473,25 @@ async def authorize_session(fleet, host: str, action: str, t: dict, *, live: Liv
     m = BY_ACTION[action]
     if m.scope != "session":
         raise BatError(f"internal: {action} is not a session action")
+    original = registry.get(host, t["id"])
     if cls is None:
         cls, live = await classify_live(fleet, host, t, action)
     refusal = _decide(cls, m, live)
     if refusal:
         raise ResourceReadOnly(refusal[0], f"{action} refused for session {t['id'][:8]}: {refusal[1]}")
-    return WriteGrant(host, action, t["id"], m.channels, cls.workdir, cls.isolation)
+    # Pin before live reads; an admitted operation additionally supplies its
+    # durable nonce so an earlier resolution await cannot select a replacement.
+    controller_authority.require_entry(original, expected_incarnation=expected_incarnation)
+    row = controller_authority.require_entry(registry.get(host, t["id"]),
+                                            expected_incarnation=original["controller_incarnation"])
+    return WriteGrant(host, action, t["id"], m.channels, cls.workdir, cls.isolation,
+                      controller_authority.require(), row["controller_incarnation"])
 
 
 def _create_grant(host: str, session_id: str, workdir: str | None, isolation: str | None) -> WriteGrant:
     m = BY_ACTION["session.create"]
-    return WriteGrant(host, m.action, session_id, m.channels, workdir, isolation)
+    return WriteGrant(host, m.action, session_id, m.channels, workdir, isolation,
+                      controller_authority.require(), controller_authority.reservation_identity(host, session_id))
 
 
 def _check_resolved(hc: HostConfig, path: str, git_roots: dict | None) -> None:
@@ -531,7 +556,7 @@ def check_new_worktree(grant: WriteGrant, hc: HostConfig, folder: str, worktree_
         raise ResourceReadOnly("DESTINATION_UNKNOWN", f"BAT created the worktree at an unexpected path {worktree_path!r}")
     if grant.isolation == MANAGED_CLONE and not in_managed_root(hc, path):
         raise ResourceReadOnly("DESTINATION_UNKNOWN", f"BAT created the worktree outside the managed root: {path}")
-    return WriteGrant(grant.host, grant.action, grant.session_id, grant.channels, path, grant.isolation)
+    return replace(grant, workdir=path)
 
 
 async def authorize_shared_session(fleet, host: str, session_id: str, owner: dict) -> WriteGrant:
@@ -544,6 +569,7 @@ async def authorize_shared_session(fleet, host: str, session_id: str, owner: dic
     cls = classify(hc, owner["id"], terminal=owner, entries=_entries(host))
     if cls.code:
         raise ResourceReadOnly(cls.code, f"a new session cannot share {owner['id'][:8]}'s folder: {cls.reason}")
+    controller_authority.require_entry(registry.get(host, owner["id"]))
     live = await live_check(fleet.client(host), cls, worktree=False)
     if live.issue:
         raise ResourceReadOnly(live.issue[0], live.issue[1])
@@ -558,7 +584,9 @@ def authorize_register_tab(host: str, session_id: str) -> WriteGrant:
     if not row or row.get("status") != "active" or not _creation_evidence(row):
         raise ResourceReadOnly("UNKNOWN_READ_ONLY", "tabs are only registered for sessions the connector started")
     m = BY_ACTION["workspace.register_tab"]
-    return WriteGrant(host, m.action, session_id, m.channels)
+    controller_authority.require_entry(row)
+    return WriteGrant(host, m.action, session_id, m.channels, controller_authority=controller_authority.require(),
+                      controller_incarnation=row["controller_incarnation"])
 
 
 def merge_origin(hc: HostConfig, session_id: str, t: dict, ws: dict) -> str | None:
@@ -735,10 +763,20 @@ async def session_policy(fleet, host: str, session_id: str | None = None) -> dic
     t, ws = await _resolve_session(fleet.client(host), session_id)
     cls, live = await classify_live(fleet, host, t)
     tiers = {"write": base["writes_enabled"], "orchestrate": base["orchestrate_enabled"]}
+    caller_refusal = None
+    presentation = cls.to_dict()
+    if cls.writable:
+        try:
+            controller_authority.require_entry(registry.get(host, t["id"]))
+        except ResourceReadOnly as error:
+            caller_refusal = (error.code, str(error))
+            presentation.update(api_access="read_only", read_only_code=error.code, read_only_reason=str(error))
     actions = {}
     for action in SESSION_ACTIONS:
         m = BY_ACTION[action]
         refusal = _decide(cls, m, live)
+        if refusal is None:
+            refusal = caller_refusal
         if refusal is None and not tiers[m.tier]:
             refusal = ("TIER_DISABLED", f"the {m.tier} tier is off for host {host}")
         actions[action] = ({"allowed": False, "code": refusal[0], "reason": refusal[1]} if refusal
@@ -748,7 +786,7 @@ async def session_policy(fleet, host: str, session_id: str | None = None) -> dic
                 check_merge_destination(hc, _origin_cwd(t, ws))
             except ResourceReadOnly as e:
                 actions[action] = {"allowed": False, "code": e.code, "reason": str(e)}
-    return {**base, "session_id": t["id"], **cls.to_dict(),
+    return {**base, "session_id": t["id"], **presentation,
             "observed": live.observed if live else None, "actions": actions}
 
 

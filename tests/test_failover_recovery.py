@@ -10,7 +10,6 @@ import pytest
 
 from bat_agent_connector import confinement, lifecycle, registry, task_bat
 from bat_agent_connector.errors import InvokeTimeout
-from bat_agent_connector.task_journal import Journal
 from tests.test_confinement import MANAGED
 from tests.test_lifecycle import _add_wt_claude
 
@@ -248,14 +247,14 @@ async def test_failover_crash_after_start_ack_before_activation_recovers_handoff
         await fleet.close()
 
 
-async def test_task_failover_recovered_start_preserves_journal_and_frame_guards(fleet_factory, mock, tmp_path, monkeypatch):
+async def test_task_failover_recovered_start_preserves_journal_and_frame_guards(fleet_factory, mock, controller_context, monkeypatch):
     lead = _add_wt_claude(mock)
     fleet = fleet_factory(writes=True, orchestrate=True, default_permission_mode="confined",
                           safety={"write_min_interval_s": 0}, **MANAGED)
     # Task Service keeps its existing policy; this source already carries a confined intent.
     registry.update("h1", lead, write_scope="confined",
                     confinement=confinement.snapshot("claude", {"permissionMode": "default"}))
-    journal = Journal(tmp_path / "tasks.db")
+    journal, _ = controller_context
     task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="Continue the fixture",
                           idempotency_key="handoff-recovery", lead_agent="claude")
     journal.change(task["task_id"], "dispatching")
@@ -307,7 +306,6 @@ async def test_task_failover_recovered_start_preserves_journal_and_frame_guards(
         assert len(handoffs(mock)) == 1
     finally:
         await fleet.close()
-        journal.close()
 
 
 def without_timestamps(value):

@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.4
 license: MIT
 metadata:
-  workflow_version: "2026-10-11.1"
+  workflow_version: "2026-10-11.2"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "8992f85f12e707c3a57d58cfa15283f6f04d16999da6679a13143607332ad86b"
+  canonical_sha256: "64f9ac1c76f15f0b6269dbf8a7e3883aec743822fa0a41dd3b7a46b0241dd677"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -122,8 +122,12 @@ announce those capabilities until the service advertises and verifies them.
   work around that.
 - Every session has a **provenance** (`sessions_list` shows it): `manual` = a person created it in BAT,
   `connector_managed` = the connector started it, `unknown` = not proven. Manual and unknown sessions are
-  **read-only** through every tool (`api_access: read_only`). Write tools only drive connector-managed sessions in
-  folders the connector owns. To build on a person's work, start a **new** managed worktree session; never try to
+  **read-only** through every tool (`api_access: read_only`). Write tools only drive sessions created under your
+  authenticated server/actor controller, in folders the connector owns. Another controller's session stays
+  read-only even when idle or ended; admin scopes and PM membership do not transfer control. The server binds
+  creation authority and checks the original incarnation before each effect; do not supply a controller ID.
+  Missing legacy ownership evidence means read-only, not permission to adopt. To build on another controller's
+  or a person's work, start a **new** managed worktree session; never try to
   write into theirs. `session_policy(host, session_id)` explains any refusal.
 
 ## Tools (MCP) and CLI equivalents
@@ -325,7 +329,8 @@ brief={goal, context, constraints, acceptance}, earlier=[<earlier thread message
 The brief is labeled as your interpretation; the session treats the original as the source of truth, fixes unclear
 asks with its repo context and states its interpretation in one line. For parallel or large work add
 `request_fanout=true, max_items=N`, `session_wait`, then `fanout_from_plan(host, sid, confirm=true)`. The relay target is the
-workspace's most recent connector-managed session; a person's BAT sessions are never written to. When there is none,
+workspace's selected connector-managed session, which must belong to your controller; another controller's or a person's
+BAT session cannot be driven. When there is none,
 or the target is read-only (`no_session` / `read_only`), retry with `start_if_missing=true`: that starts a new Codex
 session in its own worktree with the same text. If the target is busy or quota-stopped use `fanout_plan_session`
 instead, wait, then `fanout_from_plan` on the planner. It stops the managed planner only with `confirm=true`

@@ -173,7 +173,8 @@ async def source(ops, host, sid, selector):
                     and not resource_policy.in_managed_root(hc, repository))):
             raise OperationError("SOURCE_CHANGED", "managed source folder binding differs", 409)
         fields = ("created_at", "agent_preset", "cwd", "worktree_path", "branch", "task_id", "role",
-                  "shares_worktree_with", "lead_session_id", "write_scope")
+                  "shares_worktree_with", "lead_session_id", "write_scope",
+                  "controller_authority", "controller_incarnation")
         identity = {k: entry.get(k) for k in fields}
         current = registry.get(host, sid) or {}
         current_class = resource_policy.classify(hc, sid, terminal=tab, entries=registry.list_entries(host))

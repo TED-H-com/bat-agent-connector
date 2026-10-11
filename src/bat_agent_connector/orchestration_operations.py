@@ -8,6 +8,7 @@ import time
 from . import (
     api_actions,
     api_auth,
+    controller_authority,
     lifecycle,
     registry,
     resource_policy,
@@ -23,7 +24,7 @@ ACTION = 'session.relay'
 PARENTS = frozenset({ACTION, 'fanout.plan', 'fanout.start'})
 FIELDS = {'message', 'channel', 'thread', 'earlier', 'brief', 'request_fanout', 'max_items', 'queue', 'start_if_missing'}
 BINDING_FIELDS = (*session_permissions.BINDING_FIELDS, 'workspace_id', 'origin_cwd', 'origin_root', 'branch',
-                  'superseded_by', 'failover_of')
+                  'superseded_by', 'failover_of', 'controller_authority', 'controller_incarnation')
 
 
 def install(ops):
@@ -78,7 +79,7 @@ def admit(ops, principal, target, params, pre):
         raise OperationError('UNKNOWN_HOST', 'unknown relay host', 404)
     if not fleet.writes_enabled(target['host']):
         raise OperationError('TIER_DISABLED', 'relay host write tier is disabled', 403)
-    return {'orchestration': {'accepted_scopes': sorted(scopes(params))}}
+    return {'orchestration': {'accepted_scopes': sorted(scopes(params))}, **admit_source(target)}
 
 
 def authorize_existing(ops, principal, op, verb):
@@ -97,23 +98,111 @@ def record(host, sid):
     return {k: row.get(k) for k in BINDING_FIELDS}
 
 
+def require_record(host, sid, original):
+    # Missing historical ownership is never repaired from a current row.
+    controller_authority.require_entry(original)
+    return controller_authority.require_entry(registry.get(host, sid),
+        expected_incarnation=original['controller_incarnation'])
+
+
+def source_snapshot(host, selector=None):
+    """Pin registry identity before asynchronous source discovery, including absence.
+
+    Prefix selectors remain supported; this evidence permits reading a foreign
+    source, but never grants authority to mutate it.
+    """
+    selector = selector.strip() if selector else None
+    entries = {}
+    for row in registry.list_entries(host):
+        sid = row.get('session_id')
+        if not isinstance(sid, str) or selector and not sid.startswith(selector):
+            continue
+        if sid in entries:
+            raise StepFailed('SESSION_SOURCE_CHANGED', 'source registry identity is ambiguous')
+        entries[sid] = _source_identity(row)
+    return {'host': host, 'selector': selector, 'entries': entries}
+
+
+def _source_identity(row):
+    return {'present': row is not None, **{key: (row or {}).get(key) for key in
+            ('created_at', 'controller_authority', 'controller_incarnation')}}
+
+
+def admit_source(target):
+    return ({'session_source': source_snapshot(target['host'], target['session_id'])}
+            if target.get('session_id') else {})
+
+
+def source_pin(snapshot, host, sid):
+    if (not isinstance(snapshot, dict) or snapshot.get('host') != host
+            or not isinstance(snapshot.get('entries'), dict)
+            or snapshot.get('selector') and not sid.startswith(snapshot['selector'])):
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'original source selection evidence is unavailable')
+    pinned = {'host': host, 'session_id': sid,
+              'identity': snapshot['entries'].get(sid, _source_identity(None))}
+    check_source(pinned)
+    return pinned
+
+
+def check_source(pinned):
+    if (not isinstance(pinned, dict) or not pinned.get('host') or not pinned.get('session_id')
+            or pinned.get('identity') != _source_identity(registry.get(pinned['host'], pinned['session_id']))):
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'original source controller or incarnation changed')
+
+
+async def resolve_source(ops, target, *, ctx=None, snapshot=None, step='source.identity'):
+    """Resolve once and durably retain the concrete ID before any further reads."""
+    host = target['host']
+    if snapshot is None:
+        snapshot = ((ctx.admission_binding or {}).get('session_source') if ctx else
+                    source_snapshot(host, target['session_id']))
+    saved = receipt(ops, ctx.operation_id, step) if ctx else None
+    if saved:
+        check_source(saved)
+    tab, doc = await service._resolve_session(ops.context['fleet'].client(host),
+                                            saved['session_id'] if saved else target['session_id'])
+    pinned = source_pin(snapshot, host, tab['id'])
+    if saved and saved != pinned:
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'resolved source differs from the original selection')
+    pinned = ctx.effect(step, lambda: pinned) if ctx else pinned
+    check_source(pinned)
+    return tab, doc, pinned
+
+
+def task_binding(value):
+    """The task incarnation is independent of the enclosing controller authority."""
+    return {k: v for k, v in (value or {}).items() if k not in {'controller_authority', 'session_controller'}} or None
+
+
+def require_child_authority(ctx, parent):
+    controller_authority.require_binding(controller_authority.operation_binding(parent))
+    controller_authority.require_binding(controller_authority.operation_binding(ctx.op))
+
+
 def receipt(ops, operation_id, name):
     row = ops.db.execute('SELECT response FROM operation_steps WHERE operation_id=? AND name=? AND status=\'succeeded\'',
                          (operation_id, name)).fetchone()
     return json.loads(row['response']) if row else None
 
 
-async def select(ops, target, params, pre):
+async def select(ops, target, params, pre, *, ctx=None):
     """Only reads here. The successful step fixes every later branch and prompt."""
     fleet, host = ops.context['fleet'], target['host']
     hc, client = fleet.config.host(host), fleet.client(host)
     workspace = target.get('workspace')
-    chosen = ({'session_id': target['session_id']} if target.get('session_id') else
-              await lifecycle.main_session(fleet, host, workspace) or {'session_id': None})
+    snapshot = None
+    if target.get('session_id'):
+        chosen = {'session_id': target['session_id']}
+    else:
+        snapshot = (ctx.effect('relay.candidate_sources', lambda: source_snapshot(host)) if ctx else source_snapshot(host))
+        chosen = receipt(ops, ctx.operation_id, 'relay.source_choice') if ctx else None
+        if chosen is None:
+            chosen = await lifecycle.main_session(fleet, host, workspace) or {'session_id': None}
+            chosen = ctx.effect('relay.source_choice', lambda: chosen) if ctx else chosen
     sid, ws_name = chosen['session_id'], workspace or chosen.get('workspace')
     tab, denied, meta = None, None, None
     if sid:
-        tab, ws = await service._resolve_session(client, sid)
+        tab, ws, pinned = await resolve_source(ops, {'host': host, 'session_id': sid}, ctx=ctx, snapshot=snapshot)
         sid = tab['id']
         # Journal ownership survives missing/drifted registry evidence. A task control
         # refusal can never select the independent-start compatibility fallback.
@@ -129,6 +218,7 @@ async def select(ops, target, params, pre):
             if owner or task_control.owner_task(fleet, host, sid):
                 raise
             denied = {'read_only': True, 'read_only_code': exc.code, 'reason': str(exc)}
+        check_source(pinned)
     else:
         ws = await service._workspace(client)
     n = min(fleet.config.safety.max_start_per_call, params.get('max_items') or fleet.config.safety.max_start_per_call)
@@ -162,8 +252,9 @@ async def select(ops, target, params, pre):
     kind = service.agent_kind(tab.get('agentPreset'))
     if kind not in {'claude', 'codex'}:
         raise StepFailed('RELAY_AGENT_UNSUPPORTED', 'relay supports managed Claude or Codex only')
-    task_binding = api_actions._admit_session(ops, None, {'host': host, 'session_id': sid}, {}, pre)
+    bound_task = task_binding(api_actions._admit_session(ops, None, {'host': host, 'session_id': sid}, {}, pre))
     original = record(host, sid)
+    check_source(pinned)
     meta = await service._meta(client, sid)
     if await lifecycle._quota_stopped(fleet, host, sid):
         return {**out, 'route': 'none', 'sent': False, 'quota_stopped': True,
@@ -172,7 +263,7 @@ async def select(ops, target, params, pre):
         return {**out, 'route': 'none', 'sent': False, 'busy': True, 'next': 'use queue=true explicitly'}
     if record(host, sid) != original:
         raise StepFailed('RELAY_BINDING_CHANGED', 'relay session changed while selecting it')
-    return {**out, 'route': 'send', 'registry': original, 'task_binding': task_binding, 'agent_kind': kind,
+    return {**out, 'route': 'send', 'registry': original, 'task_binding': bound_task, 'agent_kind': kind,
             'terminal': {k: tab.get(k) for k in ('workspaceId', 'cwd', 'worktreePath', 'worktreeBranch', 'agentPreset')},
             'runtime': {k: (meta or {}).get(k) for k in ('sdkSessionId', 'cwd')}}
 
@@ -195,6 +286,7 @@ def child_plan(ctx, *, allow_cancel=False):
             not saved or saved.get('operation_id') != ctx.operation_id or link.get('slot') != 'relay'
             or {k: ctx.op[k] for k in ('action', 'target', 'params', 'preconditions')} != saved.get('intent')):
         raise TaskControlRefused('RELAY_BINDING_CHANGED', 'child does not match the original relay receipt')
+    require_child_authority(ctx, parent)
     if not allow_cancel and (parent['cancel_requested'] or parent['status'] in {'failed', 'cancelled'}):
         raise TaskControlRefused('RELAY_CANCEL_REQUESTED', 'relay cancelled before this frame')
     return plan
@@ -209,9 +301,10 @@ def check_child(ctx, *, start_plan=None):
         raise TaskControlRefused('RELAY_BINDING_CHANGED', 'relay host profile changed')
     if plan['route'] == 'send':
         sid = plan['session_id']
+        require_record(host, sid, plan['registry'])
         if record(host, sid) != plan['registry'] or task_control.owner_task(fleet, host, sid) != (plan['task_binding'] or {}).get('task_id'):
             raise TaskControlRefused('RELAY_BINDING_CHANGED', 'relay session creation or owner changed')
-        if ctx.admission_binding != plan['task_binding']:
+        if task_binding(ctx.admission_binding) != task_binding(plan['task_binding']):
             raise TaskControlRefused('RELAY_BINDING_CHANGED', 'relay child task binding changed')
         task_control.check_binding(ctx)
         from .cleanup import guard
@@ -268,6 +361,7 @@ def authorize_child(ops, caller, op, verb):
 def create_child(ctx, plan):
     def create():
         if plan['route'] == 'send':
+            require_record(plan['host'], plan['session_id'], plan['registry'])
             if record(plan['host'], plan['session_id']) != plan['registry']:
                 raise StepFailed('RELAY_BINDING_CHANGED', 'fixed relay session changed before child admission')
             intent = {'action': 'session.send', 'target': {'host': plan['host'], 'session_id': plan['session_id']},
@@ -277,7 +371,7 @@ def create_child(ctx, plan):
             intent = {'action': 'session.start', 'target': {'host': plan['host'], 'workspace': plan['workspace_id']},
                       'params': {'agent': 'codex', 'prompt': plan['text'], 'use_worktree': True, 'title': 'relayed task'}, 'preconditions': {}}
         child, fresh = ctx.service.create(principal(ctx), **intent, idempotency_key=None, _legacy_session=True, entry=ctx.op['entry'])
-        if not fresh or plan['route'] == 'send' and (child.get('external_refs') or {}).get('admission_binding') != plan['task_binding']:
+        if not fresh or plan['route'] == 'send' and task_binding((child.get('external_refs') or {}).get('admission_binding')) != task_binding(plan['task_binding']):
             raise StepFailed('RELAY_BINDING_CHANGED', 'relay task binding changed before child admission')
         ctx.service._merge_refs(child['operation_id'], {'orchestration_child': {'parent_id': ctx.operation_id, 'slot': 'relay'}})
         ctx.set_refs(relay_child_id=child['operation_id'])
@@ -288,7 +382,7 @@ def create_child(ctx, plan):
 async def run(ctx):
     async def reread(_):
         return RERUN
-    plan = await ctx.step('relay.resolve', lambda: select(ctx.service, ctx.target, ctx.params, ctx.preconditions), reconcile=reread)
+    plan = await ctx.step('relay.resolve', lambda: select(ctx.service, ctx.target, ctx.params, ctx.preconditions, ctx=ctx), reconcile=reread)
     ctx.set_refs(relay_selection=plan)
     if plan['route'] == 'none':
         return plan
@@ -356,7 +450,8 @@ async def preview(ops, caller, request):
     target, params, pre = inputs(request)
     validate(target, params, pre)
     # Dry-run preserves the existing read-only render, including manual/no-session diagnostics.
-    return await lifecycle.session_relay(ops.context['fleet'], **target, **params, dry_run=True)
+    with controller_authority.use(controller_authority.binding(ops.db, caller), ops.journal):
+        return await lifecycle.session_relay(ops.context['fleet'], **target, **params, dry_run=True)
 
 
 def inputs(request):

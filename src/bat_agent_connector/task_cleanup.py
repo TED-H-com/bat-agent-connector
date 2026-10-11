@@ -11,8 +11,9 @@ import weakref
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 
-from . import registry
+from . import controller_authority, registry, task_control
 from .api_auth import Principal
+from .errors import ResourceReadOnly
 from .operations import OperationError, _canonical
 
 _HELD = contextvars.ContextVar("task_cleanup_locks", default=frozenset())
@@ -72,6 +73,10 @@ def verdict(coordinator, item):
         if task is None:
             refuse("TASK_OWNED", task_id=tid, detail="owner_missing")
             continue
+        try:
+            task_control.require_authority(task)
+        except ResourceReadOnly as exc:
+            refuse("CONTROLLER_MISMATCH", task_id=tid, detail=getattr(exc, "code", "authority_unavailable"))
         if task["state"] not in TERMINAL:
             refuse("TASK_OWNED", task_id=tid, state=task["state"], paused=bool(task["paused"]))
         commands = [dict(r) for r in ops.db.execute("SELECT * FROM commands WHERE task_id=? ORDER BY command_id", (tid,))]
@@ -81,7 +86,8 @@ def verdict(coordinator, item):
         if tid not in _HELD.get() and coordinator._task_locks.get(tid, asyncio.Lock()).locked():
             refuse("ACTIVE_EXECUTION", task_id=tid)
         bound.append({k: task.get(k) for k in ("task_id", "host", "control_version", "state", "paused",
-            "session_id", "reviewer_session_id", "external_worktree_path", "external_branch", "verification_commit")}
+            "session_id", "reviewer_session_id", "external_worktree_path", "external_branch", "verification_commit",
+            "controller_authority")}
             | {"commands": [{k: c[k] for k in ("command_id", "kind", "session_id", "status", "marker")}
                              | {"payload_sha256": hashlib.sha256(c["payload"].encode()).hexdigest()}
                              for c in commands]})
@@ -209,6 +215,11 @@ def finalize(ctx, item, after):
 
 async def automatic(daemon, task):
     """The existing daemon tick submits one fixed carrier operation; it never runs a second remover."""
+    with controller_authority.use(task_control.authority(task), daemon.journal):
+        return await _automatic_bound(daemon, task)
+
+
+async def _automatic_bound(daemon, task):
     from . import cleanup
     ops = daemon.ops
     key = "task-cleanup:" + task["task_id"] + ":" + cleanup._hash(
@@ -217,6 +228,7 @@ async def automatic(daemon, task):
                            (SYSTEM.actor, key)).fetchone()
     if prior:
         return ops.get(prior[0])
+    task_control.require_authority(task)
     doc = await cleanup.preview(ops, SYSTEM, {"kind": "task", "task_id": task["task_id"]},
                                 _automatic=True)
     if not doc["ready"]:

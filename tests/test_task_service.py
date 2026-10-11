@@ -2,17 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import os
 import stat
 import subprocess
 import sys
 import time
+from contextlib import ExitStack, contextmanager
+from functools import wraps
 from pathlib import Path
 
 import pytest
 
-from bat_agent_connector import goose_acp, lifecycle, mcp_server, orchestrate, registry, service, task_bat
+from bat_agent_connector import (
+    api_auth,
+    goose_acp,
+    lifecycle,
+    mcp_server,
+    orchestrate,
+    registry,
+    service,
+    task_bat,
+)
 from bat_agent_connector.errors import TaskIdentityMismatch, WriteRefused
 from bat_agent_connector.goose_acp import PINNED_GOOSE_VERSION, GooseACP, GooseConfig
 from bat_agent_connector.model_router import MinimalReviewGate, MinimalTaskRouter, ModelRouter, RouterConfig
@@ -30,9 +42,42 @@ from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.task_handoff import history_excerpt, ledger_summary
 from bat_agent_connector.task_journal import Journal
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings, load_settings
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 
 WORDS = "請保留 `原文`，不要改成英文。\n第二行：修好它。"
+
+
+TASK_CALLER = api_auth.Principal(api_auth.ADMIN_ACTOR, frozenset(), admin=True)
+
+
+@pytest.fixture
+def task_controller(controller_context):
+    """A test-owned journal scope, opened and closed inside the test's Context."""
+    @contextmanager
+    def scope():
+        with ExitStack() as contexts:
+            def bind(value):
+                journal = value.journal if isinstance(value, TaskDaemon) else value
+                contexts.enter_context(controller_scope(journal, TASK_CALLER))
+                return value
+            yield bind
+    return scope
+
+
+def authenticated_task_test(fn):
+    # pytest async test and fixture teardown run in different Contexts. Keep both
+    # sides of each authority scope inside the test coroutine, including failure.
+    if inspect.iscoroutinefunction(fn):
+        @wraps(fn)
+        async def asynchronous(*args, **kwargs):
+            with kwargs["task_controller"]() as bind:
+                return await fn(*args, **{**kwargs, "task_controller": bind})
+        return asynchronous
+    @wraps(fn)
+    def synchronous(*args, **kwargs):
+        with kwargs["task_controller"]() as bind:
+            return fn(*args, **{**kwargs, "task_controller": bind})
+    return synchronous
 
 
 def review_json(verdict="pass", commit="a" * 40, tree="b" * 40, findings=()):
@@ -165,9 +210,10 @@ class FakeBAT:
         return frozenset({self.reviewer_kind, "codex"})
 
 
-def test_journal_idempotency_restart_and_metrics(tmp_path):
+@authenticated_task_test
+def test_journal_idempotency_restart_and_metrics(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j)
     assert task["original_words"] == WORDS
     assert submit(j)["task_id"] == task["task_id"]
@@ -177,7 +223,7 @@ def test_journal_idempotency_restart_and_metrics(tmp_path):
     assert j.db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert j.db.execute("PRAGMA synchronous").fetchone()[0] == 2
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     assert j.get(task["task_id"])["original_words"] == WORDS
     assert j.get(task["task_id"])["delivered"] is False
     assert j.get(task["task_id"])["time_to_deliver_s"] is None
@@ -191,9 +237,10 @@ def test_journal_idempotency_restart_and_metrics(tmp_path):
     j.close()
 
 
-async def test_timeout_no_resend_and_reconcile(tmp_path):
+@authenticated_task_test
+async def test_timeout_no_resend_and_reconcile(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j)
     fake = FakeBAT()
     fake.send_error = True
@@ -203,7 +250,7 @@ async def test_timeout_no_resend_and_reconcile(tmp_path):
     assert len(fake.sends) == 1
     sid = j.get(task["task_id"])["session_id"]
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     core = TaskCoordinator(j, fake)
     await core.tick(task["task_id"])
     assert len(fake.sends) == 1
@@ -214,7 +261,8 @@ async def test_timeout_no_resend_and_reconcile(tmp_path):
     j.close()
 
 
-async def test_send_timeout_after_acceptance_read_back_exact_prompt(tmp_path):
+@authenticated_task_test
+async def test_send_timeout_after_acceptance_read_back_exact_prompt(task_controller, tmp_path):
     class AcceptedThenLost(FakeBAT):
         async def send(self, task, session_id, text, message_id):
             self.reconcile_echo = {"session_id": session_id, "message_id": message_id,
@@ -222,7 +270,7 @@ async def test_send_timeout_after_acceptance_read_back_exact_prompt(tmp_path):
             await super().send(task, session_id, text, message_id)
 
     path = tmp_path / "tasks.db"
-    journal = Journal(path)
+    journal = task_controller(Journal(path))
     task = submit(journal)
     fake = AcceptedThenLost()
     fake.prepare_kind = "codex"
@@ -235,20 +283,21 @@ async def test_send_timeout_after_acceptance_read_back_exact_prompt(tmp_path):
     assert send["status"] == "accepted" and send["marker"] == "user-confirmed-1"
     assert "send_reconciled_delivered" in [e["kind"] for e in journal.events(task["task_id"])]
     journal.close()
-    journal = Journal(path)
+    journal = task_controller(Journal(path))
     await TaskCoordinator(journal, fake).tick(task["task_id"])
     assert len(fake.sends) == 1
     journal.close()
 
 
-async def test_codex_accepted_timestamp_requires_exact_read_back(tmp_path):
+@authenticated_task_test
+async def test_codex_accepted_timestamp_requires_exact_read_back(task_controller, tmp_path):
     class AcceptedTimestampBAT(FakeBAT):
         async def send(self, task, session_id, text, message_id):
             self.reconcile_echo = {"session_id": session_id, "message_id": message_id,
                                    "text": text, "turn_id": "user-codex-exact"}
             return await super().send(task, session_id, text, message_id)
 
-    journal = Journal(tmp_path / "accepted.db")
+    journal = task_controller(Journal(tmp_path / "accepted.db"))
     task = submit(journal)
     fake = AcceptedTimestampBAT()
     fake.prepare_kind = "codex"
@@ -260,7 +309,7 @@ async def test_codex_accepted_timestamp_requires_exact_read_back(tmp_path):
     assert "send_reconciled_delivered" in [e["kind"] for e in journal.events(task["task_id"])]
     journal.close()
 
-    journal = Journal(tmp_path / "unproven.db")
+    journal = task_controller(Journal(tmp_path / "unproven.db"))
     task = submit(journal)
     fake = FakeBAT()
     fake.prepare_kind = "codex"
@@ -300,8 +349,9 @@ async def test_bat_read_back_requires_exact_new_user_echo(fleet_factory, mock):
     await fleet.close()
 
 
-async def test_verification_waits_for_quiet_candidate_window(tmp_path):
-    journal = Journal(tmp_path / "quiet.db")
+@authenticated_task_test
+async def test_verification_waits_for_quiet_candidate_window(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "quiet.db"))
     task = submit(journal)
     fake = FakeBAT()
     core = TaskCoordinator(journal, fake, verification_quiet_s=0.05)
@@ -321,8 +371,9 @@ async def test_verification_waits_for_quiet_candidate_window(tmp_path):
     journal.close()
 
 
-async def test_daemon_records_actual_journal_for_send_fence(tmp_path, mock):
-    daemon = TaskDaemon(make_config(mock), db_path=tmp_path / "custom" / "jobs.db")
+@authenticated_task_test
+async def test_daemon_records_actual_journal_for_send_fence(task_controller, tmp_path, mock):
+    daemon = task_controller(TaskDaemon(make_config(mock), db_path=tmp_path / "custom" / "jobs.db"))
     daemon.acquire_owner()
     try:
         assert service.task_service_db() == (tmp_path / "custom" / "jobs.db").resolve()
@@ -331,8 +382,9 @@ async def test_daemon_records_actual_journal_for_send_fence(tmp_path, mock):
         daemon.journal.close()
 
 
-async def test_verification_budget_is_recipe_aware(tmp_path, mock):
-    daemon = TaskDaemon(make_config(mock), db_path=tmp_path / "budget.db")
+@authenticated_task_test
+async def test_verification_budget_is_recipe_aware(task_controller, tmp_path, mock):
+    daemon = task_controller(TaskDaemon(make_config(mock), db_path=tmp_path / "budget.db"))
     assert daemon.verification_budget("feature-to-staging") >= 3600
     assert daemon.verification_budget("small-task-with-tests") >= 900
     daemon.verification_timeout_s = 7
@@ -341,8 +393,9 @@ async def test_verification_budget_is_recipe_aware(tmp_path, mock):
     daemon.journal.close()
 
 
-async def test_verification_deadline_and_failure_do_not_stall_worker(tmp_path, mock):
-    daemon = TaskDaemon(make_config(mock), db_path=tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_verification_deadline_and_failure_do_not_stall_worker(task_controller, tmp_path, mock):
+    daemon = task_controller(TaskDaemon(make_config(mock), db_path=tmp_path / "tasks.db"))
     daemon.verification_timeout_s = 1
     hung = daemon.journal.submit(project="p", host="h1", workspace="w", original_words="hung",
                                  idempotency_key="hung")
@@ -385,8 +438,9 @@ async def test_verification_deadline_and_failure_do_not_stall_worker(tmp_path, m
     daemon.journal.close()
 
 
-async def test_verification_clocks_ignore_heartbeats_and_cap_active_phase(tmp_path, mock):
-    daemon = TaskDaemon(make_config(mock), db_path=tmp_path / "clocks.db")
+@authenticated_task_test
+async def test_verification_clocks_ignore_heartbeats_and_cap_active_phase(task_controller, tmp_path, mock):
+    daemon = task_controller(TaskDaemon(make_config(mock), db_path=tmp_path / "clocks.db"))
     task = daemon.journal.submit(project="p", host="h1", workspace="w", original_words="x",
                                  idempotency_key="clocks", recipe="small-task-with-tests")
     daemon.journal.change(task["task_id"], "dispatching")
@@ -452,8 +506,9 @@ async def _to_verifying(core, journal, fake, task):
     return lead
 
 
-async def test_code_test_failure_reworks_lead_then_escalates_after_budget(tmp_path):
-    j = Journal(tmp_path / "rework.db")
+@authenticated_task_test
+async def test_code_test_failure_reworks_lead_then_escalates_after_budget(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "rework.db"))
     task = submit(j, recipe="small-task-with-tests")
     fake = FailingTestsBAT(["code", "code"])
     core = TaskCoordinator(j, fake)
@@ -471,8 +526,9 @@ async def test_code_test_failure_reworks_lead_then_escalates_after_budget(tmp_pa
     j.close()
 
 
-async def test_environment_test_failure_escalates_without_rework(tmp_path):
-    j = Journal(tmp_path / "env.db")
+@authenticated_task_test
+async def test_environment_test_failure_escalates_without_rework(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "env.db"))
     task = submit(j)
     fake = FailingTestsBAT(["environment"])
     core = TaskCoordinator(j, fake)
@@ -484,8 +540,9 @@ async def test_environment_test_failure_escalates_without_rework(tmp_path):
     j.close()
 
 
-async def test_missing_dependencies_install_once_then_retest(tmp_path):
-    j = Journal(tmp_path / "deps.db")
+@authenticated_task_test
+async def test_missing_dependencies_install_once_then_retest(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "deps.db"))
     task = submit(j)
     fake = FailingTestsBAT(["missing_dependencies", "pass"])
     core = TaskCoordinator(j, fake)
@@ -501,8 +558,9 @@ async def test_missing_dependencies_install_once_then_retest(tmp_path):
     j.close()
 
 
-async def test_missing_dependencies_after_install_becomes_code_rework(tmp_path):
-    j = Journal(tmp_path / "deps2.db")
+@authenticated_task_test
+async def test_missing_dependencies_after_install_becomes_code_rework(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "deps2.db"))
     task = submit(j)
     fake = FailingTestsBAT(["missing_dependencies", "missing_dependencies"])
     core = TaskCoordinator(j, fake)
@@ -513,8 +571,9 @@ async def test_missing_dependencies_after_install_becomes_code_rework(tmp_path):
     j.close()
 
 
-async def test_codex_timestamp_never_proves_lost_send_or_review(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_codex_timestamp_never_proves_lost_send_or_review(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     fake.prepare_kind = "codex"
@@ -529,7 +588,7 @@ async def test_codex_timestamp_never_proves_lost_send_or_review(tmp_path):
     assert not j.get(task["task_id"])["delivered"] and len(fake.sends) == 1
     j.close()
 
-    j = Journal(tmp_path / "review.db")
+    j = task_controller(Journal(tmp_path / "review.db"))
     task = submit(j)
     fake = FakeBAT()
     core = TaskCoordinator(j, fake)
@@ -542,9 +601,14 @@ async def test_codex_timestamp_never_proves_lost_send_or_review(tmp_path):
     j.close()
 
 
-async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(mock, tmp_path):
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
-    fake = FakeBAT()
+@authenticated_task_test
+async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(task_controller, mock, tmp_path):
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
+    class OwnedFakeBAT(FakeBAT):
+        async def start(self, task, *, role, agent, session_id):
+            adopt(session_id, task_id=task["task_id"], role=role)
+            return await super().start(task, role=role, agent=agent, session_id=session_id)
+    fake = OwnedFakeBAT()
     fake.send_error = True
     daemon.adapter = fake
     daemon.coordinator = TaskCoordinator(daemon.journal, fake)
@@ -598,9 +662,10 @@ async def test_operator_reconcile_is_command_scoped_and_dispatches_new_prompt(mo
         daemon.journal.close()
 
 
-async def test_operator_followup_intent_survives_crash_without_automatic_send(tmp_path):
+@authenticated_task_test
+async def test_operator_followup_intent_survives_crash_without_automatic_send(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j)
     fake = FakeBAT()
     fake.send_error = True
@@ -616,17 +681,18 @@ async def test_operator_followup_intent_survives_crash_without_automatic_send(tm
     new_command = j.command_get(result["_next_command_id"])
     assert new_command["status"] == "needs_review"
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     assert (await TaskCoordinator(j, fake).tick(task["task_id"]))["state"] == "uncertain"
     assert len(fake.sends) == 1
     assert j.command_get(new_command["command_id"])["status"] == "uncertain"
     j.close()
 
 
-async def test_task_bat_adapter_contract_with_mock_host(fleet_factory, mock, tmp_path):
+@authenticated_task_test
+async def test_task_bat_adapter_contract_with_mock_host(task_controller, fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=True,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="adapter-contract")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -661,9 +727,10 @@ async def test_task_bat_adapter_contract_with_mock_host(fleet_factory, mock, tmp
     j.close()
 
 
-async def test_claude_sessions_pin_opus_55_for_lead_and_reviewer(fleet_factory, mock, tmp_path):
+@authenticated_task_test
+async def test_claude_sessions_pin_opus_55_for_lead_and_reviewer(task_controller, fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="claude-pin", lead_agent="claude")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -688,7 +755,8 @@ async def test_claude_sessions_pin_opus_55_for_lead_and_reviewer(fleet_factory, 
     j.close()
 
 
-async def test_available_agents_uses_host_usage_snapshot_and_quota_latch(tmp_path):
+@authenticated_task_test
+async def test_available_agents_uses_host_usage_snapshot_and_quota_latch(task_controller, tmp_path):
     class Client:
         def __init__(self):
             self.reply = None
@@ -705,7 +773,7 @@ async def test_available_agents_uses_host_usage_snapshot_and_quota_latch(tmp_pat
         def client(self, _host):
             return self.client_obj
 
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     fleet = Fleet()
     adapter = task_bat.BatTaskAdapter(fleet, None, j)
     now_ms = time.time() * 1000
@@ -731,8 +799,9 @@ async def test_available_agents_uses_host_usage_snapshot_and_quota_latch(tmp_pat
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_real_agents_follow_ted_order_and_record_provider_usage(tmp_path):
-    journal = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_real_agents_follow_ted_order_and_record_provider_usage(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     fake = FakeBAT()
     fake.reviewer_kind = "claude"  # Claude available on the host
     task = submit(journal)  # Codex lead
@@ -761,8 +830,9 @@ async def test_real_agents_follow_ted_order_and_record_provider_usage(tmp_path):
     journal.close()
 
 
-async def test_claude_lead_falls_back_to_codex_and_reviewer_uses_other_family(tmp_path):
-    journal = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_claude_lead_falls_back_to_codex_and_reviewer_uses_other_family(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     fake = FakeBAT()  # only Codex available
     task = submit(journal, lead_agent="claude")
     await TaskCoordinator(journal, fake).tick(task["task_id"])
@@ -781,10 +851,11 @@ async def test_claude_lead_falls_back_to_codex_and_reviewer_uses_other_family(tm
     journal.close()
 
 
-async def test_task_initial_send_after_start_ignores_only_start_spacing(fleet_factory, mock, tmp_path):
+@authenticated_task_test
+async def test_task_initial_send_after_start_ignores_only_start_spacing(task_controller, fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True,
                           safety={"write_min_interval_s": 60, "max_writes_per_hour": 100})
-    journal = Journal(tmp_path / "initial-spacing.db")
+    journal = task_controller(Journal(tmp_path / "initial-spacing.db"))
     task = journal.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                           idempotency_key="initial-spacing")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), journal)
@@ -812,11 +883,12 @@ async def test_task_initial_send_after_start_ignores_only_start_spacing(fleet_fa
     await fleet.close()
 
 
-async def test_task_reservation_excludes_paused_lead_from_legacy_cleanup(
+@authenticated_task_test
+async def test_task_reservation_excludes_paused_lead_from_legacy_cleanup(task_controller,
         fleet_factory, mock, tmp_path, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, auto_cleanup=True,
                           safety={"write_min_interval_s": 0})
-    journal = Journal(tmp_path / "tasks.db")
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = journal.submit(project="p", host="h1", workspace="demo-project",
                           original_words=WORDS, idempotency_key="paused-reserved-lead")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), journal)
@@ -860,17 +932,20 @@ async def test_task_reservation_excludes_paused_lead_from_legacy_cleanup(
     await fleet.close()
 
 
-async def test_headless_session_lookup_restored_from_task_branch_and_bat_meta(
+@authenticated_task_test
+async def test_headless_session_lookup_restored_from_task_branch_and_bat_meta(task_controller,
         fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="headless-lookup")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
     sid = "headless-started-session"
+    start, _ = j.command(task["task_id"], "start_lead", sid, {"agent": "claude", "role": "lead"}, "headless-start")
     try:
         await adapter.start(task, role="lead", agent="claude", session_id=sid)
+        j.command_status(start["command_id"], "settled")
         j.add_branch(task["task_id"], session_id=sid, provider="claude", role="lead", reason="start")
         j.change(task["task_id"], "dispatching")
         task = j.change(task["task_id"], "accepted", fields={"session_id": sid})
@@ -891,11 +966,12 @@ async def test_headless_session_lookup_restored_from_task_branch_and_bat_meta(
         j.close()
 
 
-async def test_bat_presence_distinguishes_orphan_worktree_from_vanished_session(
+@authenticated_task_test
+async def test_bat_presence_distinguishes_orphan_worktree_from_vanished_session(task_controller,
         fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="presence-contract")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -914,12 +990,13 @@ async def test_bat_presence_distinguishes_orphan_worktree_from_vanished_session(
         j.close()
 
 
-async def test_bat_restart_null_meta_and_worktree_never_creates_replacement(
+@authenticated_task_test
+async def test_bat_restart_null_meta_and_worktree_never_creates_replacement(task_controller,
         fleet_factory, mock, tmp_path):
     path = tmp_path / "tasks.db"
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="restart-null-presence")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -936,7 +1013,7 @@ async def test_bat_restart_null_meta_and_worktree_never_creates_replacement(
         assert j.get(task["task_id"])["session_replacements"] == 0
         assert not any(c["kind"] == "send" for c in j.commands(task["task_id"]))
         j.close()
-        j = Journal(path)
+        j = task_controller(Journal(path))
         adapter.journal = j
         core = TaskCoordinator(j, adapter)
         assert (await core.tick(task["task_id"]))["state"] == "uncertain"
@@ -953,11 +1030,12 @@ async def test_bat_restart_null_meta_and_worktree_never_creates_replacement(
         j.close()
 
 
-async def test_lead_meta_present_but_bat_worktree_null_blocks_initial_send(
+@authenticated_task_test
+async def test_lead_meta_present_but_bat_worktree_null_blocks_initial_send(task_controller,
         fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="null-worktree-loaded-meta")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -980,11 +1058,12 @@ async def test_lead_meta_present_but_bat_worktree_null_blocks_initial_send(
         j.close()
 
 
-async def test_headless_reviewer_restores_from_lead_worktree_when_own_status_null(
+@authenticated_task_test
+async def test_headless_reviewer_restores_from_lead_worktree_when_own_status_null(task_controller,
         fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="reviewer-lookup")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -1024,11 +1103,12 @@ async def test_headless_reviewer_restores_from_lead_worktree_when_own_status_nul
         j.close()
 
 
-async def test_existing_registry_row_requires_matching_bat_metadata_and_worktree(
+@authenticated_task_test
+async def test_existing_registry_row_requires_matching_bat_metadata_and_worktree(task_controller,
         fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="stale-row")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -1050,11 +1130,12 @@ async def test_existing_registry_row_requires_matching_bat_metadata_and_worktree
         j.close()
 
 
-async def test_start_ack_recovery_uses_reserved_id_when_local_registry_lost(
+@authenticated_task_test
+async def test_start_ack_recovery_uses_reserved_id_when_local_registry_lost(task_controller,
         fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="recover-start-lookup")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -1092,11 +1173,12 @@ async def test_bat_start_rejects_missing_or_mismatched_session_id(fleet_factory,
 @pytest.mark.parametrize("reply", [
     {"ok": True, "sessionId": "different-reviewer"}, {"ok": True},
 ])
-async def test_reviewer_start_rejects_missing_or_mismatched_session_id(
+@authenticated_task_test
+async def test_reviewer_start_rejects_missing_or_mismatched_session_id(task_controller,
         fleet_factory, mock, tmp_path, reply):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="review-ack")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -1116,7 +1198,8 @@ async def test_reviewer_start_rejects_missing_or_mismatched_session_id(
         j.close()
 
 
-async def test_vanished_initial_session_one_replacement_and_restart(tmp_path):
+@authenticated_task_test
+async def test_vanished_initial_session_one_replacement_and_restart(task_controller, tmp_path):
     class VanishesOnStart(FakeBAT):
         async def start(self, task, *, role, agent, session_id):
             sid = await super().start(task, role=role, agent=agent, session_id=session_id)
@@ -1124,7 +1207,7 @@ async def test_vanished_initial_session_one_replacement_and_restart(tmp_path):
             return sid
 
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j)
     fake = VanishesOnStart()
     core = TaskCoordinator(j, fake)
@@ -1134,7 +1217,7 @@ async def test_vanished_initial_session_one_replacement_and_restart(tmp_path):
     assert fake.sends == []
     first = result["branches"][0]["session_id"]
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     core = TaskCoordinator(j, fake)
     result = await core.tick(task["task_id"])
     assert result["state"] == "needs_ted" and result["session_replacements"] == 1
@@ -1146,9 +1229,10 @@ async def test_vanished_initial_session_one_replacement_and_restart(tmp_path):
     j.close()
 
 
-async def test_vanished_after_uncertain_initial_send_never_replaced(tmp_path):
+@authenticated_task_test
+async def test_vanished_after_uncertain_initial_send_never_replaced(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j)
     fake = FakeBAT()
     fake.send_error = True
@@ -1156,7 +1240,7 @@ async def test_vanished_after_uncertain_initial_send_never_replaced(tmp_path):
     assert (await core.tick(task["task_id"]))["state"] == "uncertain"
     fake.vanished_ids.add(j.get(task["task_id"])["session_id"])
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     core = TaskCoordinator(j, fake)
     await core.tick(task["task_id"])
     assert j.get(task["task_id"])["state"] == "uncertain"
@@ -1165,7 +1249,8 @@ async def test_vanished_after_uncertain_initial_send_never_replaced(tmp_path):
     j.close()
 
 
-async def test_start_then_rejected_send_with_vanished_session_replaces_once(tmp_path):
+@authenticated_task_test
+async def test_start_then_rejected_send_with_vanished_session_replaces_once(task_controller, tmp_path):
     class RejectedAfterStart(FakeBAT):
         async def send(self, task, session_id, text, message_id):
             self.vanished_ids.add(session_id)
@@ -1173,7 +1258,7 @@ async def test_start_then_rejected_send_with_vanished_session_replaces_once(tmp_
             return {"accepted": False, "reason": "session absent"}
 
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j)
     fake = RejectedAfterStart()
     core = TaskCoordinator(j, fake)
@@ -1182,7 +1267,7 @@ async def test_start_then_rejected_send_with_vanished_session_replaces_once(tmp_
     assert j.commands(task["task_id"])[-1]["status"] == "rejected"
     assert len(fake.sends) == 1
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     result = await TaskCoordinator(j, fake).tick(task["task_id"])
     assert result["state"] == "needs_ted" and result["session_replacements"] == 1
     assert len(fake.sends) == 2 and fake.sends[0][0] != fake.sends[1][0]
@@ -1191,7 +1276,8 @@ async def test_start_then_rejected_send_with_vanished_session_replaces_once(tmp_
     j.close()
 
 
-async def test_pause_during_final_presence_check_cancels_unsent_command(tmp_path):
+@authenticated_task_test
+async def test_pause_during_final_presence_check_cancels_unsent_command(task_controller, tmp_path):
     class PresenceGateBAT(FakeBAT):
         def __init__(self):
             super().__init__()
@@ -1206,7 +1292,7 @@ async def test_pause_during_final_presence_check_cancels_unsent_command(tmp_path
                 await self.release.wait()
             return "present"
 
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = PresenceGateBAT()
     core = TaskCoordinator(j, fake)
@@ -1225,12 +1311,13 @@ async def test_pause_during_final_presence_check_cancels_unsent_command(tmp_path
     j.close()
 
 
-async def test_pause_during_late_session_send_lookup_blocks_bat_frame(
+@authenticated_task_test
+async def test_pause_during_late_session_send_lookup_blocks_bat_frame(task_controller,
         fleet_factory, mock, tmp_path, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
     mock.echo_sends = True
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="late-send-pause")
     adapter = task_bat.BatTaskAdapter(fleet, ObservedVerifier(VerificationSettings()), j)
@@ -1269,8 +1356,9 @@ async def test_pause_during_late_session_send_lookup_blocks_bat_frame(
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_settled_reviewer_start_requires_presence_before_prompt(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_settled_reviewer_start_requires_presence_before_prompt(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     core = TaskCoordinator(j, fake)
@@ -1293,9 +1381,10 @@ async def test_settled_reviewer_start_requires_presence_before_prompt(tmp_path):
     j.close()
 
 
-async def test_bat_adapter_recovers_codex_successor_without_handoff_turn_proof(
+@authenticated_task_test
+async def test_bat_adapter_recovers_codex_successor_without_handoff_turn_proof(task_controller,
         fleet_factory, mock, monkeypatch, tmp_path):
-    journal = Journal(tmp_path / "tasks.db")
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(journal, lead_agent="claude")
     journal.change(task["task_id"], "dispatching")
     journal.change(task["task_id"], "accepted", fields={"session_id": "old-contract"})
@@ -1349,8 +1438,9 @@ async def test_bat_adapter_recovers_codex_successor_without_handoff_turn_proof(
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_operator_review_pass_requires_current_candidate_and_turn_reference(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_operator_review_pass_requires_current_candidate_and_turn_reference(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     core = TaskCoordinator(j, fake)
@@ -1389,8 +1479,9 @@ async def test_operator_review_pass_requires_current_candidate_and_turn_referenc
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_rules_review_verification_failover_pause_and_writer(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_rules_review_verification_failover_pause_and_writer(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, interpretation="Hermes guessed the wrong feature")
     fake = FakeBAT()
     fake.verifier_available = False
@@ -1447,8 +1538,9 @@ async def test_rules_review_verification_failover_pause_and_writer(tmp_path):
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_review_with_high_defect_findings_without_marker_reworks(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_review_with_high_defect_findings_without_marker_reworks(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, interpretation="review fallback")
     fake = FakeBAT()
     core = TaskCoordinator(j, fake)
@@ -1525,8 +1617,9 @@ def test_bat_status_uses_last_line_of_final_message():
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_quoted_pass_followed_by_reject_reworks_not_delivers(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_quoted_pass_followed_by_reject_reworks_not_delivers(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     core = TaskCoordinator(j, fake)
@@ -1548,8 +1641,9 @@ async def test_quoted_pass_followed_by_reject_reworks_not_delivers(tmp_path):
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_failover_and_single_writer(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_failover_and_single_writer(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, lead_agent="claude")
     fake = FakeBAT()
     fake.failover_allowed = True
@@ -1586,8 +1680,9 @@ def _force_done(j, task_id, commit="c" * 40, result="Merged https://github.com/o
         j._event(task_id, "delivered", {"from": "verifying", "to": "done"})
 
 
-async def test_event_feed_returns_only_milestones_with_monotonic_cursor(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_event_feed_returns_only_milestones_with_monotonic_cursor(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, discord_thread_id="origin-1")
     tid = task["task_id"]
     j.change(tid, "dispatching")
@@ -1630,8 +1725,9 @@ async def test_event_feed_returns_only_milestones_with_monotonic_cursor(tmp_path
     j.close()
 
 
-async def test_event_feed_failed_and_needs_ted_reasons(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_event_feed_failed_and_needs_ted_reasons(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     tid = task["task_id"]
     j.change(tid, "dispatching")
@@ -1649,8 +1745,9 @@ async def test_event_feed_failed_and_needs_ted_reasons(tmp_path):
     j.close()
 
 
-async def test_event_feed_uses_task_result_for_legacy_transition_without_reason(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_event_feed_uses_task_result_for_legacy_transition_without_reason(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     tid = submit(j)["task_id"]
     with j.tx():
         j.db.execute("UPDATE tasks SET state='needs_ted',result='Legacy blocker text' WHERE task_id=?", (tid,))
@@ -1661,9 +1758,10 @@ async def test_event_feed_uses_task_result_for_legacy_transition_without_reason(
     j.close()
 
 
-async def test_legacy_chat_outbox_is_dropped_on_open(tmp_path):
+@authenticated_task_test
+async def test_legacy_chat_outbox_is_dropped_on_open(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     submit(j, discord_thread_id="origin-1")
     j.db.execute("ALTER TABLE events ADD COLUMN discord_message_id TEXT")
     j.db.execute("ALTER TABLE events ADD COLUMN discord_status TEXT NOT NULL DEFAULT 'pending'")
@@ -1671,33 +1769,34 @@ async def test_legacy_chat_outbox_is_dropped_on_open(tmp_path):
                  "status TEXT NOT NULL DEFAULT 'pending')")
     before = j.head_cursor()
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     columns = {r[1] for r in j.db.execute("PRAGMA table_info(events)")}
     assert not {"discord_message_id", "discord_status"} & columns
     assert not j.db.execute("SELECT 1 FROM sqlite_master WHERE name='board'").fetchone()
     assert j.head_cursor() == before and j.events()[0]["kind"] == "submitted"
     j.close()
     # Reopening an already-migrated journal is a no-op.
-    Journal(path).close()
+    task_controller(Journal(path)).close()
 
 
-async def test_daemon_and_mcp_expose_read_only_event_feed(mock, tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_daemon_and_mcp_expose_read_only_event_feed(task_controller, mock, tmp_path, monkeypatch):
     settings = tmp_path / "task-settings.toml"
     settings.write_text('[task_service]\nrepo_urls = { p = "https://github.com/o/p" }\n')
     settings.chmod(0o600)
     monkeypatch.setenv("BATC_TASK_SETTINGS", str(settings))
     assert load_settings().repo_urls == {"p": "https://github.com/o/p"}
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     try:
         tid = submit(daemon.journal, discord_thread_id="origin-9")["task_id"]
         daemon.journal.change(tid, "dispatching")
         daemon.journal.change(tid, "accepted")
         _force_done(daemon.journal, tid, result="verified")
-        feed = await daemon.call("work_events", {"since_cursor": 0, "limit": 10})
+        feed = await daemon.call("work_events", {"since_cursor": 0, "limit": 10}, principal=TASK_CALLER)
         assert _kinds(feed) == ["started", "done"]
         assert feed["events"][1]["commit_url"] == "https://github.com/o/p/commit/" + "c" * 40
         assert feed["events"][1]["link"] == feed["events"][1]["commit_url"]
-        assert (await daemon.call("work_events", {"since_cursor": feed["next_cursor"]}))["events"] == []
+        assert (await daemon.call("work_events", {"since_cursor": feed["next_cursor"]}, principal=TASK_CALLER))["events"] == []
         assert not hasattr(daemon, "publisher")
     finally:
         await daemon.fleet.close()
@@ -1738,8 +1837,9 @@ class FakeJev:
         return {"step_type": {"choice": self.choice, "confidence": self.confidence}}
 
 
-async def test_router_cap_quota_and_explicit_rules(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_router_cap_quota_and_explicit_rules(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     tid = task["task_id"]
     catalog = ProviderCatalog([
@@ -1765,8 +1865,9 @@ async def test_router_cap_quota_and_explicit_rules(tmp_path):
     j.close()
 
 
-async def test_router_has_no_classifier_and_requires_known_step_type(tmp_path):
-    journal = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_router_has_no_classifier_and_requires_known_step_type(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(journal)
     router = ModelRouter(journal)
     assert not hasattr(router, "classifier") and not hasattr(router, "prescreen")
@@ -1777,8 +1878,9 @@ async def test_router_has_no_classifier_and_requires_known_step_type(tmp_path):
     journal.close()
 
 
-async def test_router_provider_override_and_recipe_precedence(tmp_path, monkeypatch):
-    journal = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_router_provider_override_and_recipe_precedence(task_controller, tmp_path, monkeypatch):
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(journal, engine="goose")
     router = ModelRouter(journal)
     choice = await router.choose(task["task_id"], "planning:recipe", "plan",
@@ -1802,7 +1904,8 @@ async def test_router_provider_override_and_recipe_precedence(tmp_path, monkeypa
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_pause_while_jev_routes_start_does_not_start_bat(tmp_path):
+@authenticated_task_test
+async def test_pause_while_jev_routes_start_does_not_start_bat(task_controller, tmp_path):
     class SlowRouter:
         def __init__(self):
             self.entered = asyncio.Event()
@@ -1813,7 +1916,7 @@ async def test_pause_while_jev_routes_start_does_not_start_bat(tmp_path):
             await self.release.wait()
             return {"provider": "codex"}
 
-    journal = Journal(tmp_path / "tasks.db")
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(journal)
     fake = FakeBAT()
     router = SlowRouter()
@@ -1828,8 +1931,9 @@ async def test_pause_while_jev_routes_start_does_not_start_bat(tmp_path):
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_rules_route_each_pm_phase_by_rule_without_prescreen(tmp_path):
-    journal = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_rules_route_each_pm_phase_by_rule_without_prescreen(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(journal)
     catalog = ProviderCatalog([
         ProviderEntry("agy-claude", "agy-shim", "http://127.0.0.1:18796/v1",
@@ -1867,8 +1971,9 @@ async def test_rules_route_each_pm_phase_by_rule_without_prescreen(tmp_path):
     journal.close()
 
 
-async def test_work_status_and_result_make_no_routing_call(mock, tmp_path):
-    daemon = TaskDaemon(make_config(mock), db_path=tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_work_status_and_result_make_no_routing_call(task_controller, mock, tmp_path):
+    daemon = task_controller(TaskDaemon(make_config(mock), db_path=tmp_path / "tasks.db"))
     task = submit(daemon.journal)
 
     async def forbidden(*_args, **_kwargs):
@@ -1876,9 +1981,9 @@ async def test_work_status_and_result_make_no_routing_call(mock, tmp_path):
 
     daemon.router.choose = forbidden
     daemon.minimal_router.choose = forbidden
-    first = await daemon.call("work_status", {"task_id": task["task_id"]})
-    await daemon.call("work_result", {"task_id": task["task_id"]})
-    second = await daemon.call("work_status", {"task_id": task["task_id"]})
+    first = await daemon.call("work_status", {"task_id": task["task_id"]}, principal=TASK_CALLER)
+    await daemon.call("work_result", {"task_id": task["task_id"]}, principal=TASK_CALLER)
+    second = await daemon.call("work_status", {"task_id": task["task_id"]}, principal=TASK_CALLER)
     assert first["routing_metrics"] == second["routing_metrics"] == {"count": 0, "by_provider": {}}
     assert daemon.journal.routes(task["task_id"]) == []
     await daemon.fleet.close()
@@ -1901,30 +2006,32 @@ async def test_mcp_work_submit_returns_without_bat(mock, monkeypatch):
     await fleet.close()
 
 
-async def test_daemon_uses_configured_minimal_default_and_standard_opt_out(mock, tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_daemon_uses_configured_minimal_default_and_standard_opt_out(task_controller, mock, tmp_path, monkeypatch):
     monkeypatch.setenv("BATC_TASK_DEFAULT_PATH", "minimal")
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     try:
         minimal = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-            "idempotency_key": "default:minimal"})
+            "idempotency_key": "default:minimal"}, principal=TASK_CALLER)
         assert daemon.journal.get(minimal["task_id"])["task_path"] == "minimal"
         standard = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-            "idempotency_key": "default:standard", "task_path": "standard"})
+            "idempotency_key": "default:standard", "task_path": "standard"}, principal=TASK_CALLER)
         assert daemon.journal.get(standard["task_id"])["task_path"] == "standard"
     finally:
         await daemon.fleet.close()
         daemon.journal.close()
 
 
-async def test_daemon_submit_is_journal_only(mock, tmp_path):
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_daemon_submit_is_journal_only(task_controller, mock, tmp_path):
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     daemon.acquire_owner()  # owner-first initialization precedes the timed request, as in serve().
     try:
         result = await asyncio.wait_for(daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-            "idempotency_key": "discord:message:1"}), timeout=0.5)
+            "idempotency_key": "discord:message:1"}, principal=TASK_CALLER), timeout=0.5)
         assert result["state"] == "queued"
         assert daemon.journal.get(result["task_id"])["original_words"] == WORDS
         assert not mock.invokes
@@ -1933,19 +2040,20 @@ async def test_daemon_submit_is_journal_only(mock, tmp_path):
         daemon.journal.close()
 
 
-async def test_submit_enters_one_goose_session_without_jev(mock, tmp_path):
+@authenticated_task_test
+async def test_submit_enters_one_goose_session_without_jev(task_controller, mock, tmp_path):
     class NoJev:
         async def ask(self, *_args, **_kwargs):
             raise AssertionError("submit makes no model call")
         async def ask_with_model(self, *_args, **_kwargs):
             raise AssertionError("submit makes no model call")
 
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     daemon.recipe_chooser = NoJev()  # ignored; nothing calls it
     daemon.minimal_router = NoJev()
     parent = await daemon.call("work_submit", {
         "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-        "idempotency_key": "goose:parent", "task_path": "minimal"})
+        "idempotency_key": "goose:parent", "task_path": "minimal"}, principal=TASK_CALLER)
     try:
         assert parent["engine"] == "goose" and parent["goose"] == "disabled" and parent["state"] == "queued"
         assert daemon.journal.get(parent["task_id"])["recipe"] == "goose-session"
@@ -1953,11 +2061,11 @@ async def test_submit_enters_one_goose_session_without_jev(mock, tmp_path):
         follow = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": "adjust the button only",
             "idempotency_key": "goose:follow", "task_path": "minimal",
-            "parent_task_id": parent["task_id"], "continuation": True})
+            "parent_task_id": parent["task_id"], "continuation": True}, principal=TASK_CALLER)
         repeat = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": "adjust the button only",
             "idempotency_key": "goose:follow", "task_path": "minimal",
-            "parent_task_id": parent["task_id"], "continuation": True})
+            "parent_task_id": parent["task_id"], "continuation": True}, principal=TASK_CALLER)
         assert follow["task_id"] == parent["task_id"] and follow["continuation"] is True
         assert repeat["task_id"] == parent["task_id"]
         assert sum(e["kind"] == "continuation" for e in daemon.journal.events(parent["task_id"])) == 1
@@ -1967,7 +2075,8 @@ async def test_submit_enters_one_goose_session_without_jev(mock, tmp_path):
         daemon.journal.close()
 
 
-async def test_presplit_executor_is_the_only_jev_call_and_skips_opus(mock, tmp_path):
+@authenticated_task_test
+async def test_presplit_executor_is_the_only_jev_call_and_skips_opus(task_controller, mock, tmp_path):
     class OnlyHere:
         calls = 0
         async def ask(self, state, questions):
@@ -1977,17 +2086,17 @@ async def test_presplit_executor_is_the_only_jev_call_and_skips_opus(mock, tmp_p
             return {"executor": {"type": "choice", "choice": "accept", "confidence": 1.0,
                                  "probabilities": {"accept": 1.0, "reject": 0.0}}}
 
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     jev = OnlyHere()
     daemon.jev = jev
     try:
         normal = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-            "idempotency_key": "plain", "task_path": "minimal"})
+            "idempotency_key": "plain", "task_path": "minimal"}, principal=TASK_CALLER)
         assert jev.calls == 0 and daemon.journal.get(normal["task_id"])["pm_provider"] is None
         split = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-            "idempotency_key": "split", "task_path": "minimal", "executor_model": "grok"})
+            "idempotency_key": "split", "task_path": "minimal", "executor_model": "grok"}, principal=TASK_CALLER)
         assert jev.calls == 1
         row = daemon.journal.get(split["task_id"])
         assert row["pm_provider"] == "grok" and row["engine"] == "goose"
@@ -1997,8 +2106,9 @@ async def test_presplit_executor_is_the_only_jev_call_and_skips_opus(mock, tmp_p
         daemon.journal.close()
 
 
-async def test_quota_limited_stops_at_needs_ted(tmp_path):
-    j = Journal(tmp_path / "quota.db")
+@authenticated_task_test
+async def test_quota_limited_stops_at_needs_ted(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "quota.db"))
     task = submit(j)
     for state in ("dispatching", "accepted", "running", "quota_limited"):
         j.change(task["task_id"], state)
@@ -2022,7 +2132,8 @@ async def test_minimal_rejects_invalid_typed_engine_answer():
     assert choice["selected"] == "rules_engine" and choice["jev_backend"] is None
 
 
-async def test_minimal_goose_choice_is_pluggable_only_after_explicit_live_gate(mock, tmp_path):
+@authenticated_task_test
+async def test_minimal_goose_choice_is_pluggable_only_after_explicit_live_gate(task_controller, mock, tmp_path):
     class GooseChoice:
         backend = "openrouter_jev"
 
@@ -2031,13 +2142,13 @@ async def test_minimal_goose_choice_is_pluggable_only_after_explicit_live_gate(m
             return {"engine": {"type": "choice", "choice": "goose", "confidence": 1.0,
                                "probabilities": {"rules_engine": 0.0, "goose": 1.0}}}
 
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     daemon.goose = GooseACP(GooseConfig(enabled=True))  # synthetic contract; no live process launched
     daemon.minimal_router = MinimalTaskRouter(GooseChoice())
     try:
         result = await daemon.call("work_submit", {
             "project": "p", "host": "h1", "workspace": "w", "original_words": WORDS,
-            "idempotency_key": "minimal:goose-gated", "task_path": "minimal"})
+            "idempotency_key": "minimal:goose-gated", "task_path": "minimal"}, principal=TASK_CALLER)
         assert result["engine"] == "goose"
         decision = daemon.journal.engine_decision(result["task_id"])
         assert decision["jev_backend"] is None and decision["reason"] == "goose_session"
@@ -2047,7 +2158,8 @@ async def test_minimal_goose_choice_is_pluggable_only_after_explicit_live_gate(m
         daemon.journal.close()
 
 
-async def test_minimal_small_task_uses_observed_tests_without_reviewer_or_step_jev(tmp_path):
+@authenticated_task_test
+async def test_minimal_small_task_uses_observed_tests_without_reviewer_or_step_jev(task_controller, tmp_path):
     class NoStepRouter:
         async def choose(self, *_args, **_kwargs):
             raise AssertionError("minimal path must not route PM steps")
@@ -2055,7 +2167,7 @@ async def test_minimal_small_task_uses_observed_tests_without_reviewer_or_step_j
         async def prescreen(self, *_args, **_kwargs):
             raise AssertionError("minimal path must not prescreen")
 
-    journal = Journal(tmp_path / "tasks.db")
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
                           recipe="small-task-with-tests", task_path="minimal",
                           engine_decision={"selected": "rules_engine", "effective": "rules",
@@ -2122,7 +2234,8 @@ async def test_minimal_review_threshold_accepts_calibrated_floor():
     ("pass", 0.95, ["README.md"], False, "jev_unavailable_or_invalid"),
 ])
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_minimal_review_escalates_to_cross_agent(tmp_path, choice, confidence, paths, answer, reason):
+@authenticated_task_test
+async def test_minimal_review_escalates_to_cross_agent(task_controller, tmp_path, choice, confidence, paths, answer, reason):
     class ReviewJev:
         backend = "openrouter_jev" if answer else None
         calls = 0
@@ -2139,7 +2252,7 @@ async def test_minimal_review_escalates_to_cross_agent(tmp_path, choice, confide
                                     "probabilities": {key: confidence if key == choice else rest
                                                       for key in ("pass", "fail", "risk", "unsure")}}}
 
-    journal = Journal(tmp_path / "escalate.db")
+    journal = task_controller(Journal(tmp_path / "escalate.db"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
                           recipe="small-task-with-tests", task_path="minimal",
                           engine_decision={"selected": "rules_engine", "effective": "rules"},
@@ -2170,7 +2283,8 @@ async def test_minimal_review_escalates_to_cross_agent(tmp_path, choice, confide
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_minimal_review_large_diff_and_pending_restart_escalate_without_jev(tmp_path):
+@authenticated_task_test
+async def test_minimal_review_large_diff_and_pending_restart_escalate_without_jev(task_controller, tmp_path):
     class NoJev:
         backend = None
         calls = 0
@@ -2183,7 +2297,7 @@ async def test_minimal_review_large_diff_and_pending_restart_escalate_without_je
     gate = MinimalReviewGate(jev, RouterConfig())
     too_large = await gate.judge(original_words=WORDS, diff="x" * 3501, paths=["README.md"])
     assert too_large["reason"] == "diff_too_large" and jev.calls == 0
-    journal = Journal(tmp_path / "pending.db")
+    journal = task_controller(Journal(tmp_path / "pending.db"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
                           recipe="small-task-with-tests", task_path="minimal",
                           engine_decision={"selected": "rules_engine", "effective": "rules"},
@@ -2199,7 +2313,7 @@ async def test_minimal_review_large_diff_and_pending_restart_escalate_without_je
     diff_hash = hashlib.sha256(fake.review_diff["diff"].encode()).hexdigest()
     journal.reserve_minimal_review(task["task_id"], "a" * 40, "b" * 40, diff_hash, 0.85)
     journal.close()
-    reopened = Journal(tmp_path / "pending.db")
+    reopened = task_controller(Journal(tmp_path / "pending.db"))
     result = await TaskCoordinator(reopened, fake, minimal_review_gate=gate).tick(task["task_id"])
     assert result["reviewer_session_id"] and not result["delivered"] and jev.calls == 0
     recovered = reopened.minimal_review_gate(task["task_id"], "a" * 40, "b" * 40)
@@ -2230,13 +2344,14 @@ async def test_bat_candidate_review_diff_includes_both_sides_of_rename(tmp_path,
     assert "diff --git" in candidate["diff"]
 
 
-async def test_minimal_prefers_warm_session_id_and_goose_provider_order(tmp_path):
+@authenticated_task_test
+async def test_minimal_prefers_warm_session_id_and_goose_provider_order(task_controller, tmp_path):
     class WarmBAT(FakeBAT):
         async def find_warm(self, task):
             assert task["task_path"] == "minimal"
             return "existing-clean-idle-session"
 
-    journal = Journal(tmp_path / "tasks.db")
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
                           task_path="minimal", engine_decision={"selected": "rules_engine",
                           "effective": "rules"}, idempotency_key="minimal:warm")
@@ -2251,7 +2366,8 @@ async def test_minimal_prefers_warm_session_id_and_goose_provider_order(tmp_path
     journal.close()
 
 
-async def test_warm_start_mismatched_ack_remains_uncertain(tmp_path):
+@authenticated_task_test
+async def test_warm_start_mismatched_ack_remains_uncertain(task_controller, tmp_path):
     class WrongAck(FakeBAT):
         async def find_warm(self, _task):
             return "reserved-warm-session"
@@ -2260,7 +2376,7 @@ async def test_warm_start_mismatched_ack_remains_uncertain(tmp_path):
             await super().start(task, role=role, agent=agent, session_id=session_id)
             return "unrelated-session"
 
-    journal = Journal(tmp_path / "mismatch.db")
+    journal = task_controller(Journal(tmp_path / "mismatch.db"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
                           task_path="minimal", engine_decision={"selected": "rules_engine",
                           "effective": "rules"}, idempotency_key="minimal:warm-mismatch")
@@ -2271,7 +2387,8 @@ async def test_warm_start_mismatched_ack_remains_uncertain(tmp_path):
     journal.close()
 
 
-async def test_bat_warm_reuse_claims_only_clean_completed_service_session(fleet_factory, mock, tmp_path):
+@authenticated_task_test
+async def test_bat_warm_reuse_claims_only_clean_completed_service_session(task_controller, fleet_factory, mock, tmp_path):
     class CleanVerifier:
         settings = VerificationSettings()
         head = "a" * 40
@@ -2280,7 +2397,7 @@ async def test_bat_warm_reuse_claims_only_clean_completed_service_session(fleet_
             return {"candidate_commit": self.head, "tree_hash": "b" * 40, "clean": True}
 
     fleet = fleet_factory(writes=True, orchestrate=True, safety={"write_min_interval_s": 0})
-    journal = Journal(tmp_path / "warm.db")
+    journal = task_controller(Journal(tmp_path / "warm.db"))
     verifier = CleanVerifier()
     adapter = task_bat.BatTaskAdapter(fleet, verifier, journal)
     previous = journal.submit(project="p", host="h1", workspace="demo-project",
@@ -2336,13 +2453,15 @@ async def test_bat_warm_reuse_claims_only_clean_completed_service_session(fleet_
     with pytest.raises(TaskIdentityMismatch, match="ownership changed"):
         registry.claim_warm("h1", old_sid, previous_task_id=previous["task_id"],
                             task_id="another-task", workspace_id=entry["workspace_id"],
-                            cwd=entry["cwd"], branch=entry["branch"])
+                            cwd=entry["cwd"], branch=entry["branch"],
+                            expected_incarnation=entry["controller_incarnation"])
     journal.close()
     await fleet.close()
 
 
-def test_warm_candidates_are_limited_to_the_same_workstream(tmp_path):
-    journal = Journal(tmp_path / "ws.db")
+@authenticated_task_test
+def test_warm_candidates_are_limited_to_the_same_workstream(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "ws.db"))
     decision = {"selected": "rules_engine", "effective": "rules"}
 
     def done(key, **kw):
@@ -2372,8 +2491,9 @@ def test_warm_candidates_are_limited_to_the_same_workstream(tmp_path):
     journal.close()
 
 
-def test_context_refs_are_validated_stored_and_keep_old_idempotency(tmp_path):
-    journal = Journal(tmp_path / "refs.db")
+@authenticated_task_test
+def test_context_refs_are_validated_stored_and_keep_old_idempotency(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "refs.db"))
     refs = {"attachments": ["https://cdn.example/a.png"], "previous_message_id": "m-41",
             "plan": "docs/plan.md", "commit": "ABCDEF1"}
     task = journal.submit(project="p", host="h1", workspace="w", original_words=WORDS,
@@ -2391,8 +2511,9 @@ def test_context_refs_are_validated_stored_and_keep_old_idempotency(tmp_path):
     journal.close()
 
 
-def test_delivery_distinguishes_verified_adopted_merged_deployed(tmp_path):
-    journal = Journal(tmp_path / "stages.db")
+@authenticated_task_test
+def test_delivery_distinguishes_verified_adopted_merged_deployed(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "stages.db"))
     task = submit(journal)
     tid = task["task_id"]
     assert journal.delivery(tid)["stage"] is None
@@ -2412,10 +2533,11 @@ def test_delivery_distinguishes_verified_adopted_merged_deployed(tmp_path):
     journal.close()
 
 
-def test_gate_eval_counts_false_pass_and_false_escalate(tmp_path):
+@authenticated_task_test
+def test_gate_eval_counts_false_pass_and_false_escalate(task_controller, tmp_path):
     from bat_agent_connector.gate_eval import evaluate
 
-    journal = Journal(tmp_path / "eval.db")
+    journal = task_controller(Journal(tmp_path / "eval.db"))
     decision = {"selected": "rules_engine", "effective": "rules"}
 
     def gate(key, conf, reason, verdict, *, reviewed=None, chars=200):
@@ -2446,8 +2568,9 @@ def test_gate_eval_counts_false_pass_and_false_escalate(tmp_path):
     assert [r["jev_choice"] for r in result["rows"]] == ["pass", "pass", "risk", "pass"]
 
 
-def test_minimal_small_completion_still_requires_observed_clean_tests(tmp_path):
-    journal = Journal(tmp_path / "gate.db")
+@authenticated_task_test
+def test_minimal_small_completion_still_requires_observed_clean_tests(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "gate.db"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words="Small edit",
                           recipe="small-task-with-tests", task_path="minimal",
                           engine_decision={"selected": "rules_engine", "effective": "rules"},
@@ -2460,9 +2583,10 @@ def test_minimal_small_completion_still_requires_observed_clean_tests(tmp_path):
     journal.close()
 
 
-async def test_goose_acp_scoped_tool_smoke(mock, tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_goose_acp_scoped_tool_smoke(task_controller, mock, tmp_path, monkeypatch):
     """Fake ACP Goose invokes a real scoped MCP tool backed by fake BAT."""
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=["/srv"]), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=["/srv"]), tmp_path / "tasks.db"))
     fake = FakeBAT()
     daemon.adapter = fake
     daemon.coordinator = TaskCoordinator(daemon.journal, fake)
@@ -2519,8 +2643,9 @@ for line in sys.stdin:
         daemon.journal.close()
 
 
-async def test_uncertain_submission_marker_and_busy_rejection(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_uncertain_submission_marker_and_busy_rejection(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     fake.send_error = True
@@ -2541,7 +2666,7 @@ async def test_uncertain_submission_marker_and_busy_rejection(tmp_path):
             self.sends.append((session_id, text, message_id))
             return {"accepted": False, "reason": "busy"}
 
-    j = Journal(tmp_path / "busy.db")
+    j = task_controller(Journal(tmp_path / "busy.db"))
     task = submit(j)
     busy = BusyBAT()
     core = TaskCoordinator(j, busy)
@@ -2552,8 +2677,9 @@ async def test_uncertain_submission_marker_and_busy_rejection(tmp_path):
     j.close()
 
 
-async def test_start_recovery_pause_during_start_and_branch_history(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_start_recovery_pause_during_start_and_branch_history(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     fake.start_error = True
@@ -2567,7 +2693,7 @@ async def test_start_recovery_pause_during_start_and_branch_history(tmp_path):
     assert j.get(task["task_id"])["branches"][0]["session_id"] == fake.starts[0][2]
     j.close()
 
-    j = Journal(tmp_path / "paused.db")
+    j = task_controller(Journal(tmp_path / "paused.db"))
     task = submit(j)
     fake = FakeBAT()
     fake.start_gate = asyncio.Event()
@@ -2586,8 +2712,9 @@ async def test_start_recovery_pause_during_start_and_branch_history(tmp_path):
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_candidate_change_requires_fresh_review_and_attribution(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_candidate_change_requires_fresh_review_and_attribution(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     fake = FakeBAT()
     core = TaskCoordinator(j, fake)
@@ -2609,8 +2736,9 @@ async def test_candidate_change_requires_fresh_review_and_attribution(tmp_path):
     j.close()
 
 
-def test_ledger_handoff_archive_and_permissions(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+def test_ledger_handoff_archive_and_permissions(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     summary = ledger_summary(j, task["task_id"])
     assert task["task_id"] in summary and WORDS in summary
@@ -2629,8 +2757,9 @@ def test_ledger_handoff_archive_and_permissions(tmp_path):
     j.close()
 
 
-async def test_live_failover_uses_private_history_fallback_when_ledger_unavailable(mock, tmp_path, monkeypatch):
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_live_failover_uses_private_history_fallback_when_ledger_unavailable(task_controller, mock, tmp_path, monkeypatch):
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     task = submit(daemon.journal, lead_agent="claude")
     daemon.journal.change(task["task_id"], "dispatching")
     daemon.journal.change(task["task_id"], "accepted", fields={"session_id": "old"})
@@ -2679,8 +2808,9 @@ async def test_live_failover_uses_private_history_fallback_when_ledger_unavailab
         daemon.journal.close()
 
 
-async def test_history_fallback_preserves_chronological_page_order(mock, tmp_path, monkeypatch):
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+@authenticated_task_test
+async def test_history_fallback_preserves_chronological_page_order(task_controller, mock, tmp_path, monkeypatch):
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     task = submit(daemon.journal, lead_agent="claude")
 
     async def fake_read(*args, **kwargs):
@@ -2698,8 +2828,9 @@ async def test_history_fallback_preserves_chronological_page_order(mock, tmp_pat
         daemon.journal.close()
 
 
-def test_provider_switches_branch_and_uncertain_never_replays(tmp_path):
-    j = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+def test_provider_switches_branch_and_uncertain_never_replays(task_controller, tmp_path):
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j)
     entries = [ProviderEntry("agy-claude", "agy-shim", "http://127.0.0.1:9999/v1", "claude-opus-4-6-thinking", 1),
                ProviderEntry("codex", "codex-acp"), ProviderEntry("claude", "claude-acp", model="claude-opus-5-5")]
@@ -2720,8 +2851,9 @@ def test_provider_switches_branch_and_uncertain_never_replays(tmp_path):
     j.close()
 
 
-def test_provider_starts_on_agy_after_primary_quota_recorded(tmp_path):
-    journal = Journal(tmp_path / "tasks.db")
+@authenticated_task_test
+def test_provider_starts_on_agy_after_primary_quota_recorded(task_controller, tmp_path):
+    journal = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(journal)
     journal.provider_use("claude", "quota_error")
     switcher = ProviderSwitcher(journal, ProviderCatalog())
@@ -2759,7 +2891,8 @@ async def test_agy_provider_contract_with_fake_endpoint():
 
 
 @pytest.mark.parametrize("failure", ["quota", "setup"])
-async def test_goose_provider_fallback_before_prompt_only(tmp_path, monkeypatch, failure):
+@authenticated_task_test
+async def test_goose_provider_fallback_before_prompt_only(task_controller, tmp_path, monkeypatch, failure):
     script = tmp_path / "fake_acp.py"
     script.write_text('''import json, os, sys
 log=sys.argv[1]
@@ -2787,7 +2920,7 @@ for line in sys.stdin:
         ProviderEntry("agy-claude", "agy-shim", "http://127.0.0.1:18795/v1", "claude-opus-4-6-thinking", 1),
         ProviderEntry("codex", "codex-acp"), ProviderEntry("claude", "claude-acp", model="claude-opus-5-5"),
     ])
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, engine="goose")
     goose = GooseACP(GooseConfig(enabled=True, timeout_s=5), catalog)
     result = await goose.run_task(task, str(tmp_path), capability="synthetic",
@@ -2802,7 +2935,8 @@ for line in sys.stdin:
     j.close()
 
 
-async def test_goose_uncertain_prompt_does_not_switch(tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_goose_uncertain_prompt_does_not_switch(task_controller, tmp_path, monkeypatch):
     script = tmp_path / "fake_acp.py"
     script.write_text('''import json, os, sys
 for line in sys.stdin:
@@ -2824,7 +2958,7 @@ for line in sys.stdin:
         ProviderEntry("agy-claude", "agy-shim", "http://127.0.0.1:18795/v1", "claude-opus-4-6-thinking", 1),
         ProviderEntry("codex", "codex-acp"), ProviderEntry("claude", "claude-acp", model="claude-opus-5-5"),
     ])
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, engine="goose")
     goose = GooseACP(GooseConfig(enabled=True, timeout_s=5), catalog)
     with pytest.raises(UncertainPrompt):
@@ -2849,13 +2983,14 @@ for line in sys.stdin:
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_failover_recovers_reserved_successor_without_reuse(tmp_path):
+@authenticated_task_test
+async def test_failover_recovers_reserved_successor_without_reuse(task_controller, tmp_path):
     class LostReplyBAT(FakeBAT):
         async def failover(self, task, session_id, successor_id, **kwargs):
             await super().failover(task, session_id, successor_id, **kwargs)
             raise TimeoutError("successor accepted but reply lost")
 
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, lead_agent="claude")
     fake = LostReplyBAT()
     fake.reviewer_kind = "claude"  # Claude is available for the lead
@@ -2876,13 +3011,14 @@ async def test_failover_recovers_reserved_successor_without_reuse(tmp_path):
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_normal_failover_refuses_different_successor_response(tmp_path):
+@authenticated_task_test
+async def test_normal_failover_refuses_different_successor_response(task_controller, tmp_path):
     class WrongReplyBAT(FakeBAT):
         async def failover(self, task, session_id, successor_id, **kwargs):
             result = await super().failover(task, session_id, successor_id, **kwargs)
             return {**result, "session_id": "previous-successor"}
 
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = submit(j, lead_agent="claude")
     fake = WrongReplyBAT()
     fake.failover_allowed = True
@@ -2905,14 +3041,15 @@ async def test_normal_failover_refuses_different_successor_response(tmp_path):
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_recovery_conflict_stays_operator_only_after_registry_changes(tmp_path):
+@authenticated_task_test
+async def test_recovery_conflict_stays_operator_only_after_registry_changes(task_controller, tmp_path):
     class LostReplyBAT(FakeBAT):
         async def failover(self, task, session_id, successor_id, **kwargs):
             await super().failover(task, session_id, successor_id, **kwargs)
             raise TimeoutError("accepted successor, lost response")
 
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j, lead_agent="claude")
     fake = LostReplyBAT()
     fake.reviewer_kind = "claude"  # Claude is available for the lead
@@ -2930,7 +3067,7 @@ async def test_recovery_conflict_stays_operator_only_after_registry_changes(tmp_
     assert json.loads(j.command_get(failover["command_id"])["payload"])["operator_only"] is True
     fake.successors[old_sid] = {"session_id": reserved, "marker": handoff["message_id"]}
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     core = TaskCoordinator(j, fake)
     assert (await core.tick(task["task_id"]))["session_id"] == old_sid
     assert len(j.get(task["task_id"])["branches"]) == 1 and fake.failover_calls == 1
@@ -2947,7 +3084,8 @@ async def test_recovery_conflict_stays_operator_only_after_registry_changes(tmp_
 
 @pytest.mark.parametrize("wait_stage", ["start_ack", "identity_lookup", "send_transport"])
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_pause_during_failover_wait_never_submits_handoff(
+@authenticated_task_test
+async def test_pause_during_failover_wait_never_submits_handoff(task_controller,
         fleet_factory, mock, tmp_path, monkeypatch, wait_stage):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
@@ -2956,7 +3094,7 @@ async def test_pause_during_failover_wait_never_submits_handoff(
     old_sid = started["session_id"]
     mock.states[old_sid]["messages"] = [{"role": "assistant", "content": "You've hit your usage limit",
                                           "timestamp": 1_790_000_000_000}]
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="pause-failover:" + wait_stage, lead_agent="claude")
     j.change(task["task_id"], "dispatching")
@@ -3018,7 +3156,8 @@ async def test_pause_during_failover_wait_never_submits_handoff(
                                       "actual_frame_prompt", "late_registry_branch",
                                       "late_registry_owner", "late_git_root"])
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_failover_rejects_wrong_successor_or_frame_before_handoff(
+@authenticated_task_test
+async def test_failover_rejects_wrong_successor_or_frame_before_handoff(task_controller,
         fleet_factory, mock, tmp_path, monkeypatch, mismatch):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
@@ -3027,7 +3166,7 @@ async def test_failover_rejects_wrong_successor_or_frame_before_handoff(
     old_sid = started["session_id"]
     mock.states[old_sid]["messages"] = [{"role": "assistant", "content": "You've hit your usage limit",
                                           "timestamp": 1_790_000_000_000}]
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="wrong-failover:" + mismatch, lead_agent="claude")
     j.change(task["task_id"], "dispatching")
@@ -3084,7 +3223,8 @@ async def test_failover_rejects_wrong_successor_or_frame_before_handoff(
 
 @pytest.mark.parametrize("change", ["git_root", "branch", "failover_of"])
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_failover_rechecks_identity_after_semaphore_wait(
+@authenticated_task_test
+async def test_failover_rechecks_identity_after_semaphore_wait(task_controller,
         fleet_factory, mock, tmp_path, monkeypatch, change):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
@@ -3093,7 +3233,7 @@ async def test_failover_rechecks_identity_after_semaphore_wait(
     old_sid = started["session_id"]
     mock.states[old_sid]["messages"] = [{"role": "assistant", "content": "You've hit your usage limit",
                                           "timestamp": 1_790_000_000_000}]
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="sem-wait:" + change, lead_agent="claude")
     j.change(task["task_id"], "dispatching")
@@ -3148,7 +3288,8 @@ async def test_failover_rechecks_identity_after_semaphore_wait(
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_verified_successor_handoff_frame_hash_survives_restart(fleet_factory, mock, tmp_path):
+@authenticated_task_test
+async def test_verified_successor_handoff_frame_hash_survives_restart(task_controller, fleet_factory, mock, tmp_path):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
     started = await orchestrate.session_start(fleet, "h1", "demo-project", "claude",
@@ -3157,7 +3298,7 @@ async def test_verified_successor_handoff_frame_hash_survives_restart(fleet_fact
     mock.states[old_sid]["messages"] = [{"role": "assistant", "content": "You've hit your usage limit",
                                           "timestamp": 1_790_000_000_000}]
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="verified-handoff", lead_agent="claude")
     j.change(task["task_id"], "dispatching")
@@ -3178,7 +3319,7 @@ async def test_verified_successor_handoff_frame_hash_survives_restart(fleet_fact
         assert json.loads(handoff["payload"])["prompt_sha256"] == actual_hash
         assert registry.get("h1", result["session_id"])["handoff_frame_sha256"] == actual_hash
         j.close()
-        reopened = Journal(path)
+        reopened = task_controller(Journal(path))
         adapter.journal = reopened
         try:
             assert await adapter.recover_failover(old_task, successor_id=result["session_id"],
@@ -3193,9 +3334,10 @@ async def test_verified_successor_handoff_frame_hash_survives_restart(fleet_fact
 
 
 @pytest.mark.skip(reason="removed: independent reviewer, per-step routing, and mid-task failover")
-async def test_lost_codex_handoff_stays_scoped_uncertain_across_restart(tmp_path):
+@authenticated_task_test
+async def test_lost_codex_handoff_stays_scoped_uncertain_across_restart(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     task = submit(j, lead_agent="claude")
     fake = FakeBAT()
     fake.failover_allowed = True
@@ -3216,7 +3358,7 @@ async def test_lost_codex_handoff_stays_scoped_uncertain_across_restart(tmp_path
     assert (await core.tick(task["task_id"]))["state"] == "uncertain"
     assert len(fake.sends) == sends and fake.failover_calls == 1 and not j.get(task["task_id"])["delivered"]
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     core = TaskCoordinator(j, fake)
     assert (await core.tick(task["task_id"]))["state"] == "uncertain"
     assert len(fake.sends) == sends
@@ -3243,9 +3385,10 @@ async def test_lost_codex_handoff_stays_scoped_uncertain_across_restart(tmp_path
     j.close()
 
 
-def test_handoff_ledger_preserves_words_beyond_old_2200_limit(tmp_path):
+@authenticated_task_test
+def test_handoff_ledger_preserves_words_beyond_old_2200_limit(task_controller, tmp_path):
     path = tmp_path / "tasks.db"
-    j = Journal(path)
+    j = task_controller(Journal(path))
     words = "前" * 2201 + "完整結尾"
     task = j.submit(project="p", host="h1", workspace="w", original_words=words,
                     idempotency_key="long-request")
@@ -3257,7 +3400,7 @@ def test_handoff_ledger_preserves_words_beyond_old_2200_limit(tmp_path):
         authoritative_original=True)
     assert words in prompt and "overrides the original task's scope" not in prompt
     j.close()
-    j = Journal(path)
+    j = task_controller(Journal(path))
     assert j.get(task["task_id"])["original_words"] == words
     assert words in ledger_summary(j, task["task_id"])
     with pytest.raises(ValueError, match="too long"):
@@ -3267,9 +3410,10 @@ def test_handoff_ledger_preserves_words_beyond_old_2200_limit(tmp_path):
 
 
 @pytest.mark.parametrize("word_count", [17_950, 18_050])
-async def test_failover_full_original_archive_verified_and_restart(mock, tmp_path, monkeypatch, word_count):
+@authenticated_task_test
+async def test_failover_full_original_archive_verified_and_restart(task_controller, mock, tmp_path, monkeypatch, word_count):
     path = tmp_path / "tasks.db"
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), path)
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), path))
     words = "Ted 原話。" + "字" * word_count + "END-VERBATIM"
     task = daemon.journal.submit(project="p", host="h1", workspace="w", original_words=words,
                                  idempotency_key=f"long:{word_count}", lead_agent="claude")
@@ -3326,14 +3470,15 @@ async def test_failover_full_original_archive_verified_and_restart(mock, tmp_pat
         assert hashlib.sha256(words.encode()).hexdigest() in called[0]["instructions"]
         assert json.loads(daemon.journal.command_get(handoff["command_id"])["payload"])["prompt_sha256"]
         daemon.journal.close()
-        reopened = Journal(path)
+        reopened = task_controller(Journal(path))
         assert reopened.get(task["task_id"])["original_words"] == referenced.read_text()
         reopened.close()
     finally:
         await daemon.fleet.close()
 
 
-async def test_daemon_lock_and_rpc_task_scope(mock, tmp_path):
+@authenticated_task_test
+async def test_daemon_lock_and_rpc_task_scope(task_controller, mock, tmp_path):
     path = tmp_path / "tasks.db"
     first = TaskDaemon(make_config(mock, writes=True, orchestrate=True), path)
     second = TaskDaemon(make_config(mock, writes=True, orchestrate=True), path)
@@ -3343,11 +3488,12 @@ async def test_daemon_lock_and_rpc_task_scope(mock, tmp_path):
     first.release_owner()
     second.acquire_owner()
     second.release_owner()
+    task_controller(first)
     task_a = submit(first.journal, engine="goose")
     task_b = first.journal.submit(project="p", host="h1", workspace="w", original_words="other",
                                   engine="goose", idempotency_key="discord:message:2")
     with pytest.raises(ValueError, match="caller-supplied"):
-        await first.call("task_run_verification", {"task_id": task_a["task_id"], "exit_code": 0})
+        await first.call("task_run_verification", {"task_id": task_a["task_id"], "exit_code": 0}, principal=TASK_CALLER)
     cap = first.journal.issue_capability(task_a["task_id"])
     server = await asyncio.start_server(first._handle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
@@ -3378,21 +3524,22 @@ async def test_daemon_lock_and_rpc_task_scope(mock, tmp_path):
         second.journal.close()
 
 
-async def test_live_goose_remains_disabled_after_restart(mock, tmp_path):
+@authenticated_task_test
+async def test_live_goose_remains_disabled_after_restart(task_controller, mock, tmp_path):
     path = tmp_path / "tasks.db"
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), path)
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), path))
     task = submit(daemon.journal, engine="goose")
     await daemon._tick_task(task["task_id"])
     assert daemon.journal.get(task["task_id"])["state"] == "queued"  # switch off: start nothing
     await daemon.fleet.close()
     daemon.journal.close()
-    again = TaskDaemon(make_config(mock, writes=True, orchestrate=True), path)
+    again = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), path))
     try:
         await again._tick_task(task["task_id"])
         assert again.journal.get(task["task_id"])["state"] == "queued"
         assert not again.journal.commands(task["task_id"])
         submitted = await again.call("work_submit", {"project": "p", "host": "h1", "workspace": "w",
-                                                     "original_words": WORDS, "idempotency_key": "new"})
+                                                     "original_words": WORDS, "idempotency_key": "new"}, principal=TASK_CALLER)
         assert submitted["engine"] == "goose" and submitted["goose"] == "disabled"
         assert again.journal.get(submitted["task_id"])["state"] == "queued"
     finally:
@@ -3586,8 +3733,9 @@ async def test_install_dependencies_uses_tracked_lockfile_once_and_stays_clean(t
 
 
 @pytest.mark.asyncio
-async def test_external_worktree_creation_is_restart_idempotent(tmp_path, fleet_factory, monkeypatch):
-    journal = Journal(tmp_path / "tasks.sqlite3")
+@authenticated_task_test
+async def test_external_worktree_creation_is_restart_idempotent(task_controller, tmp_path, fleet_factory, monkeypatch):
+    journal = task_controller(Journal(tmp_path / "tasks.sqlite3"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words="x",
                           base_branch="feat/task-service", idempotency_key="external-restart")
     adapter = task_bat.BatTaskAdapter(
@@ -3615,8 +3763,9 @@ async def test_external_worktree_creation_is_restart_idempotent(tmp_path, fleet_
 
 
 @pytest.mark.asyncio
-async def test_external_worktree_script_quotes_workspace_path(tmp_path, fleet_factory, monkeypatch):
-    journal = Journal(tmp_path / "tasks.sqlite3")
+@authenticated_task_test
+async def test_external_worktree_script_quotes_workspace_path(task_controller, tmp_path, fleet_factory, monkeypatch):
+    journal = task_controller(Journal(tmp_path / "tasks.sqlite3"))
     task = journal.submit(project="p", host="h1", workspace="w", original_words="x",
                           base_branch="feat/task-service", idempotency_key="quoted-root")
     adapter = task_bat.BatTaskAdapter(
@@ -3642,7 +3791,8 @@ async def test_external_worktree_script_quotes_workspace_path(tmp_path, fleet_fa
 
 
 @pytest.mark.asyncio
-async def test_external_cleanup_retains_unmerged_commit_and_recovers_after_restart(
+@authenticated_task_test
+async def test_external_cleanup_retains_unmerged_commit_and_recovers_after_restart(task_controller,
         tmp_path, fleet_factory, monkeypatch):
     root = tmp_path / "Operator's repo"
     root.mkdir()
@@ -3653,7 +3803,7 @@ async def test_external_cleanup_retains_unmerged_commit_and_recovers_after_resta
               "-c", "user.email=test@example.invalid", "commit", "-qm"]
     subprocess.run([*commit, "base"], check=True)
     journal_path = tmp_path / "tasks.db"
-    journal = Journal(journal_path)
+    journal = task_controller(Journal(journal_path))
     task = journal.submit(project="p", host="h1", workspace="w", original_words="keep work",
                           idempotency_key="cleanup-retain")
     suffix = task["task_id"].replace("-", "")[:12]
@@ -3699,7 +3849,7 @@ async def test_external_cleanup_retains_unmerged_commit_and_recovers_after_resta
                      "commit": candidate, "mode": "removed"}
     assert not path.exists()
     journal.close()  # Crash after Git removal but before journal settlement.
-    journal = Journal(journal_path)
+    journal = task_controller(Journal(journal_path))
     assert [t["task_id"] for t in journal.list_cleanup_pending()] == [task["task_id"]]
     second = await adapter.cleanup_external_worktree(journal.get(task["task_id"]))
     assert second["mode"] == "already_removed" and second["commit"] == candidate
@@ -3715,9 +3865,10 @@ async def test_external_cleanup_retains_unmerged_commit_and_recovers_after_resta
 
 
 @pytest.mark.asyncio
-async def test_terminal_cleanup_requires_shared_finalization_before_pointer_is_cleared(mock, tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_terminal_cleanup_requires_shared_finalization_before_pointer_is_cleared(task_controller, mock, tmp_path, monkeypatch):
     from bat_agent_connector import task_cleanup
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     task = submit(daemon.journal)
     suffix = task["task_id"].replace("-", "")[:12]
     path = f"/srv/project/.bat-worktrees/batc-task-{suffix}"
@@ -3740,13 +3891,16 @@ async def test_terminal_cleanup_requires_shared_finalization_before_pointer_is_c
     daemon.journal.close()
 
 @pytest.mark.asyncio
-async def test_goose_acp_error_settles_from_bat_readback(mock, tmp_path, monkeypatch, caplog):
+@authenticated_task_test
+async def test_goose_acp_error_settles_from_bat_readback(task_controller, mock, tmp_path, monkeypatch, caplog):
     """A lost ACP terminal reply must not discard a committed, idle BAT turn."""
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db"))
     task = submit(daemon.journal, engine="goose")
     daemon.journal.change(task["task_id"], "dispatching")
     daemon.journal.change(task["task_id"], "accepted", fields={"session_id": "lead-readback"})
-    monkeypatch.setattr(registry, "get", lambda _host, _sid: {"cwd": "/remote/not-on-box"})
+    adopt("lead-readback", cwd="/remote/not-on-box", task_id=task["task_id"], role="lead")
+    start, _ = daemon.journal.command(task["task_id"], "start_lead", "lead-readback", {}, "original-start")
+    daemon.journal.command_status(start["command_id"], "settled")
 
     async def fail_run(*args, **kwargs):
         raise RuntimeError("PRIVATE_PROVIDER_ERROR_DO_NOT_LOG")
@@ -3784,10 +3938,11 @@ def test_agy_adapter_model_effort_policy(monkeypatch):
     assert adapter.environment(gemini, {"BATC_AGY_SHIM_TOKEN": "local-token"})["BATC_AGY_REQUEST_POLICY"] == "pass_reasoning_effort"
 
 @pytest.mark.asyncio
-async def test_session_presence_retries_transient_workspace_timeout(fleet_factory, tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_session_presence_retries_transient_workspace_timeout(task_controller, fleet_factory, tmp_path, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="presence-retry")
     sid = "presence-retry-session"
@@ -3816,11 +3971,12 @@ async def test_session_presence_retries_transient_workspace_timeout(fleet_factor
 
 
 @pytest.mark.asyncio
-async def test_reviewer_start_polls_existing_session_after_start_timeout(
+@authenticated_task_test
+async def test_reviewer_start_polls_existing_session_after_start_timeout(task_controller,
         fleet_factory, tmp_path, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, tabs=False,
                           safety={"write_min_interval_s": 0})
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     task = j.submit(project="p", host="h1", workspace="demo-project", original_words=WORDS,
                     idempotency_key="reviewer-start-retry")
     lead = "reviewer-start-lead"
@@ -3900,10 +4056,11 @@ def _advance(j, tid, *states):
         j.change(tid, state)
 
 
-async def test_event_push_starts_at_now_signs_and_advances_in_order(tmp_path):
+@authenticated_task_test
+async def test_event_push_starts_at_now_signs_and_advances_in_order(task_controller, tmp_path):
     from bat_agent_connector.task_push import EventPusher, EventWebhook, sign
 
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     old = submit(j, discord_thread_id="origin-old")["task_id"]
     _advance(j, old, "dispatching", "accepted")  # history before push is configured
     receiver = _Receiver()
@@ -3930,11 +4087,12 @@ async def test_event_push_starts_at_now_signs_and_advances_in_order(tmp_path):
         j.close()
 
 
-async def test_event_push_failure_backs_off_and_retries_without_skipping(tmp_path):
+@authenticated_task_test
+async def test_event_push_failure_backs_off_and_retries_without_skipping(task_controller, tmp_path):
     from bat_agent_connector.task_push import EventPusher, EventWebhook
 
     now = [1000.0]
-    j = Journal(tmp_path / "tasks.db")
+    j = task_controller(Journal(tmp_path / "tasks.db"))
     receiver = _Receiver(statuses=[502])
     pusher = EventPusher(j, EventWebhook(receiver.url), clock=lambda: now[0])
     try:
@@ -3956,7 +4114,8 @@ async def test_event_push_failure_backs_off_and_retries_without_skipping(tmp_pat
         j.close()
 
 
-async def test_event_webhook_settings_require_loopback_and_private_secret(mock, tmp_path, monkeypatch):
+@authenticated_task_test
+async def test_event_webhook_settings_require_loopback_and_private_secret(task_controller, mock, tmp_path, monkeypatch):
     from bat_agent_connector.task_push import validate_callback_url
 
     for bad in ("http://example.com/hook", "http://user:pw@127.0.0.1/x", "ftp://127.0.0.1/x"):
@@ -3971,13 +4130,13 @@ async def test_event_webhook_settings_require_loopback_and_private_secret(mock, 
     settings.chmod(0o600)
     monkeypatch.setenv("BATC_TASK_SETTINGS", str(settings))
     with pytest.raises(ValueError, match="0600"):
-        TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db").acquire_owner()
+        task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks.db")).acquire_owner()
     secret.chmod(0o600)
-    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks2.db")
+    daemon = task_controller(TaskDaemon(make_config(mock, writes=True, orchestrate=True), tmp_path / "tasks2.db"))
     try:
         assert daemon.pusher.webhook.url.endswith("/webhooks/task-events")
         assert daemon.pusher.webhook.secret == "x" * 40
-        feed = await daemon.call("work_events", {"limit": 0})
+        feed = await daemon.call("work_events", {"limit": 0}, principal=TASK_CALLER)
         assert feed["push"] == {"configured": True}
     finally:
         await daemon.fleet.close()

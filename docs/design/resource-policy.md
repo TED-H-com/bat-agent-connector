@@ -131,3 +131,61 @@ task link 不授予 resource write grant。send／answer／interrupt／permissio
 managed_roots = ["/srv/batc-managed"]   # connector 自有 clone；可合併到其主 checkout
 shared_clone_worktrees = true           # false：只允許在 managed root 內開新 worktree
 ```
+
+## Authenticated controller authority (PM v1.2 W02)
+
+Resource provenance and caller authority are separate. A connector-created session
+retains `connector_managed` provenance when another caller reads it, but its action
+verdicts refuse that caller's mutations. The existing manual, unknown, folder,
+confinement, task, failover and merge checks still apply.
+
+`controller_authority.binding()` derives the controller from the authenticated
+principal and the journal's existing durable `server_id`. Clients cannot submit a
+controller ID, and a shared repository, BAT workspace, account, path or `Fleet.actor`
+is not controller evidence. Multiple authenticated clients with the same actor on
+that central server share the controller identity. A different server or actor does
+not. Administrator or PM owner status does not override a foreign controller.
+
+The authenticated operation/task adapter enters `controller_authority.use()` before
+new effects. Bindings contain the original server/controller IDs, actor, scopes and
+administrator flag, plus an optional **PM** workspace ID; they contain no credential
+or credential hash. PM workspace IDs are distinct from BAT's inventory workspace
+IDs. An explicitly scoped caller cannot switch workspace. Acting on a PM-scoped
+resource also requires current write membership, checked against the context's
+journal. Revoked membership blocks unapplied effects. Credential revocation blocks
+future authenticated calls; it does not silently replace an already admitted
+intent's original controller.
+
+New registry reservations persist immutable `controller_authority` and
+`controller_incarnation` fields. A creation grant may validate a destination before
+reservation, but every BAT write frame must find the actual reserved row with the
+same controller and incarnation. Existing session grants pin that incarnation too.
+Shared worktrees, replacements, failover predecessors and warm session reuse must
+belong to the same controller; an ended session does not transfer ownership of its
+carrier. Registry projections and same-ID unsent retries cannot replace the original
+authority fields or drop their PM workspace scope. A durable fresh-worktree start
+may read a foreign source folder to create its own separate carrier; this read does
+not claim that source or permit a session start in it. The actual resulting carrier
+still passes the controller checks before later frames.
+
+Explicit source selectors retain their admission-time identity; prefix and automatic
+selection persist the resolved session ID before further reads. Failover, fanout,
+relay and worktree merge do not retarget a pending operation to a replacement with
+the same ID. `SESSION_SOURCE_CHANGED` requires reviewing the current source before
+submitting a new intent. Read-only use of an unchanged foreign planner remains allowed.
+
+Recovery may restore a missing registry row only from original durable controller
+and incarnation evidence, together with the existing session/task identity checks.
+Legacy rows without this evidence remain readable and are not adopted from an actor
+string or path. `use(None)` permits observation and sent-effect reconciliation but
+cannot grant a new write. Direct service helpers without an authenticated context
+fail closed. Operation-owned SSH/Git carriers use their creating operation's
+binding; fixed path validators remain classification checks and confer no caller
+authority. The shared Connector integration area retains its existing serialized
+service contract rather than becoming one session controller's checkout.
+
+New refusal codes include `CONTROLLER_AUTHORITY_REQUIRED`,
+`CONTROLLER_OWNER_UNPROVEN`, `FOREIGN_CONTROLLER`,
+`CONTROLLER_INCARNATION_CHANGED`, `CONTROLLER_WORKSPACE_CHANGED`,
+`CONTROLLER_MEMBERSHIP_CHANGED`, `CONTROLLER_IMMUTABLE` and `SESSION_SOURCE_CHANGED`. These restrictions are
+shown per action without rewriting provenance or granting takeover through `force`.

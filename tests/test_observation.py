@@ -26,7 +26,7 @@ from bat_agent_connector.observation import (
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.resource_ids import worktree_id
 from bat_agent_connector.task_journal import LATEST_DATA_STEP, Journal
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 from tests.test_api_v1 import (  # noqa: F401 - shared fixtures
     MANUAL,
     http,
@@ -1211,7 +1211,8 @@ async def test_b02_unchanged_poll_does_not_rewrite_observation_identities(mock, 
     from bat_agent_connector import inventory
     j = Journal(tmp_path / "j.db")
     inv = Inventory(j, make_config(mock))
-    adopt("registry-only", worktree_path="/srv/wt", worktree_made_by="bat")
+    with controller_scope(j):
+        adopt("registry-only", worktree_path="/srv/wt", worktree_made_by="bat")
     changes = []
     original = inventory.registry_bindings
 
@@ -1449,7 +1450,8 @@ async def test_b02_scope_change_stays_blocked_on_later_refreshes(mock, tmp_path,
 async def test_b02_null_workspace_preserves_missing_counts_even_with_registry(mock, tmp_path):
     j = Journal(tmp_path / "j.db")
     inv = Inventory(j, make_config(mock))
-    adopt("registry-only")
+    with controller_scope(j):
+        adopt("registry-only")
     await inv.refresh_host("h1")
     mock.handlers["workspace:load"] = lambda p: None
     for _ in range(3):
@@ -1497,7 +1499,8 @@ async def test_b03_states_unknown_no_tab_and_field_times(mock, tmp_path):
     unknown = inv.get_session("h1", "unobserved")
     assert unknown["loaded"] is unknown["has_tab"] is unknown["streaming"] is None
     assert unknown["state"]["lifecycle"] == "unknown" and unknown["api_access"] == "read_only"
-    adopt("no-tab")
+    with controller_scope(j):
+        adopt("no-tab")
     await inv.refresh_host("h1")
     unloaded = inv.get_session("h1", "sess-unload-0003")
     assert unloaded["state"]["loading"] == "not_loaded" and unloaded["state"]["activity"] == "unknown"
@@ -1994,8 +1997,12 @@ async def test_b03_rpc_admin_identity_is_not_claimed_human(served, monkeypatch):
     from bat_agent_connector.task_daemon import request
     d, port = served
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
-    t = task(d.journal, "a")
-    bind(d.journal, t, "sid")
+    principal = api_auth.authenticate(d.journal.db, d._admin_token, d._admin_token)
+    assert principal is not None and principal.admin
+    # The real RPC caller owns this task; claimed human fields do not grant control.
+    with controller_scope(d.journal, principal):
+        t = task(d.journal, "a")
+        bind(d.journal, t, "sid")
     await asyncio.to_thread(request, "work_pause", _auth_token=d._admin_token, task_id=t["task_id"], actor="ted", source_message_id="claimed-human-message")
     events = Observation(d.journal).history("execution", t["task_id"])["events"]
     paused = next(e for e in events if e["kind"] == "task.paused")

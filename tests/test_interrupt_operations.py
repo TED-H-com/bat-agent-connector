@@ -12,12 +12,12 @@ from bat_agent_connector.mcp_server import build_server
 from bat_agent_connector.operations import NO_KEY_PREFIX, OperationError
 from tests import test_api_v1 as api
 from tests import test_operations_unification as task_tests
-from tests.conftest import adopt
+from tests.conftest import adopt, controller_scope
 from tests.operation_helpers import settle_operations
 
 daemon, served, owned = api.daemon, api.served, task_tests.owned
 SID = api.MANUAL
-PRINCIPAL = api_auth.Principal("caller", frozenset({"operate", "observe"}))
+PRINCIPAL = api_auth.Principal("operator-dashboard", frozenset({"operate", "observe"}))
 
 
 def arguments(**extra):
@@ -47,7 +47,7 @@ async def mcp_result(server, name, params):
 async def test_a05_interrupt_named_key_replays_across_real_transports(served, mock, monkeypatch, capsys, first):
     d, port = served
     adopt(SID)
-    tok = api.token(d, "caller", "operate", "observe")
+    tok = api.token(d, "operator-dashboard", "operate", "observe")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", tok)
     monkeypatch.setattr(cli, "load_config", lambda _: d.fleet.config)
@@ -87,7 +87,7 @@ async def test_a05_interrupt_named_key_replays_across_real_transports(served, mo
 async def test_a05_no_key_is_unique_storage_only_across_reads_and_reopen(served, mock, monkeypatch, capsys):
     d, port = served
     adopt(SID)
-    tok = api.token(d, "caller", "observe", "operate")
+    tok = api.token(d, "operator-dashboard", "observe", "operate")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", tok)
     one = await legacy(d)
@@ -127,7 +127,7 @@ async def test_a05_no_key_is_unique_storage_only_across_reads_and_reopen(served,
 @pytest.mark.parametrize("key", [None, "", "batc:nokey:caller", "  batc:nokey:caller  "])
 async def test_a05_raw_operation_door_cannot_opt_into_legacy_key_mode(served, key):
     d, port = served
-    tok = api.token(d, "caller", "operate")
+    tok = api.token(d, "operator-dashboard", "operate")
     body = {"action": "session.interrupt", "target": {"host": "h1", "session_id": SID},
             "idempotency_key": key, "_legacy_interrupt": True, "_resolved_target": {"session_id": SID}}
     code, out = await api.http(port, "POST", "/api/v1/operations", tok=tok, body=body)
@@ -144,7 +144,8 @@ async def test_a05_raw_operation_door_cannot_opt_into_legacy_key_mode(served, ke
 async def test_a05_reserved_key_prefix_cannot_hide_in_legacy_task_hash(daemon, size):
     with pytest.raises(OperationError, match="INVALID_IDEMPOTENCY_KEY"):
         await daemon.call("work_submit", {"host": "h1", "workspace": "demo-project", "project": "p",
-                                          "original_words": "saved", "idempotency_key": NO_KEY_PREFIX + "x" * size})
+                                          "original_words": "saved", "idempotency_key": NO_KEY_PREFIX + "x" * size},
+                          principal=PRINCIPAL)
     assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
     assert not daemon.journal.db.execute("SELECT 1 FROM tasks").fetchone()
 
@@ -200,8 +201,13 @@ async def test_prefix_interrupt_history_uses_bound_session_even_before_bat_effec
 async def test_a05_legacy_keys_remain_actor_scoped(daemon, mock):
     adopt(SID)
     first = await legacy(daemon, idempotency_key="shared")
-    other = await daemon.call_api("session_interrupt", arguments(idempotency_key="shared"),
-                                  api_auth.Principal("other", frozenset({"operate"})))
+    principal = api_auth.Principal("other", frozenset({"operate"}))
+    mock.metas["sess-codex-0002"]["cwd"] = "/srv/other"
+    next(t for t in mock.ws_doc["terminals"] if t["id"] == "sess-codex-0002")["cwd"] = "/srv/other"
+    with controller_scope(daemon.journal, principal):
+        adopt("sess-codex-0002", agent_preset="codex-agent", cwd="/srv/other")
+    other = await daemon.call_api("session_interrupt", arguments(session_id="sess-codex-0002", idempotency_key="shared"),
+                                  principal)
     assert first["operation_id"] != other["operation_id"] and len(api.write_frames(mock)) == 2
     await daemon.fleet.close()
 
@@ -238,7 +244,7 @@ async def test_a01_legacy_mcp_needs_own_token_without_direct_or_admin_fallback(s
 async def test_a08_legacy_failed_operation_keeps_id_in_cli_and_mcp_error(served, mock, monkeypatch, capsys):
     d, port = served
     adopt(SID)
-    tok = api.token(d, "caller", "operate", "observe")
+    tok = api.token(d, "operator-dashboard", "operate", "observe")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", tok)
     monkeypatch.setattr(cli, "load_config", lambda _: d.fleet.config)
@@ -263,7 +269,7 @@ async def test_a08_bounded_cli_wait_returns_pending_receipt_without_repeating_ha
     d, port = served
     adopt(SID)
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
-    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "caller", "operate"))
+    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "operator-dashboard", "operate"))
     monkeypatch.setattr(cli, "load_config", lambda _: d.fleet.config)
     original_wait, original_interrupt = d.ops.wait, service.session_interrupt
     entered, release = asyncio.Event(), asyncio.Event()
@@ -296,7 +302,7 @@ async def test_a01_unavailable_owner_has_no_cli_or_mcp_direct_fallback(served, m
     from tests.test_mcp_principal import call
     d, _ = served
     adopt(SID)
-    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "caller", "operate"))
+    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "operator-dashboard", "operate"))
     monkeypatch.setattr(cli, "load_config", lambda _: d.fleet.config)
     def unavailable(*a, **k):
         raise ConnectionRefusedError("owner unavailable")
@@ -405,7 +411,7 @@ async def test_a07_legacy_interrupt_keeps_the_final_frame_task_guard(owned, mock
 async def test_a01_legacy_interrupt_refused_before_operation_or_frame(served, mock, case, code):
     d, port = served
     principal_scope = "observe" if case == "scope" else "operate"
-    tok = api.token(d, "caller", principal_scope)
+    tok = api.token(d, "operator-dashboard", principal_scope)
     params = arguments()
     if case not in {"manual", "unknown"}:
         adopt(SID)
@@ -427,7 +433,7 @@ async def test_a01_legacy_interrupt_refused_before_operation_or_frame(served, mo
 async def test_interrupt_rejects_malformed_mode_before_admission(served, mock, mode, door):
     d, port = served
     adopt(SID)
-    tok = api.token(d, "caller", "operate")
+    tok = api.token(d, "operator-dashboard", "operate")
     if door == "http":
         status, out = await api.http(port, "POST", "/api/v1/operations", tok=tok, body={
             "action": "session.interrupt", "target": {"host": "h1", "session_id": SID},

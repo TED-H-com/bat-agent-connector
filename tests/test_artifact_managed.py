@@ -9,14 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from bat_agent_connector import api_auth, artifacts, cli, registry
+from bat_agent_connector import api_auth, artifacts, checkpoints, cli, controller_authority, registry
 from bat_agent_connector import artifact_managed as managed
 from bat_agent_connector.operations import AmbiguousOutcome, OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests import test_api_v1 as api
 from tests import test_artifact_capture as manual
+from tests.conftest import controller_scope
 from tests.test_artifact_capture import finish, principal
-from tests.test_artifacts import action, continuation, make_checkpoint
+from tests.test_artifacts import PERSON, action, continuation, make_checkpoint
 from tests.test_checkpoints import bat_writes, git
 
 daemon, human, served = manual.daemon, manual.human, api.served
@@ -77,6 +78,66 @@ async def test_managed_capture_and_accept_exact_bytes_without_execution_or_compl
     assert not daemon.journal.db.execute("SELECT 1 FROM tasks").fetchone()
     assert not daemon.journal.db.execute("SELECT 1 FROM work_items").fetchone()
     assert len(bat_writes(mock)) == writes
+
+
+async def test_foreign_controller_can_capture_managed_evidence_without_source_control(daemon, execution, mock):
+    person, _ = principal(daemon, actor="foreign-artifact-reader")
+    entry = registry.get("h1", execution[1])
+    assert not controller_authority.same_controller(entry["controller_authority"],
+        controller_authority.binding(daemon.journal.db, person))
+    def source_state():
+        path = execution[2]
+        index = Path(git(path, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+        return ({str(file.relative_to(path)): file.read_bytes() for file in path.rglob("*") if file.is_file()},
+                git(path, "rev-parse", "HEAD"), git(path, "for-each-ref"), index.read_bytes(), index.stat().st_mtime_ns)
+
+    before, writes = source_state(), list(bat_writes(mock))
+    pv = await preview(daemon, person, execution)
+    identity = pv["source"]["registry_identity"]
+    assert identity["controller_authority"] == entry["controller_authority"]
+    assert identity["controller_incarnation"] == entry["controller_incarnation"]
+    op = await finish(daemon, submit(daemon, person, pv))
+    assert op["status"] == "succeeded", op
+    assert daemon.artifact_store.read_content(op["result"]["artifact_id"], 1) == b"result\x00\xff\n"
+    assert source_state() == before and bat_writes(mock) == writes
+    assert registry.get("h1", execution[1]) == entry
+
+
+@pytest.mark.parametrize("field", ["controller_authority", "controller_incarnation"])
+@pytest.mark.parametrize("phase", ["observe", "capture"])
+async def test_managed_capture_pins_original_controller_identity(daemon, execution, mock, monkeypatch, field, phase):
+    person, _ = principal(daemon, actor="foreign-artifact-reader")
+    writes = list(bat_writes(mock))
+
+    def replace():
+        path = registry.registry_path()
+        document = json.loads(path.read_text())
+        row = next(row for row in document["sessions"] if row["session_id"] == execution[1])
+        row[field] = (controller_authority.binding(daemon.journal.db,
+            api_auth.Principal("replacement-controller", frozenset({"observe"})))
+            if field == "controller_authority" else "f" * 32)
+        path.write_text(json.dumps(document))
+
+    if phase == "observe":
+        client = checkpoints._read_fleet(daemon.ops).client("h1")
+        original = client.invoke
+
+        async def changed(channel, *args, **kwargs):
+            result = await original(channel, *args, **kwargs)
+            if channel == "claude:get-session-meta":
+                replace()
+            return result
+
+        monkeypatch.setattr(client, "invoke", changed)
+        with pytest.raises(OperationError, match="SOURCE_CHANGED"):
+            await preview(daemon, person, execution)
+    else:
+        pv = await preview(daemon, person, execution)
+        replace()
+        op = await finish(daemon, submit(daemon, person, pv))
+        assert op["status"] == "failed" and op["error_code"] == "SOURCE_CHANGED", op
+    assert bat_writes(mock) == writes
+    assert not list(daemon.artifact_store.root.glob("revisions/*/*/content"))
 
 
 @pytest.mark.parametrize("change", ["unknown", "other_action", "uncertain", "not_accepted", "wrong_sid", "created_later"])
@@ -235,8 +296,11 @@ async def test_send_lineage_uses_real_central_send_and_original_command(daemon, 
     sid = execution[1]
     tid = None
     if task_owned:
-        task = daemon.journal.submit(project="fixture", host="h1", workspace="demo-project", original_words="review result",
-                                     engine="goose", idempotency_key="managed-task")
+        # The task and its existing execution carrier belong to the same caller.
+        with controller_scope(daemon.journal, PERSON):
+            task = daemon.journal.submit(project="fixture", host="h1", workspace="demo-project", original_words="review result",
+                                         engine="goose", idempotency_key="managed-task")
+        assert task["controller_authority"] == registry.get("h1", sid)["controller_authority"]
         tid = task["task_id"]
         daemon.journal.change(tid, "dispatching", fields={"session_id": sid})
         daemon.journal.change(tid, "accepted")

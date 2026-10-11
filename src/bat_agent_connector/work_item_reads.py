@@ -51,7 +51,8 @@ def _admit(ops, principal, target, params, pre):
 
 
 def _authorize_existing(ops, principal, op, _verb):
-    if (op.get("external_refs") or {}).get("admission_binding") != dashboard_sync.identity(ops.journal, principal):
+    saved = (op.get("external_refs") or {}).get("admission_binding") or {}
+    if {k: v for k, v in saved.items() if k != "controller_authority"} != dashboard_sync.identity(ops.journal, principal):
         raise OperationError("FORBIDDEN", "reading markers belong to the original effective principal", 403)
 
 

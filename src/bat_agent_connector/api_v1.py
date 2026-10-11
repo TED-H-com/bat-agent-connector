@@ -337,7 +337,10 @@ class ApiV1:
                       self.host_preferences, self.project_skills, self.work_item_results}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
-            status, payload = await fn(principal=principal, query=query, body=body, headers=headers, **kwargs)
+            from . import controller_authority
+            authority = controller_authority.binding(self.daemon.journal.db, principal) if principal else None
+            with controller_authority.use(authority, self.daemon.journal):
+                status, payload = await fn(principal=principal, query=query, body=body, headers=headers, **kwargs)
         except dashboard_sync.ResetRequired as e:
             status, payload = 409, e.document()
         except ApiError as e:
@@ -547,6 +550,8 @@ class ApiV1:
                                      "reasons": ([] if self._can_continue(name) else ["HOST_CLEANUP_UNAVAILABLE"])}
                                      for name in fleet.config.hosts]},
                       "features": {"dashboard_sync": {"version": 1, "bootstrap": "/api/v1/bootstrap", "checkpoint_replay": True},
+                                  "controller_isolation": {"version": 1, "identity": "server_actor",
+                                      "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "plan_adoption": False, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
@@ -620,7 +625,8 @@ class ApiV1:
         return 200, {"sync": sync, "capabilities": capabilities,
                      "snapshot": {"hosts": self.daemon.inventory.hosts_document(),
                          "sessions": decorate(self.daemon.journal, principal,
-                             self.daemon.inventory.list_sessions(order="id", include_gone=True, limit=50)),
+                             self.daemon.inventory.list_sessions(order="id", include_gone=True, limit=50,
+                                                                principal=principal)),
                          "projects": work_items.projects_list(db, include_archived=True),
                          "work_items": work_items.work_items_list(db, include_archived=True, limit=50,
                              principal_id=sync["principal_id"]),
@@ -676,6 +682,7 @@ class ApiV1:
     async def sessions(self, query, principal, **_):
         from .session_reading import decorate
         return 200, decorate(self.daemon.journal, principal, self.daemon.inventory.list_sessions(
+            principal=principal,
             host=self._q(query, "host"), provenance=self._q(query, "provenance"),
             api_access=self._q(query, "access"), attention=self._bool(query, "attention"),
             include_gone=bool(self._bool(query, "include_gone")), order=self._q(query, "order", "activity"),
@@ -701,7 +708,9 @@ class ApiV1:
                 raise
             out = {"session": None, "cleanup": []}
         if live:
-            out["policy"] = await resource_policy.session_policy(self.daemon.fleet, host, sid)
+            from . import controller_authority
+            with controller_authority.use(controller_authority.binding(self.daemon.journal.db, principal), self.daemon.journal):
+                out["policy"] = await resource_policy.session_policy(self.daemon.fleet, host, sid)
             if out["session"]:
                 out["session"].update(confinement.session_fields(
                     host, sid, await service._meta(self.daemon.fleet.client(host), sid),
@@ -759,12 +768,14 @@ class ApiV1:
             query_params("session_wait", host, sid, query), reader=reader, writer=writer,
             check_authorization=check_authorization)
 
-    async def policy(self, query, **_):
+    async def policy(self, query, principal, **_):
         host = self._q(query, "host")
         if host:
             self._known_host(host)
         names = [host] if host else list(self.daemon.fleet.config.hosts)
-        return 200, {"hosts": [await resource_policy.session_policy(self.daemon.fleet, h) for h in names]}
+        from . import controller_authority
+        with controller_authority.use(controller_authority.binding(self.daemon.journal.db, principal), self.daemon.journal):
+            return 200, {"hosts": [await resource_policy.session_policy(self.daemon.fleet, h) for h in names]}
 
     async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]

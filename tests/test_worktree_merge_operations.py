@@ -24,7 +24,7 @@ from tests.conftest import adopt
 from tests.operation_helpers import settle_operations
 
 daemon, served = api.daemon, api.served
-P = api_auth.Principal('merge-caller', frozenset({'observe', 'integrate'}))
+P = api_auth.Principal('operator-dashboard', frozenset({'observe', 'integrate'}))
 SID = 'merge-managed-0001'
 
 
@@ -142,7 +142,8 @@ async def test_merge_exact_receipts_real_git_and_named_replay(daemon, mock, carr
     assert git(origin, 'rev-parse', 'HEAD') != original_head
     assert (origin / 'feature').read_bytes() == (source / 'feature').read_bytes()
     assert not merge._document().get('carrier_writers')
-    assert [s['name'] for s in out['steps']] == ['merge.prepare', 'merge.reserve', 'merge.frame', 'merge.release']
+    assert [s['name'] for s in out['steps']] == [
+        'merge.prepare', 'source.identity', 'merge.reserve', 'merge.frame', 'merge.release']
     daemon.fleet.config.host('h1').orchestrate = False
     daemon.ops.context['git_runner'] = None
     replay = await create(daemon, target={'host': 'h1', 'session_id': 'merge-managed'})
@@ -197,7 +198,7 @@ async def test_positive_managed_idle_and_all_consumers_required(daemon, mock, ca
     elif change == 'neighbor':
         mock.ws_doc['terminals'].append({'id': 'manual-neighbor', 'cwd': str(origin), 'agentPreset': 'claude-code'})
     else:
-        other, _ = daemon.ops.create(api_auth.Principal('other', frozenset({'operate'})), action='session.send',
+        other, _ = daemon.ops.create(api_auth.Principal(P.actor, frozenset({'operate'})), action='session.send',
                                     target={'host': 'h1', 'session_id': SID}, params={'text': 'pending'}, idempotency_key='pending')
         daemon.ops.db.execute("UPDATE operations SET status='uncertain',next_run_at=99999999999 WHERE operation_id=?", (other['operation_id'],))
     out = await create(daemon)
@@ -789,7 +790,8 @@ async def test_no_key_is_independent_and_scope_replay_controls_stay_original_act
     assert mock.channels().count('worktree:merge') == 1  # second request truthfully observes already merged
     op, _ = daemon.ops.create(P, **intent())
     for caller in (api_auth.Principal(P.actor, frozenset({'observe'})), api_auth.Principal('different', P.scopes)):
-        with pytest.raises(OperationError, match='FORBIDDEN'):
+        code = 'FORBIDDEN' if caller.actor == P.actor else 'CONTROLLER_MISMATCH'
+        with pytest.raises(OperationError, match=code):
             daemon.ops.cancel(caller, op['operation_id'])
     with pytest.raises(OperationError, match='IDEMPOTENCY_KEY_REQUIRED'):
         daemon.ops.create(P, **intent(idempotency_key=None))

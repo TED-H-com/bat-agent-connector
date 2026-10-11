@@ -173,7 +173,7 @@ class OpContext:
 
     @property
     def effective_preconditions(self) -> dict:
-        if self.admission_binding:
+        if self.admission_binding and "control_version" in self.admission_binding:
             return {**self.preconditions, "control_version": self.admission_binding["control_version"]}
         return self.preconditions
 
@@ -186,6 +186,12 @@ class OpContext:
                                       (self.operation_id,)).fetchone()
         if row and row["cancel_requested"]:
             raise Cancelled()
+
+    def require_controller(self) -> dict:
+        """Check the persisted creation authority immediately before a resource effect."""
+        from . import controller_authority
+        return controller_authority.require_binding(controller_authority.operation_binding(
+            self.service.get(self.operation_id, steps=False)))
 
     def set_refs(self, **refs: Any) -> None:
         self.service._merge_refs(self.operation_id, refs)
@@ -484,6 +490,7 @@ class OperationService:
                                      "this idempotency_key was already used for a different request", 409)
         op = self._decode(existing) if existing else None
         if op:
+            self._authorize_controller(principal, op, "replay")
             from .bulk_approval import authorize_child
             authorize_child(self, principal, op, "replay")
             from .orchestration_operations import authorize_child as authorize_orchestration_child
@@ -514,8 +521,15 @@ class OperationService:
         # Only a legacy answer needs a separate view: its observed prompt is stored in refs,
         # never added to the caller's literal params or request hash.
         admission_params = params if _resolved_params is None else {**params, **_resolved_params}
-        binding = adef.admit(self, principal, _resolved_target or target,
-                            admission_params, preconditions) if adef.admit else None
+        from . import controller_authority
+        authority = controller_authority.binding(self.db, principal)
+        with controller_authority.use(authority, self.journal):
+            binding = adef.admit(self, principal, _resolved_target or target,
+                                admission_params, preconditions) if adef.admit else None
+        # Admission is trusted service code. A task capability may delegate the
+        # original task controller after validating that exact capability; an
+        # HTTP/RPC caller cannot supply or replace this binding.
+        binding = {"controller_authority": authority, **(binding or {})}
         operation_id = "op_" + uuid.uuid4().hex
         key = key if key is not None else NO_KEY_PREFIX + operation_id
         refs = {"admission_binding": binding} if binding else {}
@@ -536,6 +550,7 @@ class OperationService:
         return self._row(operation_id), True
 
     def _may_steer(self, principal: Principal, op: dict, verb: str) -> None:
+        self._authorize_controller(principal, op, verb)
         from .bulk_approval import authorize_child
         authorize_child(self, principal, op, verb)
         from .orchestration_operations import authorize_child as authorize_orchestration_child
@@ -546,6 +561,34 @@ class OperationService:
         if not (op["actor"] == principal.actor or principal.admin or (adef and principal.allows(adef.scope))):
             raise OperationError("FORBIDDEN", f"{verb} needs the operation's own actor or its {op['action']} scope",
                                  403)
+
+    def _authorize_controller(self, principal: Principal, op: dict, verb: str) -> None:
+        """Resource control belongs to its controller, independently of admin/scopes.
+
+        Read-only records and GitHub delivery retain their existing permissions.
+        A legacy operation without creation authority may be read/reconciled by
+        the worker, but cannot be claimed through resume or cancellation.
+        """
+        action = op["action"]
+        if action in {"session.read", "session.position", "session.labels.set", "session.record_verification"}:
+            return  # Connector metadata keeps its existing personal/manage authorization.
+        if action == "cleanup.apply":
+            from .cleanup import authorize_controller_existing
+            if authorize_controller_existing(self, principal, op, verb):
+                return
+        if action.startswith("task.") or action == "session.send" and (op.get("target") or {}).get("task_id"):
+            from .task_actions import authorize_controller_existing
+            authorize_controller_existing(self, principal, op, verb)
+            return
+        if not (action.startswith(("session.", "worktree.", "fanout.", "cleanup."))
+                or action in {"checkpoint.continue", "checkpoint.continue.revalidate",
+                              "repository.continue", "integration.handoff"}):
+            return
+        from . import controller_authority
+        saved = controller_authority.operation_binding(op)
+        caller = controller_authority.binding(self.db, principal)
+        if not saved or any(saved.get(k) != caller.get(k) for k in ("server_id", "controller_id")):
+            raise OperationError("CONTROLLER_MISMATCH", f"{verb} requires the original resource controller", 403)
 
     def _running(self, operation_id: str) -> bool:
         task = self._active.get(operation_id)
@@ -701,7 +744,11 @@ class OperationService:
             op = self._transition(operation_id, "running", attempts=op["attempts"] + 1)
         ctx = OpContext(self, op)
         try:
-            result = await adef.run(ctx)
+            from . import controller_authority
+            # Missing legacy authority is intentional: receipt recovery can
+            # still read, while every new external effect fails closed.
+            with controller_authority.use(controller_authority.operation_binding(op), self.journal):
+                result = await adef.run(ctx)
         except Cancelled:
             self._transition(operation_id, "cancelled", reason="cancelled between steps")
         except Wait as w:

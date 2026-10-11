@@ -74,13 +74,16 @@ def test_only_the_policy_mints_write_grants():
     assert offenders == []
 
 
-def test_a_session_grant_never_covers_a_frame_without_its_session_id():
-    grant = resource_policy.WriteGrant("h1", "session.send", "s-1", BY_ACTION["session.send"].channels)
+def test_a_session_grant_never_covers_a_frame_without_its_session_id(controller_context):
+    adopt("s-1")
+    row = registry.get("h1", "s-1")
+    ownership = {key: row[key] for key in ("controller_authority", "controller_incarnation")}
+    grant = resource_policy.WriteGrant("h1", "session.send", "s-1", BY_ACTION["session.send"].channels, **ownership)
     resource_policy.check_grant(grant, "h1", "claude:send-message", {"sessionId": "s-1"})
     for params in ({}, None, {"sessionId": "s-2"}):
         with pytest.raises(ResourceReadOnly, match="GRANT_MISMATCH"):
             resource_policy.check_grant(grant, "h1", "claude:send-message", params)
-    tab = resource_policy.WriteGrant("h1", "workspace.register_tab", "s-1", frozenset({"workspace:save"}))
+    tab = resource_policy.WriteGrant("h1", "workspace.register_tab", "s-1", frozenset({"workspace:save"}), **ownership)
     resource_policy.check_grant(tab, "h1", "workspace:save", {"profileId": "default"})
 
 
@@ -144,7 +147,7 @@ async def test_bulk_and_relay_paths_skip_bat_sessions(fleet_factory, mock):
 async def test_mcp_tools_refuse_bat_sessions(mock, served, monkeypatch):
     d, port = served
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
-    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "policy-test", "operate", "start"))
+    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "policy-test", "observe", "operate", "start"))
     server, fleet = build_server(make_config(mock, writes=True, orchestrate=True))
     for tool, args in (("session_send", {"text": "hi", "confirm": True}),
                        ("session_interrupt", {"confirm": True, "mode": "hard"}),
@@ -198,7 +201,9 @@ async def test_connector_record_pointing_at_a_human_checkout_grants_nothing(flee
         add_managed_wt(mock, sid, cwd="/srv/other", worktree_path="/srv/other")
         mock.metas[sid]["cwd"] = "/srv/other"
     elif case == "shares_a_bat_session_worktree":
-        add_managed_wt(mock, sid, shares_worktree_with=MANUAL, failover_of=MANUAL)
+        add_managed_wt(mock, sid)
+        # Model a pre-policy invalid relationship: a new reservation now refuses it.
+        registry.update("h1", sid, shares_worktree_with=MANUAL, failover_of=MANUAL)
     else:
         add_managed_wt(mock, sid)
     if case == "meta_cwd_in_main_checkout":
@@ -424,12 +429,11 @@ async def test_a_tab_worktree_the_record_lacks_is_a_binding_mismatch(fleet_facto
     await f.close()
 
 
-async def test_shared_clone_setting_is_applied_before_any_ssh_git(tmp_path, fleet_factory, monkeypatch):
+async def test_shared_clone_setting_is_applied_before_any_ssh_git(controller_context, fleet_factory, monkeypatch):
     from bat_agent_connector import task_bat
-    from bat_agent_connector.task_journal import Journal
     from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 
-    journal = Journal(tmp_path / "tasks.sqlite3")
+    journal, _ = controller_context
     task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="x",
                           base_branch="main", idempotency_key="k1")
     adapter = task_bat.BatTaskAdapter(fleet_factory(writes=True, orchestrate=True, shared_clone_worktrees=False),
@@ -444,7 +448,6 @@ async def test_shared_clone_setting_is_applied_before_any_ssh_git(tmp_path, flee
     with pytest.raises(ResourceReadOnly, match="shared_clone_worktrees"):
         await adapter._ensure_external_worktree(task)
     assert scripts == []
-    journal.close()
 
 
 async def test_a_managed_root_that_resolves_into_a_human_checkout_is_refused(fleet_factory, mock):

@@ -37,8 +37,8 @@ def known_live_terminals(mock):
         if mock.metas.get(terminal["id"]) is None:
             mock.metas[terminal["id"]] = {"cwd": terminal["cwd"], "isStreaming": False}
 
-CLEANER = api_auth.Principal("cleaner", frozenset({"observe", "cleanup"}))
-DISCARDER = api_auth.Principal("person", frozenset({"observe", "cleanup", "cleanup_discard"}))
+CLEANER = api_auth.Principal("operator-dashboard", frozenset({"observe", "cleanup"}))
+DISCARDER = api_auth.Principal("operator-dashboard", frozenset({"observe", "cleanup", "cleanup_discard"}))
 
 
 async def setup_work(d, mock, **checkpoint_params):
@@ -82,7 +82,7 @@ async def test_e01_preview_is_pure_and_signed_plan_cannot_be_changed(daemon, moc
         daemon.ops.create(CLEANER, **req)
     req = cleanup.apply_request(doc, "actor")
     with pytest.raises(OperationError, match="PREVIEW_MISMATCH"):
-        daemon.ops.create(DISCARDER, **req)
+        daemon.ops.create(api_auth.Principal("other-cleaner", DISCARDER.scopes), **req)
     req = cleanup.apply_request(doc, "tamper")
     req["params"]["preview_token"] += "broken"
     with pytest.raises(OperationError, match="PREVIEW_TOKEN_INVALID"):
@@ -695,7 +695,7 @@ async def test_e01_partial_cleanup_resumes_only_unfinished_unchanged_items(daemo
     assert finished["status"] == "succeeded", finished
     assert len([i for i in mock.invokes if i["channel"] == "claude:stop-session"]) == count
     assert any(s["name"].endswith("remove.worktree.a2") for s in finished["steps"])
-    assert any("cleaner" in r["resumed_by"] for r in cleanup.receipts(daemon.ops, done["operation_id"]))
+    assert any(CLEANER.actor in r["resumed_by"] for r in cleanup.receipts(daemon.ops, done["operation_id"]))
 
 
 async def test_e01_attachment_replicas_are_removed_without_discard_scope(daemon, mock, monkeypatch):
@@ -890,7 +890,7 @@ async def test_e01_cleanup_adapters_share_the_action_contract(daemon, mock, monk
     from bat_agent_connector import cli, mcp_server
     from tests.test_api_v1 import http
     cp, _ = await setup_work(daemon, mock)
-    token = api_auth.issue(daemon.journal.db, "cleaner", ["observe", "cleanup"])
+    token = api_auth.issue(daemon.journal.db, CLEANER.actor, ["observe", "cleanup"])
     server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
@@ -985,7 +985,8 @@ def repair_facts(d, cp, op, human):
     row = dict(d.journal.db.execute("SELECT * FROM operations WHERE operation_id=?", (op["operation_id"],)).fetchone())
     row.update(operation_id=handoff_id, idem_key="crashed-handoff", action="integration.handoff", target=json.dumps({"operation_id": apply_id}),
                params=json.dumps({"seq": 1}), status="failed", external_refs=json.dumps(
-                   {"seq": 1, "worktree_path": str(wt), "branch": branch}))
+                   {"admission_binding": json.loads(row["external_refs"])["admission_binding"],
+                    "seq": 1, "worktree_path": str(wt), "branch": branch}))
     columns = ",".join(row)
     d.journal.db.execute(f"INSERT INTO operations({columns}) VALUES({','.join('?' for _ in row)})", tuple(row.values()))  # noqa: S608 - fixed fixture keys
     seed_item = {"original_ids": [op["operation_id"]], "observation": {"head": cp["commit_sha"]}}
@@ -1023,7 +1024,8 @@ async def test_e01_empty_integration_temporary_has_exact_intent_and_no_restore_p
     row = dict(daemon.journal.db.execute("SELECT * FROM operations WHERE operation_id=?", (op["operation_id"],)).fetchone())
     preview_op = "op_" + "f" * 32
     row.update(operation_id=preview_op, idem_key="empty-preview", action="integration.preview", target=json.dumps({"host": "h1", "repository": "o/r", "pull_number": 1}),
-               params=json.dumps({"sources": []}), status="failed", external_refs=json.dumps({"area_path": str(area)}))
+               params=json.dumps({"sources": []}), status="failed", external_refs=json.dumps(
+                   {"admission_binding": json.loads(row["external_refs"])["admission_binding"], "area_path": str(area)}))
     columns = ",".join(row)
     daemon.journal.db.execute(f"INSERT INTO operations({columns}) VALUES({','.join('?' for _ in row)})", tuple(row.values()))  # noqa: S608 - fixed fixture keys
     step = dict(daemon.journal.db.execute("SELECT * FROM operation_steps WHERE operation_id=? AND name='worktree.prepare'", (op["operation_id"],)).fetchone())

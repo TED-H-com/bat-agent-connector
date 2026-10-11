@@ -11,6 +11,7 @@ from pathlib import Path
 
 from bat_agent_connector import api_auth, cleanup, platform_files
 from tests.mockbat import TOKEN, MockBat
+from tests.test_checkpoints import OPERATOR
 from tests.test_checkpoints import daemon as daemon_fixture
 from tests.test_checkpoints import human as human_fixture
 from tests.test_cleanup import setup_work
@@ -39,7 +40,8 @@ async def main():
         managed_path = Path(operation["result"]["worktree_path"])
         human_before = {str(p.relative_to(human)): p.read_bytes() for p in human.rglob("*") if p.is_file()}
         frames_before = len(mock.invokes)
-        token = api_auth.issue(daemon.journal.db, "cleanup-browser", ["observe", "cleanup", "cleanup_discard"])
+        # A narrower cleanup credential keeps the controller that created this fixture carrier.
+        token = api_auth.issue(daemon.journal.db, OPERATOR.actor, ["observe", "cleanup", "cleanup_discard"])
         server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
         worker = asyncio.create_task(daemon.ops.loop(0.1))
         print(json.dumps({"port": server.sockets[0].getsockname()[1], "token": token,

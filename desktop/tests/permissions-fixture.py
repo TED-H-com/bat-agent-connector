@@ -12,7 +12,7 @@ from pathlib import Path
 
 from bat_agent_connector import api_auth, platform_files
 from bat_agent_connector.task_daemon import TaskDaemon
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 from tests.mockbat import TOKEN, MockBat
 
 CLAUDE = "sess-claude-0001"
@@ -32,12 +32,14 @@ async def main():
         config = make_config(mock, writes=True, managed_roots=["/srv"], default_permission_mode="allow_all",
                              safety={"write_min_interval_s": 0})
         daemon = TaskDaemon(config, root / "journal.db")
-        for sid in (CLAUDE, CODEX):
-            adopt(sid)
+        token = api_auth.issue(daemon.journal.db, "permissions-browser", ["observe", "operate"])
+        principal = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token)
+        with controller_scope(daemon.journal, principal):
+            for sid in (CLAUDE, CODEX):
+                adopt(sid)
         mock.metas[CLAUDE]["isStreaming"] = True
         mock.states[CLAUDE]["isStreaming"] = True
         await daemon.inventory.refresh_host("h1")
-        token = api_auth.issue(daemon.journal.db, "permissions-browser", ["observe", "operate"])
         server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
         worker = asyncio.create_task(daemon.ops.loop(0.1))
         print(json.dumps({"port": server.sockets[0].getsockname()[1], "token": token,

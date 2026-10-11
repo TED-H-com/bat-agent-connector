@@ -12910,7 +12910,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		data = await api("GET", `/sessions/${encodeURIComponent(bound.host)}/${encodeURIComponent(bound.session_id)}`);
 		guard();
 		const row = data.session;
-		if (row?.host !== bound.host || row.session_id !== bound.session_id || row.provenance !== "connector_managed" || row.api_access !== "managed") throw new Error(t("ar_source_unavailable"));
+		if (row?.host !== bound.host || row.session_id !== bound.session_id || row.provenance !== "connector_managed") throw new Error(t("ar_source_unavailable"));
 		source = {
 			host: row.host,
 			session_id: row.session_id
@@ -15124,7 +15124,7 @@ async function viewSession(main, host, sid, context = null) {
 		if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
 		if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
 		const managed = row.api_access === "managed";
-		if (managed && row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) metadata.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
+		if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) metadata.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
 		if (managed && row.provenance === "connector_managed") {
 			const links = [];
 			if (state.caps?.actions?.some((a) => a.action === "session.relay")) links.push(h("a", { href: `#/orchestrate/relay/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("orch_relay")));

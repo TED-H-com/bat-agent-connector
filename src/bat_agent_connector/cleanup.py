@@ -24,6 +24,7 @@ from urllib.parse import urlencode, urlsplit
 
 from . import (
     checkpoints,
+    controller_authority,
     integration,
     lifecycle,
     registry,
@@ -66,6 +67,11 @@ REASONS = {
     "UNKNOWN_READ_ONLY": "Creation ownership is not proven.",
     "WORKDIR_NOT_MANAGED": "The workdir is outside the managed roots.",
     "BINDING_MISMATCH": "The resource does not match its creation binding.",
+    "FOREIGN_CONTROLLER": "This resource or one of its consumers belongs to another controller.",
+    "CONTROLLER_AUTHORITY_REQUIRED": "The original controller authority is not proven.",
+    "CONTROLLER_OWNER_UNPROVEN": "The original resource incarnation is not proven.",
+    "CONTROLLER_INCARNATION_CHANGED": "The original resource incarnation changed.",
+    "CONTROLLER_MEMBERSHIP_CHANGED": "Current PM membership no longer permits this resource mutation.",
     "CLONE_NOT_OURS": "The repository has no matching connector creation markers.",
     "CLONE_CONFIG_TAMPERED": "Repository config or object storage is unsafe.",
     "OBSERVATION_UNAVAILABLE": "Live observation was unavailable: the host is unconfigured or its read deadline expired.",
@@ -193,6 +199,14 @@ def _mark(item, op_id, status, *, ops=None):
         }
         for e in d.get("sessions", []):
             if e.get("host") == item["host"] and e.get("session_id") == item.get("session_id"):
+                # Settled effects still get receipts after ownership changes, but
+                # bookkeeping must never alter a newer or foreign registry row.
+                try:
+                    original = controller_authority.require_entry(item.get("registry"))
+                    controller_authority.require_entry(e,
+                        expected_incarnation=original["controller_incarnation"])
+                except ResourceReadOnly:
+                    continue
                 if status == "cleaned" and item.get("task_cleanup"):
                     bound = next((b for b in item["task_cleanup"]["binding"]["sessions"]
                                   if b["session_id"] == e["session_id"]), None)
@@ -214,6 +228,11 @@ def _release(item, op_id):
             for e in d.get("sessions", []):
                 if (e.get("cleanup_reservation") == op_id and e.get("host") == item["host"]
                         and e.get("session_id") == item.get("session_id")):
+                    try:
+                        original = controller_authority.require_entry(item.get("registry"))
+                        controller_authority.require_entry(e, expected_incarnation=original["controller_incarnation"])
+                    except ResourceReadOnly:
+                        continue
                     e["cleanup_reservation"] = None
             registry._write_document(path, d)
 
@@ -570,7 +589,54 @@ def _all(ops):
                           task_owned=w.get("task_owned", False), worktree_id=w["resource_id"], content_path=w["path"]))
     for i in items.values():
         i["relations"] = sorted({r["work_item_id"] for r in links if r["ref"] in i["original_ids"]})
+        i["controller_source"] = (items[i["worktree_id"]].get("controller_source")
+                                  if i["kind"] == "local_branch" else _controller_source(i, regs))
     return items, op_rows, pvs, worktrees, containers, links
+
+
+def _controller_source(item, entries):
+    """Name the original creator record; paths and incidental consumers confer no authority."""
+    evidence = item["creation_evidence"]
+    intent = evidence["intent"]
+    if item["kind"] == "session":
+        entry = item.get("registry") or {}
+    elif item.get("flavor") == "task":
+        return {"kind": "task", "task_id": intent}
+    elif str(evidence.get("start_operation_id") or intent).startswith("op_"):
+        return {"kind": "operation", "operation_id": evidence.get("start_operation_id") or intent}
+    else:
+        entry = next((e for e in entries if e.get("host") == item["host"]
+                      and f"{e.get('session_id')}@{e.get('created_at')}" == intent), {})
+    if not entry:
+        return None
+    return {"kind": "registry", "host": item["host"], "session_id": entry.get("session_id"),
+            "created_at": entry.get("created_at"), "controller_authority": entry.get("controller_authority"),
+            "controller_incarnation": entry.get("controller_incarnation")}
+
+
+def _require_resource_controller(ops, item):
+    source = item.get("controller_source") or {}
+    if source.get("kind") == "registry":
+        controller_authority.require_entry(source)
+        row = controller_authority.require_entry(registry.get(source["host"], source["session_id"]),
+            expected_incarnation=source["controller_incarnation"])
+        if row.get("created_at") != source.get("created_at"):
+            raise ResourceReadOnly("CONTROLLER_RESOURCE_CHANGED", "original cleanup resource incarnation changed")
+    elif source.get("kind") == "operation":
+        original = ops._row(source["operation_id"])
+        controller_authority.require_binding(controller_authority.operation_binding(original) if original else None)
+    elif source.get("kind") == "task":
+        task_control.require_authority(ops.journal.get(source["task_id"]))
+    else:
+        controller_authority.require_binding(None)
+
+    # A shared carrier remains shared after another controller's session ends.
+    # The path locates consumers only; it never supplies their ownership proof.
+    path = item.get("content_path") or item.get("path")
+    if path and item["kind"] in {"session", "worktree", "local_branch", "temporary"}:
+        for row in registry.list_entries(item["host"]):
+            if _inside(path, row.get("worktree_path") or row.get("cwd")):
+                controller_authority.require_entry(row)
 
 
 def _selection(ops, target, items, pvs, links, op_rows):
@@ -887,6 +953,11 @@ def _plan(ops, item, choices, op_rows, pvs, own_op=None):
         _reason(item, "RESOURCE_CLEANED")
     if not item.get("proven"):
         _reason(item, "MANUAL_READ_ONLY" if item.get("provenance") == "manual" else "UNKNOWN_READ_ONLY")
+    if kind in {"session", "worktree", "local_branch", "temporary"}:
+        try:
+            _require_resource_controller(ops, item)
+        except (BatError, OperationError) as error:
+            _reason(item, error.code)
     if item.get("task_owned"):
         verdict = item.get("task_cleanup")
         if not verdict or not verdict["eligible"]:
@@ -1149,6 +1220,7 @@ async def snapshot(ops, target, choices, *, only=None, own_op=None, automatic=Fa
                       flavor=i.get("flavor"), base=i.get("base"), observation=branch_obs, original_ids=i["original_ids"], relations=i["relations"],
                       task_owned=i.get("task_owned", False), worktree_id=i["resource_id"],
                       content_path=i["path"], live_consumers=i.get("live_consumers", []),
+                      controller_source=i.get("controller_source"),
                       repository_identity=i.get("repository_identity"), repository_error=i.get("repository_error"))
         i["branch_id"] = b["resource_id"]
         items[b["resource_id"]] = b
@@ -1252,6 +1324,12 @@ def _capacity_ready(items):
 
 
 async def preview(ops, principal, target, choices=None, *, _automatic=False):
+    authority = controller_authority.require() if _automatic else controller_authority.binding(ops.db, principal)
+    with controller_authority.use(authority, ops.journal):
+        return await _preview(ops, principal, target, choices, _automatic=_automatic)
+
+
+async def _preview(ops, principal, target, choices=None, *, _automatic=False):
     if not principal.allows("observe"):
         raise OperationError("FORBIDDEN", "preview needs observe", 403)
     target, choices = _target(ops, target), _choices(choices, principal)
@@ -1265,6 +1343,7 @@ async def preview(ops, principal, target, choices=None, *, _automatic=False):
                "ready": any(i["decision"] == "reclaim" for i in doc["items"]) or _capacity_ready(doc["items"])}
     if _automatic:
         payload["origin"] = "task_lifecycle"
+        payload["controller_authority"] = task_control.require_authority(ops.journal.get(target["task_id"]))
     raw = _canonical(payload).encode()
     if len(raw) > MAX_TOKEN_BYTES:
         raise OperationError("PREVIEW_TOO_LARGE", "preview token is too large", 413)
@@ -1297,6 +1376,26 @@ def _admit(ops, principal, target, params, pre):
         "scopes": sorted(SCOPES if principal.admin else principal.scopes), "choices": payload["choices"]}
     if payload.get("origin") == "task_lifecycle":
         params["_accepted_authorization"]["origin"] = "task_lifecycle"
+        params["_accepted_authorization"]["task_id"] = payload["target"]["task_id"]
+        authority = task_control.authority(ops.journal.get(payload["target"]["task_id"]))
+        if authority != payload.get("controller_authority"):
+            raise OperationError("CONTROLLER_RESOURCE_CHANGED", "automatic cleanup task authority changed", 409)
+        with controller_authority.use(authority, ops.journal):
+            task_control.require_authority(ops.journal.get(payload["target"]["task_id"]))
+        return {"controller_authority": authority}
+
+
+def authorize_controller_existing(ops, principal, op, verb):
+    """Only the server's task-cleanup principal can replay its original delegated intent."""
+    if principal is not task_cleanup.SYSTEM or op["action"] != "cleanup.apply":
+        return False
+    accepted = op["params"].get("_accepted_authorization") or {}
+    if accepted.get("origin") != "task_lifecycle" or accepted.get("actor") != principal.actor:
+        return False
+    authority = controller_authority.operation_binding(op)
+    with controller_authority.use(authority, ops.journal):
+        task_control.require_authority(ops.journal.get(accepted.get("task_id")))
+    return True
 
 
 def apply_request(doc, key):
@@ -1441,6 +1540,8 @@ def _retire_absent_sessions(ctx, carrier_id=None):
         if (owner and row["status"] == "already_absent" and item.get("task_cleanup", {}).get("eligible")
                 and (carrier in carriers or carrier is None and not entry.get("worktree_path"))):
             try:
+                ctx.require_controller()
+                controller_authority.require_entry(entry)
                 capacity = task_cleanup.retire_absent(ctx, item)
             except (ResourceReadOnly, registry.RegistryInvariantError, OSError) as error:
                 capacity = _capacity_failure(error)
@@ -1465,8 +1566,13 @@ def _retire_absent_sessions(ctx, carrier_id=None):
                 "carrier_resource_id": carrier, "stopped_by_cleanup": False})
             continue
         try:
+            # Read-only descriptions above do not require creation authority. An actual
+            # retirement must retain both the accepted owner and its locked row identity.
+            ctx.require_controller()
+            controller_authority.require_entry(entry)
             capacity = registry.retire(item["host"], item["session_id"], "absent_at_cleanup",
-                created_at=item["registry"].get("created_at"), actor=ctx.actor, operation_id=ctx.operation_id,
+                created_at=entry.get("created_at"), controller_incarnation=entry["controller_incarnation"],
+                actor=ctx.actor, operation_id=ctx.operation_id,
                 carrier_resource_id=carrier, reason="session observed absent; no worktree or carrier removed/already absent")
         except (ResourceReadOnly, registry.RegistryInvariantError, OSError) as e:
             capacity = _capacity_failure(e)
@@ -1490,7 +1596,9 @@ def _progress(ctx):
 
 
 async def _phase_consumers(ctx, item):
+    ctx.require_controller()
     ops = ctx.service
+    _require_resource_controller(ops, item)
     _host_config(ops, item["host"])
     if item.get("task_cleanup"):
         task_cleanup.check(ops, item)
@@ -1528,6 +1636,7 @@ async def _phase_consumers(ctx, item):
             recorded = e.get("worktree_path") or e.get("cwd")
             if not _inside(path, runtime.get("cwd")) and not _inside(path, recorded):
                 continue
+            controller_authority.require_entry(e)
             task_owner = task_control.owner_task(ops.context["fleet"], host, sid)
             allowed_owner = bool(item.get("task_cleanup", {}).get("eligible") and task_owner in item["task_cleanup"]["task_ids"])
             if (task_owner and not allowed_owner
@@ -1542,6 +1651,8 @@ async def _phase_consumers(ctx, item):
                 raise OperationError("PREVIEW_STALE", "an unreviewed session uses this worktree", 409)
         if item.get("task_cleanup"):
             task_cleanup.check(ops, item)
+        ctx.require_controller()
+        _require_resource_controller(ops, item)
     except asyncio.TimeoutError:
         raise OperationError("OBSERVATION_UNAVAILABLE", "live consumer read deadline expired; preview again", 409) from None
     finally:

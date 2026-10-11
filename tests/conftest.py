@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
 
-from bat_agent_connector import registry
+from bat_agent_connector import api_auth, controller_authority, registry
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.fleet import Fleet
+from bat_agent_connector.task_journal import Journal
 from tests.mockbat import TOKEN, MockBat
 
 
@@ -41,8 +44,30 @@ def make_config(
     return parse_config({"hosts": {"h1": host}, "safety": safety or {"write_min_interval_s": 60}})
 
 
+@contextmanager
+def controller_scope(journal, principal=None):
+    """Explicit authenticated test caller; never infer identity from Fleet.actor."""
+    principal = principal or api_auth.Principal("test-operator", frozenset(api_auth.SCOPES))
+    value = controller_authority.binding(journal.db, principal)
+    with controller_authority.use(value, journal):
+        yield value
+
+
 @pytest.fixture
-def fleet_factory(mock):
+def controller_context(tmp_path):
+    """Opt-in authority backed by a real durable server identity, without legacy adoption."""
+    # Journal must create its own private directory: pytest's existing Windows
+    # temporary directory need not have the current-user owner/private DACL.
+    journal = Journal(tmp_path / "test-controller" / "journal.db")
+    try:
+        with controller_scope(journal) as value:
+            yield journal, value
+    finally:
+        journal.close()
+
+
+@pytest.fixture
+def fleet_factory(mock, controller_context):
     fleets = []
 
     def make(**kw):
@@ -54,11 +79,17 @@ def fleet_factory(mock):
     yield make
 
 
-def adopt(session_id: str, *, host: str = "h1", cwd: str = "/srv/demo", **fields) -> None:
+def adopt(session_id: str, *, host: str = "h1", cwd: str = "/srv/demo", authority=None,
+          journal=None, **fields) -> None:
     """Record a mock session as one the connector created (registry creation record, start acknowledged).
 
     Pair it with ``managed_roots`` covering ``cwd`` (or a connector worktree ``cwd``) so the policy lets
-    write tools drive it; without that the session stays a legacy boundary."""
+    write tools drive it; without that the session stays a legacy boundary. The caller must
+    activate controller_scope/controller_context or supply authority (and journal for PM membership).
+    This helper only creates new proven fixture records; it never stamps raw legacy rows."""
+    if authority is not None:
+        with controller_authority.use(authority, journal):
+            return adopt(session_id, host=host, cwd=cwd, **fields)
     registry.reserve(host, {"session_id": session_id, "cwd": cwd, "origin_cwd": fields.pop("origin_cwd", cwd),
                             **fields}, 32)
     registry.update(host, session_id, status="active")

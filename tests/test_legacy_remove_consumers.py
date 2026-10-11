@@ -31,7 +31,8 @@ async def standalone(fleet_factory, mock):
 
 def successor(mock, source):
     sid = "successor-sharing-0001"
-    old = registry.get("h1", source["session_id"])
+    old = {k: v for k, v in registry.get("h1", source["session_id"]).items()
+           if k not in {"controller_authority", "controller_incarnation"}}
     registry.reserve("h1", {**old, "session_id": sid, "failover_of": source["session_id"],
                             "shares_worktree_with": source["session_id"]}, 10)
     registry.update("h1", sid, status="active")

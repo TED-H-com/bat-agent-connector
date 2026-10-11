@@ -10,6 +10,7 @@ from bat_agent_connector import confinement, lifecycle, orchestrate, platform_fi
 from bat_agent_connector.errors import InvokeError, WriteRefused
 from bat_agent_connector.task_core import TaskCoordinator
 from bat_agent_connector.task_journal import Journal
+from tests.conftest import controller_scope
 from tests.test_confinement import MANAGED
 
 
@@ -66,42 +67,43 @@ async def test_a10_lead_invoke_error_is_fenced_and_recovers_one_registry_row(
         fleet_factory, mock, tmp_path, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, orchestrate_max_sessions=1, **MANAGED)
     journal = Journal(tmp_path / "tasks.db")
-    task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="Start fixture",
-                          idempotency_key="invoke-error-start")
-    adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
+    with controller_scope(journal):
+        task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="Start fixture",
+                              idempotency_key="invoke-error-start")
+        adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
 
-    async def available(_task):
-        return frozenset({"codex"})
+        async def available(_task):
+            return frozenset({"codex"})
 
-    monkeypatch.setattr(adapter, "available_agents", available)
-    attempts = error_after_creation(mock)
-    core = TaskCoordinator(journal, adapter)
-    try:
-        result = await core._start(task, role="lead")
-        command = next(c for c in journal.commands(task["task_id"]) if c["kind"] == "start_lead")
-        sid = command["session_id"]
-        assert result["state"] == "uncertain" and command["status"] == "uncertain"
-        row = unique_rows()[0]
-        assert len(unique_rows()) == 1 and row["session_id"] == sid
-        assert row["status"] == "uncertain" and row["start_sent"] is True
-        assert row["error_code"] == "CONFINEMENT_START_UNSETTLED"
-        assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
-        assert "worktree:remove" not in mock.channels() and "claude:send-message" not in mock.channels()
-        result = await core.tick(task["task_id"])
-        assert result["state"] == "accepted" and result["session_id"] == sid
-        assert len(unique_rows()) == len(registry.list_entries("h1", active_only=True)) == 1
-        assert unique_rows()[0]["status"] == "active"
-        assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
-        with pytest.raises(WriteRefused, match="cap reached.*1 active"):
-            await orchestrate.session_start(fleet, "h1", "demo-project", confirm=True)
-        assert len(unique_rows()) == 1 and mock.channels().count("claude:start-session") == 1
-    finally:
-        await fleet.close()
-        journal.close()
+        monkeypatch.setattr(adapter, "available_agents", available)
+        attempts = error_after_creation(mock)
+        core = TaskCoordinator(journal, adapter)
+        try:
+            result = await core._start(task, role="lead")
+            command = next(c for c in journal.commands(task["task_id"]) if c["kind"] == "start_lead")
+            sid = command["session_id"]
+            assert result["state"] == "uncertain" and command["status"] == "uncertain"
+            row = unique_rows()[0]
+            assert len(unique_rows()) == 1 and row["session_id"] == sid
+            assert row["status"] == "uncertain" and row["start_sent"] is True
+            assert row["error_code"] == "CONFINEMENT_START_UNSETTLED"
+            assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
+            assert "worktree:remove" not in mock.channels() and "claude:send-message" not in mock.channels()
+            result = await core.tick(task["task_id"])
+            assert result["state"] == "accepted" and result["session_id"] == sid
+            assert len(unique_rows()) == len(registry.list_entries("h1", active_only=True)) == 1
+            assert unique_rows()[0]["status"] == "active"
+            assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
+            with pytest.raises(WriteRefused, match="cap reached.*1 active"):
+                await orchestrate.session_start(fleet, "h1", "demo-project", confirm=True)
+            assert len(unique_rows()) == 1 and mock.channels().count("claude:start-session") == 1
+        finally:
+            await fleet.close()
+            journal.close()
 
 
 @pytest.mark.parametrize("status,sent", [("failed", True), ("superseded", True), ("failed", None)])
-def test_a10_reserve_cannot_append_another_row_for_an_existing_id(status, sent):
+def test_a10_reserve_cannot_append_another_row_for_an_existing_id(controller_context, status, sent):
     registry.reserve("h1", {"session_id": "reserved-id", "start_sent": False}, 4)
     registry.update("h1", "reserved-id", status=status, start_sent=sent)
     row = copy.deepcopy(registry.get("h1", "reserved-id"))
@@ -125,7 +127,8 @@ def test_a10_registry_duplicate_identity_fails_loudly_without_changes(reader):
             registry.ensure_existing("h1", row)
         else:
             registry.claim_warm("h1", "duplicate-id", previous_task_id="before", task_id="after",
-                                workspace_id="ws-1", cwd="/srv/demo", branch="fixture-branch")
+                                workspace_id="ws-1", cwd="/srv/demo", branch="fixture-branch",
+                                expected_incarnation="0" * 32)
     assert path.read_bytes() == before
 
 
@@ -170,7 +173,8 @@ async def test_a10_start_failover_recovery_and_warm_claim_preserve_unique_rows(f
         registry.update("h1", successor, task_id="previous-task", role="lead")
         row = registry.get("h1", successor)
         registry.claim_warm("h1", successor, previous_task_id="previous-task", task_id="next-task",
-                            workspace_id=row["workspace_id"], cwd=row["cwd"], branch=row["branch"])
+                            workspace_id=row["workspace_id"], cwd=row["cwd"], branch=row["branch"],
+                            expected_incarnation=row["controller_incarnation"])
         assert len(unique_rows()) == 2 and registry.get("h1", successor)["task_id"] == "next-task"
     finally:
         await fleet.close()

@@ -63,6 +63,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "op_get": "observe", "op_list": "observe", "op_cancel": "?", "op_resume": "?",
            "work_status": "observe", "work_result": "observe", "work_events": "observe",
            "api_events": "observe", "inventory_sessions": "observe", "inventory_hosts": "observe",
+           "session_policy": "observe",
            "inventory_session": "observe", "inventory_worktree": "observe", "resource_history": "observe", "resource_relations": "observe",
            "api_capabilities": "observe", "github_pr_preview": "observe", "github_merge_preview_get": "observe",
            "deployment_preview": "observe", "deployment_status": "observe", "deployments_list": "observe",
@@ -253,6 +254,13 @@ class TaskDaemon:
 
     async def call_api(self, method: str, params: dict, principal: api_auth.Principal,
                        *, _observation_transport: dict | None = None) -> dict:
+        from . import controller_authority
+        with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal):
+            return await self._call_api_bound(method, params, principal,
+                                               _observation_transport=_observation_transport)
+
+    async def _call_api_bound(self, method: str, params: dict, principal: api_auth.Principal,
+                             *, _observation_transport: dict | None = None) -> dict:
         """/rpc doors into OperationService and the inventory for MCP and CLI (same rules as /api/v1)."""
         scope = API_RPC[method]
         if scope != "?" and not principal.allows(scope):
@@ -268,6 +276,9 @@ class TaskDaemon:
         if method == "repository_preview":
             from .repository_sync import preview
             return {"preview": await preview(self.ops, principal, params)}
+        if method == "session_policy":
+            from .resource_policy import session_policy
+            return await session_policy(self.fleet, params.get("host"), params.get("session_id"))
         if method in {"session_start", "workspaces_list"}:
             from . import session_start_operations
             if method == "workspaces_list":
@@ -332,6 +343,7 @@ class TaskDaemon:
                                            related_resource_type=params.get("related_resource_type"), related_resource_id=params.get("related_resource_id")))
         if method == "inventory_sessions":
             return session_reading.decorate(self.journal, principal, self.inventory.list_sessions(
+                principal=principal,
                 host=params.get("host"), provenance=params.get("provenance"), api_access=params.get("access"),
                 attention=params.get("attention"), include_gone=bool(params.get("include_gone")),
                 order=params.get("order") or "activity", cursor=params.get("cursor"),
@@ -420,6 +432,14 @@ class TaskDaemon:
 
     async def call(self, method: str, params: dict, *, auth_token: str | None = None,
                    principal: api_auth.Principal | None = None, _ctx: OpContext | None = None) -> dict:
+        if principal is not None and _ctx is None:
+            from . import controller_authority
+            with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal):
+                return await self._call_bound(method, params, auth_token=auth_token, principal=principal)
+        return await self._call_bound(method, params, auth_token=auth_token, principal=principal, _ctx=_ctx)
+
+    async def _call_bound(self, method: str, params: dict, *, auth_token: str | None = None,
+                          principal: api_auth.Principal | None = None, _ctx: OpContext | None = None) -> dict:
         if method in task_actions.METHODS and _ctx is None:
             return await self._task_operation(method, params, auth_token=auth_token, principal=principal)
         if method == "api_token_issue":
@@ -541,6 +561,7 @@ class TaskDaemon:
                     "goose": "enabled" if self.goose.config.enabled else "disabled"}
         task_id = params["task_id"]
         if method == "work_reconcile_capability":
+            task_control.require_authority(self.journal.get(task_id))
             key = params.get("idempotency_key")
             token = None
             if key is not None:
@@ -728,13 +749,10 @@ class TaskDaemon:
             if method == "work_reconcile":
                 target["command_id"] = params.pop("command_id")
         if principal is None:
-            if auth_token:
-                digest = hashlib.sha256(auth_token.encode()).hexdigest()
-                prefix = (f"reconcile:{target['task_id']}:{target['command_id']}:" if method == "work_reconcile"
-                          else f"task:{target['task_id']}:")
-                principal = api_auth.Principal(prefix + digest, frozenset({"operate"}))
-            else:
-                principal = api_auth.Principal(api_auth.ADMIN_ACTOR, frozenset(), admin=True)
+            principal = (self.capability_principal(auth_token, task_actions.METHODS[method], target, key)
+                         if auth_token else None)
+            if principal is None:
+                raise LegacyTaskError("FORBIDDEN", "authenticated task caller or valid task capability required", 403)
         try:
             # A restart must see both the admitted intent and its historical-key bridge, or neither.
             with self.journal.tx():
@@ -903,6 +921,14 @@ class TaskDaemon:
             await asyncio.sleep(2)
 
     async def _tick_task(self, task_id: str):
+        from . import controller_authority
+        # Queued asyncio work can inherit an unrelated API caller's context.
+        # Only the durable task admission owns its background execution.
+        task = self.journal.get(task_id)
+        with controller_authority.use(task_control.authority(task), self.journal):
+            return await self._tick_task_bound(task_id)
+
+    async def _tick_task_bound(self, task_id: str):
         verifying = False
         version = None
         try:
@@ -927,10 +953,21 @@ class TaskDaemon:
                 return
             if task["paused"] or task["state"] in {"needs_ted", "human_owned", "failed", "done"}:
                 return
+            task_control.require_authority(task)
             if any(c["kind"] == "goose_run" for c in self.journal.commands(task_id)):
                 return
             entry = registry.get(task["host"], task["session_id"])
-            if not entry or not entry.get("cwd"):
+            from . import controller_authority
+            start = next((c for c in self.journal.commands(task_id)
+                          if c["kind"] == "start_lead" and c["session_id"] == task["session_id"]), None)
+            original_nonce = json.loads(start["payload"]).get("controller_incarnation") if start else None
+            if not original_nonce:
+                raise TaskControlRefused("CONTROLLER_BINDING_UNPROVEN", "Goose has no original task session creation")
+            controller_authority.require_binding(task_control.authority(start))
+            controller_authority.require_entry(entry, expected_incarnation=original_nonce)
+            if (entry.get("task_id") != task_id or entry.get("role") != "lead"):
+                raise TaskControlRefused("TASK_BINDING_MISMATCH", "Goose requires the original task session")
+            if not entry.get("cwd"):
                 self.journal.change(task_id, "uncertain")
                 return
             cmd, _ = self.journal.command(task_id, "goose_run", task["session_id"], {},
@@ -950,7 +987,7 @@ class TaskDaemon:
                 goose_task = {**task, "_route_provider": self.goose.config.provider}
                 await self.goose.run_task(goose_task, goose_cwd, capability=capability,
                                           journal=self.journal)
-            except TaskControlRefused:
+            except (TaskControlRefused, ResourceReadOnly):
                 raise
             except Exception as exc:  # noqa: BLE001 - reconcile before uncertainty
                 logging.warning("Goose ACP task %s failed before settlement: %s",
@@ -982,7 +1019,7 @@ class TaskDaemon:
             finally:
                 if temporary_cwd:
                     shutil.rmtree(temporary_cwd, ignore_errors=True)
-        except TaskControlRefused as exc:
+        except (TaskControlRefused, ResourceReadOnly) as exc:
             logging.info("Task %s tick cancelled by %s", task_id[:8], exc.code)
         except Exception as exc:  # noqa: BLE001 - one task cannot kill worker
             logging.warning("Task %s needs reconciliation after %s", task_id[:8], type(exc).__name__)

@@ -25,10 +25,13 @@ clients and role changes do not change it. Request fields cannot supply the acti
 principal, an administrator flag or a claimed controller. Membership's `actor` names
 the member being changed, not the caller performing the change.
 
-This establishes a PM identity namespace, **not completed controller isolation for
-session execution**. No PM action here sends to, resumes, interrupts or closes a BAT
-session. Original human sessions remain read-only under existing resource policy;
-the full cross-controller admission work remains in the v1.2 backlog.
+The same server/actor identity now binds execution reservations and operation
+authority; see [resource policy](resource-policy.md). Each session also has an
+immutable creation incarnation, checked again before a BAT write. Membership or an
+administrator scope does not transfer another controller's session. Legacy resources
+without original controller evidence remain read-only. No PM discussion action here
+sends to, resumes, interrupts or closes a BAT session; the PM runner remains separate
+unfinished work.
 
 ## Membership and mutation authority
 

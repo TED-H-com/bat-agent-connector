@@ -318,7 +318,9 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
     if (!bound?.host || !bound?.session_id) throw new Error(t('ar_source_unavailable'));
     data = await api('GET', `/sessions/${encodeURIComponent(bound.host)}/${encodeURIComponent(bound.session_id)}`); guard();
     const row = data.session;
-    if (row?.host !== bound.host || row.session_id !== bound.session_id || row.provenance !== 'connector_managed' || row.api_access !== 'managed') throw new Error(t('ar_source_unavailable'));
+    // Capture reads a proven source; session-control availability is caller-specific.
+    // The central preview checks current lineage, folder and exact file evidence.
+    if (row?.host !== bound.host || row.session_id !== bound.session_id || row.provenance !== 'connector_managed') throw new Error(t('ar_source_unavailable'));
     source = {host: row.host, session_id: row.session_id};
     sourceBox.replaceChildren(facts([[t('capture_source'), `${row.host} / ${row.session_id}`]]));
     if (!saved.capture) {

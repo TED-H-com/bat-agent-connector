@@ -5,15 +5,23 @@ from bat_agent_connector import confinement, registry, task_bat
 from bat_agent_connector.errors import TaskControlRefused
 from bat_agent_connector.task_core import TaskCoordinator
 from bat_agent_connector.task_journal import Journal
+from tests.conftest import controller_scope
 from tests.test_confinement import MANAGED
+
+
+@pytest.fixture
+def journal(tmp_path, controller_context):
+    value = Journal(tmp_path / 'tasks.db')
+    with controller_scope(value):
+        yield value
+    value.close()
 
 
 @pytest.mark.parametrize('boundary', ['admission', 'admission_refusal', 'carrier', 'connect', 'confinement', 'confinement_refusal'])
 @pytest.mark.parametrize('control', ['pause', 'version', 'command'])
 async def test_real_lead_start_refuses_changed_authority_before_transport(
-        fleet_factory, mock, tmp_path, monkeypatch, boundary, control):
+        fleet_factory, mock, journal, monkeypatch, boundary, control):
     fleet = fleet_factory(writes=True, orchestrate=True, safety={'write_min_interval_s': 0}, **MANAGED)
-    journal = Journal(tmp_path / 'tasks.db')
     adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
     coordinator = TaskCoordinator(journal, adapter)
     task = journal.submit(project='p', host='h1', workspace='demo-project', original_words='fixture start',
@@ -85,4 +93,3 @@ async def test_real_lead_start_refuses_changed_authority_before_transport(
         assert mock.channels().count('worktree:create') == creates
     finally:
         await fleet.close()
-        journal.close()

@@ -87,7 +87,7 @@ def admit(ops, caller, target, params, pre, action):
     _tier(ops.context['fleet'], target['host'])
     if 'plan' in params and len(params['plan']) > min(ops.context['fleet'].config.safety.max_start_per_call, params.get('max_items', 16)):
         raise OperationError('FANOUT_CAP', 'fixed plan exceeds the configured per-call start cap', 422)
-    return {'fanout': {'accepted_scopes': sorted(scopes(action, target))}}
+    return {'fanout': {'accepted_scopes': sorted(scopes(action, target))}, **relay.admit_source(target)}
 
 
 def authorize_existing(ops, caller, op, verb):
@@ -100,7 +100,7 @@ def principal(ctx):
     return api_auth.Principal(ctx.actor, frozenset(ctx.admission_binding['fanout']['accepted_scopes']))
 
 
-async def resolve(ops, action, target, params):
+async def resolve(ops, action, target, params, *, ctx=None):
     fleet, host = ops.context['fleet'], target['host']
     client, hc = fleet.client(host), fleet.config.host(host)
     cap = min(fleet.config.safety.max_start_per_call, params.get('max_items') or 16)
@@ -112,9 +112,10 @@ async def resolve(ops, action, target, params):
             human_name=fleet.config.human_name, relay_name=fleet.config.relay_name, request_fanout=True, max_items=cap)
         plan = [{'index': 1, 'title': 'fan-out planner', 'prompt': text}]
     elif target.get('session_id'):
-        tab, _ = await service._resolve_session(client, target['session_id'])
+        tab, _, pinned = await relay.resolve_source(ops, target, ctx=ctx)
         sid = tab['id']
         before = relay.record(host, sid)
+        relay.check_source(pinned)
         read = await service.session_read(fleet, host, sid, last_n=6, max_chars=60000, max_message_chars=40000)
         replies = [m.get('text') or '' for m in reversed(read['messages']) if m.get('role') not in ('user', 'system')]
         block = next((t for t in replies if 'bat-fanout' in t.lower()), None)
@@ -162,6 +163,7 @@ def child_plan(ctx, link, parent, *, allow_cancel=False):
             or parent['actor'] != ctx.actor or saved.get('operation_id') != ctx.operation_id
             or {k: ctx.op[k] for k in ('action', 'target', 'params', 'preconditions')} != saved.get('intent')):
         raise TaskControlRefused('FANOUT_BINDING_CHANGED', 'child differs from the fixed fanout receipt')
+    relay.require_child_authority(ctx, parent)
     if not allow_cancel and (parent['cancel_requested'] or parent['status'] in {'failed', 'cancelled'}):
         raise TaskControlRefused('FANOUT_CANCEL_REQUESTED', 'fanout cancelled before this frame')
     return plan
@@ -185,10 +187,12 @@ def create_child(ctx, plan, item):
 
 def _stop_guard(ctx, plan):
     ctx.check_cancel()
+    ctx.require_controller()
     fleet, source, host = ctx.service.context['fleet'], plan['source'], plan['host']
     from .session_start_operations import _tier
     _tier(fleet, host)
     sid = source['session_id']
+    relay.require_record(host, sid, source['registry'])
     if (fleet.config.host(host).profile_id != plan['profile_id'] or relay.record(host, sid) != source['registry']
             or source['registry'].get('role') != 'planner' or source['registry'].get('task_id')
             or task_control.owner_task(fleet, host, sid)):
@@ -290,6 +294,10 @@ async def stop_planner(ctx, plan):
                 'reason': observed.get('reason', 'runtime is still loaded; capacity retained')}
     async def retire():
         row = registry.get(host, sid) or {}
+        try:
+            relay.require_record(host, sid, source['registry'])
+        except BatError as error:
+            return {'capacity_released': False, 'capacity_reason': error.code}
         if relay.record(host, sid) != source['registry'] and (row.get('retirement') or {}).get('operation_id') != ctx.operation_id:
             return {'capacity_released': False, 'capacity_reason': 'generation_changed'}
         if task_control.owner_task(fleet, host, sid):
@@ -305,7 +313,7 @@ async def stop_planner(ctx, plan):
 async def run(ctx):
     async def reread(_):
         return RERUN
-    plan = await ctx.step('fanout.resolve', lambda: resolve(ctx.service, ctx.op['action'], ctx.target, ctx.params), reconcile=reread)
+    plan = await ctx.step('fanout.resolve', lambda: resolve(ctx.service, ctx.op['action'], ctx.target, ctx.params, ctx=ctx), reconcile=reread)
     ctx.set_refs(fanout_selection=plan)
     started = []
     stop_exists = ctx.service.db.execute('SELECT 1 FROM operation_steps WHERE operation_id=? AND name=?',

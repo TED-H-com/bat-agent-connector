@@ -569,12 +569,21 @@ async def test_c03_second_source_conflict_keeps_the_first_receipt_and_pushes_not
     assert again["error_code"] == "INTEGRATION_CONFLICT" and w.runner.ran["compose"] == 2
 
 
-async def test_c03_lost_push_reply_after_landing_reads_the_remote_and_never_pushes_twice(world):
+@pytest.mark.parametrize("legacy_receipt", [False, True])
+async def test_c03_lost_push_reply_after_landing_reads_the_remote_and_never_pushes_twice(world, legacy_receipt):
     w = world
     cp = await w.checkpoint()
     doc = await w.preview([{"kind": "checkpoint", "id": cp["checkpoint_id"]}])
     reflog = w.reflog()
     w.runner.lose_after.add("push")
+    if legacy_receipt:
+        def before_upgrade():
+            row = w.d.journal.db.execute("SELECT operation_id,external_refs FROM operations WHERE action='integration.apply'").fetchone()
+            refs = json.loads(row["external_refs"])
+            refs["admission_binding"].pop("controller_authority")
+            w.d.journal.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?",
+                                  (json.dumps(refs), row["operation_id"]))
+        w.runner.after["push"] = before_upgrade
     op = await w.apply(doc)
     assert op["status"] == "succeeded", op
     assert w.runner.ran["push"] == 1 and w.runner.ran["readback"] >= 1 and w.reflog() == reflog + 1

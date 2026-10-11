@@ -171,7 +171,14 @@ def claim_unsent(host: str, session_id: str) -> str:
     p = registry_path()
     with _locked(p):
         items = _read(p)
+        from . import controller_authority
         entry = next((e for e in items if e.get("host") == host and e.get("session_id") == session_id), {})
+        # A sent/settled record needs no start claim: permit read-back even when
+        # legacy authority is absent. Only new or positively unsent effects need authority.
+        if not entry or (entry.get("status") in {"failed", "starting"} and entry.get("start_sent") is False):
+            controller_authority.require()
+            if entry:
+                controller_authority.require_entry(entry)
         _cleanup_guard(host, {**entry, "session_id": session_id})
         return _claim_unsent_locked(p, items, host, session_id)
 
@@ -292,11 +299,45 @@ def get(host: str, session_id: str) -> dict | None:
     return None
 
 
+def _preserve_controller(row, fields):
+    from .errors import ResourceReadOnly
+    for key in ("controller_authority", "controller_incarnation"):
+        if key in fields and fields[key] != row.get(key):
+            raise ResourceReadOnly("CONTROLLER_IMMUTABLE", "Registry projection cannot replace controller creation evidence")
+
+
+def is_pending_worktree_source(entry):
+    """A durable fresh-worktree start reads this cwd; it has no carrier there yet."""
+    return (isinstance(entry.get("start_operation_id"), str) and bool(entry["start_operation_id"])
+            and entry.get("creates_worktree") is True and entry.get("start_sent") is False
+            and not entry.get("worktree_path")
+            and not any(entry.get(key) for key in ("shares_worktree_with", "lead_session_id", "failover_of")))
+
+
+def _require_owned_carriers(host, entry, items, *, replaces=None):
+    from . import controller_authority
+    related = {value for value in (replaces, entry.get("failover_of"), entry.get("shares_worktree_with"),
+                                  entry.get("lead_session_id")) if value}
+    for sid in related:
+        row = next((e for e in items if e.get("host") == host and e.get("session_id") == sid), None)
+        controller_authority.require_entry(row)
+    paths = {entry.get("worktree_path"), None if is_pending_worktree_source(entry) else entry.get("cwd")} - {None, ""}
+    for row in items:
+        if row.get("host") == host and row.get("session_id") != entry.get("session_id") and paths & {
+                None if is_pending_worktree_source(row) else row.get("cwd"), row.get("worktree_path")}:
+            controller_authority.require_entry(row)
+
+
 def ensure_existing(host: str, entry: dict) -> None:
     """Restore local lookup for a BAT session verified by task journal and host meta."""
+    from . import controller_authority
     p = registry_path()
     with _locked(p), _discard_unused_claim(p, host, entry["session_id"]):
         items = _read(p)
+        # Recovery must carry original durable creation evidence. Never infer a
+        # controller from the current caller while adopting an old BAT session.
+        controller_authority.require_entry(entry)
+        _require_owned_carriers(host, entry, items)
         _cleanup_guard(host, entry)
         if any(e.get("host") == host and e.get("session_id") == entry.get("session_id") and
                e.get("status") in RETIRED for e in items):
@@ -308,12 +349,14 @@ def ensure_existing(host: str, entry: dict) -> None:
             claim = _own_claim(p, host, entry["session_id"])
         for old in items:
             if old.get("host") == host and old.get("session_id") == entry.get("session_id"):
+                controller_authority.require_entry(old, expected_incarnation=entry["controller_incarnation"])
                 if (old.get("task_id") not in {None, entry.get("task_id")}
                         or old.get("role") not in {None, entry.get("role")}
                         or any(old.get(key) not in {None, entry.get(key)} for key in (
                             "workspace_id", "origin_cwd", "cwd", "worktree_path", "branch",
                             "agent_preset"))):
                     raise ValueError("local session entry changed during BAT identity verification")
+                _preserve_controller(old, entry)
                 old.update(entry)
                 old["status"] = "active"
                 old["updated_at"] = time.time()
@@ -340,11 +383,18 @@ def reserve(host: str, entry: dict, max_active: int, replaces: str | None = None
     ``replaces``: session id of an active entry this one takes over (failover in the same
     worktree). It is marked ``superseded`` in the same transaction, so the pair counts once.
     """
+    from . import controller_authority
     from .errors import WriteRefused
 
     p = registry_path()
     with _locked(p), _discard_unused_claim(p, host, entry["session_id"]):
         items = _read(p)
+        controller_authority.require()
+        _require_owned_carriers(host, entry, items, replaces=replaces)
+        previous = next((e for e in items if e.get("host") == host and e.get("session_id") == entry["session_id"]), None)
+        if previous:
+            controller_authority.require_entry(previous)
+        entry = controller_authority.stamp({**entry, "host": host})
         _cleanup_guard(host, entry)
         predecessor = None
         if predecessor_expected is not None or failover_fence is not None:
@@ -472,6 +522,7 @@ def update(host: str, session_id: str, **fields) -> None:
             claim = _own_claim(p, host, session_id)
         for e in items:
             if e.get("host") == host and e.get("session_id") == session_id:
+                _preserve_controller(e, fields)
                 e.update(fields)
                 e["updated_at"] = time.time()
         if fields.get("status") and fields["status"] != "starting":
@@ -495,6 +546,7 @@ def project_start(host, session_id, *, operation_id, created_at, expected, field
             return True
         if any(row.get(key) != value for key, value in expected.items()):
             return False
+        _preserve_controller(row, fields)
         row.update(fields, updated_at=time.time())
         _write(p, items)
         return True
@@ -512,6 +564,7 @@ def project_permissions(host, session_id, expected, operation_id, fields):
             return {"updated": True, "replayed": True}
         if any(entry.get(k) != v for k, v in expected.items()):
             return {"updated": False, "reason": "registry_binding_changed"}
+        _preserve_controller(entry, fields)
         entry.update(fields, permission_operation_id=operation_id, updated_at=time.time())
         _write(p, items)
         return {"updated": True}
@@ -519,7 +572,7 @@ def project_permissions(host, session_id, expected, operation_id, fields):
 
 def retire(host: str, session_id: str, status: str, *, created_at, actor: str, reason: str,
            operation_id: str | None = None, carrier_resource_id: str | None = None,
-           expected: dict | None = None) -> dict:
+           expected: dict | None = None, controller_incarnation: str | None = None) -> dict:
     """Release capacity for a confirmed runtime generation without retiring its worktree/history."""
     if status not in RETIRED:
         raise ValueError("invalid session retirement status")
@@ -543,6 +596,14 @@ def retire(host: str, session_id: str, status: str, *, created_at, actor: str, r
             result = {"capacity_released": False, "registry_status": e.get("status"), "capacity_reason": None}
             if e.get("created_at") != created_at:
                 return {**result, "capacity_reason": "generation_changed"}
+            # Check the original resource inside the same lock as the write and before
+            # accepting an idempotent retirement receipt from a possibly replaced row.
+            incarnation = controller_incarnation if controller_incarnation is not None else (expected or {}).get("controller_incarnation")
+            if incarnation is not None:
+                if e.get("controller_incarnation") != incarnation:
+                    return {**result, "capacity_reason": "generation_changed"}
+                from . import controller_authority
+                controller_authority.require_entry(e, expected_incarnation=incarnation)
             if e.get("task_id"):
                 return {**result, "capacity_reason": "task_owned"}
             if e.get("status") == "starting":
@@ -568,9 +629,9 @@ def retire(host: str, session_id: str, status: str, *, created_at, actor: str, r
 
 
 def claim_warm(host: str, session_id: str, *, previous_task_id: str, task_id: str,
-               workspace_id: str, cwd: str, branch: str) -> None:
-    """Transfer one completed task's lead session under the registry flock."""
-    from .errors import TaskIdentityMismatch
+               workspace_id: str, cwd: str, branch: str, expected_incarnation: str) -> None:
+    """Transfer the exact lead incarnation inspected before asynchronous host reads."""
+    from .errors import ResourceReadOnly, TaskIdentityMismatch
 
     p = registry_path()
     with _locked(p):
@@ -586,6 +647,10 @@ def claim_warm(host: str, session_id: str, *, previous_task_id: str, task_id: st
                 or any(e.get("host") == host and e.get("failover_of") == session_id
                        and e.get("status") in {"active", "starting"} for e in items)):
             raise TaskIdentityMismatch("warm session ownership changed before claim")
+        from . import controller_authority
+        if expected_incarnation is None:
+            raise ResourceReadOnly("CONTROLLER_OWNER_UNPROVEN", "Warm reuse requires original incarnation evidence")
+        controller_authority.require_entry(matches[0], expected_incarnation=expected_incarnation)
         matches[0].update(task_id=task_id, title="task " + task_id[:8],
                           warm_from_task_id=previous_task_id, updated_at=time.time())
         _write(p, items)
@@ -611,6 +676,7 @@ def confirm_failover_start(host: str, session_id: str, *, message_id: str, **fie
             successor.setdefault("handoff_frame_sha256", None)
             if not successor.get("handoff_message_id"):
                 successor["handoff_message_id"] = message_id
+        _preserve_controller(successor, fields)
         successor.update(fields, updated_at=time.time())
         _write(p, items)
         return successor

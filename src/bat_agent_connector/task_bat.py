@@ -108,6 +108,7 @@ class BatTaskAdapter:
         return str(matches[0]["folderPath"])
 
     async def _ensure_external_worktree(self, task: dict) -> dict:
+        task_control.require_authority(task)
         root = await self._workspace_folder(task)
         suffix = task["task_id"].replace("-", "")[:12]
         path = f"{root}/.bat-worktrees/batc-task-{suffix}"
@@ -136,6 +137,7 @@ class BatTaskAdapter:
         return result
 
     async def cleanup_external_worktree(self, task: dict) -> dict | None:
+        task_control.require_authority(task)
         path, branch = task.get("external_worktree_path"), task.get("external_branch")
         if not path or not branch:
             return None
@@ -188,12 +190,16 @@ class BatTaskAdapter:
                 "commit": lines[0], "mode": lines[1]}
 
     async def _warm_identity(self, task: dict, previous: dict) -> dict | None:
+        from . import controller_authority
+        task_control.require_authority(task)
+        controller_authority.require_binding(task_control.authority(previous))
         sid = previous.get("session_id")
         if (not sid or previous.get("state") != "done" or previous.get("external_worktree_path")
                 or previous.get("reviewer_session_id")
                 or task.get("base_branch")):
             return None
         entry = registry.get(task["host"], sid)
+        controller_authority.require_entry(entry or {})
         if (not entry or entry.get("task_id") != previous["task_id"]
                 or entry.get("role") != "lead" or entry.get("status") != "active"
                 or task["workspace"] not in {entry.get("workspace_id"), entry.get("workspace_name")}
@@ -236,6 +242,7 @@ class BatTaskAdapter:
 
     @registry.start_call
     async def start(self, task: dict, *, role: str, agent: str, session_id: str) -> str:
+        task_control.require_authority(task)
         host = task["host"]
         entry = registry.get(host, session_id) or {}
         if task.get("_warm_session_id") == session_id:
@@ -256,7 +263,10 @@ class BatTaskAdapter:
                 self.journal.revoke_task_capabilities(previous["task_id"])
                 registry.claim_warm(host, session_id, previous_task_id=previous["task_id"],
                                     task_id=task["task_id"], workspace_id=identity["workspace_id"],
-                                    cwd=identity["cwd"], branch=identity["branch"])
+                                    cwd=identity["cwd"], branch=identity["branch"],
+                                    expected_incarnation=identity["controller_incarnation"])
+                confinement.record_task_start(self.journal, task["task_id"], session_id,
+                                              registry.get(host, session_id) or {})
                 # The reused branch's verified HEAD is the next task's diff baseline.
                 self.journal.change(task["task_id"], "dispatching", fields={
                     "base_commit": previous["verification_commit"]}, event="warm_base_recorded")
@@ -326,7 +336,7 @@ class BatTaskAdapter:
         record = confinement.snapshot(agent, opts, account=account, task=True)
         entry.update(confinement=record, start_sent=False, **orchestrate.registry_permission_fields(opts))
         registry.reserve(host, entry, hc.orchestrate_max_sessions)
-        confinement.record_task_start(self.journal, task["task_id"], sid, entry)
+        confinement.record_task_start(self.journal, task["task_id"], sid, registry.get(host, sid) or {})
         client = self.fleet.client(host)
         async def before_start_frame():
             if before_start:
@@ -559,6 +569,11 @@ class BatTaskAdapter:
         intent = next((c for c in self.journal.commands(task["task_id"])
                        if c["kind"] == "start_" + role and c["session_id"] == session_id), None)
         evidence = json.loads(intent["payload"]) if intent else {}
+        # Missing registry is recoverable only from the original stamped creation,
+        # never by lending today's task controller to an unknown old session.
+        from . import controller_authority
+        creation = existing or evidence
+        controller_authority.require_entry(creation)
         record = (existing or {}).get("confinement") or evidence.get("confinement")
         if record:
             confinement.guard_start_record({"confinement": record})
@@ -583,6 +598,8 @@ class BatTaskAdapter:
             "worktree_path": expected_cwd, "branch": branch_name,
             "role": role, "task_id": task["task_id"], "lead_session_id": lead_id, "error_code": None,
             "title": ("review " if role == "reviewer" else "task ") + task["task_id"][:8],
+            "controller_authority": creation["controller_authority"],
+            "controller_incarnation": creation["controller_incarnation"],
             **({} if existing else {"confinement": record or {
                 **confinement.session_fields(task["host"], session_id)["confinement"],
                 "options": {k: meta[k] for k in confinement.OPTION_KEYS if meta.get(k)},
@@ -591,6 +608,7 @@ class BatTaskAdapter:
         })
 
     async def send(self, task: dict, session_id: str, text: str, message_id: str) -> dict:
+        task_control.require_authority(task)
         command = (self.journal.send_for_message(task["task_id"], session_id, message_id)
                    if self.journal else None)
         purpose = json.loads(command["payload"]).get("purpose") if command else None
@@ -692,6 +710,7 @@ class BatTaskAdapter:
         return result
 
     async def interrupt(self, task: dict, session_id: str) -> None:
+        task_control.require_authority(task)
         from .task_control import FrameGuard
         guard = FrameGuard(self.journal, task["task_id"], task["host"], session_id,
                            task["control_version"], action="interrupt", abort=True)
@@ -700,6 +719,7 @@ class BatTaskAdapter:
 
     async def failover(self, task: dict, session_id: str, successor_id: str, *,
                        handoff_message_id: str, handoff_command_id: str) -> dict:
+        task_control.require_authority(task)
         entry = registry.get(task["host"], session_id)
         if not entry or not str(entry.get("agent_preset") or "").startswith("claude"):
             raise ValueError("only a quota-limited Claude session can fail over to Codex")
@@ -974,6 +994,7 @@ class BatTaskAdapter:
         return {"kind": kind, "summary": summary}
 
     async def install_dependencies(self, task: dict) -> dict:
+        task_control.require_authority(task)
         cwd = self._cwd(task)
         if not cwd:
             return {"ok": False, "reason": "worktree_unavailable"}
@@ -990,6 +1011,7 @@ class BatTaskAdapter:
         return result
 
     async def run_verification(self, task: dict) -> dict | None:
+        task_control.require_authority(task)
         cwd = self._cwd(task)
         if not cwd:
             return None
