@@ -320,7 +320,7 @@ def _view(ops, principal, row, *, constraints=None):
                 reasons.append(key + '_changed')
     original = latest['document'] if latest else {'acceptance': 'unassessed', 'dod': 'unassessed' if context['dod_ref'] else 'not_defined', 'qualified': False}
     return {key: row[key] for key in ('sequence', 'review_id', 'operation_id', 'workspace_id', 'work_item_id', 'created_at', 'version', 'context_digest')} | {
-        'context': context, 'assessment': latest, 'history': [{key: value[key] for key in ('sequence', 'operation_id', 'version', 'kind', 'document_digest', 'actor', 'created_at')} for value in history],
+        'context': context, 'assessment': latest, 'revocation': history[-1] if history and history[-1]['kind'] == 'revocation' else None, 'history': [{key: value[key] for key in ('sequence', 'operation_id', 'version', 'kind', 'document_digest', 'actor', 'created_at')} for value in history],
         'original_outcome': {key: original[key] for key in ('acceptance', 'dod', 'qualified')},
         'applicable': not reasons, 'applicability_reasons': reasons,
         'acceptance': original['acceptance'] if not reasons else 'unassessed', 'dod': original['dod'] if not reasons else 'unassessed',
@@ -334,9 +334,13 @@ def _publication(ops, principal, wid, rid, *, reserve_revocation):
     # Keep one terminal revocation possible at both the history and byte limits.
     # These are size reservations only, never stored or returned as evidence.
     value = payload['review']
-    reserved = {**value, 'version': MAX_HISTORY + 2, 'history': [*value['history'], {
-        'sequence': 2**63 - 1, 'operation_id': 'op_' + 'f' * 32, 'version': MAX_HISTORY + 2,
-        'kind': 'revocation', 'document_digest': 'f' * 64, 'actor': 'a' * 64, 'created_at': 1.7976931348623157e308}],
+    terminal = {'sequence': 2**63 - 1, 'review_id': rid, 'operation_id': 'op_' + 'f' * 32,
+        'version': MAX_HISTORY + 2, 'kind': 'revocation', 'document_digest': 'f' * 64,
+        'actor': 'a' * 64, 'created_at': 1.7976931348623157e308,
+        # JSON control-character escapes are wider than any UTF-8 code point.
+        'document': {'reason': '\x01' * 4000, 'qualified': False}}
+    reserved = {**value, 'version': MAX_HISTORY + 2, 'revocation': terminal,
+        'history': [*value['history'], {key: item for key, item in terminal.items() if key not in {'review_id', 'document'}}],
         'applicable': False, 'qualified': False, 'acceptance': 'unassessed', 'dod': 'unassessed',
         'applicability_reasons': ['review_revoked', 'review_superseded', 'review_responsibility_unavailable',
             'original_verification_no_longer_proven', 'work_binding_changed', 'scope_revision_changed',
