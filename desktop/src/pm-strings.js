@@ -2,6 +2,7 @@ import {pmGovernanceStrings} from './pm-governance-strings.js';
 import {specSourceStrings} from './pm-spec-sources-strings.js';
 import {pmFollowUpStrings} from './pm-follow-up-strings.js';
 import {followUpAnalysisStrings} from './pm-follow-up-analysis-strings.js';
+import {briefExportStrings} from './pm-brief-export-strings.js';
 import {workPackageStrings} from './pm-work-packages-strings.js';
 import {pmSprintStrings} from './pm-sprint-strings.js';
 import {pmKanbanStrings} from './pm-kanban-strings.js';
@@ -16,6 +17,7 @@ export const pmStrings = {
     ...specSourceStrings.en,
     ...pmFollowUpStrings.en,
     ...followUpAnalysisStrings.en,
+    ...briefExportStrings.en,
     ...workPackageStrings.en,
     pm_roadmap_historical_work: "Previously selected work association",
     pm_roadmap_missing_dependency: "Removed milestone dependency",
@@ -237,6 +239,7 @@ export const pmStrings = {
     ...specSourceStrings['zh-TW'],
     ...pmFollowUpStrings['zh-TW'],
     ...followUpAnalysisStrings['zh-TW'],
+    ...briefExportStrings['zh-TW'],
     ...workPackageStrings['zh-TW'],
     pm_roadmap_historical_work: "先前選定的工作關聯",
     pm_roadmap_missing_dependency: "已移除里程碑的依賴",

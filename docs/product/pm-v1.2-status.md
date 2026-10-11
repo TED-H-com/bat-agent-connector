@@ -103,8 +103,8 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W36 | P1 | OpenSpec read adapter | 開發分支：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W39 | P1 | DocumentSnapshot 與五視圖 SVG | #96 已合併：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
-| W40 | P1 | 專案文件與簡報 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W39 | P1 | DocumentSnapshot 與五視圖 SVG | #96 已合併固定快照；開發分支加入 Project Brief 的分頁 SVG、目前權限／來源／輸出 digest 與共用下載；其餘四視圖 SVG 待做 |
+| W40 | P1 | 專案文件與簡報 | 開發分支加入同一固定 Brief 的 Markdown／HTML／SVG、中英文及 Web／Tauri 存檔；其他文件種類、可編輯簡報／播放／下載待做 |
 | W41 | P1 | Actor 決策責任與 follow-up | 開發分支：指定決策者、改善責任、固定治理／會議結果與前次比較；新增依固定準備提出偏差／決策效果與下一步的評估，API／MCP／Web／Tauri 共用原操作；建議仍未採用，後端回歸、判斷品質與自動排程待完成 |
 | W42 | P1 | Idea 到 Review 真實驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -145,7 +145,10 @@ Linux native PM analysis adapter 已在 #97 合併：明確要求一次分析後
 
 工作空間首頁顯示完整總覽；進入討論後，總覽置於右側，對話保留主要位置。
 原始快照保持不變，但每次讀取重新核對來源權限，不向已撤權的讀者顯示私有證據。
-文件／SVG／簡報可沿用此快照；這些 renderer 尚未完成。
+開發分支已加入 Project Brief 的 Markdown、HTML 與分頁 SVG，三種格式使用同一份
+可讀快照，保留未知、來源時間與涵蓋限制。下載前核對固定版本與 bytes；Tauri 由原生
+對話框選目的地並再次向中央查證，不接收前端傳入的路徑或內容。其餘四視圖輸出、
+完整文件種類及可編輯簡報仍待完成，生成報告不算 Review 完成。
 
 ## 後續順序
 

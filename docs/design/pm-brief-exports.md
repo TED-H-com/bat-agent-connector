@@ -27,9 +27,9 @@ Only snapshot template version 1 has a renderer; unsupported versions produce
 
 There is no new action, schema, operation, file, ordinary artifact, Git write,
 publication or model call. Selecting a report format does not create a newer
-snapshot, refresh evidence or complete a Review. An eventual UI/API should offer
-these bytes for an explicitly selected snapshot using this read contract; it must
-not silently substitute `latest` or reuse an earlier caller's authorized output.
+snapshot, refresh evidence or complete a Review. The shared UI and API offer
+these bytes for an explicitly selected snapshot using this read contract; they
+do not substitute `latest` or reuse an earlier caller's authorized output.
 
 The return value is:
 
@@ -163,10 +163,32 @@ exist. The canonical skill and its generated agent bundles describe this same
 fixed read and output boundary.
 
 This entrypoint does not use ordinary artifact storage or grants. It creates no
-durable operations, files, share links or publication. A future user-initiated
-download can validate `byte_length` and `output_digest` against the UTF-8 content,
-then save the bytes through an explicit local destination workflow. Report text
-must never become app HTML, an executable instruction or a URL to open.
+durable operations, files, share links or publication. User-initiated downloads
+validate `byte_length` and `output_digest` against the UTF-8 content, then save the
+bytes through the browser download workflow or the native destination dialog.
+Report text never becomes app HTML, an executable instruction or a URL to open.
+
+## Shared download interaction
+
+The selected Brief includes one collapsed download section, with format and
+report-language selectors. It retains the current historical snapshot across
+refresh and failure; choosing a format does not select the newest snapshot.
+English and Traditional Chinese use the same component on Web and Tauri.
+
+Each click reads the exact snapshot export again, validates workspace, snapshot,
+source/view digests, renderer/template versions, content length and SHA-256, and
+checks that the same authorized view is still selected before handing off bytes.
+Selection or source authority changes block delayed responses. Failed parent
+workspace reads withdraw the Brief as well as its download control.
+
+The browser requests a download with a fixed generated filename and does not
+claim that the user saved it. Tauri passes only fixed references and expected
+digests to [native Save As](pm-brief-native-save.md), which rechecks with central
+after the destination dialog. An older native client without this capability
+keeps Brief reading available and explains that saving requires a supported
+client or the browser. Cancellation and local destination errors preserve the
+Brief; source failures remove it. Native completion and interruption notices
+survive unrelated PM refreshes. No format opens a live preview or new tab.
 
 ## Validation
 
@@ -175,3 +197,7 @@ all three formats/locales, fixed revisions despite later plan/work changes,
 current membership and source withdrawal, no writes, candidate/unknown meanings,
 malicious literals, precise UTF-8 bounds, and long SVG pagination. The tests do not
 call a live provider or claim a professional PM analysis or Review took place.
+Shared-browser tests cover all formats, exact bytes, late replies, source loss,
+selected history, native receipts and compact layouts at 390/768/1440 pixels in
+both languages. The real-central browser fixture also downloads and verifies all
+three formats, without adding an operation or changing the captured snapshot.
