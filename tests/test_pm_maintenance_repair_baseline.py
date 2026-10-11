@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from bat_agent_connector import deployment_store, pm_lifecycle_gates
+from bat_agent_connector import deployment, deployment_store, pm_lifecycle_gates
 from bat_agent_connector import pm_maintenance_policy as policies
 from bat_agent_connector import pm_maintenance_repair_baseline as baseline
 from bat_agent_connector import pm_release_baselines as baselines
@@ -133,6 +133,7 @@ async def test_verified_same_channel_uses_original_registration_and_keeps_policy
     assert parent['result']['repair_fixed'] is False and view(w, parent)['capacity_held']
     original = baseline.child(ops, parent)
     assert view(w, parent)['baseline_child']['operation_id'] == original['operation_id']
+    assert view(w, parent)['baseline_update'] == selected
     # Recovery after selection uses its receipt, even though the old baseline CAS
     # and original repair's new-effect authority no longer match the new head.
     await ops._execute(original['operation_id'])
@@ -182,6 +183,7 @@ async def test_committed_baseline_recovers_parent_after_a_later_deployment(ready
     w['gh'].commits[newer] = {'sha': newer, 'parents': [{'sha': previous['identity']['source_sha']}]}
     w['gh'].branches['main'] = newer
     await deployments.deployed(w['d'], w['gh'], key='later-independent-deployment', sha=newer)
+    deployment.settle_stopped_local(ops, deployment_store.deployment(ops.db, operation_id=original['operation_id']), original)
     assert deployment_store.deployment(ops.db, operation_id=original['operation_id'])['state'] == 'superseded'
     await ops._execute(parent['operation_id'])
     recovered = ops.get(parent['operation_id'])

@@ -229,3 +229,24 @@ and reservation. A matching PR number, branch, marker or later lineage associati
 cannot replace that receipt. Successful publication is a PR creation fact, not
 merge, deployment, release or automatic requirement acceptance. Updates of the
 fixed repair candidate are currently unsupported.
+
+## Same-channel deployment baseline advancement
+
+An original verified repair deployment can select a successor to its adopted
+deployment baseline through one private `pm.release_baseline.register` child.
+The existing baseline must already use a deployment source, and the adopted
+policy must permit deployment to that exact environment. The child fixes the
+original repository, merged/deployed commit, maintenance branch, prior baseline
+ID/version and original source receipts. GitHub Release channels and registry
+versions are not converted into deployment environments.
+
+The original registration action retains owner, scope, lifecycle, source and CAS
+checks. Its provider reads use the current credential and the original repair's
+bounded deadline and response budget. A stopped or failed new selection records
+`baseline_update.status=not_updated` and preserves the verified delivery fact;
+it does not send another deployment or registration under a new key. A committed
+registration recovers from its original receipt even if the parent has not yet
+recorded completion or a later deployment supersedes the original environment
+generation. That historical receipt does not claim the old version is currently
+live. Baseline advancement itself does not prove runtime completion, acceptance,
+or release held maintenance capacity.
