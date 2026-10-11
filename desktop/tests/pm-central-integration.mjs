@@ -148,6 +148,17 @@ try {
   await page.getByLabel('Connector project',{exact:true}).selectOption(project.project_id);
   const projectForm=page.locator('[data-pm-action="pm.project.bind"]');
   await projectForm.getByLabel('Why associate this work?',{exact:true}).fill('Track this existing project in the PM workspace');
+  // A background refresh can start between filling a form and clicking it. Keep
+  // its visible controls in step with the read gate instead of swallowing a click.
+  let releaseCatalog, markCatalogRead;
+  const catalogBlocked=new Promise(resolve=>{releaseCatalog=resolve;}),catalogRead=new Promise(resolve=>{markCatalogRead=resolve;});
+  await page.route(origin+'/api/v1/projects',async route=>{markCatalogRead();await catalogBlocked;await route.continue();},{times:1});
+  try {
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await bounded(catalogRead,30000,'Project catalog refresh was not requested');
+    await expect(projectForm.getByRole('button',{name:'Associate project',exact:true})).toBeDisabled();
+  }finally{releaseCatalog();}
+  await expect(projectForm.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Track this existing project in the PM workspace');
   await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
   await page.locator('[data-pm-work] > summary').click();
   await page.getByText('Track this work',{exact:true}).first().click();
@@ -164,6 +175,38 @@ try {
   assert.equal(captured.capture.work_item_id,work.work_item_id); assert.equal(captured.capture.dod,'unassessed');
   assert.equal(captured.capture.evidence.length,1); assert.equal(captured.capture.evidence[0].source_kind,'work_claim');
   assert.equal(captured.capture.execution_authorized,false);
+  const comparison = page.locator('[data-pm-plan-diff]');
+  await expect(comparison).toHaveCount(1);
+  await expect(comparison.getByRole('button',{name:'Compare versions',exact:true})).toBeDisabled();
+  await comparison.getByLabel('From version',{exact:true}).selectOption(plans.revisions[0].revision_id);
+  await comparison.getByLabel('To version',{exact:true}).selectOption(updatedPlans.head.latest_revision_id);
+  await comparison.locator('[data-pm-diff-bindings] > summary').click();
+  const associations = await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/work`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
+  const association = associations.bindings.find(binding=>binding.work_item_id===work.work_item_id);
+  assert.ok(association);
+  await comparison.locator(`[data-pm-diff-binding="${association.binding_id}"]`).check();
+  const comparisonResponse = () => page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/plan-comparison') && response.request().method()==='GET');
+  const firstComparison = comparisonResponse();
+  await comparison.getByRole('button',{name:'Compare versions',exact:true}).click();
+  const comparisonReply = await firstComparison;
+  assert.equal(comparisonReply.status(),200);
+  const fixedComparison = await comparisonReply.json();
+  assert.equal(fixedComparison.comparison.from_revision.revision_id,plans.revisions[0].revision_id);
+  assert.equal(fixedComparison.comparison.to_revision.revision_id,updatedPlans.head.latest_revision_id);
+  assert.deepEqual(fixedComparison.comparison.context.binding_ids,[association.binding_id]);
+  assert.equal(fixedComparison.comparison.changes.domains.finance.after.statements[0].status,'unresolved');
+  assert.equal(fixedComparison.comparison.scope.prose_scope_impact,'unknown');
+  assert.equal(fixedComparison.comparison.impact_candidates[0].binding.work_state,'unknown');
+  assert.equal(fixedComparison.comparison.impact_candidates[0].work_update_authorized,false);
+  assert.equal(fixedComparison.comparison.execution_authorized,false);
+  const comparisonResult = comparison.locator('[data-pm-diff-result]');
+  await comparisonResult.getByText('Eight management domains',{exact:true}).click();
+  await comparisonResult.getByText('Finance · Changed',{exact:true}).click();
+  await expect(comparisonResult).toContainText('Budget still needs an owner decision');
+  await comparisonResult.getByText('Title and Markdown',{exact:true}).click();
+  await expect(comparisonResult).toContainText('effect on scope has not been classified');
+  await comparisonResult.locator('summary').filter({hasText:'Review candidate'}).click();
+  await expect(comparisonResult).toContainText('Title and work state were not saved');
   await page.locator('[data-pm-action="pm.snapshot.create"] button[type="submit"]').click();
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   await expect(page.locator('[data-pm-brief-section="delivery"]')).toContainText('quality unassessed');
@@ -172,12 +215,22 @@ try {
   assert.equal(brief.snapshot.candidate_document.revision_id,updatedPlans.head.latest_revision_id);
   assert.equal(brief.snapshot.work[0].capture.capture_id,captured.capture.capture_id);
   assert.equal(brief.snapshot.brief.deviations.status,'unassessed');
+  await page.getByRole('button',{name:'Refresh',exact:true}).click();
+  await expect(comparison.getByLabel('From version',{exact:true})).toHaveValue(plans.revisions[0].revision_id);
+  await expect(comparison.getByLabel('To version',{exact:true})).toHaveValue(updatedPlans.head.latest_revision_id);
+  await expect(comparison.locator(`[data-pm-diff-binding="${association.binding_id}"]`)).toBeChecked();
+  const repeatedComparison = comparisonResponse();
+  await comparison.getByRole('button',{name:'Recheck this comparison',exact:true}).click();
+  const repeatedResponse = await repeatedComparison;
+  assert.equal(repeatedResponse.status(),200);
+  assert.equal(new URL(repeatedResponse.url()).searchParams.get('journal_cursor'),String(fixedComparison.comparison.context.journal_cursor));
+  assert.deepEqual(await repeatedResponse.json(),fixedComparison);
   await page.reload();
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association and fixed evidence and five-section Brief; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence and five-section Brief; zero hosts or tasks.');
 } finally {
   try {await browser?.close();}
   finally {

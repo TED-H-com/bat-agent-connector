@@ -77,6 +77,8 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_plans_list": "observe", "pm_plan_get": "observe", "pm_plan_accepted_get": "observe", "pm_plan_head_get": "observe",
            "pm_projects_list": "observe", "pm_work_list": "observe", "pm_evidence_list": "observe",
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
+           "pm_plan_compare": "observe",
+           "pm_roadmap_get": "observe", "pm_roadmap_revisions_list": "observe", "pm_roadmap_revision_get": "observe",
            "pm_snapshots_list": "observe", "pm_snapshot_get": "observe", "pm_snapshot_latest_get": "observe",
            "projects_list": "observe", "project_get": "observe", "work_items_list": "observe",
            "work_item_get": "observe", "artifacts_list": "observe", "artifact_get": "observe",
@@ -323,7 +325,10 @@ class TaskDaemon:
                                           params=params.get("params"), preconditions=params.get("preconditions"),
                                           idempotency_key=params.get("idempotency_key"), entry=entry)
             if wait > 0:
-                op = await self.ops.wait(op["operation_id"], wait)
+                await self.ops.wait(op["operation_id"], wait)
+                # The MCP/RPC response uses current membership and original source
+                # visibility even if the admitted operation has already completed.
+                op = self.ops.get(op["operation_id"], principal=principal)
             return {"operation": op, "created": created}
         if method == "op_get":
             return {"operation": self.ops.get(str(params.get("operation_id")), principal=principal)}

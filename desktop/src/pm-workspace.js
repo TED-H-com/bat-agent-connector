@@ -1,4 +1,5 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+import {workspaceRoadmap} from './pm-roadmap.js';
 import {projectBrief} from './pm-brief.js';
 import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
@@ -8,6 +9,9 @@ const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b =
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
 const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
+// A remounted form recovers an acknowledged ID without resending an unknown POST.
+// Notifications carry no result; the active form reads with current access.
+const receiptSubscribers = new Map();
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
@@ -15,6 +19,9 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
+  const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
+  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false;
+  const stopTimer = () => {clearTimeout(receiptTimer); receiptTimer = null;};
   try {
     const raw = localStorage.getItem(storage);
     if (raw) {
@@ -42,6 +49,21 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes('manage')
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
+  const receiveReceipt = () => {
+    if (disposed || damaged || !saved.intent) return;
+    try {
+      guard();
+      const stored = JSON.parse(localStorage.getItem(storage));
+      if (stored?.intent?.key !== saved.intent.key || !same(stored.intent.request, saved.intent.request)
+        || !/^op_[0-9a-f]{32}$/.test(stored.intent.operation_id)
+        || saved.intent.operation_id && saved.intent.operation_id !== stored.intent.operation_id) return;
+      saved.intent.operation_id = stored.intent.operation_id;
+      receiptPolling = true;
+      update();
+    } catch { /* a retired or unreadable form cannot apply the receipt */ }
+  };
+  const subscribers = receiptSubscribers.get(storage) || new Set();
+  subscribers.add(receiveReceipt); receiptSubscribers.set(storage, subscribers);
   const terminal = () => ['failed', 'cancelled'].includes(operation?.status);
   const reset = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {
     try {
@@ -52,7 +74,20 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   const button = h('button', {type: 'submit', class: 'primary'}, t(label));
   const form = h('form', {'data-pm-action': action, onsubmit: event => {event.preventDefault(); void run();}},
     extra, h('div', {class: 'actions'}, button, reset), status, receipt);
+  function pollReceipt() {
+    // Only an acknowledged original ID may be checked automatically. An unknown
+    // admission keeps its exact key and the existing explicit recovery control.
+    if (disposed || receiptTimer !== null || busy || damaged || !receiptPolling || receiptAttempt >= receiptDelays.length
+      || !saved.intent?.operation_id || !form.isConnected || !allowed()) return;
+    if (operation && !['accepted', 'queued', 'pending', 'running'].includes(operation.status)) return;
+    try {guard();} catch {receiptPolling = false; return;}
+    receiptTimer = setTimeout(() => {
+      receiptTimer = null;
+      void run(true);
+    }, receiptDelays[receiptAttempt++]);
+  }
   function update() {
+    if (disposed) return;
     const locked = busy || damaged || Boolean(saved.intent) || !allowed();
     for (const input of Object.values(fields)) input.disabled = locked;
     button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
@@ -60,9 +95,12 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
     reset.disabled = busy || !allowed();
     onStateChange();
+    pollReceipt();
   }
-  async function run() {
-    if (busy || damaged || !allowed()) return;
+  async function run(automatic = false) {
+    if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+    stopTimer();
+    if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = false;
     try {
       guard(); busy = true; status.replaceChildren();
@@ -72,13 +110,31 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         saved.intent = {key: crypto.randomUUID(), request}; persist(); firstAttempt = true;
       }
       update();
-      const intent = saved.intent; persist();
-      const data = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`)
-        : await api('POST', '/operations?wait=3', intent.request, intent.key);
-      guard(); const op = data.operation;
-      if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key
-        || !same({action: op.action, target: op.target, params: op.params, preconditions: op.preconditions}, intent.request)
-        || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
+      const intent = saved.intent, actor = caps()?.actor; persist();
+      let collected = false;
+      const collectReceipt = data => {
+        if (collected) return;
+        const op = data.operation;
+        if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== actor || op.idempotency_key !== intent.key
+          || !same({action: op.action, target: op.target, params: op.params, preconditions: op.preconditions}, intent.request)
+          || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
+        // Only enrich the still-matching original intent. Do not overwrite a newer
+        // draft or save any result/private source after a view/identity change.
+        const stored = JSON.parse(localStorage.getItem(storage));
+        if (stored?.intent?.key === intent.key && same(stored.intent.request, intent.request)) {
+          if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
+          stored.intent.operation_id = op.operation_id;
+          localStorage.setItem(storage, JSON.stringify(stored));
+          for (const notify of receiptSubscribers.get(storage) || []) notify();
+        }
+        collected = true;
+      };
+      const data = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`, undefined, undefined, collectReceipt)
+        : await api('POST', '/operations?wait=3', intent.request, intent.key, collectReceipt);
+      collectReceipt(data);
+      guard();
+      if (disposed || !allowed()) return;
+      const op = data.operation;
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', String(op.status));
       if (op.status === 'succeeded') {
@@ -87,6 +143,12 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         await onSaved(op.result); guard(); status.replaceChildren(h('span', {class: 'muted'}, t('pm_saved')));
       } else status.replaceChildren(h('p', {class: 'muted'}, t(terminal() ? 'pm_terminal' : 'pm_pending')));
     } catch (error) {
+      receiptPolling = false;
+      // Reporting a read/write error also affects the current event checkpoint.
+      // A detached request must not poison another view's successful refresh or
+      // change an original intent after a route/authority boundary has moved.
+      if (disposed) return;
+      try {guard();} catch {return;}
       if (!retired(error)) {
         // Explicit server pre-admission refusal is useful only for the first attempt.
         if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
@@ -101,6 +163,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   update();
   return {box: form, fields, update, changed, locked: () => busy || damaged || Boolean(saved.intent),
+    dispose: () => {
+      disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
+      if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
+    },
     set: (name, value) => {if (!busy && !saved.intent && !damaged) {fields[name].value = value; changed();}},
     values: () => capture()};
 }
@@ -143,11 +209,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
     packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
   const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
-    ? workspaceEvidence({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
+    ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (evidence) body.append(evidence.box);
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
     ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, content);
+  const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
+    ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
+  if(roadmap)body.insertBefore(roadmap.box,content);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -469,6 +538,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       worktreeChoice?.update();
       if (evidence) await evidence.refresh();
       if (brief) await brief.refresh();
+      if (roadmap) await roadmap.refresh();
       nativeAnalysis?.update(runs?.runs || []);
       updateForms();
     } catch (error) {
@@ -478,11 +548,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
     }
   });
-  return () => {disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);};
+  return () => {
+    disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
+    for (const value of forms) value.dispose();
+  };
 }

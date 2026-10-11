@@ -1,24 +1,46 @@
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
 const flatten = rows => (rows || []).flatMap(row => [row, ...flatten(row.children)]);
-export function workspaceEvidence({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox}) {
+// Retain only explicit selection IDs across a same-principal access revalidation.
+// The catalog, associations and evidence are always read again before displaying them.
+const projectSelections = new Map();
+export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = '', active = null;
+  const selectionKey = namespace ? JSON.stringify([namespace, workspaceId]) : null;
+  let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = projectSelections.get(selectionKey) || '', active = null;
   const rows = h('div', {class: 'pm-evidence-rows'}), status = h('div', {role: 'status'});
-  const choose = h('select', {'aria-label': t('pm_evidence_project'), onchange: () => {selected = choose.value; void loadProject();}});
+  const choose = h('select', {'aria-label': t('pm_evidence_project'), onchange: () => {
+    alive(); selected = choose.value;
+    if (selectionKey) {
+      projectSelections.delete(selectionKey);
+      if (selected) projectSelections.set(selectionKey, selected);
+      if (projectSelections.size > 40) projectSelections.delete(projectSelections.keys().next().value);
+    }
+    void loadProject();
+  }});
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-evidence': ''}, h('h2', {}, t('pm_evidence_title')),
     h('p', {class: 'muted'}, t('pm_evidence_intro')), labelled('pm_evidence_project', choose), status, rows);
   const stateText = value => {const key = 'pm_evidence_state_' + value, translated = t(key); return translated === key ? String(value) : translated;};
   const sourceTime = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
   const verify = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const can = decide => loaded && permitted(decide);
+  const forms = new Set();
+  const track = value => {forms.add(value); return value;};
+  function updateForms() {
+    // The action handler uses the same read gate. A still-enabled button would
+    // silently discard a click during an event refresh; keep the draft intact.
+    for (const value of forms) {
+      if (!value.box.isConnected) forms.delete(value);
+      else value.update();
+    }
+  }
   function bindingForm(action, target, preconditions, label, extraParams = {}, alreadyBound = false) {
     const rationale = input('pm_evidence_rationale', {max: 4000});
     let result;
-    result = form({action, target: {workspace_id: workspaceId, ...target}, fields: {rationale},
+    result = track(form({action, target: {workspace_id: workspaceId, ...target}, fields: {rationale},
       params: values => ({rationale: values.rationale, ...extraParams}), preconditions,
       permitted: () => can(true) && !alreadyBound, recoverPermitted: () => can(true), label, onSaved: () => refresh(),
       onStateChange: () => {if (result) result.box.hidden = alreadyBound && !result.locked();},
-      extra: labelled('pm_evidence_rationale', rationale)});
+      extra: labelled('pm_evidence_rationale', rationale)}));
     result.update(); return result;
   }
   async function loadEvidence(item, holder) {
@@ -98,14 +120,14 @@ export function workspaceEvidence({h, t, api, alive, workspaceId, workspace, per
               }); choices.append(h('label', {}, checkbox, requirement.text));
             }
           };
-          bind = form({action: 'pm.work.bind', target: {workspace_id: workspaceId, work_item_id: item.work_item_id},
+          bind = track(form({action: 'pm.work.bind', target: {workspace_id: workspaceId, work_item_id: item.work_item_id},
             fields: {rationale, plan_revision_id: planId, requirement_ids: selectedIds},
             params: values => ({rationale: values.rationale, plan_revision_id: values.plan_revision_id || null,
               requirement_ids: values.plan_revision_id ? JSON.parse(values.requirement_ids || '[]') : []}),
             preconditions: () => ({expected_work_version: item.version, expected_binding_id: binding?.binding_id || null}),
             permitted: () => can(true), label: 'pm_evidence_associate_work', onSaved: () => refresh(),
             onStateChange: showRequirements,
-            extra: h('div', {}, labelled('pm_evidence_rationale', rationale), labelled('pm_evidence_plan_choice', planId), selectedIds, choices)});
+            extra: h('div', {}, labelled('pm_evidence_rationale', rationale), labelled('pm_evidence_plan_choice', planId), selectedIds, choices)}));
           planId.addEventListener('change', () => {if (bind.locked()) return; selectedIds.value = '[]'; bind.changed(); showRequirements();});
           editor.append(bind.box); showRequirements();
         } catch (error) {if (row.isConnected) editor.append(errorBox(error));}
@@ -115,21 +137,21 @@ export function workspaceEvidence({h, t, api, alive, workspaceId, workspace, per
       if (binding.plan_revision_id) detail.append(h('code', {}, binding.plan_revision_id),
         h('p', {}, (binding.requirement_ids || []).join(', ')));
       const holder = h('div');
-      const capture = form({action: 'pm.evidence.capture', target: {workspace_id: workspaceId, work_item_id: item.work_item_id},
+      const capture = track(form({action: 'pm.evidence.capture', target: {workspace_id: workspaceId, work_item_id: item.work_item_id},
         fields: {}, params: () => ({}), preconditions: () => ({expected_binding_id: binding.binding_id}),
-        permitted: () => can(false), label: 'pm_evidence_capture', onSaved: () => loadEvidence(item, holder)});
+        permitted: () => can(false), label: 'pm_evidence_capture', onSaved: () => loadEvidence(item, holder)}));
       detail.append(capture.box, holder);
       try {await loadEvidence(item, holder);} catch (error) {if (holder.isConnected) holder.replaceChildren(errorBox(error));}
     }); return row;
   }
   async function loadProject() {
-    const ticket = ++generation; loaded = false; status.replaceChildren();
+    const ticket = ++generation; loaded = false; updateForms(); status.replaceChildren();
     if (!selected) {rows.replaceChildren(); active = null; return;}
     try {
       const data = await api('GET', `/projects/${encodeURIComponent(selected)}`); alive(); if (ticket !== generation) return;
       if (data.project?.project_id !== selected) throw Error(t('pm_scope_mismatch'));
       const signature = JSON.stringify([data, bindings, workBindings]);
-      loaded = true; if (active?.signature === signature) return;
+      loaded = true; if (active?.signature === signature) {updateForms(); return;}
       active = {signature}; rows.replaceChildren();
       const bound = bindings.some(row => row.project_id === selected);
       if (can(true)) rows.append(bindingForm('pm.project.bind', {project_id: selected},
@@ -152,7 +174,7 @@ export function workspaceEvidence({h, t, api, alive, workspaceId, workspace, per
     throw Error(t('pm_partial'));
   }
   async function refresh() {
-    const ticket = ++generation; loaded = false;
+    const ticket = ++generation; loaded = false; updateForms();
     try {
       const [catalog, associated, work] = await Promise.all([api('GET', '/projects'), allBindings('projects'), allBindings('work')]); alive();
       if (ticket !== generation) return;

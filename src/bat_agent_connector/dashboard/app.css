@@ -599,3 +599,20 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-inspector .pm-brief-row {grid-template-columns:3.5rem minmax(0,1fr); gap:.5rem;}
 .pm-inspector .pm-brief .pm-heading p {margin-bottom:.5rem;}
 .pm-inspector .pm-brief-date {font-size:.85rem;}
+
+.pm-roadmap {margin:1.5rem 0;min-width:0;}
+.pm-roadmap h2 {font-size:1.15rem;margin-bottom:.4rem;}
+.pm-roadmap-scroll {max-width:100%;overflow-x:auto;}
+.pm-roadmap-table {width:100%;border-collapse:collapse;font-size:.9rem;}
+.pm-roadmap-table th,.pm-roadmap-table td {text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:.7rem .6rem;}
+.pm-roadmap-table thead th {font-size:.8rem;font-weight:600;color:var(--muted);}
+.pm-roadmap-table th:first-child {width:32%;}
+.pm-roadmap > details {border-bottom:1px solid var(--line);padding:.75rem 0;}
+.pm-roadmap summary {cursor:pointer;}
+.pm-roadmap .pm-source {display:block;margin-top:.25rem;}
+.pm-roadmap form {max-width:46rem;padding-top:.5rem;}
+.pm-roadmap-editor fieldset {border:1px solid var(--line);border-radius:6px;margin:1rem 0;padding:.75rem;min-width:0;}
+.pm-roadmap-editor fieldset > details {margin:.6rem 0;}
+.pm-roadmap-choices label {display:flex;align-items:baseline;gap:.35rem;font-size:.9rem;}
+.pm-roadmap-choices input {width:auto;}
+@media(max-width:600px){.pm-roadmap-table {min-width:34rem}.pm-roadmap-table th,.pm-roadmap-table td {padding:.5rem}}

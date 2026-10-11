@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "a316dbabfbb215e649f1f8b7249e0f972d105cecabcc180b57c9b34a62d4a1f4"
+  canonical_sha256: "101e27a3d7acdd04b166a8cfc056d55b69610bcdb54c884d815640c6542cb654"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -199,6 +199,40 @@ inputs. Source access is rechecked on every read, so use the returned `view_dige
 and visibility/coverage with the immutable `snapshot_digest`. Unknown quality,
 cost and drift remain unassessed; absence of recorded blockers is not proof that
 work is unblocked. Later activity belongs in a new snapshot.
+
+## Fixed plan comparison and Roadmap
+
+Use `pm_plan_compare` with explicit `workspace_id`, `from_revision_id`,
+`to_revision_id`, and optionally up to 100 distinct immutable `binding_ids`.
+Keep the returned `journal_cursor` for the same comparison; a changed selection
+is a new read. Differences preserve each source's status and acceptance wording.
+Work-impact candidates are prompts for review, not authorization to rebind work,
+rewrite attempts or create issues. Semantic impact and missing work data remain
+unassessed. Missing retained creation events are not grounds to invent history.
+
+Read `pm_roadmap_get`, `pm_roadmap_revisions_list` and `pm_roadmap_revision_get`.
+All changes use the existing operations service and original request key:
+
+- `pm.roadmap.baseline.set`: target `{workspace_id}`, params `{title?, rationale,
+  milestones}`, preconditions `{expected_roadmap_version, expected_plan_version}`.
+  Owners select stable milestone IDs, exact adopted plan/requirement IDs,
+  optional exact work binding IDs, dependencies and explicit baseline dates.
+  A date may be null. This scheduling decision does not adopt a new product scope
+  or claim that the Roadmap was committed to the PM worktree.
+- `pm.roadmap.forecast.set`: same target, params `{baseline_revision_id, rationale,
+  updates: [{milestone_id, forecast_date}]}`, precondition
+  `{expected_roadmap_version}`. Owners revise forecasts without overwriting the
+  original schedule; missing predictions stay unknown.
+- `pm.roadmap.observe`: same target, params `{baseline_revision_id, snapshot_id}`,
+  precondition `{expected_roadmap_version}`. Contributors can attach an existing
+  fixed snapshot's exact work/capture evidence. This does not refresh providers
+  or assess milestone acceptance, DoD or an actual finish date.
+
+Keep original and current baselines, explicit forecasts and observed results
+separate. An observation records the baseline/forecast applicable when saved;
+a later forecast does not rewrite that historical context. Follow sequence
+cursors and current source visibility. Re-baselining resets the current forecast
+and observation pointers, while their immutable history remains readable.
 
 ## Concept
 

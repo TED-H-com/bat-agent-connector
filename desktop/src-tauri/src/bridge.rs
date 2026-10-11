@@ -1111,7 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1237,14 +1237,46 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let work_list = path.ends_with("/work");
             let evidence_list = path.ends_with("/evidence");
             let snapshot_list = path.ends_with("/snapshots");
-            let sequence_list =
-                plan_list || project_list || work_list || evidence_list || snapshot_list;
+            let comparison = path.ends_with("/plan-comparison");
+            let roadmap_list = path.ends_with("/roadmap/revisions");
+            let sequence_list = plan_list
+                || project_list
+                || work_list
+                || evidence_list
+                || snapshot_list
+                || roadmap_list;
             let thread_detail = path
                 .split('/')
                 .nth(5)
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
+                "from_revision_id" | "to_revision_id" if comparison => {
+                    value.len() == 38
+                        && value.starts_with("pmrev_")
+                        && value[6..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "binding_ids" if comparison => {
+                    value.is_empty()
+                        || (value.split(',').count() <= 100
+                            && value.split(',').all(|id| {
+                                id.len() == 37
+                                    && id.starts_with("pmwb_")
+                                    && id[5..]
+                                        .bytes()
+                                        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                            }))
+                }
+                "journal_cursor" if comparison => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                }
+                "kind" if roadmap_list => {
+                    matches!(value.as_ref(), "baseline" | "forecast" | "observation")
+                }
                 "limit" if thread_list || thread_detail || run_list || sequence_list => {
                     !value.is_empty()
                         && value.len() <= 3
@@ -1784,6 +1816,12 @@ mod tests {
             format!("{workspace}/runs/pmr_22222222222222222222222222222222"),
             format!("{workspace}/plans?limit=100&after=0"),
             format!("{workspace}/projects?limit=100&after=0"),
+            format!("{workspace}/plan-comparison?from_revision_id=pmrev_33333333333333333333333333333333&to_revision_id=pmrev_44444444444444444444444444444444&binding_ids=pmwb_55555555555555555555555555555555&journal_cursor=0"),
+            format!("{workspace}/roadmap"),
+            format!("{workspace}/roadmap/revisions?kind=forecast&limit=100&after=0"),
+            format!("{workspace}/roadmap/revisions/pmrb_66666666666666666666666666666666"),
+            format!("{workspace}/roadmap/revisions/pmrf_66666666666666666666666666666666"),
+            format!("{workspace}/roadmap/revisions/pmro_66666666666666666666666666666666"),
             format!("{workspace}/snapshots?limit=100&after=0"),
             format!("{workspace}/snapshots/latest"),
             format!("{workspace}/snapshots/pmsnap_66666666666666666666666666666666"),
@@ -1823,6 +1861,17 @@ mod tests {
             format!("{workspace}/runs/pmr_22222222222222222222222222222222/start"),
             format!("{workspace}/plans?limit=101"),
             format!("{workspace}/projects?after=-1"),
+            format!("{workspace}/plan-comparison?from_revision_id=other"),
+            format!("{workspace}/plan-comparison?to_revision_id=pmrev_33333333333333333333333333333333&to_revision_id=pmrev_44444444444444444444444444444444"),
+            format!("{workspace}/plan-comparison?binding_ids=wrong"),
+            format!("{workspace}/plan-comparison?journal_cursor=-1"),
+            format!("{workspace}/plan-comparison?journal_cursor=1.5"),
+            format!("{workspace}/plan-comparison?actor=other"),
+            format!("{workspace}/plan-comparison?limit=10"),
+            format!("{workspace}/roadmap?kind=forecast"),
+            format!("{workspace}/roadmap/revisions?kind=unknown"),
+            format!("{workspace}/roadmap/revisions?kind=baseline&kind=forecast"),
+            format!("{workspace}/roadmap/revisions/pmrb_66666666666666666666666666666666?limit=1"),
             format!("{workspace}/snapshots?limit=101"),
             format!("{workspace}/snapshots?after=1&after=2"),
             format!("{workspace}/snapshots/latest?actor=owner"),
