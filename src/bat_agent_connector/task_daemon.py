@@ -339,7 +339,10 @@ class TaskDaemon:
                                           params=params.get("params"), preconditions=params.get("preconditions"),
                                           idempotency_key=params.get("idempotency_key"), entry=entry)
             if wait > 0:
-                op = await self.ops.wait(op["operation_id"], wait)
+                await self.ops.wait(op["operation_id"], wait)
+                # The MCP/RPC response uses current membership and original source
+                # visibility even if the admitted operation has already completed.
+                op = self.ops.get(op["operation_id"], principal=principal)
             return {"operation": op, "created": created}
         if method == "op_get":
             return {"operation": self.ops.get(str(params.get("operation_id")), principal=principal)}
