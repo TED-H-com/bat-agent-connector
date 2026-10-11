@@ -76,7 +76,12 @@ or ongoing effects remain held for reconciliation. A terminal child with no orig
 session.start step (or a stopped parent with no child at all) proves that no runtime
 was started; only that case releases capacity without delivery evidence. Per-period
 counts and stable finding/work dedup are never refunded. Retry ceilings do not authorize
-a new key or replay an uncertain effect.
+a new key or replay an uncertain effect. A proven-unsent restart consumes the
+original repair's retry count in the same journal transaction as the step transition;
+the exact request, original step row and latest original step-event sequence form
+the idempotent reservation. Bookkeeping, existing registered lifecycle record actions, stopping an owned
+session and sent-effect readback consume no retry. The shared source-visibility
+gate still precedes local records; the exception grants no source access.
 
 ## Actual receipt progress and delivery limits
 
@@ -112,7 +117,9 @@ operation after an actual publication receipt; merge is not publication.
 
 New module installs actions and schema, offers capabilities/get/list/current run,
 source_visible/operation_visible, bounded tick, require_child(ops, operation), and
-require_new_effect(ops, operation). Private table relations are authoritative;
+require_new_effect(ops, operation), and
+admit_restart(ops, operation_id, step_name, request) inside the existing
+OperationService._step_restart transaction after the batch hook. Private table relations are authoritative;
 public requests cannot supply them. Shared lineage adds a self root only for the
 trusted pm_maintenance_repair admission tag and dispatches its original source
 visibility to this module. Reservation attaches that root to the selected work

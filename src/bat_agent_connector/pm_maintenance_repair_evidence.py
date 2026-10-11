@@ -112,6 +112,8 @@ def progress(ops, parent):
                   else 'PM_REPAIR_VERIFICATION_REQUIRED')
     if time.time() >= row['deadline_at']:
         reason = 'PM_REPAIR_DEADLINE'
+    if row['finished_at'] is not None:
+        reason = 'PM_REPAIR_STOPPED_WITHOUT_START'
     try:
         repairs._guard(ops, parent)
         investment_blocked = None

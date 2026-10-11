@@ -49,7 +49,10 @@ def schema(journal):
         journal.db.execute('CREATE TABLE IF NOT EXISTS pm_maintenance_repair_cursor (singleton INTEGER PRIMARY KEY CHECK(singleton=1), policy_sequence INTEGER NOT NULL, run_sequence INTEGER NOT NULL)')
         journal.db.execute('INSERT OR IGNORE INTO pm_maintenance_repair_cursor VALUES(1,0,0)')
         journal.db.execute('CREATE INDEX IF NOT EXISTS pm_maintenance_repair_evidence_parent ON pm_maintenance_repair_evidence(parent_id,sequence)')
-        for table in ('pm_maintenance_repair_children', 'pm_maintenance_repair_evidence'):
+        journal.db.execute('''CREATE TABLE IF NOT EXISTS pm_maintenance_repair_retries (
+            parent_id TEXT NOT NULL,operation_id TEXT NOT NULL,transition_digest TEXT NOT NULL,step_name TEXT NOT NULL,
+            created_at REAL NOT NULL,PRIMARY KEY(parent_id,operation_id,transition_digest))''')
+        for table in ('pm_maintenance_repair_children', 'pm_maintenance_repair_evidence', 'pm_maintenance_repair_retries'):
             for verb in ('UPDATE', 'DELETE'):
                 journal.db.execute(f'CREATE TRIGGER IF NOT EXISTS {table}_{verb.lower()}_immutable BEFORE {verb} ON {table} '
                                   "BEGIN SELECT RAISE(ABORT,'Repair history is immutable'); END")
@@ -331,6 +334,40 @@ def require_child(ops, operation):
     return _record_for(ops, parent)['deadline_at']
 
 
+def admit_restart(ops, operation_id, step_name, request):
+    """Charge only proven-unsent restarts in the existing atomic step transition."""
+    operation = _operation(ops, operation_id)
+    if _local_record_or_stop(operation):
+        return
+    if not installed(ops.db):
+        require_child(ops, operation)
+        return
+    original_ids = pm_source_lineage.roots(ops.db, 'operation', operation_id)
+    parents = [_operation(ops, oid) for oid in sorted(original_ids)]
+    parents = [parent for parent in parents if parent['action'] == ACTION]
+    if not parents:
+        require_child(ops, operation)  # Reject an invented private parent claim.
+        return
+    if not ops.db.in_transaction:
+        raise _bad('PM_REPAIR_RETRY_TRANSACTION', 'Retry reservation requires the original journal transaction')
+    require_new_effect(ops, operation)
+    step = ops.db.execute('SELECT * FROM operation_steps WHERE operation_id=? AND name=?', (operation_id, step_name)).fetchone()
+    if (not step or step['status'] not in {'started', 'uncertain'} or json.loads(step['request']) != request):
+        raise _bad('PM_REPAIR_RETRY_UNPROVEN', 'Only the same unresolved original request may reserve a proven-unsent retry')
+    event = ops.db.execute("SELECT MAX(seq) FROM api_events WHERE resource_type='operation' AND resource_id=? "
+        "AND kind LIKE 'operation.step.%' AND json_extract(body,'$.step')=?", (operation_id, step_name)).fetchone()[0]
+    transition = checks._digest({'step': dict(step), 'original_step_event': event})
+    for parent in parents:
+        if ops.db.execute('SELECT 1 FROM pm_maintenance_repair_retries WHERE parent_id=? AND operation_id=? AND transition_digest=?',
+                          (parent['operation_id'], operation_id, transition)).fetchone():
+            continue
+        count = ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repair_retries WHERE parent_id=?', (parent['operation_id'],)).fetchone()[0]
+        if count >= _intent(parent)['check']['limits']['retries']:
+            raise _bad('PM_REPAIR_RETRIES_EXHAUSTED', 'The original repair proved-unsent retry budget is exhausted')
+        ops.db.execute('INSERT INTO pm_maintenance_repair_retries VALUES(?,?,?,?,?)',
+                       (parent['operation_id'], operation_id, transition, step_name, time.time()))
+
+
 def capacity_counts(ops, wid, policy_id, period):
     if not installed(ops.db):
         return 0, 0
@@ -427,9 +464,14 @@ async def _run(ctx):
     raise Wait('waiting_external', 'Awaiting original fixed verification and delivery receipts', 15)
 
 
+def _local_record_or_stop(operation):
+    bound = (operation.get('external_refs') or {}).get('admission_binding')
+    return pm_lifecycle_gates.kind(operation['action'], bound) == 'record' or operation['action'] == 'session.interrupt'
+
+
 def require_new_effect(ops, operation):
-    if operation['action'] in {RECORD, 'session.interrupt'}:
-        return  # Original local evidence and stopping owned work add no investment.
+    if _local_record_or_stop(operation):
+        return  # Existing local records/stop still pass the shared original-source gate.
     require_child(ops, operation)
     if not installed(ops.db):
         return
@@ -457,7 +499,8 @@ def get_repair(ops, principal, workspace_id, repair_id):
             'operation_status': parent['status'], 'child': ({key: child[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if child else None),
             'evidence': proofs, 'capacity_held': row['finished_at'] is None,
             'repair_fixed': False, 'release_status': 'not_inferred', 'cost_coverage': 'model_provider_unmeasured',
-            'progress': evidence.progress(ops, parent)}})
+            'progress': evidence.progress(ops, parent),
+            'retries_used': ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repair_retries WHERE parent_id=?', (parent['operation_id'],)).fetchone()[0]}})
 
 
 def list_repairs(ops, principal, workspace_id, *, after=0, limit=20):
