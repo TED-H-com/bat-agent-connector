@@ -601,6 +601,18 @@ pause, source withdrawal and budget exhaustion refuse new effects. Local
 stop, without restarting work. Publication, required CI, merge and deployment
 need their own original proven receipts; a reported observation is insufficient.
 
+Keep `runtime_completion`, `capacity_held` and `baseline_update` separate from
+the original delivery outcome. The central service privately observes the original
+owned turn; callers must not submit a second runtime observer or send new input
+to recover it. Completion requires the original native event, SDK/input epoch,
+settled child receipts and unchanged verified candidate. An older host without
+the original input identity retains capacity. This proves neither process death
+nor that the Issue is fixed. A verified same-channel deployment may advance its
+existing deployment baseline through one original registration child; a stopped
+selection preserves delivery and leaves the prior baseline. Release/registry
+publication is not inferred. Maintenance Review freezes these original receipts
+at capture time and retains their current source permissions.
+
 Read `pm_quality_reviews_list`, `pm_quality_review_get` and `pm_work_quality_get`
 to inspect fixed package/candidate reviews. An owner uses
 `pm.quality.review.create` to appoint a responsible reviewer over the original
