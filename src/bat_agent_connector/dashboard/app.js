@@ -152,7 +152,7 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 		"change"
 	];
 	let serial = 0, loaded = false, dirty = false, stale = false, signature = "", selectedId = "", model = null, forms = [], widgets = [];
-	let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null;
+	let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
 	const navigationKey = `batc.pm.governance.selection.${workspaceId}.${caps()?.actor}`;
 	try {
 		const saved = sessionStorage.getItem(navigationKey);
@@ -247,6 +247,20 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 		editors.hidden = true;
 		update();
 		status.replaceChildren(errorBox(error));
+	}
+	async function currentWorkspace() {
+		const value = await api("GET", endpoint);
+		alive();
+		check(value.workspace);
+	}
+	function clearEditors() {
+		++sourceTicket;
+		forms = [];
+		widgets = [];
+		createSnapshot = null;
+		createEditor = null;
+		refreshCreateSource = null;
+		editors.replaceChildren();
 	}
 	function localForm(options, rebase = false) {
 		const expected = JSON.stringify({
@@ -614,7 +628,8 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 					alive();
 					if (ticket !== sourceTicket || !editor.box.isConnected) return;
 					check(result.snapshot);
-					if (result.snapshot.snapshot_id !== snapshotId || result.snapshot.visibility?.filtered) throw Error(t("pm_gov_source_missing"));
+					if (result.snapshot.snapshot_id !== snapshotId) invalid();
+					if (result.snapshot.visibility?.filtered) throw Object.assign(Error(t("pm_gov_source_missing")), { status: 404 });
 					if (!result.snapshot.baseline?.document) {
 						sourceStatus.append(note("pm_gov_no_snapshot"));
 						update();
@@ -624,9 +639,22 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 					sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor);
 					update();
 				} catch (error) {
-					if (ticket === sourceTicket && editor.box.isConnected) unavailable(error);
+					if (ticket !== sourceTicket || !editor.box.isConnected) return;
+					if (error.status !== 404) {
+						unavailable(error);
+						return;
+					}
+					try {
+						await currentWorkspace();
+						if (ticket !== sourceTicket || !editor.box.isConnected) return;
+						sourceStatus.replaceChildren(errorBox(error));
+						update();
+					} catch (failure) {
+						if (ticket === sourceTicket && editor.box.isConnected) unavailable(failure);
+					}
 				}
 			};
+			refreshCreateSource = readSource;
 			fields.snapshot_id.addEventListener("change", () => {
 				readSource();
 			});
@@ -716,14 +744,9 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 		return holder;
 	}
 	async function renderEditors(rebase = false) {
-		++sourceTicket;
-		forms = [];
-		widgets = [];
+		clearEditors();
 		dirty = false;
 		stale = false;
-		createSnapshot = null;
-		createEditor = null;
-		editors.replaceChildren();
 		if (model.detail) editors.append(findingEditor(model.detail, rebase).element, decisionEditors(rebase));
 		const create = findingEditor(null, rebase);
 		editors.append(create.element);
@@ -734,6 +757,7 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 		const ticket = ++serial, focused = element.contains(document.activeElement) ? document.activeElement : null;
 		const selection = focused && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
 		loaded = false;
+		editors.hidden = true;
 		update();
 		status.replaceChildren();
 		try {
@@ -773,7 +797,7 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 			check(accepted.head);
 			if (!selectedId) selectedId = records.find((row) => row.revision.document.status === "open")?.record.record_id || records[0]?.record.record_id || "";
 			let current = null, fixed = null;
-			if (selectedId) {
+			if (selectedId) try {
 				current = check(await api("GET", `${endpoint}/governance/${selectedId}`));
 				alive();
 				if (ticket !== serial) return;
@@ -782,7 +806,23 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 				alive();
 				if (ticket !== serial) return;
 				fixed = check(result.snapshot);
-				if (fixed.snapshot_id !== current.record.context.snapshot_ref.snapshot_id || fixed.snapshot_digest !== current.record.context.snapshot_ref.snapshot_digest || fixed.visibility?.filtered || !fixed.baseline?.document) invalid();
+				if (fixed.snapshot_id !== current.record.context.snapshot_ref.snapshot_id || fixed.snapshot_digest !== current.record.context.snapshot_ref.snapshot_digest || !fixed.baseline?.document) invalid();
+				if (fixed.visibility?.filtered) throw Object.assign(Error(t("pm_gov_source_missing")), { status: 404 });
+			} catch (error) {
+				if (ticket !== serial) return;
+				if (error.status !== 404) throw error;
+				const withdrawn = selectedId;
+				detail.replaceChildren();
+				list.replaceChildren();
+				clearEditors();
+				await currentWorkspace();
+				if (ticket !== serial) return;
+				for (let i = records.length - 1; i >= 0; i--) if (records[i].record.record_id === withdrawn) records.splice(i, 1);
+				selectRecord("");
+				current = null;
+				fixed = null;
+				force = true;
+				status.replaceChildren(errorBox(error));
 			}
 			const next = JSON.stringify([
 				selectedId,
@@ -800,22 +840,19 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 				nextCursor: page.next_cursor
 			};
 			loaded = true;
-			editors.hidden = false;
 			renderRead();
 			if (force || !signature || changed && !dirty && !forms.some((editor) => editor.locked())) await renderEditors();
 			else {
 				if (changed) stale = true;
 				if (createEditor?.fields.snapshot_id.value) {
-					const expected = createEditor.fields.snapshot_id.value, value = await api("GET", `${endpoint}/snapshots/${expected}`);
+					await refreshCreateSource();
 					alive();
 					if (ticket !== serial) return;
-					check(value.snapshot);
-					if (value.snapshot.snapshot_id !== expected || value.snapshot.visibility?.filtered) invalid();
-					createSnapshot = value.snapshot.baseline?.document ? value.snapshot : null;
 				}
 			}
-			if (ticket !== serial) return;
+			if (ticket !== serial || !loaded) return;
 			signature = next;
+			editors.hidden = false;
 			update();
 			if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {
 				focused.focus({ preventScroll: true });
