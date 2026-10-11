@@ -161,11 +161,11 @@ def _binding(ops, wid):
 
 
 def _admit(ops, principal, target, params, pre):
-    pm_native_operations._values(ops, principal, target, params, pre)
+    context = pm_native_operations._values(ops, principal, target, params, pre)
     binding = _binding(ops, target["workspace_id"])
     starts._tier(ops.context["fleet"], binding["target"]["host"])
     return {"principal": pm_workspace.principal_binding(principal),
-        "pm_bat_binding": binding, "pm_bat_binding_digest": pm_runs._digest(binding)}
+        "pm_bat_binding": binding, "pm_bat_binding_digest": pm_runs._digest(binding), **context}
 
 
 def _check(ctx, run, *, sending=False):

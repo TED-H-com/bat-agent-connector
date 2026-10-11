@@ -1,3 +1,4 @@
+import {pmContextBundleStrings} from './pm-context-bundle-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
 import {pmLifecycleStrings} from './pm-lifecycle-strings.js';
 import {pmIssueStrings} from './pm-issue-strings.js';
@@ -21,6 +22,7 @@ export const pmStrings = {
     ...specSourceStrings.en,
     ...pmFollowUpStrings.en,
     ...followUpAnalysisStrings.en,
+    ...pmContextBundleStrings.en,
     ...briefExportStrings.en,
     ...workPackageStrings.en,
     pm_roadmap_historical_work: "Previously selected work association",
@@ -254,6 +256,7 @@ export const pmStrings = {
     ...specSourceStrings['zh-TW'],
     ...pmFollowUpStrings['zh-TW'],
     ...followUpAnalysisStrings['zh-TW'],
+    ...pmContextBundleStrings['zh-TW'],
     ...briefExportStrings['zh-TW'],
     ...workPackageStrings['zh-TW'],
     pm_roadmap_historical_work: "先前選定的工作關聯",

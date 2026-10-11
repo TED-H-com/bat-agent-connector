@@ -192,10 +192,13 @@ def visible_roots(db, principal, original_ids):
             if not repair_visible(db, principal, operation):
                 return False
         elif operation["action"] == "pm.run.bat.analyze":
+            from .pm_context_bundles import operation_visible as bundle_visible
             from .pm_workspace import require_member
             try:
                 require_member(db, principal, operation["target"]["workspace_id"])
             except OperationError:
+                return False
+            if not bundle_visible(db, principal, operation):
                 return False
         elif not source_visible(db, principal, operation):
             return False

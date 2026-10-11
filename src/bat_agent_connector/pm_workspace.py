@@ -125,6 +125,10 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'] in {'pm.run.analyze', 'pm.run.bat.analyze'}:
+        from .pm_context_bundles import operation_visible as bundle_visible
+        if not bundle_visible(db, principal, op):
+            return False
     if op['action'].startswith('pm.lifecycle.'):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         return lifecycle_visible(db, principal, op)

@@ -1,5 +1,6 @@
+import {pmContextBundle} from './pm-context-bundle.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
-export function pmNativeAnalysis({h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard}) {
+export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard}) {
   const specs = [
     {key: 'native_analysis', adapter: 'codex-native-linux', action: 'pm.run.analyze', label: 'pm_analysis_local'},
     {key: 'bat_analysis', adapter: 'bat-pm-linux-v1', action: 'pm.run.bat.analyze', label: 'pm_analysis_bat'},
@@ -24,14 +25,16 @@ export function pmNativeAnalysis({h, t, form, input, labelled, caps, capability,
     const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
     const model = input('pm_native_model', {max: 128, required: false});
     model.placeholder = t('pm_native_default_model');
-    const request = form({action: spec.action, target, fields: {purpose, model},
-      params: values => ({purpose: values.purpose, ...(values.model.trim() ? {model: values.model.trim()} : {})}),
+    const context = pmContextBundle({h,t,api,guard,caps,target,thread});
+    const request = form({action: spec.action, target, fields: {purpose, model, accepted_context: context.value},
+      params: values => ({purpose: values.purpose, ...context.params(values), ...(values.model.trim() ? {model: values.model.trim()} : {})}),
       preconditions: () => ({expected_version: thread().thread.version}),
       permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec)
-        && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
+        && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
       recoverPermitted: authorized, label: 'pm_native_analyze', onSaved: refresh,
-      onStateChange: () => {if (ready) render();},
-      extra: h('div', {class: 'pm-fields'}, labelled('pm_native_purpose', purpose), labelled('pm_native_model', model))});
+      onStateChange: () => {context.update();if (ready) render();},
+      extra: h('div', {class: 'pm-fields'}, labelled('pm_native_purpose', purpose), context.box, labelled('pm_native_model', model))});
+    context.bind(request);
     requests.push({spec, request});
   }
   if (!restored) selected = requests.find(row => row.request.locked())?.spec.key || selected;
