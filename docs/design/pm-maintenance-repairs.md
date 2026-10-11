@@ -106,12 +106,12 @@ Only native provider/repository identity and original central source receipts
 can associate an existing owned target PR; matching number/path/prose is not
 proven ownership or delivery. Foreign/existing repair PRs block duplicate starts.
 
-There is currently no registered PR-create operation. Existing integration applies
-to an existing target PR. This slice can dispatch and verify; delivery waits for
-an exact proven existing central receipt and cannot invent PR or release success.
-A later bounded PR-create extension must reuse the existing provider journal and
-read-back contracts. Release adoption remains the existing verified-baseline
-operation after an actual publication receipt; merge is not publication.
+The parent can compose one private `github.pr.publish` child after explicit fixed
+quality evidence. Only its original durable HTTP 201 native-identity receipt proves
+owned PR creation. An unknown POST is never resent or adopted from matching branch,
+number or prose. Publication of the owned draft PR does not prove required CI,
+merge, deployment or a new release baseline; those retain their separate original
+receipt and policy gates.
 
 ## Shared integration interfaces
 

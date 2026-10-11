@@ -36,13 +36,14 @@ from tests.test_pm_release_baselines import request as baseline_request
 from tests.test_pm_workload import settings
 
 fixed = fixed_fixture
+TEST_COMMAND_ID = 'pytest'
 
 
 async def execute(ops, envelope, *, who):
     op = ops.create(who, **envelope)[0]
     await ops._execute(op['operation_id'])
     op = ops.get(op['operation_id'])
-    assert op['status'] == 'succeeded', (op['error_code'], op.get('error_message'), op['steps'])
+    assert op['status'] == 'succeeded', (op['error_code'], op.get('reason'), [(step['name'], step.get('error')) for step in op['steps']])
     return op
 
 
@@ -148,7 +149,7 @@ async def repair_ready(fixed, monkeypatch):
     rule = {'key': 'release_bug', 'work_kind': 'bug_fix', 'labels_all': ['bug', 'release-1.4'],
         'release': rules.release_predicate(baseline), 'paths': ['.'],
         'handoff': {key: handoff[key] for key in ('target', 'params', 'preconditions')},
-        'verification': {'kind': 'fixed_revision_verification', 'profile': 'observed_runner_v1', 'command_digest': verifier.digest('pytest')}}
+        'verification': {'kind': 'fixed_revision_verification', 'profile': 'observed_runner_v1', 'command_digest': verifier.digest(TEST_COMMAND_ID)}}
     document = settings()
     document['allowed_work_kinds'] = ['bug_fix']
     document['delivery']['maximum'] = 'pull_request'

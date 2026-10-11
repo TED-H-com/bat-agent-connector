@@ -58,6 +58,9 @@ def require_sources(ops, principal, wid, proof):
 
 
 def _runner(ops, principal, wid, child, selected, ref):
+    if isinstance(ref, dict) and 'verification_operation_id' in ref:
+        from . import pm_execution_verification
+        return pm_execution_verification.evaluate(ops, principal, wid, child, selected, ref)
     if not isinstance(ref, dict) or set(ref) != {'verification_id', 'candidate_commit', 'tree_hash'}:
         raise bad('Select an exact observed verification and full candidate commit/tree')
     if type(ref['verification_id']) is not int or not 0 < ref['verification_id'] < 2**63 or any(not isinstance(ref[k], str) or not SHA.fullmatch(ref[k]) for k in ('candidate_commit', 'tree_hash')):
