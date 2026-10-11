@@ -166,6 +166,40 @@ def _check_host_config() -> None:
              "PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED")
 
 
+def _summary_items(observations: list, summary: list) -> tuple[list, list, str | None]:
+    """Pinned live summary contains only the last completed, nonempty final message."""
+    starts, completed, seqs = {}, {}, []
+    for method, item, seq in observations:
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            return [], [], "native_item_ids_invalid"
+        if method == "item/started":
+            if item_id in starts or item_id in completed:
+                return [], [], "native_item_lifecycle_invalid"
+            starts[item_id] = item
+        else:
+            original = starts.get(item_id)
+            if (original is None or item_id in completed or original.get("type") != item.get("type")
+                    or item.get("type") == "userMessage" and original != item
+                    or item.get("type") == "agentMessage" and original.get("phase") != item.get("phase")):
+                return [], [], "native_item_lifecycle_invalid"
+            completed[item_id] = item
+        seqs.append(seq)
+    if not starts or starts.keys() != completed.keys():
+        return [], [], "native_items_incomplete"
+    items = list(completed.values())
+    messages = [item for item in items if item.get("type") == "agentMessage"
+                and item.get("phase") in (None, "final_answer")
+                and isinstance(item.get("text"), str) and item["text"].strip()]
+    # Do not treat a summary as a complete history or accept merely matching text.
+    if not messages or summary != [messages[-1]]:
+        return [], [], "native_summary_mismatch"
+    users = [item for item in items if item.get("type") == "userMessage"]
+    if len(users) != 1 or items.index(users[0]) >= items.index(messages[-1]):
+        return [], [], "native_input_mismatch"
+    return items, seqs, None
+
+
 def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_digest: str,
                 client_message_id: str, actual_model: str, stream_complete: bool = True) -> dict:
     """Reduce original native notifications. ACK, exit, or assistant text alone is insufficient."""
@@ -177,6 +211,7 @@ def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_diges
     started = None
     terminal = None
     acknowledged = None
+    observations, boundary_seqs = [], []
     for index, envelope in enumerate(events, 1):
         if (not isinstance(envelope, dict) or type(envelope.get("seq")) is not int or envelope["seq"] != index
                 or envelope.get("run_id") != run_id or not isinstance(envelope.get("event"), dict)):
@@ -189,7 +224,12 @@ def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_diges
             return {**result, "reason": "unexpected_runtime_request"}
         if params.get("threadId", thread_id) != thread_id:
             return {**result, "reason": "native_thread_mismatch"}
+        if "turnId" in params and (started is None or params["turnId"] != started):
+            return {**result, "reason": "native_turn_mismatch"}
         method = event.get("method")
+        if method in ("turn/started", "turn/completed", "item/started", "item/completed"):
+            if params.get("threadId") != thread_id:
+                return {**result, "reason": "native_thread_mismatch"}
         if "id" in event:
             response = event.get("result", {})
             if "error" in event or not isinstance(response, dict):
@@ -199,14 +239,16 @@ def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_diges
                     or not turn["id"] or acknowledged is not None):
                 return {**result, "reason": "native_ack_invalid"}
             acknowledged = turn["id"]
-        if method in {"item/started", "item/completed"}:
+            boundary_seqs.append(index)
+        if method in ("item/started", "item/completed"):
             item = params.get("item", {})
-            if not isinstance(item, dict) or item.get("type") not in {"userMessage", "agentMessage", "reasoning"}:
+            if not isinstance(item, dict) or item.get("type") not in ("userMessage", "agentMessage", "reasoning"):
                 return {**result, "reason": "unexpected_runtime_tool"}
             if started is None or params.get("turnId") != started:
                 return {**result, "reason": "native_turn_mismatch"}
             if terminal is not None:
                 return {**result, "reason": "native_events_after_completion"}
+            observations.append((method, item, index))
         if method == "turn/started":
             if started is not None or terminal is not None:
                 return {**result, "reason": "multiple_native_turns"}
@@ -214,6 +256,7 @@ def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_diges
             if not isinstance(turn, dict) or not isinstance(turn.get("id"), str) or not turn["id"]:
                 return {**result, "reason": "native_turn_mismatch"}
             started = turn["id"]
+            boundary_seqs.append(index)
         if method == "turn/completed":
             if terminal is not None:
                 return {**result, "reason": "multiple_native_completions"}
@@ -232,10 +275,17 @@ def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_diges
     if turn.get("status") != "completed" or turn.get("error"):
         return {**result, "status": "incomplete", "reason": "native_turn_not_completed"}
     items = turn.get("items")
-    if turn.get("itemsView", "full") != "full" or not isinstance(items, list):
+    view = turn.get("itemsView", "full")
+    if view not in ("full", "summary") or not isinstance(items, list):
         return {**result, "reason": "native_items_incomplete"}
+    source_seqs = [seq]
+    if view == "summary":
+        items, item_seqs, reason = _summary_items(observations, items)
+        if reason:
+            return {**result, "reason": reason}
+        source_seqs = sorted([*boundary_seqs, *item_seqs, seq])
     if any(not isinstance(item, dict) or item.get("type") not in
-           {"userMessage", "agentMessage", "reasoning"} for item in items):
+           ("userMessage", "agentMessage", "reasoning") for item in items):
         return {**result, "reason": "unexpected_runtime_tool"}
     ids = [item.get("id") for item in items]
     if any(not isinstance(item_id, str) or not item_id for item_id in ids) or len(set(ids)) != len(ids):
@@ -249,14 +299,15 @@ def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_diges
             or not isinstance(content[0].get("text"), str) or _digest(content[0]["text"]) != prompt_digest):
         return {**result, "reason": "native_input_mismatch"}
     messages = [item for item in items if item.get("type") == "agentMessage"
-                and item.get("phase") in {None, "final_answer"}]
-    if not messages or not isinstance(messages[-1].get("text"), str) or not messages[-1]["text"].strip():
+                and item.get("phase") in (None, "final_answer")
+                and isinstance(item.get("text"), str) and item["text"].strip()]
+    if not messages:
         return {**result, "status": "incomplete", "reason": "native_output_missing"}
     message = messages[-1]
     if not isinstance(message.get("id"), str) or not message["id"] or len(message["text"]) > MAX_OUTPUT_CHARS:
         return {**result, "reason": "native_output_invalid"}
     return {**result, "status": "completed", "complete": True, "reason": None,
-            "content": message["text"], "native_message_id": message["id"], "source_event_seqs": [seq]}
+            "content": message["text"], "native_message_id": message["id"], "source_event_seqs": source_seqs}
 
 
 class NativePmRuntime:

@@ -107,13 +107,32 @@ server replay cursor. The parent must store the immutable original objects; this
 adapter has no reconnect/resume or replay substitute for a broken pipe.
 
 `assess_turn` requires a single matching native ACK, turn-start and completed
-terminal event. The terminal must contain the full item list, exactly the original
-user input and client-message ID, and a nonempty native final assistant message.
-It rejects gaps, foreign runs/threads/turns, duplicate IDs, tool items, errors,
-partial items and mismatched input. ACK, process exit, idle state or streamed text
-alone never prove completion. Output retains native turn/message IDs, actual
-model and source event sequence. The raw native terminal error remains in the
-stored event even when the assessment has no assistant content.
+terminal event. It supports two explicit item views:
+
+- `full`: the terminal contains exactly the original user input and client-message
+  ID, together with the nonempty native final assistant message.
+- `summary`: the live terminal contains only the final assistant item. The
+  original stream must have matched `item/started` and `item/completed` records
+  for every item, one original user echo matching the sent input digest and
+  client-message ID, and a final completed assistant item exactly equal to the
+  terminal summary. A summary alone cannot replace missing input or item evidence.
+
+The pinned server's
+[completion emitter](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/app-server/src/bespoke_event_handling.rs#L1327)
+emits a singleton summary from
+[the last nonempty final completed agent item](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/app-server/src/thread_state.rs#L201).
+This live notification differs from a historical summary projection; the adapter
+does not silently treat every summary format as complete. `notLoaded` is rejected.
+
+Both paths reject observation gaps, foreign runs/threads/turns, duplicate IDs,
+tool items, errors, partial items and mismatched input. ACK, process exit, idle
+state or streamed text alone never prove completion. Output retains native
+turn/message IDs, actual model and source event sequences; the summary path
+includes ACK, turn-start, item lifecycle and terminal evidence. The raw native
+terminal error remains stored even when the assessment has no assistant content.
+The synthetic summary fixture models an authorized one-turn smoke's event shapes;
+all IDs and text are replaced, unrelated notifications omitted and sequence
+renumbered. It contains no original provider, account or usage data.
 
 The limit is one MiB per input/JSON line, eight MiB total stdout, 64 KiB stderr,
 128,000 output characters and at most one hour per turn (five minutes by default).

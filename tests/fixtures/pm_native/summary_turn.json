@@ -1,0 +1,145 @@
+{
+  "description": "Synthetic IDs/text and minimal protocol fields modeled on an authorized single-turn smoke; unrelated account, warning, usage, timestamps and delta events omitted; sequence renumbered.",
+  "run_id": "fixture-run",
+  "thread_id": "fixture-thread",
+  "prompt": "Synthetic membership site: login and password reset are confirmed. Referral discounts remain unadopted. Return three brief PM sentences.",
+  "prompt_digest": "ad6115a0456de80cc77f337594217e9d816ecba11eb9776184d815627a4ee545",
+  "client_message_id": "fixture-client",
+  "actual_model": "fixture-model",
+  "request_id": 6,
+  "events": [
+    {
+      "run_id": "fixture-run",
+      "seq": 1,
+      "event": {
+        "id": 6,
+        "result": {
+          "turn": {
+            "id": "fixture-turn",
+            "status": "inProgress",
+            "items": [],
+            "itemsView": "notLoaded"
+          }
+        }
+      }
+    },
+    {
+      "run_id": "fixture-run",
+      "seq": 2,
+      "event": {
+        "method": "turn/started",
+        "params": {
+          "threadId": "fixture-thread",
+          "turn": {
+            "id": "fixture-turn",
+            "status": "inProgress",
+            "items": [],
+            "itemsView": "notLoaded"
+          }
+        }
+      }
+    },
+    {
+      "run_id": "fixture-run",
+      "seq": 3,
+      "event": {
+        "method": "item/started",
+        "params": {
+          "threadId": "fixture-thread",
+          "turnId": "fixture-turn",
+          "item": {
+            "type": "userMessage",
+            "id": "fixture-user",
+            "clientId": "fixture-client",
+            "content": [
+              {
+                "type": "text",
+                "text": "Synthetic membership site: login and password reset are confirmed. Referral discounts remain unadopted. Return three brief PM sentences."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "run_id": "fixture-run",
+      "seq": 4,
+      "event": {
+        "method": "item/completed",
+        "params": {
+          "threadId": "fixture-thread",
+          "turnId": "fixture-turn",
+          "item": {
+            "type": "userMessage",
+            "id": "fixture-user",
+            "clientId": "fixture-client",
+            "content": [
+              {
+                "type": "text",
+                "text": "Synthetic membership site: login and password reset are confirmed. Referral discounts remain unadopted. Return three brief PM sentences."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "run_id": "fixture-run",
+      "seq": 5,
+      "event": {
+        "method": "item/started",
+        "params": {
+          "threadId": "fixture-thread",
+          "turnId": "fixture-turn",
+          "item": {
+            "type": "agentMessage",
+            "id": "fixture-answer",
+            "text": "",
+            "phase": "final_answer"
+          }
+        }
+      }
+    },
+    {
+      "run_id": "fixture-run",
+      "seq": 6,
+      "event": {
+        "method": "item/completed",
+        "params": {
+          "threadId": "fixture-thread",
+          "turnId": "fixture-turn",
+          "item": {
+            "type": "agentMessage",
+            "id": "fixture-answer",
+            "text": "Login and password reset are confirmed scope. Referral discounts remain an unadopted suggestion. Confirm how a password-reset link expires before drafting acceptance criteria.",
+            "phase": "final_answer"
+          }
+        }
+      }
+    },
+    {
+      "run_id": "fixture-run",
+      "seq": 7,
+      "event": {
+        "method": "turn/completed",
+        "params": {
+          "threadId": "fixture-thread",
+          "turn": {
+            "id": "fixture-turn",
+            "status": "completed",
+            "error": null,
+            "itemsView": "summary",
+            "items": [
+              {
+                "type": "agentMessage",
+                "id": "fixture-answer",
+                "text": "Login and password reset are confirmed scope. Referral discounts remain an unadopted suggestion. Confirm how a password-reset link expires before drafting acceptance criteria.",
+                "phase": "final_answer"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
