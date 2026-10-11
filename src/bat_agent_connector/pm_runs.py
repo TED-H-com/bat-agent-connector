@@ -177,6 +177,9 @@ def source_visible(db, principal, run):
     if run["context"].get("output_destination") == "follow_up_assessment" or row and row[0] == "pm.follow_up.analyze":
         from .pm_follow_up_analysis import operation_visible
         return operation_visible(db, principal, {"operation_id": run["operation_id"]})
+    if run["context"].get("output_destination") == "conversation_proposal" or row and row[0] == "pm.conversation.propose":
+        from .pm_conversation_proposals import operation_visible
+        return operation_visible(db, principal, {"operation_id": run["operation_id"]})
     if row and row[0] == "pm.spec.materialize":
         from .pm_spec_materialization import source_visible as spec_visible
         return spec_visible(db, principal, {"operation_id": run["operation_id"]})
@@ -247,11 +250,12 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
                    pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars))
         if _context_factory:
             row = ops.db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
-            if (not row or row[0] != "pm.follow_up.analyze" or adapter != "codex-native-linux"
-                    or context.get("output_destination") != "follow_up_assessment"
+            destinations = {"pm.follow_up.analyze": "follow_up_assessment", "pm.conversation.propose": "conversation_proposal"}
+            if (not row or row[0] not in destinations or adapter != "codex-native-linux"
+                    or context.get("output_destination") != destinations[row[0]]
                     or context.get("workspace_id") != workspace_id or context.get("thread_id") != thread_id
                     or context.get("thread_version") != expected_version or context.get("coverage", {}).get("max_chars") != max_chars):
-                raise _error("A fixed context requires its original Follow-up admission", "PM_CONTEXT_REFUSED")
+                raise _error("A fixed context requires its original structured-analysis admission", "PM_CONTEXT_REFUSED")
         context["purpose"] = purpose
         # Keep the profile, sources, omitted coverage, and exact words, not a mutable pointer.
         digest = _digest(context)
@@ -504,7 +508,7 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
         if value is not None:
             pm_discussions._text(value, label, 300)
     with journal.tx():
-        if get(journal.db, run_id)["context"].get("output_destination") == "follow_up_assessment":
+        if get(journal.db, run_id)["context"].get("output_destination") in {"follow_up_assessment", "conversation_proposal"}:
             raise _error("Follow-up output cannot enter ordinary discussion history", "PM_OUTPUT_DESTINATION_REFUSED")
         saved = journal.db.execute("""SELECT p.*,m.content FROM pm_assistant_provenance p
             JOIN pm_messages m USING(message_id) WHERE p.run_id=?""", (run_id,)).fetchone()

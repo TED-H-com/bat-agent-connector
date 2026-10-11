@@ -141,6 +141,617 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-plan-proposals.js
+var PROPOSE = "pm.conversation.propose";
+var ADOPT = "pm.conversation.adopt";
+var same$8 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var copy = (value) => structuredClone(value);
+var statuses = [
+	"user_confirmed",
+	"agent_assumption",
+	"unresolved",
+	"conflicting",
+	"not_applicable"
+];
+var defaults = {
+	proposal: "user_confirmed",
+	assumption: "agent_assumption",
+	unknown: "unresolved",
+	conflict: "conflicting",
+	excluded: "not_applicable"
+};
+var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
+var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
+function cyclic(requirements) {
+	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
+	const visit = (id) => {
+		if (active.has(id)) return true;
+		if (done.has(id)) return false;
+		active.add(id);
+		if ((graph.get(id) || []).some(visit)) return true;
+		active.delete(id);
+		done.add(id);
+		return false;
+	};
+	return [...graph.keys()].some(visit);
+}
+function validRequirements(values, included) {
+	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$4(row) || !key$1(row.id, 80))) return false;
+	const ids = new Set(values.map((row) => row.id));
+	return ids.size === values.length && values.every((row) => included.has(row.source_key) && refs$1(row.acceptance_keys, included) && [
+		"must",
+		"should",
+		"could",
+		"unresolved"
+	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
+}
+function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
+		workspace_id: workspaceId,
+		thread_id: threadId
+	};
+	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt;
+	let candidateFields = [], requirementFields = [], rendered = "", visible = false;
+	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
+	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
+	const deciding = () => writing() && permitted(true) && thread()?.capabilities?.decide === true && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === ADOPT && row.allowed === true) && capability?.plan_adoption_available !== false;
+	const fresh = () => active && head && thread()?.thread?.version === active.context.thread_version && head.version === active.context.plan_head.version && head.accepted_revision_id === active.context.plan_head.accepted_revision_id;
+	const original = () => {
+		try {
+			return JSON.parse(adopt?.values().review || "null");
+		} catch {
+			return null;
+		}
+	};
+	const note = (key) => h("p", { class: "muted" }, t(key));
+	const acceptedDocument = (p) => p.context.accepted_plan?.document || p.context.accepted_plan;
+	const removed = (p, requirements) => (acceptedDocument(p)?.requirements || []).filter((row) => !requirements.some((item) => item.id === row.id)).map((row) => row.id);
+	const fail = () => Error(t("pcp_mismatch"));
+	const select = (label, options, attrs = {}) => h("select", {
+		"aria-label": t(label),
+		...attrs
+	}, ...options.map(([value, text]) => h("option", { value }, text)));
+	const hidden = () => h("input", {
+		type: "hidden",
+		value: ""
+	});
+	const picker = select("pcp_saved", [["", t("pcp_choose")]]), notice = h("div", { role: "status" }), detail = h("div"), content = h("div");
+	const purpose = input("pcp_purpose", {
+		multiline: true,
+		max: 4e3
+	}), model = input("pcp_model", {
+		max: 128,
+		required: false
+	}), prepareReason = h("p", {
+		class: "muted",
+		"data-proposal-availability": ""
+	});
+	prepare = form({
+		action: PROPOSE,
+		target,
+		fields: {
+			purpose,
+			model
+		},
+		params: (values) => ({
+			purpose: values.purpose,
+			...values.model.trim() ? { model: values.model.trim() } : {}
+		}),
+		preconditions: () => ({
+			expected_version: thread().thread.version,
+			expected_plan_version: head.version,
+			expected_accepted_revision_id: head.accepted_revision_id
+		}),
+		permitted: () => writing() && head && caps()?.scopes?.includes("start") && capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true && !adopt?.locked(),
+		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
+		label: "pcp_prepare",
+		onSaved: async (result) => {
+			const id = result?.outcome?.proposal_id || result?.proposal_id;
+			if (id) picker.value = id;
+			await refreshParent?.();
+			await refresh(id);
+		},
+		onStateChange: () => {
+			if (ready) updateControls();
+		},
+		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"), prepareReason)
+	});
+	const review = hidden(), rationale = input("pcp_rationale", {
+		multiline: true,
+		max: 4e3
+	});
+	adopt = form({
+		action: ADOPT,
+		target,
+		fields: {
+			review,
+			rationale
+		},
+		params: (values) => {
+			const saved = JSON.parse(values.review);
+			if (!active || saved.proposal_id !== active.proposal_id || !validReview(saved.review)) throw Error(t("pcp_missing"));
+			return {
+				proposal_id: saved.proposal_id,
+				review: saved.review,
+				rationale: values.rationale
+			};
+		},
+		preconditions: () => {
+			const saved = original();
+			if (!saved?.preconditions) throw fail();
+			return saved.preconditions;
+		},
+		permitted: () => deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked(),
+		recoverPermitted: () => writing() && permitted(true) && caps()?.scopes?.includes("start"),
+		label: "pcp_adopt",
+		onSaved: async () => {
+			await refreshParent?.();
+			await refresh();
+		},
+		onStateChange: () => {
+			if (ready) updateControls();
+		},
+		extra: h("div", {}, review, content, labelled("pcp_rationale", rationale), note("pcp_review_help"))
+	});
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void loadMore()
+	}, t("pcp_more"));
+	const reload = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pcp_refresh"));
+	const prepareBox = h("details", {
+		open: true,
+		"data-proposal-prepare": ""
+	}, h("summary", {}, t("pcp_prepare")), prepare.box);
+	const box = h("section", {
+		class: "pm-plans",
+		"data-pm-plan-proposals": ""
+	}, h("h3", {}, t("pcp_title")), note("pcp_help"), prepareBox, h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)), notice, detail);
+	picker.addEventListener("change", () => {
+		if (adopt.locked()) {
+			picker.value = active?.proposal_id || "";
+			return;
+		}
+		choose(picker.value);
+	});
+	function checked(value) {
+		if (value?.workspace_id !== workspaceId || !record$4(value.proposal)) throw fail();
+		const p = value.proposal, c = p.context;
+		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$4(c) || !Number.isInteger(c.thread_version) || !record$4(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$4(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
+		for (const ref of Object.values(c.source_references)) if (!record$4(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
+		if (p.validation.status === "needs_review") {
+			if (p.document !== null || p.document_digest !== null) throw fail();
+		} else {
+			const d = p.document;
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			const keys = new Set();
+			for (const row of d.candidates) {
+				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				keys.add(row.key);
+			}
+			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
+			if (!Array.isArray(d.removed_requirement_ids) || !same$8([...d.removed_requirement_ids].sort(), removed(p, d.requirements).sort())) throw fail();
+			for (const question of d.questions) if (typeof question.question !== "string" || typeof question.why_now !== "string" || !Array.isArray(question.source_refs) || question.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+		}
+		return p;
+	}
+	function defaultsFor(p) {
+		return {
+			title: p.document.title,
+			rows: p.document.candidates.map((row) => ({
+				key: row.key,
+				text: row.text,
+				status: defaults[row.kind],
+				include: row.kind !== "excluded"
+			})),
+			requirements: copy(p.document.requirements),
+			removed_requirement_ids: copy(p.document.removed_requirement_ids)
+		};
+	}
+	function reviewIssue(value) {
+		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		const keys = active.document?.candidates?.map((row) => row.key) || [];
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
+		if (!included.size) return "pcp_empty_selection";
+		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
+		if (value.requirements.every((row) => record$4(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
+		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
+		return null;
+	}
+	function validReview(value) {
+		return reviewIssue(value) === null;
+	}
+	function sourceQuotes(refs) {
+		return h("details", { class: "pm-source" }, h("summary", {}, t("pcp_sources")), ...refs.map((key) => {
+			const row = active.context.source_references[key];
+			return h("div", {}, h("blockquote", { class: "pm-note-text" }, row.quote), h("small", {}, row.kind, " · ", row.id));
+		}));
+	}
+	function updateControls() {
+		if (!ready) return;
+		const locked = adopt.locked() || !deciding();
+		picker.disabled = loading || adopt.locked();
+		reload.disabled = loading;
+		more.disabled = loading;
+		const unavailable = capability?.native_analysis?.authorized === false || capability?.native_analysis?.eligible_for_preflight !== true || !caps()?.scopes?.includes("start");
+		prepareReason.hidden = !unavailable;
+		prepareReason.textContent = unavailable ? t("pcp_runtime") : "";
+		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
+		if (active && active.validation.status === "format_valid") {
+			const reasons = content.querySelector("[data-proposal-reason]");
+			if (reasons) {
+				const reason = capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? "pcp_stale" : reviewIssue(original()?.review);
+				reasons.textContent = reason ? t(reason) : "";
+				reasons.hidden = !reason;
+			}
+		}
+	}
+	function saveEditor(title) {
+		if (adopt.locked() || !active) return;
+		const value = {
+			title: title.value,
+			rows: candidateFields.map((row) => ({
+				key: row.key,
+				text: row.text.value,
+				status: row.status.value,
+				include: row.include.checked
+			})),
+			requirements: requirementFields.map((row) => ({
+				id: row.id.value,
+				source_key: row.source.value,
+				acceptance_keys: [...row.acceptance.selectedOptions].map((option) => option.value),
+				priority: row.priority.value,
+				depends_on: [...row.dependencies.selectedOptions].map((option) => option.value)
+			}))
+		};
+		value.removed_requirement_ids = removed(active, value.requirements);
+		const saved = original();
+		adopt.set("review", JSON.stringify({
+			...saved,
+			review: value
+		}));
+		showRemoved(value.removed_requirement_ids);
+		adopt.update();
+	}
+	function showRemoved(ids) {
+		const box = content.querySelector("[data-proposal-removed]");
+		if (!box) return;
+		box.hidden = !ids.length;
+		box.replaceChildren(h("h4", {}, t("pcp_removed")), note("pcp_removed_help"), h("ul", {}, ...ids.map((id) => h("li", {}, h("strong", {}, id), " · ", acceptedDocument(active).requirements.find((row) => row.id === id).text))));
+	}
+	function renderReview() {
+		const p = active;
+		if (!p) return;
+		const sig = p.proposal_id + ":" + p.document_digest;
+		if (rendered === sig) {
+			adopt.update();
+			return;
+		}
+		rendered = sig;
+		candidateFields = [];
+		requirementFields = [];
+		detail.replaceChildren();
+		content.replaceChildren();
+		detail.append(h("h4", {}, t("pcp_review")));
+		if (p.validation.status !== "format_valid") {
+			detail.append(note("pcp_invalid"), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error)))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
+			return;
+		}
+		let saved = original();
+		if (saved?.proposal_id !== p.proposal_id) {
+			if (adopt.locked()) throw fail();
+			const drafts = { ...record$4(saved?.drafts) ? saved.drafts : {} };
+			if (saved?.proposal_id) drafts[saved.proposal_id] = {
+				review: saved.review,
+				preconditions: saved.preconditions,
+				rationale: adopt.values().rationale
+			};
+			const retained = drafts[p.proposal_id];
+			saved = {
+				proposal_id: p.proposal_id,
+				review: retained?.review || defaultsFor(p),
+				drafts,
+				preconditions: retained?.preconditions || {
+					expected_version: p.context.thread_version,
+					expected_plan_version: p.context.plan_head.version,
+					expected_accepted_revision_id: p.context.plan_head.accepted_revision_id,
+					expected_proposal_digest: p.document_digest
+				}
+			};
+			adopt.set("review", JSON.stringify(saved));
+			adopt.set("rationale", retained?.rationale || "");
+		}
+		if (!same$8(saved.preconditions, {
+			expected_version: p.context.thread_version,
+			expected_plan_version: p.context.plan_head.version,
+			expected_accepted_revision_id: p.context.plan_head.accepted_revision_id,
+			expected_proposal_digest: p.document_digest
+		})) throw fail();
+		if (!prepare.locked()) prepareBox.open = false;
+		const edited = saved.review, title = input("pcp_name", {
+			max: 160,
+			value: edited.title
+		});
+		const accepted = acceptedDocument(p);
+		content.append(h("p", { class: "pm-note-text" }, p.document.summary), h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first")), labelled("pcp_name", title), h("h4", {}, t("pcp_candidates")));
+		title.addEventListener("input", () => saveEditor(title));
+		const requirementBox = h("div"), add = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (adopt.locked() || requirementFields.length >= 20) return;
+				let index = 1;
+				while (requirementFields.some((row) => row.id.value === "requirement_" + index)) index++;
+				addRequirement({
+					id: "requirement_" + index,
+					source_key: "",
+					acceptance_keys: [],
+					priority: "unresolved",
+					depends_on: []
+				});
+				saveEditor(title);
+			}
+		}, t("pcp_add_requirement"));
+		const choices = (element, options) => {
+			const selected = [...element.selectedOptions].map((row) => row.value);
+			element.replaceChildren(...options.map(([value, label]) => h("option", { value }, label)));
+			for (const option of element.options) option.selected = selected.includes(option.value);
+		};
+		function rebuildChoices() {
+			const sources = [["", t("pcp_none")], ...candidateFields.filter((row) => row.include.checked).map((row) => [row.key, row.text.value || row.key])];
+			for (const row of requirementFields) {
+				const keep = (element, options) => {
+					const missing = [...element.selectedOptions].filter((option) => !options.some(([value]) => value === option.value)).map((option) => [option.value, option.textContent]);
+					choices(element, [...options, ...missing]);
+				};
+				keep(row.source, sources);
+				keep(row.acceptance, sources.slice(1));
+				keep(row.dependencies, requirementFields.filter((value) => value !== row).map((value) => [value.id.value, value.id.value]));
+			}
+		}
+		for (const candidate of p.document.candidates) {
+			const row = edited.rows.find((value) => value.key === candidate.key);
+			if (!row) throw fail();
+			const include = h("input", {
+				type: "checkbox",
+				"aria-label": t("pcp_include")
+			}), text = input("pcp_text", {
+				multiline: true,
+				max: 4e3,
+				value: row.text
+			}), status = select("pcp_status", statuses.map((value) => [value, t("pm_status_" + value)]));
+			include.checked = row.include;
+			status.value = row.status;
+			candidateFields.push({
+				key: row.key,
+				include,
+				text,
+				status
+			});
+			const wording = h("span", {}, row.text), summary = h("summary", {}, h("span", { class: "chip" }, t("pcp_" + candidate.kind)), " ", wording);
+			const item = h("details", { "data-proposal-candidate": row.key }, summary, h("div", { class: "pm-fields" }, h("label", {}, include, t("pcp_include")), labelled("pcp_status", status), labelled("pcp_text", text)), sourceQuotes(candidate.source_refs));
+			for (const field of [
+				include,
+				text,
+				status
+			]) field.addEventListener("input", () => {
+				wording.textContent = text.value;
+				rebuildChoices();
+				saveEditor(title);
+			});
+			content.append(item);
+		}
+		function addRequirement(value) {
+			const id = input("pcp_requirement_id", {
+				max: 80,
+				value: value.id
+			}), source = select("pcp_requirement_source", [[value.source_key, value.source_key]]), acceptance = select("pcp_acceptance", value.acceptance_keys.map((key) => [key, key]), {
+				multiple: true,
+				size: 3
+			}), priority = select("pcp_priority", [
+				"must",
+				"should",
+				"could",
+				"unresolved"
+			].map((value) => [value, t("pcp_" + value)])), dependencies = select("pcp_dependencies", value.depends_on.map((key) => [key, key]), {
+				multiple: true,
+				size: 2
+			});
+			priority.value = value.priority;
+			for (const option of [...acceptance.options, ...dependencies.options]) option.selected = true;
+			const row = {
+				id,
+				source,
+				acceptance,
+				priority,
+				dependencies
+			};
+			requirementFields.push(row);
+			const remove = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					if (adopt.locked()) return;
+					requirementFields = requirementFields.filter((item) => item !== row);
+					item.remove();
+					rebuildChoices();
+					saveEditor(title);
+				}
+			}, t("pcp_remove_requirement"));
+			const item = h("details", { "data-proposal-requirement": "" }, h("summary", {}, value.id || t("pcp_requirements"), " · ", candidateFields.find((row) => row.key === value.source_key)?.text.value || t("pcp_none")), h("div", { class: "pm-fields" }, labelled("pcp_requirement_id", id), labelled("pcp_requirement_source", source), labelled("pcp_priority", priority), labelled("pcp_acceptance", acceptance), labelled("pcp_dependencies", dependencies)), remove);
+			for (const field of [
+				id,
+				source,
+				acceptance,
+				priority,
+				dependencies
+			]) field.addEventListener("input", () => {
+				if (field === id) rebuildChoices();
+				saveEditor(title);
+			});
+			requirementBox.append(item);
+			rebuildChoices();
+		}
+		for (const row of edited.requirements) addRequirement(row);
+		content.append(h("h4", {}, t("pcp_requirements")), requirementBox, add, h("div", { "data-proposal-removed": "" }));
+		showRemoved(edited.removed_requirement_ids);
+		if (p.document.questions.length) content.append(h("details", {}, h("summary", {}, t("pcp_questions")), ...p.document.questions.map((question) => h("div", {}, h("p", {}, question.question), h("p", {}, t("pcp_why"), ": ", question.why_now), sourceQuotes(question.source_refs)))));
+		content.append(h("p", {
+			class: "muted",
+			"data-proposal-reason": ""
+		}), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
+		detail.append(adopt.box);
+		adopt.update();
+	}
+	async function choose(id) {
+		const own = ++ticket;
+		active = null;
+		rendered = "";
+		detail.replaceChildren();
+		content.replaceChildren();
+		candidateFields = [];
+		requirementFields = [];
+		adopt.update();
+		if (!id) return;
+		try {
+			const result = checked(await api("GET", endpoint + "/" + encodeURIComponent(id)));
+			alive();
+			if (own !== ticket) return;
+			if (result.proposal_id !== id) throw fail();
+			active = result;
+			renderReview();
+		} catch (error) {
+			if (own === ticket) {
+				withdraw();
+				notice.replaceChildren(errorBox(error));
+			}
+		}
+	}
+	function page(value, append = false) {
+		if (value?.workspace_id !== workspaceId || !Array.isArray(value.proposals) || value.proposals.some((row) => row.thread_id !== threadId || typeof row.proposal_id !== "string")) throw fail();
+		const next = value.next_cursor;
+		if (next !== null && next !== void 0 && (!Number.isInteger(next) || next < 1 || append && next <= cursor)) throw fail();
+		rows = append ? [...rows, ...value.proposals] : value.proposals;
+		cursor = next ?? null;
+		const selected = picker.value;
+		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, row.title || row.proposal_id)));
+		picker.value = selected;
+		more.hidden = cursor === null;
+		notice.replaceChildren(...!rows.length ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
+	}
+	async function refresh(preferred) {
+		if (!enabled()) {
+			withdraw();
+			box.hidden = true;
+			return;
+		}
+		if (loading) return;
+		loading = true;
+		const own = ++ticket;
+		updateControls();
+		try {
+			const [list, plans] = await Promise.all([api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`), api("GET", base + "/plans?limit=1")]);
+			alive();
+			if (own !== ticket) return;
+			if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
+			head = plans.head;
+			visible = true;
+			box.hidden = false;
+			page(list);
+			const id = preferred || original()?.proposal_id || active?.proposal_id || picker.value;
+			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, id));
+			picker.value = id || "";
+			if (id) {
+				const result = checked(await api("GET", endpoint + "/" + encodeURIComponent(id)));
+				alive();
+				if (own !== ticket) return;
+				if (result.proposal_id !== id) throw fail();
+				active = result;
+				renderReview();
+			}
+		} catch (error) {
+			if (own === ticket) {
+				withdraw();
+				notice.replaceChildren(errorBox(error));
+			}
+		} finally {
+			if (own === ticket || !visible) {
+				loading = false;
+				prepare.update();
+				adopt.update();
+				updateControls();
+			}
+		}
+	}
+	async function loadMore() {
+		if (cursor === null || loading) return;
+		loading = true;
+		const own = ticket;
+		updateControls();
+		try {
+			const result = await api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);
+			alive();
+			if (own !== ticket) return;
+			page(result, true);
+		} catch (error) {
+			if (own === ticket) {
+				withdraw();
+				notice.replaceChildren(errorBox(error));
+			}
+		} finally {
+			loading = false;
+			updateControls();
+		}
+	}
+	function withdraw() {
+		ticket++;
+		visible = false;
+		active = head = null;
+		rows = [];
+		cursor = null;
+		rendered = "";
+		candidateFields = [];
+		requirementFields = [];
+		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")));
+		detail.replaceChildren();
+		content.replaceChildren();
+		notice.replaceChildren();
+		more.hidden = true;
+		prepare?.update();
+		adopt?.update();
+	}
+	ready = true;
+	updateControls();
+	return {
+		box,
+		refresh,
+		withdraw,
+		update(value = {}) {
+			if (value.capabilities) capability = value.capabilities;
+			if (value.head) head = value.head;
+			if (value.page) {
+				visible = true;
+				page(value.page);
+			}
+			prepare.update();
+			adopt.update();
+		},
+		dispose() {
+			withdraw();
+			prepare.dispose();
+			adopt.dispose();
+		}
+	};
+}
+//#endregion
 //#region src/pm-work-deliveries.js
 function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 	let workId = null, sequence = 0, busy = false, cursor = null, rows = [], packages = [];
@@ -13605,7 +14216,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
 	lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1 ? workspaceLifecycle({
 		h,
 		t,
@@ -14060,6 +14671,25 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					"data-pm-note-only": ""
 				}, h("summary", {}, t("pm_native_note_only")), noteForm.box));
 			} else column.append(noteForm.box);
+			if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
+				proposalReview = planProposals({
+					h,
+					t,
+					api,
+					alive,
+					form,
+					input,
+					labelled,
+					caps,
+					workspaceId,
+					threadId,
+					thread: () => threadData,
+					permitted,
+					refresh: load,
+					errorBox
+				});
+				column.append(proposalReview.box);
+			}
 			if (caps()?.features?.pm_workspaces?.plan_drafting) {
 				revisions = planRevisions({
 					h,
@@ -14481,6 +15111,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		maintenanceRepairs?.withdraw();
 		maintenanceReview?.withdraw();
 		qualityReviews?.withdraw();
+		proposalReview?.withdraw();
 		qualitySelections.clear();
 		try {
 			alive();
@@ -14562,6 +15193,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				renderPackages(runs);
 			}
 			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
+			if (proposalReview) {
+				proposalReview.update({
+					head: plans?.head,
+					capabilities: workspaceCaps
+				});
+				await proposalReview.refresh();
+				alive();
+				if (ticket !== sequence) return;
+			}
 			worktreeChoice?.update();
 			for (const section of [
 				lifecycle,
@@ -14599,6 +15239,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				threadData = null;
 				brief?.withdraw();
 				qualityReviews?.withdraw();
+				proposalReview?.withdraw();
 				qualitySelections.clear();
 				lifecycle?.withdraw();
 				engineering?.withdraw();
@@ -14639,6 +15280,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_governance",
 			"pm_follow_up",
 			"pm_follow_up_assessment",
+			"pm_conversation_proposal",
 			"pm_work_package",
 			"pm_work_batch",
 			"pm_lifecycle",
@@ -14705,6 +15347,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sequence++;
 		off();
 		navigationMedia.removeEventListener("change", resizeNavigation);
+		proposalReview?.dispose();
 		for (const value of forms) value.dispose();
 	};
 }
@@ -20138,6 +20781,138 @@ var pmPackageHandoffStrings = {
 	}
 };
 //#endregion
+//#region src/pm-plan-proposal-strings.js
+var pmPlanProposalStrings = {
+	en: {
+		pcp_title: "Plan update from this discussion",
+		pcp_help: "Prepare a sourced proposal, review the whole change, then adopt it once.",
+		pcp_purpose: "What should this plan update cover?",
+		pcp_prepare: "Prepare plan update",
+		pcp_model: "Model (optional)",
+		pcp_prepare_help: "This creates a proposal. Your accepted plan and existing work continue unchanged.",
+		pcp_saved: "Saved proposal",
+		pcp_choose: "Choose a proposal",
+		pcp_more: "Load more proposals",
+		pcp_refresh: "Refresh proposals",
+		pcp_empty: "No proposal has been prepared for this discussion.",
+		pcp_review: "Review this update",
+		pcp_name: "Plan title",
+		pcp_candidates: "Information and scope",
+		pcp_include: "Include in this plan",
+		pcp_text: "Reviewed wording",
+		pcp_status: "Information status",
+		pcp_sources: "Original sources",
+		pcp_original: "Original wording",
+		pcp_requirements: "Requirements and acceptance",
+		pcp_requirement_id: "Stable requirement ID",
+		pcp_requirement_source: "Requirement source",
+		pcp_acceptance: "Acceptance criteria",
+		pcp_priority: "Priority",
+		pcp_dependencies: "Depends on requirements",
+		pcp_add_requirement: "Add requirement",
+		pcp_remove_requirement: "Remove requirement",
+		pcp_no_requirements: "No requirements selected. Add them from the reviewed information when appropriate.",
+		pcp_rationale: "Reason for adopting this update",
+		pcp_adopt: "Adopt this update",
+		pcp_questions: "Questions still to resolve",
+		pcp_before: "Accepted plan before this update",
+		pcp_first: "No plan has been adopted yet.",
+		pcp_baseline: "Original accepted revision",
+		pcp_review_help: "Adoption records your reviewed wording and status together. Assumptions and unresolved points remain explicit; adoption does not dispatch work.",
+		pcp_invalid: "The reply needs review before it can become a plan proposal.",
+		pcp_raw: "Original analysis reply",
+		pcp_stale: "The discussion or plan has changed. Keep this draft, then prepare a proposal against the current version.",
+		pcp_readonly: "A workspace owner with plan adoption permission can adopt this update.",
+		pcp_unavailable: "Plan proposals are unavailable on this connection.",
+		pcp_runtime: "The selected central runtime must be ready before preparing a proposal.",
+		pcp_mismatch: "The proposal does not match its original discussion or sources.",
+		pcp_partial: "This is a partial list. More proposals may be available.",
+		pcp_missing: "Select included information for every requirement and acceptance criterion.",
+		pcp_empty_selection: "Include at least one piece of information in this plan.",
+		pcp_acceptance_missing: "Select at least one acceptance criterion for every requirement.",
+		pcp_cycle: "Remove the circular dependency between requirements.",
+		pcp_key: "Candidate",
+		pcp_why: "Why this matters now",
+		pcp_pending: "Recover the original request before selecting a different proposal.",
+		pcp_proposal: "Proposed",
+		pcp_assumption: "Assumption",
+		pcp_unknown: "Unresolved",
+		pcp_conflict: "Conflicting",
+		pcp_excluded: "Out of scope",
+		pcp_must: "Must",
+		pcp_should: "Should",
+		pcp_could: "Could",
+		pcp_unresolved: "Unresolved",
+		pcp_none: "Choose information",
+		pcp_removed: "Requirements removed by this update",
+		pcp_removed_help: "These original commitments are removed when you adopt the whole update."
+	},
+	"zh-TW": {
+		pcp_title: "從這段討論整理計畫",
+		pcp_help: "先整理有來源的提案，審閱整組變更，再一次採用。",
+		pcp_purpose: "這次計畫要整理哪些內容？",
+		pcp_prepare: "整理成計畫",
+		pcp_model: "模型（選填）",
+		pcp_prepare_help: "這一步只產生提案；已採用計畫與既有工作仍繼續。",
+		pcp_saved: "已保存提案",
+		pcp_choose: "選擇提案",
+		pcp_more: "載入更多提案",
+		pcp_refresh: "重新讀取提案",
+		pcp_empty: "這段討論還沒有計畫提案。",
+		pcp_review: "審閱這組更新",
+		pcp_name: "計畫名稱",
+		pcp_candidates: "資訊與範圍",
+		pcp_include: "納入這份計畫",
+		pcp_text: "審閱後文字",
+		pcp_status: "資訊狀態",
+		pcp_sources: "原始來源",
+		pcp_original: "原始文字",
+		pcp_requirements: "需求與接受條件",
+		pcp_requirement_id: "固定需求代號",
+		pcp_requirement_source: "需求來源",
+		pcp_acceptance: "接受條件",
+		pcp_priority: "優先序",
+		pcp_dependencies: "前置需求",
+		pcp_add_requirement: "加入需求",
+		pcp_remove_requirement: "移除需求",
+		pcp_no_requirements: "尚未選入需求；可依需要從已審閱資訊建立。",
+		pcp_rationale: "採用這組更新的理由",
+		pcp_adopt: "採用這組更新",
+		pcp_questions: "仍待釐清的問題",
+		pcp_before: "更新前的採用計畫",
+		pcp_first: "尚未採用任何計畫。",
+		pcp_baseline: "原採用版本",
+		pcp_review_help: "一次保存你審閱後的文字與狀態；假設與未決事項仍明確保留。採用不會直接派工。",
+		pcp_invalid: "回覆內容需要檢視，目前還不能作為計畫提案。",
+		pcp_raw: "原始分析回覆",
+		pcp_stale: "討論或計畫已有變更。草稿已保留，請以目前版本重新整理提案。",
+		pcp_readonly: "具有計畫採用權限的 workspace 負責者可採用這組更新。",
+		pcp_unavailable: "此連線尚未提供計畫提案。",
+		pcp_runtime: "中央執行環境就緒後才能整理提案。",
+		pcp_mismatch: "提案與原討論或來源不符。",
+		pcp_partial: "目前只載入部分提案，可繼續讀取。",
+		pcp_missing: "每項需求與接受條件都必須選用已納入的資訊。",
+		pcp_empty_selection: "至少選入一項計畫資訊。",
+		pcp_acceptance_missing: "每項需求至少要選一個接受條件。",
+		pcp_cycle: "請移除需求之間的循環相依。",
+		pcp_key: "候選資訊",
+		pcp_why: "現在需要釐清的原因",
+		pcp_pending: "請先查回原請求，再選擇其他提案。",
+		pcp_proposal: "建議",
+		pcp_assumption: "假設",
+		pcp_unknown: "未決",
+		pcp_conflict: "矛盾",
+		pcp_excluded: "本輪不做",
+		pcp_must: "必要",
+		pcp_should: "應有",
+		pcp_could: "可選",
+		pcp_unresolved: "未決",
+		pcp_none: "選擇資訊",
+		pcp_removed: "這次更新將移除的需求",
+		pcp_removed_help: "採用整組更新時，會一併移除以下原有承諾。"
+	}
+};
+//#endregion
 //#region src/pm-governance-strings.js
 var pmGovernanceStrings = {
 	en: {
@@ -21777,6 +22552,7 @@ var pmMeetingStrings = {
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		...pmPlanProposalStrings.en,
 		...pmIssueStrings.en,
 		...pmLifecycleStrings.en,
 		...pmSprintStrings.en,
@@ -22115,6 +22891,7 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		...pmPlanProposalStrings["zh-TW"],
 		...pmIssueStrings["zh-TW"],
 		...pmLifecycleStrings["zh-TW"],
 		...pmSprintStrings["zh-TW"],

@@ -170,6 +170,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.work_package.'):
         from .pm_work_packages import operation_visible as package_operation_visible
         return package_operation_visible(db, principal, op)
+    if op['action'].startswith('pm.conversation.'):
+        from .pm_conversation_proposals import operation_visible as conversation_visible
+        return conversation_visible(db, principal, op)
     if op['action'] == 'pm.follow_up.analyze':
         from .pm_follow_up_analysis import operation_visible as assessment_operation_visible
         return assessment_operation_visible(db, principal, op)

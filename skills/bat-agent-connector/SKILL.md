@@ -456,6 +456,40 @@ access applies to pending operations, assessments, native run reads and event
 feeds, including after a waited response. A withdrawn source must not be recovered
 through the raw response, an older event or a newer readable intake.
 
+### Turn discussion into one reviewed plan update
+
+When `features.pm_workspaces.conversation_proposals.version` is 1, an explicit
+request to organize a discussion can use `pm.conversation.propose`. Target the
+workspace/thread with bounded `purpose` and optional native analysis budgets;
+freeze `expected_version`, `expected_plan_version` and
+`expected_accepted_revision_id`. This is one context-only native analysis, with
+the same per-run capability proof as ordinary analysis. Normal Idea messages
+never automatically adopt a plan.
+
+Read `pm_conversation_proposals_list` (optional `thread_id`, `after`, `limit`) and
+`pm_conversation_proposal_get`. Detail keeps original quotes, accepted baseline,
+raw reply and validation. Preserve assumptions, conflicts, questions and explicit
+exclusions. A `needs_review` result cannot be adopted. The current complete-update
+bound is 20 candidates/requirements; an oversized baseline is refused before a
+model runs and stays available through the existing plan workflow.
+
+Present the meaningful changes, requirement/acceptance mapping and every removed
+accepted requirement for one owner decision. `pm.conversation.adopt` takes
+`proposal_id`, a complete `review` (`title`, candidate `rows`, `requirements`,
+`removed_requirement_ids`) and `rationale`, with the original discussion/plan/
+accepted-version preconditions and `expected_proposal_digest`. Rows preserve
+original candidate keys and sources, with reviewed text, existing information
+status and `include`. Edited confirmations identify the actual owner. Do not
+turn a model claim into `repo_evidence` or silently omit an accepted requirement.
+
+The existing registered input, Planning, document and owned-Git adoption actions
+run as private children of that one reviewed intent. This does not authorize
+execution. Preserve the original parent key and child receipts after an unknown
+reply; do not recreate the sequence through separate client POSTs. Changed
+versions, credentials or sources stop new effects. A committed adoption remains
+an original fact recoverable without repeating Git. Derived plan, discussion,
+runtime and snapshot reads retain the original source boundary.
+
 ### Select the maintained release version
 
 When `features.pm_workspaces.release_baselines` is advertised, read
