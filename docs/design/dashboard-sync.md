@@ -65,6 +65,22 @@ authority：重啟與該 journal 的備份保留 UUID，新 journal 使用新 UU
 同一 journal 的兩個端點可能有同一 UUID，因此 client 仍須使用已驗證 configured endpoint 作分區。
 principal_id 綁 actor、scopes、admin，不綁 bearer secret；同一 actor 的不同權限不能共用 cache。
 
+PM workspace membership 的變動另外綁在 checkpoint 的 `access_id` digest，不改
+`server_id`／`principal_id` 或本地草稿 namespace。每個 actor 的 membership INSERT、role UPDATE、
+DELETE 在同一交易更新 `api_sync_pm_access` generation；generation 保留在移除會員之後，也不依賴
+事件 retention 或牆上時間。即使兩次輪詢間先撤權再授權，舊 checkpoint 仍須重新取得快照。
+Digest 同時涵蓋該 actor 所有 workspace 的目前 ID／role，包含來源 workspace，兼顧既有會員資料的
+升級及來源可見性。Token 只帶 digest，不包含 workspace ID、角色列表或撤權事件內容。
+
+Access 不符回 `EVENT_CURSOR_RESET`／`access_changed`，JSON polling 與已開啟 SSE 使用相同檢查。
+新授權也需要重新快照，不能假設 grant 前的舊事件仍被保留。撤權後的普通事件與 operation 仍照
+目前來源權限過濾，不因通知需求放行。升級前沒有 `access_id` 的合法 token 會安全地要求一次快照。
+其他 actor 的 membership 變更與無效／回滾的修改，不讓該使用者的 checkpoint 無限重設。
+
+Client 收到 access reset 時必須立即隱藏舊來源與暫停操作；不能因仍在輸入而延後撤權處理。
+重新讀取後，沿用同一身份的未提交草稿、原 request／idempotency key 與 operation IDs，依最新授權
+顯示可讀資料。不把保留草稿視為仍能使用被撤銷的來源或繼續原操作的授權。
+
 Token 用該 journal 的 key 驗 HMAC，只證明續接資料，不授予 observe 或其他權限。每次請求仍先驗
 bearer。Token 包含 identity、cursor 與該位置最近 event 的內容 digest；每一頁更新 anchor，所以還原
 舊 DB 造成的 head regression，或重新用同一 seq 寫入不同 event，都必須重新 bootstrap。若還原後仍
@@ -84,6 +100,7 @@ HTTP 在串流 headers 之前的 reset 回 409：
 | reason | 意義 |
 |---|---|
 | server_changed／principal_changed | journal authority 或 effective principal 不符 |
+| access_changed | PM membership 可見範圍／角色改變，或舊 token 未綁存取版本；身份與草稿分區不變 |
 | cursor_ahead／cursor_expired | cursor 超過目前 head，或缺少必須 replay 的歷史 |
 | history_changed | checkpoint 的 event anchor 已不存在或內容改變 |
 | checkpoint_invalid／checkpoint_cursor_mismatch | token 格式／signature 錯誤，或 after 與 token 不成對 |
@@ -104,6 +121,10 @@ Client reset 必須清掉該區觀測 cache、重新 bootstrap，保留該身份
 | B02 | test_b02_restored_journal_detects_regression_and_divergent_reused_sequence；test_b02_retention_keeps_head_and_explicitly_resets_expired_cursor |
 | B02 | test_b02_pages_refresh_checkpoint_and_hidden_events_advance_without_shape_change；test_b02_http_cursor_ahead_and_expired_are_explicit_resets；test_b02_sse_delivers_page_checkpoint_then_explicit_reset |
 | B02 | test_b02_filtered_checkpoint_refused_before_any_journal_read；test_b02_filtered_page_cannot_mint_or_reuse_a_complete_feed_checkpoint；test_b02_http_and_sse_reject_filtered_checkpoint_before_replay：bootstrap／前頁 token、所有 filter 欄位、空與非空 filtered page 均不跨過未處理事件 |
+
+PM access 回歸另見 `test_dashboard_sync_pm_access.py`：grant／revoke／角色降升、撤銷後重授權、
+重啟／retention／升級、rollback；兩個真正 HTTP principals 修改會員後 polling／已開啟 SSE 都
+安全 reset，原撤權事件不放行，principal identity 保持一致。
 
 ## 尚未涵蓋
 
