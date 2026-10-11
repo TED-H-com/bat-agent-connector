@@ -237,7 +237,7 @@ def _create(ctx):
         ctx.service.db.execute("INSERT INTO pm_conversation_children VALUES(?,?,?,?,?,?)", (ctx.operation_id, len(children),
             child["operation_id"], pm_runs._json(request), pm_runs._digest(request), time.time()))
         ctx.service._merge_refs(child["operation_id"], {LINK: ctx.operation_id})
-        ctx.service.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)",
+        ctx.service.db.execute("INSERT OR IGNORE INTO pm_source_lineage VALUES(?,?,?,?)",
             ("operation", child["operation_id"], proposal["operation_id"], ctx.operation_id))
         return {"operation_id": child["operation_id"]}
     ordinal = len(_children(ctx.service.db, ctx.op))
