@@ -55,6 +55,39 @@ Enable **Start when I sign in** for this installation's login startup. Closing W
 
 Configuration changes wait while operations/tasks are active. If a reply is lost, use **Recover original setup request** and **View setup operation**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
 
+## Try one PM workflow
+
+Use a central and client built from the same reviewed PM candidate. Availability
+comes from that central's capabilities; an older installation may expose fewer
+steps. See the [current PM implementation status](product/pm-v1.2-status.md) for
+merged, candidate and remaining work.
+
+1. Open **PM**, create a workspace and start an Idea discussion. Save the project
+   goal and constraints in ordinary notes—for example, member login and password
+   reset, with referral codes outside the first release.
+2. Under **Plan update from this discussion**, prepare a proposal. The configured
+   native analysis runtime must be available. Review its source quotes, retained
+   requirements, exclusions, proposed removals and open questions. Edit the
+   wording as needed, then adopt the whole update once. Adoption needs workspace
+   owner authority and the prepared PM-owned Git worktree.
+3. Associate the adopted requirements with work, prepare the engineering packages
+   and review their explicit repository/commit destinations. An accepted plan
+   records direction; starting a package is a separate product action.
+4. Verify the fixed result using the configured command or original GitHub checks.
+   Appoint a **Quality review** against the fixed criteria and Definition of Done.
+   The responsible reviewer records conclusions, reasons and original evidence.
+   Select that assessment for the work or its dependency condition; the shared
+   views use the same original result. Passing tests alone leave acceptance open.
+5. After publication, record the verified release baseline and review a maintenance
+   policy's sources, repair bounds and delivery ceiling. Maintenance Review shows
+   the original findings and repair receipts. A published PR, merged result,
+   verified deployment and completed runtime remain distinct facts.
+
+A missing runtime, Git worktree, verifier or original source is reported at its
+step. Resolve that prerequisite before starting a new action. For a lost reply,
+use **Check original request** with the saved draft; recovery retains its original
+version and operation. Human checkouts and manual sessions remain read-only.
+
 ## Advanced: existing central and operator deployment
 
 Existing desktop central configuration is retained. To join a different service explicitly, use **Advanced: join an existing central**, then enroll its separate credential. The remaining sections describe an operator-managed central; they are not prerequisites for the normal bundled installation.
