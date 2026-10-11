@@ -318,8 +318,8 @@ async def test_manage_only_member_capture_and_original_key_replay_no_observe_esc
     principal = Principal(OWNER.actor, frozenset({'manage'}))
     req = capture_request(ops, data)
     done = await execute(ops, req, who=principal)
-    same, reused = ops.create(principal, **req)
-    assert reused and same['operation_id'] == done['operation_id']
+    same, created = ops.create(principal, **req)
+    assert not created and same['operation_id'] == done['operation_id']
     with pytest.raises(OperationError, match='FORBIDDEN'):
         workload.current_snapshot(ops, principal, data['workspace_id'])
 
