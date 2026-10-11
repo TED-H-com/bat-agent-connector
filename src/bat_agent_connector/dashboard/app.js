@@ -3757,6 +3757,13 @@ var retired = (error) => [
 	"CONNECTION_CHANGED",
 	"PM_DISPOSED"
 ].includes(error.code);
+var threadDisclosures = new Map();
+var threadDisclosureSelectors = [
+	"[data-pm-add-input]",
+	"[data-pm-planning-revision]",
+	"[data-pm-note-only]",
+	"[data-pm-prepare-context]"
+];
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
 function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
@@ -3927,6 +3934,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return;
 	}
 	let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1;
+	const disclosureKey = JSON.stringify([
+		namespace,
+		workspaceId,
+		threadId
+	]);
 	const forms = [], alive = () => {
 		guard();
 		if (disposed) throw Object.assign(Error(), { code: "PM_DISPOSED" });
@@ -4190,7 +4202,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					target,
 					refresh: load
 				});
-				column.append(nativeAnalysis.box, h("details", { class: "pm-package-preparation" }, h("summary", {}, t("pm_native_note_only")), noteForm.box));
+				column.append(nativeAnalysis.box, h("details", {
+					class: "pm-package-preparation",
+					"data-pm-note-only": ""
+				}, h("summary", {}, t("pm_native_note_only")), noteForm.box));
 			} else column.append(noteForm.box);
 			if (caps()?.features?.pm_workspaces?.plan_drafting) {
 				revisions = planRevisions({
@@ -4247,7 +4262,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				});
 				worktreeChoice?.attach(prepare);
 				packages = h("div", { "data-pm-packages": "" });
-				column.append(h("details", { class: "pm-package-preparation" }, h("summary", {}, t("pm_package_prepare_title")), prepare.box), h("section", { class: "pm-packages" }, h("h3", {}, t("pm_packages")), packages));
+				column.append(h("details", {
+					class: "pm-package-preparation",
+					"data-pm-prepare-context": ""
+				}, h("summary", {}, t("pm_package_prepare_title")), prepare.box), h("section", { class: "pm-packages" }, h("h3", {}, t("pm_packages")), packages));
 			}
 			facts = h("div", { class: "pm-facts" });
 			draft = h("section", { class: "pm-draft" });
@@ -4379,6 +4397,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
 			if (brief) inspector.prepend(brief.box);
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
+			const disclosures = threadDisclosures.get(disclosureKey);
+			for (const selector of threadDisclosureSelectors) {
+				const element = content.querySelector(selector);
+				if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
+			}
 		}
 		threadTitle.textContent = thread.title;
 		mode.textContent = t("pm_mode_" + thread.mode);
@@ -4735,6 +4758,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	});
 	return () => {
+		if (threadId && mountedThread === threadId) {
+			const disclosures = new Map();
+			for (const selector of threadDisclosureSelectors) {
+				const element = content.querySelector(selector);
+				if (element) disclosures.set(selector, element.open);
+			}
+			threadDisclosures.delete(disclosureKey);
+			threadDisclosures.set(disclosureKey, disclosures);
+			if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
+		}
 		disposed = true;
 		sequence++;
 		off();

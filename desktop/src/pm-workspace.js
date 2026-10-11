@@ -12,6 +12,10 @@ const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b =
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
 const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
+// Only disclosure preferences survive a same-principal remount. Facts are always
+// removed and reread after an access reset; drafts retain their existing namespace.
+const threadDisclosures = new Map();
+const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]'];
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
@@ -112,6 +116,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, onEvents, errorBox}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
   let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1;
+  const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
   const permitted = decide => loaded && Boolean(workspace) && (caps()?.scopes?.includes('admin')
     || (decide ? workspace.membership?.role === 'owner' : ['owner', 'contributor'].includes(workspace.membership?.role)));
@@ -211,7 +216,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (caps()?.features?.pm_workspaces?.native_analysis) {
         nativeAnalysis = pmNativeAnalysis({h, t, form, input, labelled, caps,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
-        column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation'},
+        column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation', 'data-pm-note-only': ''},
           h('summary', {}, t('pm_native_note_only')), noteForm.box));
       } else column.append(noteForm.box);
       if (caps()?.features?.pm_workspaces?.plan_drafting) {
@@ -230,7 +235,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           extra: h('div', {}, labelled('pm_package_purpose', purpose), worktreeChoice?.box || '', h('p', {class: 'muted'}, t('pm_package_help')))});
         worktreeChoice?.attach(prepare);
         packages = h('div', {'data-pm-packages': ''});
-        column.append(h('details', {class: 'pm-package-preparation'}, h('summary', {}, t('pm_package_prepare_title')), prepare.box),
+        column.append(h('details', {class: 'pm-package-preparation', 'data-pm-prepare-context': ''}, h('summary', {}, t('pm_package_prepare_title')), prepare.box),
           h('section', {class: 'pm-packages'}, h('h3', {}, t('pm_packages')), packages));
       }
       facts = h('div', {class: 'pm-facts'}); draft = h('section', {class: 'pm-draft'});
@@ -284,6 +289,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '');
       if (brief) inspector.prepend(brief.box);
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
+      const disclosures = threadDisclosures.get(disclosureKey);
+      for (const selector of threadDisclosureSelectors) {
+        const element = content.querySelector(selector);
+        if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
+      }
     }
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
     discussionHint.textContent = t(nativeAnalysis || data.messages?.some(message => message.role === 'assistant') ? 'pm_native_discussion' : 'pm_manual');
@@ -513,5 +523,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       return eventReads;
     }
   });
-  return () => {disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);};
+  return () => {
+    if (threadId && mountedThread === threadId) {
+      const disclosures = new Map();
+      for (const selector of threadDisclosureSelectors) {
+        const element = content.querySelector(selector);
+        if (element) disclosures.set(selector, element.open);
+      }
+      threadDisclosures.delete(disclosureKey); threadDisclosures.set(disclosureKey, disclosures);
+      if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
+    }
+    disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
+  };
 }
