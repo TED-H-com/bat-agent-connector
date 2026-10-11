@@ -103,7 +103,9 @@ def daemon(mock, human, tmp_path):
     d = TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=[str(tmp_path / "managed")],
                                safety={"write_min_interval_s": 0}), tmp_path / "tasks.db")
     d.ops.context["git_runner"] = LocalRunner()
-    yield d
+    from tests.conftest import controller_scope
+    with controller_scope(d.journal, OPERATOR):
+        yield d
     d.journal.close()
 
 

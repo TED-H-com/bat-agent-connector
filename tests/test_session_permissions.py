@@ -12,7 +12,7 @@ from tests.conftest import adopt
 from tests.operation_helpers import settle_operations
 
 daemon, served, owned = api.daemon, api.served, task_tests.owned
-PERSON = api_auth.Principal("permissions-caller", frozenset({"operate", "observe"}))
+PERSON = api_auth.Principal("operator-dashboard", frozenset({"operate", "observe"}))
 CLAUDE, CODEX = api.MANUAL, "sess-codex-0002"
 
 

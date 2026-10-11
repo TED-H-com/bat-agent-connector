@@ -234,7 +234,7 @@ async def test_actual_reviewed_cleanup_removes_only_owned_carrier(world, mock):
     sid, path = op["result"]["session_id"], op["result"]["worktree_path"]
     mock.metas[sid]["isStreaming"] = False
     before = snapshot(world["human"])
-    cleaner = api_auth.Principal("cleaner", frozenset({"observe", "cleanup"}))
+    cleaner = api_auth.Principal(STARTER.actor, frozenset({"observe", "cleanup"}))
     doc = await cleanup.preview(world["d"].ops, cleaner, {"kind": "host", "host": "h1"})
     assert doc["ready"], json.dumps([{k: i.get(k) for k in ("kind", "path", "session_id", "reasons", "observation")} for i in doc["items"]], indent=2)
     request = cleanup.apply_request(doc, "cleanup-published")

@@ -12,13 +12,13 @@ from bat_agent_connector.mcp_server import build_server
 from bat_agent_connector.operations import NO_KEY_PREFIX, OperationError
 from tests import test_api_v1 as api
 from tests import test_operations_unification as task_tests
-from tests.conftest import adopt
+from tests.conftest import adopt, controller_scope
 from tests.operation_helpers import settle_operations
 from tests.test_interrupt_operations import mcp_result, rpc
 
 daemon, served, owned = api.daemon, api.served, task_tests.owned
 SID = api.MANUAL
-PERSON = api_auth.Principal("caller", frozenset({"operate", "observe"}))
+PERSON = api_auth.Principal("operator-dashboard", frozenset({"operate", "observe"}))
 
 
 def request(kind, **extra):
@@ -47,7 +47,7 @@ async def test_named_keys_share_canonical_action_across_real_transports(served, 
     pending(mock)
     if kind == "send":
         mock.metas[SID]["isStreaming"] = True  # queue must survive each real transport
-    tok = api.token(d, "caller", "operate", "observe")
+    tok = api.token(d, "operator-dashboard", "operate", "observe")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", tok)
     monkeypatch.setattr(cli, "load_config", lambda _: d.fleet.config)
@@ -92,7 +92,7 @@ async def test_named_keys_share_canonical_action_across_real_transports(served, 
             assert frames[0]["params"]["clientMessageId"] == "caller-message"
         elif kind == "answer":
             assert frames[0]["params"]["result"]["dontAskAgain"] is True
-        assert d.ops.get(op_id)["actor"] == "caller"
+        assert d.ops.get(op_id)["actor"] == "operator-dashboard"
         assert not d.journal.db.execute("SELECT 1 FROM commands").fetchone()
     finally:
         await fleet.close()
@@ -106,7 +106,7 @@ async def test_failed_control_receipt_keeps_actionable_reason_on_keyed_replay(
     adopt(SID)
     mock.metas[SID]["isStreaming"] = True
     # This principal cannot use operation GET to recover an omitted failure explanation.
-    token = api.token(d, "caller", "operate")
+    token = api.token(d, "operator-dashboard", "operate")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", token)
     monkeypatch.setattr(cli, "load_config", lambda _: d.fleet.config)
@@ -314,7 +314,7 @@ async def test_mcp_requires_agent_token_and_unavailable_owner_has_no_direct_fall
     server, fleet = build_server(d.fleet.config)
     try:
         assert "BATC_API_TOKEN" in await call(server, "session_" + kind, request(kind))
-        monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "caller", "operate"))
+        monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "operator-dashboard", "operate"))
         def unavailable(*_a, **_k):
             raise ConnectionRefusedError("owner unavailable")
         monkeypatch.setattr(task_daemon, "request", unavailable)
@@ -439,7 +439,7 @@ async def test_answer_preserves_deny_message_and_codex_session_permission(daemon
 ])
 async def test_http_and_rpc_reject_malformed_canonical_params_without_admission(served, action, params):
     d, port = served
-    tok = api.token(d, "caller", "operate")
+    tok = api.token(d, "operator-dashboard", "operate")
     body = {"action": action, "target": {"host": "h1", "session_id": SID}, "params": params,
             "idempotency_key": "malformed"}
     code, out = await api.http(port, "POST", "/api/v1/operations", tok=tok, body=body)
@@ -453,7 +453,7 @@ async def test_http_and_rpc_reject_malformed_canonical_params_without_admission(
 @pytest.mark.parametrize("bad", [[], {}, " "])
 async def test_canonical_session_targets_refuse_malformed_host_before_policy(served, action, bad):
     d, port = served
-    tok = api.token(d, "caller", "operate")
+    tok = api.token(d, "operator-dashboard", "operate")
     params = {"session.send": {"text": "prompt"}, "session.answer": {"permission": "allow", "tool_use_id": "reviewed"},
               "session.interrupt": {"mode": "soft"}}[action]
     body = {"action": action, "target": {"host": bad, "session_id": SID}, "params": params,
@@ -468,7 +468,7 @@ async def test_canonical_session_targets_refuse_malformed_host_before_policy(ser
 @pytest.mark.parametrize("kind", ["send", "answer"])
 async def test_raw_operations_cannot_select_legacy_key_or_resolved_input_mode(served, kind):
     d, port = served
-    tok = api.token(d, "caller", "operate")
+    tok = api.token(d, "operator-dashboard", "operate")
     params = {"text": "prompt"} if kind == "send" else {"permission": "allow", "tool_use_id": "reviewed"}
     body = {"action": "session." + kind, "target": {"host": "h1", "session_id": SID}, "params": params,
             "_legacy_session": True, "_resolved_target": {"host": "h1", "session_id": "forged-session"},
@@ -482,12 +482,13 @@ async def test_raw_operations_cannot_select_legacy_key_or_resolved_input_mode(se
 
 @pytest.mark.parametrize("kind", ["send", "continue", "answer"])
 async def test_legacy_control_key_namespace_keeps_original_actor(daemon, mock, kind):
-    adopt(SID)
     results = []
-    for actor in ("one", "two"):
-        pending(mock)
-        out = await daemon.call_api("session_" + kind, request(kind, idempotency_key="shared-key"),
-                                   api_auth.Principal(actor, frozenset({"operate"})))
+    for actor, sid in (("one", SID), ("two", "sess-codex-0002")):
+        principal = api_auth.Principal(actor, frozenset({"operate"}))
+        with controller_scope(daemon.journal, principal):
+            adopt(sid, agent_preset="codex-agent" if actor == "two" else "claude-code")
+        pending(mock, sid=sid)
+        out = await daemon.call_api("session_" + kind, request(kind, session_id=sid, idempotency_key="shared-key"), principal)
         assert daemon.ops.get(out["operation_id"])["actor"] == actor
         results.append(out["operation_id"])
     assert results[0] != results[1] and len(api.write_frames(mock)) == 2
