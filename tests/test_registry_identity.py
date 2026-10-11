@@ -10,6 +10,7 @@ from bat_agent_connector import confinement, lifecycle, orchestrate, platform_fi
 from bat_agent_connector.errors import InvokeError, WriteRefused
 from bat_agent_connector.task_core import TaskCoordinator
 from bat_agent_connector.task_journal import Journal
+from tests.conftest import controller_scope
 from tests.test_confinement import MANAGED
 
 
@@ -66,38 +67,39 @@ async def test_a10_lead_invoke_error_is_fenced_and_recovers_one_registry_row(
         fleet_factory, mock, tmp_path, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, orchestrate_max_sessions=1, **MANAGED)
     journal = Journal(tmp_path / "tasks.db")
-    task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="Start fixture",
-                          idempotency_key="invoke-error-start")
-    adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
+    with controller_scope(journal):
+        task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="Start fixture",
+                              idempotency_key="invoke-error-start")
+        adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
 
-    async def available(_task):
-        return frozenset({"codex"})
+        async def available(_task):
+            return frozenset({"codex"})
 
-    monkeypatch.setattr(adapter, "available_agents", available)
-    attempts = error_after_creation(mock)
-    core = TaskCoordinator(journal, adapter)
-    try:
-        result = await core._start(task, role="lead")
-        command = next(c for c in journal.commands(task["task_id"]) if c["kind"] == "start_lead")
-        sid = command["session_id"]
-        assert result["state"] == "uncertain" and command["status"] == "uncertain"
-        row = unique_rows()[0]
-        assert len(unique_rows()) == 1 and row["session_id"] == sid
-        assert row["status"] == "uncertain" and row["start_sent"] is True
-        assert row["error_code"] == "CONFINEMENT_START_UNSETTLED"
-        assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
-        assert "worktree:remove" not in mock.channels() and "claude:send-message" not in mock.channels()
-        result = await core.tick(task["task_id"])
-        assert result["state"] == "accepted" and result["session_id"] == sid
-        assert len(unique_rows()) == len(registry.list_entries("h1", active_only=True)) == 1
-        assert unique_rows()[0]["status"] == "active"
-        assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
-        with pytest.raises(WriteRefused, match="cap reached.*1 active"):
-            await orchestrate.session_start(fleet, "h1", "demo-project", confirm=True)
-        assert len(unique_rows()) == 1 and mock.channels().count("claude:start-session") == 1
-    finally:
-        await fleet.close()
-        journal.close()
+        monkeypatch.setattr(adapter, "available_agents", available)
+        attempts = error_after_creation(mock)
+        core = TaskCoordinator(journal, adapter)
+        try:
+            result = await core._start(task, role="lead")
+            command = next(c for c in journal.commands(task["task_id"]) if c["kind"] == "start_lead")
+            sid = command["session_id"]
+            assert result["state"] == "uncertain" and command["status"] == "uncertain"
+            row = unique_rows()[0]
+            assert len(unique_rows()) == 1 and row["session_id"] == sid
+            assert row["status"] == "uncertain" and row["start_sent"] is True
+            assert row["error_code"] == "CONFINEMENT_START_UNSETTLED"
+            assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
+            assert "worktree:remove" not in mock.channels() and "claude:send-message" not in mock.channels()
+            result = await core.tick(task["task_id"])
+            assert result["state"] == "accepted" and result["session_id"] == sid
+            assert len(unique_rows()) == len(registry.list_entries("h1", active_only=True)) == 1
+            assert unique_rows()[0]["status"] == "active"
+            assert attempts == [sid] and mock.channels().count("claude:start-session") == 1
+            with pytest.raises(WriteRefused, match="cap reached.*1 active"):
+                await orchestrate.session_start(fleet, "h1", "demo-project", confirm=True)
+            assert len(unique_rows()) == 1 and mock.channels().count("claude:start-session") == 1
+        finally:
+            await fleet.close()
+            journal.close()
 
 
 @pytest.mark.parametrize("status,sent", [("failed", True), ("superseded", True), ("failed", None)])

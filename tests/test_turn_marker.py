@@ -15,7 +15,7 @@ MANAGED = {"writes": True, "managed_roots": ["/srv"]}
 
 
 @pytest.fixture(autouse=True)
-def connector_sessions():
+def connector_sessions(controller_context):
     """Turn-marker mechanics run on sessions the connector created in a managed root."""
     adopt(SID)
     adopt("sess-codex-0002")
