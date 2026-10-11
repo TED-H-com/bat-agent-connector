@@ -505,6 +505,10 @@ def _once(ctx: OpContext, change: Callable[[object, float], dict]) -> dict:
                          (ctx.operation_id,)).fetchone()
         if row is not None:
             return json.loads(row["result"])
+        from .pm_source_lineage import require_new_effect
+        require_new_effect(ctx.service, ctx.operation_id)
+        from .pm_lifecycle_gates import require_local
+        require_local(db, ctx.operation_id)
         now = _now()
         result = change(db, now)
         db.execute("INSERT INTO management_applied(operation_id,result,applied_at) VALUES(?,?,?)",

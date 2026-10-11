@@ -530,4 +530,8 @@ def readiness(ops, principal, workspace_id, package_id):
             "ready_for": "engineering_handoff_review", "checks": checks,
             "coverage": {"basis": "fixed_package_and_current_local_state", "network_checked": False, "runtime": "not_checked",
                          "budget": "not_checked", "delivery_target": "not_checked", "quality": "unassessed"},
-            "execution_available": False, "execution_authorized": False, "dispatch_readiness": "not_implemented"})
+            "execution_available": False, "execution_authorized": False,
+            "dispatch_readiness": "separate_fixed_handoff_admission",
+            "handoff": {"action": "repository.continue", "contract": "pm-engineering-handoff/v1",
+                        "code_basis_required": True, "compatibility": "unverified",
+                        "source_materialization": "bounded_full_prompt"}})

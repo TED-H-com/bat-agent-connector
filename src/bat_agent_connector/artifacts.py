@@ -131,9 +131,12 @@ def _file_hash(path: Path) -> tuple[int, str]:
     return size, digest.hexdigest()
 
 
-def get(db, artifact_id, revision) -> dict:
+def get(db, artifact_id, revision, *, principal=None) -> dict:
     if not isinstance(artifact_id, str) or not ARTIFACT_ID.fullmatch(artifact_id) or type(revision) is not int or revision < 1:
         raise OperationError("INVALID_ARTIFACT_REF", "artifact_id and positive revision are required", 422)
+    if principal is not None:
+        from .pm_source_lineage import require
+        require(db, principal, "artifact", artifact_id)
     row = db.execute("SELECT * FROM artifact_revisions WHERE artifact_id=? AND revision=?",
                      (artifact_id, revision)).fetchone()
     if row is None:
@@ -150,7 +153,7 @@ def get(db, artifact_id, revision) -> dict:
     return out
 
 
-def list_artifacts(db, *, limit=50, cursor=None) -> dict:
+def list_artifacts(db, *, limit=50, cursor=None, principal=None) -> dict:
     if type(limit) is not int or not 1 <= limit <= 200:
         raise OperationError("INVALID_PARAMS", "limit must be 1-200", 422)
     args, clause = [], ""
@@ -168,6 +171,10 @@ def list_artifacts(db, *, limit=50, cursor=None) -> dict:
                       + " ORDER BY a.created_at DESC,a.artifact_id DESC LIMIT ?", (*args, limit + 1)).fetchall()
     items = []
     for row in rows[:limit]:
+        if principal is not None:
+            from .pm_source_lineage import visible
+            if not visible(db, principal, "artifact", row["artifact_id"]):
+                continue
         item = dict(row)
         item["revision"] = get(db, row["artifact_id"], row["latest_revision"]) if row["latest_revision"] else None
         items.append(item)

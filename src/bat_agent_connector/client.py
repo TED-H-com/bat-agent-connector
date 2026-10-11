@@ -389,6 +389,8 @@ class BatClient:
                 # A shared-carrier failover may reserve its writer fence while
                 # this frame waits for connect, a permit or async identity reads.
                 check_grant(grant, self.host.name, canonical, params)
+                from .pm_source_lineage import require_frame
+                require_frame()
         return await self._invoke_checked(canonical, params, timeout,
                                           retry_on_disconnect=retry_on_disconnect,
                                           before_send=final_gate, before_frame=before_frame,

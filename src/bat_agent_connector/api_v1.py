@@ -361,6 +361,8 @@ class ApiV1:
                         raise ApiError(405, "METHOD_NOT_ALLOWED", "download content needs GET")
                     if not principal.allows("observe"):
                         raise ApiError(403, "FORBIDDEN", "download needs observe scope")
+                    from .pm_source_lineage import require
+                    require(self.daemon.journal.db, principal, "artifact", download["aid"])
                     row = artifacts.get(self.daemon.journal.db, download["aid"], int(download["revision"]))
                     data = self.daemon.artifact_store.read_content(row["artifact_id"], row["revision"])
                     head = (f"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {len(data)}\r\n"
@@ -445,7 +447,13 @@ class ApiV1:
             from . import controller_authority
             authority = controller_authority.binding(self.daemon.journal.db, principal) if principal else None
             with controller_authority.use(authority, self.daemon.journal):
+                from .pm_source_lineage import http_selection, read_request, read_response
+                # Commands retain their durable admission/replay classification.
+                # Read selectors and final responses always use current sources.
+                if method == "GET":
+                    read_request(self.daemon.journal.db, principal, http_selection(fn.__name__, kwargs, query, body))
                 status, payload = await fn(principal=principal, query=query, body=body, headers=headers, **kwargs)
+                payload = read_response(self.daemon.journal.db, principal, payload)
         except dashboard_sync.ResetRequired as e:
             status, payload = 409, e.document()
         except ApiError as e:
@@ -1154,11 +1162,11 @@ class ApiV1:
     async def artifact_capture_preview(self, principal, body, **_):
         return 200, {"preview": await artifact_capture.preview(self.daemon.ops, principal, body)}
 
-    async def artifacts(self, query, **_):
-        return 200, artifacts.list_artifacts(self.daemon.journal.db, limit=self._int(query, "limit", 50), cursor=self._q(query, "cursor"))
+    async def artifacts(self, query, principal, **_):
+        return 200, artifacts.list_artifacts(self.daemon.journal.db, limit=self._int(query, "limit", 50), cursor=self._q(query, "cursor"), principal=principal)
 
-    async def artifact(self, aid, revision, **_):
-        return 200, {"artifact": artifacts.get(self.daemon.journal.db, aid, int(revision))}
+    async def artifact(self, aid, revision, principal, **_):
+        return 200, {"artifact": artifacts.get(self.daemon.journal.db, aid, int(revision), principal=principal)}
 
     async def resume_operation(self, principal, op, **_):
         return 200, {"operation": self.daemon.ops.resume(principal, op)}

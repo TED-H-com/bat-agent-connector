@@ -549,6 +549,10 @@ class Inventory:
         items = []
         membership = self._memberships(relation_scope) if projects or work_item_id else {}
         for r in rows:
+            if principal is not None:
+                from .pm_source_lineage import visible
+                if not visible(self.db, principal, "session", r["host"] + "/" + r["session_id"]):
+                    continue
             item = self.get_session(r["host"], r["session_id"], now) if r.get("journal_only") else self._session_out(r, hosts, now)
             if principal is not None:
                 from .session_reading import access

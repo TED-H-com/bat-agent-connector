@@ -222,6 +222,9 @@ class OpContext:
             self.service._step_start(self.operation_id, name, request or {}, local=True,
                                      bookkeeping=receipt_only or lifecycle_bookkeeping)
         with self.service.journal.tx():
+            if not receipt_only:
+                from .pm_source_lineage import require_new_effect
+                require_new_effect(self.service, self.operation_id)
             from .pm_lifecycle_gates import require_local
             require_local(self.service.db, self.operation_id, bookkeeping=receipt_only or lifecycle_bookkeeping)
             result = fn()
@@ -435,6 +438,9 @@ class OperationService:
 
     def _step_start(self, operation_id: str, name: str, request: dict, *, local=False, bookkeeping=False) -> None:
         with self.journal.tx():
+            if not bookkeeping:
+                from .pm_source_lineage import require_new_effect
+                require_new_effect(self, operation_id)
             from .pm_lifecycle_gates import admit_step
             admit_step(self.db, operation_id, name, local=local, bookkeeping=bookkeeping)
             seq = self.db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM operation_steps WHERE operation_id=?",
@@ -445,6 +451,9 @@ class OperationService:
 
     def _step_restart(self, operation_id: str, name: str, request: dict, *, bookkeeping=False) -> None:
         with self.journal.tx():
+            if not bookkeeping:
+                from .pm_source_lineage import require_new_effect
+                require_new_effect(self, operation_id)
             from .pm_lifecycle_gates import admit_step
             admit_step(self.db, operation_id, name, bookkeeping=bookkeeping, restart=True)
             self.db.execute("""UPDATE operation_steps SET status='started',request=?,response=NULL,error=NULL,
@@ -526,6 +535,8 @@ class OperationService:
                                      "this idempotency_key was already used for a different request", 409)
         op = self._decode(existing) if existing else None
         if op:
+            from .pm_access import require_visible
+            require_visible(self.db, principal, op)
             self._authorize_controller(principal, op, "replay")
             from .bulk_approval import authorize_child
             authorize_child(self, principal, op, "replay")
@@ -559,9 +570,13 @@ class OperationService:
         admission_params = params if _resolved_params is None else {**params, **_resolved_params}
         from . import controller_authority
         authority = controller_authority.binding(self.db, principal)
+        from .pm_source_lineage import require_document
+        require_document(self.db, principal, {"target": _resolved_target or target, "params": admission_params})
         with controller_authority.use(authority, self.journal):
             binding = adef.admit(self, principal, _resolved_target or target,
                                 admission_params, preconditions) if adef.admit else None
+        from .pm_source_lineage import inherit
+        binding = inherit(self, principal, action, _resolved_target or target, admission_params, binding)
         # Admission is trusted service code. A task capability may delegate the
         # original task controller after validating that exact capability; an
         # HTTP/RPC caller cannot supply or replace this binding.
@@ -582,12 +597,16 @@ class OperationService:
                              now, _canonical(refs) if refs else None))
             from .pm_lifecycle_gates import admit_operation
             admit_operation(self.db, operation_id, action, target, binding)
+            from .pm_source_lineage import bind_operation
+            bind_operation(self.db, operation_id, _resolved_target or target, params, binding)
             self.journal.api_event("operation", operation_id, "operation.accepted",
                                    {"action": action, "target": target, "entry": entry}, actor=principal.actor)
         self.kick()
         return self._row(operation_id), True
 
     def _may_steer(self, principal: Principal, op: dict, verb: str) -> None:
+        from .pm_access import require_visible
+        require_visible(self.db, principal, op)
         self._authorize_controller(principal, op, verb)
         from .bulk_approval import authorize_child
         authorize_child(self, principal, op, verb)
@@ -789,9 +808,11 @@ class OperationService:
         ctx = OpContext(self, op)
         try:
             from . import controller_authority
+            from .pm_source_lineage import execution
+
             # Missing legacy authority is intentional: receipt recovery can
             # still read, while every new external effect fails closed.
-            with controller_authority.use(controller_authority.operation_binding(op), self.journal):
+            with controller_authority.use(controller_authority.operation_binding(op), self.journal), execution(self, operation_id):
                 result = await adef.run(ctx)
         except Cancelled:
             self._transition(operation_id, "cancelled", reason="cancelled between steps")
