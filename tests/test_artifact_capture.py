@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import api_auth, artifacts, cli, registry
+from bat_agent_connector import api_auth, artifacts, cli, platform_files, registry
 from bat_agent_connector import artifact_capture as capture
 from bat_agent_connector import artifact_capture_helper as helper
 from bat_agent_connector.artifact_host import CAPTURE_HELPER, ArtifactHost
@@ -285,8 +285,12 @@ async def test_capture_refuses_changed_source_without_publishing(daemon, human, 
     elif change == "sdk_identity":
         mock.ws_doc["terminals"][0]["sdkSessionId"] = "different"
     else:
-        registry.ensure_existing("h1", {"session_id": MANUAL, "workspace": "fixture", "agent": "claude",
-                                        "status": "starting", "cwd": str(human)})
+        # Simulate unproven registry evidence appearing after the manual preview.
+        # Recovery cannot adopt this row without its original controller proof.
+        entries = registry.list_entries()
+        entries.append({"host": "h1", "session_id": MANUAL, "workspace": "fixture", "agent": "claude",
+                        "status": "starting", "cwd": str(human)})
+        platform_files.atomic_write(registry.registry_path(), json.dumps({"sessions": entries}).encode())
     op = await finish(daemon, submit(daemon, person, pv))
     assert op["status"] == "failed", op
     assert op["error_code"] in {"SOURCE_CHANGED", "CAPTURE_SOURCE_NOT_MANUAL"}
