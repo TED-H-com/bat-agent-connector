@@ -138,10 +138,18 @@ async def test_original_source_withdrawal_hides_pending_complete_events_and_repl
         await fleet.close()
 
 
-async def test_waited_post_does_not_leak_source_revoked_during_provider_read(ready):
+async def test_waited_post_does_not_leak_source_revoked_during_provider_read(ready, monkeypatch):
     d, port, target, binding, project_id = ready
     original = request(d.ops, target, binding)
     original["params"]["rationale"] = "PRIVATE SOURCE IN WAITED ACTION"
+    # This HTTP fixture has no background worker. Settle the actual admitted
+    # operation while its public wait is held, rather than timing out queued.
+    original_wait = d.ops.wait
+
+    async def complete_before_reply(operation_id, timeout):
+        await settle_operations(d.ops)
+        return await original_wait(operation_id, timeout)
+    monkeypatch.setattr(d.ops, "wait", complete_before_reply)
 
     async def revoke(path):
         if path.endswith("releases/41"):
