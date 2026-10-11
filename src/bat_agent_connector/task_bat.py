@@ -263,7 +263,8 @@ class BatTaskAdapter:
                 self.journal.revoke_task_capabilities(previous["task_id"])
                 registry.claim_warm(host, session_id, previous_task_id=previous["task_id"],
                                     task_id=task["task_id"], workspace_id=identity["workspace_id"],
-                                    cwd=identity["cwd"], branch=identity["branch"])
+                                    cwd=identity["cwd"], branch=identity["branch"],
+                                    expected_incarnation=identity["controller_incarnation"])
                 confinement.record_task_start(self.journal, task["task_id"], session_id,
                                               registry.get(host, session_id) or {})
                 # The reused branch's verified HEAD is the next task's diff baseline.
