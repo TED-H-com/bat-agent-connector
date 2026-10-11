@@ -572,7 +572,7 @@ def project_permissions(host, session_id, expected, operation_id, fields):
 
 def retire(host: str, session_id: str, status: str, *, created_at, actor: str, reason: str,
            operation_id: str | None = None, carrier_resource_id: str | None = None,
-           expected: dict | None = None) -> dict:
+           expected: dict | None = None, controller_incarnation: str | None = None) -> dict:
     """Release capacity for a confirmed runtime generation without retiring its worktree/history."""
     if status not in RETIRED:
         raise ValueError("invalid session retirement status")
@@ -596,6 +596,14 @@ def retire(host: str, session_id: str, status: str, *, created_at, actor: str, r
             result = {"capacity_released": False, "registry_status": e.get("status"), "capacity_reason": None}
             if e.get("created_at") != created_at:
                 return {**result, "capacity_reason": "generation_changed"}
+            # Check the original resource inside the same lock as the write and before
+            # accepting an idempotent retirement receipt from a possibly replaced row.
+            incarnation = controller_incarnation if controller_incarnation is not None else (expected or {}).get("controller_incarnation")
+            if incarnation is not None:
+                if e.get("controller_incarnation") != incarnation:
+                    return {**result, "capacity_reason": "generation_changed"}
+                from . import controller_authority
+                controller_authority.require_entry(e, expected_incarnation=incarnation)
             if e.get("task_id"):
                 return {**result, "capacity_reason": "task_owned"}
             if e.get("status") == "starting":
