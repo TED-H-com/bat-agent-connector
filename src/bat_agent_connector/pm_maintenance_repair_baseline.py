@@ -12,7 +12,7 @@ from . import pm_maintenance_repair_delivery as delivery
 from . import pm_maintenance_repair_evidence as evidence
 from . import pm_maintenance_repairs as repairs
 from . import pm_release_baselines as baselines
-from .operations import OperationError, Wait
+from .operations import Cancelled, OperationError, Wait
 
 
 def child(ops, parent):
@@ -70,10 +70,10 @@ def advance(ctx, parent, completed):
         if selected is None:
             return {'status': 'not_applicable', 'reason': 'original_release_source_or_delivery_scope'}
         delivery._create(ctx, 'baseline', 0, selected, None)
-    except OperationError as exc:
+    except (Cancelled, OperationError) as exc:
         # Delivery has already been verified. A later stop/version conflict may
         # prevent the new local selection, but cannot erase that delivery fact.
-        return {'status': 'not_updated', 'reason': exc.code}
+        return {'status': 'not_updated', 'reason': getattr(exc, 'code', 'CANCELLED')}
     raise Wait('waiting_external', 'Original verified-deployment baseline selection admitted', 1)
 
 
