@@ -45,6 +45,15 @@ MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confir
 
 ## Operation
 
+HTTP `POST /operations?wait=…`、RPC `op_submit(wait_s=…)` 與 MCP
+`operation_submit` 等待後，必須以目前 caller 再讀原 operation；等待期間的
+PM membership／原始來源撤權會拒絕回傳 params、result 與 external refs。
+拒絕揭露不取消、刪除或重送已受理的操作，原始 key 與 receipt 保留。
+HTTP 的 `admission_refused=true` 只用於確認該 actor／key namespace 沒有
+已受理紀錄的拒絕；不可用 filtered read 的查無結果推斷尚未受理。既存隱藏
+操作的 replay 與等待後拒絕不帶此旗標，避免 client 丟棄原 key 建立重複工作。
+PM key namespace 包含 workspace；另一 actor 的同 key 不影響這個判斷。
+
 | 狀態 | 意思 |
 |---|---|
 | `accepted` | 意圖已持久保存，尚未開始 |

@@ -930,11 +930,17 @@ class ApiV1:
             if (not str(body.get("action", "")).startswith("pm.")
                     and body.get("action") not in {"setup.host", "setup.repository", "setup.verification"}):
                 raise
-            # This boundary is before a new durable setup operation exists. The UI
-            # may review invalid input again; lost transport replies still keep the key.
-            return error.status, {"error": {"code": error.code, "message": error.message, "admission_refused": True}}
+            # A source-hidden replay is still the original admitted operation.
+            # Only proven absence in this actor/key namespace permits a fresh UI key.
+            existing = self.daemon.ops.has_idempotency_record(principal, action=body.get("action"),
+                target=body.get("target"), idempotency_key=key)
+            return error.status, {"error": {"code": error.code, "message": error.message,
+                                           **({} if existing else {"admission_refused": True})}}
         if wait > 0:
-            op = await self.daemon.ops.wait(op["operation_id"], wait)
+            await self.daemon.ops.wait(op["operation_id"], wait)
+            # Waiting is not a read grant: membership or original source access
+            # may have changed. Outside the admission catch: never mark this unsent.
+            op = self.daemon.ops.get(op["operation_id"], principal=principal)
         return (202 if created else 200), {"operation": op, "created": created}
 
     async def operation(self, op, principal, **_):
