@@ -9751,7 +9751,8 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		return row;
 	}
 	function render(row) {
-		const c = row.context, p = row.progress || {}, box = h("article", { "data-repair": row.repair_id }, h("h3", {}, `${t("pmr_issue")} #${c.finding.native.number}`), line("pmr_rule", c.rule.key), line("pmr_dispatch", state(row.child?.status || "not_admitted")), text(row.capacity_held ? "pmr_reserved" : "pmr_released"), line("pmr_verification", p.verification ? state(p.verification.status) : t("pmr_unproven")), line("pmr_quality", p.quality?.length ? t("pmr_recorded") : t("pmr_unproven")), line("pmr_publication", row.publication_child ? state(row.publication_child.status) : t("pmr_unproven")), line("pmr_ci", p.required_ci_receipts?.length ? t("pmr_recorded") : t("pmr_unproven")), text("pmr_not_fixed"));
+		const c = row.context, p = row.progress || {}, box = h("article", { "data-repair": row.repair_id }, h("h3", {}, `${t("pmr_issue")} #${c.finding.native.number}`), line("pmr_rule", c.rule.key), line("pmr_dispatch", state(row.child?.status || "not_admitted")), text(row.capacity_held === false ? "pmr_released" : "pmr_reserved"), line("pmr_verification", p.verification ? state(p.verification.status) : t("pmr_unproven")), line("pmr_quality", p.quality?.length ? t("pmr_recorded") : t("pmr_unproven")), line("pmr_publication", row.publication_child ? state(row.publication_child.status) : t("pmr_unproven")), line("pmr_ci", p.required_ci_receipts?.length ? t("pmr_recorded") : t("pmr_unproven")), text("pmr_not_fixed"));
+		if (row.outcome === "published_for_review") box.prepend(line("pmr_outcome", t("pmr_published_for_review")));
 		if (row.child) box.append(h("p", {}, t("pmr_child"), " · ", link(row.child.operation_id)));
 		if (row.publication_child) {
 			box.append(h("p", {}, t("pmr_original_publication"), " · ", link(row.publication_child.operation_id)));
@@ -9770,6 +9771,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		return box;
 	}
 	function reason(code) {
+		if (code === "PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN") return t("pmr_runtime_unproven");
 		if (/UNKNOWN|UNSETTLED/.test(code)) return t("pmr_unknown");
 		if (/DEADLINE/.test(code)) return t("pmr_deadline_block");
 		if (/BUDGET|CAPACITY/.test(code)) return t("pmr_budget_block");
@@ -18077,6 +18079,9 @@ var pmMaintenanceRepairsStrings = {
 		pmr_cost: "Model and provider charges are unmeasured. These limits do not prove a hard cost ceiling.",
 		pmr_reserved: "This repair still holds its capacity reservation.",
 		pmr_released: "This repair no longer holds a capacity reservation.",
+		pmr_outcome: "Repair outcome",
+		pmr_published_for_review: "Published for review",
+		pmr_runtime_unproven: "The PR is available for review. The original repair runtime has not been proven ended, so its capacity remains reserved.",
 		pmr_dispatch: "Implementation dispatch",
 		pmr_verification: "Fixed revision verification",
 		pmr_quality: "Acceptance and review assessment",
@@ -18170,6 +18175,9 @@ var pmMaintenanceRepairsStrings = {
 		pmr_cost: "模型與供應商費用尚未量測；這些上限不代表已確保費用不超支。",
 		pmr_reserved: "此修復仍保留工作容量。",
 		pmr_released: "此修復已釋放工作容量。",
+		pmr_outcome: "修復結果",
+		pmr_published_for_review: "已發布供審閱",
+		pmr_runtime_unproven: "PR 已可供審閱。原始修復 runtime 尚未證實結束，因此仍保留其工作容量。",
 		pmr_dispatch: "實作派送",
 		pmr_verification: "固定版本驗證",
 		pmr_quality: "驗收與審查評估",
