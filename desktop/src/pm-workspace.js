@@ -1,5 +1,6 @@
-// PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+// PM facts and operations remain central; this client submits explicit durable requests.
 import {workspaceGovernance} from './pm-governance.js';
+import {workspacePackageHandoff} from './pm-package-handoff.js';
 import {workspaceLifecycle} from './pm-lifecycle.js';
 import {workspaceIssueMappings} from './pm-issue-mappings.js';
 import {specSources} from './pm-spec-sources.js';
@@ -263,11 +264,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
   const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping
     ? workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
+  const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available
+    ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure:()=>engineering?.withdraw()}) : null;
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
-    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>issues?.setPackage(row)}) : null;
+    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);}}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
+  if(handoff)body.insertBefore(handoff.element,specifications?.element||content);
   if(issues)body.insertBefore(issues.element,specifications?.element||content);
-  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,issues?.element].filter(Boolean);
+  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,handoff?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -541,7 +545,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
-    lifecycle?.withdraw();issues?.withdraw();
+    lifecycle?.withdraw();engineering?.withdraw();handoff?.withdraw();issues?.withdraw();
     releaseBaselines?.withdraw();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
@@ -595,7 +599,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [lifecycle, evidence, brief, releaseBaselines, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,issues]) {
+      for (const section of [lifecycle, evidence, brief, releaseBaselines, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,handoff,issues]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -606,7 +610,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         brief?.withdraw();
-        lifecycle?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();
+        lifecycle?.withdraw();engineering?.withdraw();handoff?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -620,6 +624,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
+    }
+    if(handoff&&['project','work_item'].includes(event.resource_type)) {
+      eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
     }
     if (kanban && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
       eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());
