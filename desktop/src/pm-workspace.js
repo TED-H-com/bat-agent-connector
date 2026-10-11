@@ -23,6 +23,9 @@ const receiptSubscribers = new Map();
 // removed and reread after an access reset; drafts retain their existing namespace.
 const threadDisclosures = new Map();
 const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]'];
+// A remounted form recovers an acknowledged ID without resending an unknown POST.
+// Notifications carry no result; the active form reads with current access.
+const receiptSubscribers = new Map();
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
