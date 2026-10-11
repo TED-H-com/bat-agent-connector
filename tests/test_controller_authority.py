@@ -266,3 +266,40 @@ def test_sent_or_settled_legacy_readback_needs_no_new_start_claim(status, sent):
     with authority.use(None):
         assert registry.claim_unsent("h1", "legacy") == "not_unsent"
     assert registry.registry_path().read_bytes() == before
+
+
+def test_new_worktree_can_read_foreign_origin_but_cannot_use_its_carrier(identities):
+    from dataclasses import replace
+
+    journal, first, second = identities
+    with authority.use(first, journal):
+        registry.reserve("h1", {"session_id": "readable-planner", "cwd": "/srv/shared"}, 8)
+        registry.update("h1", "readable-planner", status="active")
+    with authority.use(second, journal):
+        grant = resource_policy._create_grant("h1", "fresh-child", None, resource_policy.LEGACY_SHARED_CLONE)
+        registry.reserve("h1", {"session_id": "fresh-child", "cwd": "/srv/shared", "origin_cwd": "/srv/shared",
+                                "start_operation_id": "op_fixture", "creates_worktree": True,
+                                "start_sent": False}, 8)
+        resource_policy.check_grant(grant, "h1", "worktree:create", {"sessionId": "fresh-child"})
+        # Reading another controller's source does not acquire or block its carrier.
+        with authority.use(first, journal):
+            planner_grant = resource_policy._create_grant("h1", "readable-planner", "/srv/shared", None)
+            resource_policy.check_grant(planner_grant, "h1", "claude:send-message", {"sessionId": "readable-planner"})
+        # A start in the source folder is still a foreign carrier mutation.
+        with pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+            resource_policy.check_grant(grant, "h1", "claude:start-session", {"sessionId": "fresh-child"})
+        path = "/srv/shared/.bat-worktrees/child"
+        registry.update("h1", "fresh-child", cwd=path, worktree_path=path)
+        grant = replace(grant, workdir=path)
+        resource_policy.check_grant(grant, "h1", "claude:start-session", {"sessionId": "fresh-child"})
+    assert registry.get("h1", "readable-planner")["status"] == "active"
+
+
+def test_new_reservation_cannot_copy_another_sessions_incarnation(identities):
+    journal, first, _second = identities
+    with authority.use(first, journal):
+        registry.reserve("h1", {"session_id": "original"}, 8)
+        original = registry.get("h1", "original")
+        with pytest.raises(ResourceReadOnly, match="CONTROLLER_INCARNATION_CHANGED"):
+            registry.reserve("h1", {**original, "session_id": "copy"}, 8)
+        assert registry.get("h1", "copy") is None
