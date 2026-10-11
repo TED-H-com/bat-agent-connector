@@ -1435,7 +1435,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			selected.append(h("p", { class: "muted" }, t("pmi_select_package")));
 			return;
 		}
-		selected.append(h("p", {}, packageRow.document.title), h("p", { class: "pm-source" }, t("pmi_fixed_package"), ": ", packageRow.package_id));
+		selected.append(h("p", {}, t("pmi_fixed_package"), " ", packageRow.sequence, " · ", packageRow.document.title));
 		const found = matching();
 		if (found[0]?.document.state === "cancelled") {
 			publication.append(h("p", { class: "muted" }, t("pmi_cancelled_help")));
