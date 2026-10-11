@@ -96,8 +96,10 @@ Revocation prevents future use, preserves every previous conclusion and original
 receipt, and never kills sessions or rewrites a historical snapshot.
 
 All matrices, histories and responses are bounded whole UTF-8 JSON documents.
-A review has at most 200 criteria and 32 immutable assessment/revocation records;
-its predecessor chain is bounded separately. Oversized whole records fail
+A review has at most 200 criteria and 32 immutable assessments, plus one reserved
+terminal revocation record. Its predecessor chain is bounded separately at 32.
+Publication reserves the terminal record and later applicability metadata within
+the whole UTF-8 budget so reaching a limit cannot prevent withdrawal. Oversized whole records fail
 explicitly, never trim original criteria or skip inaccessible source checks.
 
 ## Independent verification and semantic judgment
@@ -106,7 +108,9 @@ Registered adapters initially reuse `observed_runner_v1` and
 `github_reported_checks_v1` from the fixed batch evidence contract. They verify
 exact original child/session/controller or original integration-source and
 provider/numeric repository/full SHA identity. The adapter's selected commit
-must equal the review's fixed candidate. No latest branch/head is substituted.
+must equal the review's fixed candidate. The integration provider and numeric
+repository must also equal the original handoff source identity, even when
+an unrelated repository contains the same Git commit. No latest branch/head is substituted.
 All source operations, original verifier task and saved GitHub observation remain
 subject to current source visibility.
 
@@ -148,7 +152,14 @@ views. Suggested reads are:
 
 Export `install(ops)`, `capabilities()`,
 `operation_visible(db,principal,operation)`, `get_review`, `list_reviews`, and
-`for_work(ops,principal,wid,work_item_id,...)`. Shared reads hold one SQLite read
+`for_work(ops,principal,wid,work_item_id,...)`, and
+`get_assessment(ops,principal,wid,review_id,*,operation_id,version,document_digest)`.
+The last helper selects only an exact original assessment receipt and returns its
+immutable stored conclusion, labeled `current_applicability: not_evaluated`. New
+assessments, revocation and supersession cannot replace that historical value;
+complete original source/privacy checks still apply. Callers first use
+`evaluate_review` for current applicability when selecting a frozen close result.
+Shared reads hold one SQLite read
 snapshot and refuse an inaccessible original whole, including ancestors and
 proof sources. No public read creates an operation or performs provider I/O.
 

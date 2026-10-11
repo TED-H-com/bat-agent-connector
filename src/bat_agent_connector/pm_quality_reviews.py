@@ -74,7 +74,7 @@ def install(ops):
 
 def capabilities():
     return {'actions': list(ACTIONS), 'version': 1, 'verification_profiles': sorted(sources.verification.PROFILES),
-        'max_criteria': sources.MAX_CRITERIA, 'max_assessments': MAX_HISTORY, 'responsibility': 'owner_appointed_original_reviewer',
+        'max_criteria': sources.MAX_CRITERIA, 'max_assessments': MAX_HISTORY, 'max_records': MAX_HISTORY + 1, 'responsibility': 'owner_appointed_original_reviewer',
         'verification_alone_is_acceptance': False, 'execution_authorized': False}
 
 
@@ -118,7 +118,7 @@ def _records(ops, row):
         if digest(value['document']) != value['document_digest']:
             raise sources.bad('An original assessment changed', 'PM_QUALITY_CORRUPT', 409)
         result.append(value)
-    if len(result) > MAX_HISTORY:
+    if len(result) > MAX_HISTORY and not (len(result) == MAX_HISTORY + 1 and result[-1]['kind'] == 'revocation'):
         raise sources.bad('The original assessment history exceeds its bound', 'PM_QUALITY_CORRUPT', 409)
     return result
 
@@ -148,7 +148,7 @@ def _create_input(ops, principal, target, params, pre):
     if not isinstance(target['work_item_id'], str) or not work_items.WORK_ITEM_ID.fullmatch(target['work_item_id']):
         raise sources.bad('Select an original Connector WorkItem')
     sources.text(params['rationale'], 'Policy rationale')
-    reviewer = params['reviewer_actor']
+    reviewer = sources.text(params['reviewer_actor'], 'Responsible reviewer actor', 200)
     if pm_sprints._role(ops.db, wid, reviewer) not in {'owner', 'contributor'}:
         raise sources.bad('Appoint one current workspace writer as the responsible reviewer')
     context = sources.subject(ops, principal, wid, target['work_item_id'], params)
@@ -181,7 +181,7 @@ def _record_input(ops, principal, action, target, params, pre):
     history = _records(ops, row)
     if history and history[-1]['kind'] == 'revocation':
         raise sources.bad('An explicitly revoked review cannot receive new conclusions', 'PM_QUALITY_REVOKED', 409)
-    if len(history) >= MAX_HISTORY:
+    if action != REVOKE and len(history) >= MAX_HISTORY:
         raise sources.bad('The original review assessment history is full', 'PM_QUALITY_LIMIT', 409)
     reviewer = row['context']['reviewer_actor']
     if principal.actor != reviewer and not (action == REVOKE and member['membership']['role'] == 'owner'):
@@ -240,6 +240,9 @@ async def _run(ctx):
                 (row['review_id'], ctx.operation_id, row['version'] + 1, kind, _json(document), digest(document), principal.actor, now))
             result = {'workspace_id': row['workspace_id'], 'review_id': row['review_id'], 'version': row['version'] + 1,
                 'qualified': document['qualified'], 'kind': kind, 'document_digest': digest(document)}
+        # Refuse an unreadable whole publication atomically, including metadata
+        # and history that were not present in the caller's admission document.
+        _publication(ops, principal, result['workspace_id'], result['review_id'], reserve_revocation=ctx.op['action'] != REVOKE)
         ops.journal.api_event('pm_quality_review', result['review_id'], ctx.op['action'], {**result, 'operation_id': ctx.operation_id}, actor=ctx.actor)
         return result
     return ctx.effect('pm.quality.record', apply)
@@ -324,6 +327,30 @@ def _view(ops, principal, row, *, constraints=None):
         'qualified': original['qualified'] and not reasons}
 
 
+def _publication(ops, principal, wid, rid, *, reserve_revocation):
+    payload = get_review(ops, principal, wid, rid)
+    if not reserve_revocation:
+        return
+    # Keep one terminal revocation possible at both the history and byte limits.
+    # These are size reservations only, never stored or returned as evidence.
+    value = payload['review']
+    reserved = {**value, 'version': MAX_HISTORY + 2, 'history': [*value['history'], {
+        'sequence': 2**63 - 1, 'operation_id': 'op_' + 'f' * 32, 'version': MAX_HISTORY + 2,
+        'kind': 'revocation', 'document_digest': 'f' * 64, 'actor': 'a' * 64, 'created_at': 1.7976931348623157e308}],
+        'applicable': False, 'qualified': False, 'acceptance': 'unassessed', 'dod': 'unassessed',
+        'applicability_reasons': ['review_revoked', 'review_superseded', 'review_responsibility_unavailable',
+            'original_verification_no_longer_proven', 'work_binding_changed', 'scope_revision_changed',
+            'binding_id_changed', 'dod_revision_id_changed', 'candidate_commit_changed']}
+    _bounded({'workspace_id': wid, 'review': reserved})
+    _bounded({'workspace_id': wid, 'reviews': [reserved], 'next_cursor': 2**63 - 1,
+        'visibility_filtered': False, **_work_envelope(value['work_item_id'])})
+
+
+def _work_envelope(work_item_id):
+    return {'work_item_id': work_item_id, 'aggregation': 'explicit_original_review_selection_required',
+        'requirement_counting': 'distinct_original_scope_and_requirement_only'}
+
+
 @snapshots._snapshot_read
 def evaluate_review(ops, principal, workspace_id, review_id, *, binding_id, scope_revision, dod_revision_id, candidate_commit):
     row = _review(ops, workspace_id, review_id)
@@ -340,7 +367,25 @@ def get_review(ops, principal, workspace_id, review_id):
 
 
 @snapshots._snapshot_read
-def list_reviews(ops, principal, workspace_id, *, after=0, limit=50, work_item_id=None):
+def get_assessment(ops, principal, workspace_id, review_id, *, operation_id, version, document_digest):
+    """Return one exact original assessment, never a newer outcome substitution."""
+    if (not isinstance(operation_id, str) or not re.fullmatch('op_[0-9a-f]{32}', operation_id)
+            or type(version) is not int or not 2 <= version <= MAX_HISTORY + 1
+            or not isinstance(document_digest, str) or not sources.verification.DIGEST.fullmatch(document_digest)):
+        raise sources.bad('Select the exact original assessment receipt')
+    row = _review(ops, workspace_id, review_id)
+    _access(ops, principal, row)
+    record = next((value for value in _records(ops, row) if value['kind'] == 'assessment'
+        and value['operation_id'] == operation_id and value['version'] == version
+        and value['document_digest'] == document_digest), None)
+    if record is None:
+        raise sources.bad('The original quality assessment is unavailable', 'NOT_FOUND', 404)
+    return _bounded({'workspace_id': workspace_id, 'review_id': review_id, 'context': row['context'],
+        'context_digest': row['context_digest'], 'assessment': record,
+        'semantics': 'immutable_original_assessment', 'current_applicability': 'not_evaluated'})
+
+
+def _list_reviews(ops, principal, workspace_id, *, after, limit, work_item_id=None, extra=None, work_context=None):
     _member(ops, principal, workspace_id)
     if type(after) is not int or not 0 <= after < 2**63 or type(limit) is not int or not 1 <= limit <= 100:
         raise sources.bad('Use a signed 64-bit cursor and page size 1–100')
@@ -348,20 +393,37 @@ def list_reviews(ops, principal, workspace_id, *, after=0, limit=50, work_item_i
         raise sources.bad('Select an original Connector WorkItem')
     rows = ops.db.execute('SELECT review_id,sequence FROM pm_quality_reviews WHERE workspace_id=? AND sequence>? '
         'AND (? IS NULL OR work_item_id=?) ORDER BY sequence LIMIT ?', (workspace_id, after, work_item_id, work_item_id, limit + 1)).fetchall()
-    result = {'workspace_id': workspace_id, 'reviews': [], 'next_cursor': None, 'visibility_filtered': False}
+    result = {'workspace_id': workspace_id, 'reviews': [], 'next_cursor': None, 'visibility_filtered': False, **(extra or {})}
     scanned = after
-    for stub in rows[:limit]:
+    for index, stub in enumerate(rows[:limit]):
         row = _review(ops, workspace_id, stub['review_id'])
+        # A known final page uses null; an intermediate prefix reserves the wider
+        # of its actual cursor and a final null after later invisible rows.
+        cursor = row['sequence'] if index + 1 < len(rows) and row['sequence'] >= 1000 else None
         try:
             _access(ops, principal, row)
         except OperationError as exc:
             if exc.status != 404:
                 raise
+            candidate = {**result, 'visibility_filtered': True, 'next_cursor': cursor}
+            if _size(candidate) > MAX_BYTES:
+                if scanned == after:
+                    raise sources.bad('The whole list envelope exceeds the read budget', 'PM_QUALITY_LIMIT', 413) from exc
+                result['next_cursor'] = scanned
+                return _bounded(result)
             result['visibility_filtered'] = True
             scanned = row['sequence']
             continue
         item = _view(ops, principal, row)
-        if _size({**result, 'reviews': [*result['reviews'], item], 'next_cursor': 2**63 - 1}) > MAX_BYTES:
+        if work_context is not None:
+            binding, scope = work_context
+            if item['context']['work_ref']['binding_id'] != binding:
+                item['applicability_reasons'].append('work_binding_changed')
+            if item['context']['plan_ref']['scope_revision'] != scope:
+                item['applicability_reasons'].append('scope_revision_changed')
+            if item['applicability_reasons']:
+                item.update(applicable=False, qualified=False, acceptance='unassessed', dod='unassessed')
+        if _size({**result, 'reviews': [*result['reviews'], item], 'next_cursor': cursor}) > MAX_BYTES:
             if scanned == after:
                 raise sources.bad('One whole review exceeds the read budget', 'PM_QUALITY_LIMIT', 413)
             result['next_cursor'] = scanned
@@ -373,18 +435,16 @@ def list_reviews(ops, principal, workspace_id, *, after=0, limit=50, work_item_i
 
 
 @snapshots._snapshot_read
+def list_reviews(ops, principal, workspace_id, *, after=0, limit=50, work_item_id=None):
+    return _list_reviews(ops, principal, workspace_id, after=after, limit=limit, work_item_id=work_item_id)
+
+
+@snapshots._snapshot_read
 def for_work(ops, principal, workspace_id, work_item_id, *, after=0, limit=50):
-    result = list_reviews(ops, principal, workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+    _member(ops, principal, workspace_id)
     current = pm_evidence._binding(ops.db, workspace_id, work_item_id)
     plan = pm_plans.accepted_plan(ops, principal, workspace_id)['plan']
     scope = plan['adoption']['scope_revision'] if plan and plan['adoption'] else None
-    for value in result['reviews']:
-        if not current or value['context']['work_ref']['binding_id'] != current['binding_id']:
-            value['applicability_reasons'].append('work_binding_changed')
-        if value['context']['plan_ref']['scope_revision'] != scope:
-            value['applicability_reasons'].append('scope_revision_changed')
-        if value['applicability_reasons']:
-            value.update(applicable=False, qualified=False, acceptance='unassessed', dod='unassessed')
-    result.update(work_item_id=work_item_id, aggregation='explicit_original_review_selection_required',
-        requirement_counting='distinct_original_scope_and_requirement_only')
-    return _bounded(result)
+    return _list_reviews(ops, principal, workspace_id, after=after, limit=limit, work_item_id=work_item_id,
+        work_context=(current['binding_id'] if current else None, scope),
+        extra=_work_envelope(work_item_id))

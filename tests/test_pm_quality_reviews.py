@@ -232,3 +232,184 @@ async def test_projection_requires_exact_original_scope_binding_dod_and_candidat
     visible = quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'])
     assert len(visible['reviews']) == 1 and visible['reviews'][0]['qualified']
     assert visible['aggregation'] == 'explicit_original_review_selection_required'
+
+
+def original_assessment(w, review, saved):
+    return quality.get_assessment(w['d'].ops, OWNER, w['workspace_id'], review['review_id'],
+        **{key: saved[key] for key in ('operation_id', 'version', 'document_digest')})
+
+
+def contradict_verifier(w):
+    ops = w['d'].ops
+    row = dict(ops.db.execute('SELECT * FROM observed_verifications WHERE verification_id=?', (w['proof']['verification_id'],)).fetchone())
+    fields = ('candidate_commit', 'tree_hash', 'command', 'log_ref', 'output_sha256')
+    return ops.journal.record_observed_verification(row['task_id'],
+        {**{key: row[key] for key in fields}, 'exit_code': 1, 'source': 'observed_runner'})
+
+
+def withdraw_verifier(w):
+    ops = w['d'].ops
+    task = ops.db.execute('SELECT task_id FROM observed_verifications WHERE verification_id=?', (w['proof']['verification_id'],)).fetchone()[0]
+    ops.db.execute("UPDATE tasks SET controller_authority=json_set(controller_authority,'$.pm_workspace_id',?) WHERE task_id=?", ('ws_' + 'f' * 32, task))
+
+
+async def test_new_contradiction_changes_current_qualification_without_rewriting_original_receipt(reviewed):
+    w = reviewed
+    review = await new_review(w)
+    await execute(w, assessment(w, review), actor=REVIEWER)
+    saved = read(w, review)['assessment']
+    frozen = original_assessment(w, review, saved)
+    assert frozen['assessment']['document']['qualified']
+    contradict_verifier(w)
+    current = read(w, review)
+    assert current['original_outcome']['qualified'] and not current['qualified']
+    assert current['applicability_reasons'] == ['original_verification_no_longer_proven']
+    assert original_assessment(w, review, saved) == frozen
+
+
+async def test_original_assessment_is_exact_and_survives_later_rejection_revocation_and_policy(reviewed):
+    w = reviewed
+    review = await new_review(w)
+    await execute(w, assessment(w, review), actor=REVIEWER)
+    saved = read(w, review)['assessment']
+    frozen = original_assessment(w, review, saved)
+    await execute(w, assessment(w, review, verdict='rejected', version=2), actor=REVIEWER)
+    assert not read(w, review)['qualified']
+    await execute(w, {'action': quality.REVOKE, 'target': {'workspace_id': w['workspace_id'], 'review_id': review['review_id']},
+        'params': {'reason': 'Retain this historical conclusion; close current review'},
+        'preconditions': {'expected_version': 3}, 'idempotency_key': uuid.uuid4().hex})
+    newer = await new_review(w, previous=review['review_id'])
+    assert not read(w, newer)['qualified'] and original_assessment(w, review, saved) == frozen
+    for field, value in [('operation_id', 'op_' + 'f' * 32), ('version', 3), ('document_digest', 'f' * 64)]:
+        with pytest.raises(OperationError) as missing:
+            original_assessment(w, review, {**saved, field: value})
+        assert missing.value.status == 404
+    withdraw_verifier(w)
+    with pytest.raises(OperationError) as hidden:
+        original_assessment(w, review, saved)
+    assert hidden.value.status == 404
+    with pytest.raises(OperationError) as hidden_successor:
+        read(w, newer)
+    assert hidden_successor.value.status == 404
+
+
+@pytest.mark.parametrize('change', ['contradiction', 'withdrawal'])
+async def test_changed_original_proof_between_admission_and_record_never_commits_success(reviewed, change):
+    w, ops = reviewed, reviewed['d'].ops
+    review = await new_review(w)
+    op = ops.create(REVIEWER, **assessment(w, review))[0]
+    if change == 'contradiction':
+        contradict_verifier(w)
+    else:
+        withdraw_verifier(w)
+    await settle_operations(ops)
+    done = ops.get(op['operation_id'])
+    assert done['status'] == 'failed'
+    assert done['error_code'] == ('PM_QUALITY_EVIDENCE_CHANGED' if change == 'contradiction' else 'NOT_FOUND')
+    assert not ops.db.execute('SELECT 1 FROM pm_quality_review_records').fetchone()
+    assert read(w, review)['version'] == 1
+    if change == 'withdrawal':
+        assert not quality.operation_visible(ops.db, REVIEWER, done)
+
+
+@pytest.mark.parametrize('change', ['binding', 'scope'])
+async def test_current_work_does_not_inherit_original_qualification_after_context_changes(reviewed, change):
+    from tests.test_pm_plan_operations import adopt, draft
+    from tests.test_pm_work_packages import associate
+    w, ops = reviewed, reviewed['d'].ops
+    review = await new_review(w)
+    await execute(w, assessment(w, review), actor=REVIEWER)
+    original = read(w, review)
+    if change == 'binding':
+        await associate(w)
+    else:
+        plan = await draft(w, requirements=w['requirements'], markdown='# New adopted scope\nThe original scope remains historical.\n')
+        assert (await adopt(w, plan))['status'] == 'succeeded'
+    current = quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'])['reviews'][0]
+    assert not current['qualified'] and current['original_outcome']['qualified']
+    assert ('work_binding_changed' if change == 'binding' else 'scope_revision_changed') in current['applicability_reasons']
+    assert read(w, review) == original
+
+
+@pytest.mark.parametrize('state', ['pause', 'close'])
+async def test_original_quality_records_preserve_results_after_workspace_stop(reviewed, mock, state):
+    from tests.test_pm_lifecycle import decide
+    w = reviewed
+    await decide(w['d'].ops, w['workspace_id'], state, who=OWNER)
+    before = len(bat_writes(mock))
+    review = await new_review(w)
+    await execute(w, assessment(w, review), actor=REVIEWER)
+    assert read(w, review)['qualified'] and len(bat_writes(mock)) == before
+
+
+@pytest.mark.parametrize('work', [False, True])
+async def test_whole_utf8_quality_page_reserves_actual_int64_cursor_and_final_null(reviewed, monkeypatch, work):
+    w, ops = reviewed, reviewed['d'].ops
+    ops.db.execute("INSERT INTO sqlite_sequence(name,seq) VALUES('pm_quality_reviews',?)", (2**63 - 2,))
+    env = selection(w)
+    env['params']['rationale'] = '原始驗收與責任的完整證據' * 30
+    await execute(w, env)
+    fetch = (lambda: quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'])) if work else (
+        lambda: quality.list_reviews(ops, OWNER, w['workspace_id']))
+    original = fetch()
+    assert original['reviews'][0]['sequence'] == 2**63 - 1 and original['next_cursor'] is None
+    monkeypatch.setattr(quality, 'MAX_BYTES', quality._size(original))
+    assert fetch() == original
+    monkeypatch.setattr(quality, 'MAX_BYTES', quality._size(original) - 1)
+    with pytest.raises(OperationError) as oversized:
+        fetch()
+    assert oversized.value.status == 413
+
+
+async def test_quality_work_page_includes_projection_fields_before_prefix_budget(reviewed, monkeypatch):
+    w, ops = reviewed, reviewed['d'].ops
+    first = await new_review(w)
+    await new_review(w, previous=first['review_id'])
+    original = quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'])
+    budget = quality._size(original) - 1
+    monkeypatch.setattr(quality, 'MAX_BYTES', budget)
+    prefix = quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'])
+    assert len(prefix['reviews']) == 1 and prefix['next_cursor'] == original['reviews'][0]['sequence']
+    assert quality._size(prefix) <= budget
+    suffix = quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'], after=prefix['next_cursor'])
+    assert len(suffix['reviews']) == 1 and suffix['next_cursor'] is None and quality._size(suffix) <= budget
+
+
+async def test_publication_metadata_budget_failure_rolls_back_original_record_and_version(reviewed, monkeypatch):
+    w, ops = reviewed, reviewed['d'].ops
+    review = await new_review(w)
+    original = ops.create(REVIEWER, **assessment(w, review))[0]
+    saved = original['external_refs']['admission_binding']['quality_record']['document']
+    budget = quality._size({'review_id': review['review_id'], 'context': review['context'], 'assessment': saved})
+    monkeypatch.setattr(quality, 'MAX_BYTES', budget)
+    await settle_operations(ops)
+    done = ops.get(original['operation_id'])
+    assert done['status'] == 'failed' and done['error_code'] == 'PM_QUALITY_LIMIT'
+    assert not ops.db.execute('SELECT 1 FROM pm_quality_review_records').fetchone()
+    assert ops.db.execute('SELECT version FROM pm_quality_reviews').fetchone()[0] == 1
+
+
+@pytest.mark.parametrize('reviewer', [None, True, {}, [], 'x' * 201])
+async def test_invalid_reviewer_types_never_reach_sql_or_create_an_operation(reviewed, reviewer):
+    with pytest.raises(OperationError) as invalid:
+        reviewed['d'].ops.create(OWNER, **selection(reviewed, reviewer=reviewer))
+    assert invalid.value.code == 'PM_QUALITY_INVALID'
+
+
+async def test_full_assessment_history_keeps_one_reserved_terminal_revocation(reviewed):
+    w, ops = reviewed, reviewed['d'].ops
+    review = await new_review(w)
+    for version in range(1, quality.MAX_HISTORY + 1):
+        await execute(w, assessment(w, review, version=version), actor=REVIEWER)
+    saved = read(w, review)
+    assert saved['qualified'] and len(saved['history']) == quality.MAX_HISTORY
+    with pytest.raises(OperationError) as full:
+        ops.create(REVIEWER, **assessment(w, review, version=quality.MAX_HISTORY + 1))
+    assert full.value.code == 'PM_QUALITY_LIMIT'
+    await execute(w, {'action': quality.REVOKE, 'target': {'workspace_id': w['workspace_id'], 'review_id': review['review_id']},
+        'params': {'reason': 'Explicit withdrawal is available even at the original history ceiling'},
+        'preconditions': {'expected_version': quality.MAX_HISTORY + 1}, 'idempotency_key': uuid.uuid4().hex})
+    final = read(w, review)
+    assert not final['qualified'] and final['original_outcome']['qualified']
+    assert len(final['history']) == quality.MAX_HISTORY + 1
+    assert original_assessment(w, review, saved['assessment'])['assessment']['document']['qualified']
