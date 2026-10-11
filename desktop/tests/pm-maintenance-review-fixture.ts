@@ -110,7 +110,8 @@ export async function boot(page:Page,locale='en'){
     const {workspaceMaintenanceReview}=await import('/__review_src/pm-maintenance-review.js'),{durableForm}=await import('/__review_src/pm-workspace.js');
     const {maintenanceReviewStrings}=await import('/__review_src/pm-maintenance-review-strings.js'),{pmStrings}=await import('/__review_src/pm-strings.js');
     const {pmMaintenancePolicyStrings}=await import('/__review_src/pm-maintenance-policy-strings.js');
-    const strings={...pmStrings[locale],...pmMaintenancePolicyStrings[locale],...maintenanceReviewStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[name,value])=>text.replaceAll('{'+name+'}',String(value)),strings[key]||key);
+    const {maintenanceFindingStrings}=await import('/__review_src/pm-maintenance-findings-strings.js');
+    const strings={...pmStrings[locale],...pmMaintenancePolicyStrings[locale],...maintenanceFindingStrings[locale],...maintenanceReviewStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[name,value])=>text.replaceAll('{'+name+'}',String(value)),strings[key]||key);
     const h=(tag:string,attrs:any={},...children:any[])=>{const el=document.createElement(tag);for(const[key,value]of Object.entries(attrs||{})){
       if(value===null||value===undefined||value===false)continue;if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));
     }for(const child of children.flat()){if(child===null||child===undefined||child===false)continue;el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};

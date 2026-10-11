@@ -36,6 +36,17 @@ and `not_configured` remain separate statuses. Issues, dependencies, research,
 quality and model analysis remain explicitly unobserved/unassessed/not requested
 unless a later implementation supplies original evidence for them.
 
+Configured W47 Issue and dependency observations are now retained inside their
+original GitHub sample projection, including native finding IDs, bounded facts,
+original observation digest and exact source-binding digest. Coverage and finding
+comparisons require the report's exact policy, baseline, observation configuration
+and lifecycle context. A different configuration cannot inherit an older empty or
+complete sample. The latest incomplete source blocks its comparison, while stale
+samples remain explicitly stale. Per-source comparisons use stable finding IDs;
+disappearance remains unassessed, and release applicability and dependency-scan
+completeness remain unknown. These additions do not rewrite old snapshots or make
+new provider requests. Report source access retains all original work associations.
+
 ## Discussion, completion and follow-up
 
 Actions under `pm.maintenance_review.` are:

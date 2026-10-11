@@ -6627,6 +6627,149 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	};
 }
 //#endregion
+//#region src/pm-maintenance-findings.js
+var kinds = [
+	"issues",
+	"dependabot_pull_requests",
+	"dependabot_alerts"
+];
+var states = [
+	"disabled",
+	"missing",
+	"complete",
+	"incomplete",
+	"stale",
+	"context_changed",
+	"stopped"
+];
+function findingPolicyControls({ h, t, input, labelled, available }) {
+	const toggle = (key) => h("select", { "aria-label": t(key) }, h("option", { value: "false" }, t("pmf_off")), h("option", { value: "true" }, t("pmf_on")));
+	const fields = {
+		finding_configured: h("input", { type: "hidden" }),
+		finding_issues: toggle("pmf_issues_enable"),
+		finding_labels: input("pmf_labels", {
+			multiline: true,
+			required: false,
+			max: 2020
+		}),
+		finding_dependencies: toggle("pmf_deps_enable"),
+		finding_manifests: input("pmf_manifests", {
+			multiline: true,
+			required: false,
+			max: 51300
+		}),
+		finding_branch: input("pmf_branch", {
+			required: false,
+			max: 256
+		}),
+		finding_bot: input("pmf_bot", {
+			required: false,
+			max: 16
+		}),
+		finding_alerts: toggle("pmf_alerts_enable"),
+		finding_pulls: toggle("pmf_pulls_enable")
+	};
+	const element = h("details", {
+		"data-policy-group": "pmf_sources",
+		hidden: !available()
+	}, h("summary", {}, t("pmf_configure")), h("p", { class: "muted" }, t("pmf_configure_help")), ...Object.entries({
+		finding_issues: "pmf_issues_enable",
+		finding_labels: "pmf_labels",
+		finding_dependencies: "pmf_deps_enable",
+		finding_manifests: "pmf_manifests",
+		finding_branch: "pmf_branch",
+		finding_bot: "pmf_bot",
+		finding_alerts: "pmf_alerts_enable",
+		finding_pulls: "pmf_pulls_enable"
+	}).map(([key, label]) => labelled(label, fields[key])), h("p", { class: "muted" }, t("pmf_permission")));
+	function initialize(observation) {
+		const c = observation.maintenance_sources, d = c?.dependencies;
+		return {
+			finding_configured: c ? "1" : "",
+			finding_issues: String(c?.issues != null),
+			finding_labels: c?.issues?.labels_all?.join("\n") || "",
+			finding_dependencies: String(d != null),
+			finding_manifests: d?.manifests?.join("\n") || "",
+			finding_branch: d?.base_branch || "",
+			finding_bot: d?.dependabot_actor_id || "",
+			finding_alerts: String(d?.alerts === true),
+			finding_pulls: String(d?.pull_requests === true)
+		};
+	}
+	function build(v, sources, profile, baseline) {
+		const issues = v.finding_issues === "true", deps = v.finding_dependencies === "true";
+		if (!v.finding_configured && !issues && !deps) return {};
+		const invalid = () => {
+			throw Error(t("pmf_config_invalid"));
+		};
+		if (!available() || profile !== "github_open_prs_and_actions_v1") invalid();
+		const lines = (value, max, length) => {
+			const rows = value.split("\n").map((s) => s.trim()).filter(Boolean);
+			if (rows.length > max || new Set(rows).size !== rows.length || rows.some((s) => s.length > length || /[\x00-\x1f]/.test(s))) invalid();
+			return rows;
+		};
+		const labels = issues ? lines(v.finding_labels, 20, 100) : [];
+		if (issues && !sources.includes("issues") || deps && !sources.includes("dependencies")) invalid();
+		let dependencies = null;
+		if (deps) {
+			const manifests = lines(v.finding_manifests, 100, 512), bot = Number(v.finding_bot), branch = v.finding_branch;
+			if (!manifests.length || manifests.some((path) => path.includes("\\") || path.split("/").some((part) => [
+				"",
+				".",
+				".."
+			].includes(part))) || !/^\d+$/.test(v.finding_bot) || !Number.isSafeInteger(bot) || bot < 1 || baseline?.document?.proof?.maintenance_branch?.status !== "verified_at_observation" || baseline.document.proof.maintenance_branch.ref !== "refs/heads/" + branch || v.finding_alerts !== "true" && v.finding_pulls !== "true") invalid();
+			dependencies = {
+				manifests,
+				base_branch: branch,
+				dependabot_actor_id: bot,
+				alerts: v.finding_alerts === "true",
+				pull_requests: v.finding_pulls === "true"
+			};
+		}
+		return { maintenance_sources: {
+			issues: issues ? { labels_all: labels } : null,
+			dependencies
+		} };
+	}
+	return {
+		element,
+		fields,
+		initialize,
+		build
+	};
+}
+function maintenanceFindingsView({ h, t, workspaceId, data }) {
+	const invalid = () => {
+		throw Error(t("pmf_invalid"));
+	};
+	if (data?.workspace_id !== workspaceId || data.automatic_repair_authorized !== false || typeof data.visibility_filtered !== "boolean" || !data.sources || Object.keys(data.sources).some((k) => !kinds.includes(k))) invalid();
+	const ref = data.observation_ref;
+	if (ref && (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !/^[0-9a-f]{64}$/.test(ref.document_digest))) invalid();
+	const rows = [];
+	for (const kind of kinds) {
+		const source = data.sources[kind];
+		if (!source || !states.includes(source.status) || !Array.isArray(source.findings) || source.findings.length > 2e3 || data.visibility_filtered && source.findings.length) invalid();
+		const items = source.findings.map((row) => {
+			const native = row.native;
+			if (!ref || !/^pmfn_[0-9a-f]{32}$/.test(row.finding_id) || native?.kind !== kind || !Number.isSafeInteger(native.number) || native.number < 1 || !Number.isSafeInteger(native.repository_id) || native.repository_id < 1 || !/^[0-9a-f]{64}$/.test(native.provider_digest)) invalid();
+			const facts = row.facts || {}, detail = h("details", {}, h("summary", {}, `${t("pmf_" + kind)} #${native.number}`), h("p", { class: "muted" }, t("pmf_applicability")), h("p", { class: "pm-source" }, row.finding_id));
+			for (const key of [
+				"package",
+				"ecosystem",
+				"manifest_path",
+				"severity",
+				"vulnerable_version_range",
+				"first_patched_version"
+			]) if (facts[key] != null) detail.append(h("p", {}, h("strong", {}, t("pmf_" + key) + ": "), String(facts[key])));
+			if (row.existing_pull_request) detail.append(h("p", {}, t("pmf_existing_pr") + " #" + row.existing_pull_request.number));
+			for (const work of row.existing_work || []) detail.append(h("p", { class: "pm-source" }, t("pmf_existing_work") + ": " + work.work_item_id));
+			return detail;
+		});
+		rows.push(h("section", {}, h("h5", {}, t("pmf_" + kind)), h("p", {}, t("pmf_state_" + source.status)), source.status === "complete" && !items.length ? h("p", { class: "muted" }, t("pmf_empty")) : null, ...items));
+	}
+	return h("section", { "data-maintenance-findings": "" }, h("h4", {}, t("pmf_title")), h("p", { class: "muted" }, t("pmf_boundary")), ...data.visibility_filtered ? [h("p", { class: "muted" }, t("pmf_hidden"))] : [], ...rows, ref ? h("details", {}, h("summary", {}, t("pmf_original")), h("p", { class: "pm-source" }, ref.observation_id), h("p", { class: "pm-source" }, ref.document_digest)) : null);
+}
+//#endregion
 //#region src/pm-maintenance-review-view.js
 function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, errorBox, onUnavailable, detail }) {
 	const { review, snapshot, completion, events } = detail, extension = snapshot?.maintenance, report = extension?.report;
@@ -6722,6 +6865,25 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		"changed",
 		"no_longer_observed"
 	]) compared.append(fold(`pmrv_${key}`, list(changes[key])));
+	if (report.finding_changes) {
+		const findings = fold("pmrv_finding_changes");
+		for (const kind of [
+			"issues",
+			"dependabot_pull_requests",
+			"dependabot_alerts"
+		]) {
+			const change = report.finding_changes[kind];
+			if (!change) throw Error(t("pmrv_invalid"));
+			const entry = h("section", {}, h("h5", {}, t("pmf_" + kind)), text(label("pmrv_changes", change.status)));
+			for (const key of [
+				"added",
+				"changed",
+				"no_longer_observed"
+			]) entry.append(fold(`pmrv_${key}`, list(change[key])));
+			findings.append(entry);
+		}
+		compared.append(findings);
+	}
 	overview.append(h("div", { class: "pm-review-columns" }, sources, compared));
 	const blockers = h("div");
 	for (const item of report.current_blockers) if (typeof item === "string") blockers.append(text(item));
@@ -6729,7 +6891,29 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 	if (!report.current_blockers.length) blockers.append(text(t("pmrv_none")));
 	overview.append(fold("pmrv_blockers", text(t("pmrv_blocker_help")), blockers), line("pmrv_finished_checks", report.effort.completed_checks), line("pmrv_pending_checks", report.effort.pending_checks), text(t("pmrv_effort_unknown")), fold("pmrv_proof", line("pmrv_snapshot", snapshot.snapshot_id), line("pmrv_release", release.baseline_id), text(release.commit_sha), line("pmrv_as_of", stamp(report.as_of)), text(snapshot.snapshot_digest), sourceProof(report.sources.map((row) => row.source_id)), op(review.operation_id)));
 	const samples = h("div");
-	for (const row of report.observations || []) samples.append(h("article", { class: "pm-fact" }, line("pmrv_sample_at", stamp(row.observed_at)), line("pmrv_open_prs", row.observed_open_pulls), line("pmrv_active_actions", row.observed_nonterminal_actions), fold("pmrv_proof", sourceProof([row.source_id]))));
+	for (const row of report.observations || []) {
+		const sample = h("article", { class: "pm-fact" }, line("pmrv_sample_at", stamp(row.observed_at)), line("pmrv_open_prs", row.observed_open_pulls), line("pmrv_active_actions", row.observed_nonterminal_actions), fold("pmrv_proof", sourceProof([row.source_id])));
+		if (row.maintenance_sources) {
+			const original = sourceById.get(row.source_id);
+			if (original?.kind !== "github" || original.id !== row.observation_id || original.digest !== row.document_digest) throw Error(t("pmrv_invalid"));
+			sample.append(maintenanceFindingsView({
+				h,
+				t,
+				workspaceId,
+				data: {
+					workspace_id: workspaceId,
+					observation_ref: {
+						observation_id: row.observation_id,
+						document_digest: row.document_digest
+					},
+					sources: row.maintenance_sources,
+					visibility_filtered: false,
+					automatic_repair_authorized: false
+				}
+			}));
+		}
+		samples.append(sample);
+	}
 	for (const row of report.workloads || []) samples.append(h("article", { class: "pm-fact" }, line("pmrv_sample_at", stamp(row.observed_at)), line("pmrv_workload_classification", label("pmrv_workload", row.classification)), fold("pmrv_proof", sourceProof([row.source_id]))));
 	for (const row of report.checks || []) samples.append(h("article", { class: "pm-fact" }, line("pmrv_check_outcome", label("pmrv_check", row.outcome)), line("pmrv_recorded", stamp(row.started_at)), fold("pmrv_proof", sourceProof([row.source_id]))));
 	if (!samples.children.length) samples.append(text(t("pmrv_none")));
@@ -7654,149 +7838,6 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		refresh,
 		withdraw
 	};
-}
-//#endregion
-//#region src/pm-maintenance-findings.js
-var kinds = [
-	"issues",
-	"dependabot_pull_requests",
-	"dependabot_alerts"
-];
-var states = [
-	"disabled",
-	"missing",
-	"complete",
-	"incomplete",
-	"stale",
-	"context_changed",
-	"stopped"
-];
-function findingPolicyControls({ h, t, input, labelled, available }) {
-	const toggle = (key) => h("select", { "aria-label": t(key) }, h("option", { value: "false" }, t("pmf_off")), h("option", { value: "true" }, t("pmf_on")));
-	const fields = {
-		finding_configured: h("input", { type: "hidden" }),
-		finding_issues: toggle("pmf_issues_enable"),
-		finding_labels: input("pmf_labels", {
-			multiline: true,
-			required: false,
-			max: 2020
-		}),
-		finding_dependencies: toggle("pmf_deps_enable"),
-		finding_manifests: input("pmf_manifests", {
-			multiline: true,
-			required: false,
-			max: 51300
-		}),
-		finding_branch: input("pmf_branch", {
-			required: false,
-			max: 256
-		}),
-		finding_bot: input("pmf_bot", {
-			required: false,
-			max: 16
-		}),
-		finding_alerts: toggle("pmf_alerts_enable"),
-		finding_pulls: toggle("pmf_pulls_enable")
-	};
-	const element = h("details", {
-		"data-policy-group": "pmf_sources",
-		hidden: !available()
-	}, h("summary", {}, t("pmf_configure")), h("p", { class: "muted" }, t("pmf_configure_help")), ...Object.entries({
-		finding_issues: "pmf_issues_enable",
-		finding_labels: "pmf_labels",
-		finding_dependencies: "pmf_deps_enable",
-		finding_manifests: "pmf_manifests",
-		finding_branch: "pmf_branch",
-		finding_bot: "pmf_bot",
-		finding_alerts: "pmf_alerts_enable",
-		finding_pulls: "pmf_pulls_enable"
-	}).map(([key, label]) => labelled(label, fields[key])), h("p", { class: "muted" }, t("pmf_permission")));
-	function initialize(observation) {
-		const c = observation.maintenance_sources, d = c?.dependencies;
-		return {
-			finding_configured: c ? "1" : "",
-			finding_issues: String(c?.issues != null),
-			finding_labels: c?.issues?.labels_all?.join("\n") || "",
-			finding_dependencies: String(d != null),
-			finding_manifests: d?.manifests?.join("\n") || "",
-			finding_branch: d?.base_branch || "",
-			finding_bot: d?.dependabot_actor_id || "",
-			finding_alerts: String(d?.alerts === true),
-			finding_pulls: String(d?.pull_requests === true)
-		};
-	}
-	function build(v, sources, profile, baseline) {
-		const issues = v.finding_issues === "true", deps = v.finding_dependencies === "true";
-		if (!v.finding_configured && !issues && !deps) return {};
-		const invalid = () => {
-			throw Error(t("pmf_config_invalid"));
-		};
-		if (!available() || profile !== "github_open_prs_and_actions_v1") invalid();
-		const lines = (value, max, length) => {
-			const rows = value.split("\n").map((s) => s.trim()).filter(Boolean);
-			if (rows.length > max || new Set(rows).size !== rows.length || rows.some((s) => s.length > length || /[\x00-\x1f]/.test(s))) invalid();
-			return rows;
-		};
-		const labels = issues ? lines(v.finding_labels, 20, 100) : [];
-		if (issues && !sources.includes("issues") || deps && !sources.includes("dependencies")) invalid();
-		let dependencies = null;
-		if (deps) {
-			const manifests = lines(v.finding_manifests, 100, 512), bot = Number(v.finding_bot), branch = v.finding_branch;
-			if (!manifests.length || manifests.some((path) => path.includes("\\") || path.split("/").some((part) => [
-				"",
-				".",
-				".."
-			].includes(part))) || !/^\d+$/.test(v.finding_bot) || !Number.isSafeInteger(bot) || bot < 1 || baseline?.document?.proof?.maintenance_branch?.status !== "verified_at_observation" || baseline.document.proof.maintenance_branch.ref !== "refs/heads/" + branch || v.finding_alerts !== "true" && v.finding_pulls !== "true") invalid();
-			dependencies = {
-				manifests,
-				base_branch: branch,
-				dependabot_actor_id: bot,
-				alerts: v.finding_alerts === "true",
-				pull_requests: v.finding_pulls === "true"
-			};
-		}
-		return { maintenance_sources: {
-			issues: issues ? { labels_all: labels } : null,
-			dependencies
-		} };
-	}
-	return {
-		element,
-		fields,
-		initialize,
-		build
-	};
-}
-function maintenanceFindingsView({ h, t, workspaceId, data }) {
-	const invalid = () => {
-		throw Error(t("pmf_invalid"));
-	};
-	if (data?.workspace_id !== workspaceId || data.automatic_repair_authorized !== false || typeof data.visibility_filtered !== "boolean" || !data.sources || Object.keys(data.sources).some((k) => !kinds.includes(k))) invalid();
-	const ref = data.observation_ref;
-	if (ref && (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !/^[0-9a-f]{64}$/.test(ref.document_digest))) invalid();
-	const rows = [];
-	for (const kind of kinds) {
-		const source = data.sources[kind];
-		if (!source || !states.includes(source.status) || !Array.isArray(source.findings) || source.findings.length > 2e3 || data.visibility_filtered && source.findings.length) invalid();
-		const items = source.findings.map((row) => {
-			const native = row.native;
-			if (!ref || !/^pmfn_[0-9a-f]{32}$/.test(row.finding_id) || native?.kind !== kind || !Number.isSafeInteger(native.number) || native.number < 1 || !Number.isSafeInteger(native.repository_id) || native.repository_id < 1 || !/^[0-9a-f]{64}$/.test(native.provider_digest)) invalid();
-			const facts = row.facts || {}, detail = h("details", {}, h("summary", {}, `${t("pmf_" + kind)} #${native.number}`), h("p", { class: "muted" }, t("pmf_applicability")), h("p", { class: "pm-source" }, row.finding_id));
-			for (const key of [
-				"package",
-				"ecosystem",
-				"manifest_path",
-				"severity",
-				"vulnerable_version_range",
-				"first_patched_version"
-			]) if (facts[key] != null) detail.append(h("p", {}, h("strong", {}, t("pmf_" + key) + ": "), String(facts[key])));
-			if (row.existing_pull_request) detail.append(h("p", {}, t("pmf_existing_pr") + " #" + row.existing_pull_request.number));
-			for (const work of row.existing_work || []) detail.append(h("p", { class: "pm-source" }, t("pmf_existing_work") + ": " + work.work_item_id));
-			return detail;
-		});
-		rows.push(h("section", {}, h("h5", {}, t("pmf_" + kind)), h("p", {}, t("pmf_state_" + source.status)), source.status === "complete" && !items.length ? h("p", { class: "muted" }, t("pmf_empty")) : null, ...items));
-	}
-	return h("section", { "data-maintenance-findings": "" }, h("h4", {}, t("pmf_title")), h("p", { class: "muted" }, t("pmf_boundary")), ...data.visibility_filtered ? [h("p", { class: "muted" }, t("pmf_hidden"))] : [], ...rows, ref ? h("details", {}, h("summary", {}, t("pmf_original")), h("p", { class: "pm-source" }, ref.observation_id), h("p", { class: "pm-source" }, ref.document_digest)) : null);
 }
 //#endregion
 //#region src/pm-maintenance-checks.js
@@ -15659,6 +15700,7 @@ var maintenanceFindingStrings = {
 //#endregion
 //#region src/pm-maintenance-review-strings.js
 var rows$1 = {
+	finding_changes: ["Configured finding comparisons", "已設定來源的觀察比較"],
 	selection_required: ["Complete the required source, discussion or period selection before recording.", "請先完成必要的來源、討論或期間選取，再保存紀錄。"],
 	source_missing: ["Original choice is unavailable", "原選取目前無法讀取"],
 	history_bound: ["The history exceeds this view’s bound. Narrow the selection before recording.", "歷史超過此畫面的範圍，請先縮小選取再記錄。"],

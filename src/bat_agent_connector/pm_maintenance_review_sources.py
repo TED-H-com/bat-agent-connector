@@ -110,13 +110,17 @@ def _github_projection(response):
     row = response['observation']
     doc, facts = row['document'], row['document']['evidence']['facts']
     source = ref('github', row['observation_id'], row['document_digest'])
-    return {'source_id': key(source), 'observation_id': row['observation_id'], 'observed_at': doc['as_of'],
+    projected = {'source_id': key(source), 'observation_id': row['observation_id'], 'observed_at': doc['as_of'],
         'expires_at': doc['expires_at'], 'scope_digest': baselines.sources.digest(doc['scope']),
         'coverage_status': doc['evidence']['status'], 'reason': doc['evidence']['reason'],
         'facts_digest': baselines.sources.digest(facts),
         'observed_open_pulls': doc['evidence']['observed_open_pulls'],
         'observed_nonterminal_actions': doc['evidence']['observed_nonterminal_actions'],
-        'outside_scope': doc['evidence']['outside_scope']}, source
+        'outside_scope': doc['evidence']['outside_scope']}
+    if 'maintenance_sources' in doc['evidence']:
+        projected.update(maintenance_sources=doc['evidence']['maintenance_sources'],
+            source_binding_digest=doc['source_binding_digest'], document_digest=row['document_digest'])
+    return projected, source
 
 
 def _workload_projection(response):
@@ -197,6 +201,54 @@ def _changes(previous, current):
         'resolution_assessed': False, 'whole_period_no_events_proven': False}
 
 
+def _finding_inventory(sample, kind):
+    source = sample['maintenance_sources'][kind]
+    if source['status'] != 'complete':
+        return None
+    items = {item['finding_id']: baselines.sources.digest(item) for item in source['findings']}
+    return {'digest': baselines.sources.digest(source),
+        'items': dict(sorted(items.items())[:MAX_COMPARISON_ROWS]), 'truncated': len(items) > MAX_COMPARISON_ROWS}
+
+
+def _finding_report(intent, observations, coverage, now, enabled, previous):
+    """Compare only the exact configured source context; retain original point facts."""
+    config = intent['observation'].get('maintenance_sources')
+    if config is None:
+        return None
+    context = baselines.sources.digest(intent)
+    samples = [row for row in observations if row.get('source_binding_digest') == context]
+    deps = config['dependencies'] or {}
+    kinds = {'issues': config['issues'] is not None, 'dependabot_pull_requests': deps.get('pull_requests', False),
+        'dependabot_alerts': deps.get('alerts', False)}
+    states, comparisons, inventories = {}, {}, {}
+    prior = previous['report'].get('finding_comparison_facts') if previous else None
+    for kind, selected in kinds.items():
+        values = [{**row, 'coverage_status': row['maintenance_sources'][kind]['status']} for row in samples]
+        state = _state(values, coverage, now, enabled=enabled and selected)
+        # Old labels/manifests, policy or lifecycle cannot prove today's configured coverage.
+        if selected and enabled and not samples and observations:
+            state = 'incomplete'
+        states[kind] = {'status': state, 'samples': len(samples), 'configured': selected,
+            'other_context_records': len(samples) != len(observations),
+            'observation_mode': 'point_samples', 'period_continuity': 'unproven',
+            'whole_period_no_events_proven': False, 'release_applicability': 'unknown'}
+        current = _finding_inventory(samples[-1], kind) if samples and selected else None
+        earlier = None
+        if prior and prior['context_digest'] == context:
+            earlier = prior['sources'].get(kind)
+        elif previous is None and len(samples) >= 2 and selected:
+            earlier = _finding_inventory(samples[0], kind)
+        comparisons[kind] = _changes(earlier, current)
+        inventories[kind] = current
+    selected_deps = [states[k] for k in kinds if k != 'issues' and kinds[k]]
+    priority = ('incomplete', 'not_configured', 'unchecked', 'stale', 'disabled', 'observed')
+    dependency_state = next((state for state in priority if any(v['status'] == state for v in selected_deps)), 'disabled')
+    return {'coverage': {'issues': states['issues'], 'dependencies': {
+        'status': dependency_state, 'samples': len(samples), 'sources': {k: states[k] for k in kinds if k != 'issues'},
+        'release_applicability': 'unknown', 'manifest_scan_completeness': 'unknown'}},
+        'finding_changes': comparisons, 'finding_comparison_facts': {'context_digest': context, 'sources': inventories}}
+
+
 def build(ops, principal, wid, intent, period, now, previous=None):
     baseline = baselines._record(ops.db, wid, intent['baseline_id'])
     policy = policies._record(ops.db, wid, intent['policy_id'])
@@ -264,7 +316,14 @@ def build(ops, principal, wid, intent, period, now, previous=None):
         'next_check': {'status': 'schedule_intent_only', 'execution_time': None},
         'decisions': [], 'improvement_candidates': [], 'meeting_completed': False,
         'automatic_maintenance_authorized': False, 'scope_adopted': False}
-    if all(coverage['status'] == 'observed' for coverage in (gh_coverage, wl_coverage)):
+    finding_report = _finding_report(intent, observations, gh_coverage, now, enabled, previous)
+    required_coverage = [gh_coverage, wl_coverage]
+    if finding_report:
+        report['coverage'].update(finding_report.pop('coverage'))
+        report.update(finding_report)
+        required_coverage.extend(report['coverage'][kind] for kind in ('issues', 'dependencies')
+            if report['coverage'][kind]['status'] != 'disabled')
+    if all(coverage['status'] == 'observed' for coverage in required_coverage):
         report['report_status'] = report['changes']['status']
     else:
         report['report_status'] = 'data_gaps'

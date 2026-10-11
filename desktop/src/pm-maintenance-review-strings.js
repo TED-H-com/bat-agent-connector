@@ -1,4 +1,5 @@
 const rows={
+  finding_changes:['Configured finding comparisons','已設定來源的觀察比較'],
   selection_required:['Complete the required source, discussion or period selection before recording.','請先完成必要的來源、討論或期間選取，再保存紀錄。'],
   source_missing:['Original choice is unavailable','原選取目前無法讀取'],history_bound:['The history exceeds this view’s bound. Narrow the selection before recording.','歷史超過此畫面的範圍，請先縮小選取再記錄。'],
   ref_policy:['Adopted maintenance policy','已採用的維護政策'],ref_baseline:['Published release baseline','已發布版本基準'],ref_github:['Saved GitHub observation','已保存的 GitHub 觀察'],

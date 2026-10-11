@@ -1,4 +1,5 @@
 import {briefExport} from './pm-brief-export.js';
+import {maintenanceFindingsView} from './pm-maintenance-findings.js';
 
 // Render only the supplied original Snapshot. Discussion stays in separate records.
 export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable,detail}) {
@@ -46,6 +47,17 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   const compared=h('section',{},h('h4',{},t('pmrv_changes')),text(label('pmrv_changes',changes.status)));
   if(changes.scope_changed)compared.append(text(t('pmrv_scope_changed')));
   for(const key of ['added','changed','no_longer_observed'])compared.append(fold(`pmrv_${key}`,list(changes[key])));
+  if(report.finding_changes){
+    const findings=fold('pmrv_finding_changes');
+    for(const kind of ['issues','dependabot_pull_requests','dependabot_alerts']){
+      const change=report.finding_changes[kind];
+      if(!change)throw Error(t('pmrv_invalid'));
+      const entry=h('section',{},h('h5',{},t('pmf_'+kind)),text(label('pmrv_changes',change.status)));
+      for(const key of ['added','changed','no_longer_observed'])entry.append(fold(`pmrv_${key}`,list(change[key])));
+      findings.append(entry);
+    }
+    compared.append(findings);
+  }
   overview.append(h('div',{class:'pm-review-columns'},sources,compared));
   const blockers=h('div');
   for(const item of report.current_blockers){
@@ -58,9 +70,19 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     fold('pmrv_proof',line('pmrv_snapshot',snapshot.snapshot_id),line('pmrv_release',release.baseline_id),text(release.commit_sha),
       line('pmrv_as_of',stamp(report.as_of)),text(snapshot.snapshot_digest),sourceProof(report.sources.map(row=>row.source_id)),op(review.operation_id)));
   const samples=h('div');
-  for(const row of report.observations||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_sample_at',stamp(row.observed_at)),
-    line('pmrv_open_prs',row.observed_open_pulls),line('pmrv_active_actions',row.observed_nonterminal_actions),
-    fold('pmrv_proof',sourceProof([row.source_id]))));
+  for(const row of report.observations||[]){
+    const sample=h('article',{class:'pm-fact'},line('pmrv_sample_at',stamp(row.observed_at)),
+      line('pmrv_open_prs',row.observed_open_pulls),line('pmrv_active_actions',row.observed_nonterminal_actions),
+      fold('pmrv_proof',sourceProof([row.source_id])));
+    if(row.maintenance_sources){
+      const original=sourceById.get(row.source_id);
+      if(original?.kind!=='github'||original.id!==row.observation_id||original.digest!==row.document_digest)throw Error(t('pmrv_invalid'));
+      sample.append(maintenanceFindingsView({h,t,workspaceId,data:{workspace_id:workspaceId,
+        observation_ref:{observation_id:row.observation_id,document_digest:row.document_digest},
+        sources:row.maintenance_sources,visibility_filtered:false,automatic_repair_authorized:false}}));
+    }
+    samples.append(sample);
+  }
   for(const row of report.workloads||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_sample_at',stamp(row.observed_at)),
     line('pmrv_workload_classification',label('pmrv_workload',row.classification)),fold('pmrv_proof',sourceProof([row.source_id]))));
   for(const row of report.checks||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_check_outcome',label('pmrv_check',row.outcome)),

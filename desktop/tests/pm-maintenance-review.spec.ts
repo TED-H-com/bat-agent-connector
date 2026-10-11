@@ -8,6 +8,22 @@ test.use({timezoneId:'America/New_York'});
 
 async function saveNote(page:any){await reason(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('Keep this actual discussion');await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();}
 
+for(const locale of ['en','zh-TW'])test(`fixed configured findings remain in the report and withdraw with its source ${locale}`,async({page})=>{
+  const f=reviewFixture(),report=f.state.reviews[0].snapshot.maintenance.report;
+  const kinds=['issues','dependabot_pull_requests','dependabot_alerts'],findingId='pmfn_'+'a'.repeat(32);
+  const sources=Object.fromEntries(kinds.map(kind=>[kind,{status:kind==='issues'?'complete':'disabled',findings:kind==='issues'?[{
+    finding_id:findingId,native:{kind,id:501,number:50,repository_id:7,provider_digest:'c'.repeat(64)},facts:{labels:['bug']},existing_work:[],existing_pull_request:null}]:[]}]));
+  Object.assign(report.observations[0],{observation_id:'pmgh_'+'5'.repeat(32),document_digest:'e'.repeat(64),maintenance_sources:sources});
+  Object.assign(report,{finding_changes:Object.fromEntries(kinds.map(kind=>[kind,{status:'comparison_unavailable',added:[],changed:[],no_longer_observed:[]}]))});
+  report.coverage.issues={status:'observed',samples:1};
+  await mount(page,f,locale);await page.getByText(locale==='en'?'Original saved samples':'原始保存取樣',{exact:true}).click();
+  const view=page.locator('[data-review-report] [data-maintenance-findings]');await expect(view).toBeVisible();
+  await view.getByText('Issue #50',{exact:true}).click();await expect(view).toContainText(findingId);
+  await expect(view).toContainText(locale==='en'?'released version remains unproven':'發布版本仍');
+  expect(f.state.reads.some((path:string)=>path.includes('/maintenance-findings'))).toBe(false);
+  f.state.failRead=true;await page.evaluate(()=>(window as any).refreshReviews());await expect(view).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+});
+
 test('fixed report and weekly status do not mark discussion complete or create work',async({page})=>{
   const f=reviewFixture();await mount(page,f);
   await expect(page.getByRole('heading',{name:'Membership service maintenance',exact:true})).toBeVisible();
@@ -50,6 +66,7 @@ test('only owner with a selected saved note and acknowledgment can complete then
   await editor.getByLabel('Expected effect',{exact:true}).fill('Make uncertainty visible');await editor.getByLabel('Verification method',{exact:true}).fill('Attach a fixed source');
   await editor.locator('button[type=submit]').click();expect(f.state.writes[0].body.params.acknowledged_note_ids).toEqual([f.state.reviews[0].events[0].event_id]);
   expect(f.state.writes[0].body.params.discussion_acknowledged).toBe(true);expect(f.state.reviews[0].review.status).toBe('completed');
+  await expect(page.locator('[data-review-discussion]').getByRole('heading',{name:'Discussion outcome',exact:true})).toBeVisible();
   await reason(page,'follow_up.record');const follow=action(page,'follow_up.record');await follow.getByLabel('Reported status',{exact:true}).selectOption('reported_done');
   await follow.getByLabel('Reported result',{exact:true}).fill('Evidence collected, quality not yet assessed');await follow.locator('button[type=submit]').click();
   expect(f.state.writes[1].body.params.status).toBe('reported_done');await expect(page.locator('[data-review-discussion]')).toContainText('Reported progress is not verified quality');
