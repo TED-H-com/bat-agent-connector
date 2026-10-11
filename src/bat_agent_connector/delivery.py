@@ -155,6 +155,9 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
     submitted = _has_step(ctx, f"{prefix}.submit")
     preview = pr_delivery.get_preview(ctx.service.db, ctx.params["preview_id"])
     method = preview["method"]
+    if not submitted:
+        from .pm_delivery_lineage import require_target
+        require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr.get("base", {}).get("repo") or {}).get("id"), pull_number=number)
     if pr.get("merged"):
         if (pr.get("head") or {}).get("sha") != sha:
             raise NeedsAttention("MERGED_DIFFERENT_HEAD",
