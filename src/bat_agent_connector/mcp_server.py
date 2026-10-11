@@ -61,6 +61,7 @@ READ_TOOLS = [
     "integrations_list",
     "projects_list",
     "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_profiles_get",
+    "pm_runs_list", "pm_run_get", "pm_capabilities_get",
     "project_get",
     "work_items_list",
     "work_item_get", "artifacts_list", "artifact_get", "artifact_capture_preview", "artifact_managed_capture_preview", "approval_preview", "cleanup_preview", "cleanup_retained", "cleanup_tombstones",
@@ -525,6 +526,19 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Versioned discussion purposes, inputs, question policies and outputs; check executable_modes."""
         return await pm_daemon("pm_profiles_get")
 
+    async def pm_runs_list(workspace_id: str, thread_id: str | None = None,
+                           limit: int = 50, after: str | None = None) -> dict[str, Any]:
+        """PM work packages with fixed context, source coverage and original operation IDs."""
+        return await pm_daemon("pm_runs_list", workspace_id=workspace_id, thread_id=thread_id, limit=limit, after=after)
+
+    async def pm_run_get(workspace_id: str, run_id: str) -> dict[str, Any]:
+        """Read the original frozen PM context and preparation receipts; preparation is not an AI reply."""
+        return await pm_daemon("pm_run_get", workspace_id=workspace_id, run_id=run_id)
+
+    async def pm_capabilities_get(workspace_id: str) -> dict[str, Any]:
+        """Configured PM worktree destinations and actual runtime limitations, without starting a session."""
+        return await pm_daemon("pm_capabilities_get", workspace_id=workspace_id)
+
     async def projects_list(include_archived: bool = False) -> dict[str, Any]:
         """The project tree in display order (pinned first, then the saved order), with work item counts per
         state. Projects and work items are the connector's own records; change them with operation_submit
@@ -617,6 +631,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                deployment_environment_get, checkpoints_list, checkpoint_preview, repository_preview, integration_candidates, integration_get,
                integrations_list, projects_list, project_get, work_items_list, work_item_get,
                pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_profiles_get,
+               pm_runs_list, pm_run_get, pm_capabilities_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 

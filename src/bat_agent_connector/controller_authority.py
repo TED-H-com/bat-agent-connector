@@ -43,12 +43,22 @@ def _validated(value) -> dict:
                  and all(isinstance(scope, str) for scope in value["scopes"])
                  and (value.get("pm_workspace_id") is None or isinstance(value["pm_workspace_id"], str)
                       and _WORKSPACE.fullmatch(value["pm_workspace_id"])))
+        if "pm_operation_id" in value or "pm_requester" in value:
+            requester = value.get("pm_requester")
+            valid = (valid and value.get("actor") == "pm:" + str(value.get("pm_workspace_id"))
+                     and isinstance(value.get("pm_operation_id"), str)
+                     and re.fullmatch(r"op_[0-9a-f]{32}", value["pm_operation_id"])
+                     and isinstance(requester, dict) and isinstance(requester.get("actor"), str)
+                     and bool(requester["actor"]) and type(requester.get("admin")) is bool
+                     and isinstance(requester.get("scopes"), list)
+                     and all(isinstance(scope, str) for scope in requester["scopes"]))
     except (KeyError, ValueError, TypeError, AttributeError):
         valid = False
     if not valid:
         raise ResourceReadOnly("CONTROLLER_AUTHORITY_INVALID", "Controller authority is incomplete or invalid")
     return {key: copy.deepcopy(value[key]) for key in
-            ("server_id", "controller_id", "actor", "scopes", "admin", "pm_workspace_id") if key in value}
+            ("server_id", "controller_id", "actor", "scopes", "admin", "pm_workspace_id",
+             "pm_operation_id", "pm_requester") if key in value}
 
 
 def binding(db, principal: Principal, *, pm_workspace_id=None) -> dict:
@@ -117,6 +127,10 @@ def require_binding(expected) -> dict:
         if state.journal is None:
             raise ResourceReadOnly("CONTROLLER_WORKSPACE_UNAVAILABLE", "Current PM membership cannot be verified")
         try:
+            if expected["actor"] == "pm:" + workspace:
+                from .pm_run_operations import require_execution
+                require_execution(state.journal, actual, workspace)
+                return expected
             pm_workspace.require_member(state.journal.db,
                 Principal(actual["actor"], frozenset(actual["scopes"]), admin=actual["admin"]), workspace, write=True)
         except OperationError:

@@ -11,6 +11,9 @@ FIELDS = {
     "pm_thread_get": ("workspace_id", "thread_id", "limit", "before_message", "before_input"),
     "pm_context_get": ("workspace_id", "thread_id", "max_chars"),
     "pm_profiles_get": (),
+    "pm_runs_list": ("workspace_id", "thread_id", "limit", "after"),
+    "pm_run_get": ("workspace_id", "run_id"),
+    "pm_capabilities_get": ("workspace_id",),
 }
 
 
@@ -20,6 +23,21 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_runs_list":
+        from . import pm_runs
+        return pm_runs.list_runs(ops, principal, workspace_id, thread_id=thread_id,
+                                limit=params.get("limit", 50), after=params.get("after"))
+    if method == "pm_run_get":
+        from . import pm_runs
+        return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
+    if method == "pm_capabilities_get":
+        from . import pm_runtime, pm_worktree
+        workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
+        repositories = {repository.lower() for repository in workspace["repositories"]}
+        return {"workspace_id": workspace_id, "context_packages": True,
+                "runtime": pm_runtime.capability_report(),
+                "worktrees": [entry for entry in pm_worktree.capabilities(ops)
+                              if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":
         return {"workspaces": pm_workspace.list_workspaces(ops.db, principal)}
     if method == "pm_workspace_get":

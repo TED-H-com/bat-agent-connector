@@ -121,9 +121,10 @@ class ApiV1:
         managed_repairs.install(daemon.ops)
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
-        from . import pm_discussions, pm_workspace
+        from . import pm_discussions, pm_run_operations, pm_workspace
         pm_workspace.install(daemon.ops)
         pm_discussions.install(daemon.ops)
+        pm_run_operations.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -145,6 +146,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/profiles", self.pm_profiles, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})", self.pm_workspace, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads", self.pm_threads, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs", self.pm_runs, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs/(?P<run_id>pmr_[0-9a-f]{32})", self.pm_run, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/capabilities", self.pm_capabilities, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})", self.pm_thread, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})/context", self.pm_context, "observe"),
             ("POST", r"/api/v1/artifacts", self.create_artifact, "manage"),
@@ -511,6 +515,15 @@ class ApiV1:
     async def pm_context(self, principal, query, workspace_id, thread_id, **_):
         return self._pm_read(principal, "pm_context_get", query, workspace_id=workspace_id, thread_id=thread_id)
 
+    async def pm_runs(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_runs_list", query, workspace_id=workspace_id)
+
+    async def pm_run(self, principal, query, workspace_id, run_id, **_):
+        return self._pm_read(principal, "pm_run_get", query, workspace_id=workspace_id, run_id=run_id)
+
+    async def pm_capabilities(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_capabilities_get", query, workspace_id=workspace_id)
+
     async def capabilities(self, principal, **_):
         fleet = self.daemon.fleet
         from . import worktree_merge_operations
@@ -553,7 +566,9 @@ class ApiV1:
                                   "controller_isolation": {"version": 1, "identity": "server_actor",
                                       "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
-                                                    "runner": False, "plan_adoption": False, "dispatch": False},
+                                                    "runner": False, "context_packages": True,
+                                                    "runtime_reason": "external_tool_policy_unverified",
+                                                    "plan_adoption": False, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},
