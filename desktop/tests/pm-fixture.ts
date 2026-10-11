@@ -12,10 +12,14 @@ export function pmFixture() {
     messages:[{message_id:'pmm_'+'3'.repeat(32),sequence:1,actor:'reader',content:'Visitors should find their first useful action without switching between pages.',created_at:stamp}],
     inputs:[{input_id:inputA,slot:'problem',value:'Keep the first useful action visible',status:'user_confirmed',source_ref:{kind:'message',message_id:'pmm_'+'3'.repeat(32)},recorded_by:'reader',confirmed_by:'reader',observed_at:stamp,evidence_verification:'central_message'},
       {input_id:inputB,slot:'alternatives',value:'Offer a guided tour as another option',status:'agent_assumption',source_ref:{kind:'statement',ref:'Idea from the discussion'},recorded_by:'reader',confirmed_by:null,observed_at:stamp,evidence_verification:'unverified_claim'}] as any[],
-    draft:null as any, runs:[] as any[], packages:true, writes:[] as any[], ops:new Map<string,any>()};
-  const actions=['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.confirm','pm.thread.plan','pm.run.prepare'];
-  const caps=()=>({actor:state.actor,scopes:state.manage?['observe','manage']:['observe'],api_version:1,contract_version:'2026-10-08',hosts:[],
-    actions:actions.map(action=>({action,allowed:state.manage})),features:state.available?{pm_workspaces:{version:1,executable_modes:['idea','planning'],context_packages:state.packages,runner:false,plan_adoption:false,dispatch:false}}:{}});
+    draft:null as any, runs:[] as any[], packages:true, plans:false, start:false, bound:false, revisions:[] as any[],
+    planHead:{workspace_id:workspaceId,version:0,latest_revision_id:null as null|string,accepted_revision_id:null as null|string},
+    writes:[] as any[], ops:new Map<string,any>()};
+  const actions=['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.confirm','pm.thread.plan','pm.run.prepare','pm.plan.draft','pm.plan.adopt'];
+  const caps=()=>({actor:state.actor,scopes:state.manage?['observe','manage',...(state.start?['start']:[])]:['observe'],api_version:1,contract_version:'2026-10-08',hosts:[],
+    actions:actions.map(action=>({action,allowed:state.manage})),features:state.available?{pm_workspaces:{version:1,executable_modes:['idea','planning'],context_packages:state.packages,runner:false,plan_drafting:state.plans,plan_adoption:state.plans,dispatch:false}}:{}});
+  const binding={repository:'example/library',host:'fixture-host',workspace_id:'fixture-workspace',source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)};
+  const planRead=(plan:any)=>({version:1,head:structuredClone(state.planHead),plan:plan?{...structuredClone(plan),is_current_accepted:plan.revision_id===state.planHead.accepted_revision_id}:null});
   const workspace=(w:any)=>({...w,membership:{actor:state.actor,role:state.role,controller_id:'ctr_'+'4'.repeat(32)}});
   const detail=()=>({version:1,thread:{...state.thread},profile:{profile_id:'pm.'+state.thread.mode,version:1,mode:state.thread.mode,
     input_slots:(state.thread.mode==='idea'?['problem','stakeholders','alternatives','unknowns']:['value','scope','schedule','finance','stakeholders','resources','risk','quality']).map(key=>({key,domain:key,purpose:key}))},
@@ -27,11 +31,18 @@ export function pmFixture() {
     if(path==='/capabilities')return {status:200,data:caps()};
     if(path==='/bootstrap')return {status:200,data:{capabilities:caps(),sync:{version:1,server_id:'pm-fixture',principal_id:state.principal,checkpoint:{cursor:0,token:'pm-0'}}}};
     if(path==='/events')return {status:200,data:{events:Number(url.searchParams.get('after'))<state.cursor?[{seq:state.cursor,resource_type:'pm_thread',resource_id:threadId,kind:'pm.message.append'}]:[],next_cursor:state.cursor,head_cursor:state.cursor,has_more:false,sync:{checkpoint:{cursor:state.cursor,token:'pm-'+state.cursor}}}};
+    if(path==='/repository-previews')return {status:200,data:{preview:{...binding,target:{repository:binding.repository,host:binding.host,workspace_id:binding.workspace_id},source_ref:input.body.source_ref}}};
     if(input.method==='GET'&&path.startsWith('/pm/')){
       if(state.failRead)return {status:503,data:{error:{code:'UNAVAILABLE',message:'PM read unavailable'}}};
       if(path==='/pm/workspaces')return {status:200,data:{workspaces:state.workspaces.map(workspace)}};
       if(path.endsWith('/threads'))return {status:200,data:{version:1,workspace_id:workspaceId,threads:[state.thread],next_cursor:null,runtime:{available:false,reason:'manual_discussion_only'}}};
       if(path===pmPath)return {status:200,data:detail()};
+      if(path.endsWith('/capabilities'))return {status:200,data:{workspace_id:workspaceId,plan_drafting:state.plans,plan_adoption:state.plans,
+        plan_adoption_available:state.bound&&state.start&&state.manage&&state.role==='owner',worktree_selection:state.bound?binding:null,
+        worktrees:[{repository:binding.repository,host:binding.host,workspace_id:binding.workspace_id,available:true}]}};
+      if(path.endsWith('/plans'))return {status:200,data:{version:1,workspace_id:workspaceId,head:structuredClone(state.planHead),revisions:state.revisions.map(({document,adoption,...rest})=>rest),next_cursor:null}};
+      if(path.endsWith('/plans/accepted'))return {status:200,data:planRead(state.revisions.find(plan=>plan.revision_id===state.planHead.accepted_revision_id))};
+      if(path.includes('/plans/'))return {status:200,data:planRead(state.revisions.find(plan=>path.endsWith(plan.revision_id)))};
       if(path.endsWith('/runs'))return {status:200,data:{workspace_id:workspaceId,runs:state.runs.map(({context,...rest})=>rest),next_cursor:null}};
       if(path.includes('/runs/'))return {status:200,data:{run:state.runs.find(run=>path.endsWith(run.run_id))}};
       return {status:200,data:{workspace:workspace(state.workspaces.find(w=>path.endsWith(w.workspace_id)))}};
@@ -55,14 +66,29 @@ export function pmFixture() {
             selected_inputs:state.inputs.filter(item=>params.selected_input_ids.includes(item.input_id)),candidate_inputs:state.inputs.filter(item=>!params.selected_input_ids.includes(item.input_id)),
             unknowns:[{slot:'finance',domain:'finance',status:'unresolved'}],execution_authorized:false,scope_revision:null};
         }else if(action==='pm.run.prepare'){
+          if(params.repository_binding)state.bound=true;
           const context={thread_version:state.thread.version,messages:structuredClone(state.messages),inputs_by_status:{},coverage:{}};
           for(const row of state.inputs){const grouped=context.inputs_by_status as any;(grouped[row.status]||=[]).push(structuredClone(row));}
           const run={run_id:'pmr_'+String(state.runs.length+1).padStart(32,'0'),workspace_id:workspaceId,thread_id:threadId,
             purpose:params.purpose,created_at:stamp,state:'prepared_manual',context,
             operation_id:'op_'+String(state.ops.size+1).padStart(32,'0')};
           state.runs.push(run);result={run_id:run.run_id,workspace_id:workspaceId,thread_id:threadId,state:run.state,runtime_started:false};
+        }else if(action==='pm.plan.draft'){
+          const revision_id='pmrev_'+String(state.revisions.length+1).padStart(32,'0');
+          const sections=Object.fromEntries(['governance','scope','schedule','finance','stakeholders','resources','risk','quality'].map(domain=>[domain,
+            {source_input_ids:domain==='scope'?[inputA]:[],coverage:domain==='scope'?'attributed_inputs':'unresolved',statements:domain==='scope'?[structuredClone(state.inputs[0])]:[]}]));
+          const plan={revision_id,sequence:state.revisions.length+1,workspace_id:workspaceId,thread_id:threadId,
+            base_accepted_revision_id:state.planHead.accepted_revision_id,previous_revision_id:params.previous_revision_id,created_at:stamp,
+            document:{title:params.title,markdown:params.markdown||'# '+params.title+'\n\nUnresolved: finance',sections,requirements:[]},adoption:null};
+          state.revisions.push(plan);state.planHead={...state.planHead,version:state.planHead.version+1,latest_revision_id:revision_id};
+          result={revision_id,workspace_id:workspaceId};
+        }else if(action==='pm.plan.adopt'){
+          const plan=state.revisions.find(plan=>plan.revision_id===target.revision_id);
+          plan.adoption={adopted_by:state.actor,rationale:params.rationale,commit_sha:'c'.repeat(40),execution_authorized:false};
+          state.planHead={...state.planHead,version:state.planHead.version+1,accepted_revision_id:plan.revision_id};
+          result={revision_id:plan.revision_id,status:'adopted',execution_authorized:false};
         }else throw Error('Unexpected PM action '+action);
-        if(action!=='pm.run.prepare')state.thread.version++;
+        if(!['pm.run.prepare','pm.plan.draft','pm.plan.adopt'].includes(action))state.thread.version++;
         op={...input.body,actor:state.actor,idempotency_key:input.idempotency_key,operation_id:'op_'+String(state.ops.size+1).padStart(32,'0'),status:'succeeded',result};
         state.ops.set(input.idempotency_key,op);
       }

@@ -94,10 +94,24 @@ try {
   const data = await read(); assert.equal(data.thread.mode, 'planning'); assert.equal(data.draft.execution_authorized, false);
   assert.equal(data.draft.adopted, false); assert.deepEqual(data.draft.selected_input_ids, [confirmed.input_id]);
   assert.equal(data.draft.candidate_inputs.length, 1); assert.equal(data.messages.length, 1);
+  await page.locator('[data-pm-revision-editor] > summary').click();
+  await page.getByLabel('Plan title', {exact:true}).fill('First useful action');
+  await page.getByRole('button', {name:'Save plan revision', exact:true}).click();
+  await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
+  await page.locator('[data-pm-revision] > summary').click();
+  await expect(page.locator('.pm-plan-document')).toContainText('First useful action');
+  await expect(page.locator('[data-pm-action="pm.plan.adopt"] button[type="submit"]')).toBeDisabled();
+  const plansResponse = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans`, {headers:{Authorization:'Bearer '+fixture.token}});
+  assert.equal(plansResponse.status, 200); const plans = await plansResponse.json();
+  assert.equal(plans.revisions.length, 1); assert.equal(plans.head.accepted_revision_id, null);
+  const revisionResponse = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans/${plans.revisions[0].revision_id}`, {headers:{Authorization:'Bearer '+fixture.token}});
+  const revision = await revisionResponse.json();
+  assert.deepEqual(revision.plan.document.selected_inputs.map(input=>input.input_id), [confirmed.input_id]);
+  assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
-  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan'].sort());
+  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, numeric note timestamps, immutable source confirmation, retained candidate, Planning draft; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft; zero hosts or tasks.');
 } finally {
   try {await browser?.close();}
   finally {

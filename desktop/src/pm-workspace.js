@@ -1,4 +1,6 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+import {planRevisions} from './pm-plans.js';
+import {pmWorktreeChoice} from './pm-worktree-choice.js';
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -136,7 +138,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   main.append(h('div', {class: 'pm-shell'}, h('aside', {}, nav), body));
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '';
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null;
   const noteCache = new Map();
   const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (!forms[i].box.isConnected) forms.splice(i, 1); else forms[i].update();}};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
@@ -172,12 +174,21 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         extra: h('div', {}, labelled('pm_note_content', text), h('p', {class: 'muted'}, t('pm_note_help')))});
       const column = h('section', {class: 'pm-discussion'},
         h('div', {class: 'pm-thread-heading'}, threadTitle, mode), h('p', {class: 'muted'}, t('pm_manual')), earlier, notes, coverage, noteForm.box);
+      if (caps()?.features?.pm_workspaces?.plan_drafting) {
+        revisions = planRevisions({h, t, api, alive, workspaceId, threadId, thread: () => threadData,
+          form, input, labelled, permitted, refresh: load, errorBox});
+        column.append(revisions.box);
+      }
       if (caps()?.features?.pm_workspaces?.context_packages) {
         const purpose = input('pm_package_purpose', {multiline: true, max: 4000});
-        const prepare = form({action: 'pm.run.prepare', target, fields: {purpose},
-          params: values => ({purpose: values.purpose}), preconditions, permitted: write,
+        if (caps()?.features?.pm_workspaces?.plan_drafting) worktreeChoice = pmWorktreeChoice({h, t, api, alive, input, labelled,
+          capability: () => pmCapabilities, scopes: () => caps()?.scopes || [], editable: () => write() && caps()?.scopes?.includes('manage'), errorBox});
+        const prepare = form({action: 'pm.run.prepare', target, fields: {purpose, ...worktreeChoice?.fields},
+          params: values => ({purpose: values.purpose, ...worktreeChoice?.params(values)}), preconditions, permitted: write,
+          onStateChange: () => worktreeChoice?.update(),
           label: 'pm_prepare_package', onSaved: () => load(),
-          extra: h('div', {}, labelled('pm_package_purpose', purpose), h('p', {class: 'muted'}, t('pm_package_help')))});
+          extra: h('div', {}, labelled('pm_package_purpose', purpose), worktreeChoice?.box || '', h('p', {class: 'muted'}, t('pm_package_help')))});
+        worktreeChoice?.attach(prepare);
         packages = h('div', {'data-pm-packages': ''});
         column.append(h('details', {class: 'pm-package-preparation'}, h('summary', {}, t('pm_package_prepare_title')), prepare.box),
           h('section', {class: 'pm-packages'}, h('h3', {}, t('pm_packages')), packages));
@@ -278,7 +289,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const old = data.input_history?.find(item => item.input_id === id);
       const row = h('article', {class: 'pm-fact', 'data-pm-missing-selection': id},
         h('label', {class: 'pm-fact-heading'}, checkbox, t('pm_missing_selection')),
-        h('p', {class: 'muted'}, t('pm_missing_selection_help')), old ? h('p', {}, old.value) : null);
+        h('p', {class: 'muted'}, t('pm_missing_selection_help')), old ? h('p', {}, old.value) : '');
       rows.push(row);
     }
     facts.replaceChildren(...rows);
@@ -291,8 +302,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         h('h3', {}, t('pm_selected')), h('ul', {}, ...selected.map(item => h('li', {}, item.value))),
         h('h3', {}, t('pm_candidates')), h('ul', {}, ...candidates.map(item => h('li', {}, item.value))),
         h('h3', {}, t('pm_open_planning')), h('ul', {}, ...(data.draft.unknowns || []).map(item => h('li', {}, t('pm_slot_' + item.slot)))),
-        data.draft.candidates_truncated ? h('p', {class: 'muted'}, t('pm_partial')) : null,
-        h('p', {class: 'muted'}, t('pm_draft_help')));
+        data.draft.candidates_truncated ? h('p', {class: 'muted'}, t('pm_partial')) : '',
+        h('p', {class: 'muted'}, t(caps()?.features?.pm_workspaces?.plan_drafting ? 'pm_planning_source_help' : 'pm_draft_help')));
     }
     planForm.box.closest('[data-pm-plan]').hidden = (thread.mode !== 'idea' && !planForm.locked()) || !data.capabilities?.decide;
     updateForms();
@@ -361,13 +372,19 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
-      let detail = null, threadList = null, data = null, runs = null;
+      let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
       if (workspaceId) {
-        [detail, threadList, data, runs] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
+        [detail, threadList, data, runs, plans, accepted, workspaceCaps] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
           api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
           threadId ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
           threadId && caps()?.features?.pm_workspaces?.context_packages
-            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null)]);
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
+          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
+          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
+          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
           const next = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads?after=${encodeURIComponent(threadList.next_cursor)}`); alive();
@@ -376,7 +393,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (ticket !== sequence) return;
       if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t('pm_scope_mismatch'));
-      workspace = detail?.workspace || null; loaded = true; status.replaceChildren();
+      workspace = detail?.workspace || null; pmCapabilities = workspaceCaps; loaded = true; status.replaceChildren();
       title.textContent = workspace?.name || t('pm_title');
       workspaceList.replaceChildren(...(list.workspaces || []).map(item => h('div', {class: 'pm-workspace-row'},
         h('a', {href: `#/pm/${encodeURIComponent(item.workspace_id)}`, 'aria-current': item.workspace_id === workspaceId ? 'page' : null}, item.name),
@@ -403,6 +420,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         if (runs.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
         renderPackages(runs);
       }
+      if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
+      worktreeChoice?.update();
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {loaded = false; updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
@@ -411,7 +430,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;

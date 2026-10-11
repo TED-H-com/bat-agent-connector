@@ -141,6 +141,315 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-plans.js
+function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
+	let head = null, capability = null, signature = "", busy = false;
+	const title = input("pm_revision_title", {
+		max: 200,
+		value: thread().thread.title
+	});
+	const markdown = input("pm_revision_markdown", {
+		multiline: true,
+		max: 128e3,
+		required: false
+	});
+	const structure = h("input", {
+		type: "hidden",
+		value: "{}"
+	});
+	structure.dataset.pmDefault = "{}";
+	const editor = form({
+		action: "pm.plan.draft",
+		target: {
+			workspace_id: workspaceId,
+			thread_id: threadId
+		},
+		fields: {
+			title,
+			markdown,
+			structure
+		},
+		label: "pm_revision_save",
+		params: (values) => ({
+			title: values.title,
+			...values.markdown.trim() ? { markdown: values.markdown } : {},
+			...JSON.parse(values.structure || "{}"),
+			previous_revision_id: head.latest_revision_id
+		}),
+		preconditions: () => ({
+			expected_version: thread().thread.version,
+			expected_plan_version: head.version
+		}),
+		permitted: () => Boolean(head) && permitted(false) && thread().thread.mode === "planning",
+		onSaved: () => refresh(),
+		extra: h("div", { class: "pm-fields" }, labelled("pm_revision_title", title), labelled("pm_revision_markdown", markdown), structure, h("p", { class: "muted" }, t("pm_revision_draft_help")))
+	});
+	const draftBox = h("details", { "data-pm-revision-editor": "" }, h("summary", {}, t("pm_revision_new")), editor.box);
+	const current = h("div", { "data-pm-accepted-plan": "" }), rows = h("div", { class: "pm-revision-list" });
+	const box = h("section", {
+		class: "pm-plans",
+		"data-pm-plans": ""
+	}, h("h3", {}, t("pm_plan_versions")), current, draftBox, rows);
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
+	function revisionRow(summary) {
+		const detail = h("div"), item = h("details", { "data-pm-revision": summary.revision_id }, h("summary", {}, t("pm_revision_number", { number: summary.sequence }), summary.revision_id === head.accepted_revision_id ? " · " + t("pm_plan_accepted") : ""), detail);
+		let pending = false, fetched = false;
+		item.addEventListener("toggle", async () => {
+			if (!item.open || pending || fetched) return;
+			pending = true;
+			try {
+				const data = await api("GET", `${endpoint}/${encodeURIComponent(summary.revision_id)}`);
+				alive();
+				if (!item.isConnected) return;
+				const plan = data.plan;
+				if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t("pm_scope_mismatch"));
+				const document = plan.document, source = h("div", { class: "pm-plan-domains" });
+				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, t("pm_slot_" + domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, t("pm_status_" + statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
+					statement.source_ref?.ref || statement.source_ref?.message_id,
+					statement.source_ref?.path,
+					statement.source_ref?.revision
+				].filter(Boolean).join(" · ")))), section.coverage === "unresolved" ? h("p", { class: "muted" }, t("pm_plan_domain_unknown")) : ""));
+				detail.replaceChildren(h("h4", {}, document.title), h("div", { class: "pm-plan-document" }, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source), h("p", { class: "muted" }, t("pm_plan_no_execution")));
+				if (plan.adoption) detail.append(h("p", {}, t("pm_plan_adoption_evidence", { actor: plan.adoption.adopted_by }), h("code", {}, plan.adoption.commit_sha)), h("p", { class: "pm-note-text" }, plan.adoption.rationale));
+				if (plan.thread_id === threadId) detail.append(h("button", {
+					type: "button",
+					class: "secondary",
+					disabled: editor.locked() || !permitted(false),
+					onclick: () => {
+						if (editor.locked() || !permitted(false)) return;
+						editor.set("title", document.title);
+						editor.set("markdown", document.markdown);
+						editor.set("structure", JSON.stringify({
+							sections: Object.fromEntries(Object.entries(document.sections || {}).map(([key, value]) => [key, value.source_input_ids])),
+							requirements: (document.requirements || []).map((requirement) => ({
+								id: requirement.id,
+								source_input_id: requirement.source_input_id,
+								acceptance_input_ids: requirement.acceptance.map((value) => value.source_input_id),
+								priority: requirement.priority,
+								depends_on: requirement.depends_on
+							}))
+						}));
+						draftBox.open = true;
+						markdown.focus();
+					}
+				}, t("pm_revision_edit")));
+				if (permitted(true)) {
+					const rationale = input("pm_adopt_rationale", {
+						multiline: true,
+						max: 8e3
+					});
+					const baseline = data.head.accepted_revision_id;
+					let adopt;
+					adopt = form({
+						action: "pm.plan.adopt",
+						target: {
+							workspace_id: workspaceId,
+							revision_id: plan.revision_id
+						},
+						fields: { rationale },
+						params: (values) => ({ rationale: values.rationale }),
+						preconditions: () => ({ expected_accepted_revision_id: baseline }),
+						permitted: () => !plan.is_current_accepted && permitted(true) && capability?.plan_adoption_available === true && head.accepted_revision_id === baseline && plan.base_accepted_revision_id === baseline,
+						recoverPermitted: () => permitted(true),
+						label: "pm_adopt_revision",
+						onSaved: () => refresh(),
+						onStateChange: () => {
+							if (adopt) adopt.box.hidden = plan.is_current_accepted && !adopt.locked();
+						},
+						extra: h("div", {}, labelled("pm_adopt_rationale", rationale), h("p", { class: "muted" }, t(plan.base_accepted_revision_id !== baseline ? "pm_plan_baseline_changed" : capability?.plan_adoption_available ? "pm_adopt_help" : "pm_plan_worktree_required")))
+					});
+					detail.append(adopt.box);
+					adopt.update();
+				}
+				fetched = true;
+			} catch (error) {
+				if (item.isConnected) detail.replaceChildren(errorBox(error));
+			} finally {
+				pending = false;
+			}
+		});
+		return item;
+	}
+	function renderRows(page, append = false) {
+		if (!append) rows.replaceChildren();
+		rows.append(...(page.revisions || []).map(revisionRow));
+		if (!rows.children.length) rows.append(h("p", { class: "muted" }, t("pm_plan_no_revisions")));
+		if (page.next_cursor !== null && page.next_cursor !== void 0) {
+			const more = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: async () => {
+					if (busy) return;
+					busy = true;
+					more.disabled = true;
+					try {
+						const next = await api("GET", `${endpoint}?after=${page.next_cursor}&limit=20`);
+						alive();
+						if (next.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+						if (!more.isConnected) return;
+						more.remove();
+						renderRows(next, true);
+					} catch (error) {
+						if (more.isConnected) more.after(errorBox(error));
+					} finally {
+						busy = false;
+						more.disabled = false;
+					}
+				}
+			}, t("pm_plan_more"));
+			rows.append(more);
+		}
+	}
+	return {
+		box,
+		update(page, accepted, capabilities) {
+			if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("pm_stale"));
+			head = page.head;
+			capability = capabilities;
+			draftBox.hidden = thread().thread.mode !== "planning" && !editor.locked();
+			const nextSignature = JSON.stringify([
+				page,
+				accepted,
+				capabilities
+			]);
+			if (signature !== nextSignature) {
+				signature = nextSignature;
+				current.replaceChildren(h("p", {}, h("strong", {}, accepted.plan ? accepted.plan.document.title : t("pm_plan_none_accepted"))), h("p", { class: "muted" }, t("pm_plan_no_execution")));
+				if (accepted.plan) current.append(h("p", { class: "muted" }, t("pm_plan_accepted"), " · ", h("code", {}, accepted.plan.adoption.commit_sha)));
+				renderRows(page);
+			}
+			editor.update();
+		}
+	};
+}
+//#endregion
+//#region src/pm-worktree-choice.js
+function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scopes, editable, errorBox }) {
+	let form = null, reading = false, sequence = 0;
+	const mode = h("select", { "aria-label": t("pm_context_location") });
+	const source = input("pub_ref", {
+		max: 211,
+		required: false,
+		value: "main"
+	});
+	const selection = h("input", {
+		type: "hidden",
+		value: ""
+	});
+	const proof = h("div", { role: "status" });
+	const preview = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: async () => {
+			if (!form || form.locked() || reading || !mode.value || mode.value === "owned") return;
+			const ticket = ++sequence, target = JSON.parse(mode.value);
+			const branch = source.value.startsWith("refs/") ? source.value : "refs/heads/" + source.value;
+			reading = true;
+			update();
+			proof.replaceChildren();
+			try {
+				const data = await api("POST", "/repository-previews", {
+					...target,
+					source_ref: branch
+				});
+				alive();
+				if (ticket !== sequence || form.locked()) return;
+				const value = data.preview;
+				if (!value || Object.keys(target).some((key) => value.target?.[key] !== target[key]) || value.source_ref !== branch || !/^[0-9a-f]{40,64}$/.test(value.source_sha) || !/^[0-9a-f]{64}$/.test(value.binding_digest) || !Number.isSafeInteger(value.repository_id) || value.repository_id < 1) throw Error(t("pm_scope_mismatch"));
+				form.set("repository_selection", JSON.stringify({
+					...target,
+					...Object.fromEntries([
+						"source_ref",
+						"source_sha",
+						"repository_id",
+						"binding_digest"
+					].map((key) => [key, value[key]]))
+				}));
+				renderProof();
+			} catch (error) {
+				if (ticket === sequence) proof.replaceChildren(errorBox(error));
+			} finally {
+				if (ticket === sequence) {
+					reading = false;
+					update();
+				}
+			}
+		}
+	}, t("pm_preview_worktree"));
+	const controls = h("div", { class: "pm-fields" }, labelled("pub_ref", source), preview);
+	const box = h("details", { "data-pm-worktree-choice": "" }, h("summary", {}, t("pm_context_location")), labelled("pm_context_location", mode), controls, selection, proof, h("p", { class: "muted" }, t("pm_context_location_help")));
+	function renderProof() {
+		if (!selection.value) {
+			proof.replaceChildren();
+			return;
+		}
+		try {
+			const saved = JSON.parse(selection.value);
+			proof.replaceChildren(h("p", {}, saved.repository, " · ", h("code", {}, saved.source_sha)));
+		} catch {
+			proof.replaceChildren(h("p", { class: "muted" }, t("pm_preview_required")));
+		}
+	}
+	function update() {
+		if (!form) return;
+		controls.hidden = !mode.value || mode.value === "owned";
+		const blocked = form.locked() || reading || !scopes().includes("start") || !editable();
+		mode.disabled = blocked;
+		source.disabled = blocked;
+		preview.disabled = blocked || !mode.value || mode.value === "owned";
+	}
+	function changed() {
+		if (form?.locked()) return;
+		sequence++;
+		reading = false;
+		form?.set("repository_selection", mode.value === "owned" ? JSON.stringify(capability()?.worktree_selection || null) : "");
+		renderProof();
+		update();
+	}
+	mode.addEventListener("change", changed);
+	source.addEventListener("input", changed);
+	return {
+		box,
+		fields: {
+			repository_mode: mode,
+			repository_ref: source,
+			repository_selection: selection
+		},
+		params(values) {
+			if (!values.repository_mode) return {};
+			if (!values.repository_selection) throw Error(t("pm_preview_required"));
+			const fixed = JSON.parse(values.repository_selection);
+			if (!fixed) throw Error(t("pm_preview_required"));
+			return { repository_binding: fixed };
+		},
+		attach(value) {
+			form = value;
+			this.update();
+		},
+		update() {
+			const selected = mode.value;
+			if (!form?.locked()) {
+				const options = [h("option", { value: "" }, t("pm_context_journal"))];
+				if (capability()?.worktree_selection) options.push(h("option", { value: "owned" }, t("pm_context_owned")));
+				else for (const row of capability()?.worktrees || []) if (row.available) {
+					const target = Object.fromEntries([
+						"repository",
+						"host",
+						"workspace_id"
+					].map((key) => [key, row[key]]));
+					options.push(h("option", { value: JSON.stringify(target) }, `${row.repository} · ${row.host} · ${row.workspace_id}`));
+				}
+				if (selected && !options.some((option) => option.value === selected)) options.push(h("option", { value: selected }, t("pm_saved_worktree_choice")));
+				mode.replaceChildren(...options);
+				mode.value = selected;
+			}
+			update();
+			renderProof();
+		}
+	};
+}
+//#endregion
 //#region src/pm-workspace.js
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
 var retired = (error) => [
@@ -393,7 +702,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "";
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null;
 	const noteCache = new Map();
 	const updateForms = () => {
 		for (let i = forms.length - 1; i >= 0; i--) if (!forms[i].box.isConnected) forms.splice(i, 1);
@@ -472,22 +781,60 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				extra: h("div", {}, labelled("pm_note_content", text), h("p", { class: "muted" }, t("pm_note_help")))
 			});
 			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), h("p", { class: "muted" }, t("pm_manual")), earlier, notes, coverage, noteForm.box);
+			if (caps()?.features?.pm_workspaces?.plan_drafting) {
+				revisions = planRevisions({
+					h,
+					t,
+					api,
+					alive,
+					workspaceId,
+					threadId,
+					thread: () => threadData,
+					form,
+					input,
+					labelled,
+					permitted,
+					refresh: load,
+					errorBox
+				});
+				column.append(revisions.box);
+			}
 			if (caps()?.features?.pm_workspaces?.context_packages) {
 				const purpose = input("pm_package_purpose", {
 					multiline: true,
 					max: 4e3
 				});
+				if (caps()?.features?.pm_workspaces?.plan_drafting) worktreeChoice = pmWorktreeChoice({
+					h,
+					t,
+					api,
+					alive,
+					input,
+					labelled,
+					capability: () => pmCapabilities,
+					scopes: () => caps()?.scopes || [],
+					editable: () => write() && caps()?.scopes?.includes("manage"),
+					errorBox
+				});
 				const prepare = form({
 					action: "pm.run.prepare",
 					target,
-					fields: { purpose },
-					params: (values) => ({ purpose: values.purpose }),
+					fields: {
+						purpose,
+						...worktreeChoice?.fields
+					},
+					params: (values) => ({
+						purpose: values.purpose,
+						...worktreeChoice?.params(values)
+					}),
 					preconditions,
 					permitted: write,
+					onStateChange: () => worktreeChoice?.update(),
 					label: "pm_prepare_package",
 					onSaved: () => load(),
-					extra: h("div", {}, labelled("pm_package_purpose", purpose), h("p", { class: "muted" }, t("pm_package_help")))
+					extra: h("div", {}, labelled("pm_package_purpose", purpose), worktreeChoice?.box || "", h("p", { class: "muted" }, t("pm_package_help")))
 				});
+				worktreeChoice?.attach(prepare);
 				packages = h("div", { "data-pm-packages": "" });
 				column.append(h("details", { class: "pm-package-preparation" }, h("summary", {}, t("pm_package_prepare_title")), prepare.box), h("section", { class: "pm-packages" }, h("h3", {}, t("pm_packages")), packages));
 			}
@@ -680,7 +1027,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				const row = h("article", {
 					class: "pm-fact",
 					"data-pm-missing-selection": id
-				}, h("label", { class: "pm-fact-heading" }, checkbox, t("pm_missing_selection")), h("p", { class: "muted" }, t("pm_missing_selection_help")), old ? h("p", {}, old.value) : null);
+				}, h("label", { class: "pm-fact-heading" }, checkbox, t("pm_missing_selection")), h("p", { class: "muted" }, t("pm_missing_selection_help")), old ? h("p", {}, old.value) : "");
 				rows.push(row);
 			}
 			facts.replaceChildren(...rows);
@@ -689,7 +1036,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		draft.replaceChildren();
 		if (data.draft) {
 			const selected = data.draft.selected_inputs || [], candidates = data.draft.candidate_inputs || [];
-			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, t("pm_slot_" + item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : null, h("p", { class: "muted" }, t("pm_draft_help")));
+			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, t("pm_slot_" + item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : "", h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.plan_drafting ? "pm_planning_source_help" : "pm_draft_help")));
 		}
 		planForm.box.closest("[data-pm-plan]").hidden = thread.mode !== "idea" && !planForm.locked() || !data.capabilities?.decide;
 		updateForms();
@@ -792,13 +1139,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			alive();
 			const list = await api("GET", "/pm/workspaces");
 			alive();
-			let detail = null, threadList = null, data = null, runs = null;
+			let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
 			if (workspaceId) {
-				[detail, threadList, data, runs] = await Promise.all([
+				[detail, threadList, data, runs, plans, accepted, workspaceCaps] = await Promise.all([
 					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
 					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
 					threadId ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
-					threadId && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null)
+					threadId && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
+					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
+					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
+					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
 				]);
 				alive();
 				for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -813,6 +1163,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (ticket !== sequence) return;
 			if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t("pm_scope_mismatch"));
 			workspace = detail?.workspace || null;
+			pmCapabilities = workspaceCaps;
 			loaded = true;
 			status.replaceChildren();
 			title.textContent = workspace?.name || t("pm_title");
@@ -863,6 +1214,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (runs.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 				renderPackages(runs);
 			}
+			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
+			worktreeChoice?.update();
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -883,7 +1236,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if ([
 			"pm_workspace",
 			"pm_thread",
-			"pm_run"
+			"pm_run",
+			"pm_plan"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -4748,6 +5102,35 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_planning_source_help: "This records the selected planning direction. See Project plan for the accepted document version.",
+		pm_context_location: "Save in a PM worktree",
+		pm_context_location_help: "Choose an existing repository connection and preview its published commit. The service prepares its own PM worktree.",
+		pm_context_journal: "Discussion record only",
+		pm_context_owned: "Use the existing PM worktree",
+		pm_preview_worktree: "Preview published revision",
+		pm_preview_required: "Preview the selected repository revision before saving.",
+		pm_saved_worktree_choice: "Previously selected repository",
+		pm_plan_versions: "Project plan",
+		pm_revision_title: "Plan title",
+		pm_revision_markdown: "Plan document (Markdown)",
+		pm_revision_save: "Save plan revision",
+		pm_revision_new: "Write a plan revision",
+		pm_revision_draft_help: "Start with the selected Planning sources, or write the document here. Empty text creates a structured draft with unresolved domains clearly marked.",
+		pm_revision_number: "Revision {number}",
+		pm_plan_accepted: "Accepted plan",
+		pm_plan_none_accepted: "No plan has been adopted",
+		pm_plan_no_execution: "Adopting a plan records the direction. Development is authorized separately.",
+		pm_plan_domain_unknown: "No selected source covers this domain yet.",
+		pm_plan_sources: "Management domains and source status",
+		pm_plan_adoption_evidence: "Adopted by {actor} · Git commit ",
+		pm_revision_edit: "Use this revision as a draft",
+		pm_adopt_rationale: "Why adopt this version?",
+		pm_adopt_revision: "Adopt this plan",
+		pm_adopt_help: "This exact document will be saved in the PM worktree and recorded as the accepted version.",
+		pm_plan_worktree_required: "Adoption needs an owned PM worktree and owner access with permission to create work.",
+		pm_plan_baseline_changed: "The accepted baseline changed. Prepare a new revision against the current plan.",
+		pm_plan_no_revisions: "No plan revisions saved yet.",
+		pm_plan_more: "More plan revisions",
 		pm_package_prepare_title: "Prepare discussion context",
 		pm_package_purpose: "What should this discussion help decide?",
 		pm_prepare_package: "Save context package",
@@ -4859,6 +5242,35 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_planning_source_help: "此處保留選定的規劃方向；正式採用的文件版本請見專案計畫。",
+		pm_context_location: "保存到 PM 工作目錄",
+		pm_context_location_help: "選擇已設定的儲存庫連線並預覽已發布 commit，服務會準備自己的 PM 工作目錄。",
+		pm_context_journal: "只保留討論紀錄",
+		pm_context_owned: "沿用既有 PM 工作目錄",
+		pm_preview_worktree: "預覽已發布版本",
+		pm_preview_required: "儲存前請先預覽所選儲存庫版本。",
+		pm_saved_worktree_choice: "先前選定的儲存庫",
+		pm_plan_versions: "專案計畫",
+		pm_revision_title: "計畫名稱",
+		pm_revision_markdown: "計畫內容（Markdown）",
+		pm_revision_save: "儲存計畫版本",
+		pm_revision_new: "撰寫計畫版本",
+		pm_revision_draft_help: "以已選定的 Planning 來源起草，也可以在此撰寫內容。留白會產生結構化草稿，明確保留尚未釐清的管理領域。",
+		pm_revision_number: "版本 {number}",
+		pm_plan_accepted: "已採用計畫",
+		pm_plan_none_accepted: "尚未採用計畫",
+		pm_plan_no_execution: "採用計畫會記錄正式方向；開發工作另行授權。",
+		pm_plan_domain_unknown: "目前沒有選定來源涵蓋這個領域。",
+		pm_plan_sources: "管理領域與來源狀態",
+		pm_plan_adoption_evidence: "由 {actor} 採用 · Git commit ",
+		pm_revision_edit: "以此版本起草",
+		pm_adopt_rationale: "採用這個版本的理由",
+		pm_adopt_revision: "採用這份計畫",
+		pm_adopt_help: "這份確定的文件會保存到 PM 工作目錄，並記錄為正式採用版本。",
+		pm_plan_worktree_required: "採用需要先準備 PM 自有工作目錄，並具備 owner 與建立工作權限。",
+		pm_plan_baseline_changed: "已採用的基準版本已改變，請依目前計畫準備新版本。",
+		pm_plan_no_revisions: "目前沒有已保存的計畫版本。",
+		pm_plan_more: "更多計畫版本",
 		pm_package_prepare_title: "準備討論脈絡",
 		pm_package_purpose: "這次討論要協助判斷什麼？",
 		pm_prepare_package: "儲存討論脈絡",
