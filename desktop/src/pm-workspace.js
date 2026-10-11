@@ -349,8 +349,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       discussionHint = h('p', {class: 'muted'});
       const column = h('section', {class: 'pm-discussion'},
         h('div', {class: 'pm-thread-heading'}, threadTitle, mode), discussionHint, earlier, notes, coverage);
-      if (caps()?.features?.pm_workspaces?.native_analysis) {
-        nativeAnalysis = pmNativeAnalysis({h, t, form, input, labelled, caps,
+      if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
+        nativeAnalysis = pmNativeAnalysis({h, t, form, input, labelled, caps, namespace, guard: alive,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
         column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation', 'data-pm-note-only': ''},
           h('summary', {}, t('pm_native_note_only')), noteForm.box));
@@ -594,7 +594,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
           threadId && caps()?.features?.pm_workspaces?.plan_drafting
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-          threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis)
+          threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
