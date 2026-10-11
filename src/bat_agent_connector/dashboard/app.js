@@ -393,7 +393,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "";
 	const noteCache = new Map();
 	const updateForms = () => {
 		for (let i = forms.length - 1; i >= 0; i--) if (!forms[i].box.isConnected) forms.splice(i, 1);
@@ -472,6 +472,25 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				extra: h("div", {}, labelled("pm_note_content", text), h("p", { class: "muted" }, t("pm_note_help")))
 			});
 			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), h("p", { class: "muted" }, t("pm_manual")), earlier, notes, coverage, noteForm.box);
+			if (caps()?.features?.pm_workspaces?.context_packages) {
+				const purpose = input("pm_package_purpose", {
+					multiline: true,
+					max: 4e3
+				});
+				const prepare = form({
+					action: "pm.run.prepare",
+					target,
+					fields: { purpose },
+					params: (values) => ({ purpose: values.purpose }),
+					preconditions,
+					permitted: write,
+					label: "pm_prepare_package",
+					onSaved: () => load(),
+					extra: h("div", {}, labelled("pm_package_purpose", purpose), h("p", { class: "muted" }, t("pm_package_help")))
+				});
+				packages = h("div", { "data-pm-packages": "" });
+				column.append(h("details", { class: "pm-package-preparation" }, h("summary", {}, t("pm_package_prepare_title")), prepare.box), h("section", { class: "pm-packages" }, h("h3", {}, t("pm_packages")), packages));
+			}
 			facts = h("div", { class: "pm-facts" });
 			draft = h("section", { class: "pm-draft" });
 			slotSelect = h("select", {
@@ -675,6 +694,67 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		planForm.box.closest("[data-pm-plan]").hidden = thread.mode !== "idea" && !planForm.locked() || !data.capabilities?.decide;
 		updateForms();
 	}
+	function renderPackages(page, append = false) {
+		if (!packages) return;
+		const signature = JSON.stringify(page);
+		if (!append && signature === packageSignature) return;
+		if (!append) {
+			packages.replaceChildren();
+			packageSignature = signature;
+		}
+		for (const run of page.runs || []) {
+			const detail = h("div"), item = h("details", { "data-pm-run": run.run_id }, h("summary", {}, run.purpose, " · ", time(run.created_at)), detail);
+			let fetched = false, pending = false;
+			item.addEventListener("toggle", async () => {
+				if (!item.open || fetched || pending) return;
+				pending = true;
+				detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_loading")));
+				try {
+					const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(run.run_id)}`);
+					alive();
+					if (!item.isConnected) return;
+					const saved = data.run;
+					if (saved?.workspace_id !== workspaceId || saved?.thread_id !== threadId || saved?.run_id !== run.run_id) throw Error(t("pm_scope_mismatch"));
+					const context = saved.context;
+					detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_version", { version: context.thread_version })), h("a", { href: `#/op/${saved.operation_id}` }, t("pm_operation")), ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) => h("section", {}, h("h4", {}, t("pm_status_" + status)), ...inputs.map((input) => h("div", {}, h("p", {}, input.value), h("small", { class: "muted" }, [
+						input.source_ref?.ref || input.source_ref?.message_id,
+						input.source_ref?.path,
+						input.source_ref?.revision
+					].filter(Boolean).join(" · ")))))), h("h4", {}, t("pm_notes")), ...(context.messages || []).map((message) => h("p", {}, h("strong", {}, message.actor + ": "), message.content)), h("p", { class: "muted" }, t("pm_package_frozen")));
+					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
+					fetched = true;
+				} catch (error) {
+					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error));
+				} finally {
+					pending = false;
+				}
+			});
+			packages.append(item);
+		}
+		if (!packages.children.length) packages.append(h("p", { class: "muted" }, t("pm_packages_empty")));
+		if (page.next_cursor) {
+			const more = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: async () => {
+					more.disabled = true;
+					try {
+						const next = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20&after=${encodeURIComponent(page.next_cursor)}`);
+						alive();
+						if (next.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+						more.remove();
+						renderPackages(next, true);
+					} catch (error) {
+						if (!retired(error)) {
+							status.replaceChildren(errorBox(error));
+							more.disabled = false;
+						}
+					}
+				}
+			}, t("pm_packages_more"));
+			packages.append(more);
+		}
+	}
 	async function loadEarlier() {
 		if (!historyCursor || refreshing || !loaded) return;
 		const ticket = ++sequence;
@@ -712,12 +792,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			alive();
 			const list = await api("GET", "/pm/workspaces");
 			alive();
-			let detail = null, threadList = null, data = null;
+			let detail = null, threadList = null, data = null, runs = null;
 			if (workspaceId) {
-				[detail, threadList, data] = await Promise.all([
+				[detail, threadList, data, runs] = await Promise.all([
 					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
 					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
-					threadId ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null)
+					threadId ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
+					threadId && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null)
 				]);
 				alive();
 				for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -778,6 +859,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), h("p", { class: "muted" }, t("pm_thread_help")), create.box));
 				}
 			}
+			if (runs) {
+				if (runs.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+				renderPackages(runs);
+			}
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -795,7 +880,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	await load();
 	let eventReads = Promise.resolve();
 	const off = onEvents((event) => {
-		if (["pm_workspace", "pm_thread"].includes(event.resource_type)) {
+		if ([
+			"pm_workspace",
+			"pm_thread",
+			"pm_run"
+		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
 		}
@@ -4659,6 +4748,16 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_package_prepare_title: "Prepare discussion context",
+		pm_package_purpose: "What should this discussion help decide?",
+		pm_prepare_package: "Save context package",
+		pm_packages: "Saved discussion context",
+		pm_package_help: "Save the current notes, source status and PM profile for a focused discussion. An AI participant is not started.",
+		pm_packages_empty: "No saved context packages yet.",
+		pm_package_loading: "Loading saved context…",
+		pm_package_version: "Discussion version {version}",
+		pm_package_frozen: "This context stays fixed when later notes change. It does not adopt a plan or authorize work.",
+		pm_packages_more: "Load more saved context",
 		pm_earlier_notes: "Load earlier notes",
 		pm_more_threads: "Load more discussions",
 		pm_missing_selection: "Selected input outside this view",
@@ -4760,6 +4859,16 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_package_prepare_title: "準備討論脈絡",
+		pm_package_purpose: "這次討論要協助判斷什麼？",
+		pm_prepare_package: "儲存討論脈絡",
+		pm_packages: "已保存的討論脈絡",
+		pm_package_help: "固定目前的筆記、來源狀態與 PM 討論方式，供下一次討論使用。目前不會啟動 AI 參與者。",
+		pm_packages_empty: "尚未保存討論脈絡。",
+		pm_package_loading: "正在讀取已保存的脈絡…",
+		pm_package_version: "討論版本 {version}",
+		pm_package_frozen: "後續筆記不會改寫這份脈絡；保存脈絡不代表採用計畫或授權工作。",
+		pm_packages_more: "載入更多討論脈絡",
 		pm_earlier_notes: "載入較早筆記",
 		pm_more_threads: "載入更多討論",
 		pm_missing_selection: "此頁未列出的已選紀錄",

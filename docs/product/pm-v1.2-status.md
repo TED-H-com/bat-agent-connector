@@ -38,6 +38,19 @@ Dashboard inventory 與帶 token 的 CLI／MCP policy 顯示目前 caller 的操
 
 ## 工作與剩餘範圍
 
+第三批追蹤 [#88](https://github.com/teddashh/bat-agent-connector/issues/88)：已實作固定討論脈絡、
+workspace writer generation、PM 自有 controller、來源／原生回覆紀錄，以及設定綁定下的
+固定 commit 工作目錄與不可覆寫草稿。API／MCP／Web／Tauri 共用 `pm.run.prepare`；
+畫面可查回原始討論版本，保存脈絡不會產生 AI 回覆或採用計畫。
+
+BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK session ID，保留重播缺口；
+這是 runner 的內部基礎。目前核對的 BAT 介面可傳遞檔案唯讀設定，但沒有逐次限制外部 MCP
+工具的契約，因此自動 Idea／Planning 執行仍不可用，明示 `external_tool_policy_unverified`。
+這個限制與使用者自行處理的真人實機驗收分開。W09 與 #88 尚未全部完成。
+
+正式計畫修訂與 Git／journal 採用另追蹤 [#91](https://github.com/teddashh/bat-agent-connector/issues/91)。
+本批驗證、合併、安裝與實測狀態仍以 PR 的實際證據為準。
+
 下表的「本批」是這次的實作範圍；測試／審查以 PR 證據為準。未完成部分保留在原編號下，
 不以新增一張畫面或資料表當作完整 PM 能力完成。
 
@@ -46,13 +59,13 @@ Dashboard inventory 與帶 token 的 CLI／MCP policy 顯示目前 caller 的操
 | W01 | P0 | Workspace identity 與 scope migration | 本批：workspace identity／membership；待舊專案明確綁定與部署遷移 |
 | W02 | P0 | 全入口 controller policy | 第二批：既有執行入口、最後 frame、背景恢復與清理已接入原 controller／incarnation；驗證見 #87 的實作 PR |
 | W03 | P0 | Operation request key 與查回 | 本批重用 PM operation key／receipt；Git 採用與外部效果仍待驗證 |
-| W04 | P0 | BAT capability adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W04 | P0 | BAT capability adapter | 第三批：唯讀選項、native replay／completion 與能力缺口；自動 PM 執行仍缺工具限制契約 |
 | W05 | P0 | Evidence IDs 與 replay 去重 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W06 | P0 | Session worktree work 關聯 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W07 | P0 | PM worktree bootstrap | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W07 | P0 | PM worktree bootstrap | 第三批：設定綁定、固定 commit、自有 worktree、不可覆寫草稿及原操作查回；計畫 commit／採用由 W08 接續 |
 | W08 | P0 | Plan revision 與採用流程 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W09 | P1 | PM runner 與 adapter selection | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W10 | P1 | 一位 PM 討論與 evidence snapshot | 本批：持久討論／來源／有限上下文；PM runner 與 evidence snapshot 待做 |
+| W09 | P1 | PM runner 與 adapter selection | 第三批：writer／context／reply provenance 基礎與手動脈絡準備；可自動執行的 adapter、工具限制與切換待完成 |
+| W10 | P1 | 一位 PM 討論與 evidence snapshot | 第三批：固定討論脈絡、來源／版本／缺口；AI 參與及跨交付 evidence 關聯待做 |
 | W11 | P1 | Plan diff 與影響分析 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W12 | P1 | Project Brief | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W13 | P1 | Roadmap 與 scope | 待開發／接入 v1.2；既有底層能力按計畫重用 |

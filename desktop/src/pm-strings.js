@@ -1,5 +1,11 @@
 export const pmStrings = {
   en: {
+    pm_package_prepare_title: 'Prepare discussion context', pm_package_purpose: 'What should this discussion help decide?',
+    pm_prepare_package: 'Save context package', pm_packages: 'Saved discussion context',
+    pm_package_help: 'Save the current notes, source status and PM profile for a focused discussion. An AI participant is not started.',
+    pm_packages_empty: 'No saved context packages yet.', pm_package_loading: 'Loading saved context…',
+    pm_package_version: 'Discussion version {version}', pm_package_frozen: 'This context stays fixed when later notes change. It does not adopt a plan or authorize work.',
+    pm_packages_more: 'Load more saved context',
     pm_earlier_notes: 'Load earlier notes', pm_more_threads: 'Load more discussions',
     pm_missing_selection: 'Selected input outside this view', pm_missing_selection_help: 'This selection may have been revised or omitted from this page. Uncheck it to review and choose a current input; it will not be replaced automatically.',
     pm_title: 'Project discussions', pm_nav: 'PM', pm_workspaces: 'PM workspaces', pm_new_workspace: 'New workspace',
@@ -44,6 +50,12 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    pm_package_prepare_title: '準備討論脈絡', pm_package_purpose: '這次討論要協助判斷什麼？',
+    pm_prepare_package: '儲存討論脈絡', pm_packages: '已保存的討論脈絡',
+    pm_package_help: '固定目前的筆記、來源狀態與 PM 討論方式，供下一次討論使用。目前不會啟動 AI 參與者。',
+    pm_packages_empty: '尚未保存討論脈絡。', pm_package_loading: '正在讀取已保存的脈絡…',
+    pm_package_version: '討論版本 {version}', pm_package_frozen: '後續筆記不會改寫這份脈絡；保存脈絡不代表採用計畫或授權工作。',
+    pm_packages_more: '載入更多討論脈絡',
     pm_earlier_notes: '載入較早筆記', pm_more_threads: '載入更多討論',
     pm_missing_selection: '此頁未列出的已選紀錄', pm_missing_selection_help: '這筆選取可能已有修訂，或未列入此頁。可取消勾選，再檢視並選擇目前的紀錄；系統不會自動替換。',
     pm_title: '專案討論', pm_nav: 'PM 討論', pm_workspaces: 'PM 工作區', pm_new_workspace: '新增工作區',
