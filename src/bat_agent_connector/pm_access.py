@@ -1,0 +1,47 @@
+"""Apply PM membership to shared operation and event read surfaces.
+
+Legacy Connector resources retain their existing visibility. A PM operation's
+parameters/results must not bypass workspace membership through the global feed.
+Filtering a page retains its original cursor, including wholly hidden pages.
+"""
+from __future__ import annotations
+
+import json
+
+from .operations import OperationError
+
+
+def visible(db, principal, operation):
+    if not operation.get("action", "").startswith("pm."):
+        return True
+    from .pm_workspace import operation_visible
+    return operation_visible(db, principal, operation)
+
+
+def require_visible(db, principal, operation):
+    if not visible(db, principal, operation):
+        raise OperationError("NOT_FOUND", "operation not found", 404)
+
+
+def event_visible(db, principal, event):
+    if event["resource_type"] == "operation":
+        row = db.execute("SELECT operation_id,actor,action,target,result FROM operations WHERE operation_id=?",
+                         (event["resource_id"],)).fetchone()
+        if row is None:
+            return not event.get("body", {}).get("action", "").startswith("pm.")
+        return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
+                                      "result": json.loads(row["result"]) if row["result"] else None})
+    if event["resource_type"].startswith("pm_") or event["kind"].startswith("pm."):
+        from .pm_workspace import require_member
+        workspace_id = event.get("body", {}).get("workspace_id")
+        if not workspace_id:
+            return False
+        try:
+            require_member(db, principal, workspace_id)
+        except OperationError:
+            return False
+    return True
+
+
+def filter_events(db, principal, page):
+    return {**page, "events": [event for event in page["events"] if event_visible(db, principal, event)]}

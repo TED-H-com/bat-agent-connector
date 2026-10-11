@@ -60,6 +60,7 @@ READ_TOOLS = [
     "integration_get",
     "integrations_list",
     "projects_list",
+    "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_profiles_get",
     "project_get",
     "work_items_list",
     "work_item_get", "artifacts_list", "artifact_get", "artifact_capture_preview", "artifact_managed_capture_preview", "approval_preview", "cleanup_preview", "cleanup_retained", "cleanup_tombstones",
@@ -331,6 +332,13 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
             raise WriteRefused("BATC_API_TOKEN is required for the principal-only profile (including reads)")
         return asyncio.to_thread(http_request, path, token=token, **params)
 
+    def pm_daemon(method: str, **params):
+        # New workspace data has explicit membership even on legacy installations.
+        # Never silently read it through the local-admin fallback.
+        if not os.environ.get("BATC_API_TOKEN"):
+            raise WriteRefused("PM and shared operation/event reads require the caller's BATC_API_TOKEN")
+        return daemon(method, **params)
+
     def principal_daemon(method: str, confirmed: bool, **params):
         if not confirmed:
             raise WriteRefused(f"{method} requires confirm=true")
@@ -401,19 +409,19 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """The shared event log (tasks, operations, sessions, hosts) after a persistent cursor. Store next_cursor
         only after handling the returned events; limit=0 returns head_cursor. Session.updated includes changes to
         fields_stale/field_evidence; observation/activity timestamps alone emit no update."""
-        return await daemon("api_events", after=after, limit=limit, resource_type=resource_type,
+        return await pm_daemon("api_events", after=after, limit=limit, resource_type=resource_type,
                             resource_id=resource_id, kind=kind, related_resource_type=related_resource_type, related_resource_id=related_resource_id)
 
     async def operation_get(operation_id: str) -> dict[str, Any]:
         """One operation with its steps: status (accepted, running, waiting_checks, waiting_external,
         needs_attention, uncertain, succeeded, failed, cancelled), error_code, result and external refs.
         After a timeout, look the operation up here instead of submitting again."""
-        return await daemon("op_get", operation_id=operation_id)
+        return await pm_daemon("op_get", operation_id=operation_id)
 
     async def operations_list(statuses: list[str] | None = None, action: str | None = None,
                               limit: int = 50) -> dict[str, Any]:
         """Recent operations, newest first, optionally filtered by status or action."""
-        return await daemon("op_list", statuses=statuses, action=action, limit=limit)
+        return await pm_daemon("op_list", statuses=statuses, action=action, limit=limit)
 
     async def github_pr_preview(repository: str, pull_number: int, method: str | None = None) -> dict[str, Any]:
         """Read title/body digest and save a complete immutable merge_preview: fixed head/base, all commits,
@@ -483,6 +491,35 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def integrations_list(repository: str, pull_number: int, limit: int = 20) -> dict[str, Any]:
         """Integration updates of one PR, newest first, with their receipts."""
         return await daemon("integrations_list", repository=repository, pull_number=pull_number, limit=limit)
+
+    async def pm_workspaces_list() -> dict[str, Any]:
+        """PM workspaces this principal can read; separate from BAT runtime workspaces."""
+        return await pm_daemon("pm_workspaces_list")
+
+    async def pm_workspace_get(workspace_id: str) -> dict[str, Any]:
+        """Durable workspace identity, explicit repository bindings and this principal's membership."""
+        return await pm_daemon("pm_workspace_get", workspace_id=workspace_id)
+
+    async def pm_threads_list(workspace_id: str, limit: int = 50, after: str | None = None) -> dict[str, Any]:
+        """Persistent Idea/Planning threads, without starting an agent or changing phase."""
+        return await pm_daemon("pm_threads_list", workspace_id=workspace_id, limit=limit, after=after)
+
+    async def pm_thread_get(workspace_id: str, thread_id: str, limit: int = 50,
+                            before_message: int | None = None, before_input: int | None = None) -> dict[str, Any]:
+        """Sourced discussion notes, input status/history and the selected Planning draft.
+        Follow explicit cursors; a truncated page is not the full project history."""
+        return await pm_daemon("pm_thread_get", workspace_id=workspace_id, thread_id=thread_id, limit=limit,
+                            before_message=before_message, before_input=before_input)
+
+    async def pm_context_get(workspace_id: str, thread_id: str, max_chars: int = 32000) -> dict[str, Any]:
+        """Prepare the professional PM profile and bounded memory before asking questions.
+        Confirmed inputs, source claims, assumptions and unknowns stay distinct. This
+        read grants no execution authority and does not start an LLM runner."""
+        return await pm_daemon("pm_context_get", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
+
+    async def pm_profiles_get() -> dict[str, Any]:
+        """Versioned discussion purposes, inputs, question policies and outputs; check executable_modes."""
+        return await pm_daemon("pm_profiles_get")
 
     async def projects_list(include_archived: bool = False) -> dict[str, Any]:
         """The project tree in display order (pinned first, then the saved order), with work item counts per
@@ -575,6 +612,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                github_pr_preview, github_merge_preview_get, deployment_preview, deployment_status, deployments_list,
                deployment_environment_get, checkpoints_list, checkpoint_preview, repository_preview, integration_candidates, integration_get,
                integrations_list, projects_list, project_get, work_items_list, work_item_get,
+               pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_profiles_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 

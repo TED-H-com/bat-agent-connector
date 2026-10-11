@@ -1393,6 +1393,8 @@ def preview_document(db, preview_id: str) -> dict:
 
 def integration_get(ops: OperationService, operation_id: str) -> dict:
     op = ops.get(operation_id)
+    if op["action"].startswith("pm."):
+        raise OperationError("NOT_FOUND", "integration not found", 404)
     if op["action"] not in {"integration.apply", "integration.preview", "integration.handoff"}:
         raise OperationError("NOT_AN_INTEGRATION", f"{operation_id} is {op['action']}", 422)
     pv_id = (op["params"] or {}).get("preview_id") or ("ipv_" + operation_id[3:])

@@ -178,7 +178,7 @@ async def test_e01_cancel_partial_keeps_completed_phases_and_guard(daemon, mock,
     assert row["error"]["code"] == "CLEANUP_PARTIAL_STATE"
     assert any(p["phase"] == "discard" for p in row["completed_phases"])
     from bat_agent_connector.api_v1 import ApiV1
-    status, body = await ApiV1(daemon).operation(done["operation_id"])
+    status, body = await ApiV1(daemon).operation(done["operation_id"], principal=CLEANER)
     assert status == 200
     live = next(r for r in body["cleanup_receipts"] if r["resource_id"] == item["resource_id"])
     assert live["cancel_requested"] and live["completed_phases"] == row["completed_phases"]

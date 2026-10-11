@@ -1,4 +1,5 @@
 import {prSelector} from "./pr-selector.js";
+import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
 import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel} from "./managed-setup.js";
 import {managedControl} from "./transport/index.ts";
@@ -3540,6 +3541,13 @@ async function viewProjectWork(main, pid, kind, id) {
   }
 }
 
+async function viewPmWorkspace(main, workspaceId, threadId) {
+  const connection = {epoch: state.epoch, namespace: state.namespace, generation};
+  return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
+    guard: () => assertView(connection), namespace: connection.namespace,
+    workspaceId, threadId, onEvents, errorBox});
+}
+
 const NAV = [["home", "nav_home"], ["projects", "nav_projects"], ["sessions", "nav_sessions"], ["artifact-review", "ar_nav"], ["delivery", "nav_delivery"],
   ["operations", "nav_operations"], ["cleanup", "nav_cleanup"], ["settings", "nav_settings"]];
 let workspaceNav = null, workspaceIdentity = "", workspaceSidebar = null;
@@ -3557,7 +3565,8 @@ function mountWorkspace(name) {
     }
   }
   document.body.classList.toggle("has-workspace", Boolean(state.token));
-  document.getElementById("main").className = ["session", "work"].includes(name) ? "session-view" : "";
+  document.body.classList.toggle("pm-mode", Boolean(state.token) && name === "pm");
+  document.getElementById("main").className = ["session", "work"].includes(name) ? "session-view" : name === "pm" ? "pm-view" : "";
   const menu = document.getElementById("workspace-menu");
   menu.hidden = !state.token; menu.textContent = t("workspace_navigation");
   menu.onclick = () => {
@@ -3569,7 +3578,8 @@ function mountWorkspace(name) {
     h("div", {}, ...NAV.filter(([key]) => !["home", "settings", "projects"].includes(key)).map(([key, label]) =>
       h("a", {href: `#/${key}`, "aria-current": name === key ? "page" : null}, t(label)))));
   document.getElementById("nav").replaceChildren(...(state.token ? [
-    h("a", {href: "#/home", class: name === "home" ? "on" : ""}, t("nav_home")), tools] : []),
+    h("a", {href: "#/home", class: name === "home" ? "on" : ""}, t("nav_home")),
+    ...(pmAvailable(state.caps) ? [h("a", {href: "#/pm", class: name === "pm" ? "on" : ""}, t("pm_nav"))] : []), tools] : []),
     h("a", {href: "#/settings", class: !state.token || name === "settings" ? "on" : ""}, t("nav_settings")));
 }
 let teardown = null;
@@ -3590,7 +3600,7 @@ async function route() {
     teardown = off || null;
     return;
   }
-  const views = { home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
+  const views = { pm: viewPmWorkspace, home: viewHome, projects: viewProjects, project: viewProject, item: viewLinkedWorkItem, sessions: viewSessions,
     cleanup: viewCleanup, approvals: viewApprovals, delivery: viewDelivery, operations: viewOperations, session: viewSession, start: viewStart, published: viewPublished, orchestrate: viewOrchestration, op: viewOperation, settings: viewSettings,
     "artifact-review": viewArtifactReview, work: viewProjectWork, dispatch: viewProjectDispatch,
     host: viewHostDiscovery, task: viewTask,

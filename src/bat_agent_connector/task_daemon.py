@@ -70,6 +70,8 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "checkpoints_list": "observe",
            "checkpoint_get": "observe", "checkpoint_preview": "observe", "integration_candidates": "observe",
            "integration_preview_get": "observe", "integration_get": "observe", "integrations_list": "observe",
+           "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
+           "pm_thread_get": "observe", "pm_context_get": "observe", "pm_profiles_get": "observe",
            "projects_list": "observe", "project_get": "observe", "work_items_list": "observe",
            "work_item_get": "observe", "artifacts_list": "observe", "artifact_get": "observe",
            "artifact_capture_preview": "observe", "artifact_managed_capture_preview": "observe", "approval_preview": "observe", "approve_pending": "?"}
@@ -257,6 +259,9 @@ class TaskDaemon:
             raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
         entry = params.pop("entry", None)
         entry = entry if entry in {"mcp", "cli"} else "rpc"
+        if method.startswith("pm_"):
+            from .pm_reads import read
+            return read(self.ops, principal, method, params)
         if method in {"session_read", "session_wait"}:
             return await self.api.session_observation.request(
                 principal, method, params, **(_observation_transport or {}))
@@ -305,12 +310,12 @@ class TaskDaemon:
                 op = await self.ops.wait(op["operation_id"], wait)
             return {"operation": op, "created": created}
         if method == "op_get":
-            return {"operation": self.ops.get(str(params.get("operation_id")))}
+            return {"operation": self.ops.get(str(params.get("operation_id")), principal=principal)}
         if method == "op_list":
             statuses = params.get("statuses")
             return self.ops.list(statuses=statuses if isinstance(statuses, list) else None,
                                  actor=params.get("actor"), action=params.get("action"),
-                                 limit=int(params.get("limit") or 50))
+                                 limit=int(params.get("limit") or 50), principal=principal)
         if method == "op_cancel":
             op = self.ops.cancel(principal, str(params.get("operation_id")))
             await self.artifact_store.reap_best_effort(op["operation_id"])
@@ -318,11 +323,13 @@ class TaskDaemon:
         if method == "op_resume":
             return {"operation": self.ops.resume(principal, str(params.get("operation_id")))}
         if method == "api_events":
+            from .pm_access import filter_events
             limit = params.get("limit")
-            return self.journal.api_events(int(params.get("after") or 0), 100 if limit is None else int(limit),
+            return filter_events(self.journal.db, principal, self.journal.api_events(
+                                           int(params.get("after") or 0), 100 if limit is None else int(limit),
                                            resource_type=params.get("resource_type"),
                                            resource_id=params.get("resource_id"), kind=params.get("kind"),
-                                           related_resource_type=params.get("related_resource_type"), related_resource_id=params.get("related_resource_id"))
+                                           related_resource_type=params.get("related_resource_type"), related_resource_id=params.get("related_resource_id")))
         if method == "inventory_sessions":
             return session_reading.decorate(self.journal, principal, self.inventory.list_sessions(
                 host=params.get("host"), provenance=params.get("provenance"), api_access=params.get("access"),
@@ -377,6 +384,7 @@ class TaskDaemon:
         if method == "integration_preview_get":
             return {"preview": integration.preview_document(self.journal.db, str(params.get("preview_id")))}
         if method == "integration_get":
+            self.ops.get(str(params.get("operation_id")), steps=False, principal=principal)
             return integration.integration_get(self.ops, str(params.get("operation_id")))
         if method == "integrations_list":
             return integration.integrations_list(self.ops, str(params.get("repository")),

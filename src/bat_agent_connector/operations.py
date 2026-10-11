@@ -48,6 +48,7 @@ ALLOWED = {
 }
 UNCERTAIN_RETRY_S = (30.0, 60.0, 120.0, 300.0, 600.0)
 NO_KEY_PREFIX = "batc:nokey:"
+PM_KEY_PREFIX = NO_KEY_PREFIX + "pm:"
 LEGACY_SESSION_ACTIONS = frozenset({"worktree.merge", "session.record_verification", "session.failover", "fanout.plan", "fanout.start", "session.relay", "session.start", "session.send", "session.answer", "session.interrupt", "session.permissions", "session.approve_pending"})
 LEGACY_TASK_ACTIONS = frozenset({"task.pause", "task.resume", "task.mark_stage",
                                  "task.verify", "task.request_ted", "task.command.reconcile"})
@@ -120,6 +121,13 @@ class ActionDef:
 
 def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def _pm_key_prefix(target: dict) -> str:
+    # The journal is server-scoped and the unique index also includes the actor.
+    # Keep legacy keys intact; new PM keys additionally belong to one workspace.
+    namespace = hashlib.sha256(_canonical(target.get("workspace_id")).encode()).hexdigest()
+    return PM_KEY_PREFIX + namespace + ":"
 
 
 def _error_code(exc: BaseException) -> str:
@@ -312,15 +320,20 @@ class OperationService:
         # Keep the old field for readers, but never expose a storage sentinel as a client key.
         if op["idem_key"] == NO_KEY_PREFIX + op["operation_id"]:
             op["idem_key"] = None
+        elif op["action"].startswith("pm.") and op["idem_key"].startswith(_pm_key_prefix(op["target"])):
+            op["idem_key"] = op["idem_key"][len(_pm_key_prefix(op["target"])):]
         op["idempotency_key"] = op["idem_key"]
         op["idempotency_enabled"] = op["idem_key"] is not None
         op.pop("request_hash", None)
         return op
 
-    def get(self, operation_id: str, *, steps: bool = True) -> dict:
+    def get(self, operation_id: str, *, steps: bool = True, principal: Principal | None = None) -> dict:
         op = self._row(operation_id)
         if op is None:
             raise OperationError("NOT_FOUND", "operation not found", 404)
+        if principal is not None:
+            from .pm_access import require_visible
+            require_visible(self.db, principal, op)
         if steps:
             op["steps"] = [{"seq": r["seq"], "name": r["name"], "status": r["status"],
                             "external_ref": r["external_ref"],
@@ -331,7 +344,7 @@ class OperationService:
         return op
 
     def list(self, *, statuses: list[str] | None = None, actor: str | None = None, action: str | None = None,
-             before: float | None = None, limit: int = 50) -> dict:
+             before: float | None = None, limit: int = 50, principal: Principal | None = None) -> dict:
         limit = max(1, min(200, int(limit)))
         sql, args = "SELECT * FROM operations WHERE 1=1", []
         if statuses:
@@ -348,7 +361,11 @@ class OperationService:
             sql, args = sql + " AND created_at<?", [*args, float(before)]
         rows = self.db.execute(sql + " ORDER BY created_at DESC LIMIT ?", (*args, limit + 1)).fetchall()
         ops = [self._decode(r) for r in rows[:limit]]
-        return {"operations": ops, "next_before": ops[-1]["created_at"] if len(rows) > limit else None}
+        next_before = ops[-1]["created_at"] if len(rows) > limit else None
+        if principal is not None:
+            from .pm_access import visible
+            ops = [op for op in ops if visible(self.db, principal, op)]
+        return {"operations": ops, "next_before": next_before}
 
     def _transition(self, operation_id: str, status: str, *, reason: str | None = None,
                     error_code: str | None = None, result: dict | None = None, next_run_at: float = 0.0,
@@ -457,9 +474,11 @@ class OperationService:
         except UnicodeEncodeError:
             raise OperationError("INVALID_REQUEST", "request text must contain valid Unicode characters", 422) from None
         key = None if no_key else idempotency_key.strip()
+        if action.startswith("pm."):
+            key = _pm_key_prefix(target) + key
         existing = self.db.execute("SELECT * FROM operations WHERE actor=? AND idem_key=?",
                                    (principal.actor, key)).fetchone()
-        if existing:
+        if existing and not action.startswith("pm."):
             if existing["request_hash"] != request_hash:
                 raise OperationError("IDEMPOTENCY_CONFLICT",
                                      "this idempotency_key was already used for a different request", 409)
@@ -471,6 +490,9 @@ class OperationService:
             authorize_orchestration_child(self, principal, op, "replay")
         if op and adef.authorize_existing:
             adef.authorize_existing(self, principal, op, "replay")
+        if existing and action.startswith("pm.") and existing["request_hash"] != request_hash:
+            raise OperationError("IDEMPOTENCY_CONFLICT",
+                                 "this idempotency_key was already used for a different request", 409)
         return adef, target, params, preconditions, key, request_hash, op
 
     def create(self, principal: Principal, *, action: str, target: dict | None = None, params: dict | None = None,

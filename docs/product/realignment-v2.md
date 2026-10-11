@@ -1,5 +1,9 @@
 # Better Agent Dashboard：共用產品與 Tauri 介面方向
 
+目前方向以已採用的 [PM v1.2 計畫](pm-v1.2-plan.md)為準：專業 PM 是產品核心，
+涵蓋 Idea、Planning、工程與交付、Maintainer 及暫停／結案。本頁保留既有底層和 UI
+決策；v1.2 新增範圍與完成情況見[專用狀態表](pm-v1.2-status.md)。
+
 日期：2026-10-08。來源：產品負責人提供的《Better Agent Dashboard Tauri 校正開發計畫
 第二版》v2.0，§01–27。本文保留 repository 需要的決策；私人環境設定不放入 repo。
 產品負責人後續澄清：**v1、v2 是同一產品的計畫／UI 設計修訂，不是兩套產品或分開的功能發行。**

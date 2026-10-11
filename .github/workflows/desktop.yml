@@ -96,6 +96,7 @@ jobs:
         timeout-minutes: 10
         run: |
           npm run test:central
+          npm run test:pm
           npm run test:cleanup
           npm run test:task-cleanup
           npm run test:task-controls

@@ -141,6 +141,673 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-workspace.js
+var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
+var retired = (error) => [
+	"VIEW_CHANGED",
+	"CONNECTION_CHANGED",
+	"PM_DISPOSED"
+].includes(error.code);
+var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted }) {
+	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
+	let saved = {
+		version: 1,
+		values: {}
+	}, damaged = false, busy = false, operation = null;
+	try {
+		const raw = localStorage.getItem(storage);
+		if (raw) {
+			saved = JSON.parse(raw);
+			if (saved?.version !== 1 || !saved.values || typeof saved.values !== "object" || Array.isArray(saved.values) || Object.values(saved.values).some((value) => typeof value !== "string") || saved.intent && (saved.intent.request?.action !== action || !same$3(saved.intent.request.target, target) || typeof saved.intent.key !== "string" || !saved.intent.key || saved.intent.operation_id && !/^op_[0-9a-f]{32}$/.test(saved.intent.operation_id))) throw Error();
+		}
+	} catch {
+		damaged = true;
+	}
+	const status = h("div", { role: "status" }), receipt = h("div", { class: "pm-receipt" });
+	const persist = () => {
+		guard();
+		localStorage.setItem(storage, JSON.stringify(saved));
+	};
+	const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
+	const changed = () => {
+		if (busy || saved.intent || damaged) return;
+		saved.values = capture();
+		try {
+			persist();
+		} catch (error) {
+			status.replaceChildren(errorBox(error));
+		}
+	};
+	for (const [name, input] of Object.entries(fields)) {
+		const value = saved.values[name] ?? input.value;
+		if (input.tagName === "SELECT" && value && ![...input.options].some((option) => option.value === value)) input.append(h("option", { value }, value));
+		input.value = value;
+		input.addEventListener("input", changed);
+		input.addEventListener("change", changed);
+	}
+	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
+	const terminal = () => ["failed", "cancelled"].includes(operation?.status);
+	const reset = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			try {
+				guard();
+				if (!terminal() && !saved.intent?.initialAdmissionRefused) return;
+				saved = {
+					version: 1,
+					values: capture()
+				};
+				persist();
+				operation = null;
+				status.replaceChildren();
+				receipt.replaceChildren();
+				update();
+			} catch (error) {
+				if (!retired(error)) status.replaceChildren(errorBox(error));
+			}
+		}
+	}, t("pm_edit_request"));
+	const button = h("button", {
+		type: "submit",
+		class: "primary"
+	}, t(label));
+	const form = h("form", {
+		"data-pm-action": action,
+		onsubmit: (event) => {
+			event.preventDefault();
+			run();
+		}
+	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
+	function update() {
+		const locked = busy || damaged || Boolean(saved.intent) || !allowed();
+		for (const input of Object.values(fields)) input.disabled = locked;
+		button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		button.textContent = t(saved.intent ? "pm_check_original" : label);
+		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
+		reset.disabled = busy || !allowed();
+		onStateChange();
+	}
+	async function run() {
+		if (busy || damaged || !allowed()) return;
+		let firstAttempt = false;
+		try {
+			guard();
+			busy = true;
+			status.replaceChildren();
+			if (!saved.intent) {
+				saved.values = capture();
+				const request = {
+					action,
+					target,
+					params: params(saved.values),
+					preconditions: preconditions()
+				};
+				saved.intent = {
+					key: crypto.randomUUID(),
+					request
+				};
+				persist();
+				firstAttempt = true;
+			}
+			update();
+			const intent = saved.intent;
+			persist();
+			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+			guard();
+			const op = data.operation;
+			if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key || !same$3({
+				action: op.action,
+				target: op.target,
+				params: op.params,
+				preconditions: op.preconditions
+			}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+			saved.intent.operation_id = op.operation_id;
+			persist();
+			operation = op;
+			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", String(op.status));
+			if (op.status === "succeeded") {
+				saved = {
+					version: 1,
+					values: {}
+				};
+				persist();
+				for (const input of Object.values(fields)) input.value = input.dataset.pmDefault || "";
+				await onSaved(op.result);
+				guard();
+				status.replaceChildren(h("span", { class: "muted" }, t("pm_saved")));
+			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
+		} catch (error) {
+			if (!retired(error)) {
+				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
+					saved.intent.initialAdmissionRefused = true;
+					try {
+						persist();
+					} catch {}
+				}
+				status.replaceChildren(errorBox(error));
+				if (error.code === "VERSION_CONFLICT") status.append(h("p", { class: "muted" }, t("pm_stale")));
+			}
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	if (damaged) status.append(h("p", { class: "error" }, t("pm_damaged")));
+	update();
+	return {
+		box: form,
+		fields,
+		update,
+		changed,
+		locked: () => busy || damaged || Boolean(saved.intent),
+		set: (name, value) => {
+			if (!busy && !saved.intent && !damaged) {
+				fields[name].value = value;
+				changed();
+			}
+		},
+		values: () => capture()
+	};
+}
+async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, onEvents, errorBox }) {
+	if (!pmAvailable(caps())) {
+		main.append(h("p", {}, t("pm_unavailable")));
+		return;
+	}
+	let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1;
+	const forms = [], alive = () => {
+		guard();
+		if (disposed) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+	};
+	const permitted = (decide) => loaded && Boolean(workspace) && (caps()?.scopes?.includes("admin") || (decide ? workspace.membership?.role === "owner" : ["owner", "contributor"].includes(workspace.membership?.role)));
+	const input = (label, { multiline = false, max = 2e3, required = true, value = "" } = {}) => {
+		const field = h(multiline ? "textarea" : "input", {
+			"aria-label": t(label),
+			maxlength: max,
+			required
+		});
+		field.value = value;
+		return field;
+	};
+	const labelled = (label, field) => h("label", {}, t(label), field);
+	const form = (options) => {
+		const value = durableForm({
+			h,
+			t,
+			api,
+			caps,
+			guard: alive,
+			namespace,
+			errorBox,
+			...options
+		});
+		forms.push(value);
+		return value;
+	};
+	const status = h("div", {
+		role: "status",
+		class: "pm-status"
+	}), workspaceList = h("div", { class: "pm-workspace-list" });
+	const name = input("pm_workspace_name", { max: 120 }), repositories = input("pm_repositories", { required: false });
+	const workspaceForm = form({
+		action: "pm.workspace.create",
+		target: {},
+		fields: {
+			name,
+			repositories
+		},
+		params: (values) => ({
+			name: values.name.trim(),
+			repositories: values.repositories.split(/[\n,]/).map((value) => value.trim()).filter(Boolean)
+		}),
+		preconditions: () => ({}),
+		permitted: () => true,
+		label: "pm_create_workspace",
+		onSaved: (result) => {
+			alive();
+			location.hash = `#/pm/${encodeURIComponent(result.workspace.workspace_id)}`;
+		},
+		extra: h("div", { class: "pm-fields" }, labelled("pm_workspace_name", name), h("details", {}, h("summary", {}, t("pm_repositories_optional")), labelled("pm_repositories", repositories), h("p", { class: "muted" }, t("pm_repository_help"))))
+	});
+	const navigationMedia = matchMedia("(min-width: 800px)");
+	const nav = h("details", {
+		class: "pm-navigation",
+		open: navigationMedia.matches
+	}, h("summary", {}, t("pm_workspaces")), h("div", { class: "pm-navigation-body" }, workspaceList, h("details", { class: "pm-create-workspace" }, h("summary", {}, t("pm_new_workspace")), workspaceForm.box), h("a", {
+		class: "pm-projects-link",
+		href: "#/projects"
+	}, t("pm_back_projects"))));
+	const resizeNavigation = () => {
+		nav.open = navigationMedia.matches;
+	};
+	navigationMedia.addEventListener("change", resizeNavigation);
+	const title = h("h1", {}, t("pm_title")), subtitle = h("p", { class: "muted" }, t("pm_intro"));
+	const refresh = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void load()
+	}, t("pm_refresh"));
+	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
+	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
+	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false;
+	const noteCache = new Map();
+	const updateForms = () => {
+		for (let i = forms.length - 1; i >= 0; i--) if (!forms[i].box.isConnected) forms.splice(i, 1);
+		else forms[i].update();
+	};
+	const timestamp = (value) => typeof value === "number" ? value * 1e3 : value;
+	const time = (value) => {
+		const date = new Date(timestamp(value));
+		return Number.isNaN(date.valueOf()) ? String(value || "") : date.toLocaleString();
+	};
+	const sourceText = (item) => {
+		const source = item.source_ref || {};
+		if (source.kind === "message") {
+			const message = threadData?.messages?.find((row) => row.message_id === source.message_id);
+			return message ? t("pm_note_source", {
+				author: message.actor,
+				time: time(message.created_at)
+			}) : t("pm_saved_note_source");
+		}
+		return [
+			source.ref,
+			source.revision,
+			source.path
+		].filter(Boolean).join(" · ");
+	};
+	function renderThread(data) {
+		const thread = data.thread;
+		if (mountedThread !== thread.thread_id) {
+			noteCache.clear();
+			historyExpanded = false;
+		}
+		for (const note of data.messages || []) noteCache.set(note.message_id, note);
+		if (!historyExpanded) historyCursor = data.next_message_cursor;
+		data = {
+			...data,
+			messages: [...noteCache.values()].sort((a, b) => a.sequence - b.sequence)
+		};
+		threadData = data;
+		if (mountedThread !== thread.thread_id) {
+			mountedThread = thread.thread_id;
+			content.replaceChildren();
+			threadTitle = h("h2");
+			mode = h("span", { class: "chip" });
+			notes = h("div", {
+				class: "pm-notes",
+				"aria-label": t("pm_notes")
+			});
+			earlier = h("button", {
+				type: "button",
+				class: "secondary",
+				hidden: true,
+				onclick: () => void loadEarlier()
+			}, t("pm_earlier_notes"));
+			coverage = h("p", { class: "muted" });
+			permissions = h("p", { class: "muted" });
+			const text = input("pm_note_content", {
+				multiline: true,
+				max: 12e3
+			});
+			const target = {
+				workspace_id: workspaceId,
+				thread_id: threadId
+			};
+			const preconditions = () => ({ expected_version: threadData.thread.version });
+			const write = () => permitted(false) && threadData?.capabilities?.write === true;
+			const decide = () => permitted(true) && threadData?.capabilities?.decide === true;
+			noteForm = form({
+				action: "pm.message.append",
+				target,
+				fields: { content: text },
+				params: (values) => ({ content: values.content }),
+				preconditions,
+				permitted: write,
+				label: "pm_save_note",
+				onSaved: () => load(),
+				extra: h("div", {}, labelled("pm_note_content", text), h("p", { class: "muted" }, t("pm_note_help")))
+			});
+			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), h("p", { class: "muted" }, t("pm_manual")), earlier, notes, coverage, noteForm.box);
+			facts = h("div", { class: "pm-facts" });
+			draft = h("section", { class: "pm-draft" });
+			slotSelect = h("select", {
+				"aria-label": t("pm_input_slot"),
+				required: true
+			});
+			const value = input("pm_input_value", {
+				multiline: true,
+				max: 4e3
+			});
+			const statusSelect = h("select", { "aria-label": t("pm_input_status") }, ...[
+				"unresolved",
+				"agent_assumption",
+				"repo_evidence",
+				"conflicting",
+				"not_applicable"
+			].map((value) => h("option", { value }, t("pm_status_" + value))));
+			statusSelect.dataset.pmDefault = "unresolved";
+			sourceSelect = h("select", { "aria-label": t("pm_input_source") }, h("option", { value: "statement" }, t("pm_source_statement")), h("option", { value: "repository" }, t("pm_source_repository")), h("option", { value: "external" }, t("pm_source_external")));
+			sourceSelect.dataset.pmDefault = "statement";
+			const reference = input("pm_source_ref", {
+				required: false,
+				max: 1e3
+			});
+			const requireReference = () => {
+				reference.required = ["repository", "external"].includes(sourceSelect.value);
+			};
+			sourceSelect.addEventListener("change", requireReference);
+			factForm = form({
+				action: "pm.input.record",
+				target,
+				fields: {
+					slot: slotSelect,
+					value,
+					status: statusSelect,
+					source: sourceSelect,
+					reference
+				},
+				params: (values) => {
+					if (values.status === "repo_evidence" && values.source !== "repository") throw Error(t("pm_repository_source_required"));
+					return {
+						slot: values.slot,
+						value: values.value,
+						status: values.status,
+						source_ref: values.source.startsWith("message:") ? {
+							kind: "message",
+							message_id: values.source.slice(8)
+						} : {
+							kind: values.source,
+							ref: values.reference.trim() || (values.source === "statement" ? values.value.slice(0, 1e3) : "")
+						}
+					};
+				},
+				preconditions,
+				permitted: write,
+				label: "pm_record_input",
+				onSaved: () => load(),
+				extra: h("div", { class: "pm-fields" }, labelled("pm_input_slot", slotSelect), labelled("pm_input_value", value), labelled("pm_input_status", statusSelect), labelled("pm_input_source", sourceSelect), labelled("pm_source_ref", reference), h("p", { class: "muted" }, t("pm_source_help")))
+			});
+			requireReference();
+			const selected = h("input", { type: "hidden" });
+			selected.value = "[]";
+			selected.dataset.pmDefault = "[]";
+			const rationale = input("pm_plan_rationale", {
+				multiline: true,
+				max: 4e3
+			});
+			planForm = form({
+				action: "pm.thread.plan",
+				target,
+				fields: {
+					selected,
+					rationale
+				},
+				params: (values) => ({
+					selected_input_ids: JSON.parse(values.selected || "[]"),
+					rationale: values.rationale
+				}),
+				preconditions,
+				permitted: () => decide() && threadData.thread.mode === "idea",
+				label: "pm_create_plan",
+				onSaved: () => load(),
+				recoverPermitted: decide,
+				onStateChange: () => {
+					const section = planForm?.box.closest("[data-pm-plan]");
+					if (section) section.hidden = threadData.thread.mode !== "idea" && !planForm.locked() || !threadData.capabilities?.decide;
+					for (const checkbox of facts.querySelectorAll("input[type=checkbox]")) checkbox.disabled = Boolean(planForm?.locked()) || !decide() || threadData.thread.mode !== "idea";
+				},
+				extra: h("div", {}, selected, labelled("pm_plan_rationale", rationale), h("p", { class: "muted" }, t("pm_plan_help")))
+			});
+			const inspector = h("aside", {
+				class: "pm-inspector",
+				"aria-label": t("pm_inputs")
+			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box));
+			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
+		}
+		threadTitle.textContent = thread.title;
+		mode.textContent = t("pm_mode_" + thread.mode);
+		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
+		notes.replaceChildren(...(data.messages || []).map((message) => h("article", {
+			class: "pm-note",
+			"data-note-id": message.message_id
+		}, h("div", { class: "pm-note-stamp" }, h("strong", {}, message.actor), h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content))));
+		if (!data.messages?.length) notes.append(h("p", { class: "muted pm-empty" }, t("pm_no_notes")));
+		notes.scrollTop = bottom ? notes.scrollHeight : scroll;
+		earlier.hidden = !historyCursor;
+		earlier.disabled = false;
+		coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t("pm_partial") : "";
+		permissions.textContent = !data.capabilities?.write ? t("pm_readonly") : !data.capabilities?.decide ? t("pm_owner_decides") : "";
+		const oldSource = sourceSelect.value, oldSlot = slotSelect.value;
+		for (const message of data.messages || []) if (![...sourceSelect.options].some((option) => option.value === "message:" + message.message_id)) sourceSelect.append(h("option", { value: "message:" + message.message_id }, `${message.actor} · ${message.content.slice(0, 50)}`));
+		sourceSelect.value = oldSource || "statement";
+		const slots = data.profile?.input_slots || [];
+		for (const slot of slots) {
+			const id = typeof slot === "string" ? slot : slot.key || slot.slot || slot.id;
+			if (id && ![...slotSelect.options].some((option) => option.value === id)) slotSelect.append(h("option", { value: id }, t("pm_slot_" + id) === "pm_slot_" + id ? slot.label || id : t("pm_slot_" + id)));
+		}
+		if (oldSlot) slotSelect.value = oldSlot;
+		const signature = JSON.stringify([
+			data.inputs,
+			data.capabilities,
+			thread.mode
+		]);
+		if (signature !== factSignature) {
+			factSignature = signature;
+			const selection = new Set(JSON.parse(planForm.values().selected || "[]"));
+			const rows = (data.inputs || []).map((item) => {
+				const checkbox = h("input", {
+					type: "checkbox",
+					"aria-label": t("pm_select_input", { value: item.value }),
+					checked: selection.has(item.input_id),
+					disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== "idea",
+					onchange: (event) => {
+						const selected = new Set(JSON.parse(planForm.values().selected || "[]"));
+						if (event.target.checked) selected.add(item.input_id);
+						else selected.delete(item.input_id);
+						planForm.set("selected", JSON.stringify([...selected]));
+					}
+				});
+				const row = h("article", {
+					class: "pm-fact",
+					"data-input-id": item.input_id
+				}, h("div", { class: "pm-fact-heading" }, checkbox, h("strong", {}, t("pm_slot_" + item.slot) === "pm_slot_" + item.slot ? item.slot : t("pm_slot_" + item.slot)), h("span", { class: `chip ${item.status === "user_confirmed" ? "ok" : [
+					"unresolved",
+					"conflicting",
+					"agent_assumption"
+				].includes(item.status) ? "warn" : ""}` }, t("pm_status_" + item.status))), h("p", { class: "pm-note-text" }, item.value), h("p", { class: "muted pm-source" }, sourceText(item)), h("p", { class: "muted" }, item.status === "user_confirmed" ? t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by }) : t("pm_unverified")));
+				if (data.capabilities?.decide && item.status !== "user_confirmed") {
+					const rationale = input("pm_confirm_rationale", { max: 2e3 });
+					const confirm = form({
+						action: "pm.input.confirm",
+						target: {
+							workspace_id: workspaceId,
+							thread_id: threadId
+						},
+						namespace: `${namespace}.${item.input_id}`,
+						fields: { rationale },
+						params: (values) => ({
+							input_id: item.input_id,
+							rationale: values.rationale
+						}),
+						preconditions: () => ({ expected_version: threadData.thread.version }),
+						permitted: () => permitted(true) && threadData.capabilities?.decide === true,
+						onSaved: () => load(),
+						label: "pm_confirm",
+						extra: labelled("pm_confirm_rationale", rationale)
+					});
+					row.append(h("details", {}, h("summary", {}, t("pm_confirm_review")), confirm.box));
+				}
+				return row;
+			});
+			for (const id of selection) if (!(data.inputs || []).some((item) => item.input_id === id)) {
+				const checkbox = h("input", {
+					type: "checkbox",
+					checked: true,
+					"aria-label": t("pm_missing_selection"),
+					disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== "idea",
+					onchange: (event) => {
+						if (event.target.checked) return;
+						const selected = new Set(JSON.parse(planForm.values().selected || "[]"));
+						selected.delete(id);
+						planForm.set("selected", JSON.stringify([...selected]));
+						row.remove();
+					}
+				});
+				const old = data.input_history?.find((item) => item.input_id === id);
+				const row = h("article", {
+					class: "pm-fact",
+					"data-pm-missing-selection": id
+				}, h("label", { class: "pm-fact-heading" }, checkbox, t("pm_missing_selection")), h("p", { class: "muted" }, t("pm_missing_selection_help")), old ? h("p", {}, old.value) : null);
+				rows.push(row);
+			}
+			facts.replaceChildren(...rows);
+			if (!rows.length) facts.append(h("p", { class: "muted" }, t("pm_no_inputs")));
+		}
+		draft.replaceChildren();
+		if (data.draft) {
+			const selected = data.draft.selected_inputs || [], candidates = data.draft.candidate_inputs || [];
+			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, t("pm_slot_" + item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : null, h("p", { class: "muted" }, t("pm_draft_help")));
+		}
+		planForm.box.closest("[data-pm-plan]").hidden = thread.mode !== "idea" && !planForm.locked() || !data.capabilities?.decide;
+		updateForms();
+	}
+	async function loadEarlier() {
+		if (!historyCursor || refreshing || !loaded) return;
+		const ticket = ++sequence;
+		refreshing = true;
+		earlier.disabled = true;
+		refresh.disabled = true;
+		try {
+			alive();
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
+			alive();
+			if (ticket !== sequence) return;
+			if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t("pm_scope_mismatch"));
+			historyCursor = data.next_message_cursor;
+			historyExpanded = true;
+			renderThread(data);
+		} catch (error) {
+			if (!retired(error) && ticket === sequence) {
+				loaded = false;
+				updateForms();
+				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+			}
+		} finally {
+			if (ticket === sequence) {
+				refreshing = false;
+				refresh.disabled = false;
+				earlier.disabled = !loaded;
+			}
+		}
+	}
+	async function load() {
+		const ticket = ++sequence;
+		refreshing = true;
+		refresh.disabled = true;
+		try {
+			alive();
+			const list = await api("GET", "/pm/workspaces");
+			alive();
+			let detail = null, threadList = null, data = null;
+			if (workspaceId) {
+				[detail, threadList, data] = await Promise.all([
+					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
+					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
+					threadId ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null)
+				]);
+				alive();
+				for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
+					const next = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads?after=${encodeURIComponent(threadList.next_cursor)}`);
+					alive();
+					threadList = {
+						...next,
+						threads: [...threadList.threads, ...next.threads]
+					};
+				}
+			}
+			if (ticket !== sequence) return;
+			if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t("pm_scope_mismatch"));
+			workspace = detail?.workspace || null;
+			loaded = true;
+			status.replaceChildren();
+			title.textContent = workspace?.name || t("pm_title");
+			workspaceList.replaceChildren(...(list.workspaces || []).map((item) => h("div", { class: "pm-workspace-row" }, h("a", {
+				href: `#/pm/${encodeURIComponent(item.workspace_id)}`,
+				"aria-current": item.workspace_id === workspaceId ? "page" : null
+			}, item.name), ...item.workspace_id === workspaceId ? (threadList?.threads || []).map((thread) => h("a", {
+				class: "pm-thread-link",
+				href: `#/pm/${encodeURIComponent(workspaceId)}/${encodeURIComponent(thread.thread_id)}`,
+				"aria-current": thread.thread_id === threadId ? "page" : null
+			}, h("span", {}, thread.title), h("small", {}, t("pm_mode_" + thread.mode)))) : [])));
+			if (!list.workspaces?.length) {
+				workspaceList.append(h("p", { class: "muted" }, t("pm_no_workspaces")));
+				nav.querySelector(".pm-create-workspace").open = true;
+			}
+			if (workspace) workspaceList.append(h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}` }, t("pm_new_thread")));
+			if (threadList?.next_cursor) workspaceList.append(h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					threadPages++;
+					load();
+				}
+			}, t("pm_more_threads")));
+			if (data) renderThread(data);
+			else if (!content.children.length) {
+				if (!workspace) content.append(h("div", { class: "pm-empty" }, h("h2", {}, t("pm_start_title")), h("p", {}, t("pm_start_help"))));
+				else {
+					const title = input("pm_thread_title", { max: 160 });
+					const create = form({
+						action: "pm.thread.create",
+						target: { workspace_id: workspaceId },
+						fields: { title },
+						params: (values) => ({ title: values.title.trim() }),
+						preconditions: () => ({ expected_version: workspace.version }),
+						permitted: () => permitted(false),
+						label: "pm_create_thread",
+						onSaved: (result) => {
+							alive();
+							location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${encodeURIComponent(result.thread_id)}`;
+						},
+						extra: labelled("pm_thread_title", title)
+					});
+					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), h("p", { class: "muted" }, t("pm_thread_help")), create.box));
+				}
+			}
+			updateForms();
+		} catch (error) {
+			if (!retired(error) && ticket === sequence) {
+				loaded = false;
+				updateForms();
+				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+			}
+		} finally {
+			if (ticket === sequence) {
+				refreshing = false;
+				refresh.disabled = false;
+			}
+		}
+	}
+	await load();
+	let eventReads = Promise.resolve();
+	const off = onEvents((event) => {
+		if (["pm_workspace", "pm_thread"].includes(event.resource_type)) {
+			eventReads = eventReads.catch(() => {}).then(() => load());
+			return eventReads;
+		}
+	});
+	return () => {
+		disposed = true;
+		sequence++;
+		off();
+		navigationMedia.removeEventListener("change", resizeNavigation);
+	};
+}
+//#endregion
 //#region src/state/sessions.js
 var text$3 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
@@ -3989,9 +4656,216 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-strings.js
+var pmStrings = {
+	en: {
+		pm_earlier_notes: "Load earlier notes",
+		pm_more_threads: "Load more discussions",
+		pm_missing_selection: "Selected input outside this view",
+		pm_missing_selection_help: "This selection may have been revised or omitted from this page. Uncheck it to review and choose a current input; it will not be replaced automatically.",
+		pm_title: "Project discussions",
+		pm_nav: "PM",
+		pm_workspaces: "PM workspaces",
+		pm_new_workspace: "New workspace",
+		pm_workspace_name: "Workspace name",
+		pm_create_workspace: "Create workspace",
+		pm_repositories_optional: "Repositories (optional)",
+		pm_repositories: "Repositories, separated by commas",
+		pm_repository_help: "Use owner/repository names. These references do not select a BAT host or grant execution access.",
+		pm_back_projects: "Projects and work →",
+		pm_intro: "Keep ideas, evidence and a planning draft together.",
+		pm_refresh: "Refresh",
+		pm_unavailable: "This central does not provide PM workspaces for this account.",
+		pm_no_workspaces: "No PM workspaces yet.",
+		pm_start_title: "A place to work through an idea",
+		pm_start_help: "Create a workspace in the left list, then start a discussion. Notes are saved centrally so you can continue later.",
+		pm_new_thread: "Start an idea discussion",
+		pm_thread_title: "Discussion title",
+		pm_create_thread: "Start discussion",
+		pm_thread_help: "Each discussion keeps its own notes, sources and candidate ideas. Planning begins only when an owner selects a direction.",
+		pm_notes: "Discussion notes",
+		pm_note_content: "Add a discussion note",
+		pm_save_note: "Save note",
+		pm_note_help: "Saved to this discussion. This does not send a message to an agent.",
+		pm_manual: "Discussion notes · no AI participant is connected",
+		pm_no_notes: "No notes yet. Record the problem, an option, or a question to revisit.",
+		pm_mode_idea: "Idea",
+		pm_mode_planning: "Planning draft",
+		pm_inputs: "Facts and open questions",
+		pm_inputs_help: "Confirmed statements, source claims and unresolved assumptions stay distinct.",
+		pm_no_inputs: "No facts recorded yet. Add a sourced statement or an open question from the discussion.",
+		pm_input_slot: "Topic",
+		pm_input_value: "Statement or question",
+		pm_input_status: "Evidence status",
+		pm_input_source: "Source type or saved note",
+		pm_add_input: "Record a fact or question",
+		pm_record_input: "Save input",
+		pm_source_ref: "Source reference",
+		pm_source_statement: "Recorded statement",
+		pm_source_repository: "Repository reference",
+		pm_source_external: "External reference",
+		pm_source_help: "References are saved as claims; the service does not fetch or verify their contents.",
+		pm_status_user_confirmed: "User confirmed",
+		pm_status_repo_evidence: "Source claim",
+		pm_status_agent_assumption: "Unverified assumption",
+		pm_status_unresolved: "Unresolved",
+		pm_status_conflicting: "Conflicting",
+		pm_status_not_applicable: "Not applicable",
+		pm_note_source: "Note by {author} · {time}",
+		pm_saved_note_source: "Earlier saved discussion note",
+		pm_confirmed_by: "Confirmed by {actor}",
+		pm_unverified: "Not independently verified",
+		pm_confirm_review: "Review and confirm",
+		pm_confirm_rationale: "Why this statement is confirmed",
+		pm_confirm: "Confirm statement",
+		pm_select_input: "Select for planning: {value}",
+		pm_direction: "Choose a direction",
+		pm_plan_rationale: "Why this direction",
+		pm_create_plan: "Save Planning draft",
+		pm_plan_help: "Select inputs above. Unselected ideas remain candidates. A draft does not adopt requirements or start work.",
+		pm_draft_title: "Planning draft",
+		pm_selected: "Selected direction",
+		pm_candidates: "Other ideas retained",
+		pm_draft_help: "Saved draft only. Requirements have not been adopted, and execution is not authorized.",
+		pm_readonly: "You can read this workspace. Editing requires contributor access.",
+		pm_owner_decides: "Contributors can add notes and inputs. A workspace owner confirms facts and selects the planning direction.",
+		pm_saved: "Saved centrally.",
+		pm_pending: "The original operation is still pending. Check its receipt before another change.",
+		pm_terminal: "The original operation ended without success. Review its result before editing a new request.",
+		pm_check_original: "Check original request",
+		pm_edit_request: "Edit a new request",
+		pm_operation: "View operation",
+		pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
+		pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
+		pm_stale: "Could not confirm the current version. Your draft is preserved. Refresh and review before another change.",
+		pm_scope_mismatch: "The response does not belong to the selected workspace and discussion.",
+		pm_partial: "This is a bounded view; older records or additional candidates may not be included.",
+		pm_open_planning: "Still to clarify",
+		pm_repository_source_required: "A repository source claim needs a repository reference.",
+		pm_slot_alternatives: "Alternatives",
+		pm_slot_problem: "Problem",
+		pm_slot_outcome: "Desired outcome",
+		pm_slot_options: "Options",
+		pm_slot_constraints: "Constraints",
+		pm_slot_evidence: "Evidence",
+		pm_slot_unknowns: "Open questions",
+		pm_slot_value: "Value",
+		pm_slot_governance: "Governance",
+		pm_slot_scope: "Scope",
+		pm_slot_schedule: "Schedule",
+		pm_slot_finance: "Finance",
+		pm_slot_stakeholders: "Stakeholders",
+		pm_slot_resources: "Resources",
+		pm_slot_risk: "Risk",
+		pm_slot_quality: "Quality"
+	},
+	"zh-TW": {
+		pm_earlier_notes: "載入較早筆記",
+		pm_more_threads: "載入更多討論",
+		pm_missing_selection: "此頁未列出的已選紀錄",
+		pm_missing_selection_help: "這筆選取可能已有修訂，或未列入此頁。可取消勾選，再檢視並選擇目前的紀錄；系統不會自動替換。",
+		pm_title: "專案討論",
+		pm_nav: "PM 討論",
+		pm_workspaces: "PM 工作區",
+		pm_new_workspace: "新增工作區",
+		pm_workspace_name: "工作區名稱",
+		pm_create_workspace: "建立工作區",
+		pm_repositories_optional: "儲存庫（選填）",
+		pm_repositories: "儲存庫（以逗號分隔）",
+		pm_repository_help: "填入 owner/repository。這些參照不會選定 BAT 主機，也不會取得執行權限。",
+		pm_back_projects: "專案與工作 →",
+		pm_intro: "將想法、依據與規劃草稿放在同一處。",
+		pm_refresh: "重新整理",
+		pm_unavailable: "目前中央未向此帳號提供 PM 工作區。",
+		pm_no_workspaces: "尚無 PM 工作區。",
+		pm_start_title: "從一個想法開始討論",
+		pm_start_help: "先在左側建立工作區，再開啟討論。筆記會存到中央，之後可以接著整理。",
+		pm_new_thread: "開啟想法討論",
+		pm_thread_title: "討論標題",
+		pm_create_thread: "開始討論",
+		pm_thread_help: "每份討論保留自己的筆記、來源與候選想法。由工作區擁有者選定方向後，才建立規劃草稿。",
+		pm_notes: "討論筆記",
+		pm_note_content: "新增討論筆記",
+		pm_save_note: "儲存筆記",
+		pm_note_help: "儲存到這份討論，不會傳送給 Agent。",
+		pm_manual: "討論筆記 · 目前未連接 AI 參與者",
+		pm_no_notes: "尚無筆記。可以先記下問題、一個選項，或待釐清的疑問。",
+		pm_mode_idea: "想法",
+		pm_mode_planning: "規劃草稿",
+		pm_inputs: "事實與待釐清問題",
+		pm_inputs_help: "已確認的陳述、來源說法與待查假設會分開標示。",
+		pm_no_inputs: "尚無事實紀錄。可從討論中加入有來源的陳述或待釐清的問題。",
+		pm_input_slot: "主題",
+		pm_input_value: "陳述或問題",
+		pm_input_status: "依據狀態",
+		pm_input_source: "來源類型或已存筆記",
+		pm_add_input: "記錄事實或問題",
+		pm_record_input: "儲存紀錄",
+		pm_source_ref: "來源參照",
+		pm_source_statement: "文字陳述",
+		pm_source_repository: "儲存庫參照",
+		pm_source_external: "外部參照",
+		pm_source_help: "參照會作為來源說法保存；服務不會讀取或驗證其中的內容。",
+		pm_status_user_confirmed: "使用者已確認",
+		pm_status_repo_evidence: "來源說法",
+		pm_status_agent_assumption: "待查假設",
+		pm_status_unresolved: "待釐清",
+		pm_status_conflicting: "有衝突",
+		pm_status_not_applicable: "不適用",
+		pm_note_source: "{author} 的筆記 · {time}",
+		pm_saved_note_source: "較早保存的討論筆記",
+		pm_confirmed_by: "確認者：{actor}",
+		pm_unverified: "尚未獨立驗證",
+		pm_confirm_review: "檢視並確認",
+		pm_confirm_rationale: "確認這項陳述的依據",
+		pm_confirm: "確認陳述",
+		pm_select_input: "納入規劃：{value}",
+		pm_direction: "選定方向",
+		pm_plan_rationale: "選擇此方向的理由",
+		pm_create_plan: "儲存規劃草稿",
+		pm_plan_help: "勾選上方紀錄。未選的想法仍會保留。草稿不代表已採納需求，也不會啟動工作。",
+		pm_draft_title: "規劃草稿",
+		pm_selected: "選定的方向",
+		pm_candidates: "保留的其他想法",
+		pm_draft_help: "目前僅保存草稿。尚未採納需求，也未授權執行。",
+		pm_readonly: "你可以閱讀此工作區；編輯需要協作者權限。",
+		pm_owner_decides: "協作者可以新增筆記與紀錄。由工作區擁有者確認事實並選定規劃方向。",
+		pm_saved: "已儲存到中央。",
+		pm_pending: "原操作仍待確認。請先查回原回執，再進行下一筆變更。",
+		pm_terminal: "原操作已結束，但未成功。請檢視結果後，再編輯新的請求。",
+		pm_check_original: "查回原請求",
+		pm_edit_request: "編輯新的請求",
+		pm_operation: "查看操作",
+		pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
+		pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
+		pm_stale: "目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。",
+		pm_scope_mismatch: "回應不屬於選定的工作區與討論。",
+		pm_partial: "目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。",
+		pm_open_planning: "規劃中仍待釐清",
+		pm_repository_source_required: "儲存庫來源說法需要填入儲存庫參照。",
+		pm_slot_alternatives: "替代方案",
+		pm_slot_problem: "問題",
+		pm_slot_outcome: "期望成果",
+		pm_slot_options: "選項",
+		pm_slot_constraints: "限制",
+		pm_slot_evidence: "依據",
+		pm_slot_unknowns: "待釐清問題",
+		pm_slot_value: "價值",
+		pm_slot_governance: "治理",
+		pm_slot_scope: "範圍",
+		pm_slot_schedule: "時程",
+		pm_slot_finance: "財務",
+		pm_slot_stakeholders: "利害關係人",
+		pm_slot_resources: "資源",
+		pm_slot_risk: "風險",
+		pm_slot_quality: "品質"
+	}
+};
+//#endregion
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
+		...pmStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -5441,6 +6315,7 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 	},
 	en: {
+		...pmStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
@@ -17699,6 +18574,26 @@ async function viewProjectWork(main, pid, kind, id) {
 		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
 	}
 }
+async function viewPmWorkspace(main, workspaceId, threadId) {
+	const connection = {
+		epoch: state.epoch,
+		namespace: state.namespace,
+		generation
+	};
+	return mountPmWorkspace({
+		main,
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		guard: () => assertView(connection),
+		namespace: connection.namespace,
+		workspaceId,
+		threadId,
+		onEvents,
+		errorBox
+	});
+}
 var NAV = [
 	["home", "nav_home"],
 	["projects", "nav_projects"],
@@ -17743,7 +18638,8 @@ function mountWorkspace(name) {
 		}
 	}
 	document.body.classList.toggle("has-workspace", Boolean(state.token));
-	document.getElementById("main").className = ["session", "work"].includes(name) ? "session-view" : "";
+	document.body.classList.toggle("pm-mode", Boolean(state.token) && name === "pm");
+	document.getElementById("main").className = ["session", "work"].includes(name) ? "session-view" : name === "pm" ? "pm-view" : "";
 	const menu = document.getElementById("workspace-menu");
 	menu.hidden = !state.token;
 	menu.textContent = t("workspace_navigation");
@@ -17762,10 +18658,17 @@ function mountWorkspace(name) {
 		href: `#/${key}`,
 		"aria-current": name === key ? "page" : null
 	}, t(label)))));
-	document.getElementById("nav").replaceChildren(...state.token ? [h("a", {
-		href: "#/home",
-		class: name === "home" ? "on" : ""
-	}, t("nav_home")), tools] : [], h("a", {
+	document.getElementById("nav").replaceChildren(...state.token ? [
+		h("a", {
+			href: "#/home",
+			class: name === "home" ? "on" : ""
+		}, t("nav_home")),
+		...pmAvailable(state.caps) ? [h("a", {
+			href: "#/pm",
+			class: name === "pm" ? "on" : ""
+		}, t("pm_nav"))] : [],
+		tools
+	] : [], h("a", {
 		href: "#/settings",
 		class: !state.token || name === "settings" ? "on" : ""
 	}, t("nav_settings")));
@@ -17795,6 +18698,7 @@ async function route() {
 		return;
 	}
 	const off = await ({
+		pm: viewPmWorkspace,
 		home: viewHome,
 		projects: viewProjects,
 		project: viewProject,

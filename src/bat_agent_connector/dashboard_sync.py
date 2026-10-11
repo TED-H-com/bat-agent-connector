@@ -123,6 +123,8 @@ def event_page(journal, principal, after=0, limit=100, *, token=None, **filters)
     with journal.tx():
         check(journal, principal, after, token)
         page = journal.api_events(after, limit, **filters)
+        from .pm_access import filter_events
+        page = filter_events(journal.db, principal, page)
         if token is not None:
             page["sync"] = checkpoint(journal, principal, page["next_cursor"])
         return page
