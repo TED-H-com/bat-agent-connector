@@ -1,3 +1,4 @@
+import {findingPolicyControls} from './pm-maintenance-findings.js';
 import {maintenanceChecks} from './pm-maintenance-checks.js';
 import {maintenanceObservations} from './pm-maintenance-observations.js';
 // One durable decision; selecting sources never runs monitoring or repair work.
@@ -28,6 +29,8 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     age:numeric('pmp_max_age',1,86400),stable:numeric('pmp_stable',0,604800),parallel:numeric('pmp_parallel',1,16),run:numeric('pmp_run_seconds',1,86400),
     period:numeric('pmp_period_seconds',60,2678400),runs:numeric('pmp_period_runs',1,1000),cost:input('pmp_cost',{required:false,max:20}),retries:numeric('pmp_retries',0,10),
     rationale:input('pmp_rationale',{multiline:true,required:false,max:4000})};
+  const findingControls=findingPolicyControls({h,t,input,labelled,available:()=>caps()?.features?.pm_github_observation?.maintenance_findings?.version===1});
+  Object.assign(fields,findingControls.fields);
   const selected=(field)=>{try{const values=JSON.parse(field.value);return Array.isArray(values)?values:[];}catch{return [];}};
   const checks=[];
   function choices(field,values,label){
@@ -54,6 +57,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       choices(fields.works,workKinds,'pmp_work'),h('p',{class:'muted'},t('pmp_work_help')),labelled('pmp_paths',fields.paths),h('p',{class:'muted'},t('pmp_paths_help')),
       grid(['delivery','pmp_delivery']),envLabel,h('p',{class:'muted'},t('pmp_delivery_help'))),
     group('pmp_verification',grid(['ci','pmp_ci'],['review','pmp_review']),labelled('pmp_acceptance',fields.acceptance),h('p',{class:'muted'},t('pmp_acceptance_help'))),
+    findingControls.element,
     group('pmp_schedule',profileLabel,profileHelp,grid(['timezone','pmp_timezone'],['interval','pmp_interval'],['weekday','pmp_weekday'],['time','pmp_time'],['age','pmp_max_age'],['stable','pmp_stable'])),
     group('pmp_limits',grid(['parallel','pmp_parallel'],['run','pmp_run_seconds'],['period','pmp_period_seconds'],['runs','pmp_period_runs'],['cost','pmp_cost'],['retries','pmp_retries'])),
     labelled('pmp_rationale',fields.rationale),eligibility);
@@ -105,6 +109,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       delivery:p.delivery.maximum,environment:p.delivery.environment||'',ci:String(p.verification.required_ci),review:String(p.verification.review_required),acceptance:p.verification.acceptance_evidence.join('\n'),
       profile:p.observation.github_profile||'',timezone:p.schedule.timezone,interval:p.schedule.check_interval_seconds,weekday:p.schedule.review_weekday,time:p.schedule.review_local_time,age:p.observation.max_age_seconds,stable:p.observation.stable_for_seconds,
       parallel:p.limits.max_parallel,run:p.limits.run_seconds,period:p.limits.period_seconds,runs:p.limits.period_runs,cost:p.limits.cost_microusd===null?'':String(p.limits.cost_microusd/1000000),retries:p.limits.retries,rationale:''};
+    Object.assign(values,findingControls.initialize(p.observation));
     for(const [key,value]of Object.entries(values))fields[key].value=String(value);editor.changed();
   }
   function required(value,max){if(typeof value!=='string'||!value.trim()||[...value].length>max||value.includes('\0'))throw Error(t('pmp_validation'));return value;}
@@ -123,7 +128,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     if(works.length&&(v.delivery==='report'||baseline?.baseline?.document?.proof?.maintenance_branch?.status!=='verified_at_observation'))throw Error(t('pmp_repair_invalid'));
     return {enabled:v.enabled==='true',after_release_policy:v.after,sources:selection(v.sources,sourceKinds),allowed_work_kinds:works,allowed_paths:paths,
       delivery:{maximum:v.delivery,environment:v.delivery==='deploy'?required(v.environment,256):null},
-      observation:{max_age_seconds:integer(v.age,1,86400),stable_for_seconds:integer(v.stable,0,604800),...(v.profile?{github_profile:v.profile}:{})},
+      observation:{max_age_seconds:integer(v.age,1,86400),stable_for_seconds:integer(v.stable,0,604800),...(v.profile?{github_profile:v.profile}:{}),...findingControls.build(v,selection(v.sources,sourceKinds),v.profile,baseline?.baseline)},
       schedule:{timezone:v.timezone,check_interval_seconds:integer(v.interval,60,2678400),review_weekday:integer(v.weekday,0,6),review_local_time:v.time},
       limits:{max_parallel:integer(v.parallel,1,16),run_seconds:integer(v.run,1,86400),period_seconds:integer(v.period,60,2678400),period_runs:integer(v.runs,1,1000),cost_microusd:cost,retries:integer(v.retries,0,10)},
       verification:{required_ci:v.ci==='true',review_required:v.review==='true',acceptance_evidence:list(v.acceptance,40,2000)}};

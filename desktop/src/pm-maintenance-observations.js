@@ -1,3 +1,4 @@
+import {maintenanceFindingsView} from './pm-maintenance-findings.js';
 // Saved observations are evidence at a point in time, never permission to repair.
 export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,profile='github_open_prs_and_actions_v1';
@@ -87,7 +88,12 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
         ||p.visibility_filtered&&p.policy!==null||b.visibility_filtered&&b.baseline!==null)throw Error(t('pmo_invalid'));
       policy=p.visibility_filtered?null:p.policy;baseline=b.visibility_filtered?null:b.baseline;lifecycle=l.lifecycle;ready=true;
       // Build all rows before rendering; a malformed or withdrawn source clears the whole projection.
-      const rows=[...(g?[record(g,'github')]:[]),record(w,'workload')];facts.replaceChildren(...rows);
+      const rows=[...(g?[record(g,'github')]:[]),record(w,'workload')];
+      if(policy&&caps()?.features?.pm_github_observation?.maintenance_findings?.version===1){
+        const data=await api('GET',`${base}/maintenance-findings/current`);if(!valid(ticket))return;
+        rows.push(maintenanceFindingsView({h,t,workspaceId,data}));
+      }
+      facts.replaceChildren(...rows);
       context.textContent=current()?`${t('pmo_request_context')}: ${t('pmp_revision')} ${policy.revision} · ${baseline.document.release_version.value}`:t('pmo_context_missing');update();
     }catch(error){if(valid(ticket))failure(error);}
   }

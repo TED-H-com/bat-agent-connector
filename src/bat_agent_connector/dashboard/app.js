@@ -7538,6 +7538,149 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	};
 }
 //#endregion
+//#region src/pm-maintenance-findings.js
+var kinds = [
+	"issues",
+	"dependabot_pull_requests",
+	"dependabot_alerts"
+];
+var states = [
+	"disabled",
+	"missing",
+	"complete",
+	"incomplete",
+	"stale",
+	"context_changed",
+	"stopped"
+];
+function findingPolicyControls({ h, t, input, labelled, available }) {
+	const toggle = (key) => h("select", { "aria-label": t(key) }, h("option", { value: "false" }, t("pmf_off")), h("option", { value: "true" }, t("pmf_on")));
+	const fields = {
+		finding_configured: h("input", { type: "hidden" }),
+		finding_issues: toggle("pmf_issues_enable"),
+		finding_labels: input("pmf_labels", {
+			multiline: true,
+			required: false,
+			max: 2020
+		}),
+		finding_dependencies: toggle("pmf_deps_enable"),
+		finding_manifests: input("pmf_manifests", {
+			multiline: true,
+			required: false,
+			max: 51300
+		}),
+		finding_branch: input("pmf_branch", {
+			required: false,
+			max: 256
+		}),
+		finding_bot: input("pmf_bot", {
+			required: false,
+			max: 16
+		}),
+		finding_alerts: toggle("pmf_alerts_enable"),
+		finding_pulls: toggle("pmf_pulls_enable")
+	};
+	const element = h("details", {
+		"data-policy-group": "pmf_sources",
+		hidden: !available()
+	}, h("summary", {}, t("pmf_configure")), h("p", { class: "muted" }, t("pmf_configure_help")), ...Object.entries({
+		finding_issues: "pmf_issues_enable",
+		finding_labels: "pmf_labels",
+		finding_dependencies: "pmf_deps_enable",
+		finding_manifests: "pmf_manifests",
+		finding_branch: "pmf_branch",
+		finding_bot: "pmf_bot",
+		finding_alerts: "pmf_alerts_enable",
+		finding_pulls: "pmf_pulls_enable"
+	}).map(([key, label]) => labelled(label, fields[key])), h("p", { class: "muted" }, t("pmf_permission")));
+	function initialize(observation) {
+		const c = observation.maintenance_sources, d = c?.dependencies;
+		return {
+			finding_configured: c ? "1" : "",
+			finding_issues: String(c?.issues != null),
+			finding_labels: c?.issues?.labels_all?.join("\n") || "",
+			finding_dependencies: String(d != null),
+			finding_manifests: d?.manifests?.join("\n") || "",
+			finding_branch: d?.base_branch || "",
+			finding_bot: d?.dependabot_actor_id || "",
+			finding_alerts: String(d?.alerts === true),
+			finding_pulls: String(d?.pull_requests === true)
+		};
+	}
+	function build(v, sources, profile, baseline) {
+		const issues = v.finding_issues === "true", deps = v.finding_dependencies === "true";
+		if (!v.finding_configured && !issues && !deps) return {};
+		const invalid = () => {
+			throw Error(t("pmf_config_invalid"));
+		};
+		if (!available() || profile !== "github_open_prs_and_actions_v1") invalid();
+		const lines = (value, max, length) => {
+			const rows = value.split("\n").map((s) => s.trim()).filter(Boolean);
+			if (rows.length > max || new Set(rows).size !== rows.length || rows.some((s) => s.length > length || /[\x00-\x1f]/.test(s))) invalid();
+			return rows;
+		};
+		const labels = issues ? lines(v.finding_labels, 20, 100) : [];
+		if (issues && !sources.includes("issues") || deps && !sources.includes("dependencies")) invalid();
+		let dependencies = null;
+		if (deps) {
+			const manifests = lines(v.finding_manifests, 100, 512), bot = Number(v.finding_bot), branch = v.finding_branch;
+			if (!manifests.length || manifests.some((path) => path.includes("\\") || path.split("/").some((part) => [
+				"",
+				".",
+				".."
+			].includes(part))) || !/^\d+$/.test(v.finding_bot) || !Number.isSafeInteger(bot) || bot < 1 || baseline?.document?.proof?.maintenance_branch?.status !== "verified_at_observation" || baseline.document.proof.maintenance_branch.ref !== "refs/heads/" + branch || v.finding_alerts !== "true" && v.finding_pulls !== "true") invalid();
+			dependencies = {
+				manifests,
+				base_branch: branch,
+				dependabot_actor_id: bot,
+				alerts: v.finding_alerts === "true",
+				pull_requests: v.finding_pulls === "true"
+			};
+		}
+		return { maintenance_sources: {
+			issues: issues ? { labels_all: labels } : null,
+			dependencies
+		} };
+	}
+	return {
+		element,
+		fields,
+		initialize,
+		build
+	};
+}
+function maintenanceFindingsView({ h, t, workspaceId, data }) {
+	const invalid = () => {
+		throw Error(t("pmf_invalid"));
+	};
+	if (data?.workspace_id !== workspaceId || data.automatic_repair_authorized !== false || typeof data.visibility_filtered !== "boolean" || !data.sources || Object.keys(data.sources).some((k) => !kinds.includes(k))) invalid();
+	const ref = data.observation_ref;
+	if (ref && (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !/^[0-9a-f]{64}$/.test(ref.document_digest))) invalid();
+	const rows = [];
+	for (const kind of kinds) {
+		const source = data.sources[kind];
+		if (!source || !states.includes(source.status) || !Array.isArray(source.findings) || source.findings.length > 2e3 || data.visibility_filtered && source.findings.length) invalid();
+		const items = source.findings.map((row) => {
+			const native = row.native;
+			if (!ref || !/^pmfn_[0-9a-f]{32}$/.test(row.finding_id) || native?.kind !== kind || !Number.isSafeInteger(native.number) || native.number < 1 || !Number.isSafeInteger(native.repository_id) || native.repository_id < 1 || !/^[0-9a-f]{64}$/.test(native.provider_digest)) invalid();
+			const facts = row.facts || {}, detail = h("details", {}, h("summary", {}, `${t("pmf_" + kind)} #${native.number}`), h("p", { class: "muted" }, t("pmf_applicability")), h("p", { class: "pm-source" }, row.finding_id));
+			for (const key of [
+				"package",
+				"ecosystem",
+				"manifest_path",
+				"severity",
+				"vulnerable_version_range",
+				"first_patched_version"
+			]) if (facts[key] != null) detail.append(h("p", {}, h("strong", {}, t("pmf_" + key) + ": "), String(facts[key])));
+			if (row.existing_pull_request) detail.append(h("p", {}, t("pmf_existing_pr") + " #" + row.existing_pull_request.number));
+			for (const work of row.existing_work || []) detail.append(h("p", { class: "pm-source" }, t("pmf_existing_work") + ": " + work.work_item_id));
+			return detail;
+		});
+		rows.push(h("section", {}, h("h5", {}, t("pmf_" + kind)), h("p", {}, t("pmf_state_" + source.status)), source.status === "complete" && !items.length ? h("p", { class: "muted" }, t("pmf_empty")) : null, ...items));
+	}
+	return h("section", { "data-maintenance-findings": "" }, h("h4", {}, t("pmf_title")), h("p", { class: "muted" }, t("pmf_boundary")), ...data.visibility_filtered ? [h("p", { class: "muted" }, t("pmf_hidden"))] : [], ...rows, ref ? h("details", {}, h("summary", {}, t("pmf_original")), h("p", { class: "pm-source" }, ref.observation_id), h("p", { class: "pm-source" }, ref.document_digest)) : null);
+}
+//#endregion
 //#region src/pm-maintenance-checks.js
 function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, profile = "github_open_prs_and_actions_v1";
@@ -7968,6 +8111,16 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 			lifecycle = l.lifecycle;
 			ready = true;
 			const rows = [...g ? [record(g, "github")] : [], record(w, "workload")];
+			if (policy && caps()?.features?.pm_github_observation?.maintenance_findings?.version === 1) {
+				const data = await api("GET", `${base}/maintenance-findings/current`);
+				if (!valid(ticket)) return;
+				rows.push(maintenanceFindingsView({
+					h,
+					t,
+					workspaceId,
+					data
+				}));
+			}
 			facts.replaceChildren(...rows);
 			context.textContent = current() ? `${t("pmo_request_context")}: ${t("pmp_revision")} ${policy.revision} · ${baseline.document.release_version.value}` : t("pmo_context_missing");
 			update();
@@ -8097,6 +8250,14 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			max: 4e3
 		})
 	};
+	const findingControls = findingPolicyControls({
+		h,
+		t,
+		input,
+		labelled,
+		available: () => caps()?.features?.pm_github_observation?.maintenance_findings?.version === 1
+	});
+	Object.assign(fields, findingControls.fields);
 	const selected = (field) => {
 		try {
 			const values = JSON.parse(field.value);
@@ -8145,7 +8306,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		}
 	}, t("pmp_use_versions"));
 	const eligibility = h("p", { class: "muted" });
-	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
+	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), findingControls.element, group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
 	function context() {
 		return ready && baseline?.baseline && !baseline.visibility_filtered && current && !current.visibility_filtered && lifecycle ? {
 			expected_policy_revision: current.head.revision,
@@ -8322,6 +8483,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			retries: p.limits.retries,
 			rationale: ""
 		};
+		Object.assign(values, findingControls.initialize(p.observation));
 		for (const [key, value] of Object.entries(values)) fields[key].value = String(value);
 		editor.changed();
 	}
@@ -8391,7 +8553,8 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			observation: {
 				max_age_seconds: integer(v.age, 1, 86400),
 				stable_for_seconds: integer(v.stable, 0, 604800),
-				...v.profile ? { github_profile: v.profile } : {}
+				...v.profile ? { github_profile: v.profile } : {},
+				...findingControls.build(v, selection(v.sources, sourceKinds), v.profile, baseline?.baseline)
 			},
 			schedule: {
 				timezone: v.timezone,
@@ -15179,6 +15342,92 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-maintenance-findings-strings.js
+var maintenanceFindingStrings = {
+	en: {
+		pmf_configure: "Configure Issue and dependency sources",
+		pmf_configure_help: "Choose exact filters for saved observations. Empty Issue labels explicitly include all open Issues. Existing policies keep these sources off until selected.",
+		pmf_off: "Not configured",
+		pmf_on: "Include this source",
+		pmf_issues_enable: "Observe matching Issues",
+		pmf_labels: "Required Issue labels (one per line)",
+		pmf_deps_enable: "Observe dependency sources",
+		pmf_manifests: "Exact dependency manifest paths (one per line)",
+		pmf_branch: "Adopted maintenance branch",
+		pmf_bot: "Dependabot native Bot ID",
+		pmf_alerts_enable: "Read Dependabot alerts",
+		pmf_pulls_enable: "Read matching Dependabot pull requests",
+		pmf_permission: "The provider needs the selected Issues, pull-request or Dependabot-alert read permission. A denied read remains unavailable.",
+		pmf_config_invalid: "Select matching policy sources, exact paths, the verified maintenance branch and a native Bot ID. Enable at least one dependency source.",
+		pmf_title: "Configured maintenance findings",
+		pmf_boundary: "These are saved observations. A missing finding does not mean resolved; findings alone do not authorize repair.",
+		pmf_invalid: "Finding evidence does not match this workspace or its original observation.",
+		pmf_hidden: "Original finding evidence is outside your current access.",
+		pmf_issues: "Issue",
+		pmf_dependabot_pull_requests: "Dependabot pull request",
+		pmf_dependabot_alerts: "Dependabot alert",
+		pmf_state_disabled: "Not configured",
+		pmf_state_missing: "No saved observation",
+		pmf_state_complete: "Configured source observed",
+		pmf_state_incomplete: "Incomplete coverage",
+		pmf_state_stale: "Saved observation expired",
+		pmf_state_context_changed: "Policy or release context changed",
+		pmf_state_stopped: "New maintenance work is stopped",
+		pmf_empty: "No matching entries were returned by this configured endpoint. This is not a complete dependency scan.",
+		pmf_applicability: "Whether this affects the released version remains unproven.",
+		pmf_existing_pr: "Existing pull request",
+		pmf_existing_work: "Existing work",
+		pmf_original: "Original finding observation",
+		pmf_package: "Package",
+		pmf_ecosystem: "Ecosystem",
+		pmf_manifest_path: "Manifest",
+		pmf_severity: "Reported severity",
+		pmf_vulnerable_version_range: "Reported vulnerable range",
+		pmf_first_patched_version: "First patched version"
+	},
+	"zh-TW": {
+		pmf_configure: "設定 Issue 與依賴來源",
+		pmf_configure_help: "明確選定保存觀察的條件。Issue 標籤留白代表選取所有開啟的 Issue；舊政策不會自動啟用這些來源。",
+		pmf_off: "尚未設定",
+		pmf_on: "納入此來源",
+		pmf_issues_enable: "觀察符合條件的 Issue",
+		pmf_labels: "必須同時符合的 Issue 標籤（每行一個）",
+		pmf_deps_enable: "觀察依賴來源",
+		pmf_manifests: "依賴清單的精確路徑（每行一個）",
+		pmf_branch: "已採用的維護分支",
+		pmf_bot: "Dependabot 原生 Bot ID",
+		pmf_alerts_enable: "讀取 Dependabot 警示",
+		pmf_pulls_enable: "讀取符合條件的 Dependabot PR",
+		pmf_permission: "Provider 須具備所選 Issue、PR 或 Dependabot 警示的讀取權限；拒絕讀取仍標記為無法取得。",
+		pmf_config_invalid: "請勾選相符的政策來源，填寫精確路徑、已驗證的維護分支及原生 Bot ID，並至少啟用一種依賴來源。",
+		pmf_title: "已設定的維護觀察結果",
+		pmf_boundary: "這些是已保存的觀察。項目不再出現不代表已解決；觀察結果本身不授權修復。",
+		pmf_invalid: "觀察證據與此 workspace 或原始觀察不一致。",
+		pmf_hidden: "原始觀察證據已不在目前可讀範圍。",
+		pmf_issues: "Issue",
+		pmf_dependabot_pull_requests: "Dependabot PR",
+		pmf_dependabot_alerts: "Dependabot 警示",
+		pmf_state_disabled: "尚未設定",
+		pmf_state_missing: "尚無保存的觀察",
+		pmf_state_complete: "已觀察所設定的來源",
+		pmf_state_incomplete: "來源涵蓋不完整",
+		pmf_state_stale: "保存的觀察已過期",
+		pmf_state_context_changed: "政策或發布脈絡已變更",
+		pmf_state_stopped: "已停止新的維護投入",
+		pmf_empty: "此設定端點未回傳符合條件的項目；這不代表完整依賴掃描。",
+		pmf_applicability: "是否影響已發布版本仍未確認。",
+		pmf_existing_pr: "既有 PR",
+		pmf_existing_work: "既有工作",
+		pmf_original: "原始觀察依據",
+		pmf_package: "套件",
+		pmf_ecosystem: "生態系",
+		pmf_manifest_path: "清單路徑",
+		pmf_severity: "回報的嚴重程度",
+		pmf_vulnerable_version_range: "回報的受影響版本範圍",
+		pmf_first_patched_version: "首個修補版本"
+	}
+};
+//#endregion
 //#region src/pm-maintenance-review-strings.js
 var rows$1 = {
 	selection_required: ["Complete the required source, discussion or period selection before recording.", "請先完成必要的來源、討論或期間選取，再保存紀錄。"],
@@ -18351,6 +18600,7 @@ var STRINGS = {
 		...maintenanceCheckStrings["zh-TW"],
 		...maintenanceReviewStrings["zh-TW"],
 		...maintenanceObservationStrings["zh-TW"],
+		...maintenanceFindingStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -19808,6 +20058,7 @@ var STRINGS = {
 		...maintenanceCheckStrings.en,
 		...maintenanceReviewStrings.en,
 		...maintenanceObservationStrings.en,
+		...maintenanceFindingStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
