@@ -80,40 +80,81 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
         fold('pm_sprint_fixed', h('div', {}, h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
           h('p', {}, source(def.product_goal_revision_id)), h('p', {}, source(def.dod_revision_id)), h('p', {}, source(def.backlog_revision_id)))))),
       note('pm_sprint_no_execution')));
-    const ending = [...(data.history || [])].reverse().find(entry => ['pm.sprint.close', 'pm.sprint.cancel'].includes(entry.action));
-    if (ending) view.append(h('section', {class: 'pm-plans', 'data-pm-sprint-closure': ''}, h('h3', {}, t('pm_sprint_closure')),
-      h('p', {class: 'pm-note-text'}, ending.document.rationale),
-      ...(ending.document.items || []).map(item => h('p', {class: 'pm-note-text'}, title(item), ' · ', t('pm_sprint_reconsider'), ' — ', item.reason)),
-      note('pm_sprint_no_carryover')));
+    const ticket = serial, terminal = ['closed', 'cancelled'].includes(sprint.status);
+    let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
+    const closure = h('section', {class: 'pm-plans', 'data-pm-sprint-closure': ''});
+    if (terminal) view.append(closure);
+    const endingItems = items => h('div', {class: 'pm-evidence-rows'}, ...items.map(item =>
+      h('article', {class: 'pm-fact', 'data-pm-sprint-ended-work': item.work_item_id},
+        h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
+        h('p', {class: 'pm-note-text'}, t('pm_sprint_unassessed'), ' · ', t('pm_sprint_reconsider')),
+        h('p', {class: 'pm-note-text'}, item.reason),
+        fold('pm_sprint_versions', h('div', {}, source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
+          h('p', {}, (item.requirement_ids || []).join(', ')))))));
+    function renderClosure() {
+      if (!terminal) return;
+      closure.replaceChildren(h('h3', {}, t('pm_sprint_closure')));
+      if (ending) {
+        closure.append(h('p', {class: 'muted'}, t('pm_sprint_recorded_by', {actor: ending.actor})),
+          h('p', {class: 'pm-note-text'}, ending.document.rationale), endingItems(ending.document.items || []),
+          note('pm_sprint_no_carryover'));
+      } else if (eventCursor != null) {
+        closure.append(note('pm_sprint_closure_pending'), h('button', {type: 'button', class: 'secondary', disabled: eventPending,
+          onclick: () => void loadEventPage?.()}, t(eventPending ? 'pm_sprint_history_loading' : 'pm_sprint_load_closure')));
+      } else closure.append(note('pm_sprint_closure_unavailable'));
+    }
     const history = h('div');
     for (const kind of ['goals', 'selections', 'events']) {
-      const holder = h('section'), records = kind === 'goals' ? data.goal_revisions : kind === 'selections' ? data.selection_revisions : data.history;
+      const holder = h('section', {'data-pm-sprint-history': kind}), navigation = h('div'), seen = new Set();
+      const records = kind === 'goals' ? data.goal_revisions : kind === 'selections' ? data.selection_revisions : data.history;
       holder.append(h('h4', {}, t('pm_sprint_history_' + kind))); history.append(holder);
       function append(page) {
-        for (const entry of page.records || []) {
-          if (entry.sprint_id !== sprint.sprint_id) throw Error(t('pm_scope_mismatch'));
+        if (!Array.isArray(page.records) || page.next_cursor != null && (!Number.isInteger(page.next_cursor) || page.next_cursor < 0)) throw Error(t('pm_scope_mismatch'));
+        navigation.remove();
+        for (const entry of page.records) {
+          if (entry.sprint_id !== sprint.sprint_id || entry.workspace_id !== undefined && entry.workspace_id !== workspaceId
+              || !Number.isInteger(entry.sequence) || entry.sequence < 1) throw Error(t('pm_scope_mismatch'));
+          if (seen.has(entry.sequence)) continue;
+          seen.add(entry.sequence);
+          const isEnding = kind === 'events' && ['pm.sprint.close', 'pm.sprint.cancel'].includes(entry.action);
+          if (isEnding && (!ending || entry.sequence > ending.sequence)) ending = entry;
           const body = h('div', {}, h('p', {class: 'muted'}, t('pm_sprint_recorded_by', {actor: entry.actor})),
             h('p', {class: 'pm-note-text'}, entry.rationale || entry.document?.rationale || ''));
           if (entry.text) body.append(h('p', {class: 'pm-note-text'}, entry.text));
           if (entry.items) body.append(workRows(entry.items));
+          if (isEnding) body.append(endingItems(entry.document?.items || []), note('pm_sprint_no_carryover'));
           const labels = {'pm.sprint.create': 'pm_sprint_save', 'pm.sprint.goal.revise': 'pm_sprint_save_sprint_goal',
             'pm.sprint.select': 'pm_sprint_save_selection', 'pm.sprint.start': 'pm_sprint_start',
             'pm.sprint.close': 'pm_sprint_close', 'pm.sprint.cancel': 'pm_sprint_cancel'};
           holder.append(h('details', {}, h('summary', {}, `#${entry.sequence} · ${t(kind === 'events' ? labels[entry.action] || 'pm_sprint_history_events' : 'pm_sprint_history_' + kind)}`), body));
         }
+        navigation.replaceChildren(); holder.append(navigation);
+        if (kind === 'events') {eventCursor = page.next_cursor ?? null; loadEventPage = null;}
         if (page.next_cursor != null) {
-          const more = h('button', {type: 'button', class: 'secondary', onclick: async () => {
+          const more = h('button', {type: 'button', class: 'secondary'}, t('pm_sprint_more_history', {kind: t('pm_sprint_history_' + kind)}));
+          const load = async () => {
+            if (more.disabled || !loaded || ticket !== serial) return;
             more.disabled = true;
+            if (kind === 'events') {eventPending = true; renderClosure();}
             try {
               const next = check(await api('GET', `${endpoint}/sprints/${sprint.sprint_id}/history/${kind}?after=${page.next_cursor}&limit=50`)); alive();
-              if (!more.isConnected) return;
-              if (next.sprint_id !== sprint.sprint_id || next.kind !== kind || next.next_cursor != null && next.next_cursor <= page.next_cursor) throw Error(t('pm_scope_mismatch'));
-              more.remove(); append(next);
-            } catch (error) {if (more.isConnected) unavailable(error);} finally {more.disabled = false;}
-          }}, t('pm_sprint_more_history', {kind: t('pm_sprint_history_' + kind)})); holder.append(more);
+              if (!more.isConnected || ticket !== serial) return;
+              if (next.sprint_id !== sprint.sprint_id || next.kind !== kind
+                  || next.next_cursor != null && (!Number.isInteger(next.next_cursor) || next.next_cursor <= page.next_cursor)) throw Error(t('pm_scope_mismatch'));
+              append(next);
+            } catch (error) {if (holder.isConnected && ticket === serial) unavailable(error);}
+            finally {
+              more.disabled = false;
+              if (kind === 'events' && ticket === serial && closure.isConnected) {eventPending = false; renderClosure();}
+            }
+          };
+          more.addEventListener('click', () => void load());
+          navigation.append(note('pm_sprint_history_partial'), more);
+          if (kind === 'events') loadEventPage = load;
         }
+        if (kind === 'events') renderClosure();
       }
-      append({records, next_cursor: data.history_next_cursors?.[kind]});
+      append({records: records || [], next_cursor: data.history_next_cursors?.[kind]});
     }
     view.append(fold('pm_sprint_history', history));
   }
