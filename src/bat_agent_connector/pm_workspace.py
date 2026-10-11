@@ -128,6 +128,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.lifecycle.'):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         return lifecycle_visible(db, principal, op)
+    if op['action'] == 'pm.maintenance_policy.adopt':
+        from .pm_maintenance_policy import operation_visible as policy_visible
+        return policy_visible(db, principal, op)
     if op['action'] == 'pm.release_baseline.register':
         from .pm_release_baselines import operation_visible as baseline_visible
         return baseline_visible(db, principal, op)

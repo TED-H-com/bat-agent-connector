@@ -31,6 +31,10 @@ def event_visible(db, principal, event):
             return not event.get("body", {}).get("action", "").startswith("pm.")
         return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
                                       "result": json.loads(row["result"]) if row["result"] else None})
+    if event["resource_type"] == "pm_maintenance_policy" or event["kind"].startswith("pm.maintenance_policy."):
+        from .pm_maintenance_policy import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_release_baseline" or event["kind"].startswith("pm.release_baseline."):
         from .pm_release_baselines import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
