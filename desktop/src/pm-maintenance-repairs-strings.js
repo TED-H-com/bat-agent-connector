@@ -1,5 +1,7 @@
 export const pmMaintenanceRepairsStrings={
   en:{
+    pmr_merged:'Verified merge',pmr_deployed:'Verified deployment',pmr_runtime:'Original implementation turn',pmr_turn_completed:'Completion verified',pmr_completion_receipt:'Original completion evidence',
+    pmr_delivery:'Delivery operation',pmr_original_delivery:'Original delivery receipt',pmr_baseline_update:'Maintenance baseline',pmr_baseline_updated:'Updated from the verified deployment',pmr_baseline_not_updated:'The original baseline was retained; check the original operation for the reason.',pmr_baseline_receipt:'Original baseline selection receipt',
     pmr_policy_runtime:'Adopted rules permit only their fixed sources and limits. Verification, acceptance and delivery still require original evidence.',
     pmr_status_accepted:'Accepted request',pmr_status_queued:'Queued',pmr_status_pending:'Pending',pmr_status_running:'Running',pmr_status_succeeded:'Operation completed',pmr_status_failed:'Failed',pmr_status_cancelled:'Cancelled',pmr_status_needs_attention:'Needs reconciliation',pmr_status_not_admitted:'Not started',pmr_status_passed:'Passed',pmr_status_blocked:'Blocked',pmr_status_unknown:'Unknown',
     pmr_title:'Maintenance repairs',pmr_intro:'Review one observed Issue against an adopted rule and its fixed implementation handoff.',pmr_refresh:'Refresh repairs',pmr_loading:'Reading original repair sources…',
@@ -22,6 +24,8 @@ export const pmMaintenanceRepairsStrings={
     pmr_ci_profile:'Native required-check observation',pmr_ci_unchanged:'Keep the original policy selection',pmr_ci_explicit:'Observe applied GitHub required status checks',pmr_ci_help:'Select this explicitly to observe the native required set for a fixed PR head. Empty or unavailable requirements do not pass; merge and deployment still enforce current gates.',
   },
   'zh-TW':{
+    pmr_merged:'已核對合併',pmr_deployed:'已核對部署',pmr_runtime:'原始實作回合',pmr_turn_completed:'已核對完成',pmr_completion_receipt:'原始完成證據',
+    pmr_delivery:'交付操作',pmr_original_delivery:'原始交付收據',pmr_baseline_update:'維護基準',pmr_baseline_updated:'已依核對後的部署更新',pmr_baseline_not_updated:'保留原始基準；可查看原始操作了解原因。',pmr_baseline_receipt:'原始基準選定收據',
     pmr_policy_runtime:'已採用的規則僅允許固定來源與額度內的工作。驗證、驗收與交付仍須原始證據。',
     pmr_status_accepted:'請求已受理',pmr_status_queued:'排隊中',pmr_status_pending:'待處理',pmr_status_running:'執行中',pmr_status_succeeded:'操作已完成',pmr_status_failed:'失敗',pmr_status_cancelled:'已取消',pmr_status_needs_attention:'待核對原始效果',pmr_status_not_admitted:'尚未啟動',pmr_status_passed:'通過',pmr_status_blocked:'受阻',pmr_status_unknown:'未知',
     pmr_title:'維護修復',pmr_intro:'依已採用的規則與固定實作交接，審閱一筆觀察到的 Issue。',pmr_refresh:'重新讀取修復',pmr_loading:'正在讀取原始修復來源…',

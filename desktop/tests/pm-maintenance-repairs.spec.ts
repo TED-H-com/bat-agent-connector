@@ -88,3 +88,30 @@ for(const locale of ['en','zh-TW'])test(`published review outcome retains indepe
 test('succeeded child alone cannot invent a published review outcome',async({page})=>{
  const f=repairFixture();const row:any=f.save();row.operation_status='succeeded';await mountRepairs(page,f);await selectRepair(page,f);await expect(panel(page).locator('[data-repair]')).not.toContainText('Published for review');expect(f.state.writes).toEqual([]);
 });
+
+for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`verified delivery and original completion ${locale} ${width}`,async({page},info)=>{
+ const f=repairFixture(),row:any=f.save();row.operation_status='succeeded';row.outcome='deployed';row.capacity_held=false;row.progress.blocked_reason=null;
+ row.progress.verification={status:'passed'};row.progress.quality=[{qualified:true}];row.progress.required_ci_receipts=[{status:'passed'}];
+ row.publication_child={operation_id:'op_'+'a'.repeat(32),status:'succeeded',result:{creation_receipt:{native_pr_id:600,candidate_sha:'b'.repeat(40)}}};
+ const adopted:any=f.base.state.policies[0];adopted.document.policy.delivery={maximum:'deploy',environment:'production'};adopted.document.scope.channel='production';
+ row.delivery_child={operation_id:'op_'+'d'.repeat(32),status:'succeeded'};
+ row.runtime_completion={schema:'pm_repair_runtime_completion_v1',parent_operation_id:row.operation_id,execution_operation_id:row.child.operation_id,
+   observation_operation_id:'op_'+'e'.repeat(32),runtime_status:'original_turn_completed',process_death_proven:false};
+ row.baseline_child={operation_id:'op_'+'b'.repeat(32),status:'succeeded',result:{baseline_id:'pmrb_'+'b'.repeat(32)}};
+ row.baseline_update={status:'updated',operation_id:row.baseline_child.operation_id,baseline_id:row.baseline_child.result.baseline_id};
+ await page.setViewportSize({width,height:950});await mountRepairs(page,f,locale);
+ await panel(page).getByLabel(locale==='en'?'Saved repair':'已保存的修復',{exact:true}).selectOption(row.repair_id);
+ const shown=panel(page).locator('[data-repair]');await expect(shown).toContainText(locale==='en'?'Verified deployment':'已核對部署');
+ await expect(shown).toContainText(locale==='en'?'Completion verified':'已核對完成');await expect(shown).toContainText(locale==='en'?'Updated from the verified deployment':'已依核對後的部署更新');
+ await expect(shown).toContainText(locale==='en'?'no longer holds a capacity reservation':'此修復已釋放工作容量');
+ expect(await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(node=>node.getBoundingClientRect().right>innerWidth+1).map(node=>node.tagName))).toEqual([]);
+ expect(await shown.innerText()).not.toMatch(/pmr_[a-z_]+/);expect(f.state.writes).toEqual([]);
+ await page.screenshot({path:info.outputPath(`completed-${locale}-${width}.png`),fullPage:true});
+ f.state.deny=true;await page.evaluate(()=>(window as any).repairRefresh());await expect(panel(page).locator('[data-repair]')).toHaveCount(0);
+});
+test('unrelated completion and unconfirmed baseline cannot upgrade original result',async({page})=>{
+ const f=repairFixture(),row:any=f.save();row.runtime_completion={schema:'pm_repair_runtime_completion_v1',parent_operation_id:'op_'+'f'.repeat(32),
+   execution_operation_id:row.child.operation_id,runtime_status:'original_turn_completed'};row.baseline_update={status:'updated',baseline_id:'pmrb_'+'b'.repeat(32)};
+ await mountRepairs(page,f);await selectRepair(page,f);const shown=panel(page).locator('[data-repair]');await expect(shown).not.toContainText('Completion verified');
+ await expect(shown).not.toContainText('Updated from the verified deployment');await expect(shown).toContainText('still holds its capacity reservation');expect(f.state.writes).toEqual([]);
+});
