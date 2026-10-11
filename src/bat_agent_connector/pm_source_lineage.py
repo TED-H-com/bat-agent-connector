@@ -292,7 +292,8 @@ fixed PM documents are not rewritten into misleading partial descriptions.
         require_document(db, principal, value)
         return value
     result = filter_page(db, principal, value, _COLLECTIONS)
-    if isinstance(result.get("snapshot"), dict):
+    if (isinstance(result.get("snapshot"), dict) and isinstance(result.get("sync"), dict)
+            and isinstance(result.get("capabilities"), dict) and "pagination" in result):
         result["snapshot"] = {key: read_response(db, principal, part) if isinstance(part, dict) else part
                               for key, part in result["snapshot"].items()}
     require_document(db, principal, result)
