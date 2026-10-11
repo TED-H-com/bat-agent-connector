@@ -22,8 +22,8 @@ from . import (
     work_items,
 )
 from . import pm_work_batch_evidence as evidence
-from .operations import ActionDef, OperationError, OperationService
-from .task_verifier import ObservedVerifier
+from .operations import ActionDef, NeedsAttention, OperationError, OperationService
+from .task_verifier import ObservedVerifier, VerificationProcessStuck
 
 ACTION = 'pm.execution.verify'
 PROCESS = 'pm.execution.verifier.process'
@@ -140,8 +140,27 @@ def _check(ops, principal, target, params, pre):
         'operation_ids': [child['operation_id']]}
 
 
+def _active(ops, target):
+    # The existing original process row is the durable exclusion, including
+    # stopped operation status whose sent process outcome remains unknown.
+    return ops.db.execute("""SELECT o.operation_id FROM operations o
+        WHERE o.action=? AND json_extract(o.target,'$.execution_operation_id')=?
+        AND (o.status NOT IN ('succeeded','failed','cancelled') OR EXISTS (
+            SELECT 1 FROM operation_steps s WHERE s.operation_id=o.operation_id
+            AND s.name=? AND s.status IN ('started','uncertain')))
+        ORDER BY o.created_at,o.operation_id LIMIT 1""", (ACTION, target['execution_operation_id'], PROCESS)).fetchone()
+
+
+def _exclusive(ops, target, original_id=None):
+    first = _active(ops, target)
+    if first is not None and first[0] != original_id:
+        raise _bad('PM_VERIFIER_IN_PROGRESS', 'Reconcile the original active or unknown verifier before another verification')
+
+
 def _admit(ops, principal, target, params, pre):
-    context = _check(ops, principal, target, params, pre)
+    with ops.journal.tx():
+        context = _check(ops, principal, target, params, pre)
+        _exclusive(ops, target)
     return {'principal': pm_workspace.principal_binding(principal), 'pm_execution_verification': context,
         'pm_execution_verification_digest': evidence.digest(context), 'pm_lineage': {'workspace_id': target['workspace_id']}}
 
@@ -211,6 +230,8 @@ def _guard(ctx):
     ctx.check_cancel()
     from .pm_lifecycle_gates import require_local
     require_local(ctx.service.db, ctx.operation_id)
+    with ctx.service.journal.tx():
+        _exclusive(ctx.service, ctx.target, ctx.operation_id)
     principal = _current_principal(ctx.service, ctx.op)
     if _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions) != _intent(ctx.op):
         raise _bad('PM_VERIFIER_CONTEXT_CHANGED', 'Original verifier source, command or host changed')
@@ -254,6 +275,8 @@ async def _run(ctx):
         try:
             observed = await asyncio.wait_for(runner.observe(metadata, cwd, before_run=before_run,
                 expected_identity={key: ctx.params[key] for key in ('candidate_commit', 'tree_hash')}), remaining)
+        except VerificationProcessStuck as exc:
+            raise NeedsAttention('PM_VERIFIER_PROCESS_UNRESOLVED', 'Original verifier process termination is unproven; do not rerun') from exc
         except asyncio.TimeoutError:
             observed = None
         if observed is not None and (observed['candidate_commit'] != ctx.params['candidate_commit']
