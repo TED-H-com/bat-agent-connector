@@ -128,8 +128,14 @@ that cannot fit. Cursor validation rejects booleans, negative values and integer
 outside SQLite's signed 64-bit range.
 
 All public reads use one WAL snapshot for membership, original authority, row and
-page selection. The integrator must install the action and route operation/event
-visibility through `operation_visible` before exposing entrypoints.
+page selection. The shared API installs the policy before this action and routes
+operation/event visibility through `operation_visible`. HTTP readers are
+`/pm/workspaces/{workspace_id}/workload-snapshots`, `/current` and `/{snapshot_id}`.
+RPC/MCP expose `pm_workload_snapshots_list`, `pm_workload_snapshot_current_get` and
+`pm_workload_snapshot_get` with the same whole-record visibility. Tauri allows
+only these exact GET paths, list limit and signed 64-bit sequence cursor. All
+capture requests use the existing operation endpoint. Availability is reported
+under `features.pm_workspaces.workload`.
 
 ## Stability and final admission
 

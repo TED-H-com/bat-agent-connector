@@ -131,6 +131,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.issue.'):
         from .pm_issue_mappings import operation_visible as issue_operation_visible
         return issue_operation_visible(db, principal, op)
+    if op['action'] == 'pm.workload.capture':
+        from .pm_workload import operation_visible as workload_visible
+        return workload_visible(db, principal, op)
     if op['action'] == 'pm.maintenance_policy.adopt':
         from .pm_maintenance_policy import operation_visible as policy_visible
         return policy_visible(db, principal, op)

@@ -1158,7 +1158,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1295,6 +1295,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let assessment_list = path.ends_with("/follow-up-assessments");
             let work_package_list = path.ends_with("/work-packages");
             let issue_mapping_list = path.ends_with("/issue-mappings");
+            let workload_list = path.ends_with("/workload-snapshots");
             let release_baseline_list =
                 path.ends_with("/release-baselines") || path.ends_with("/maintenance-policies");
             let baseline_catalog = path.ends_with("/release-baseline-sources");
@@ -1332,6 +1333,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || assessment_list
                 || work_package_list
                 || issue_mapping_list
+                || workload_list
                 || release_baseline_list
                 || baseline_catalog
                 || baseline_deployments
@@ -1345,6 +1347,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
+                "after" if workload_list => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n >= 0)
+                }
                 "project_binding_id" if baseline_source => {
                     value.len() == 37
                         && value.starts_with("pmpb_")
@@ -2080,6 +2088,56 @@ mod tests {
                 "{suffix}"
             );
         }
+        let mut keyed = get(root);
+        keyed.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&keyed).is_err());
+    }
+
+    #[test]
+    fn workload_reads_allow_only_fixed_ids_and_bounded_64_bit_cursors() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/workload-snapshots";
+        let snapshot = "pmwl_22222222222222222222222222222222";
+        for suffix in [
+            "".to_string(),
+            "?after=0&limit=100".into(),
+            "?after=1000000000".into(),
+            "?after=9223372036854775807".into(),
+            "/current".into(),
+            format!("/{snapshot}"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?after=",
+            "?after=-1",
+            "?after=9223372036854775808",
+            "?after=0&after=1",
+            "?limit=",
+            "?limit=0",
+            "?limit=101",
+            "?limit=1&limit=2",
+            "?actor=",
+            "?idle=true",
+            "/latest",
+            "/pmwl_bad",
+            "/current?after=0",
+            "/current/capture",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        for suffix in ["?limit=1", "?actor=", "/capture", "/maintenance"] {
+            assert!(
+                validate_request(&get(&format!("{root}/{snapshot}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        assert!(validate_request(&request("POST", root)).is_err());
         let mut keyed = get(root);
         keyed.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&keyed).is_err());

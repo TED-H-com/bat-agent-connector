@@ -139,6 +139,7 @@ class ApiV1:
             pm_snapshots,
             pm_sprints,
             pm_work_packages,
+            pm_workload,
             pm_workspace,
         )
         pm_workspace.install(daemon.ops)
@@ -160,6 +161,7 @@ class ApiV1:
 
         pm_release_baselines.install(daemon.ops)
         pm_maintenance_policy.install(daemon.ops)
+        pm_workload.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -204,6 +206,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/workload-snapshots", self.pm_workload_snapshots, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/workload-snapshots/current", self.pm_workload_snapshot_current, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/workload-snapshots/(?P<snapshot_id>pmwl_[0-9a-f]{32})", self.pm_workload_snapshot, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-policies", self.pm_maintenance_policies, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-policies/current", self.pm_maintenance_policy_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-policies/(?P<policy_id>pmmp_[0-9a-f]{32})", self.pm_maintenance_policy, "observe"),
@@ -443,6 +448,7 @@ class ApiV1:
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
+                      self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
                       self.pm_release_baseline_sources, self.pm_release_baseline_releases,
@@ -606,14 +612,14 @@ class ApiV1:
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
-        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list"}:
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        lifecycle_page = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list"}
-        if lifecycle_page:
+        wide_cursor = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list", "pm_workload_snapshots_list"}
+        if wide_cursor:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
-            pattern = r"[0-9]{1,19}" if lifecycle_page and key == "after" else r"[0-9]{1,9}"
+            pattern = r"[0-9]{1,19}" if wide_cursor and key == "after" else r"[0-9]{1,9}"
             if not re.fullmatch(pattern, value):
                 raise OperationError("INVALID_PARAMS", f"{key} must be a positive integer", 422)
             params[key] = int(value)
@@ -743,6 +749,15 @@ class ApiV1:
     async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
         return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
 
+    async def pm_workload_snapshots(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_workload_snapshots_list", query, workspace_id=workspace_id)
+
+    async def pm_workload_snapshot_current(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_workload_snapshot_current_get", query, workspace_id=workspace_id)
+
+    async def pm_workload_snapshot(self, principal, query, workspace_id, snapshot_id, **_):
+        return self._pm_read(principal, "pm_workload_snapshot_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
+
     async def pm_maintenance_policies(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_maintenance_policies_list", query, workspace_id=workspace_id)
 
@@ -842,7 +857,7 @@ class ApiV1:
     async def capabilities(self, principal, **_):
         from . import pm_lifecycle
         fleet = self.daemon.fleet
-        from . import pm_maintenance_policy, pm_release_baselines, worktree_merge_operations
+        from . import pm_maintenance_policy, pm_release_baselines, pm_workload, worktree_merge_operations
         gh_cfg = self.daemon.ops.context["github_config"]
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
@@ -895,6 +910,7 @@ class ApiV1:
                                                     "governance": "pm.governance.record" in self.daemon.ops.actions,
                                                     "release_baselines": pm_release_baselines.capabilities(),
                                                     "maintenance_policy": pm_maintenance_policy.capabilities(),
+                                                    "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),
                                                     "package_handoff": {"action": "repository.continue", "contract": "pm-engineering-handoff/v1",

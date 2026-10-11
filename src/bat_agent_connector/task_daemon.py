@@ -79,6 +79,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_projects_list": "observe", "pm_work_list": "observe", "pm_evidence_list": "observe",
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
            "pm_governance_list": "observe", "pm_governance_get": "observe", "pm_governance_history_list": "observe",
+           "pm_workload_snapshots_list": "observe", "pm_workload_snapshot_get": "observe", "pm_workload_snapshot_current_get": "observe",
            "pm_maintenance_policies_list": "observe", "pm_maintenance_policy_get": "observe", "pm_maintenance_policy_current_get": "observe",
            "pm_release_baselines_list": "observe", "pm_release_baseline_get": "observe", "pm_release_baseline_current_get": "observe",
            "pm_release_baseline_sources_list": "observe", "pm_release_baseline_releases_list": "observe",

@@ -5,6 +5,9 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_workload_snapshots_list": ("workspace_id", "after", "limit"),
+    "pm_workload_snapshot_current_get": ("workspace_id",),
+    "pm_workload_snapshot_get": ("workspace_id", "snapshot_id"),
     "pm_lifecycle_get": ("workspace_id",),
     "pm_lifecycle_transitions_list": ("workspace_id", "after", "limit"),
     "pm_lifecycle_transition_get": ("workspace_id", "transition_id"),
@@ -93,6 +96,14 @@ def read(ops, principal, method, params):
         return pm_issue_mappings.list_mappings(ops, principal, workspace_id,
                                                after=params.get("after", 0), limit=params.get("limit", 50))
 
+    if method in {"pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get"}:
+        from . import pm_workload
+        if method == "pm_workload_snapshot_current_get":
+            return pm_workload.current_snapshot(ops, principal, workspace_id)
+        if method == "pm_workload_snapshot_get":
+            return pm_workload.get_snapshot(ops, principal, workspace_id, params.get("snapshot_id"))
+        return pm_workload.list_snapshots(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
     if method in {"pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get"}:
         from . import pm_maintenance_policy
         if method == "pm_maintenance_policy_current_get":
