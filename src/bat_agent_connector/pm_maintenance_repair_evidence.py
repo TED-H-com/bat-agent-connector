@@ -144,6 +144,8 @@ def progress(ops, parent):
         reason = 'PM_REPAIR_DEADLINE'
     if row['finished_at'] is not None:
         reason = 'PM_REPAIR_STOPPED_WITHOUT_START'
+    if (parent.get('result') or {}).get('outcome') == 'published_for_review':
+        reason = 'PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN' if row['finished_at'] is None else None
     try:
         repairs._guard(ops, parent)
         investment_blocked = None
@@ -153,6 +155,7 @@ def progress(ops, parent):
         'verification': verifications[-1] if verifications else None,
         'quality': [doc['evidence'] for doc in docs if doc['evidence']['kind'] == 'quality'],
         'publication': published['status'] if published else 'not_admitted',
+        'outcome': (parent.get('result') or {}).get('outcome'),
         'acceptance': [doc['evidence'] for doc in docs if doc['evidence']['kind'] == 'acceptance'],
         'delivery_receipts': delivery, 'blocked_reason': reason, 'new_investment_blocked_reason': investment_blocked,
         'required_ci': 'unproven',
