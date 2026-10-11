@@ -54,10 +54,9 @@ async def test_fixed_spec_read_parity_routes_and_original_source_withdrawal(fixe
         assert status == 200, caps
         assert caps['features']['pm_workspaces']['spec_materialization']['action'] == 'pm.spec.materialize'
         assert not next(a for a in caps['actions'] if a['action']=='pm.spec.materialize')['allowed']
-        project_id = w['package']['document']['context']['work_ref']['project_id']
-        d.ops.db.execute("UPDATE projects SET repositories='[]' WHERE project_id=?", (project_id,))
+        d.ops.db.execute("DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?", (wid, OWNER.actor))
         status, hidden = await http(w['port'], 'GET', root, tok=auth)
-        assert status == 200 and hidden['materializations'] == [] and hidden['source_visibility_filtered']
+        assert status == 404, hidden
         assert ident not in json.dumps(hidden)
         for path in [root+'/'+ident, '/api/v1/operations/'+done['operation_id'],
                      '/api/v1/artifacts/'+done['result']['artifact_ref']['artifact_id']+'/revisions/1']:

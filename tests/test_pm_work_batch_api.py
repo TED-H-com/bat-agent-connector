@@ -48,10 +48,9 @@ async def test_shared_batch_original_operation_reads_and_source_withdrawal(fixed
         status, caps = await http(w['port'], 'GET', '/api/v1/capabilities', tok=token(d, OWNER.actor, 'observe', 'manage'))
         assert status == 200 and caps['features']['pm_workspaces']['work_batches'] == batches.capabilities(d.ops)
         assert not any(a['allowed'] for a in caps['actions'] if a['action'].startswith('pm.work_batch.'))
-        project = w['package']['document']['context']['work_ref']['project_id']
-        d.ops.db.execute("UPDATE projects SET repositories='[]' WHERE project_id=?", (project,))
+        d.ops.db.execute("DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?", (wid, OWNER.actor))
         status, page = await http(w['port'], 'GET', root, tok=auth)
-        assert status == 200 and page['batches'] == [] and page['visibility_filtered']
+        assert status == 404, page
         assert (await http(w['port'], 'GET', root+'/'+bid, tok=auth))[0] == 404
         assert (await http(w['port'], 'GET', '/api/v1/operations/'+parent['operation_id'], tok=auth))[0] == 404
         status, events = await http(w['port'], 'GET', '/api/v1/events?after=0&limit=500', tok=auth)
