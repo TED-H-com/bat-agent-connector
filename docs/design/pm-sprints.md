@@ -7,7 +7,7 @@ start, stop, take over or modify sessions, worktrees, work items, attempts or wo
 execution. An explicit selection is a management choice, not dispatch authority.
 
 This is an additive schema with no `user_version` allocation. `install(ops)` is the
-integration hook. The domain module does not install public HTTP/MCP routes or UI.
+integration hook. The shared API layer installs the domain alongside its HTTP/RPC/MCP reads and client controls.
 
 ## Commitments and fixed references
 
@@ -150,3 +150,24 @@ Mutable heads/current state are derived management pointers. These actions do no
 alter accepted plans, PM messages, writer slots, work claims, quality assessments,
 Git/PR facts or deployment evidence. W16 meetings, evidence-backed Increment
 assessment and Sprint-to-execution authorization remain explicit follow-up work.
+
+## Shared reads and client
+
+Under `/api/v1/pm/workspaces/{workspace_id}`, GET paths are:
+
+- `/sprint-artifacts`, `/sprint-artifacts/{kind}?after=0&limit=50`, and
+  `/sprint-artifacts/{kind}/{revision_id}`, for kind `product_goal|dod|backlog`.
+- `/sprints?after=0&limit=50` and `/sprints/{sprint_id}?history_limit=50`.
+- `/sprints/{sprint_id}/history/{kind}?after=0&limit=50`, for `goals|selections|events`.
+
+The corresponding MCP/RPC names are `pm_sprint_artifacts_get`,
+`pm_sprint_artifact_revisions_list`, `pm_sprint_artifact_get`, `pm_sprints_list`,
+`pm_sprint_get` and `pm_sprint_history_list`. Query keys are exact, limits are
+bounded, and current workspace membership is checked on every read. Tauri's
+central bridge allows the same specific paths and query parameters.
+
+The shared workspace home places Sprint Goal, selected work, period and DoD
+together. Editors and original history expand in place. Existing durable forms
+preserve unsent drafts and original uncertain operation contents/keys. Fresh
+submission uses the reviewed baseline; reading changed versions alone does not
+adopt them into a pending request or modify an active Sprint.

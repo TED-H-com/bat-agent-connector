@@ -5,6 +5,12 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_sprint_artifacts_get": ('workspace_id',),
+    "pm_sprint_artifact_revisions_list": ('workspace_id', 'kind', 'after', 'limit'),
+    "pm_sprint_artifact_get": ('workspace_id', 'kind', 'revision_id'),
+    "pm_sprints_list": ('workspace_id', 'after', 'limit'),
+    "pm_sprint_get": ('workspace_id', 'sprint_id', 'history_limit'),
+    "pm_sprint_history_list": ('workspace_id', 'sprint_id', 'kind', 'after', 'limit'),
     "pm_plan_compare": ("workspace_id", "from_revision_id", "to_revision_id", "binding_ids", "journal_cursor"),
     "pm_roadmap_get": ("workspace_id",),
     "pm_roadmap_revisions_list": ("workspace_id", "kind", "after", "limit"),
@@ -40,6 +46,21 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_sprint_artifacts_get", "pm_sprint_artifact_revisions_list", "pm_sprint_artifact_get",
+                   "pm_sprints_list", "pm_sprint_get", "pm_sprint_history_list"}:
+        from . import pm_sprints
+        if method == "pm_sprint_artifacts_get":
+            return pm_sprints.get_artifacts(ops, principal, workspace_id)
+        if method == "pm_sprint_artifact_get":
+            return pm_sprints.get_artifact(ops, principal, workspace_id, params.get("kind"), params.get("revision_id"))
+        if method == "pm_sprint_get":
+            return pm_sprints.get_sprint(ops, principal, workspace_id, params.get("sprint_id"), history_limit=params.get("history_limit", 50))
+        page = {"after": params.get("after", 0), "limit": params.get("limit", 50)}
+        if method == "pm_sprints_list":
+            return pm_sprints.list_sprints(ops, principal, workspace_id, **page)
+        if method == "pm_sprint_history_list":
+            return pm_sprints.list_history(ops, principal, workspace_id, params.get("sprint_id"), params.get("kind"), **page)
+        return pm_sprints.list_revisions(ops, principal, workspace_id, params.get("kind"), **page)
     if method == "pm_plan_compare":
         from . import pm_plan_diff
         if not all(isinstance(params.get(key), str) and params[key] for key in ("from_revision_id", "to_revision_id")):

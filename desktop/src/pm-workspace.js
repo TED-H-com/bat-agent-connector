@@ -1,4 +1,5 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+import {workspaceSprints} from './pm-sprints.js';
 import {workspaceRoadmap} from './pm-roadmap.js';
 import {projectBrief} from './pm-brief.js';
 import {workspaceEvidence} from './pm-evidence.js';
@@ -152,6 +153,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   if(roadmap)body.insertBefore(roadmap.box,content);
+  const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
+    ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+  if(sprints)body.insertBefore(sprints.box,content);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -474,6 +478,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (evidence) await evidence.refresh();
       if (brief) await brief.refresh();
       if (roadmap) await roadmap.refresh();
+      if (sprints) await sprints.refresh();
       nativeAnalysis?.update(runs?.runs || []);
       updateForms();
     } catch (error) {
