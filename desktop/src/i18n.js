@@ -1,4 +1,5 @@
 import {maintenanceReviewStrings} from './pm-maintenance-review-strings.js';
+import {pmSpecMaterializationStrings} from './pm-spec-materialization-strings.js';
 import {maintenanceCheckStrings} from './pm-maintenance-checks-strings.js';
 import {maintenanceObservationStrings} from './pm-maintenance-observation-strings.js';
 import {pmMaintenancePolicyStrings} from './pm-maintenance-policy-strings.js';
@@ -12,6 +13,7 @@ const STRINGS = {
     ...pmStrings["zh-TW"],
     ...pmReleaseBaselineStrings["zh-TW"],
     ...pmPackageHandoffStrings["zh-TW"],
+    ...pmSpecMaterializationStrings["zh-TW"],
     ...pmMaintenancePolicyStrings["zh-TW"],
     ...maintenanceCheckStrings["zh-TW"],
     ...maintenanceReviewStrings["zh-TW"],
@@ -892,6 +894,7 @@ const STRINGS = {
     ...pmStrings.en,
     ...pmReleaseBaselineStrings.en,
     ...pmPackageHandoffStrings.en,
+    ...pmSpecMaterializationStrings.en,
     ...pmMaintenancePolicyStrings.en,
     ...maintenanceCheckStrings.en,
     ...maintenanceReviewStrings.en,

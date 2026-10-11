@@ -20,6 +20,8 @@
   [data-pm-maintenance-review] .pm-review-checks label,[data-pm-maintenance-review] .pm-review-ack{min-height:44px}
   [data-pm-maintenance-review]>.pm-heading{flex-direction:column;align-items:start}
 }
+[data-pm-package-handoff] .pm-fields{grid-template-columns:minmax(0,1fr);min-width:0}
+[data-pm-package-handoff] select{min-width:0;max-width:100%;width:100%}
 [data-pm-maintenance-checks] { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; overflow-wrap: anywhere; }
 [data-pm-maintenance-checks] h4 { font-size: 14px; margin: 8px 0; }
 [data-pm-maintenance-checks] p { margin: 8px 0; }

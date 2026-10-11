@@ -141,6 +141,242 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-spec-materialization.js
+var id = /^pmsp_[0-9a-f]{32}$/;
+var digest$5 = /^[0-9a-f]{64}$/;
+var sha$1 = /^[0-9a-f]{40}$/;
+var artifactRef = (row) => Object.fromEntries([
+	"artifact_id",
+	"revision",
+	"digest"
+].map((key) => [key, row.artifact_ref[key]]));
+function checkSpecMaterialization(value, workspaceId, selected, { full = false, original = null } = {}) {
+	const fail = () => {
+		throw Error("PM_SPEC_RESPONSE_MISMATCH");
+	}, row = value;
+	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$5.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
+	const receipt = row.git_receipt;
+	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$1.test(receipt.commit_sha) || !sha$1.test(receipt.tree_sha) || !digest$5.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$5.test(value))) fail();
+	if (original && (JSON.stringify(fixedSpecSelection(row, workspaceId)) !== JSON.stringify(fixedSpecSelection(original, workspaceId)) || row.operation_id !== original.operation_id || receipt.commit_sha !== original.git_receipt.commit_sha || receipt.document_digest !== original.git_receipt.document_digest)) fail();
+	if (full) {
+		const doc = row.document, ref = doc?.package_ref;
+		if (doc?.schema !== "batc.pm.spec-materialization/v1" || doc.workspace_id !== workspaceId || ref?.workspace_id !== workspaceId || ref.package_id !== selected.package_id || ref.document_digest !== selected.document_digest || doc.package?.package_id !== selected.package_id || doc.package.workspace_id !== workspaceId || doc.verification !== "unassessed" || doc.delivery !== "not_observed" || doc.layout !== "connector_owned_revision_adapter" || doc.openspec_cli_compatibility !== "not_claimed" || doc.change_id !== receipt.change_id || !Array.isArray(doc.tasks) || !Array.isArray(doc.source_chain)) fail();
+		const seen = new Set();
+		for (const task of doc.tasks) {
+			if (!/^pmt_[0-9a-f]{32}$/.test(task.task_id) || typeof task.key !== "string" || seen.has(task.task_id) || !["active", "removed"].includes(task.state) || !Array.isArray(task.history)) fail();
+			seen.add(task.task_id);
+		}
+	}
+	return row;
+}
+async function readSpecMaterializations(api, workspaceId, selected, valid = () => true) {
+	let after = 0, filtered = false;
+	const rows = [], seen = new Set(), path = `/pm/workspaces/${encodeURIComponent(workspaceId)}/spec-materializations`;
+	for (let page = 0; page < 20; page++) {
+		const data = await api("GET", `${path}?package_id=${encodeURIComponent(selected.package_id)}&after=${after}&limit=50`);
+		if (!valid()) return null;
+		if (data?.version !== 1 || data.workspace_id !== workspaceId || !Array.isArray(data.materializations) || typeof data.source_visibility_filtered !== "boolean" || data.next_after !== null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error("PM_SPEC_RESPONSE_MISMATCH");
+		for (const row of data.materializations) {
+			checkSpecMaterialization(row, workspaceId, selected);
+			if (seen.has(row.materialization_id)) throw Error("PM_SPEC_RESPONSE_MISMATCH");
+			seen.add(row.materialization_id);
+			rows.push(row);
+		}
+		filtered ||= data.source_visibility_filtered;
+		if (data.next_after === null) return {
+			rows,
+			filtered
+		};
+		after = data.next_after;
+	}
+	throw Error("PM_SPEC_HISTORY_BOUND");
+}
+function fixedSpecSelection(row, workspaceId) {
+	return {
+		pm_spec_ref: {
+			workspace_id: workspaceId,
+			materialization_id: row.materialization_id,
+			document_digest: row.document_digest
+		},
+		artifacts: [artifactRef(row)]
+	};
+}
+function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox, namespace, onSourceFailure = () => {} }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.spec.materialize";
+	let selected = null, serial = 0, ready = false, record = null, eligible = false, editor = null;
+	const editors = new Map(), facts = h("div"), status = h("div", { role: "status" }), editorView = h("div"), summary = h("p", { class: "muted" });
+	const refreshButton = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("psm_refresh"));
+	const element = h("section", {
+		class: "pm-packages",
+		"data-pm-spec-materialization": ""
+	}, h("details", {}, h("summary", {}, t("psm_title")), h("p", { class: "muted" }, t("psm_intro")), summary, refreshButton, status, facts, editorView));
+	const cap = () => caps()?.features?.pm_workspaces?.spec_materialization;
+	const supported = () => cap()?.version === 1 && cap().action === action && cap().immutable === true && cap().owned_git_chain === true;
+	const valid = (ticket) => {
+		try {
+			alive();
+			return serial === ticket;
+		} catch {
+			return false;
+		}
+	};
+	const writer = () => supported() && permitted(false) && ["owner", "contributor"].includes(workspace()?.membership?.role) && [
+		"observe",
+		"manage",
+		"start"
+	].every((scope) => caps()?.scopes?.includes(scope));
+	const text = (key) => h("p", { class: "muted" }, t(key));
+	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), String(value));
+	const detail = (key, ...nodes) => h("details", {}, h("summary", {}, t(key)), ...nodes);
+	const op = (value) => h("a", { href: `#/op/${encodeURIComponent(value)}` }, t("pm_operation"));
+	function update() {
+		refreshButton.disabled = !selected;
+		summary.textContent = selected ? `${selected.document.title} · ${t("ph_preparation")} ${selected.sequence}` : t("psm_select");
+		for (const value of editors.values()) value.update();
+	}
+	function clear() {
+		ready = false;
+		eligible = false;
+		record = null;
+		facts.replaceChildren();
+		status.replaceChildren();
+		editorView.hidden = true;
+		update();
+	}
+	function withdraw() {
+		serial++;
+		selected = null;
+		clear();
+		editorView.replaceChildren();
+		editor = null;
+	}
+	function fail(error) {
+		clear();
+		status.replaceChildren(text("psm_unavailable"), errorBox(error.message?.startsWith("PM_SPEC_") ? Error(t("psm_invalid")) : error));
+		if ([
+			401,
+			403,
+			404
+		].includes(error.status)) {
+			selected = null;
+			editorView.replaceChildren();
+			editor = null;
+			onSourceFailure();
+			update();
+		}
+	}
+	function bind(row) {
+		if (!editors.has(row.package_id)) {
+			const guardedApi = async (...args) => {
+				const ticket = serial;
+				try {
+					return await api(...args);
+				} catch (error) {
+					if (valid(ticket) && [
+						401,
+						403,
+						404
+					].includes(error.status)) fail(error);
+					throw error;
+				}
+			};
+			const value = form({
+				namespace: `${namespace}.spec-materialization.${row.package_id}`,
+				api: guardedApi,
+				action,
+				target: {
+					workspace_id: workspaceId,
+					package_id: row.package_id
+				},
+				fields: {},
+				params: () => ({}),
+				preconditions: () => ({
+					expected_package_digest: row.document_digest,
+					expected_scope_revision: row.document.context.plan_ref.scope_revision
+				}),
+				permitted: () => ready && eligible && !record && selected?.package_id === row.package_id && writer(),
+				recoverPermitted: () => ready && selected?.package_id === row.package_id && writer(),
+				label: "psm_create",
+				extra: text("psm_boundary"),
+				onSaved: async (result) => {
+					if (result?.status !== "materialized" || result.workspace_id !== workspaceId || result.package_id !== row.package_id || result.execution_authorized !== false || !id.test(result.materialization_id)) throw Error(t("psm_invalid"));
+					await refresh();
+				}
+			});
+			editors.set(row.package_id, value);
+		}
+		editor = editors.get(row.package_id);
+		editorView.replaceChildren(editor.box);
+		update();
+	}
+	function render(row) {
+		const doc = row.document, receipt = row.git_receipt, ref = row.artifact_ref;
+		const tasks = doc.tasks.map((task) => h("details", {}, h("summary", {}, task.key), line("psm_task_key", task.key), line("psm_task_id", task.task_id), text(task.state === "active" ? "psm_active" : "psm_removed"), ...task.history.map((history) => h("div", { class: "pm-fact" }, line("wp_package_id", history.package_id), text(history.state === "active" ? "psm_active" : "psm_removed"), history.task ? h("p", { class: "pm-note-text" }, history.task.description) : null))));
+		facts.replaceChildren(h("h4", {}, t("psm_saved")), text("psm_unassessed"), line("psm_commit", receipt.commit_sha), h("p", {}, h("a", { href: `#/artifact-review/artifact/${encodeURIComponent(ref.artifact_id)}/${ref.revision}` }, t("psm_open_artifact"))), detail("psm_tasks", text("psm_task_help"), ...tasks), detail("psm_proof", line("psm_identity", row.materialization_id), line("wp_package_id", row.package_id), line("psm_artifact", ref.artifact_id), line("psm_revision", ref.revision), line("psm_artifact_digest", row.document_digest), line("psm_files_digest", receipt.document_digest), ...Object.entries(receipt.file_digests).map(([path, hash]) => h("p", { class: "pm-source" }, path, " · ", hash)), op(row.operation_id)));
+	}
+	async function refresh() {
+		if (!selected) return;
+		const row = selected, ticket = ++serial;
+		clear();
+		status.replaceChildren(text("psm_reading"));
+		try {
+			if (!supported()) throw Error(t("psm_not_supported"));
+			const [pkg, readiness, history] = await Promise.all([
+				api("GET", `${endpoint}/work-packages/${row.package_id}`),
+				api("GET", `${endpoint}/work-packages/${row.package_id}/readiness`),
+				readSpecMaterializations(api, workspaceId, row, () => valid(ticket))
+			]);
+			if (!valid(ticket)) return;
+			if (pkg?.version !== 1 || pkg.workspace_id !== workspaceId || pkg.package?.package_id !== row.package_id || pkg.package.document_digest !== row.document_digest || pkg.package.document.context.plan_ref.scope_revision !== row.document.context.plan_ref.scope_revision || readiness?.version !== 1 || readiness.workspace_id !== workspaceId || readiness.package_id !== row.package_id || readiness.document_digest !== row.document_digest || readiness.execution_authorized !== false || !Array.isArray(readiness.checks)) throw Error(t("psm_invalid"));
+			eligible = !history.filtered && readiness.checks.every((check) => check.status === "passed" || check.check === "spec_code_alignment");
+			if (history.rows.length > 1) throw Error(t("psm_invalid"));
+			if (history.rows.length) {
+				const data = await api("GET", `${endpoint}/spec-materializations/${history.rows[0].materialization_id}`);
+				if (!valid(ticket)) return;
+				if (data?.version !== 1 || data.workspace_id !== workspaceId || data.materialization?.materialization_id !== history.rows[0].materialization_id || data.materialization.document_digest !== history.rows[0].document_digest) throw Error(t("psm_invalid"));
+				record = checkSpecMaterialization(data.materialization, workspaceId, row, {
+					full: true,
+					original: history.rows[0]
+				});
+				render(record);
+			}
+			ready = true;
+			editorView.hidden = false;
+			status.replaceChildren();
+			if (history.filtered) status.append(text("psm_filtered"));
+			else if (!record) status.append(text(eligible ? "psm_empty" : "psm_blocked"));
+			if (!writer()) status.append(text("psm_permissions"));
+			bind(row);
+			update();
+		} catch (error) {
+			if (valid(ticket)) fail(error);
+		}
+	}
+	async function setPackage(row) {
+		withdraw();
+		if (!row) return;
+		try {
+			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$5.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
+			selected = row;
+			bind(row);
+			await refresh();
+		} catch (error) {
+			fail(error);
+		}
+	}
+	update();
+	return {
+		element,
+		setPackage,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-governance.js
 function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = [
@@ -907,6 +1143,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		"start"
 	].every((scope) => caps()?.scopes?.includes(scope)) && caps()?.actions?.some((row) => row.action === "repository.continue" && row.allowed);
 	const write = () => available() && writer();
+	const fixedArtifacts = () => caps()?.features?.pm_workspaces?.spec_materialization?.version === 1 && caps()?.features?.pm_workspaces?.package_handoff?.source_materialization === "bounded_full_prompt_or_fixed_spec_artifact";
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -965,6 +1202,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		update();
 	}
 	function fail(error) {
+		if (error.message?.startsWith("PM_SPEC_")) error = Error(t("ph_invalid"));
 		if ([
 			401,
 			403,
@@ -993,6 +1231,14 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 			}), model = input("start_model", {
 				required: false,
 				max: 256
+			});
+			const spec = h("select", { "aria-label": t("ph_spec_attachment") }, h("option", { value: "" }, t("ph_inline")));
+			const specBox = h("div", {}, labelled("ph_spec_attachment", spec), h("p", { class: "muted" }, t("ph_spec_help")));
+			spec.addEventListener("change", () => {
+				if (value?.locked()) return;
+				prepared = null;
+				facts.replaceChildren();
+				update();
 			});
 			const agent = h("select", { "aria-label": t("ph_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
 			agent.dataset.pmDefault = "claude";
@@ -1036,7 +1282,8 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 					prompt,
 					agent,
 					title,
-					model
+					model,
+					spec_selection: spec
 				},
 				params: (values) => {
 					return {
@@ -1065,7 +1312,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 					outcome.replaceChildren(h("p", {}, t("ph_started")), h("a", { href: `#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}` }, t("ph_open")));
 					update();
 				},
-				extra: h("div", { class: "pm-fields" }, warning, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), h("p", { class: "muted" }, t("ph_agent_help")), h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)))
+				extra: h("div", { class: "pm-fields" }, warning, specBox, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), h("p", { class: "muted" }, t("ph_agent_help")), h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)))
 			});
 			const original = value.update;
 			value.update = () => {
@@ -1078,6 +1325,8 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 					}
 					original();
 					warning.hidden = value.locked() || !fixed.value || matches();
+					specBox.hidden = !fixedArtifacts() && !spec.value;
+					spec.disabled = value.locked() || !authorized() || !fixedArtifacts() || reading;
 					if (!value.locked() && authorized()) for (const field of [
 						basis,
 						prompt,
@@ -1123,14 +1372,34 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		update();
 		try {
 			const id = selected.package_id, work = selected.document.context.work_ref;
-			const [pkg, readiness, projectData] = await Promise.all([
+			const [pkg, readiness, projectData, specs] = await Promise.all([
 				api("GET", `${endpoint}/${id}`),
 				api("GET", `${endpoint}/${id}/readiness`),
-				api("GET", `/projects/${encodeURIComponent(work.project_id)}`)
+				api("GET", `/projects/${encodeURIComponent(work.project_id)}`),
+				fixedArtifacts() ? readSpecMaterializations(api, workspaceId, selected, () => valid(ticket)) : Promise.resolve({
+					rows: [],
+					filtered: false
+				})
 			]);
 			if (!valid(ticket) || active?.package_id !== id) return;
 			const row = packageCheck(pkg, id, selected.document_digest);
 			readinessCheck(readiness, row);
+			const choice = editor.fields.spec_selection, chosen = choice.value;
+			choice.replaceChildren(h("option", { value: "" }, t("ph_inline")), ...specs.rows.map((spec) => h("option", { value: spec.materialization_id }, `${t("ph_fixed_attachment")} · ${spec.sequence}`)));
+			if (chosen && !specs.rows.some((spec) => spec.materialization_id === chosen)) choice.append(h("option", { value: chosen }, t("ph_spec_missing")));
+			choice.value = chosen;
+			let fixedSpec = null;
+			if (chosen) {
+				const original = specs.rows.find((spec) => spec.materialization_id === chosen);
+				if (!original) throw Error(t("ph_spec_missing"));
+				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/spec-materializations/${chosen}`);
+				if (!valid(ticket) || active?.package_id !== id) return;
+				if (data?.version !== 1 || data.workspace_id !== workspaceId || data.materialization?.materialization_id !== chosen || data.materialization.document_digest !== original.document_digest) throw Error(t("ph_invalid"));
+				fixedSpec = checkSpecMaterialization(data.materialization, workspaceId, row, {
+					full: true,
+					original
+				});
+			}
 			const project = projectData.project;
 			if (project?.project_id !== work.project_id || project.archived || !Number.isSafeInteger(project.version) || project.version < 1 || !project.repositories?.some((repository) => repository.toLowerCase() === row.document.code_source.repository.toLowerCase())) throw Error(t("ph_invalid"));
 			const code = row.document.code_source;
@@ -1153,7 +1422,8 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 							workspace_id: workspaceId,
 							package_id: id,
 							document_digest: row.document_digest
-						}
+						},
+						...fixedSpec ? fixedSpecSelection(fixedSpec, workspaceId) : {}
 					},
 					preconditions: {
 						repository_id: code.repository_id,
@@ -1164,7 +1434,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 				}
 			};
 			const proof = h("details", {}, h("summary", {}, t("ph_sources")), h("p", { class: "mono" }, `${t("ph_base")}: ${code.source_sha}`), ...(row.document.sources?.documents || []).map((source) => h("p", { class: "mono" }, `${t("ph_spec")}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)), h("p", { class: "mono" }, `${code.host} · ${code.workspace_id}`), h("p", { class: "mono" }, row.package_id), h("p", { class: "mono" }, row.document_digest), h("p", { class: "mono" }, work.work_fingerprint));
-			facts.replaceChildren(h("h4", {}, t("ph_reviewed")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), h("p", { class: "muted" }, t("ph_separate")), proof);
+			facts.replaceChildren(h("h4", {}, t("ph_reviewed")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), h("p", { class: "muted" }, t("ph_separate")), fixedSpec ? h("p", { class: "pm-source" }, t("ph_fixed_attachment"), ": ", fixedSpec.materialization_id, " · ", fixedSpec.artifact_ref.artifact_id, " · ", fixedSpec.document_digest) : null, specs.filtered ? h("p", { class: "muted" }, t("ph_spec_filtered")) : null, proof);
 			status.replaceChildren();
 		} catch (error) {
 			if (valid(ticket)) fail(error);
@@ -10402,6 +10672,23 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		labelled,
 		errorBox
 	}) : null;
+	const materialization = workspaceId && !threadId && caps()?.features?.pm_workspaces?.spec_materialization?.version === 1 ? workspaceSpecMaterialization({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		caps,
+		permitted,
+		form,
+		errorBox,
+		namespace,
+		onSourceFailure: () => {
+			engineering?.withdraw();
+			handoff?.withdraw();
+		}
+	}) : null;
 	const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available ? workspacePackageHandoff({
 		h,
 		t,
@@ -10416,7 +10703,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		labelled,
 		errorBox,
 		namespace,
-		onSourceFailure: () => engineering?.withdraw()
+		onSourceFailure: () => {
+			engineering?.withdraw();
+			materialization?.withdraw();
+		}
 	}) : null;
 	const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare ? workspaceWorkPackages({
 		h,
@@ -10428,9 +10718,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		onSelection: (row) => {
 			issues?.setPackage(row);
 			handoff?.setPackage(row);
+			materialization?.setPackage(row);
 		}
 	}) : null;
 	if (engineering) body.insertBefore(engineering.element, specifications?.element || content);
+	if (materialization) body.insertBefore(materialization.element, specifications?.element || content);
 	if (handoff) body.insertBefore(handoff.element, specifications?.element || content);
 	if (issues) body.insertBefore(issues.element, specifications?.element || content);
 	const sourceSections = () => [
@@ -10449,6 +10741,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		specifications?.element,
 		followUp?.element,
 		engineering?.element,
+		materialization?.element,
 		handoff?.element,
 		issues?.element
 	].filter(Boolean);
@@ -10967,6 +11260,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refresh.disabled = true;
 		lifecycle?.withdraw();
 		engineering?.withdraw();
+		materialization?.withdraw();
 		handoff?.withdraw();
 		issues?.withdraw();
 		releaseBaselines?.withdraw();
@@ -11068,6 +11362,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				specifications,
 				followUp,
 				engineering,
+				materialization,
 				handoff,
 				issues
 			]) {
@@ -11086,6 +11381,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				brief?.withdraw();
 				lifecycle?.withdraw();
 				engineering?.withdraw();
+				materialization?.withdraw();
 				handoff?.withdraw();
 				issues?.withdraw();
 				releaseBaselines?.withdraw();
@@ -14884,7 +15180,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 }
 //#endregion
 //#region src/pm-maintenance-review-strings.js
-var rows = {
+var rows$1 = {
 	selection_required: ["Complete the required source, discussion or period selection before recording.", "請先完成必要的來源、討論或期間選取，再保存紀錄。"],
 	source_missing: ["Original choice is unavailable", "原選取目前無法讀取"],
 	history_bound: ["The history exceeds this view’s bound. Narrow the selection before recording.", "歷史超過此畫面的範圍，請先縮小選取再記錄。"],
@@ -15062,7 +15358,43 @@ var rows = {
 	missed_weeks: ["Coalesced missed weeks", "已合併的漏跑週數"],
 	missed_help: ["This report covers the latest due period. Earlier missed weeks were not checked.", "這份報告只涵蓋最近到期期間，更早漏跑週期未經檢查。"]
 };
-var maintenanceReviewStrings = Object.fromEntries(["en", "zh-TW"].map((locale, index) => [locale, Object.fromEntries(Object.entries(rows).map(([key, value]) => ["pmrv_" + key, value[index]]))]));
+var maintenanceReviewStrings = Object.fromEntries(["en", "zh-TW"].map((locale, index) => [locale, Object.fromEntries(Object.entries(rows$1).map(([key, value]) => ["pmrv_" + key, value[index]]))]));
+//#endregion
+//#region src/pm-spec-materialization-strings.js
+var rows = {
+	title: ["Save fixed specification artifacts", "保存固定規格產物"],
+	intro: ["Save this engineering package in the owned PM worktree and as an immutable attachment for implementation.", "將這份工程工作包保存至自有 PM worktree，並建立可供實作使用的不可變附件。"],
+	select: ["Select an engineering work package above.", "請先在上方選取工程工作包。"],
+	refresh: ["Refresh specification artifacts", "重新讀取規格產物"],
+	create: ["Save fixed specification", "保存固定規格"],
+	boundary: ["This writes planning artifacts only. Starting implementation remains a separate handoff.", "此處只寫入規劃產物；開始實作仍是另一個交接操作。"],
+	unavailable: ["The specification or its original sources are unavailable. Original requests remain saved for recovery.", "規格或其原始來源目前無法讀取；原請求仍保留以供查回。"],
+	invalid: ["The response does not match the original specification and Git receipt.", "回應與原始規格及 Git 收據不符。"],
+	not_supported: ["This connection does not advertise fixed specification materialization.", "此連線未提供固定規格產物功能。"],
+	reading: ["Reading the fixed package, readiness and original artifacts…", "讀取固定工作包、就緒狀態與原產物…"],
+	empty: ["No completed materialization is saved for this package.", "這份工作包尚無已完成的產物保存紀錄。"],
+	blocked: ["Current scope, work or dependency checks prevent a new materialization.", "目前範圍、工作或相依檢查不允許新保存操作。"],
+	filtered: ["Some original artifact records are hidden by source access. This is not an empty history.", "部分原產物紀錄因來源權限而隱藏，不能視為沒有歷史。"],
+	permissions: ["Saving requires current workspace write membership and observe, manage and start scopes.", "保存需要目前工作區寫入資格，以及 observe、manage 與 start 權限。"],
+	saved: ["Fixed specification saved", "固定規格已保存"],
+	unassessed: ["The original Git write is verified. Implementation quality and delivery remain unassessed.", "已核對原始 Git 寫入；實作品質與交付仍未評估。"],
+	commit: ["Verified PM commit", "已核對的 PM commit"],
+	open_artifact: ["Open fixed specification attachment", "開啟固定規格附件"],
+	tasks: ["Stable task identities and revisions", "穩定任務身分與修訂"],
+	task_help: ["Task keys preserve identity through reordered text and removals. Planning markers do not prove completed implementation.", "任務 key 在文字重排與移除後仍保留身分；規劃標記不代表實作完成。"],
+	task: ["Task history", "任務歷史"],
+	task_key: ["Authored task key", "撰寫時的任務 key"],
+	task_id: ["Stable task ID", "穩定任務 ID"],
+	active: ["Included in this revision", "納入此修訂"],
+	removed: ["Removed from this revision · history retained", "已從此修訂移除 · 保留歷史"],
+	proof: ["Original artifact and Git proof", "原附件與 Git 證據"],
+	identity: ["Materialization", "產物保存紀錄"],
+	artifact: ["Specification attachment", "規格附件"],
+	revision: ["Attachment revision", "附件版次"],
+	artifact_digest: ["Specification attachment digest", "規格附件摘要值"],
+	files_digest: ["Generated file-set digest", "產生檔案集摘要值"]
+};
+var pmSpecMaterializationStrings = Object.fromEntries(["en", "zh-TW"].map((locale, index) => [locale, Object.fromEntries(Object.entries(rows).map(([key, value]) => ["psm_" + key, value[index]]))]));
 //#endregion
 //#region src/pm-maintenance-checks-strings.js
 var maintenanceCheckStrings = {
@@ -15643,6 +15975,12 @@ var pmReleaseBaselineStrings = {
 //#region src/pm-package-handoff-strings.js
 var pmPackageHandoffStrings = {
 	en: {
+		ph_spec_attachment: "Specification delivery",
+		ph_inline: "Complete spec in first prompt",
+		ph_fixed_attachment: "Fixed specification attachment",
+		ph_spec_help: "Select a saved attachment when needed, then review this handoff again. The exact attachment revision and digest will be preserved.",
+		ph_spec_missing: "The originally selected specification attachment is unavailable.",
+		ph_spec_filtered: "Some specification attachments are hidden by current source access.",
 		ph_workspace: "Selected BAT workspace",
 		ph_title: "Implement the selected work package",
 		ph_intro: "Start one managed BAT session from this fixed package. The original specification and work relationship stay attached to the attempt.",
@@ -15674,6 +16012,12 @@ var pmPackageHandoffStrings = {
 		ph_project_version: "Project version"
 	},
 	"zh-TW": {
+		ph_spec_attachment: "規格交付方式",
+		ph_inline: "在首則指示中包含完整規格",
+		ph_fixed_attachment: "固定規格附件",
+		ph_spec_help: "需要時選取已保存附件，再重新核對此次交接；保留附件的精確版次與摘要值。",
+		ph_spec_missing: "原選取的規格附件目前無法讀取。",
+		ph_spec_filtered: "部分規格附件因目前來源權限而隱藏。",
 		ph_workspace: "所選 BAT 工作區",
 		ph_title: "實作所選工程工作包",
 		ph_intro: "依這份固定工作包開啟一個自有 BAT session；原始規格與工作關聯會保留在這次執行中。",
@@ -18002,6 +18346,7 @@ var STRINGS = {
 		...pmStrings["zh-TW"],
 		...pmReleaseBaselineStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
+		...pmSpecMaterializationStrings["zh-TW"],
 		...pmMaintenancePolicyStrings["zh-TW"],
 		...maintenanceCheckStrings["zh-TW"],
 		...maintenanceReviewStrings["zh-TW"],
@@ -19458,6 +19803,7 @@ var STRINGS = {
 		...pmStrings.en,
 		...pmReleaseBaselineStrings.en,
 		...pmPackageHandoffStrings.en,
+		...pmSpecMaterializationStrings.en,
 		...pmMaintenancePolicyStrings.en,
 		...maintenanceCheckStrings.en,
 		...maintenanceReviewStrings.en,

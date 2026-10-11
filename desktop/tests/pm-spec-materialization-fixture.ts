@@ -26,9 +26,9 @@ export function specFixture(){
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),pathname=url.pathname;
     if(pathname==='/spec-ui-config')return {status:200,data:{stage:base.fixture.state.stage}};
-    if(pathname==='/capabilities'){
-      const reply=await base.dispatch(input);if(state.enabled)reply.data.features.pm_workspaces.spec_materialization={version:1,action:'pm.spec.materialize',immutable:true,owned_git_chain:true};
-      reply.data.features.pm_workspaces.package_handoff.source_materialization='bounded_full_prompt_or_fixed_spec_artifact';reply.data.actions.push({action:'pm.spec.materialize',allowed:base.fixture.base.state.manage});return reply;
+    if(pathname==='/capabilities'||pathname==='/bootstrap'){
+      const reply=await base.dispatch(input),caps=pathname==='/bootstrap'?reply.data.capabilities:reply.data;if(state.enabled)caps.features.pm_workspaces.spec_materialization={version:1,action:'pm.spec.materialize',immutable:true,owned_git_chain:true};
+      caps.features.pm_workspaces.package_handoff.source_materialization='bounded_full_prompt_or_fixed_spec_artifact';caps.actions.push({action:'pm.spec.materialize',allowed:base.fixture.base.state.manage});return reply;
     }
     if(pathname.startsWith(`/pm/workspaces/${workspaceId}/spec-materializations`)){
       state.reads.push(input.path);if(state.gate)await state.gate;

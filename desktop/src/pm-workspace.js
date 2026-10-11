@@ -1,3 +1,4 @@
+import {workspaceSpecMaterialization} from './pm-spec-materialization.js';
 // PM facts and operations remain central; this client submits explicit durable requests.
 import {workspaceGovernance} from './pm-governance.js';
 import {workspacePackageHandoff} from './pm-package-handoff.js';
@@ -272,14 +273,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
   const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping
     ? workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
+  const materialization = workspaceId && !threadId && caps()?.features?.pm_workspaces?.spec_materialization?.version === 1
+    ? workspaceSpecMaterialization({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,errorBox,namespace,onSourceFailure:()=>{engineering?.withdraw();handoff?.withdraw();}}) : null;
   const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available
-    ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure:()=>engineering?.withdraw()}) : null;
+    ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure:()=>{engineering?.withdraw();materialization?.withdraw();}}) : null;
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
-    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);}}) : null;
+    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);void materialization?.setPackage(row);}}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
+  if(materialization)body.insertBefore(materialization.element,specifications?.element||content);
   if(handoff)body.insertBefore(handoff.element,specifications?.element||content);
   if(issues)body.insertBefore(issues.element,specifications?.element||content);
-  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceReview?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,handoff?.element,issues?.element].filter(Boolean);
+  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceReview?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -553,7 +557,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
-    lifecycle?.withdraw();engineering?.withdraw();handoff?.withdraw();issues?.withdraw();
+    lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();issues?.withdraw();
     releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceReview?.withdraw();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
@@ -607,7 +611,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [lifecycle, evidence, brief, releaseBaselines, maintenancePolicy, maintenanceReview, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,handoff,issues]) {
+      for (const section of [lifecycle, evidence, brief, releaseBaselines, maintenancePolicy, maintenanceReview, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,issues]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -618,7 +622,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         brief?.withdraw();
-        lifecycle?.withdraw();engineering?.withdraw();handoff?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceReview?.withdraw();
+        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceReview?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));

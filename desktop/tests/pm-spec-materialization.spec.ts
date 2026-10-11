@@ -1,3 +1,4 @@
+import {mountConversation} from './conversation-fixture.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {bootSpec,mountSpec,specFixture,panel,handoff,materialize,startForm,workspaceId,packageId} from './pm-spec-materialization-fixture.ts';
@@ -78,4 +79,14 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`spec 
   const f=specFixture();f.save();await page.setViewportSize({width,height:900});await mountSpec(page,f,locale);
   expect(await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(node=>node.getBoundingClientRect().right>innerWidth+1).map(node=>({tag:node.tagName,class:node.className,text:node.textContent?.slice(0,70),right:node.getBoundingClientRect().right})))).toEqual([]);expect(await page.locator('main').innerText()).not.toMatch(/(?:psm|ph|wp)_[a-z_]+/);
   const output=process.env.BATC_PM_SPEC_SCREENSHOTS||info.outputPath('screenshots');await mkdir(output,{recursive:true});await page.screenshot({path:`${output}/spec-${locale}-${width}.png`,fullPage:true});
+});
+
+for(const native of [false,true])test(native?'native workspace fixed specification handoff':'browser workspace fixed specification handoff',async({page})=>{
+  const f=specFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);
+  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
+  await panel(page).locator('summary').first().click();await materialize(page).locator('button[type=submit]').click();
+  await expect(panel(page)).toContainText('Fixed specification saved');expect(f.state.writes).toHaveLength(1);expect(f.base.state.writes).toHaveLength(0);
+  f.base.state.deny=true;f.base.fixture.base.state.cursor++;
+  await expect(panel(page).getByRole('heading',{name:'Fixed specification saved',exact:true})).toHaveCount(0);
+  await expect(panel(page)).not.toContainText('Restore member access');
 });
