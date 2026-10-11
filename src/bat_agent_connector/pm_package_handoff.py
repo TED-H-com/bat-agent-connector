@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from . import pm_work_packages, pm_workspace, repository_sync, service
+from . import artifacts, pm_work_packages, pm_workspace, repository_sync, service
 from .api_auth import Principal
 from .operations import OperationError
 
@@ -84,18 +84,23 @@ def _matches(document, target, params, pre):
 
 def prompt(user_prompt, contract):
     """Keep the full authoritative package; never truncate a requirement or source."""
+    presentation = contract
+    if "spec_materialization" in contract:
+        presentation = {key: value for key, value in contract.items() if key != "package"}
+        presentation = {**presentation, "package_location": contract["spec_materialization"]["input_path"],
+            "instruction": "Read the entire JSON specification artifact before implementing. Its package field is the complete authoritative engineering package; tasks includes stable identities and removed-key history. Do not replace missing bytes with guesses or a live PM path."}
     text = (user_prompt + "\n\nFixed engineering work package (authoritative for this attempt):\n"
-            + canonical(contract) + "\n\nImplement only the selected adopted requirements. "
+            + canonical(presentation) + "\n\nImplement only the selected adopted requirements. "
             "Unknowns remain unknown. Task checkboxes and implementation reports do not prove verification, "
             "merge or deployment. Do not replace these fixed sources with live PM files.\n")
     if len(text) > service.MAX_PROMPT_CHARS - 100 or len(text.encode("utf-8")) > MAX_CONTRACT_BYTES:
-        raise _error("PM_HANDOFF_TOO_LARGE", "This complete engineering contract exceeds the bounded first prompt; select a smaller package", 413)
+        raise _error("PM_HANDOFF_TOO_LARGE", "This complete engineering contract exceeds the bounded first prompt; materialize it as a fixed spec artifact or select a smaller package", 413)
     return text
 
 
 def admit(ops, principal, target, params, pre):
     if "pm_package_ref" not in params:
-        if "pm_code_basis" in params:
+        if "pm_code_basis" in params or "pm_spec_ref" in params:
             raise _error("INVALID_PARAMS", "A code-basis decision requires a fixed engineering package", 422)
         return None
     if not principal.allows("observe") or not principal.allows("manage"):
@@ -108,6 +113,8 @@ def admit(ops, principal, target, params, pre):
     contract = {"contract": CONTRACT, "package_ref": ref, "package": document,
                 "code_basis": basis, "execution_assignment": "this_original_operation_only",
                 "verification": "unassessed", "delivery": "not_observed"}
+    if "pm_spec_ref" in params:
+        contract["spec_materialization"] = _materialized(ops, principal, params["pm_spec_ref"], ref, params.get("artifacts", []))
     prompt(params["prompt"], contract)
     return {"pm_handoff": {"contract": contract, "contract_digest": digest(contract),
                             "principal": pm_workspace.principal_binding(principal)},
@@ -130,6 +137,7 @@ def source_visible(db, principal, original):
         return (digest(contract) == saved["contract_digest"]
                 and record["document_digest"] == ref["document_digest"]
                 and contract["package"] == record["document"]
+                and _spec_visible(db, principal, contract)
                 and pm_work_packages.operation_visible(db, principal, {"operation_id": record["operation_id"]}))
     except (OperationError, TypeError, KeyError, ValueError):
         return False
@@ -147,8 +155,44 @@ def guard(ctx):
     package = _package(ctx.service, principal, contract["package_ref"], write=True)
     _matches(package["document"], ctx.target, ctx.params, ctx.preconditions)
     _ready(ctx.service, principal, contract["package_ref"])
+    if "spec_materialization" in contract:
+        current = _materialized(ctx.service, principal, ctx.params["pm_spec_ref"], contract["package_ref"], ctx.params.get("artifacts", []))
+        if current != contract["spec_materialization"]:
+            raise _error("PM_SPEC_CHANGED", "The original spec artifact binding changed")
 
 
 def execution_prompt(ctx):
     saved = (ctx.admission_binding or {}).get("pm_handoff")
     return prompt(ctx.params["prompt"], saved["contract"]) if saved else ctx.params["prompt"]
+
+
+def _materialized(ops, principal, selected, package_ref, refs):
+    from . import pm_spec_materialization as specs
+    if (not isinstance(selected, dict) or set(selected) != {"workspace_id", "materialization_id", "document_digest"}
+            or selected["workspace_id"] != package_ref["workspace_id"]):
+        raise _error("INVALID_PARAMS", "Select an exact materialization in this package workspace", 422)
+    value = specs.get_materialization(ops, principal, selected["workspace_id"], selected["materialization_id"])["materialization"]
+    if (value["document_digest"] != selected["document_digest"] or value["document"]["package_ref"] != package_ref):
+        raise _error("PM_SPEC_CHANGED", "The selected spec does not match the fixed package and digest")
+    artifact_ref = value["artifact_ref"]
+    if artifact_ref not in refs:
+        raise _error("PM_SPEC_ARTIFACT_REQUIRED", "Include the exact spec artifact revision in this handoff's attachments", 422)
+    metadata = artifacts.get(ops.db, artifact_ref["artifact_id"], artifact_ref["revision"], principal=principal)
+    if (metadata["state"] != "ready" or metadata["operation_id"] != value["operation_id"]
+            or metadata["digest"] != value["document_digest"]
+            or ops.context["artifact_store"].read_content(artifact_ref["artifact_id"], artifact_ref["revision"]) != canonical(value["document"]).encode()):
+        raise _error("PM_SPEC_ARTIFACT_CHANGED", "The original frozen spec bytes cannot be verified")
+    return {**selected, "artifact_ref": artifact_ref, "operation_id": value["operation_id"],
+            "git_commit_sha": value["git_receipt"]["commit_sha"],
+            "input_path": ".batc-inputs/" + artifact_ref["artifact_id"] + "-r" + str(artifact_ref["revision"]) + "/" + artifacts.safe_name(metadata["display_name"])}
+
+
+def _spec_visible(db, principal, contract):
+    if "spec_materialization" not in contract:
+        return True
+    from . import pm_spec_materialization as specs
+    fixed = contract["spec_materialization"]
+    value = specs._record(db, fixed["workspace_id"], fixed["materialization_id"])
+    return (value["document_digest"] == fixed["document_digest"] and value["artifact_ref"] == fixed["artifact_ref"]
+            and value["operation_id"] == fixed["operation_id"] and value["document"]["package_ref"] == contract["package_ref"]
+            and specs.source_visible(db, principal, {"operation_id": value["operation_id"]}))
