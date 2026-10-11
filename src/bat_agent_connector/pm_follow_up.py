@@ -425,6 +425,9 @@ async def _run(ctx):
 def operation_visible(db, principal, operation):
     try:
         row = db.execute('SELECT * FROM operations WHERE operation_id=?', (operation['operation_id'],)).fetchone()
+        if row is not None and row['action'] == 'pm.follow_up.analyze':
+            from .pm_follow_up_analysis import operation_visible as analysis_visible
+            return analysis_visible(db, principal, operation)
         if row is None or row['action'] != ACTION or not principal.allows('observe'):
             return False
         op = OperationService._decode(row)

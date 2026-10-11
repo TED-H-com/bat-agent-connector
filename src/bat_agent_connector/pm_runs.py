@@ -110,11 +110,13 @@ def get(db, run_id):
 
 
 def read(ops, principal, workspace_id, run_id):
-    pm_discussions._read(ops, principal, workspace_id)
-    run = get(ops.db, run_id)
-    if run["workspace_id"] != workspace_id:
-        raise _error("PM run not found", "PM_RUN_NOT_FOUND", 404)
-    return run
+    with ops.journal.tx():
+        pm_discussions._read(ops, principal, workspace_id)
+        run = get(ops.db, run_id)
+        if run["workspace_id"] != workspace_id or not source_visible(ops.db, principal, run):
+            raise _error("PM run not found", "PM_RUN_NOT_FOUND", 404)
+        _read_bound({"run": run})
+        return run
 
 
 def get_by_operation(db, operation_id):
@@ -123,17 +125,58 @@ def get_by_operation(db, operation_id):
 
 
 def list_runs(ops, principal, workspace_id, *, thread_id=None, limit=50, after=None):
-    pm_discussions._read(ops, principal, workspace_id)
-    pm_discussions._limit(limit)
-    if thread_id is not None:
-        pm_discussions._thread(ops.db, workspace_id, thread_id)
-    if after is not None:
-        read(ops, principal, workspace_id, after)
-    rows = ops.db.execute("""SELECT run_id FROM pm_runs WHERE workspace_id=?
-        AND (? IS NULL OR thread_id=?) AND (? IS NULL OR run_id>?) ORDER BY run_id LIMIT ?""",
-        (workspace_id, thread_id, thread_id, after, after, limit + 1)).fetchall()
-    return {"workspace_id": workspace_id, "runs": [_summary(get(ops.db, row[0])) for row in rows[:limit]],
-            "next_cursor": rows[limit - 1][0] if len(rows) > limit else None}
+    with ops.journal.tx():
+        pm_discussions._read(ops, principal, workspace_id)
+        pm_discussions._limit(limit)
+        if thread_id is not None:
+            pm_discussions._thread(ops.db, workspace_id, thread_id)
+        if after is not None and get(ops.db, after)["workspace_id"] != workspace_id:
+            raise _error("PM run not found", "PM_RUN_NOT_FOUND", 404)
+        rows = ops.db.execute("""SELECT run_id FROM pm_runs WHERE workspace_id=?
+            AND (? IS NULL OR thread_id=?) AND (? IS NULL OR run_id>?) ORDER BY run_id LIMIT ?""",
+            (workspace_id, thread_id, thread_id, after, after, limit + 1)).fetchall()
+        result = {"workspace_id": workspace_id, "runs": [], "next_cursor": None,
+                  "coverage": {"visibility_filtered": False, "scanned": 0}}
+        cursor = after
+        for row in rows[:limit]:
+            run = get(ops.db, row[0])
+            result["coverage"]["scanned"] += 1
+            if source_visible(ops.db, principal, run):
+                result["runs"].append(_summary(run))
+                result["next_cursor"] = row[0]  # Budget the possible continuation, too.
+                try:
+                    _read_bound(result)
+                except OperationError:
+                    result["runs"].pop()
+                    result["coverage"]["scanned"] -= 1
+                    if cursor == after:
+                        raise
+                    result["next_cursor"] = cursor
+                    return _read_bound(result)
+            else:
+                result["coverage"]["visibility_filtered"] = True
+            cursor = row[0]
+        result["next_cursor"] = cursor if len(rows) > limit else None
+        return _read_bound(result)
+
+
+MAX_READ_BYTES = 2_000_000
+
+
+def _read_bound(value):
+    from .pm_sprints import _read_size
+    if _read_size(value) > MAX_READ_BYTES:
+        raise _error("The complete PM run response exceeds 2,000,000 UTF-8 bytes", "PM_RUN_TOO_LARGE", 413)
+    return value
+
+
+def source_visible(db, principal, run):
+    """Follow-up derives access from its original admission, including raw output."""
+    row = db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
+    if run["context"].get("output_destination") == "follow_up_assessment" or row and row[0] == "pm.follow_up.analyze":
+        from .pm_follow_up_analysis import operation_visible
+        return operation_visible(db, principal, {"operation_id": run["operation_id"]})
+    return True
 
 
 def _summary(run):
@@ -150,11 +193,13 @@ def require_requester(db, run):
     if not principal.allows("manage"):
         raise _error("PM runs require manage scope", "FORBIDDEN", 403)
     pm_workspace.require_member(db, principal, run["workspace_id"], write=True)
+    if not source_visible(db, principal, run):
+        raise _error("Original PM analysis sources are unavailable", "PM_FOLLOW_UP_SOURCE_UNAVAILABLE", 404)
     return principal
 
 
 def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_version,
-           adapter, purpose, execution_authority, max_chars=32000):
+           adapter, purpose, execution_authority, max_chars=32000, _context_factory=None):
     """Freeze the context and reserve the only writer in one journal transaction.
 
     Idempotent internal recovery reads a saved run before checking later membership
@@ -192,7 +237,15 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
         if slot and slot["run_id"]:
             raise _error("A PM turn still owns this workspace writer", "PM_WRITER_BUSY")
         generation = slot["generation"] + 1 if slot else 1
-        context = pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars)
+        context = (_context_factory() if _context_factory else
+                   pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars))
+        if _context_factory:
+            row = ops.db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
+            if (not row or row[0] != "pm.follow_up.analyze" or adapter != "codex-native-linux"
+                    or context.get("output_destination") != "follow_up_assessment"
+                    or context.get("workspace_id") != workspace_id or context.get("thread_id") != thread_id
+                    or context.get("thread_version") != expected_version or context.get("coverage", {}).get("max_chars") != max_chars):
+                raise _error("A fixed context requires its original Follow-up admission", "PM_CONTEXT_REFUSED")
         context["purpose"] = purpose
         # Keep the profile, sources, omitted coverage, and exact words, not a mutable pointer.
         digest = _digest(context)
