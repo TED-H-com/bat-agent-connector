@@ -169,8 +169,11 @@ async def test_revoke_membership_blocks_pending_mutation_replay_and_visibility(o
     await settle_operations(ops)
     assert ops.get(pending["operation_id"])["error_code"] == "NOT_FOUND"
     assert not pm.operation_visible(ops.db, OTHER, pending)
-    with pytest.raises(OperationError, match="FORBIDDEN"):
+    # The revoked caller cannot distinguish a retained pending operation from a
+    # missing operation through its original key.
+    with pytest.raises(OperationError, match="NOT_FOUND") as replay_error:
         member_op(ops, workspace, READER.actor, "reader", who=OTHER, key="pending")
+    assert replay_error.value.status == 404
     assert ops.db.execute("SELECT 1 FROM pm_workspace_members WHERE actor=?", (READER.actor,)).fetchone() is None
 
 
