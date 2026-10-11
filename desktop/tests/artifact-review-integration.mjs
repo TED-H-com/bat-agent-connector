@@ -16,6 +16,9 @@ const next=async()=>{const row=await lines.next();if(row.done)throw new Error('M
 const browser=await chromium.launch();
 try {
  const fixture=await next(),origin=`http://127.0.0.1:${fixture.port}`,writes=[],errors=[];
+ const sourceResponse=await fetch(`${origin}/api/v1/sessions/h1/${fixture.session_id}`,{headers:{Authorization:`Bearer ${fixture.token}`}});
+ assert.equal(sourceResponse.status,200);const source=(await sourceResponse.json()).session;
+ assert.equal(source.provenance,'connector_managed');assert.equal(source.api_access,'read_only');assert.equal(source.read_only_code,'FOREIGN_CONTROLLER');
  const page=await browser.newPage({locale:'en-US'});page.on('pageerror',error=>errors.push(error.message));
  const lost=new Set();await page.route('**/api/v1/operations?wait=3',async route=>{
   const request=route.request(),body=request.postDataJSON();writes.push({body,key:request.headers()['idempotency-key']});
@@ -23,7 +26,9 @@ try {
  });
  await page.route('**/dashboard/**',async route=>{const path=new URL(route.request().url()).pathname,file=path==='/dashboard/'?'index.html':path.slice('/dashboard/'.length);if(!['index.html','app.js','app.css','i18n.js'].includes(file))return route.abort();await route.fulfill({body:await readFile(resolve('../src/bat_agent_connector/dashboard',file)),contentType:file.endsWith('html')?'text/html':file.endsWith('css')?'text/css':'text/javascript'});});
  await page.addInitScript(token=>{if(!sessionStorage.getItem('batc.dashboard.token'))sessionStorage.setItem('batc.dashboard.token',token);},fixture.token);
- await page.goto(origin+'/dashboard/#/artifact-review/session/h1/'+fixture.session_id);
+ await page.goto(origin+'/dashboard/#/session/h1/'+fixture.session_id);
+ const sourceLink=page.getByRole('link',{name:"Capture and review this execution's file",exact:true});
+ await page.locator('.workspace-evidence > summary').filter({hasText:/^Status and records$/}).click();await sourceLink.click();
  let capture=page.locator('[data-managed-capture]');
  await capture.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify({execution_operation_id:fixture.execution_id}));
  await capture.getByRole('textbox',{name:'Relative file path'}).fill('result.bin');await capture.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(capture).toContainText(fixture.digest);

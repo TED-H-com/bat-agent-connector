@@ -1349,7 +1349,7 @@ async function viewSession(main, host, sid, context = null) {
     if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
     if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
     const managed = row.api_access === "managed";
-    if (managed && row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file)
+    if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file)
       metadata.append(h("p", {}, h("a", {href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`}, t("ar_open"))));
     if (managed && row.provenance === "connector_managed") {
       const links = [];

@@ -30,7 +30,7 @@ async function fixture(page:Page,native:boolean,options:any={}) {
    return {status:200,data:{operation:operation(kind)}};
   }
   state.reads.push(input.path);
-  if(path==='/sessions/demo/managed-session')return state.sourceGone?{status:404,data:{error:{code:'NOT_FOUND',message:'Source removed'}}}:{status:200,data:{session:{host:'demo',session_id:'managed-session',provenance:state.manual?'manual':'connector_managed',api_access:state.manual?'read_only':'managed'},relations_summary:[]}};
+  if(path==='/sessions/demo/managed-session')return state.sourceGone?{status:404,data:{error:{code:'NOT_FOUND',message:'Source removed'}}}:{status:200,data:{session:{host:'demo',session_id:'managed-session',provenance:state.manual?'manual':'connector_managed',api_access:state.manual||state.foreign?'read_only':'managed',...(state.foreign?{read_only_code:'FOREIGN_CONTROLLER'}:{})},relations_summary:[]}};
   if(path==='/operations/'+captureId||path==='/operations/'+acceptId){if(state.failRead)return {status:503,data:{error:{code:'READ_FAILED',message:'Read unavailable'}}};if(state.holdRead){state.holdRead=false;await new Promise(resolve=>{state.releaseRead=resolve;});}return {status:200,data:{operation:operation(path.endsWith(captureId)?'capture':'accept')}};}
   if(path==='/operations/'+executionId)return {status:200,data:{operation:execution()}};
   if(path==='/operations')return {status:200,data:{operations:url.searchParams.get('action')===execution().action?[execution()]:[],next_before:null}};
@@ -61,6 +61,13 @@ async function contentFixture(page:Page,native:boolean,options:any={}){
 async function captureForm(page:Page){await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText(ref.digest);await box.getByRole('checkbox').check();return box;}
 for(const native of [false,true]){
  const mode=native?'native':'browser';
+ test(`foreign managed source permits reviewed capture without session control (${mode})`,async({page})=>{
+  const state=await fixture(page,native,{foreign:true,scopes:['observe','manage']});
+  const box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();
+  await expect(page.locator('[data-artifact-ready]')).toBeVisible();
+  expect(state.previews).toHaveLength(1);expect(state.writes.map((request:any)=>request.body.action)).toEqual(['artifact.capture.managed']);
+  expect(state.errors).toEqual([]);
+ });
  test(`reviewer reads exact bytes without creating a review (${mode})`,async({page})=>{
   const state=await contentFixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');await page.getByRole('button',{name:'Preview',exact:true}).click();await expect(page.locator('.artifact-content pre')).toContainText('<script>');expect(await page.evaluate(()=>(window as any).readExecuted)).toBeUndefined();await expect(page.locator('.artifact-content script,.artifact-content svg,.artifact-content iframe')).toHaveCount(0);
   if(native){await page.getByRole('button',{name:'Save As',exact:true}).click();await expect(page.locator('.artifact-content')).toContainText('Downloading');expect(state.fileCalls.find((c:any)=>c.command==='native_files_preview').args).toEqual({reference:{...ref,digest:state.row.digest}});expect(state.fileCalls.find((c:any)=>c.command==='native_files_save').args).toEqual({reference:{...ref,digest:state.row.digest}});}
