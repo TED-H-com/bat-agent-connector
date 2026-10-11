@@ -1156,7 +1156,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1287,6 +1287,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let roadmap_list = path.ends_with("/roadmap/revisions");
             let governance_list = path.ends_with("/governance");
             let follow_up_list = path.ends_with("/follow-ups");
+            let assessment_list = path.ends_with("/follow-up-assessments");
             let work_package_list = path.ends_with("/work-packages");
             let governance_history = path.contains("/governance/") && path.ends_with("/history");
             let kanban_list = path.ends_with("/kanban");
@@ -1314,6 +1315,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || artifact_list
                 || governance_list
                 || follow_up_list
+                || assessment_list
                 || work_package_list
                 || governance_history
                 || kanban_list
@@ -1408,6 +1410,13 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value.len() <= 9
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u32>().is_ok()
+                }
+                "intake_id" if assessment_list => {
+                    value.len() == 37
+                        && value.starts_with("pmfu_")
+                        && value[5..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
                 "project_id" if work_list || kanban_list => {
                     value.len() == 24
@@ -1975,6 +1984,46 @@ mod tests {
         assert!(validate_request(&request("POST", root)).is_err());
         let mut input = get(root);
         input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn follow_up_assessment_reads_only_allow_exact_queries() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/follow-up-assessments";
+        let assessment = "pmfa_22222222222222222222222222222222";
+        for suffix in [
+            "".to_string(),
+            "?after=0&limit=100&intake_id=pmfu_33333333333333333333333333333333".into(),
+            format!("/{assessment}"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?after=", "?limit=", "?intake_id=", "?intake_id=pmfu_bad", "?actor=",
+            "?after=0&after=1", "?limit=&limit=1", "?after=-1", "?after=1000000000", "?limit=101",
+            "?intake_id=pmfu_33333333333333333333333333333333&intake_id=pmfu_33333333333333333333333333333333",
+            "?assessment_id=pmfa_22222222222222222222222222222222", "?execute=true",
+            "/pmfa_bad", "/latest", "/analyze",
+        ] {
+            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err(), "{suffix}");
+        }
+        for suffix in [
+            "?after=0", "?limit=1", "?actor=", "/history", "/raw", "/adopt",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}/{assessment}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        assert!(validate_request(&request("POST", root)).is_err());
+        let mut input = get(root);
+        input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+        input.idempotency_key = None;
+        input.body = Some(serde_json::json!({"intake_id": "untrusted"}));
         assert!(validate_request(&input).is_err());
     }
 

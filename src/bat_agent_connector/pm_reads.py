@@ -8,6 +8,8 @@ FIELDS = {
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
     "pm_work_package_readiness_get": ("workspace_id", "package_id"),
+    "pm_follow_up_assessments_list": ("workspace_id", "intake_id", "after", "limit"),
+    "pm_follow_up_assessment_get": ("workspace_id", "assessment_id"),
     "pm_follow_up_list": ("workspace_id", "after", "limit"),
     "pm_follow_up_get": ("workspace_id", "intake_id"),
     "pm_follow_up_latest_get": ("workspace_id",),
@@ -68,6 +70,12 @@ def read(ops, principal, method, params):
             return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"))
         return pm_work_packages.list_packages(ops, principal, workspace_id, work_item_id=params.get("work_item_id"),
                                               after=params.get("after", 0), limit=params.get("limit", 50))
+    if method in {"pm_follow_up_assessments_list", "pm_follow_up_assessment_get"}:
+        from . import pm_follow_up_analysis
+        if method == "pm_follow_up_assessment_get":
+            return pm_follow_up_analysis.get_assessment(ops, principal, workspace_id, params.get("assessment_id"))
+        return pm_follow_up_analysis.list_assessments(ops, principal, workspace_id, intake_id=params.get("intake_id"),
+            after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get"}:
         from . import pm_follow_up
         if method == "pm_follow_up_get":
@@ -183,6 +191,12 @@ def read(ops, principal, method, params):
         else:
             adoption_reason = None
         native = pm_native_capabilities.read(ops, principal, workspace)
+        follow_up_registered = "pm.follow_up.analyze" in ops.actions
+        follow_up = {**native, "action_registered": follow_up_registered,
+            "authorized": (follow_up_registered and (principal.admin or workspace["membership"]["role"] in {"owner", "contributor"})
+                and all(principal.allows(scope) for scope in ("observe", "manage", "start"))),
+            "authority": "context_only", "output_destination": "follow_up_assessment",
+            "conclusions_verified": False, "execution_authorized": False}
         return {"workspace_id": workspace_id, "context_packages": True,
                 "plan_drafting": "pm.plan.draft" in ops.actions,
                 "plan_adoption": "pm.plan.adopt" in ops.actions,
@@ -192,6 +206,7 @@ def read(ops, principal, method, params):
                                        if binding else None),
                 "runtime": pm_runtime.capability_report(),
                 "native_analysis": native,
+                "follow_up_analysis": follow_up,
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":

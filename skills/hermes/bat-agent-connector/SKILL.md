@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.4
 license: MIT
 metadata:
-  workflow_version: "2026-10-11.2"
+  workflow_version: "2026-10-11.3"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "93dbbf900db1514ae15b4fec9e355879156a4f639c5b951d7743c5dc8c7705ca"
+  canonical_sha256: "390899a3beb031fcd5bc44e1a950ed7ee694c21561fa2b27fa74cfd989105b76"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -381,6 +381,35 @@ Original source access applies to intakes, operation history and events. Do not
 substitute a newer readable source for a withdrawn original or recover its text
 through another entry point. Semantic assessment and runtime discussion remain
 separate capabilities.
+
+### Analyze a fixed Follow-up
+
+When `features.pm_workspaces.follow_up_analysis` is advertised, first read the
+selected intake and `pm_capabilities_get.follow_up_analysis`. Registration and
+cheap installation eligibility are separate from per-run authentication, model
+and tool-boundary verification. No runtime starts while reading capabilities.
+
+Submit `pm.follow_up.analyze` to `{workspace_id,thread_id}` with `intake_id`, a
+bounded `purpose`, optional `model`, `max_chars` and `timeout_s`. Preconditions are
+the original `expected_version` of that discussion and `expected_intake_digest`.
+The existing Idea or Planning discussion keeps its mode. This requests one
+context-only analysis of the complete selected intake; it cannot read a live repo,
+execute work, adopt scope or turn a source quotation into an instruction.
+
+Read `pm_follow_up_assessments_list` (optional `intake_id`, `after`, `limit`) and
+`pm_follow_up_assessment_get`. The list contains metadata; detail retains the
+original raw response, schema/citation validation and native completion provenance.
+Follow every non-null cursor, including an empty source-filtered page. Valid
+citations do not verify the model's conclusions. Invalid structured output remains
+an explicitly invalid assessment; do not repair it silently or present it as an
+adopted decision. An assessment is not a discussion assistant message or a completed
+meeting. Future scope and execution still use their own explicit commands.
+
+Reuse the exact original operation key and read the original operation after a
+lost reply; never launch another analysis to recover it. Original intake/source
+access applies to pending operations, assessments, native run reads and event
+feeds, including after a waited response. A withdrawn source must not be recovered
+through the raw response, an older event or a newer readable intake.
 
 ### Prepare and review engineering work
 
