@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import shutil
@@ -44,6 +45,26 @@ def protocol(prompt=PROMPT, client_id=CLIENT):
     ]
 
 
+def summary_protocol(prompt=PROMPT, client_id=CLIENT):
+    fixture = Path(__file__).parent / "fixtures" / "pm_native" / "summary_turn.json"
+    rows = json.loads(fixture.read_text())["events"]
+    for row in rows:
+        event = row["event"]
+        params = event.get("params", {})
+        if "threadId" in params:
+            params["threadId"] = THREAD
+        if "turnId" in params:
+            params["turnId"] = TURN
+        turn = params.get("turn", event.get("result", {}).get("turn"))
+        if turn:
+            turn["id"] = TURN
+        item = params.get("item", {})
+        if item.get("type") == "userMessage":
+            item["clientId"] = client_id
+            item["content"] = [{"type": "text", "text": prompt}]
+    return [row["event"] for row in rows]
+
+
 def envelopes(events=None):
     return [{"run_id": RUN, "seq": index, "event": event}
             for index, event in enumerate(protocol() if events is None else events, 1)]
@@ -61,6 +82,103 @@ def test_complete_turn_keeps_native_message_model_and_source():
                       "content": "A proposal, not an adopted plan.", "run_id": RUN,
                       "thread_id": THREAD, "native_turn_id": TURN, "native_message_id": "answer",
                       "actual_model": MODEL, "source_event_seqs": [4]}
+
+
+def test_summary_terminal_uses_original_completed_items_and_all_proof_sequences():
+    rows = envelopes(summary_protocol())
+    before = copy.deepcopy(rows)
+    result = assess(rows)
+    assert result["complete"] and result["status"] == "completed"
+    assert result["native_message_id"] == "fixture-answer"
+    assert result["content"] == rows[5]["event"]["params"]["item"]["text"]
+    assert result["source_event_seqs"] == list(range(1, 8))
+    assert result["native_turn_id"] == TURN and result["actual_model"] == MODEL
+    assert rows == before
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda events: events.pop(0),  # Missing ACK.
+    lambda events: events.pop(1),  # Missing turn start.
+    lambda events: events.pop(2),  # Missing native user start.
+    lambda events: events.pop(3),  # Missing completed user echo.
+    lambda events: events.pop(4),  # Missing native assistant start.
+    lambda events: events.pop(5),  # Text in terminal alone is insufficient.
+    lambda events: events.pop(6),  # Completed item alone is insufficient.
+    lambda events: events.insert(4, copy.deepcopy(events[3])),  # Duplicate completion.
+    lambda events: events.insert(3, copy.deepcopy(events[2])),  # Duplicate start.
+    lambda events: events[3]["params"]["item"].update(clientId="wrong"),
+    lambda events: events[2]["params"]["item"].update(clientId="wrong"),
+    lambda events: events[3]["params"]["item"]["content"][0].update(text="different"),
+    lambda events: events[3]["params"]["item"].update(id="wrong"),
+    lambda events: events[3]["params"]["item"].update(type="reasoning"),
+    lambda events: events[3]["params"]["item"].update(type=[]),
+    lambda events: events[3].update(method={}),
+    lambda events: events[3]["params"].update(turnId="other"),
+    lambda events: events[3]["params"].pop("threadId"),
+    lambda events: events[5]["params"].update(threadId="other"),
+    lambda events: events[5]["params"]["item"].update(phase="commentary"),
+    lambda events: events[6]["params"]["turn"].update(status="interrupted"),
+    lambda events: events[6]["params"]["turn"].update(items=[]),
+    lambda events: events[6]["params"]["turn"].update(itemsView="notLoaded"),
+    lambda events: events[6]["params"]["turn"].update(itemsView=[]),
+    lambda events: events[6]["params"].pop("threadId"),
+    lambda events: events[6]["params"]["turn"]["items"][0].update(text="different"),
+    lambda events: events[6]["params"]["turn"]["items"][0].update(id="different"),
+    lambda events: events[6]["params"]["turn"]["items"][0].update(phase="commentary"),
+    lambda events: events[6]["params"]["turn"]["items"][0].update(unproven=True),
+    lambda events: events[6]["params"]["turn"]["items"].append(copy.deepcopy(events[3]["params"]["item"])),
+    lambda events: events.insert(6, {"method": "item/started", "params": {
+        "threadId": THREAD, "turnId": TURN, "item": {"id": "unfinished", "type": "reasoning"}}}),
+    lambda events: events.insert(6, {"method": "item/agentMessage/delta", "params": {
+        "threadId": THREAD, "turnId": "other", "itemId": "fixture-answer", "delta": "foreign"}}),
+])
+def test_summary_refuses_missing_or_conflicting_native_evidence(mutation):
+    events = summary_protocol()
+    mutation(events)
+    result = assess(envelopes(events))
+    assert not result["complete"] and result["content"] is None
+
+
+def test_summary_requires_gap_free_stream_and_exact_input_even_when_both_echoes_agree():
+    events = summary_protocol("wrong prompt", "wrong client")
+    assert not assess(envelopes(events))["complete"]
+    assert not assess(envelopes(summary_protocol()), stream_complete=False)["complete"]
+    rows = envelopes(summary_protocol())
+    rows[3]["seq"] += 1
+    assert not assess(rows)["complete"]
+
+
+def test_summary_selects_last_nonempty_final_message_not_commentary_or_empty_item():
+    events = summary_protocol()
+    # The pinned server deliberately excludes trailing blank and commentary messages.
+    for item_id, phase, text in [("commentary", "commentary", "Working"), ("blank", None, "  ")]:
+        for method in ("item/started", "item/completed"):
+            events.insert(-1, {"method": method, "params": {"threadId": THREAD, "turnId": TURN,
+                "item": {"id": item_id, "type": "agentMessage", "phase": phase, "text": text}}})
+    result = assess(envelopes(events))
+    assert result["complete"] and result["native_message_id"] == "fixture-answer"
+    assert result["source_event_seqs"] == list(range(1, 12))
+
+
+def test_summary_cannot_hide_tools_or_duplicate_user_inputs():
+    for kind in ("mcpToolCall", "commandExecution", "userMessage"):
+        events = summary_protocol()
+        item = {**copy.deepcopy(events[3]["params"]["item"]), "type": kind, "id": "additional"}
+        for method in ("item/started", "item/completed"):
+            events.insert(-1, {"method": method, "params": {"threadId": THREAD, "turnId": TURN, "item": item}})
+        assert not assess(envelopes(events))["complete"]
+
+
+def test_summary_cannot_select_an_older_answer_or_input_after_answer():
+    events = summary_protocol()
+    reordered = [*events[:2], *events[4:6], *events[2:4], events[-1]]
+    assert not assess(envelopes(reordered))["complete"]
+    for method in ("item/started", "item/completed"):
+        events.insert(-1, {"method": method, "params": {"threadId": THREAD, "turnId": TURN,
+            "item": {"id": "later", "type": "agentMessage", "phase": "final_answer", "text": "Later answer"}}})
+    assert not assess(envelopes(events))["complete"]
+    events[-1]["params"]["turn"]["items"] = [copy.deepcopy(events[-2]["params"]["item"])]
+    assert assess(envelopes(events))["content"] == "Later answer"
 
 
 @pytest.mark.parametrize("count", [0, 1, 2, 3])
@@ -188,9 +306,10 @@ class FakeProcess:
             if self.mode == "invalid":
                 self.stdout.feed_data(b"not a native JSON object\n")
                 return
-            events = protocol(request["params"]["input"][0]["text"], request["params"]["clientUserMessageId"])
+            build = summary_protocol if self.mode == "summary" else protocol
+            events = build(request["params"]["input"][0]["text"], request["params"]["clientUserMessageId"])
             events[0]["id"] = request["id"]
-            for event in events if self.mode == "completed" else events[:3]:
+            for event in events if self.mode in {"completed", "summary"} else events[:3]:
                 self.output(event)
             if self.mode == "lost":
                 self.stdout.feed_eof()
@@ -262,6 +381,21 @@ async def test_one_turn_preserves_intent_events_exit_and_readonly_auth_binding(f
     with pytest.raises(OSError):
         os.fstat(kwargs["pass_fds"][0])
     assert "fixture-only" not in json.dumps([lifecycle, events, intents])
+
+
+async def test_summary_wire_turn_persists_complete_assessment_once_before_exit(fake_runtime):
+    scratch, settings, processes, _ = fake_runtime
+    settings["mode"] = "summary"
+    lifecycle, events, intents = [], [], []
+    async with native.NativePmRuntime(scratch, RUN, record_lifecycle=lifecycle.append) as runtime:
+        result = await runtime.run_turn(PROMPT, before_send=intents.append, record_event=events.append)
+    assert result["complete"] and result["source_event_seqs"] == list(range(1, 8))
+    receipt = next(row for row in lifecycle if row["kind"] == "turn_assessment")
+    assert receipt["assessment"] == result
+    assert runtime.exit_receipt["process_death_confirmed"]
+    assert len(intents) == 1 and len(events) == 7
+    assert [request["method"] for request in processes[0].requests].count("turn/start") == 1
+    assert not runtime.directory.exists()
 
 
 async def test_unsafe_config_fails_before_any_thread_or_model_start(fake_runtime):
