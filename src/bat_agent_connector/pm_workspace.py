@@ -131,6 +131,10 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.issue.'):
         from .pm_issue_mappings import operation_visible as issue_operation_visible
         return issue_operation_visible(db, principal, op)
+
+    if op['action'] == 'pm.release_baseline.register':
+        from .pm_release_baselines import operation_visible as baseline_visible
+        return baseline_visible(db, principal, op)
     if op['action'].startswith('pm.work_package.'):
         from .pm_work_packages import operation_visible as package_operation_visible
         return package_operation_visible(db, principal, op)

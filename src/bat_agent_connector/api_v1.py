@@ -132,6 +132,7 @@ class ApiV1:
             pm_meetings,
             pm_native_operations,
             pm_plan_operations,
+            pm_release_baselines,
             pm_roadmap,
             pm_run_operations,
             pm_snapshots,
@@ -155,6 +156,8 @@ class ApiV1:
         pm_work_packages.install(daemon.ops)
         pm_lifecycle.install(daemon.ops)
         pm_issue_mappings.install(daemon.ops)
+
+        pm_release_baselines.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -193,6 +196,15 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/governance", self.pm_governance_records, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/issue-mappings", self.pm_issue_mappings, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/issue-mappings/(?P<mapping_id>pmim_[0-9a-f]{32})", self.pm_issue_mapping, "observe"),
+
+
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources", self.pm_release_baseline_sources, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines", self.pm_release_baselines, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/current", self.pm_release_baseline_current, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/(?P<baseline_id>pmrb_[0-9a-f]{32})", self.pm_release_baseline, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages", self.pm_work_packages, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})", self.pm_work_package, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})/readiness", self.pm_work_package_readiness, "observe"),
@@ -424,6 +436,9 @@ class ApiV1:
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
+                      self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
+                      self.pm_release_baseline_sources, self.pm_release_baseline_releases,
+                      self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
@@ -577,7 +592,7 @@ class ApiV1:
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
-        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list"}:
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list"}:
             integer_fields.add("after")
         lifecycle_page = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list"}
         if lifecycle_page:
@@ -692,6 +707,37 @@ class ApiV1:
     async def pm_issue_mapping(self, principal, query, workspace_id, mapping_id, **_):
         return self._pm_read(principal, "pm_issue_mapping_get", query, workspace_id=workspace_id, mapping_id=mapping_id)
 
+    async def _pm_release_source_read(self, principal, method, query, workspace_id):
+        from .pm_release_previews import FIELDS, read
+        self._exact_query(query, FIELDS[method] - {"workspace_id"})
+        params = {key: values[0] for key, values in query.items()}
+        for key in {"after", "limit", "page", "release_id"} & params.keys():
+            if not re.fullmatch(r"[0-9]{1,19}" if key == "release_id" else r"[0-9]{1,9}", params[key]):
+                raise OperationError("INVALID_PARAMS", f"{key} must be a bounded integer", 422)
+            params[key] = int(params[key])
+        return 200, await read(self.daemon.ops, principal, method, {**params, "workspace_id": workspace_id})
+
+    async def pm_release_baseline_sources(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_sources_list", query, workspace_id)
+
+    async def pm_release_baseline_releases(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_releases_list", query, workspace_id)
+
+    async def pm_release_baseline_deployments(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_deployments_list", query, workspace_id)
+
+    async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
+
+    async def pm_release_baselines(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_release_baselines_list", query, workspace_id=workspace_id)
+
+    async def pm_release_baseline_current(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_release_baseline_current_get", query, workspace_id=workspace_id)
+
+    async def pm_release_baseline(self, principal, query, workspace_id, baseline_id, **_):
+        return self._pm_read(principal, "pm_release_baseline_get", query, workspace_id=workspace_id, baseline_id=baseline_id)
+
     async def pm_work_packages(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_work_packages_list", query, workspace_id=workspace_id)
 
@@ -773,7 +819,7 @@ class ApiV1:
     async def capabilities(self, principal, **_):
         from . import pm_lifecycle
         fleet = self.daemon.fleet
-        from . import worktree_merge_operations
+        from . import pm_release_baselines, worktree_merge_operations
         gh_cfg = self.daemon.ops.context["github_config"]
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
@@ -824,6 +870,7 @@ class ApiV1:
                                                     "lifecycle": pm_lifecycle.capabilities(self.daemon.ops),
                                                     "sprints": "pm.sprint.create" in self.daemon.ops.actions,
                                                     "governance": "pm.governance.record" in self.daemon.ops.actions,
+                                                    "release_baselines": pm_release_baselines.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,

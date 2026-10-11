@@ -1158,7 +1158,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1295,6 +1295,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let assessment_list = path.ends_with("/follow-up-assessments");
             let work_package_list = path.ends_with("/work-packages");
             let issue_mapping_list = path.ends_with("/issue-mappings");
+            let release_baseline_list = path.ends_with("/release-baselines");
+            let baseline_catalog = path.ends_with("/release-baseline-sources");
+            let baseline_releases = path.ends_with("/release-baseline-sources/github-releases");
+            let baseline_deployments = path.ends_with("/release-baseline-sources/deployments");
+            let baseline_preview = path.ends_with("/release-baseline-preview");
+            let baseline_source = baseline_releases || baseline_deployments || baseline_preview;
             let governance_history = path.contains("/governance/") && path.ends_with("/history");
             let kanban_list = path.ends_with("/kanban");
             let meeting_list = path.ends_with("/meetings");
@@ -1325,6 +1331,9 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || assessment_list
                 || work_package_list
                 || issue_mapping_list
+                || release_baseline_list
+                || baseline_catalog
+                || baseline_deployments
                 || governance_history
                 || kanban_list
                 || meeting_list
@@ -1335,9 +1344,49 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
+                "project_binding_id" if baseline_source => {
+                    value.len() == 37
+                        && value.starts_with("pmpb_")
+                        && value[5..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "kind" if baseline_preview => {
+                    matches!(value.as_ref(), "github_release" | "deployment")
+                }
+                "release_id" if baseline_preview => {
+                    !value.is_empty()
+                        && value.len() <= 19
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n > 0)
+                }
+                "deployment_id" if baseline_preview => {
+                    value.len() == 36
+                        && value.starts_with("dep_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "maintenance_branch" if baseline_preview => {
+                    !value.is_empty()
+                        && value.len() <= 256
+                        && !value.chars().any(char::is_whitespace)
+                }
+                "page" if baseline_releases => {
+                    !value.is_empty()
+                        && value.len() <= 5
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u32>().is_ok_and(|n| (1..=10000).contains(&n))
+                }
+                "limit" if baseline_catalog || baseline_releases || baseline_deployments => {
+                    !value.is_empty()
+                        && value.len() <= 2
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=20).contains(&n))
+                }
                 "format" if brief_export => matches!(value.as_ref(), "markdown" | "html" | "svg"),
                 "locale" if brief_export => matches!(value.as_ref(), "en" | "zh-TW"),
-                "repository" if spec_sources => {
+                "repository" if spec_sources || baseline_source => {
                     value.len() <= 256
                         && value.split('/').count() == 2
                         && value.split('/').all(|part| {
@@ -1952,6 +2001,87 @@ mod tests {
         input.body = None;
         input.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn release_baseline_sources_require_explicit_bounded_queries() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111";
+        let chosen =
+            "project_binding_id=pmpb_22222222222222222222222222222222&repository=example%2Fproduct";
+        for suffix in [
+            "/release-baseline-sources?after=0&limit=20".to_string(),
+            format!("/release-baseline-sources/github-releases?{chosen}&page=1&limit=20"),
+            format!("/release-baseline-sources/deployments?{chosen}&after=0&limit=20"),
+            format!("/release-baseline-preview?{chosen}&kind=github_release&release_id=41&maintenance_branch=support%2F1.x"),
+            format!("/release-baseline-preview?{chosen}&kind=deployment&deployment_id=dep_33333333333333333333333333333333"),
+        ] {
+            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_ok(), "{suffix}");
+        }
+        for suffix in [
+            "/release-baseline-sources?limit=21".to_string(),
+            "/release-baseline-sources?after=".into(),
+            format!("/release-baseline-sources/github-releases?{chosen}&page=0"),
+            format!("/release-baseline-sources/github-releases?{chosen}&page=10001"),
+            format!("/release-baseline-sources/github-releases?{chosen}&after=0"),
+            format!("/release-baseline-sources/deployments?{chosen}&page=1"),
+            format!("/release-baseline-preview?{chosen}&kind=github_release&release_id="),
+            format!("/release-baseline-preview?{chosen}&kind=github_release&release_id=9223372036854775808"),
+            format!("/release-baseline-preview?{chosen}&kind=github_release&release_id=1&release_id=2"),
+            format!("/release-baseline-preview?{chosen}&kind=package_registry"),
+            format!("/release-baseline-preview?{chosen}&kind=github_release&release_id=41&channel=stable"),
+            format!("/release-baseline-preview?{chosen}&kind=github_release&release_id=41&maintenance_branch="),
+            "/release-baseline-preview?project_binding_id=pmpb_bad".into(),
+        ] {
+            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err(), "{suffix}");
+        }
+    }
+
+    #[test]
+    fn release_baseline_reads_only_allow_exact_queries() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/release-baselines";
+        let baseline = "pmrb_22222222222222222222222222222222";
+        for suffix in [
+            "".to_string(),
+            "?after=0&limit=100".into(),
+            "/current".into(),
+            format!("/{baseline}"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?after=",
+            "?after=-1",
+            "?after=1000000000",
+            "?after=0&after=1",
+            "?limit=",
+            "?limit=0",
+            "?limit=101",
+            "?limit=1&limit=2",
+            "?actor=",
+            "?publish=true",
+            "/latest",
+            "/pmrb_bad",
+            "/current?after=0",
+            "/current?actor=",
+            "/current/publish",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        for suffix in ["?limit=1", "?actor=", "/publish", "/maintenance"] {
+            assert!(
+                validate_request(&get(&format!("{root}/{baseline}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        let mut keyed = get(root);
+        keyed.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&keyed).is_err());
     }
 
     #[test]

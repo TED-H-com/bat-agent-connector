@@ -622,6 +622,14 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-roadmap-choices label {display:flex;align-items:baseline;gap:.35rem;font-size:.9rem;}
 .pm-roadmap-choices input {width:auto;}
 @media(max-width:600px){.pm-roadmap-table {min-width:34rem}.pm-roadmap-table th,.pm-roadmap-table td {padding:.5rem}}
+[data-pm-release-baselines] {overflow-wrap:anywhere;}
+[data-pm-release-baselines] article {padding:.65rem 0; border-top:1px solid var(--line);}
+[data-pm-release-baselines] article h3 {font-size:.95rem; margin:.25rem 0;}
+[data-pm-release-baselines] summary {cursor:pointer; padding:.45rem 0;}
+[data-pm-release-baselines] [data-release-register] {margin-top:.75rem;}
+[data-pm-release-baselines] [data-release-choice] {display:flex; align-items:baseline; gap:.5rem; padding:.45rem 0;}
+[data-pm-release-baselines] [data-release-choice] input {flex:none; width:auto;}
+[data-pm-release-baselines] .mono {overflow-wrap:anywhere;}
 .pm-kanban { margin-top: 16px; min-width: 0; }
 .pm-kanban .pm-heading { margin-bottom: 8px; }
 .pm-kanban .pm-heading h2 { margin: 0 0 4px; }
