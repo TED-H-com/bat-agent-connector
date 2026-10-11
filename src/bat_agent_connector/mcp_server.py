@@ -983,13 +983,15 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                                                 model: str | None = None, artifacts: list[dict] | None = None,
                                                 project_id: str | None = None, expected_project_version: int | None = None,
                                                 work_item_id: str | None = None, expected_work_item_fingerprint: str | None = None,
-                                                pm_package_ref: dict | None = None, pm_code_basis: dict | None = None) -> dict[str, Any]:
+                                                pm_package_ref: dict | None = None, pm_code_basis: dict | None = None,
+                                                pm_spec_ref: dict | None = None) -> dict[str, Any]:
             """WRITE: start from a published version in a NEW managed clone/worktree/session. Requires start scope
             and confirm=true. Use exact repository_preview values; only reviewed branch heads are supported.
             No push, pull, reset, manual checkout update or source session takeover. Keep the original key and
             operation ID after lost replies; a new key creates a separate session. No unpublished Git transfer.
             Optional fixed PM package needs explicit work/fingerprint and a code-basis rationale together;
-            readiness is not dispatch authority and different spec/code commits remain distinct."""
+            readiness is not dispatch authority and different spec/code commits remain distinct. A fixed
+            materialized PM specification must also be selected by its exact ordinary artifact reference."""
             return await principal_daemon("op_submit", confirm, action="repository.continue", idempotency_key=idempotency_key,
                 target={"repository": repository, "host": host, "workspace_id": workspace_id},
                 params={"source_ref": source_ref, "source_sha": source_sha, "prompt": prompt, "agent": agent,
@@ -998,7 +1000,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                         **({"project_id": project_id} if project_id is not None else {}),
                         **({"work_item_id": work_item_id} if work_item_id is not None else {}),
                         **({"pm_package_ref": pm_package_ref} if pm_package_ref is not None else {}),
-                        **({"pm_code_basis": pm_code_basis} if pm_code_basis is not None else {})},
+                        **({"pm_code_basis": pm_code_basis} if pm_code_basis is not None else {}),
+                        **({"pm_spec_ref": pm_spec_ref} if pm_spec_ref is not None else {})},
                 preconditions={"repository_id": repository_id, "binding_digest": binding_digest,
                     **({"expected_project_version": expected_project_version} if expected_project_version is not None else {}),
                     **({"expected_work_item_fingerprint": expected_work_item_fingerprint} if expected_work_item_fingerprint is not None else {})}, wait_s=wait_s)
