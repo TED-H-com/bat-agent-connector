@@ -364,7 +364,7 @@ async def test_verified_edge_cannot_bypass_original_package_readiness(batch_read
     blocked = await extra(w, 'Fixed unresolved design')
     params = copy.deepcopy(blocked['params'])
     params['design']['status'] = 'unresolved'
-    blocked['package'] = read(blocked, await create(blocked, **params, previous_package_id=blocked['package']['package_id']))
+    blocked['package'] = read(blocked, await create(blocked, **params, previous=blocked['package']['package_id']))
     parent = await advance(w, ops.create(OWNER, **envelope(w, [await selected(w, 'first'),
         await selected(blocked, 'second', [{'entry_key': 'first', 'condition': CONDITION}])]))[0])
     first = ops.get(view(w, parent)['entries'][0]['operation_id'])
