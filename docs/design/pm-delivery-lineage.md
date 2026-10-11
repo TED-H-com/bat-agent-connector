@@ -40,6 +40,10 @@ provider/repository/PR or revision identities are checked again before new
 effects. Newly discovered roots are refused instead of attaching a new workspace
 or lifecycle epoch to that old operation. Repository renames cannot bypass this
 check. The caller reviews a new intent with all original roots included.
+Conflict-resolution handoffs resolve the exact original apply preview, including
+its current native target sources. Public reads follow those saved references;
+new-effect admission compares against only the immutable roots captured at the
+original operation INSERT. A later read relationship cannot grant old authority.
 
 Recorded targets and sent effects establish provenance and privacy, not evidence
 that a push, merge or deploy succeeded. Only the existing confirmed receipts

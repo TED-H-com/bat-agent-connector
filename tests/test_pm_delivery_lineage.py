@@ -388,3 +388,52 @@ async def test_pr_source_withdrawal_during_provider_read_discards_shared_respons
     with pytest.raises(OperationError) as caught:
         await w["d"].call_api("github_pr_preview", {"repository": "o/r", "pull_number": 1}, DELIVERER)
     assert caught.value.code == "NOT_FOUND"
+
+
+@pytest.mark.parametrize("bind_before_admission", [False, True])
+async def test_conflict_handoff_rechecks_original_preview_sources(delivery_ready, bind_before_admission):
+    w = delivery_ready
+    external = w["human"].parent / "ordinary-conflicting-sources"
+    git(external.parent, "clone", str(w["remote"]), str(external))
+    git(external, "config", "user.name", "fixture")
+    git(external, "config", "user.email", "fixture@example.invalid")
+    for name in ("ordinary-left", "ordinary-right"):
+        git(external, "checkout", "-B", name, w["state"]["sha"])
+        commit(external, "conflict.txt", name + "\n", name)
+        git(external, "push", "origin", name)
+    operation = await settle(w, submit(w, "integration.preview", TARGET,
+        {"sources": [{"kind": "branch", "id": name} for name in ("ordinary-left", "ordinary-right")]}))
+    assert operation["status"] == "succeeded", operation
+    original_apply = await settle(w, apply(w, operation["result"]))
+    assert original_apply["error_code"] == "INTEGRATION_CONFLICT", original_apply
+    assert not lineage.roots(w["d"].ops.db, "operation", original_apply["operation_id"])
+    def bind_private():
+        submit(w, "integration.preview", TARGET,
+            {"sources": [{"kind": "execution", "id": w["original"]["operation_id"]}]})
+    if bind_before_admission:
+        bind_private()
+    handoff = submit(w, "integration.handoff", {"operation_id": original_apply["operation_id"]})
+    if not bind_before_admission:
+        bind_private()
+    assert lineage.roots(w["d"].ops.db, "operation", original_apply["operation_id"]) == {w["original"]["operation_id"]}
+    if bind_before_admission:
+        assert pm_delivery_lineage.admitted_roots(w["d"].ops.db, handoff["operation_id"]) == {w["original"]["operation_id"]}
+    revoke(w)
+    done = await settle(w, handoff)
+    assert done["error_code"] == ("PM_HANDOFF_SOURCE_UNAVAILABLE" if bind_before_admission else "PM_DELIVERY_SOURCE_CHANGED"), done
+    assert not any(handoff["operation_id"][3:15] in script for script in w["runner"].scripts)
+    with pytest.raises(OperationError) as caught:
+        lineage.read_response(w["d"].ops.db, DELIVERER, {"operation": original_apply})
+    assert caught.value.code == "NOT_FOUND"
+
+
+async def test_new_original_self_root_is_included_in_admission_bound(delivery_ready):
+    w = delivery_ready
+    db = w["d"].ops.db
+    before = db.execute("SELECT COUNT(*) FROM pm_source_lineage").fetchone()[0]
+    with pytest.raises(OperationError) as caught, w["d"].ops.journal.tx():
+        lineage.bind_operation(db, "op_" + "f" * 32, {}, {}, {
+            "pm_source_roots": ["op_" + f"{i:032x}" for i in range(lineage.MAX_ROOTS)],
+            "pm_spec_materialization": {"package_ref": {"workspace_id": w["workspace_id"]}}})
+    assert caught.value.code == "PM_SOURCE_LINEAGE_LIMIT"
+    assert db.execute("SELECT COUNT(*) FROM pm_source_lineage").fetchone()[0] == before
