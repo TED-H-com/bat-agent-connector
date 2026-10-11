@@ -101,7 +101,7 @@ async def test_a10_lead_invoke_error_is_fenced_and_recovers_one_registry_row(
 
 
 @pytest.mark.parametrize("status,sent", [("failed", True), ("superseded", True), ("failed", None)])
-def test_a10_reserve_cannot_append_another_row_for_an_existing_id(status, sent):
+def test_a10_reserve_cannot_append_another_row_for_an_existing_id(controller_context, status, sent):
     registry.reserve("h1", {"session_id": "reserved-id", "start_sent": False}, 4)
     registry.update("h1", "reserved-id", status=status, start_sent=sent)
     row = copy.deepcopy(registry.get("h1", "reserved-id"))
