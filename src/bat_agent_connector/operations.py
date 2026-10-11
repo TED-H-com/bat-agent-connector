@@ -452,6 +452,26 @@ class OperationService:
                              name))
             self._observation_event(operation_id, "operation.step." + status, {"step": name, "status": status, "error_code": (error or {}).get("code")})
 
+    def has_idempotency_record(self, principal: Principal, *, action, target, idempotency_key) -> bool:
+        """Internal admission classification, not a public lookup or source read.
+
+        A hidden original is still admitted. Only this actor's exact key namespace
+        matters; a filtered get or another actor's key cannot establish absence.
+        """
+        if not isinstance(action, str) or not isinstance(idempotency_key, str):
+            return False
+        key = idempotency_key.strip()
+        if action.startswith("pm."):
+            target = target or {}  # Match create(): omitted workspace-create target is {}.
+            if not isinstance(target, dict):
+                return False
+            try:
+                key = _pm_key_prefix(target) + key
+            except UnicodeEncodeError:
+                return False  # Such a target could not have been admitted.
+        return self.db.execute("SELECT 1 FROM operations WHERE actor=? AND idem_key=?",
+                               (principal.actor, key)).fetchone() is not None
+
     # ------------------------------------------------------------------ create / cancel
     def _prepare_create(self, principal, *, action, target=None, params=None, preconditions=None,
                         idempotency_key, _legacy_session=False, _legacy_task=False):
