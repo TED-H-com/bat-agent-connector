@@ -36,7 +36,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage'}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -67,7 +67,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     input.value = value;
     input.addEventListener('input', changed); input.addEventListener('change', changed);
   }
-  const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes('manage')
+  const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope)
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
   const receiveReceipt = () => {
     if (disposed || damaged || !saved.intent) return;
