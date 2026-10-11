@@ -221,3 +221,27 @@ Withdrawal of a selected governance or meeting source therefore withholds the
 derived intake and original operation through HTTP, RPC, MCP and event feeds.
 Internal effect receipts are retained for recovery; public replay remains
 subject to current membership and those original source references.
+
+## Client source withdrawal and partial coverage
+
+An unavailable latest intake is not an empty history and is not replaced by an
+older intake. For the specific `PM_FOLLOW_UP_SOURCE_UNAVAILABLE` response, the
+client clears the previous facts, rechecks the workspace and the signed-in
+actor's current membership, then rereads bounded history metadata and the plan
+head. It can show that readable history and allow an authorized writer to prepare
+a new intake from readable sources. A selected historical intake that loses its
+sources stays selected with an unavailable message until the user changes it.
+No stale document is restored by the metadata read.
+
+Unknown errors, generic 403/404 responses, failed membership rechecks and malformed
+scope responses keep the complete view unavailable. A late response cannot
+restore an older read after a newer failure. Draft selections and any ambiguous
+operation request/key remain unchanged; an unsent draft requires explicit CAS
+rebase when its saved head differs, while recovery checks the original request.
+
+The client displays snapshot `projects_truncated`, `work_truncated`,
+`evidence_truncated`, and `bytes_truncated` warnings next to the agenda, together
+with the selected thread's truncation warning. An empty agenda still discloses
+that omitted source records were not assessed. These are the fixed preparation's
+saved coverage flags; rendering does not query newer facts or infer complete
+coverage when a flag is absent.

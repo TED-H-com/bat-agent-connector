@@ -5,7 +5,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const number=value=>Number.isSafeInteger(value)&&value>=0;
   if(!number(pageSize)||pageSize<1||pageSize>100)throw Error('Invalid Follow-up page size');
   let serial=0, selected='', loaded=false, head=null, plan=null, metadata=[], next=null, sourceLoaded=false;
-  let sourcePages={}, snapshot=null, thread=null, editor=null, reading=false, sourceSerial=0, retired=false;
+  let sourcePages={}, snapshot=null, thread=null, editor=null, reading=false, sourceSerial=0, retired=false, verifiedRole=null;
   const status=h('div',{role:'status'}),view=h('div'),sourceStatus=h('div',{role:'status'}),choices=h('div'),meetingChoices=h('div');
   const note=key=>h('p',{class:'muted pm-note-text'},t(key));
   const code=value=>h('code',{class:'pm-source'},value||t('pm_fu_unknown'));
@@ -39,9 +39,10 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   }
   function renderNavigation() {
     const entries=metadata.map(row=>[row.intake_id,`#${row.version} · ${row.created_by}`]);
+    updateOptions(previousChoice,entries,'pm_fu_no_comparison');
     if(selected&&!entries.some(([id])=>id===selected))entries.push([selected,t('pm_fu_saved_selection')+' · '+selected]);
     updateOptions(choose,entries,'pm_fu_latest');choose.value=selected;
-    updateOptions(previousChoice,entries,'pm_fu_no_comparison');more.hidden=next==null;more.disabled=reading;
+    more.hidden=next==null;more.disabled=reading;
   }
   function clearSources() {
     sourceLoaded=false;sourcePages={};snapshot=null;thread=null;choices.replaceChildren();meetingChoices.replaceChildren();sourceStatus.replaceChildren();
@@ -58,6 +59,11 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     const doc=row.document;
     const summary=h('div',{class:'pm-fu-meta'},h('strong',{},t('pm_fu_version',{version:row.version})),h('span',{},t('pm_fu_prepared_at'),': ',date(row.created_at)),
       h('span',{},t('pm_fu_snapshot_at'),': ',date(doc.snapshot_ref.as_of)));
+    const gaps=['projects_truncated','work_truncated','evidence_truncated','bytes_truncated']
+      .filter(key=>doc.coverage?.snapshot?.[key]===true).map(key=>'pm_fu_'+key);
+    if(doc.coverage?.thread?.truncated)gaps.push('pm_fu_truncated');
+    const coverageWarning=gaps.length?h('aside',{class:'pm-fact','data-pm-fu-partial':''},h('h3',{},t('pm_fu_partial')),
+      note('pm_fu_partial_help'),h('ul',{},...gaps.map(key=>h('li',{},t(key))))):'';
     const agenda=h('section',{'data-pm-fu-agenda':''},h('h3',{},t('pm_fu_agenda')));
     if(!doc.agenda.length)agenda.append(note('pm_fu_no_agenda'));
     else agenda.append(h('ol',{},...doc.agenda.map(item=>h('li',{class:'pm-fact'},h('strong',{class:'pm-note-text'},item.text),
@@ -89,8 +95,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
       ...(doc.selected_meeting_follow_up_refs||[]).map(value=>h('p',{},value.follow_up.text,code(value.completion_id),code(value.follow_up_id),
         value.result_event_id?code(value.result_event_id):'',h('span',{class:'muted'},t('pm_fu_original_snapshot')),code(value.original_snapshot_ref.snapshot_id),
         value.result?h('span',{},t('pm_fu_result_snapshot'),code(value.result.document.snapshot_ref.snapshot_id)):'')),
-      note('pm_fu_coverage'),doc.coverage?.thread?.truncated?note('pm_fu_truncated'):'');
-    view.append(summary,note('pm_fu_preparation_only'),agenda,knowledge,issues,changes,sources);
+      note('pm_fu_coverage'));
+    view.append(summary,note('pm_fu_preparation_only'),coverageWarning,agenda,knowledge,issues,changes,sources);
   }
   function stale() {
     if(!baseline.value||head==null||plan==null)return false;
@@ -98,7 +104,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     return value.expected_version!==head||value.expected_plan_version!==plan||value.thread_id!==threadChoice.value
       ||thread&&value.expected_thread_version!==thread.version;
   }
-  const can=()=>loaded&&!retired&&actor===caps()?.actor&&permitted(false);
+  const can=()=>loaded&&!retired&&actor===caps()?.actor&&permitted(false)
+    &&(verifiedRole===null||['owner','contributor'].includes(verifiedRole));
   const ready=()=>can()&&sourceLoaded&&snapshot?.snapshot_id===snapshotChoice.value&&snapshot.baseline?.document
     &&!snapshot.visibility?.filtered&&(!threadChoice.value||thread?.thread_id===threadChoice.value)&&baseline.value&&!stale();
   function bindVersions() {
@@ -236,18 +243,45 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     }catch{/* Each original source failure clears the complete stale view. */}
   }
   editorFold.addEventListener('toggle',()=>{if(editorFold.open&&loaded&&!sourceLoaded)void loadSources();});
+  async function verifyWorkspace(ticket) {
+    const data=await api('GET',endpoint);if(!current(ticket))return false;
+    const member=data.workspace?.membership;
+    if(data.workspace?.workspace_id!==workspaceId||member?.actor!==actor||!['owner','contributor','reader'].includes(member.role))throw Error(t('pm_fu_scope_error'));
+    verifiedRole=member.role;return true;
+  }
   async function refresh() {
     const ticket=++serial;++sourceSerial;loaded=false;reading=false;view.replaceChildren();metadata=[];next=null;choose.replaceChildren();more.hidden=true;clearSources();editor.update();
     status.replaceChildren(note('pm_fu_loading'));
     try{
       if(retired||actor!==caps()?.actor){retired=true;throw Error(t('pm_fu_actor_changed'));}
-      const [latest,page,planData]=await Promise.all([api('GET',`${endpoint}/follow-ups/latest`),api('GET',`${endpoint}/follow-ups?after=0&limit=${pageSize}`),api('GET',`${endpoint}/plans/head`)]);
-      if(!current(ticket))return;check(latest);metadataPage(page,0);
-      const planHead=planData.head;if(planHead?.workspace_id!==workspaceId||!number(planHead.version)||!number(latest.head_version))throw Error(t('pm_fu_scope_error'));
-      head=latest.head_version;plan=planHead.version;metadata=page.intakes;next=page.next_cursor;
-      const detail=selected?check(await api('GET',`${endpoint}/follow-ups/${encodeURIComponent(selected)}`)):latest;
-      if(!current(ticket))return;if(detail.intake)validIntake(detail.intake,selected||null);else if(selected)throw Error(t('pm_fu_scope_error'));
-      loaded=true;status.replaceChildren();render(detail.intake);renderNavigation();editor.update();if(editorFold.open)await loadSources();
+      const listPath=`${endpoint}/follow-ups?after=0&limit=${pageSize}`, planPath=`${endpoint}/plans/head`;
+      const detailPath=selected?`${endpoint}/follow-ups/${encodeURIComponent(selected)}`:`${endpoint}/follow-ups/latest`;
+      let [page,planData,result]=await Promise.all([api('GET',listPath),api('GET',planPath),
+        api('GET',detailPath).then(value=>({value}),error=>({error}))]);
+      if(!current(ticket))return;
+      const sourceUnavailable=result.error?.code==='PM_FOLLOW_UP_SOURCE_UNAVAILABLE';
+      if(result.error&&!sourceUnavailable)throw result.error;
+      // A missing source is different from missing workspace authority. Only
+      // after rechecking membership may fresh readable metadata restore the
+      // navigation and preparation form. Never substitute an older intake.
+      if(sourceUnavailable||verifiedRole!==null){
+        if(!await verifyWorkspace(ticket))return;
+        [page,planData]=await Promise.all([api('GET',listPath),api('GET',planPath)]);
+        if(!current(ticket))return;
+      }
+      metadataPage(page,0);
+      const planHead=planData.head;if(planHead?.workspace_id!==workspaceId||!number(planHead.version))throw Error(t('pm_fu_scope_error'));
+      head=page.head_version;plan=planHead.version;metadata=page.intakes;next=page.next_cursor;
+      const detail=result.value;
+      if(detail){check(detail);if(!number(detail.head_version))throw Error(t('pm_fu_scope_error'));
+        // Concurrent newer heads may make this exact request stale; the server
+        // CAS remains authoritative and the user explicitly rebases a draft.
+        head=Math.max(head,detail.head_version);
+        if(detail.intake)validIntake(detail.intake,selected||null);else if(selected)throw Error(t('pm_fu_scope_error'));}
+      loaded=true;status.replaceChildren();
+      if(sourceUnavailable)view.replaceChildren(note(selected?'pm_fu_selected_unavailable':'pm_fu_latest_unavailable'),note('pm_fu_readable_history'));
+      else render(detail.intake);
+      renderNavigation();editor.update();if(editorFold.open)await loadSources();
     }catch(error){if(ticket===serial)unavailable(error);}
   }
   return {element,box:element,refresh};
