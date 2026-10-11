@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from bat_agent_connector import pm_quality_reviews, pm_sprints
+from bat_agent_connector import api_auth, pm_quality_reviews, pm_sprints
 from bat_agent_connector import pm_requirement_acceptance as acceptance
 from bat_agent_connector import pm_work_batch_evidence as evidence
 from bat_agent_connector import pm_work_batches as batches
@@ -37,7 +37,7 @@ async def qualify(w, *, verdict='accepted'):
         {'expected_revision_id': None}))['revision_id']
     w['candidate'], w['tree'] = w['config']['candidate_commit'], w['config']['tree_hash']
     proof = await producer.execute(w)
-    assert proof['result']['status'] == 'passed', proof
+    assert proof['status'] == 'succeeded' and proof['result']['status'] == 'passed', proof
     w['proof'] = proof['result']['reference']
     env = reviews.selection(w)
     for row in env['params']['criteria']:
@@ -143,6 +143,7 @@ async def test_actual_source_withdrawal_hides_original_dependency_proof(qualifie
 
 async def configure_batch_child(w, child):
     w['child'] = child
+    api_auth.issue(w['d'].ops.db, OWNER.actor, sorted(OWNER.scopes))
     w['d'].adapter.verifier = ObservedVerifier(VerificationSettings(commands={child['params']['project_id']: (sys.executable, '-c', 'print("fixed original proof")')},
         artifact_dir=str(w['human'].parent / 'batch-verification-logs')))
     producer.verifier.install(w['d'].ops)
