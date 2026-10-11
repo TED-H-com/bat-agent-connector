@@ -142,7 +142,8 @@ async def test_merge_exact_receipts_real_git_and_named_replay(daemon, mock, carr
     assert git(origin, 'rev-parse', 'HEAD') != original_head
     assert (origin / 'feature').read_bytes() == (source / 'feature').read_bytes()
     assert not merge._document().get('carrier_writers')
-    assert [s['name'] for s in out['steps']] == ['merge.prepare', 'merge.reserve', 'merge.frame', 'merge.release']
+    assert [s['name'] for s in out['steps']] == [
+        'merge.prepare', 'source.identity', 'merge.reserve', 'merge.frame', 'merge.release']
     daemon.fleet.config.host('h1').orchestrate = False
     daemon.ops.context['git_runner'] = None
     replay = await create(daemon, target={'host': 'h1', 'session_id': 'merge-managed'})
