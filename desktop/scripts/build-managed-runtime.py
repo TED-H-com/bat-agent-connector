@@ -35,6 +35,8 @@ def main() -> None:
             "--workpath", str(BUILD / "work"), "--specpath", str(BUILD),
             "--paths", str(ROOT / "src"),
             "--collect-all", "bat_agent_connector",
+            # Windows has no system IANA database; policy schedules use the same zones.
+            "--collect-data", "tzdata",
             # Host helpers are transmitted as source, not imported on the central host.
             "--add-data", f"{ROOT / 'src' / 'bat_agent_connector'}:bat_agent_connector",
             str(ROOT / "desktop" / "scripts" / "managed-runtime-entry.py"),
