@@ -755,15 +755,20 @@ async def session_policy(fleet, host: str, session_id: str | None = None) -> dic
     t, ws = await _resolve_session(fleet.client(host), session_id)
     cls, live = await classify_live(fleet, host, t)
     tiers = {"write": base["writes_enabled"], "orchestrate": base["orchestrate_enabled"]}
+    caller_refusal = None
+    presentation = cls.to_dict()
+    if cls.writable:
+        try:
+            controller_authority.require_entry(registry.get(host, t["id"]))
+        except ResourceReadOnly as error:
+            caller_refusal = (error.code, str(error))
+            presentation.update(api_access="read_only", read_only_code=error.code, read_only_reason=str(error))
     actions = {}
     for action in SESSION_ACTIONS:
         m = BY_ACTION[action]
         refusal = _decide(cls, m, live)
         if refusal is None:
-            try:
-                controller_authority.require_entry(registry.get(host, t["id"]))
-            except ResourceReadOnly as error:
-                refusal = (error.code, str(error))
+            refusal = caller_refusal
         if refusal is None and not tiers[m.tier]:
             refusal = ("TIER_DISABLED", f"the {m.tier} tier is off for host {host}")
         actions[action] = ({"allowed": False, "code": refusal[0], "reason": refusal[1]} if refusal
@@ -773,7 +778,7 @@ async def session_policy(fleet, host: str, session_id: str | None = None) -> dic
                 check_merge_destination(hc, _origin_cwd(t, ws))
             except ResourceReadOnly as e:
                 actions[action] = {"allowed": False, "code": e.code, "reason": str(e)}
-    return {**base, "session_id": t["id"], **cls.to_dict(),
+    return {**base, "session_id": t["id"], **presentation,
             "observed": live.observed if live else None, "actions": actions}
 
 
