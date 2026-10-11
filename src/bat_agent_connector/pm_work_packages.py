@@ -121,6 +121,11 @@ def _plan_ref(plan):
 
 def _original_plan(ops, principal, wid, ref):
     pm_plans._read(ops, principal, wid)
+    from .pm_access import require_operation_sources
+    require_operation_sources(ops.db, principal, [
+        *pm_plans.source_operation_ids(ops.db, wid, ref["revision_id"], include_adoption=False),
+        ref["adoption_operation_id"],
+    ])
     plan = pm_plans._revision(ops.db, wid, ref["revision_id"])
     pm_plans.revision_files(ops.db, wid, ref["revision_id"])
     row = ops.db.execute("SELECT result FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? AND operation_id=?",
