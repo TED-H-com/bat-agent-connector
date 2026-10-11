@@ -1158,7 +1158,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1294,6 +1294,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let follow_up_list = path.ends_with("/follow-ups");
             let assessment_list = path.ends_with("/follow-up-assessments");
             let work_package_list = path.ends_with("/work-packages");
+            let issue_mapping_list = path.ends_with("/issue-mappings");
             let governance_history = path.contains("/governance/") && path.ends_with("/history");
             let kanban_list = path.ends_with("/kanban");
             let meeting_list = path.ends_with("/meetings");
@@ -1323,6 +1324,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || follow_up_list
                 || assessment_list
                 || work_package_list
+                || issue_mapping_list
                 || governance_history
                 || kanban_list
                 || meeting_list
@@ -1949,6 +1951,53 @@ mod tests {
         assert!(validate_request(&input).is_err());
         input.body = None;
         input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn issue_mapping_reads_only_allow_exact_queries() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/issue-mappings";
+        let mapping = "pmim_22222222222222222222222222222222";
+        for suffix in [
+            "".to_string(),
+            "?after=0&limit=100".into(),
+            format!("/{mapping}"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?after=",
+            "?limit=",
+            "?actor=",
+            "?after=0&after=1",
+            "?limit=&limit=1",
+            "?after=-1",
+            "?after=1000000000",
+            "?limit=101",
+            "?work_item_id=wi_33333333333333333333",
+            "?execute=true",
+            "?mapping_id=pmim_22222222222222222222222222222222",
+            "/pmim_bad",
+            "/latest",
+            "/publish",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        for suffix in ["?after=0", "?limit=1", "?actor=", "/history", "/cancel"] {
+            assert!(
+                validate_request(&get(&format!("{root}/{mapping}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        assert!(validate_request(&request("POST", root)).is_err());
+        let mut input = get(root);
+        input.body = Some(serde_json::json!({"public_body":"not a read"}));
         assert!(validate_request(&input).is_err());
     }
 

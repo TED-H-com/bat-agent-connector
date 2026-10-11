@@ -142,8 +142,26 @@ original operation ID. General operation cancellation/recovery must retain the
 same original source policy; hidden existing requests are still admitted and must
 not receive `admission_refused: true`.
 
+## HTTP, RPC, MCP and native entries
+
+The TaskDaemon's shared API installation registers both actions. Call the existing
+operation submission endpoint/tool with the exact action request and key. Global
+capabilities advertise `features.pm_workspaces.issue_mapping` when both actions
+are installed; this is not runtime, publication authorization or completion.
+
+| HTTP GET, relative to `/api/v1` | RPC / MCP |
+| --- | --- |
+| `/pm/workspaces/{workspace_id}/issue-mappings?after&limit` | `pm_issue_mappings_list` |
+| `/pm/workspaces/{workspace_id}/issue-mappings/{mapping_id}` | `pm_issue_mapping_get` |
+
+Reads require `observe`, current membership and original source access. Unknown,
+blank, repeated or invalid selectors fail; detail accepts no selectors. The
+native bridge admits the same exact GET paths/selectors, with no direct native
+publish/cancel route. MCP marks the reads read-only and uses the caller's
+principal. A read never performs a GitHub call or changes mapping state.
+
 The core adds no ordinary artifact, new task, session, WorkBinding, execution,
-PR, deployment, model call or live host operation. Shared HTTP/RPC/MCP/UI wiring
-belongs to the integration slice. Remaining W18 work includes explicit external
+PR, deployment, model call or live host operation. UI wiring belongs to the
+integration slice. Remaining W18 work includes explicit external
 issue-state synchronization policy, richer many-to-many associations and any
 deliberate reopen/remap flow. This slice is not full W18 or M4 acceptance.
