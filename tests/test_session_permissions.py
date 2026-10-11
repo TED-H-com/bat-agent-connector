@@ -332,7 +332,7 @@ async def test_partial_ack_restart_sends_only_the_missing_frame(owned, mock, mon
 async def test_http_host_policy_refusal_is_explicit_and_has_no_operation(served, mock):
     d, port = served
     adopt(CLAUDE)
-    code, body = await api.http(port, "POST", "/api/v1/operations", tok=api.token(d, "policy", "operate"),
+    code, body = await api.http(port, "POST", "/api/v1/operations", tok=api.token(d, PERSON.actor, "operate"),
                                 body=intent(CLAUDE, mode="allow_all"))
     assert code == 403 and body["error"]["code"] == "PERMISSIONS_HOST_POLICY", body
     assert not d.ops.list()["operations"] and not api.write_frames(mock)
@@ -588,7 +588,7 @@ async def test_http_confined_raise_refusal_preserves_explicit_code(served, mock)
     d, port = served
     adopt(CLAUDE, write_scope="confined")
     d.fleet.config.host("h1").default_permission_mode = "allow_all"
-    code, body = await api.http(port, "POST", "/api/v1/operations", tok=api.token(d, "confined", "operate"),
+    code, body = await api.http(port, "POST", "/api/v1/operations", tok=api.token(d, PERSON.actor, "operate"),
                                body=intent(CLAUDE, mode="allow_all"))
     assert code == 403 and body["error"]["code"] == "CONFINEMENT_RAISE_REFUSED", body
     assert not d.ops.list()["operations"] and not api.write_frames(mock)
@@ -652,7 +652,9 @@ async def test_standalone_admission_cannot_adopt_a_later_task_owner(owned, mock,
     d, tid = owned
     adopt(CODEX, agent_preset="codex-agent")
     op, _ = d.ops.create(PERSON, **intent(CODEX))
-    assert not (op["external_refs"] or {}).get("admission_binding")
+    binding = op["external_refs"]["admission_binding"]
+    assert "task_id" not in binding
+    assert binding["session_controller"]["session_id"] == CODEX
     def claim():
         registry.update("h1", CODEX, task_id=tid, role="lead")
         d.journal.db.execute("UPDATE tasks SET session_id=? WHERE task_id=?", (CODEX, tid))
