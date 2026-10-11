@@ -336,11 +336,15 @@ async def test_extra_idle_or_complete_fields_and_wrong_cursor_are_rejected(ops):
 
 
 async def test_wire_byte_page_prefix_never_skips_next_snapshot(ops, monkeypatch):
+    # Match inventory and policy digests with a genuine multibyte profile name;
+    # wire accounting uses UTF-8 bytes, not JSON character count.
+    ops.context['fleet'].config.hosts['mock-host'].profile_id = '開發'
     data = await prepared(ops)
     inventory(ops)
     await capture(ops, data)
     await capture(ops, data)
     full = workload.list_snapshots(ops, READER, data['workspace_id'])
+    assert workload._size(full) > len(json.dumps(full, ensure_ascii=False))
     size = workload._size({**full, 'snapshots': full['snapshots'][:1], 'next_cursor': full['snapshots'][0]['sequence']})
     monkeypatch.setattr(workload, 'MAX_READ_BYTES', size + 10)
     first = workload.list_snapshots(ops, READER, data['workspace_id'])
