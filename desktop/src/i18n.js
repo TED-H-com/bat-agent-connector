@@ -1,9 +1,11 @@
+import {pmPackageHandoffStrings} from './pm-package-handoff-strings.js';
 import {pmStrings} from "./pm-strings.js";
 import {instructionReceiptStrings} from './instruction-receipts.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 const STRINGS = {
   "zh-TW": {
     ...pmStrings["zh-TW"],
+    ...pmPackageHandoffStrings["zh-TW"],
     managed_recovery_title: "本機背景服務尚未就緒", managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
     ...instructionReceiptStrings['zh-TW'],
     repair_title: "建立修復工作", repair_help: "選擇歸屬專案，讀取這次失敗的固定證據，再建立或查回修復工作。派工前仍會讓你核對目的地與版本。",
@@ -878,6 +880,7 @@ const STRINGS = {
   },
   en: {
     ...pmStrings.en,
+    ...pmPackageHandoffStrings.en,
     managed_recovery_title: "Local background service is not ready", managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
     ...instructionReceiptStrings['en-US'],
     repair_title: "Create repair work", repair_help: "Choose a project and read fixed evidence from this failure. Create or recover repair work, then review its destination and version before starting it.",

@@ -81,7 +81,10 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
     const row=packageCheck(checked(data).package);checked(readiness);
     if(row.package_id!==id||readiness.package_id!==id||readiness.document_digest!==row.document_digest
       ||readiness.ready_for!=='engineering_handoff_review'||readiness.execution_authorized!==false||readiness.execution_available!==false
-      ||readiness.dispatch_readiness!=='not_implemented'||!['ready','blocked'].includes(readiness.status)||!Array.isArray(readiness.checks))throw Error(t('wp_invalid'));
+      ||!(readiness.dispatch_readiness==='not_implemented'||readiness.dispatch_readiness==='separate_fixed_handoff_admission'
+        &&readiness.handoff?.action==='repository.continue'&&readiness.handoff.contract==='pm-engineering-handoff/v1'
+        &&readiness.handoff.code_basis_required===true&&readiness.handoff.compatibility==='unverified'&&readiness.handoff.source_materialization==='bounded_full_prompt')
+      ||!['ready','blocked'].includes(readiness.status)||!Array.isArray(readiness.checks))throw Error(t('wp_invalid'));
     render(row,readiness);onSelection(row);
   }
   function failed(error,ticket){
@@ -114,5 +117,6 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
     }catch(error){failed(error,ticket);}
     finally{try{if(valid(ticket)){busy=false;renderList();controls();}}catch{}}
   }
-  return{element,refresh};
+  function withdraw(){sequence++;busy=false;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);status.replaceChildren();controls();}
+  return{element,refresh,withdraw};
 }
