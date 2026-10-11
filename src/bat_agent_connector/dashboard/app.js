@@ -4875,6 +4875,494 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	};
 }
 //#endregion
+//#region src/pm-release-baselines.js
+function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const action = "pm.release_baseline.register", storage = `batc.pm.${namespace}.release-selection.${workspaceId}`;
+	let epoch = 0, selectionEpoch = 0, ready = false, head = null, bindings = [], bindingCursor = null, choices = [], choiceCursor = null, preview = null;
+	let currentEditor = null, selectedKey = "", historyLoaded = false, historyCursor = null, historyFiltered = false, choicesFiltered = false, choicesIneligible = false, reading = false;
+	const editors = new Map();
+	const view = h("div", { "data-release-current": "" }), history = h("div"), status = h("div", { role: "status" });
+	const sourceStatus = h("div", { role: "status" }), sourceView = h("div"), previewView = h("div"), editorView = h("div");
+	const repository = h("select", { "aria-label": t("prb_repository") }), kind = h("select", { "aria-label": t("prb_kind") }, h("option", { value: "github_release" }, t("prb_github_release")), h("option", { value: "deployment" }, t("prb_deployment")));
+	const branch = input("prb_branch", {
+		required: false,
+		max: 255
+	});
+	let draft = {
+		repository: "",
+		kind: "github_release",
+		branch: ""
+	};
+	try {
+		const saved = JSON.parse(localStorage.getItem(storage));
+		if (saved && [
+			"repository",
+			"kind",
+			"branch"
+		].every((key) => typeof saved[key] === "string")) draft = saved;
+	} catch {}
+	repository.value = draft.repository;
+	kind.value = ["github_release", "deployment"].includes(draft.kind) ? draft.kind : "github_release";
+	branch.value = draft.branch;
+	const persist = () => {
+		alive();
+		draft = {
+			repository: repository.value,
+			kind: kind.value,
+			branch: branch.value
+		};
+		localStorage.setItem(storage, JSON.stringify(draft));
+	};
+	const owner = () => permitted(true) && workspace()?.membership?.role === "owner" && caps()?.scopes?.includes("manage");
+	const discovery = () => caps()?.features?.pm_workspaces?.release_baselines?.source_choices === true && caps()?.features?.pm_workspaces?.release_baselines?.source_preview === true;
+	const allowed = () => discovery() && owner() && caps()?.actions?.some((row) => row.action === action && row.allowed);
+	const valid = (ticket) => {
+		try {
+			alive();
+			return ticket === epoch;
+		} catch {
+			return false;
+		}
+	};
+	const check = (data) => {
+		if (data?.workspace_id !== workspaceId) throw Error(t("prb_invalid"));
+		return data;
+	};
+	const stamp = (value) => {
+		const date = new Date(typeof value === "number" ? value * 1e3 : value);
+		return Number.isNaN(date.valueOf()) ? String(value ?? "—") : date.toLocaleString();
+	};
+	const query = (params) => new URLSearchParams(Object.entries(params).filter(([, value]) => value !== null && value !== void 0)).toString();
+	const bindingKey = (row, name) => JSON.stringify([row.project_binding_id, name]);
+	const selectedBinding = () => bindings.flatMap((row) => row.repositories.map((name) => ({
+		row,
+		name,
+		key: bindingKey(row, name)
+	}))).find((item) => item.key === repository.value);
+	const selection = () => JSON.stringify([
+		repository.value,
+		kind.value,
+		selectedKey,
+		branch.value
+	]);
+	const choose = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void readChoices(false)
+	}, t("prb_load_sources"));
+	const moreBindings = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void readBindings(true)
+	}, t("prb_more_bindings"));
+	const readPreview = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void readProof()
+	}, t("prb_preview"));
+	const usePreview = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			if (!currentEditor || currentEditor.locked() || !preview || !allowed()) return;
+			currentEditor.set("registration", JSON.stringify(preview.registration));
+			currentEditor.update();
+		}
+	}, t("prb_use_preview"));
+	const historyDetails = h("details", {}, h("summary", {}, t("prb_history")), history);
+	historyDetails.addEventListener("toggle", () => {
+		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
+	});
+	const editorDetails = h("details", { "data-release-register": "" }, h("summary", {}, t("prb_register")), h("p", { class: "muted" }, t("prb_source_help")), h("div", { class: "pm-fields" }, labelled("prb_repository", repository), moreBindings, labelled("prb_kind", kind)), choose, sourceStatus, sourceView, labelled("prb_branch", branch), h("p", { class: "muted" }, t("prb_branch_help")), readPreview, previewView, usePreview, editorView);
+	const permission = h("p", { class: "muted" }, t("prb_owner"));
+	const element = h("section", {
+		class: "pm-brief",
+		"data-pm-release-baselines": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("prb_title")), h("p", { class: "muted" }, t("prb_intro"))), h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("prb_refresh"))), status, view, historyDetails, permission, editorDetails);
+	function controls() {
+		const can = ready && allowed();
+		for (const field of [
+			repository,
+			kind,
+			branch
+		]) field.disabled = !can || reading;
+		choose.disabled = !can || reading || !selectedBinding();
+		moreBindings.disabled = !can || reading;
+		readPreview.disabled = !can || reading || !selectedKey;
+		permission.hidden = Boolean(owner() && discovery());
+		permission.textContent = t(owner() ? "prb_discovery_unavailable" : "prb_owner");
+		editorDetails.hidden = !owner() || !discovery();
+		for (const editor of editors.values()) editor.update();
+	}
+	function resetSources() {
+		selectionEpoch++;
+		selectedKey = "";
+		choices = [];
+		choiceCursor = null;
+		choicesFiltered = false;
+		choicesIneligible = false;
+		preview = null;
+		sourceView.replaceChildren();
+		previewView.replaceChildren();
+		usePreview.hidden = true;
+	}
+	function withdraw() {
+		epoch++;
+		selectionEpoch++;
+		ready = false;
+		head = null;
+		reading = false;
+		historyLoaded = false;
+		historyCursor = null;
+		bindings = [];
+		bindingCursor = null;
+		repository.replaceChildren(h("option", { value: "" }, t("prb_choose_repository")));
+		moreBindings.hidden = true;
+		view.replaceChildren();
+		history.replaceChildren();
+		sourceStatus.replaceChildren();
+		resetSources();
+		controls();
+	}
+	function failure(error) {
+		withdraw();
+		status.replaceChildren(h("p", { class: "muted" }, t("prb_unavailable")), errorBox(error));
+	}
+	const editorApi = async (...args) => {
+		const ticket = epoch;
+		try {
+			return await api(...args);
+		} catch (error) {
+			if (valid(ticket) && [
+				401,
+				403,
+				404
+			].includes(error.status)) failure(error);
+			throw error;
+		}
+	};
+	function fixedDetails(document, proof, metadata = null) {
+		const details = h("details", {}, h("summary", {}, t("prb_sources")));
+		const source = proof?.source || {};
+		for (const [label, value] of [
+			[t("prb_commit"), document.commit_sha],
+			[t("prb_observed"), stamp(proof?.observed_at)],
+			[t("prb_published"), source.published_at ? stamp(source.published_at) : null],
+			["Repository", document.repository],
+			["Baseline", metadata?.baseline_id],
+			["SHA-256", metadata?.document_digest],
+			["Source", source.kind],
+			["Release ID", source.release_id],
+			["Deployment", source.deployment_id]
+		]) if (value !== null && value !== void 0) details.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value))));
+		if (metadata?.operation_id) details.append(h("a", { href: `#/op/${encodeURIComponent(metadata.operation_id)}` }, t("pm_operation")));
+		const maintenance = proof?.maintenance_branch;
+		details.append(h("p", { class: "muted" }, t(maintenance?.status === "verified_at_observation" ? "prb_branch_verified" : "prb_branch_none")));
+		if (maintenance?.ref) details.append(h("p", { class: "mono" }, maintenance.ref), h("p", { class: "mono" }, maintenance.head_sha));
+		return details;
+	}
+	function baselineRow(row, current = false) {
+		if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId) throw Error(t("prb_invalid"));
+		const doc = row.document, delivery = doc.delivery_status || {};
+		return h("article", { "data-release-baseline": row.baseline_id }, h("h3", {}, current ? t("prb_current") : `${t("prb_version")} ${row.version}`), h("p", {}, h("strong", {}, doc.release_version?.value || doc.commit_sha), " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, `${t("prb_version")} ${row.version} · ${stamp(row.created_at)}`), h("ul", {}, h("li", {}, t(delivery.github_release === "published" ? "prb_gh_published" : "prb_gh_unknown")), h("li", {}, t("prb_registry")), h("li", {}, t(delivery.deployment === "verified" ? "prb_dep_verified" : "prb_dep_unknown"))), delivery.deployment === "verified" ? h("p", { class: "muted" }, t("prb_not_live")) : null, h("p", { class: "muted" }, t("prb_quality")), doc.intent?.rationale ? h("p", {}, doc.intent.rationale) : null, ...(doc.quality?.known_limitations || []).map((item) => h("p", {}, `${t("prb_limit_claim")}: ${item.text}`)), fixedDetails(doc, doc.proof, row));
+	}
+	function renderCurrent(data) {
+		check(data);
+		if (!Number.isSafeInteger(data.head?.version)) throw Error(t("prb_invalid"));
+		head = data.head;
+		view.replaceChildren(data.baseline ? baselineRow(data.baseline, true) : h("p", { class: "muted" }, t(data.visibility_filtered || head.version > 0 ? "prb_hidden" : "prb_empty")));
+	}
+	async function readHistory(append) {
+		const ticket = epoch, after = append ? historyCursor : 0;
+		try {
+			const page = check(await api("GET", `${endpoint}/release-baselines?${query({
+				after,
+				limit: 20
+			})}`));
+			if (!valid(ticket)) return;
+			const rows = (page.baselines || []).map((row) => baselineRow(row));
+			if (!append) {
+				history.replaceChildren();
+				historyFiltered = false;
+			} else history.querySelector("[data-release-more]")?.remove();
+			historyLoaded = true;
+			historyCursor = page.next_cursor;
+			historyFiltered ||= page.visibility_filtered;
+			history.append(...rows);
+			history.querySelector("[data-release-coverage]")?.remove();
+			history.append(h("p", {
+				"data-release-coverage": "",
+				class: "muted"
+			}, t(historyFiltered ? "prb_filtered" : "prb_partial")));
+			if (historyCursor !== null && historyCursor !== void 0) history.append(h("button", {
+				"data-release-more": "",
+				type: "button",
+				class: "secondary",
+				onclick: (event) => {
+					event.currentTarget.disabled = true;
+					readHistory(true);
+				}
+			}, t("prb_more")));
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	function bindEditor() {
+		const chosen = selectedBinding();
+		currentEditor = null;
+		editorView.replaceChildren();
+		if (!chosen) return;
+		const repositoryName = chosen.name;
+		if (!editors.has(repositoryName)) {
+			const registration = h("input", { type: "hidden" }), rationale = input("prb_rationale", {
+				multiline: true,
+				max: 4e3
+			}), limitations = input("prb_limits", {
+				multiline: true,
+				required: false,
+				max: 80040
+			});
+			const stale = h("p", { class: "muted" }, t("prb_stale"));
+			let editor = null, syncing = false;
+			const matches = () => {
+				if (!preview || !registration.value || !head || !ready) return false;
+				try {
+					const saved = JSON.parse(registration.value);
+					return JSON.stringify(saved) === JSON.stringify(preview.registration) && saved.preconditions.expected_baseline_version === head.version && saved.preconditions.expected_previous_baseline_id === head.baseline_id;
+				} catch {
+					return false;
+				}
+			};
+			editor = form({
+				h,
+				t,
+				api: editorApi,
+				action,
+				target: {
+					workspace_id: workspaceId,
+					repository: repositoryName
+				},
+				fields: {
+					registration,
+					rationale,
+					limitations
+				},
+				params: (values) => {
+					const frozen = JSON.parse(values.registration), limits = values.limitations.split("\n").map((line) => line.trim()).filter(Boolean);
+					if (limits.length > 40 || limits.some((line) => [...line].length > 2e3)) throw Error(t("prb_limits_help"));
+					return {
+						...frozen.params,
+						rationale: values.rationale,
+						known_limitations: limits
+					};
+				},
+				preconditions: () => JSON.parse(registration.value).preconditions,
+				permitted: () => allowed() && matches(),
+				recoverPermitted: () => allowed(),
+				label: "prb_save",
+				onSaved: () => refresh(),
+				onStateChange: () => {
+					if (editor && !syncing) editor.update();
+				},
+				extra: h("div", { class: "pm-fields" }, stale, labelled("prb_rationale", rationale), labelled("prb_limits", limitations), h("p", { class: "muted" }, t("prb_limits_help")))
+			});
+			const baseUpdate = editor.update;
+			editor.update = () => {
+				if (syncing) return;
+				syncing = true;
+				try {
+					if (!editor.locked() && !registration.value && preview?.registration.target.repository === repositoryName) {
+						registration.value = JSON.stringify(preview.registration);
+						editor.changed();
+					}
+					baseUpdate();
+					stale.hidden = editor.locked() || !registration.value || matches();
+					if (!editor.locked() && allowed()) {
+						rationale.disabled = false;
+						limitations.disabled = false;
+					}
+					if (editor === currentEditor) usePreview.hidden = editor.locked() || !preview || matches();
+				} finally {
+					syncing = false;
+				}
+			};
+			editors.set(repositoryName, editor);
+		}
+		currentEditor = editors.get(repositoryName);
+		editorView.append(currentEditor.box);
+		currentEditor.update();
+	}
+	async function readBindings(append) {
+		const ticket = epoch;
+		reading = true;
+		controls();
+		try {
+			const page = check(await api("GET", `${endpoint}/release-baseline-sources?${query({
+				after: append ? bindingCursor : 0,
+				limit: 20
+			})}`));
+			if (!valid(ticket)) return;
+			bindings = append ? [...bindings, ...page.bindings] : page.bindings;
+			bindingCursor = page.next_cursor;
+			const wanted = repository.value || draft.repository;
+			repository.replaceChildren(h("option", { value: "" }, t("prb_choose_repository")));
+			for (const row of bindings) for (const name of row.repositories) repository.append(h("option", { value: bindingKey(row, name) }, `${row.project_name} · ${name}`));
+			repository.value = [...repository.options].some((option) => option.value === wanted) ? wanted : "";
+			moreBindings.hidden = bindingCursor === null || bindingCursor === void 0;
+			bindEditor();
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		} finally {
+			if (ticket === epoch) {
+				reading = false;
+				controls();
+			}
+		}
+	}
+	function invalidate() {
+		persist();
+		resetSources();
+		sourceStatus.replaceChildren();
+		bindEditor();
+		controls();
+	}
+	repository.addEventListener("change", invalidate);
+	kind.addEventListener("change", invalidate);
+	branch.addEventListener("input", () => {
+		persist();
+		selectionEpoch++;
+		preview = null;
+		previewView.replaceChildren();
+		usePreview.hidden = true;
+		controls();
+	});
+	async function readChoices(append) {
+		const chosen = selectedBinding();
+		if (!ready || !allowed() || !chosen || reading) return;
+		const ticket = epoch, selected = ++selectionEpoch, mode = kind.value, cursor = append ? choiceCursor : mode === "github_release" ? 1 : 0;
+		reading = true;
+		preview = null;
+		previewView.replaceChildren();
+		selectedKey = "";
+		sourceStatus.replaceChildren();
+		controls();
+		try {
+			const page = check(await api("GET", `${endpoint}/release-baseline-sources/${mode === "github_release" ? "github-releases" : "deployments"}?${query({
+				project_binding_id: chosen.row.project_binding_id,
+				repository: chosen.name,
+				[mode === "github_release" ? "page" : "after"]: cursor,
+				limit: 20
+			})}`));
+			if (!valid(ticket) || selected !== selectionEpoch) return;
+			if (page.project_binding_id !== chosen.row.project_binding_id || page.repository !== chosen.name) throw Error(t("prb_invalid"));
+			const entries = mode === "github_release" ? page.releases : page.deployments;
+			if (!Array.isArray(entries) || mode === "github_release" && entries.some((row) => !Number.isSafeInteger(row.release_id) || row.release_id < 1)) throw Error(t("prb_invalid"));
+			choicesFiltered = append && choicesFiltered || Boolean(page.visibility_filtered);
+			choicesIneligible = append && choicesIneligible || Boolean(page.eligibility_filtered);
+			choices = append ? [...choices, ...entries] : entries;
+			choiceCursor = mode === "github_release" ? page.next_page : page.next_cursor;
+			sourceView.replaceChildren();
+			for (const row of choices) {
+				const id = String(mode === "github_release" ? row.release_id : row.deployment_id), label = mode === "github_release" ? `${row.tag} · ${row.channel} · ${stamp(row.published_at)}` : `${row.channel} · ${row.version?.value || row.commit_sha} · ${stamp(row.checked_at)}`;
+				const radio = h("input", {
+					type: "radio",
+					name: `release-source-${workspaceId}`,
+					value: id,
+					onchange: () => {
+						selectedKey = id;
+						selectionEpoch++;
+						preview = null;
+						previewView.replaceChildren();
+						controls();
+					}
+				});
+				sourceView.append(h("label", { "data-release-choice": id }, radio, label));
+			}
+			if (!entries.length) sourceView.append(h("p", { class: "muted" }, t("prb_no_sources")));
+			if (choicesFiltered) sourceView.append(h("p", { class: "muted" }, t("prb_filtered")));
+			if (choicesIneligible) sourceView.append(h("p", { class: "muted" }, t("prb_ineligible")));
+			if (page.coverage?.page_bound_reached) sourceView.append(h("p", { class: "muted" }, t("prb_page_bound")));
+			if (choiceCursor !== null && choiceCursor !== void 0) sourceView.append(h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => void readChoices(true)
+			}, t("prb_more_sources")));
+		} catch (error) {
+			if (valid(ticket) && selected === selectionEpoch) failure(error);
+		} finally {
+			if (ticket === epoch) {
+				reading = false;
+				controls();
+			}
+		}
+	}
+	async function readProof() {
+		const chosen = selectedBinding();
+		if (!ready || !allowed() || !chosen || !selectedKey || reading) return;
+		const ticket = epoch, selected = selectionEpoch, fixed = selection(), sourceId = selectedKey;
+		reading = true;
+		preview = null;
+		previewView.replaceChildren();
+		sourceStatus.replaceChildren();
+		controls();
+		try {
+			const value = check(await api("GET", `${endpoint}/release-baseline-preview?${query({
+				project_binding_id: chosen.row.project_binding_id,
+				repository: chosen.name,
+				kind: kind.value,
+				[kind.value === "github_release" ? "release_id" : "deployment_id"]: sourceId,
+				...branch.value ? { maintenance_branch: branch.value } : {}
+			})}`));
+			if (!valid(ticket) || selected !== selectionEpoch || fixed !== selection()) return;
+			const reg = value.registration, pre = reg?.preconditions, source = reg?.params?.source;
+			if (reg?.action !== action || reg.target?.workspace_id !== workspaceId || reg.target.repository !== chosen.name || reg.params.project_binding_id !== chosen.row.project_binding_id || source?.kind !== kind.value || String(source[source.kind === "github_release" ? "release_id" : "deployment_id"]) !== sourceId || reg.params.maintenance_branch !== (branch.value || null) || pre?.expected_baseline_version !== head?.version || pre.expected_previous_baseline_id !== head.baseline_id || !Number.isSafeInteger(pre.expected_repository_id) || pre.expected_repository_id < 1 || !/^([0-9a-f]{40})$/.test(pre.expected_commit_sha) || value.proof?.selection?.commit_sha !== pre.expected_commit_sha || value.proof.selection.repository_id !== pre.expected_repository_id || value.proof.selection.channel !== reg.params.channel || value.maintenance_authorized !== false) throw Error(t("prb_invalid"));
+			preview = value;
+			previewView.append(h("h3", {}, t("prb_preview_title")), h("p", {}, chosen.name, " · ", value.proof.source.tag || pre.expected_commit_sha, " · ", reg.params.channel), h("p", { class: "muted" }, t("prb_quality")), fixedDetails({
+				repository: chosen.name,
+				commit_sha: pre.expected_commit_sha
+			}, value.proof));
+			bindEditor();
+		} catch (error) {
+			if (valid(ticket) && selected === selectionEpoch) failure(error);
+		} finally {
+			if (ticket === epoch) {
+				reading = false;
+				controls();
+			}
+		}
+	}
+	async function refresh() {
+		withdraw();
+		const ticket = epoch;
+		status.replaceChildren();
+		try {
+			const current = await api("GET", `${endpoint}/release-baselines/current`);
+			if (!valid(ticket)) return;
+			renderCurrent(current);
+			ready = true;
+			if (owner() && discovery()) await readBindings(false);
+			if (!valid(ticket)) return;
+			if (historyDetails.open) await readHistory(false);
+			controls();
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	controls();
+	return {
+		element,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-evidence.js
 var flatten = (rows) => (rows || []).flatMap((row) => [row, ...flatten(row.children)]);
 var projectSelections = new Map();
@@ -5980,6 +6468,7 @@ var retired = (error) => [
 	"CONNECTION_CHANGED",
 	"PM_DISPOSED"
 ].includes(error.code);
+var receiptSubscribers = new Map();
 var threadDisclosures = new Map();
 var threadDisclosureSelectors = [
 	"[data-pm-add-input]",
@@ -6039,6 +6528,20 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		input.addEventListener("change", changed);
 	}
 	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
+	const receiveReceipt = () => {
+		if (disposed || damaged || !saved.intent) return;
+		try {
+			guard();
+			const stored = JSON.parse(localStorage.getItem(storage));
+			if (stored?.intent?.key !== saved.intent.key || !same$3(stored.intent.request, saved.intent.request) || !/^op_[0-9a-f]{32}$/.test(stored.intent.operation_id) || saved.intent.operation_id && saved.intent.operation_id !== stored.intent.operation_id) return;
+			saved.intent.operation_id = stored.intent.operation_id;
+			receiptPolling = true;
+			update();
+		} catch {}
+	};
+	const subscribers = receiptSubscribers.get(storage) || new Set();
+	subscribers.add(receiveReceipt);
+	receiptSubscribers.set(storage, subscribers);
 	const terminal = () => ["failed", "cancelled"].includes(operation?.status);
 	const reset = h("button", {
 		type: "button",
@@ -6131,21 +6634,32 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				firstAttempt = true;
 			}
 			update();
-			const intent = saved.intent;
+			const intent = saved.intent, actor = caps()?.actor;
 			persist();
-			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+			let collected = false;
+			const collectReceipt = (data) => {
+				if (collected) return;
+				const op = data.operation;
+				if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== actor || op.idempotency_key !== intent.key || !same$3({
+					action: op.action,
+					target: op.target,
+					params: op.params,
+					preconditions: op.preconditions
+				}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+				const stored = JSON.parse(localStorage.getItem(storage));
+				if (stored?.intent?.key === intent.key && same$3(stored.intent.request, intent.request)) {
+					if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+					stored.intent.operation_id = op.operation_id;
+					localStorage.setItem(storage, JSON.stringify(stored));
+					for (const notify of receiptSubscribers.get(storage) || []) notify();
+				}
+				collected = true;
+			};
+			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`, void 0, void 0, collectReceipt) : await api("POST", "/operations?wait=3", intent.request, intent.key, collectReceipt);
+			collectReceipt(data);
 			guard();
-			if (disposed || !allowed()) {
-				receiptPolling = false;
-				return;
-			}
+			if (disposed || !allowed()) return;
 			const op = data.operation;
-			if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key || !same$3({
-				action: op.action,
-				target: op.target,
-				params: op.params,
-				preconditions: op.preconditions
-			}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
@@ -6163,6 +6677,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
 			receiptPolling = false;
+			if (disposed) return;
+			try {
+				guard();
+			} catch {
+				return;
+			}
 			if (!retired(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
@@ -6190,6 +6710,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			disposed = true;
 			receiptPolling = false;
 			stopTimer();
+			subscribers.delete(receiveReceipt);
+			if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
 		},
 		set: (name, value) => {
 			if (!busy && !saved.intent && !damaged) {
@@ -6316,6 +6838,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (brief && !threadId) body.insertBefore(brief.box, content);
+	const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines ? workspaceReleaseBaselines({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		caps,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox,
+		namespace
+	}) : null;
+	if (releaseBaselines) body.insertBefore(releaseBaselines.element, content);
 	const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap ? workspaceRoadmap({
 		h,
 		t,
@@ -6423,6 +6961,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		content,
 		evidence?.box,
 		brief?.box,
+		releaseBaselines?.element,
 		roadmap?.box,
 		kanban?.element,
 		sprints?.box,
@@ -6942,6 +7481,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
+		releaseBaselines?.withdraw();
 		try {
 			alive();
 			const list = await api("GET", "/pm/workspaces");
@@ -7026,6 +7566,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			for (const section of [
 				evidence,
 				brief,
+				releaseBaselines,
 				roadmap,
 				kanban,
 				sprints,
@@ -7076,7 +7617,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_governance",
 			"pm_follow_up",
 			"pm_follow_up_assessment",
-			"pm_work_package"
+			"pm_work_package",
+			"pm_release_baseline"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -7938,6 +8480,7 @@ function forgetBrowserSession() {
 async function nativeStatus() {
 	const status = await invoke("native_status");
 	nativeFileSupport = status.file_transfers === true;
+	nativeBriefExportSupport = status.brief_exports === true;
 	return status;
 }
 async function connectorRequest(method, path, body, key, browserToken) {
@@ -7983,7 +8526,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	nativeDesktop = isTauri();
@@ -10960,6 +11503,124 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-release-baseline-strings.js
+var pmReleaseBaselineStrings = {
+	en: {
+		prb_discovery_unavailable: "This central does not provide source selection previews yet.",
+		prb_ineligible: "Some deployment records do not meet the fixed source requirements and are omitted.",
+		prb_page_bound: "The source browsing limit has been reached. This is a partial list.",
+		prb_title: "Release baseline",
+		prb_intro: "Select a fixed published version to track. Registration does not publish or authorize maintenance.",
+		prb_refresh: "Refresh release baseline",
+		prb_current: "Current selection",
+		prb_empty: "No release baseline has been selected.",
+		prb_hidden: "The current selection exists, but its original source is outside your access.",
+		prb_history: "Previous selections",
+		prb_more: "Load more selections",
+		prb_filtered: "Some original sources are outside your current access. This is a partial history.",
+		prb_partial: "Only the loaded selections are shown.",
+		prb_register: "Select a release baseline",
+		prb_repository: "Bound project and repository",
+		prb_choose_repository: "Choose a repository",
+		prb_more_bindings: "Load more repositories",
+		prb_kind: "Published source",
+		prb_github_release: "GitHub Release",
+		prb_deployment: "Verified deployment",
+		prb_load_sources: "Read published sources",
+		prb_more_sources: "Read more sources",
+		prb_source_help: "Published source reads begin only when you request them. Choose an existing release or verified deployment; package registries are not supported yet.",
+		prb_no_sources: "No readable published sources on this page.",
+		prb_branch: "Maintenance branch (optional)",
+		prb_branch_help: "Use a branch name such as release/1.x. Leaving it empty keeps the branch unconfigured.",
+		prb_preview: "Read fixed source evidence",
+		prb_preview_title: "Reviewed source",
+		prb_use_preview: "Use this reviewed source",
+		prb_stale: "This draft retains an earlier source or selection version. Read the source again and explicitly choose the reviewed version.",
+		prb_rationale: "Reason for selecting this baseline",
+		prb_limits: "Known limitations (one per line)",
+		prb_limits_help: "These remain owner claims, not verified quality findings. Up to 40 limitations, 2,000 characters each.",
+		prb_save: "Record release baseline",
+		prb_owner: "Only the current workspace owner can select a release baseline.",
+		prb_saved_draft: "Selection draft",
+		prb_loading: "Reading release evidence…",
+		prb_unavailable: "Source access could not be verified. Previously displayed release facts have been removed; local drafts remain.",
+		prb_invalid: "The release evidence does not match its fixed workspace, source or version.",
+		prb_quality: "Functional acceptance and quality remain unassessed. Maintain has not been authorized.",
+		prb_registry: "Package registry publication: not assessed",
+		prb_gh_published: "GitHub Release: published",
+		prb_gh_unknown: "GitHub Release: not assessed",
+		prb_dep_verified: "Deployment: fixed version verified",
+		prb_dep_unknown: "Deployment: not assessed",
+		prb_not_live: "This is the original deployment receipt. The current environment has not been rechecked.",
+		prb_observed: "Observed",
+		prb_published: "Published",
+		prb_commit: "Fixed commit",
+		prb_channel: "Channel",
+		prb_sources: "Original evidence and versions",
+		prb_version: "Selection version",
+		prb_branch_none: "Maintenance branch: unconfigured",
+		prb_branch_verified: "Maintenance branch: verified at observation",
+		prb_limit_claim: "Owner claim"
+	},
+	"zh-TW": {
+		prb_discovery_unavailable: "此中央服務尚未提供來源選擇預覽。",
+		prb_ineligible: "部分部署紀錄未符合固定來源要求，因此未列入。",
+		prb_page_bound: "已達來源瀏覽上限；這裡是部分清單。",
+		prb_title: "發布基準",
+		prb_intro: "選定已發布的固定版本作為追蹤依據；登記不會發布軟體，也不代表已授權維護。",
+		prb_refresh: "更新發布基準",
+		prb_current: "目前選定版本",
+		prb_empty: "尚未選定發布基準。",
+		prb_hidden: "已有目前基準，但原始來源不在你目前的權限內。",
+		prb_history: "歷次選定版本",
+		prb_more: "載入更多版本",
+		prb_filtered: "部分原始來源不在你目前的權限內；這裡是部分歷史。",
+		prb_partial: "只顯示已載入的選定紀錄。",
+		prb_register: "選定發布基準",
+		prb_repository: "已關聯的專案與儲存庫",
+		prb_choose_repository: "選取儲存庫",
+		prb_more_bindings: "載入更多儲存庫",
+		prb_kind: "已發布來源",
+		prb_github_release: "GitHub Release",
+		prb_deployment: "已驗證部署",
+		prb_load_sources: "讀取已發布來源",
+		prb_more_sources: "讀取更多來源",
+		prb_source_help: "按下讀取後才會查詢已發布來源。選取既有 release 或已驗證部署；目前尚不支援套件 registry。",
+		prb_no_sources: "這一頁沒有可讀的已發布來源。",
+		prb_branch: "維護分支（可留空）",
+		prb_branch_help: "填入分支名稱，例如 release/1.x；留空表示尚未設定。",
+		prb_preview: "讀取固定來源證據",
+		prb_preview_title: "已檢視來源",
+		prb_use_preview: "使用這份已檢視來源",
+		prb_stale: "草稿仍保留先前的來源或基準版本。請重新讀取來源，再明確選用目前檢視的版本。",
+		prb_rationale: "選定此基準的理由",
+		prb_limits: "已知限制（每行一項）",
+		prb_limits_help: "這些仍是負責人的陳述，並非已驗證的品質結論。最多 40 項，每項 2,000 字元。",
+		prb_save: "登記發布基準",
+		prb_owner: "只有目前工作區負責人能選定發布基準。",
+		prb_saved_draft: "選定草稿",
+		prb_loading: "讀取發布證據…",
+		prb_unavailable: "無法核對來源權限，已移除先前顯示的發布事實；本地草稿仍保留。",
+		prb_invalid: "發布證據與固定的工作區、來源或版本不符。",
+		prb_quality: "功能驗收與品質仍未評估，也尚未授權 Maintain。",
+		prb_registry: "套件 registry 發布：未評估",
+		prb_gh_published: "GitHub Release：已發布",
+		prb_gh_unknown: "GitHub Release：未評估",
+		prb_dep_verified: "部署：固定版本已驗證",
+		prb_dep_unknown: "部署：未評估",
+		prb_not_live: "這是原始部署回執，尚未重新確認環境目前運行的版本。",
+		prb_observed: "觀察時間",
+		prb_published: "發布時間",
+		prb_commit: "固定 commit",
+		prb_channel: "通道",
+		prb_sources: "原始證據與版本",
+		prb_version: "選定版本",
+		prb_branch_none: "維護分支：尚未設定",
+		prb_branch_verified: "維護分支：觀察時已核對",
+		prb_limit_claim: "負責人陳述"
+	}
+};
+//#endregion
 //#region src/pm-governance-strings.js
 var pmGovernanceStrings = {
 	en: {
@@ -13038,6 +13699,7 @@ var pmStrings = {
 var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
+		...pmReleaseBaselineStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -14488,6 +15150,7 @@ var STRINGS = {
 	},
 	en: {
 		...pmStrings.en,
+		...pmReleaseBaselineStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
@@ -21478,11 +22141,12 @@ var ApiError = class extends Error {
 		this.code = code;
 	}
 };
-async function api(method, path, body, key) {
+async function api(method, path, body, key, collectReceipt) {
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
 	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
 	const epoch = state.epoch;
 	const { status, data } = await connectorRequest(method, path, body, key, state.token);
+	if (status >= 200 && status < 300) collectReceipt?.(data);
 	if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
 	if (status < 200 || status >= 300) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
