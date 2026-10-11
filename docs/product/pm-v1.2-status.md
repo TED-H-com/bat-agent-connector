@@ -82,7 +82,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W15 | P1 | Sprint artifacts 與時間 | 開發分支：Product Goal／有序 Backlog／DoD、固定 Sprint Goal／角色／期間、選入工作與關閉歷史；品質驗收與完整事件待做 |
 | W16 | P1 | Planning Review Retro | 開發分支：各自輸出、固定討論依據、明確完成與改善追蹤；Daily Scrum、LLM 會議引導與品質判定待做 |
 | W17 | P1 | 風險、變更與決策 | 開發分支：固定計畫／快照來源、明確根因去重、版本決策與原採用結果關聯；自動分析、跨快照追蹤與提醒待做 |
-| W18 | P1 | GitHub issue mapping | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W18 | P1 | GitHub issue mapping | 開發分支：明確選定公開內容、同一工作的一個 Issue 與追加版本、原操作查回、私有停止追蹤、API／MCP／Web／Tauri；外部狀態同步、多對多與明確重開仍待做 |
 | W19 | P1 | Orchestrator readiness 與派工 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W21 | P1 | 現有 deploy 與 receipt 接入 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -161,6 +161,18 @@ Web／Tauri 在 workspace 首頁及討論旁提供相同控制，管理階段、
 目前使用者的來源權限決定歷史與在途紀錄可見性；部分隱藏不等於整個專案沒有工作。
 共用介面已以合成資料檢查原 key 恢復、版本變更草稿、撤權、owner 與中英文版面；
 中央服務與原生路由仍待完整回歸。這是開發分支，不代表已合併、安裝或真人驗收。
+
+## 明確選定的 Issue 發布與追蹤
+
+開發分支加入 [Issue mapping 契約](../design/pm-issue-mappings.md)。固定工程工作包對應
+同一份工作與原 repository；使用者另外填入公開標題、內容，私有計畫、證據、路徑與理由
+不自動帶入 GitHub。第一次建立 Issue，後續版本追加 comment，不覆寫其他人的內容。
+
+共用工作畫面保留選定的 package、mapping 版次與原操作 key。回覆遺失時先查回原請求，
+不因刷新或另一份草稿重建 Issue。停止追蹤只更新本地管理紀錄；明確填入公開說明才追加
+comment，不關閉 Issue、不停止 coding session。暫停期間仍能留下純本地的停止理由。
+Web／Tauri 合成回歸涵蓋連續發布、草稿版本衝突、來源撤權、讀者權限與中英文窄畫面；
+中央與原生路由驗證另依本批 PR 記錄，這不是已合併或已安裝的宣稱。
 
 ## 後續順序
 
