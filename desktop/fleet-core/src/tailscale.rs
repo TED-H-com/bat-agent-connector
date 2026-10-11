@@ -40,8 +40,7 @@ pub fn login_state(bytes: &[u8], success: bool) -> LoginState {
 /// Internal command runner. Production constructs only the fixed installed CLI/argv.
 #[cfg(any(windows, test))]
 pub(crate) async fn query_status(mut command: tokio::process::Command) -> LoginState {
-    use std::{process::Stdio, time::Duration};
-    use tokio::{io::AsyncReadExt, time::timeout};
+    use std::process::Stdio;
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -50,25 +49,44 @@ pub(crate) async fn query_status(mut command: tokio::process::Command) -> LoginS
     let Ok(mut child) = command.spawn() else {
         return LoginState::Unknown;
     };
-    let Some(stdout) = child.stdout.take() else {
-        return LoginState::Unknown;
-    };
-    let result = timeout(Duration::from_secs(3), async {
-        let mut bytes = zeroize::Zeroizing::new(Vec::new());
-        stdout
-            .take(STATUS_LIMIT as u64 + 1)
-            .read_to_end(&mut bytes)
-            .await
-            .ok()?;
-        if bytes.len() > STATUS_LIMIT {
-            return None;
-        }
-        let status = child.wait().await.ok()?;
-        Some(login_state(&bytes, status.success()))
-    })
-    .await;
-    result.ok().flatten().unwrap_or(LoginState::Unknown)
+    query_child_status(&mut child).await
 }
+
+#[cfg(any(windows, test))]
+async fn query_child_status(child: &mut tokio::process::Child) -> LoginState {
+    use std::time::Duration;
+    use tokio::{io::AsyncReadExt, time::timeout};
+    let result = if let Some(stdout) = child.stdout.take() {
+        timeout(Duration::from_secs(3), async {
+            let mut bytes = zeroize::Zeroizing::new(Vec::new());
+            stdout
+                .take(STATUS_LIMIT as u64 + 1)
+                .read_to_end(&mut bytes)
+                .await
+                .ok()?;
+            if bytes.len() > STATUS_LIMIT {
+                return None;
+            }
+            let status = child.wait().await.ok()?;
+            Some(login_state(&bytes, status.success()))
+        })
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+    if let Some(state) = result {
+        return state;
+    }
+    // Dropping a Child only requests termination; Windows can still hold the
+    // executable open. Reap this exact child after incomplete reads/timeouts.
+    // Cleanup has its own bounded grace and cannot extend status collection.
+    let _ = child.start_kill();
+    let _ = timeout(Duration::from_secs(1), child.wait()).await;
+    LoginState::Unknown
+}
+
 pub fn id_valid(id: &str) -> bool {
     id.len() == 32
         && id
@@ -235,7 +253,7 @@ mod tests {
             Some("valid")=>print!("{{\"BackendState\":\"NeedsLogin\",\"AuthURL\":\"secret\"}}"),
             Some("invalid")=>print!("not JSON"),
             Some("failure")=>{print!("{{\"BackendState\":\"Running\"}}");std::process::exit(1);},
-            Some("large")=>{std::io::stdout().write_all(&vec![b'x';2*1024*1024]).ok();},
+            Some("large")=>{std::io::stdout().write_all(&vec![b'x';2*1024*1024]).ok();std::thread::sleep(std::time::Duration::from_secs(60));},
             _=>std::thread::sleep(std::time::Duration::from_secs(60)),
           }
         }"##,
@@ -256,9 +274,25 @@ mod tests {
             ("timeout", LoginState::Unknown),
         ] {
             let mut command = tokio::process::Command::new(&exe);
-            command.arg(mode);
-            assert_eq!(query_status(command).await, expected);
+            command
+                .arg(mode)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .kill_on_drop(true);
+            let mut child = command.spawn().unwrap();
+            let started = std::time::Instant::now();
+            assert_eq!(query_child_status(&mut child).await, expected);
+            // Observe the original process handle, not a sleep or inferred PID.
+            assert!(
+                child.try_wait().unwrap().is_some(),
+                "{mode} child not reaped"
+            );
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
         }
+        let mut command = tokio::process::Command::new(&exe);
+        command.arg("valid");
+        assert_eq!(query_status(command).await, LoginState::NeedsLogin);
         assert_eq!(
             query_status(tokio::process::Command::new(root.join("missing"))).await,
             LoginState::Unknown
