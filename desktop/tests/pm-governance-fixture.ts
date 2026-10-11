@@ -2,6 +2,7 @@ import {expect, type Page} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {stripTypeScriptTypes} from 'node:module';
+import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
 
 export const workspaceId = 'ws_' + '1'.repeat(32), snapshotId = 'pmsnap_' + '2'.repeat(32), planId = 'pmrev_' + '3'.repeat(32);
 export const proposedId = 'pmrev_' + '4'.repeat(32), assumptionId = 'pmi_' + '5'.repeat(32), evidenceId = 'pme_' + '6'.repeat(32), adoptionId = 'op_' + 'f'.repeat(32);
@@ -161,6 +162,7 @@ export async function mount(page: Page, fixture: ReturnType<typeof governanceFix
     if (file === 'pm-workspace.js') source = source.replace('function durableForm(', 'export function durableForm(');
     await route.fulfill({contentType: 'text/javascript', body: source});
   });
+  await unavailableBriefTransport(page,'__governance_src');
   await page.route('**/__governance_harness', route => route.fulfill({contentType: 'text/html', body:
     '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><div class="pm-shell"><aside><h2>PM workspace</h2><p>Membership service</p></aside><main class="pm-main" id="mount"></main></div>'}));
   await page.goto('/__governance_harness'); await boot(page, locale);
