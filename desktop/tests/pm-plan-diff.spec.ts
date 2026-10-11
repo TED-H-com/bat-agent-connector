@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {readFileSync, mkdirSync} from 'node:fs';
+import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture, pmRoute, workspaceId, threadId, inputA, inputB} from './pm-fixture.ts';
 
@@ -19,7 +19,10 @@ function fixture(){
   const source={input_id:inputA,value:'A password reset link expires after use.',status:'agent_assumption',source_ref:{kind:'statement',ref:'A proposed condition'},confirmed_by:null};
   const requirement={id:'login',text:'Members can sign in. <script>never execute</script>',source_input_id:inputA,source_status:'user_confirmed',priority:'must',depends_on:[],acceptance:[{text:source.value,source_status:'agent_assumption',source_input_id:inputA}]};
   const section={coverage:'unresolved',statements:[],source_input_ids:[]};
-  const state={reads:[] as any[],failure:false,mismatch:false,defer:null as null|Promise<void>,cursor:45};
+  base.state.revisions=[first,second].map((revision_id,index)=>({revision_id,workspace_id:workspaceId,thread_id:threadId,sequence:index+1,
+    document:{title:'Membership',markdown:'A recorded proposal',sections:{},requirements:[]},adoption:null}));
+  base.state.planHead={workspace_id:workspaceId,version:2,latest_revision_id:second,accepted_revision_id:null};
+  const state={reads:[] as any[],planReads:0,failure:false,mismatch:false,defer:null as null|Promise<void>,cursor:45};
   const result=(params:URLSearchParams)=>({version:1,workspace_id:workspaceId,comparison:{
     from_revision:{revision_id:state.mismatch?second:params.get('from_revision_id'),document_digest:'1'.repeat(64)},
     to_revision:{revision_id:params.get('to_revision_id'),document_digest:'2'.repeat(64)},
@@ -33,6 +36,7 @@ function fixture(){
     comparison_digest:'3'.repeat(64),context_digest:'4'.repeat(64),coverage:{},execution_authorized:false}});
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture');
+    if(url.pathname===`/pm/workspaces/${workspaceId}/plans`)state.planReads++;
     if(url.pathname.endsWith('/plan-comparison')){
       state.reads.push(structuredClone(input));if(state.defer)await state.defer;
       return state.failure?{status:403,data:{error:{code:'FORBIDDEN',message:'Comparison no longer visible'}}}:{status:200,data:result(url.searchParams)};
@@ -45,30 +49,10 @@ function fixture(){
 const box=(page:any)=>page.locator('[data-pm-plan-diff]');
 async function mount(page:any,native:boolean,f:any){
   await mountConversation(page,native,f.dispatch);
-  for(const file of ['pm-plan-diff.js','pm-plan-diff-strings.js','pm-strings.js'])await page.route('**/dashboard/'+file,route=>route.fulfill({contentType:'text/javascript',body:readFileSync(new URL('../src/'+file,import.meta.url),'utf8')}));
-  await page.goto(pmRoute);await expect(page.locator('[data-pm-plans]')).toBeVisible();
-  await page.evaluate(async({native,workspaceId,first,second,threadId})=>{
-    const {planComparison}=await import('/dashboard/pm-plan-diff.js');
-    const {pmStrings}=await import('/dashboard/pm-strings.js');
-    const locale=navigator.language.toLowerCase().startsWith('zh')?'zh-TW':'en';
-    const t=(key:string,values:any={})=>(pmStrings[locale][key]||key).replace(/\{(\w+)\}/g,(_:string,k:string)=>String(values[k]??''));
-    const h=(tag:string,attrs:any={},...children:any[])=>{
-      const element=document.createElement(tag);
-      for(const[key,value]of Object.entries(attrs)){if(value===false||value==null)continue;if(key.startsWith('on'))element.addEventListener(key.slice(2),value as any);else element.setAttribute(key,value===true?'':String(value));}
-      for(const child of children.flat())if(child!==false&&child!=null)element.append(child instanceof Node?child:document.createTextNode(String(child)));
-      return element;
-    };
-    const api=async(method:string,path:string)=>{
-      const response=native?await(window as any).__TAURI_INTERNALS__.invoke('connector_request',{input:{method,path}})
-        :await fetch('/api/v1'+path).then(async r=>({status:r.status,data:await r.json()}));
-      if(response.status>=400)throw Error(response.data.error.message);
-      return response.data;
-    };
-    const component=planComparison({h,t,api,workspaceId,alive:()=>{if((window as any).fixtureAlive===false)throw Error('View changed');},errorBox:(e:any)=>h('div',{role:'alert'},e.message)});
-    document.querySelector('[data-pm-plans]')!.append(component.box);
-    const page={workspace_id:workspaceId,head:{},revisions:[{revision_id:first,sequence:1,thread_id:threadId},{revision_id:second,sequence:2,thread_id:threadId}],next_cursor:null};
-    component.update(page);(window as any).fixtureDiff={component,page};
-  },{native,workspaceId,first,second,threadId});
+  await page.goto(pmRoute);
+  await expect(page.locator('[data-pm-plans]')).toBeVisible();
+  await expect(box(page)).toHaveCount(1);
+  await expect(box(page).locator('select').first().locator('option')).toHaveCount(3);
 }
 async function choose(page:any){await box(page).getByLabel('From version',{exact:true}).selectOption(first);await box(page).getByLabel('To version',{exact:true}).selectOption(second);}
 
@@ -100,8 +84,13 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
     f.comparison.cursor=99;await box(page).getByRole('button',{name:'Recheck this comparison',exact:true}).click();
     await expect(box(page)).not.toContainText('Reading the fixed comparison');
     expect(new URL(f.comparison.reads[1].path,'http://fixture').searchParams.get('journal_cursor')).toBe('45');
-    await page.evaluate(()=>{const f=(window as any).fixtureDiff;f.component.update(f.page);});
+    const planReads=f.comparison.planReads;
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await expect.poll(()=>f.comparison.planReads).toBeGreaterThan(planReads);
     await expect(box(page).getByLabel('From version',{exact:true})).toHaveValue(first);
+    await expect(box(page).getByLabel('To version',{exact:true})).toHaveValue(second);
+    await expect(box(page).locator('[data-pm-diff-binding]')).toBeChecked();
+    await expect(box(page).getByRole('button',{name:'Recheck this comparison',exact:true})).toBeEnabled();
     await box(page).getByLabel('To version',{exact:true}).selectOption(first);
     await expect(result).toBeEmpty();await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
     await expect(box(page).getByRole('button',{name:'Recheck this comparison',exact:true})).toBeEnabled();
@@ -110,11 +99,11 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
   test('mismatched response and lost access never leave stale differences visible',async({page})=>{
     const f=fixture();await mount(page,native,f);await choose(page);f.comparison.mismatch=true;
     await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
-    await expect(box(page).getByRole('alert')).toContainText('does not match');await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
+    await expect(box(page).getByText('The response does not match the selected comparison.',{exact:true})).toBeVisible();await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     f.comparison.mismatch=false;await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
     await expect(box(page)).toContainText('Changed · login');f.comparison.failure=true;
     await box(page).getByRole('button',{name:'Recheck this comparison',exact:true}).click();
-    await expect(box(page).getByRole('alert')).toContainText('no longer visible');await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
+    await expect(box(page).getByText('Your token lacks this scope.',{exact:true})).toBeVisible();await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     expect(f.state.writes).toHaveLength(0);
   });
   test('late read from a changed selection is discarded',async({page})=>{
