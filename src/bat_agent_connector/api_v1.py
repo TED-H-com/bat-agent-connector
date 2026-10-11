@@ -121,11 +121,12 @@ class ApiV1:
         managed_repairs.install(daemon.ops)
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
-        from . import pm_discussions, pm_plan_operations, pm_run_operations, pm_workspace
+        from . import pm_discussions, pm_evidence, pm_plan_operations, pm_run_operations, pm_workspace
         pm_workspace.install(daemon.ops)
         pm_discussions.install(daemon.ops)
         pm_run_operations.install(daemon.ops)
         pm_plan_operations.install(daemon.ops)
+        pm_evidence.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -151,6 +152,12 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs/(?P<run_id>pmr_[0-9a-f]{32})", self.pm_run, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/capabilities", self.pm_capabilities, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work", self.pm_work, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/evidence", self.pm_evidence, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/evidence/(?P<evidence_id>pme_[0-9a-f]{32})", self.pm_evidence_detail, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/captures/(?P<capture_id>pmcap_[0-9a-f]{32})", self.pm_capture, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/capture", self.pm_capture_latest, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/head", self.pm_plan_head, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/accepted", self.pm_plan_accepted, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/(?P<revision_id>pmrev_[0-9a-f]{32})", self.pm_plan, "observe"),
@@ -496,7 +503,7 @@ class ApiV1:
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         integer_fields = {"limit", "max_chars", "before_message", "before_input"}
-        if method == "pm_plans_list":
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list"}:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
@@ -544,6 +551,24 @@ class ApiV1:
     async def pm_plan_head(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_plan_head_get", query, workspace_id=workspace_id)
 
+    async def pm_projects(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_projects_list", query, workspace_id=workspace_id)
+
+    async def pm_work(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_work_list", query, workspace_id=workspace_id)
+
+    async def pm_evidence(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_evidence_list", query, workspace_id=workspace_id)
+
+    async def pm_evidence_detail(self, principal, query, workspace_id, evidence_id, **_):
+        return self._pm_read(principal, "pm_evidence_get", query, workspace_id=workspace_id, evidence_id=evidence_id)
+
+    async def pm_capture(self, principal, query, workspace_id, capture_id, **_):
+        return self._pm_read(principal, "pm_capture_get", query, workspace_id=workspace_id, capture_id=capture_id)
+
+    async def pm_capture_latest(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, "pm_capture_latest_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
     async def capabilities(self, principal, **_):
         fleet = self.daemon.fleet
         from . import worktree_merge_operations
@@ -589,7 +614,8 @@ class ApiV1:
                                                     "runner": False, "context_packages": True,
                                                     "runtime_reason": "external_tool_policy_unverified",
                                                     "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
-                                                    "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions, "dispatch": False},
+                                                    "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions,
+                                                    "work_evidence": "pm.evidence.capture" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},

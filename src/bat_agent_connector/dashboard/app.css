@@ -575,3 +575,11 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
   .pm-notes { max-height: 48dvh; }
   .pm-fact-heading input { width: 24px; height: 24px; margin: 10px; }
 }
+
+.pm-evidence {margin-top:1rem; min-width:0;}
+.pm-evidence select {max-width:100%;}
+.pm-evidence-rows > details {padding:.65rem 0; border-bottom:1px solid var(--border);}
+.pm-evidence-rows summary {cursor:pointer; overflow-wrap:anywhere;}
+.pm-evidence-fields {display:grid; grid-template-columns:minmax(7rem,1fr) minmax(0,3fr); gap:.35rem .75rem; font-size:.85rem;}
+.pm-evidence-fields dd {margin:0; overflow-wrap:anywhere; white-space:pre-wrap;}
+.pm-evidence-fields dt {overflow-wrap:anywhere;}

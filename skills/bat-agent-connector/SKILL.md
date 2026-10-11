@@ -118,6 +118,28 @@ cannot submit their own Git success receipt. Adoption does not dispatch work.
 An unresolved host effect retains its writer and original operation. Never clear
 its locks or change the request key to make recovery appear successful.
 
+When `features.pm_workspaces.work_evidence` is available, work associations are
+explicit owner decisions, separate from execution authorization:
+
+- `pm.project.bind`: target `{workspace_id, project_id}`, params `{rationale}`,
+  preconditions `{expected_workspace_version, expected_project_version}`.
+- `pm.work.bind`: target `{workspace_id, work_item_id}`, params
+  `{rationale, plan_revision_id?, requirement_ids?}`, preconditions
+  `{expected_work_version, expected_binding_id}` (null for the first association).
+  A selected plan must have been adopted in this workspace; requirement IDs refer
+  to that exact document. A later accepted plan does not rebind existing work.
+- `pm.evidence.capture`: same workspace/work target, empty params, and
+  `{expected_binding_id}`. Contributors can collect already saved central facts;
+  this does not query a live provider or accept the work as Done.
+
+Read `pm_projects_list`, `pm_work_list`, `pm_evidence_list`, `pm_evidence_get`,
+`pm_capture_get` and `pm_capture_latest_get`. Follow sequence cursors; use the
+capture's own visible evidence list for a fixed snapshot. Keep source time,
+capture time and coverage gaps distinct. Work completion claims, observed tests,
+PR merge and deployment verification are separate facts. Missing evidence,
+unavailable sources, cost and Definition of Done remain unknown/unassessed.
+Never infer a session control grant or an integration target from an association.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)

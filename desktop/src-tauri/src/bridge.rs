@@ -1111,7 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1233,13 +1233,17 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let thread_list = path.ends_with("/threads");
             let run_list = path.ends_with("/runs");
             let plan_list = path.ends_with("/plans");
+            let project_list = path.ends_with("/projects");
+            let work_list = path.ends_with("/work");
+            let evidence_list = path.ends_with("/evidence");
+            let sequence_list = plan_list || project_list || work_list || evidence_list;
             let thread_detail = path
                 .split('/')
                 .nth(5)
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
-                "limit" if thread_list || thread_detail || run_list || plan_list => {
+                "limit" if thread_list || thread_detail || run_list || sequence_list => {
                     !value.is_empty()
                         && value.len() <= 3
                         && value.bytes().all(|b| b.is_ascii_digit())
@@ -1259,11 +1263,25 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                             .bytes()
                             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
-                "after" if plan_list => {
+                "after" if sequence_list => {
                     !value.is_empty()
                         && value.len() <= 9
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u32>().is_ok()
+                }
+                "project_id" if work_list => {
+                    value.len() == 24
+                        && value.starts_with("prj_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "work_item_id" if evidence_list => {
+                    value.len() == 23
+                        && value.starts_with("wi_")
+                        && value[3..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
                 "thread_id" if run_list => {
                     value.len() == 36
@@ -1763,6 +1781,12 @@ mod tests {
             format!("{workspace}/runs?limit=100&after=pmr_22222222222222222222222222222222&thread_id=pmt_11111111111111111111111111111111"),
             format!("{workspace}/runs/pmr_22222222222222222222222222222222"),
             format!("{workspace}/plans?limit=100&after=0"),
+            format!("{workspace}/projects?limit=100&after=0"),
+            format!("{workspace}/work?limit=100&after=0&project_id=prj_11111111111111111111"),
+            format!("{workspace}/work/wi_11111111111111111111/capture"),
+            format!("{workspace}/evidence?limit=1&after=0&work_item_id=wi_11111111111111111111"),
+            format!("{workspace}/evidence/pme_44444444444444444444444444444444"),
+            format!("{workspace}/captures/pmcap_55555555555555555555555555555555"),
             format!("{workspace}/plans/head"),
             format!("{workspace}/plans/accepted"),
             format!("{workspace}/plans/pmrev_33333333333333333333333333333333"),
@@ -1793,6 +1817,15 @@ mod tests {
             format!("{workspace}/runs/pmr_22222222222222222222222222222222?limit=1"),
             format!("{workspace}/runs/pmr_22222222222222222222222222222222/start"),
             format!("{workspace}/plans?limit=101"),
+            format!("{workspace}/projects?after=-1"),
+            format!("{workspace}/work?project_id=prj_bad"),
+            format!("{workspace}/work?project_id=prj_11111111111111111111&project_id=prj_11111111111111111111"),
+            format!("{workspace}/work/wi_11111111111111111111/capture?limit=1"),
+            format!("{workspace}/evidence?work_item_id=wi_bad"),
+            format!("{workspace}/evidence?limit=101"),
+            format!("{workspace}/evidence?actor=owner"),
+            format!("{workspace}/evidence/pme_44444444444444444444444444444444?after=1"),
+            format!("{workspace}/captures/pmcap_55555555555555555555555555555555?work_item_id=wi_11111111111111111111"),
             format!("{workspace}/plans?after=-1"),
             format!("{workspace}/plans?after=pmrev_33333333333333333333333333333333"),
             format!("{workspace}/plans?after=0&after=1"),
