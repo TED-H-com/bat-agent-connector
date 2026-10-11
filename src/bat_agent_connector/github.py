@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import http.client
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -57,6 +58,7 @@ class GitHubClient:
         handlers = [urllib.request.ProxyHandler({})] if host in {"127.0.0.1", "localhost"} else []
         self._opener = urllib.request.build_opener(*handlers)
         self._read_opener = urllib.request.build_opener(*handlers, _NoReadRedirect())
+        self._bounded_read_slot = threading.BoundedSemaphore(1)
 
     def _bounded_get(self, path, query, max_bytes, timeout_s):
         """Opt-in GET with byte/time bounds and metadata for object AND list pages.
@@ -115,7 +117,34 @@ class GitHubClient:
             raise GitHubAmbiguous('GitHub bounded read did not establish a complete JSON response') from None
 
     async def bounded_get(self, path, *, query=None, max_bytes=512_000, timeout_s=30):
-        return await asyncio.to_thread(self._bounded_get, path, query, max_bytes, timeout_s)
+        # DNS and response headers precede the body deadline loop. Bound caller
+        # completion too; at most ONE timed-out read worker may survive per client.
+        # Late bytes can never become the response of a subsequent observation.
+        if type(timeout_s) not in (int, float) or not 0 < timeout_s <= 120:
+            raise ValueError('Invalid bounded GitHub read timeout')
+        if not self._bounded_read_slot.acquire(blocking=False):
+            raise GitHubReadLimit('An earlier bounded GitHub read is still finishing')
+        abandoned = threading.Event()
+
+        def read():
+            try:
+                if abandoned.is_set():
+                    raise GitHubReadLimit('GitHub read was abandoned before starting')
+                return self._bounded_get(path, query, max_bytes, timeout_s)
+            finally:
+                self._bounded_read_slot.release()
+
+        task = asyncio.create_task(asyncio.to_thread(read))
+        # Retrieve a late exception after the caller has already timed out.
+        task.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout_s)
+        except asyncio.TimeoutError:
+            abandoned.set()
+            raise GitHubReadLimit('GitHub read exceeded its total time limit') from None
+        except asyncio.CancelledError:
+            abandoned.set()
+            raise
 
     def _request(self, method: str, path: str, body: dict | None = None, query: dict | None = None) -> tuple[int, dict]:
         url = self.cfg.api_url + path + (("?" + urlencode({k: v for k, v in query.items() if v is not None}))

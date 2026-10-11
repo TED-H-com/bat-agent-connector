@@ -101,3 +101,37 @@ async def test_current_token_required_no_fallback_to_previous_read_credential(ht
     monkeypatch.setenv('FAKE_GH_BOUNDED_TOKEN', 'rotated-fixture-token')
     await client.bounded_get('/repos/example/product')
     assert state['requests'][0][1] == 'Bearer rotated-fixture-token'
+
+
+async def test_slow_headers_have_outer_deadline_and_only_one_outstanding_worker(http_provider):
+    import asyncio
+    import time
+
+    client, _ = http_provider
+    entered, release = threading.Event(), threading.Event()
+    original = client._read_opener.open
+    def delayed_open(*args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=5), 'test worker was not released'
+        return original(*args, **kwargs)
+    client._read_opener.open = delayed_open
+    started = time.monotonic()
+    try:
+        with pytest.raises(GitHubReadLimit, match='total time'):
+            await client.bounded_get('/repos/example/product', timeout_s=0.05)
+        assert entered.is_set() and time.monotonic() - started < 1
+        for _ in range(5):
+            with pytest.raises(GitHubReadLimit, match='still finishing'):
+                await client.bounded_get('/repos/example/product', timeout_s=0.05)
+    finally:
+        release.set()
+    # The abandoned task can finish, but none of its data is returned to a caller.
+    for _ in range(100):
+        if client._bounded_read_slot.acquire(blocking=False):
+            client._bounded_read_slot.release()
+            break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail('read worker did not release its bounded slot')
+    answer = await client.bounded_get('/repos/example/product')
+    assert answer['status'] == 200
