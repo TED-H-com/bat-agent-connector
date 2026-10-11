@@ -868,6 +868,325 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 	};
 }
 //#endregion
+//#region src/pm-package-handoff.js
+var contract = "pm-engineering-handoff/v1";
+var equal$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSourceFailure = () => {} }) {
+	let active = null, prepared = null, serial = 0, reading = false, editor = null;
+	const editors = new Map(), facts = h("div"), status = h("div", { role: "status" }), editorView = h("div"), outcome = h("div");
+	const summary = h("p", { class: "muted" }, t("ph_select")), availabilityNotice = h("p", {
+		class: "muted",
+		hidden: true
+	}, t("ph_not_allowed"));
+	const review = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void inspect()
+	}, t("ph_review"));
+	const useReview = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			if (!editor || editor.locked() || !prepared || !write()) return;
+			editor.set("review", JSON.stringify(prepared.fixed));
+			editor.update();
+		}
+	}, t("ph_use_review"));
+	const element = h("section", {
+		class: "pm-packages",
+		"data-pm-package-handoff": ""
+	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), h("p", { class: "muted" }, t("ph_intro")), summary, h("p", { class: "muted" }, t("ph_boundary")), availabilityNotice, review, status, facts, useReview, editorView, outcome));
+	const available = () => {
+		const cap = caps()?.features?.pm_workspaces?.package_handoff;
+		return cap?.available === true && cap.action === "repository.continue" && cap.contract === contract && cap.code_basis_required === true && cap.source_materialization === "bounded_full_prompt";
+	};
+	const writer = () => permitted(false) && ["owner", "contributor"].includes(workspace()?.membership?.role) && [
+		"observe",
+		"manage",
+		"start"
+	].every((scope) => caps()?.scopes?.includes(scope)) && caps()?.actions?.some((row) => row.action === "repository.continue" && row.allowed);
+	const write = () => available() && writer();
+	const valid = (ticket) => {
+		try {
+			alive();
+			return serial === ticket;
+		} catch {
+			return false;
+		}
+	};
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
+	const target = (row) => Object.fromEntries([
+		"repository",
+		"host",
+		"workspace_id"
+	].map((key) => [key, row.document.code_source[key]]));
+	const sameCode = (row, preview) => {
+		const code = row.document.code_source, p = preview;
+		return p && p.exact_ref_head_only === true && [
+			"repository",
+			"host",
+			"workspace_id"
+		].every((key) => p.target?.[key] === code[key]) && p.source_ref === code.source_ref && p.source_sha === code.source_sha && p.repository_id === code.repository_id && p.binding_digest === code.binding_digest && p.preconditions?.repository_id === code.repository_id && p.preconditions?.binding_digest === code.binding_digest && p.workspace?.workspace_id === code.workspace_id;
+	};
+	function packageCheck(value, id, digest) {
+		const row = value?.package, code = row?.document?.code_source, work = row?.document?.context?.work_ref;
+		if (value?.version !== 1 || value.workspace_id !== workspaceId || row?.package_id !== id || row.document_digest !== digest || row.workspace_id !== workspaceId || row.document?.package_id !== id || row.document.workspace_id !== workspaceId || row.document.execution_authorized !== false || row.document.quality_assessment !== "unassessed" || !code || !work || work.work_item_id !== row.work_item_id || !/^prj_[0-9a-f]{20}$/.test(work.project_id) || !/^wi_[0-9a-f]{20}$/.test(work.work_item_id) || !/^([0-9a-f]{64})$/.test(work.work_fingerprint) || !/^([0-9a-f]{40})$/.test(code.source_sha) || !/^([0-9a-f]{64})$/.test(code.binding_digest) || !Number.isSafeInteger(code.repository_id) || code.repository_id < 1) throw Error(t("ph_invalid"));
+		return row;
+	}
+	function readinessCheck(value, row) {
+		const handoff = value?.handoff;
+		if (value?.version !== 1 || value.workspace_id !== workspaceId || value.package_id !== row.package_id || value.document_digest !== row.document_digest || value.ready_for !== "engineering_handoff_review" || value.execution_authorized !== false || value.execution_available !== false || value.dispatch_readiness !== "separate_fixed_handoff_admission" || handoff?.contract !== contract || handoff.action !== "repository.continue" || handoff.code_basis_required !== true || handoff.compatibility !== "unverified" || handoff.source_materialization !== "bounded_full_prompt" || !Array.isArray(value.checks)) throw Error(t("ph_invalid"));
+		if (value.checks.some((check) => check.status !== "passed" && check.check !== "spec_code_alignment")) throw Error(t("ph_blocked"));
+	}
+	const hostReady = (row) => caps()?.hosts?.some((host) => host.host === row.document.code_source.host && host.writes === true && host.orchestrate === true) && caps()?.features?.repository_sync?.some((binding) => binding.exact_ref_head_only === true && [
+		"repository",
+		"host",
+		"workspace_id"
+	].every((key) => binding[key] === row.document.code_source[key]));
+	function update() {
+		review.disabled = !active || reading || !write() || !hostReady(active);
+		availabilityNotice.hidden = !active || Boolean(write() && hostReady(active));
+		if (active) summary.textContent = `${active.document.title} · ${t("ph_preparation")} ${active.sequence}`;
+		else summary.textContent = t("ph_select");
+		if (editor) editor.update();
+	}
+	function withdraw() {
+		serial++;
+		reading = false;
+		active = null;
+		prepared = null;
+		facts.replaceChildren();
+		status.replaceChildren();
+		outcome.replaceChildren();
+		editorView.replaceChildren();
+		editor = null;
+		useReview.hidden = true;
+		update();
+	}
+	function fail(error) {
+		if ([
+			401,
+			403,
+			404
+		].includes(error.status)) {
+			withdraw();
+			onSourceFailure();
+		}
+		prepared = null;
+		facts.replaceChildren();
+		outcome.replaceChildren();
+		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("ph_unavailable")));
+		update();
+	}
+	function bindEditor(row) {
+		if (!editors.has(row.package_id)) {
+			const fixed = h("input", { type: "hidden" }), basis = input("ph_rationale", {
+				multiline: true,
+				max: 4e3
+			}), prompt = input("ph_prompt", {
+				multiline: true,
+				max: 12e3
+			}), title = input("start_title", {
+				required: false,
+				max: 256
+			}), model = input("start_model", {
+				required: false,
+				max: 256
+			});
+			const agent = h("select", { "aria-label": t("ph_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+			agent.dataset.pmDefault = "claude";
+			const warning = h("p", {
+				class: "muted",
+				hidden: true
+			}, t("ph_stale"));
+			let value = null, syncing = false;
+			const matches = () => {
+				try {
+					return Boolean(prepared && active?.package_id === row.package_id && equal$9(JSON.parse(fixed.value), prepared.fixed));
+				} catch {
+					return false;
+				}
+			};
+			const authorized = () => write() && active?.package_id === row.package_id;
+			const resultMatches = (result) => result?.host === row.document.code_source.host && result.workspace_id === row.document.code_source.workspace_id && result.repository === row.document.code_source.repository && result.source_sha === row.document.code_source.source_sha && typeof result.session_id === "string" && result.session_id.length > 0;
+			const guardedApi = async (...args) => {
+				const ticket = serial;
+				try {
+					const response = await api(...args);
+					if (response.operation?.status === "succeeded" && !resultMatches(response.operation.result)) throw Error(t("ph_invalid"));
+					return response;
+				} catch (error) {
+					if (valid(ticket) && [
+						401,
+						403,
+						404
+					].includes(error.status)) fail(error);
+					throw error;
+				}
+			};
+			value = form({
+				namespace: `${namespace}.package-handoff.${row.package_id}`,
+				api: guardedApi,
+				action: "repository.continue",
+				target: target(row),
+				fields: {
+					review: fixed,
+					basis,
+					prompt,
+					agent,
+					title,
+					model
+				},
+				params: (values) => {
+					return {
+						...JSON.parse(values.review).params,
+						agent: values.agent,
+						prompt: values.prompt,
+						pm_code_basis: {
+							mode: "implement_fixed_spec_from_selected_base",
+							rationale: values.basis
+						},
+						...values.title ? { title: values.title } : {},
+						...values.model ? { model: values.model } : {}
+					};
+				},
+				preconditions: () => JSON.parse(fixed.value).preconditions,
+				permitted: () => authorized() && hostReady(active) && matches() && !reading,
+				recoverPermitted: authorized,
+				label: "ph_start",
+				onStateChange: () => {
+					if (value && !syncing) value.update();
+				},
+				onSaved: (result) => {
+					if (!resultMatches(result)) throw Error(t("ph_invalid"));
+					prepared = null;
+					facts.replaceChildren();
+					outcome.replaceChildren(h("p", {}, t("ph_started")), h("a", { href: `#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}` }, t("ph_open")));
+					update();
+				},
+				extra: h("div", { class: "pm-fields" }, warning, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), h("p", { class: "muted" }, t("ph_agent_help")), h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)))
+			});
+			const original = value.update;
+			value.update = () => {
+				if (syncing) return;
+				syncing = true;
+				try {
+					if (!value.locked() && !fixed.value && prepared && active?.package_id === row.package_id) {
+						fixed.value = JSON.stringify(prepared.fixed);
+						value.changed();
+					}
+					original();
+					warning.hidden = value.locked() || !fixed.value || matches();
+					if (!value.locked() && authorized()) for (const field of [
+						basis,
+						prompt,
+						agent,
+						title,
+						model
+					]) field.disabled = false;
+					if (value === editor) useReview.hidden = value.locked() || !prepared || matches();
+				} finally {
+					syncing = false;
+				}
+			};
+			editors.set(row.package_id, value);
+		}
+		editor = editors.get(row.package_id);
+		editorView.replaceChildren(editor.box);
+		update();
+	}
+	function setPackage(row) {
+		withdraw();
+		if (!row) return;
+		try {
+			active = packageCheck({
+				version: 1,
+				workspace_id: workspaceId,
+				package: row
+			}, row.package_id, row.document_digest);
+			bindEditor(active);
+			update();
+		} catch (error) {
+			active = null;
+			fail(error);
+		}
+	}
+	async function inspect() {
+		if (!active || reading || !write() || !hostReady(active)) return;
+		const selected = active, ticket = ++serial;
+		reading = true;
+		prepared = null;
+		facts.replaceChildren();
+		outcome.replaceChildren();
+		status.replaceChildren(h("p", { class: "muted" }, t("ph_reading")));
+		update();
+		try {
+			const id = selected.package_id, work = selected.document.context.work_ref;
+			const [pkg, readiness, projectData] = await Promise.all([
+				api("GET", `${endpoint}/${id}`),
+				api("GET", `${endpoint}/${id}/readiness`),
+				api("GET", `/projects/${encodeURIComponent(work.project_id)}`)
+			]);
+			if (!valid(ticket) || active?.package_id !== id) return;
+			const row = packageCheck(pkg, id, selected.document_digest);
+			readinessCheck(readiness, row);
+			const project = projectData.project;
+			if (project?.project_id !== work.project_id || project.archived || !Number.isSafeInteger(project.version) || project.version < 1 || !project.repositories?.some((repository) => repository.toLowerCase() === row.document.code_source.repository.toLowerCase())) throw Error(t("ph_invalid"));
+			const code = row.document.code_source;
+			const response = await api("POST", "/repository-previews", {
+				...target(row),
+				source_ref: code.source_ref
+			});
+			if (!valid(ticket) || active?.package_id !== id) return;
+			if (!sameCode(row, response.preview)) throw Error(t("ph_target_changed"));
+			prepared = {
+				row,
+				project,
+				fixed: {
+					params: {
+						source_ref: code.source_ref,
+						source_sha: code.source_sha,
+						project_id: work.project_id,
+						work_item_id: work.work_item_id,
+						pm_package_ref: {
+							workspace_id: workspaceId,
+							package_id: id,
+							document_digest: row.document_digest
+						}
+					},
+					preconditions: {
+						repository_id: code.repository_id,
+						binding_digest: code.binding_digest,
+						expected_project_version: project.version,
+						expected_work_item_fingerprint: work.work_fingerprint
+					}
+				}
+			};
+			const proof = h("details", {}, h("summary", {}, t("ph_sources")), h("p", { class: "mono" }, `${t("ph_base")}: ${code.source_sha}`), ...(row.document.sources?.documents || []).map((source) => h("p", { class: "mono" }, `${t("ph_spec")}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)), h("p", { class: "mono" }, `${code.host} · ${code.workspace_id}`), h("p", { class: "mono" }, row.package_id), h("p", { class: "mono" }, row.document_digest), h("p", { class: "mono" }, work.work_fingerprint));
+			facts.replaceChildren(h("h4", {}, t("ph_reviewed")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), h("p", { class: "muted" }, t("ph_separate")), proof);
+			status.replaceChildren();
+		} catch (error) {
+			if (valid(ticket)) fail(error);
+		} finally {
+			if (valid(ticket)) {
+				reading = false;
+				update();
+			}
+		}
+	}
+	return {
+		element,
+		setPackage,
+		withdraw,
+		refresh: async () => {
+			prepared = null;
+			facts.replaceChildren();
+			update();
+		}
+	};
+}
+//#endregion
 //#region src/pm-lifecycle.js
 function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, form, input, labelled, errorBox, onChange }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/lifecycle`, actor = caps()?.actor;
@@ -885,6 +1204,12 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	const hidden = () => h("input", { type: "hidden" });
 	const stageName = (value) => t("pm_lifecycle_" + (value || "unclassified"));
 	const canAction = (action, readParams) => {
+		if (action === "repository.continue" && typeof readParams === "function") try {
+			const params = readParams();
+			if (Object.hasOwn(params, "pm_package_ref")) return params.pm_package_ref?.workspace_id === workspaceId && ready && Boolean(current) && !["paused", "closed"].includes(current.lifecycle.stage) && !["pausing", "closing"].includes(current.lifecycle.status);
+		} catch {
+			return false;
+		}
 		if (!Array.isArray(feature.gated_actions)) return false;
 		if (!feature.gated_actions.includes(action)) return true;
 		if (!ready || !current) return false;
@@ -2982,7 +3307,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		if (!valid(ticket) || id !== selected) return;
 		const row = packageCheck(checked(data).package);
 		checked(readiness);
-		if (row.package_id !== id || readiness.package_id !== id || readiness.document_digest !== row.document_digest || readiness.ready_for !== "engineering_handoff_review" || readiness.execution_authorized !== false || readiness.execution_available !== false || readiness.dispatch_readiness !== "not_implemented" || !["ready", "blocked"].includes(readiness.status) || !Array.isArray(readiness.checks)) throw Error(t("wp_invalid"));
+		if (row.package_id !== id || readiness.package_id !== id || readiness.document_digest !== row.document_digest || readiness.ready_for !== "engineering_handoff_review" || readiness.execution_authorized !== false || readiness.execution_available !== false || !(readiness.dispatch_readiness === "not_implemented" || readiness.dispatch_readiness === "separate_fixed_handoff_admission" && readiness.handoff?.action === "repository.continue" && readiness.handoff.contract === "pm-engineering-handoff/v1" && readiness.handoff.code_basis_required === true && readiness.handoff.compatibility === "unverified" && readiness.handoff.source_materialization === "bounded_full_prompt") || !["ready", "blocked"].includes(readiness.status) || !Array.isArray(readiness.checks)) throw Error(t("wp_invalid"));
 		render(row, readiness);
 		onSelection(row);
 	}
@@ -3064,9 +3389,21 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 			} catch {}
 		}
 	}
+	function withdraw() {
+		sequence++;
+		busy = false;
+		rows = [];
+		cursor = null;
+		list.replaceChildren();
+		facts.replaceChildren();
+		onSelection(null);
+		status.replaceChildren();
+		controls();
+	}
 	return {
 		element,
-		refresh
+		refresh,
+		withdraw
 	};
 }
 //#endregion
@@ -7516,6 +7853,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		labelled,
 		errorBox
 	}) : null;
+	const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available ? workspacePackageHandoff({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		caps,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox,
+		namespace,
+		onSourceFailure: () => engineering?.withdraw()
+	}) : null;
 	const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare ? workspaceWorkPackages({
 		h,
 		t,
@@ -7523,9 +7876,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		alive,
 		workspaceId,
 		errorBox,
-		onSelection: (row) => issues?.setPackage(row)
+		onSelection: (row) => {
+			issues?.setPackage(row);
+			handoff?.setPackage(row);
+		}
 	}) : null;
 	if (engineering) body.insertBefore(engineering.element, specifications?.element || content);
+	if (handoff) body.insertBefore(handoff.element, specifications?.element || content);
 	if (issues) body.insertBefore(issues.element, specifications?.element || content);
 	const sourceSections = () => [
 		content,
@@ -7540,6 +7897,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		specifications?.element,
 		followUp?.element,
 		engineering?.element,
+		handoff?.element,
 		issues?.element
 	].filter(Boolean);
 	const noteCache = new Map();
@@ -8057,6 +8415,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refresh.disabled = true;
 		lifecycle?.withdraw();
 		issues?.withdraw();
+		engineering?.withdraw();
+		handoff?.withdraw();
 		try {
 			alive();
 			const list = await api("GET", "/pm/workspaces");
@@ -8150,6 +8510,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				specifications,
 				followUp,
 				engineering,
+				handoff,
 				issues
 			]) {
 				if (section) await section.refresh();
@@ -8167,6 +8528,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				brief?.withdraw();
 				lifecycle?.withdraw();
 				issues?.withdraw();
+				engineering?.withdraw();
+				handoff?.withdraw();
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
 				for (const section of sourceSections()) section.hidden = true;
@@ -8200,6 +8563,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_lifecycle",
 			"pm_issue_mapping"
 		].includes(event.resource_type)) {
+			eventReads = eventReads.catch(() => {}).then(() => load());
+			return eventReads;
+		}
+		if (handoff && ["project", "work_item"].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
 		}
@@ -11949,6 +12316,72 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-package-handoff-strings.js
+var pmPackageHandoffStrings = {
+	en: {
+		ph_workspace: "Selected BAT workspace",
+		ph_title: "Implement the selected work package",
+		ph_intro: "Start one managed BAT session from this fixed package. The original specification and work relationship stay attached to the attempt.",
+		ph_select: "Select an engineering work package above to prepare an implementation.",
+		ph_review: "Review fixed implementation base",
+		ph_reviewed: "Reviewed implementation base",
+		ph_base: "Code starting point",
+		ph_spec: "Specification version",
+		ph_separate: "The code and specification can have different commits. Selecting this base does not prove compatibility or waive the other readiness checks.",
+		ph_boundary: "A prepared package is not execution permission. This action starts implementation only; it does not verify quality, merge or deploy.",
+		ph_rationale: "Why use this implementation base?",
+		ph_prompt: "Instructions for this implementation",
+		ph_agent: "BAT agent",
+		ph_agent_help: "Choose Claude or Codex. The central service checks the actual start; a listed choice is not proof that the runtime is ready.",
+		ph_options: "Optional session title and model",
+		ph_start: "Start implementation",
+		ph_sources: "Fixed versions and original sources",
+		ph_use_review: "Use this reviewed project version",
+		ph_stale: "This draft retains an earlier project version. Review the current source and explicitly use that project version before starting a new request.",
+		ph_blocked: "The package has unresolved checks beyond the implementation-base decision. Review the package details above.",
+		ph_target_changed: "The published code or repository binding differs from the fixed package. Prepare a new package with an explicitly chosen base; this preview cannot rewrite it.",
+		ph_unavailable: "Implementation sources or permissions could not be verified. Displayed source facts were removed; local drafts and original requests remain.",
+		ph_not_allowed: "This handoff needs current workspace write membership, observe, manage and start scopes, plus an enabled managed BAT destination.",
+		ph_invalid: "The response does not match the selected fixed engineering package.",
+		ph_reading: "Reading the original package, project and published base…",
+		ph_started: "Implementation was started. Verification and delivery remain unassessed.",
+		ph_open: "Open managed execution",
+		ph_preparation: "Preparation",
+		ph_project_version: "Project version"
+	},
+	"zh-TW": {
+		ph_workspace: "所選 BAT 工作區",
+		ph_title: "實作所選工程工作包",
+		ph_intro: "依這份固定工作包開啟一個自有 BAT session；原始規格與工作關聯會保留在這次執行中。",
+		ph_select: "先在上方選取工程工作包，再準備實作。",
+		ph_review: "核對固定實作基底",
+		ph_reviewed: "已核對實作基底",
+		ph_base: "程式起始版本",
+		ph_spec: "規格版本",
+		ph_separate: "程式與規格可以來自不同 commit。選定此基底不代表已證明相容，也不會略過其餘就緒檢查。",
+		ph_boundary: "工作包準備完成不等於已授權執行。這個操作只開始實作，不代表品質驗證、合併或部署完成。",
+		ph_rationale: "為何使用這個實作基底？",
+		ph_prompt: "這次實作的指示",
+		ph_agent: "BAT agent",
+		ph_agent_help: "選擇 Claude 或 Codex；中央服務仍會核對實際啟動條件，選單本身不代表 runtime 已就緒。",
+		ph_options: "選填 session 標題與模型",
+		ph_start: "開始實作",
+		ph_sources: "固定版本與原始來源",
+		ph_use_review: "使用這個已核對的專案版本",
+		ph_stale: "草稿仍保留先前的專案版本。請重新核對目前來源，再明確使用這個專案版本開始新請求。",
+		ph_blocked: "除了實作基底決定外，工作包仍有未解決的檢查；請查看上方工作包詳情。",
+		ph_target_changed: "已發布程式或儲存庫關聯與固定工作包不符。請明確選定基底並準備新工作包；此預覽不會改寫原工作包。",
+		ph_unavailable: "無法核對實作來源或權限，已移除顯示中的來源事實；本地草稿與原請求仍保留。",
+		ph_not_allowed: "此交接需要目前工作區寫入資格、observe／manage／start 權限，以及已允許管理工作的 BAT 目的地。",
+		ph_invalid: "回應與所選固定工程工作包不符。",
+		ph_reading: "讀取原工作包、專案與已發布基底…",
+		ph_started: "已開始實作；驗證與交付仍未評估。",
+		ph_open: "開啟自有執行",
+		ph_preparation: "準備版本",
+		ph_project_version: "專案版本"
+	}
+};
+//#endregion
 //#region src/pm-governance-strings.js
 var pmGovernanceStrings = {
 	en: {
@@ -14243,6 +14676,7 @@ var pmStrings = {
 var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
+		...pmPackageHandoffStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -15693,6 +16127,7 @@ var STRINGS = {
 	},
 	en: {
 		...pmStrings.en,
+		...pmPackageHandoffStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
