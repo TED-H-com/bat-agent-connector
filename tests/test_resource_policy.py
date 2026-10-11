@@ -74,13 +74,16 @@ def test_only_the_policy_mints_write_grants():
     assert offenders == []
 
 
-def test_a_session_grant_never_covers_a_frame_without_its_session_id():
-    grant = resource_policy.WriteGrant("h1", "session.send", "s-1", BY_ACTION["session.send"].channels)
+def test_a_session_grant_never_covers_a_frame_without_its_session_id(controller_context):
+    adopt("s-1")
+    row = registry.get("h1", "s-1")
+    ownership = {key: row[key] for key in ("controller_authority", "controller_incarnation")}
+    grant = resource_policy.WriteGrant("h1", "session.send", "s-1", BY_ACTION["session.send"].channels, **ownership)
     resource_policy.check_grant(grant, "h1", "claude:send-message", {"sessionId": "s-1"})
     for params in ({}, None, {"sessionId": "s-2"}):
         with pytest.raises(ResourceReadOnly, match="GRANT_MISMATCH"):
             resource_policy.check_grant(grant, "h1", "claude:send-message", params)
-    tab = resource_policy.WriteGrant("h1", "workspace.register_tab", "s-1", frozenset({"workspace:save"}))
+    tab = resource_policy.WriteGrant("h1", "workspace.register_tab", "s-1", frozenset({"workspace:save"}), **ownership)
     resource_policy.check_grant(tab, "h1", "workspace:save", {"profileId": "default"})
 
 
@@ -198,7 +201,9 @@ async def test_connector_record_pointing_at_a_human_checkout_grants_nothing(flee
         add_managed_wt(mock, sid, cwd="/srv/other", worktree_path="/srv/other")
         mock.metas[sid]["cwd"] = "/srv/other"
     elif case == "shares_a_bat_session_worktree":
-        add_managed_wt(mock, sid, shares_worktree_with=MANUAL, failover_of=MANUAL)
+        add_managed_wt(mock, sid)
+        # Model a pre-policy invalid relationship: a new reservation now refuses it.
+        registry.update("h1", sid, shares_worktree_with=MANUAL, failover_of=MANUAL)
     else:
         add_managed_wt(mock, sid)
     if case == "meta_cwd_in_main_checkout":
