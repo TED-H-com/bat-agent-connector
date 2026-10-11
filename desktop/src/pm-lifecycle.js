@@ -11,7 +11,15 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   const gate=()=>ready&&current&&caps()?.actor===actor&&permitted(true);
   const hidden=()=>h('input',{type:'hidden'});
   const stageName=value=>t('pm_lifecycle_'+(value||'unclassified'));
-  const canAction=action=>Array.isArray(feature.gated_actions)&&(!feature.gated_actions.includes(action)||Boolean(ready&&current&&!current.blocked_actions.includes(action)));
+  const canAction=(action,readParams)=>{
+    if(!Array.isArray(feature.gated_actions))return false;
+    if(!feature.gated_actions.includes(action))return true;
+    if(!ready||!current)return false;
+    if(!current.blocked_actions.includes(action))return true;
+    const rule=current.record_variants?.[action];
+    if(!Array.isArray(rule?.absent_params)||!rule.absent_params.length||typeof readParams!=='function')return false;
+    try{const params=readParams();return params&&rule.absent_params.every(key=>typeof key==='string'&&!Object.hasOwn(params,key));}catch{return false;}
+  };
   const notify=()=>{for(const editor of editors)editor.update();onChange();for(const field of retentionChoices.querySelectorAll('input'))field.disabled=retentionLocked();};
   const checkScope=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('pm_scope_mismatch'));return value;};
   const validCursor=(next,previous)=>next===null||Number.isSafeInteger(next)&&next>previous;
