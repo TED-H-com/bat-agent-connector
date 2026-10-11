@@ -17,7 +17,6 @@ import pytest
 
 from bat_agent_connector import (
     api_auth,
-    pm_discussions,
     pm_lifecycle_gates,
     pm_plans,
     pm_snapshots,
@@ -28,10 +27,12 @@ from bat_agent_connector import pm_requirement_acceptance as acceptance
 from bat_agent_connector import pm_work_batches as batches
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
+from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_execution_verification as producer
 from tests import test_pm_maintenance_acceptance as repair
 from tests import test_pm_maintenance_repairs as repair_setup
 from tests import test_pm_maintenance_review as meetings
+from tests import test_pm_native_operations as native
 from tests import test_pm_package_handoff as handoffs
 from tests import test_pm_quality_reviews as reviews
 from tests import test_pm_requirement_acceptance as accepted
@@ -39,8 +40,8 @@ from tests import test_pm_work_batches as batch
 from tests import test_pm_work_packages as packages
 from tests.test_checkpoints import MANUAL, bat_writes, git, snapshot
 from tests.test_integration import commit
-from tests.test_pm_plan_operations import act, adopt, draft
-from tests.test_pm_plan_operations import target as thread_target
+from tests.test_pm_native_runtime import protocol
+from tests.test_pm_plan_operations import act
 
 base_world = repair.base_world
 released_world = repair.world
@@ -97,23 +98,38 @@ async def world(released_world):
 
 
 @pytest.fixture
-async def member_batch(ready):
+async def member_batch(ready, monkeypatch):
     w, ops = ready, ready['d'].ops
-    scope = await act(w, 'pm.input.record', {'slot': 'scope', 'value': 'Members can recover a forgotten password',
-        'status': 'user_confirmed', 'source_ref': {'kind': 'statement', 'ref': 'Explicit member recovery direction'}})
-    criterion = await act(w, 'pm.input.record', {'slot': 'quality',
-        'value': 'Invalid reset tokens leave credentials unchanged; a valid token replaces the password exactly once',
-        'status': 'user_confirmed', 'source_ref': {'kind': 'statement', 'ref': 'Explicit password recovery acceptance'}})
-    original = w['requirements'][0]
-    discussion = pm_discussions.get_thread(ops, OWNER, **thread_target(w))
-    await act(w, 'pm.thread.plan.revise', {'selected_input_ids': [original['source_input_id'],
-        *original['acceptance_input_ids'], scope['input_id'], criterion['input_id']],
-        'rationale': 'Plan login first and recovery only after its original acceptance'},
-        pre={'expected_version': discussion['thread']['version'], 'expected_draft_id': discussion['draft']['draft_id']})
-    w['requirements'] = [original, {'id': 'member.recovery', 'source_input_id': scope['input_id'],
-        'acceptance_input_ids': [criterion['input_id']], 'depends_on': ['member.login']}]
-    w['revision'] = await draft(w, requirements=w['requirements'])
-    assert (await adopt(w, w['revision']))['status'] == 'succeeded'
+    # Start with an ordinary owner's discussion, then adopt one complete sourced
+    # proposal through the registered native runtime and owned Git children.
+    before = snapshot(w['human'])
+    api_auth.issue(ops.db, OWNER.actor, sorted(OWNER.scopes))
+    conversation.proposals.install(ops)
+    message = await act(w, 'pm.message.append', {'content':
+        '保留會員登入，加入忘記密碼與一次性重設連結；推薦碼不在第一版。請整理成計畫。'})
+    raw = json.dumps(conversation.envelope('message.' + message['message_id']), ensure_ascii=False)
+    def reply(prompt, client_id):
+        events = protocol(prompt, client_id)
+        events[2]['params']['item']['text'] = raw
+        events[-1]['params']['turn']['items'][-1]['text'] = raw
+        return events
+    monkeypatch.setattr(native, 'protocol', reply)
+    instances = []
+    ops.context['pm_native_runtime_factory'] = lambda *args, **kwargs: native.FakeRuntime(
+        *args, **kwargs, settings={}, instances=instances)
+    proposal = await conversation.proposed(w)
+    original_plan = pm_plans.head(ops.db, w['workspace_id'])['accepted_revision_id']
+    assert original_plan == w['revision']['revision_id']
+    parent = ops.create(OWNER, **conversation.adoption_request(w, proposal))[0]
+    adopted = await conversation.complete(w, parent)
+    assert adopted['status'] == 'succeeded', adopted
+    plan = pm_plans.accepted_plan(ops, OWNER, w['workspace_id'])['plan']
+    assert plan['revision_id'] != original_plan and '推薦碼' not in plan['document']['markdown']
+    assert snapshot(w['human']) == before and len(instances) == 1 and instances[0].sends == 1
+    w['revision'] = {'revision_id': plan['revision_id']}
+    w['requirements'] = plan['document']['requirements']
+    assert [item['id'] for item in w['requirements']] == ['member.login', 'member.recovery']
+    w['params']['verification'][0]['acceptance_input_ids'] = w['requirements'][0]['acceptance_input_ids']
     await packages.associate(w)
     w['package'] = packages.read(w, await packages.create(w))
     handoffs.dispatch_runner(w)
@@ -133,7 +149,7 @@ async def member_batch(ready):
     second['params']['tasks'][0].update(key='identity.recovery', requirement_ids=['member.recovery'],
         description='Implement one-use password recovery and its negative cases')
     second['params']['verification'][0].update(key='verify.recovery', requirement_id='member.recovery',
-        acceptance_input_ids=[criterion['input_id']], method='Exercise invalid, valid and consumed reset tokens',
+        acceptance_input_ids=w['requirements'][1]['acceptance_input_ids'], method='Exercise invalid, valid and consumed reset tokens',
         expected_evidence='Fixed candidate login and recovery regression results')
     second['package'] = packages.read(second, await packages.create(second))
     return w, second
