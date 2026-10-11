@@ -98,7 +98,8 @@ def bat_world(daemon, mock, monkeypatch):
                 if settings.get('page_size'):
                     for item in events[sid]:
                         item['seq'] += 9
-                    events[sid] = [event(i, 'claude:status', status='working') for i in range(1, 10)] + events[sid]
+                    events[sid] = [event(i, 'claude:status', meta={'sdkSessionId': value['threadId'],
+                        'model': 'observed-model', **pm_runtime.readonly_start_options()}) for i in range(1, 10)] + events[sid]
                 native = {"method": "turn/completed", "params": {"threadId": value["threadId"],
                     "turn": {"id": "original-turn", "status": "completed", "items": [{"type": "agentMessage",
                         "id": "native-answer", "text": "Discuss the original evidence."}], "itemsView": "summary"}}}
