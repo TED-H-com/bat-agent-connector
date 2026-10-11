@@ -16,6 +16,7 @@ from tests.test_pm_maintenance_repair_runtime import (  # noqa: F401
     advance,
     execute,
     fixed,
+    native_replay,
     observe,
     original_publication_authority,
     pm,
@@ -25,13 +26,11 @@ from tests.test_pm_maintenance_repair_runtime import (  # noqa: F401
     view,
     world,
 )
-from tests.test_pm_maintenance_repair_runtime import native_replay as native_replay_fixture
 from tests.test_pm_maintenance_repair_runtime import observed as observed_fixture
 from tests.test_pm_maintenance_repair_runtime import publishing as publishing_fixture
 from tests.test_pm_maintenance_repairs import shared_request
 
 observed = observed_fixture
-native_replay = native_replay_fixture
 publishing = publishing_fixture
 
 
@@ -182,11 +181,11 @@ def test_input_identity_requires_original_zero_input_epoch():
 
 
 @pytest.fixture
-async def identity_unavailable(native_replay):
+async def identity_unavailable(native_replay):  # noqa: F811
     native_replay['input_identity'] = False
 
 
-async def test_original_missing_input_counter_cannot_upgrade_later(identity_unavailable, publishing, native_replay, monkeypatch):
+async def test_original_missing_input_counter_cannot_upgrade_later(identity_unavailable, publishing, native_replay, monkeypatch):  # noqa: F811
     w = publishing
     monkeypatch.setattr(runtime, 'time', SimpleNamespace(time=lambda: w['clock'][0]))
     native_replay.update(reason='completed', input_identity=True)
@@ -198,7 +197,7 @@ async def test_original_missing_input_counter_cannot_upgrade_later(identity_unav
     assert view(w, w['parent'])['capacity_held']
 
 
-async def test_queued_input_counter_keeps_original_capacity(observed, native_replay):
+async def test_queued_input_counter_keeps_original_capacity(observed, native_replay):  # noqa: F811
     native_replay['input_pending'] = 1
     reader = await observe(observed)
     assert reader['status'] != 'succeeded', reader
