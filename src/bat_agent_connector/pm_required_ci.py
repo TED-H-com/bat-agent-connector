@@ -35,7 +35,7 @@ def _context(value):
 
 
 def _requirement(value, field):
-    if not isinstance(value, dict):
+    if not isinstance(value, dict) or field not in value:
         raise github.Incomplete('required_ci_rules_unproven')
     app = value.get(field)
     if app is not None and app != -1:
@@ -68,6 +68,8 @@ def project(row, kind, scope, sha=None):
         return {'id': digest(row['name']), 'name': row['name'], 'sha': github._sha((row.get('commit') or {}).get('sha')),
             'protected': row['protected']}
     if kind == 'required_protection':
+        if 'required_status_checks' not in row:
+            raise github.Incomplete('required_ci_legacy_unproven')
         selected = row.get('required_status_checks')
         if selected is None:
             return {'id': 'legacy', 'required': [], 'strict': False}

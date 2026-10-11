@@ -18,6 +18,7 @@ from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector import pm_required_ci as required
 from bat_agent_connector.operations import OperationError
 from tests import test_pm_maintenance_repairs as setup
+from tests.test_checkpoints import git
 from tests.test_pm_delivery_lineage import sync_provider_graph
 from tests.test_pm_maintenance_repair_quality import (  # noqa: F401
     OWNER,
@@ -97,6 +98,14 @@ async def published(publishing, monkeypatch):
     pr['base']['sha'] = receipt['base_sha']
     w['gh'].branches['main'] = receipt['base_sha']
     sync_provider_graph(w)
+    comparison = w['gh'].comparison
+    paths = git(w['remote'], 'diff', '--name-only', receipt['base_sha'], receipt['candidate_sha']).splitlines()
+    def complete_diff(base, head, page):
+        result = comparison(base, head, page)
+        if result is not None and (base, head) == (receipt['base_sha'], receipt['candidate_sha']):
+            result['files'] = [{'filename': path, 'status': 'added'} for path in paths]
+        return result
+    monkeypatch.setattr(w['gh'], 'comparison', complete_diff)
     w['ci_provider'] = CIProvider(ops.context['github'].cfg, w, receipt)
     monkeypatch.setattr(ops.context['github'], 'bounded_get', w['ci_provider'].bounded_get)
     w['ci_ref'] = await observe(w)

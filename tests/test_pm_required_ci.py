@@ -173,3 +173,16 @@ def test_native_status_proof_uses_latest_fixed_context_and_rejects_missing_app()
         {'id': 2, 'context_digest': 'same', 'state': 'success', 'created_at': 2}]
     assert required.evaluate(wanted, [], statuses)['status'] == 'passed'
     assert required.evaluate([{**wanted[0], 'app_id': 10}], [], statuses)['status'] == 'blocked'
+
+
+@pytest.mark.parametrize('missing', ['app_id', 'integration_id', 'required_status_checks'])
+async def test_omitted_native_rule_identity_does_not_widen_to_any_app(ops, monkeypatch, missing):
+    provider = ops.context['github']
+    if missing == 'app_id':
+        del provider.protection['required_status_checks']['checks'][0][missing]
+    elif missing == 'integration_id':
+        del provider.rules[0]['parameters']['required_status_checks'][0][missing]
+    else:
+        del provider.protection[missing]
+    doc = await collect(ops, monkeypatch)
+    assert doc['evidence']['status'] == 'incomplete'
