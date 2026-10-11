@@ -15,8 +15,9 @@ from bat_agent_connector.operations import AmbiguousOutcome, OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests import test_api_v1 as api
 from tests import test_artifact_capture as manual
+from tests.conftest import controller_scope
 from tests.test_artifact_capture import finish, principal
-from tests.test_artifacts import action, continuation, make_checkpoint
+from tests.test_artifacts import PERSON, action, continuation, make_checkpoint
 from tests.test_checkpoints import bat_writes, git
 
 daemon, human, served = manual.daemon, manual.human, api.served
@@ -235,8 +236,11 @@ async def test_send_lineage_uses_real_central_send_and_original_command(daemon, 
     sid = execution[1]
     tid = None
     if task_owned:
-        task = daemon.journal.submit(project="fixture", host="h1", workspace="demo-project", original_words="review result",
-                                     engine="goose", idempotency_key="managed-task")
+        # The task and its existing execution carrier belong to the same caller.
+        with controller_scope(daemon.journal, PERSON):
+            task = daemon.journal.submit(project="fixture", host="h1", workspace="demo-project", original_words="review result",
+                                         engine="goose", idempotency_key="managed-task")
+        assert task["controller_authority"] == registry.get("h1", sid)["controller_authority"]
         tid = task["task_id"]
         daemon.journal.change(tid, "dispatching", fields={"session_id": sid})
         daemon.journal.change(tid, "accepted")
