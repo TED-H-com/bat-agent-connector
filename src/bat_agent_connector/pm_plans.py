@@ -260,6 +260,8 @@ async def _run_draft(ctx):
         applied = ctx.service.db.execute("SELECT result FROM pm_plan_applied WHERE operation_id=?", (ctx.operation_id,)).fetchone()
         if applied:
             return json.loads(applied[0])
+        from .pm_lifecycle_gates import require_local
+        require_local(ctx.service.db, ctx.operation_id)
         principal = pm_workspace.admitted_principal(ctx)
         revision_id = "pmrev_" + ctx.operation_id[3:]
         thread, current, document, scope_digest = _check_draft(ctx.service, principal, ctx.target, ctx.params,
@@ -380,6 +382,8 @@ def adopt_revision(ctx):
         applied = ctx.service.db.execute("SELECT result FROM pm_plan_adoptions WHERE operation_id=?", (ctx.operation_id,)).fetchone()
         if applied:
             return json.loads(applied[0])
+        from .pm_lifecycle_gates import require_local
+        require_local(ctx.service.db, ctx.operation_id)
         principal, revision = _adoption_context(ctx)
         prepare_adoption(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         saved = ctx.service.db.execute("SELECT receipt FROM pm_plan_git_receipts WHERE operation_id=?", (ctx.operation_id,)).fetchone()
