@@ -1049,10 +1049,10 @@ async def test_a05_a07_rejected_send_command_survives_restart_without_uncertain_
         else:
             original_start = d.ops._step_start
 
-            def stop_before_refusal_intent(operation_id, name, request):
+            def stop_before_refusal_intent(operation_id, name, request, **kwargs):
                 if name == "task_send_refusal":
                     raise asyncio.CancelledError("crash after local outcome before refusal intent")
-                return original_start(operation_id, name, request)
+                return original_start(operation_id, name, request, **kwargs)
 
             patch.setattr(d.ops, "_step_start", stop_before_refusal_intent)
         with pytest.raises(asyncio.CancelledError):
