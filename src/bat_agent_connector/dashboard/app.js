@@ -1278,7 +1278,8 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			max: 32e3,
 			multiline: true
 		}), packageId = hidden(), packageDigest = hidden(), mappingRevision = hidden();
-		const editor = form({
+		let editor = null, syncing = false;
+		editor = form({
 			action: "pm.issue.publish",
 			target: {
 				workspace_id: workspaceId,
@@ -1304,6 +1305,9 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			recoverPermitted: () => loaded && permitted(false),
 			label: "pmi_publish",
 			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (editor && !syncing) editor.update();
+			},
 			extra: h("div", {}, h("p", { class: "muted" }, t("pmi_public_help")), labelled("pmi_public_title", title), labelled("pmi_public_body", body), packageId, packageDigest, mappingRevision)
 		});
 		const originalUpdate = editor.update, stale = h("p", {
@@ -1323,17 +1327,23 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}, t("pmi_review_source"));
 		editor.box.append(stale, select);
 		editor.update = () => {
-			const selectedWork = packageRow?.work_item_id === workId;
-			if (selectedWork && publicationReady() && !editor.locked() && (!packageId.value || !title.value && !body.value)) {
-				editor.set("package", packageRow.package_id);
-				editor.set("digest", packageRow.document_digest);
-				editor.set("revision", matching()[0]?.revision_id || "");
+			if (syncing) return;
+			syncing = true;
+			try {
+				const selectedWork = packageRow?.work_item_id === workId;
+				if (selectedWork && publicationReady() && !editor.locked() && (!packageId.value || !title.value && !body.value)) {
+					editor.set("package", packageRow.package_id);
+					editor.set("digest", packageRow.document_digest);
+					editor.set("revision", matching()[0]?.revision_id || "");
+				}
+				originalUpdate();
+				const changed = selectedWork && packageId.value && (packageId.value !== packageRow.package_id || packageDigest.value !== packageRow.document_digest || mappingRevision.value !== (matching()[0]?.revision_id || ""));
+				stale.hidden = !changed;
+				select.hidden = !changed;
+				select.disabled = editor.locked() || !publicationReady();
+			} finally {
+				syncing = false;
 			}
-			originalUpdate();
-			const changed = selectedWork && packageId.value && (packageId.value !== packageRow.package_id || packageDigest.value !== packageRow.document_digest || mappingRevision.value !== (matching()[0]?.revision_id || ""));
-			stale.hidden = !changed;
-			select.hidden = !changed;
-			select.disabled = editor.locked() || !publicationReady();
 		};
 		publishers.set(workId, editor);
 		return editor;
@@ -1349,7 +1359,8 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			multiline: true,
 			required: false
 		}), version = hidden();
-		const editor = form({
+		let editor = null, syncing = false;
+		editor = form({
 			action: "pm.issue.cancel",
 			target: {
 				workspace_id: workspaceId,
@@ -1369,6 +1380,9 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			recoverPermitted: () => loaded && permitted(false),
 			label: "pmi_stop",
 			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (editor && !syncing) editor.update();
+			},
 			extra: h("div", {}, h("p", { class: "muted" }, t("pmi_stop_help")), labelled("pmi_private_reason", reason), labelled("pmi_public_reason", publicReason), version)
 		});
 		const updateOriginal = editor.update, warning = h("p", {
@@ -1395,14 +1409,20 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}, t("pmi_remove_public"));
 		editor.box.append(warning, review, removePublic);
 		editor.update = () => {
-			if (current?.mapping_id === mid && !editor.locked() && (!version.value || !reason.value && !publicReason.value)) editor.set("version", current.revision_id);
-			updateOriginal();
-			const changed = current?.mapping_id === mid && version.value && version.value !== current.revision_id;
-			warning.hidden = !changed;
-			review.hidden = !changed;
-			review.disabled = editor.locked() || !loaded || !permitted(false);
-			removePublic.hidden = !publicReason.value;
-			removePublic.disabled = editor.locked() || !loaded || !permitted(false);
+			if (syncing) return;
+			syncing = true;
+			try {
+				if (current?.mapping_id === mid && !editor.locked() && (!version.value || !reason.value && !publicReason.value)) editor.set("version", current.revision_id);
+				updateOriginal();
+				const changed = current?.mapping_id === mid && version.value && version.value !== current.revision_id;
+				warning.hidden = !changed;
+				review.hidden = !changed;
+				review.disabled = editor.locked() || !loaded || !permitted(false);
+				removePublic.hidden = !publicReason.value;
+				removePublic.disabled = editor.locked() || !loaded || !permitted(false);
+			} finally {
+				syncing = false;
+			}
 		};
 		publicReason.addEventListener("input", () => editor.update());
 		cancellers.set(mid, editor);
@@ -1417,8 +1437,11 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}
 		selected.append(h("p", {}, packageRow.document.title), h("p", { class: "pm-source" }, t("pmi_fixed_package"), ": ", packageRow.package_id));
 		const found = matching();
-		if (found[0]?.document.state === "cancelled") publication.append(h("p", { class: "muted" }, t("pmi_cancelled_help")));
-		else if (!found.length && (cursor !== null || filtered)) publication.append(h("p", { class: "muted" }, t("pmi_incomplete")));
+		if (found[0]?.document.state === "cancelled") {
+			publication.append(h("p", { class: "muted" }, t("pmi_cancelled_help")));
+			const editor = publishEditor();
+			if (editor.locked()) publication.append(fold("pmi_prepare", editor.box));
+		} else if (!found.length && (cursor !== null || filtered)) publication.append(h("p", { class: "muted" }, t("pmi_incomplete")));
 		else publication.append(fold("pmi_prepare", publishEditor().box));
 		update();
 	}
@@ -6998,6 +7021,7 @@ var retired = (error) => [
 	"CONNECTION_CHANGED",
 	"PM_DISPOSED"
 ].includes(error.code);
+var receiptSubscribers = new Map();
 var threadDisclosures = new Map();
 var threadDisclosureSelectors = [
 	"[data-pm-add-input]",
@@ -7057,6 +7081,20 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		input.addEventListener("change", changed);
 	}
 	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
+	const receiveReceipt = () => {
+		if (disposed || damaged || !saved.intent) return;
+		try {
+			guard();
+			const stored = JSON.parse(localStorage.getItem(storage));
+			if (stored?.intent?.key !== saved.intent.key || !same$3(stored.intent.request, saved.intent.request) || !/^op_[0-9a-f]{32}$/.test(stored.intent.operation_id) || saved.intent.operation_id && saved.intent.operation_id !== stored.intent.operation_id) return;
+			saved.intent.operation_id = stored.intent.operation_id;
+			receiptPolling = true;
+			update();
+		} catch {}
+	};
+	const subscribers = receiptSubscribers.get(storage) || new Set();
+	subscribers.add(receiveReceipt);
+	receiptSubscribers.set(storage, subscribers);
 	const terminal = () => ["failed", "cancelled"].includes(operation?.status);
 	const reset = h("button", {
 		type: "button",
@@ -7149,21 +7187,32 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				firstAttempt = true;
 			}
 			update();
-			const intent = saved.intent;
+			const intent = saved.intent, actor = caps()?.actor;
 			persist();
-			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+			let collected = false;
+			const collectReceipt = (data) => {
+				if (collected) return;
+				const op = data.operation;
+				if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== actor || op.idempotency_key !== intent.key || !same$3({
+					action: op.action,
+					target: op.target,
+					params: op.params,
+					preconditions: op.preconditions
+				}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+				const stored = JSON.parse(localStorage.getItem(storage));
+				if (stored?.intent?.key === intent.key && same$3(stored.intent.request, intent.request)) {
+					if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+					stored.intent.operation_id = op.operation_id;
+					localStorage.setItem(storage, JSON.stringify(stored));
+					for (const notify of receiptSubscribers.get(storage) || []) notify();
+				}
+				collected = true;
+			};
+			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`, void 0, void 0, collectReceipt) : await api("POST", "/operations?wait=3", intent.request, intent.key, collectReceipt);
+			collectReceipt(data);
 			guard();
-			if (disposed || !allowed()) {
-				receiptPolling = false;
-				return;
-			}
+			if (disposed || !allowed()) return;
 			const op = data.operation;
-			if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key || !same$3({
-				action: op.action,
-				target: op.target,
-				params: op.params,
-				preconditions: op.preconditions
-			}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
@@ -7208,6 +7257,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			disposed = true;
 			receiptPolling = false;
 			stopTimer();
+			subscribers.delete(receiveReceipt);
+			if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
 		},
 		set: (name, value) => {
 			if (!busy && !saved.intent && !damaged) {
@@ -22626,11 +22677,12 @@ var ApiError = class extends Error {
 		this.code = code;
 	}
 };
-async function api(method, path, body, key) {
+async function api(method, path, body, key, collectReceipt) {
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
 	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
 	const epoch = state.epoch;
 	const { status, data } = await connectorRequest(method, path, body, key, state.token);
+	if (status >= 200 && status < 300) collectReceipt?.(data);
 	if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
 	if (status < 200 || status >= 300) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
