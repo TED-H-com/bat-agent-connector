@@ -142,7 +142,10 @@ fn verify(value: Value, reference: &Reference) -> Result<Verified, String> {
     let raw = doc.content.as_bytes();
     if doc.version != 1
         || doc.template_version != 1
-        || doc.renderer_version != 1
+        || !matches!(
+            (doc.renderer_version, doc.coverage.projection.as_str()),
+            (1, "project_brief_only") | (2, "project_brief_with_maintenance_review")
+        )
         || doc.workspace_id != reference.workspace_id
         || doc.snapshot_id != reference.snapshot_id
         || doc.format != reference.format
@@ -163,7 +166,6 @@ fn verify(value: Value, reference: &Reference) -> Result<Verified, String> {
         || !doc.coverage.snapshot.is_object()
         || !doc.coverage.visibility.is_object()
         || !doc.coverage.visibility["filtered"].is_boolean()
-        || doc.coverage.projection != "project_brief_only"
         || doc.coverage.other_management_views != "not_rendered"
         || doc.coverage.referenced_sources != "fixed_authorized_view"
         || doc.coverage.unreferenced_evidence != "not_expanded"
@@ -358,6 +360,20 @@ mod tests {
                 "{field}"
             );
         }
+    }
+
+    #[test]
+    fn maintenance_report_requires_matching_renderer_and_projection() {
+        let (reference, mut doc) = fixture("html", "zh-TW");
+        doc["coverage"]["projection"] = json!("project_brief_with_maintenance_review");
+        assert!(verify(doc.clone(), &reference).is_err());
+        doc["renderer_version"] = json!(2);
+        assert_eq!(
+            verify(doc.clone(), &reference).unwrap().content,
+            doc["content"]
+        );
+        doc["renderer_version"] = json!(3);
+        assert!(verify(doc, &reference).is_err());
     }
 
     #[test]

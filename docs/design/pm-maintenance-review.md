@@ -101,3 +101,29 @@ These five actions are local records and may be admitted while Paused/Closed
 through the shared lifecycle record-action allowlist. Weekly schedule execution
 is a separate integration over the existing bounded scheduler and is not implied
 by the existence of these manual actions or report generation.
+
+## Shared entrypoints and exports
+
+All mutations use the registered central operation endpoint. Read-only routes
+relative to `/api/v1/pm/workspaces/{workspace_id}` are:
+
+| HTTP GET | RPC / MCP |
+| --- | --- |
+| `/maintenance-reviews?after&limit` | `pm_maintenance_reviews_list` |
+| `/maintenance-reviews/current?history_limit` | `pm_maintenance_review_current_get` |
+| `/maintenance-reviews/{review_id}?history_limit` | `pm_maintenance_review_get` |
+| `/maintenance-reviews/{review_id}/events?after&limit` | `pm_maintenance_review_events_list` |
+
+API/RPC/MCP share the same readers and native route/query allowlist. Sequence
+cursors use nonnegative signed-64-bit bounds; page/history limits are 1–100.
+Unknown, duplicate and empty selectors fail. Reads never admit work.
+
+The original report Snapshot can use the existing Brief export and native save
+route. Renderer 2 pairs exactly with `project_brief_with_maintenance_review`;
+ordinary Brief snapshots retain renderer 1 and their original output bytes.
+Both use original snapshot/view/output digests, escaped literal source text and
+the same whole-content byte/page limits. The maintenance section preserves its
+fixed period, original publication/policy, coverage gaps and comparison facts.
+Subsequent discussion/completion events do not change the historical export.
+The ordinary `pm.snapshot.created` event emitted by preparing a report also
+inherits the original preparing operation's source gate.
