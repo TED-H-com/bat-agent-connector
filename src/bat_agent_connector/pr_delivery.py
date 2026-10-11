@@ -201,6 +201,8 @@ def save_preview(ops, document: dict) -> dict:
             ops.db.execute("INSERT INTO pr_merge_previews VALUES (?,?,?,?,?,?,?)",
                            (doc["preview_id"], doc["repository"], doc["target"]["number"], json.dumps(doc),
                             doc["digest"], doc["created_at"], doc["expires_at"]))
+            from .pm_delivery_lineage import preserve_preview
+            preserve_preview(ops, doc)
             from .observation import summary
             ops.journal.api_event("pr_merge_preview", doc["preview_id"], "delivery.merge_previewed", summary(doc, pr=True),
                                   context={"observer": "delivery-service", "evidence": [{"table": "pr_merge_previews", "id": doc["preview_id"]}]})
@@ -386,8 +388,9 @@ async def verify_merge(ctx, pr: dict, doc: dict) -> dict:
             return {"verification_error": "MERGE_RESULT_UNVERIFIABLE", "message": str(exc), "merged_sha": merged}
     async def reread(_):
         return RERUN  # verification is read-only, including recovery after a process exits mid-read
-    receipt = await ctx.step(name, verify, request={"merged_sha": merged, "preview_id": doc["preview_id"]},
-                             reconcile=reread)
+    from .pm_delivery_lineage import readback_step
+    receipt = await readback_step(ctx, name, verify, request={"merged_sha": merged, "preview_id": doc["preview_id"]},
+                                 reconcile=reread)
     if receipt.get("verification_pending"):
         from .delivery import _check_wait
         _check_wait(ctx, "merge_verification_wait_started_at")
