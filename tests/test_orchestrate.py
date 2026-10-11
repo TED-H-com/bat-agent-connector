@@ -9,10 +9,15 @@ import pytest
 from bat_agent_connector import orchestrate, registry, service
 from bat_agent_connector.errors import ResourceReadOnly, WriteRefused
 from bat_agent_connector.resource_policy import BY_ACTION, WriteGrant
+from tests.conftest import adopt
 
 
 def tab_grant(sid: str) -> WriteGrant:
-    return WriteGrant("h1", "workspace.register_tab", sid, BY_ACTION["workspace.register_tab"].channels)
+    adopt(sid)
+    entry = registry.get("h1", sid)
+    return WriteGrant("h1", "workspace.register_tab", sid, BY_ACTION["workspace.register_tab"].channels,
+                      controller_authority=entry["controller_authority"],
+                      controller_incarnation=entry["controller_incarnation"])
 
 
 async def test_worktree_status_read_tier(fleet_factory, mock):
