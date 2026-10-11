@@ -83,7 +83,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W16 | P1 | Planning Review Retro | 開發分支：各自輸出、固定討論依據、明確完成與改善追蹤；Daily Scrum、LLM 會議引導與品質判定待做 |
 | W17 | P1 | 風險、變更與決策 | 開發分支：固定計畫／快照來源、明確根因去重、版本決策與原採用結果關聯；自動分析、跨快照追蹤與提醒待做 |
 | W18 | P1 | GitHub issue mapping | 開發分支：明確選定公開內容、同一工作的一個 Issue 與追加版本、原操作查回、私有停止追蹤、API／MCP／Web／Tauri；外部狀態同步、多對多與明確重開仍待做 |
-| W19 | P1 | Orchestrator readiness 與派工 | 開發分支：完整固定工程包經既有 repository.continue 交接、固定程式基底、原來源最後執行檢查與衍生資料權限；大型規格 materialization、批次與完整交付鏈待做 |
+| W19 | P1 | Orchestrator readiness 與派工 | #110 草稿：完整固定工程包經既有 repository.continue 交接、固定程式基底、原來源最後執行檢查與衍生資料權限；大型規格 materialization、批次與完整交付鏈待做 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W21 | P1 | 現有 deploy 與 receipt 接入 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W22 | P1 | AHP observer 與 create-own | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -109,13 +109,13 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W42 | P1 | Idea 到 Review 真實驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 開發分支：獨立 workspace 管理階段、原版次決策、長期 Idea 與舊資料未分類；不修改討論／Sprint，不由階段標籤授權執行；Maintain 等發布基準與政策 |
 | W44 | P0 | ReleaseBaseline 與發布 receipt | #109 草稿：明確 GitHub Release 或已驗證部署的固定基準、原 repository／channel／commit／receipt、主要基準與歷史、API／MCP／Web／Tauri；registry adapter 與自動進 Maintain 待做 |
-| W45 | P0 | 閒置與 workload coverage | 開發分支：固定政策／發布／生命週期下的中央 workload snapshot、來源涵蓋、阻止原因與穩定期間；共用入口整合與完整 GitHub 觀察驗證中，尚不啟動 Maintain |
-| W46 | P1 | Maintainer profile 與政策執行 | 開發分支：owner 明確採用不可變維護政策、範圍／驗證／交付上限／時區與預算意圖；UI 與整合驗證中，排程、預算 reservation 與修復執行待做 |
-| W47 | P1 | 依賴 Issue PR 維護來源 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W48 | P0 | 維護排程與恢復 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W45 | P0 | 閒置與 workload coverage | 開發分支已接 API／MCP／Web／Tauri：固定政策／發布／生命週期下的中央 workload snapshot、來源涵蓋、阻止原因與穩定期間；尚不自動進 Maintain |
+| W46 | P1 | Maintainer profile 與政策執行 | 開發分支：owner 明確採用不可變維護政策、範圍／驗證／交付上限／時區；有界檢查排程與預算 reservation 已接入，修復執行待做 |
+| W47 | P1 | 依賴 Issue PR 維護來源 | 開發分支：明確採用 GitHub open PR／checks／statuses 與 nonterminal Actions profile，雙次有界遍歷及原始頁面證據；Issue／依賴內容與修復 finding 尚待做，不宣稱全 repository／第三方 CI 涵蓋 |
+| W48 | P0 | 維護排程與恢復 | 開發分支：既有 daemon／operation worker 執行到期檢查、固定時間窗去重與漏跑合併、目前原 owner 憑證、並行／期間上限與絕對期限、原 children 查回；API／MCP／Web／Tauri 已接入，每週 Review 排程另待 W49 |
 | W49 | P1 | 每週 Maintenance Review 與改進研究 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W50 | P0 | 暫停 關閉與 reopen | 開發分支：同 journal 的操作／step／local effect 邊界、原 execution epoch、在途查回與明確保留；重開不復活舊佇列、不封存 GitHub、不接管外部 session；中央回歸待跑 |
-| W51 | P1 | 維護 API MCP skills 與 UI | 開發分支加入 lifecycle 的共同操作／讀取、API／MCP／原生路由與同頁控制；維護政策／排程／Review 入口待做 |
+| W51 | P1 | 維護 API MCP skills 與 UI | 開發分支加入 lifecycle／政策／工作量／GitHub 觀察／檢查排程的共同操作與讀取、API／MCP／原生路由及中英文同頁控制；Review 入口待做 |
 | W52 | P1 | 完整生命週期實機驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 
 ## 工作證據與分析 adapter
@@ -268,7 +268,7 @@ API／MCP 可建立新版本，原工作、session、attempt、規格與先前�
 
 ## 固定工程包交接與原來源權限
 
-開發分支的 [W19／W38 交接](../design/pm-package-handoff.md) 沿用既有
+[#110](https://github.com/teddashh/bat-agent-connector/pull/110) 的 [W19／W38 交接](../design/pm-package-handoff.md) 沿用既有
 `repository.continue`。同一明確操作選定完整 package、已發布程式基底、原工作與目標；
 規格和程式 commit 分開保存，不因兩者不同而宣稱不相容，也不額外要求 owner 重複批准。
 完整需求、接受條件、設計與驗證安排必須符合既有首則訊息上限；超限整份拒絕，不截短規格。
@@ -287,10 +287,17 @@ repository 與 commit；部署來源必須有原本的產品版本驗證 receipt
 未查 registry、功能接受條件或目前 production 狀態時仍明示未查，不以成功 workflow 代替。
 Web／Tauri 明確讀取候選，保存審閱版本、草稿及原 key；登錄本身不再發布任何成果。
 
-維護政策與 workload collector 正在開發分支整合。政策保存採用者、原發布來源、
+維護政策與 workload collector 已在開發分支接入共用入口。政策保存採用者、原發布來源、
 精確 repository／provider／branch／workspace 範圍及投入上限。工作量以中央已知工作、
 承諾、在途效果與具範圍的 BAT 觀察判斷；失聯、等待 CI、blocked 或未知效果都不算閒置。
 舊政策的 repository 範圍不能用少數已連結 PR 宣稱全部查完。
-有界 GitHub 觀察另以明確 profile 開發；排程、修復與每週 Review 尚未完成。
+有界 GitHub 觀察須明確採用 `github_open_prs_and_actions_v1`，限制分頁、列數、bytes、
+時間與兩次遍歷結果；它不代表 Issue／依賴內容或所有第三方 CI 已查完。
+
+[有界檢查排程](../design/pm-maintenance-checks.md) 已接入原 daemon 與 operation worker。
+到期時間窗、原操作與容量在同一交易保留，漏跑只安排最近一期；每次 provider 讀取仍受
+原檢查剩餘期限限制。來源或原控制者失權、生命週期改變、額度用完會停止新步驟；
+未知的原 children 保留容量並沿原 receipt 查回。中英文畫面顯示下次時間、阻止原因、
+原操作及覆蓋缺口，讀取畫面不啟動工作。修復、自動進 Maintain 與每週 Review 尚未完成。
 
 上述區分開發分支、草稿 PR、合併、安裝與真人驗收；早期提交的測試數不套用到後續整合版本。

@@ -6239,6 +6239,232 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	};
 }
 //#endregion
+//#region src/pm-maintenance-checks.js
+function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, profile = "github_open_prs_and_actions_v1";
+	let epoch = 0, ready = false, policy = null, baseline = null, lifecycle = null, schedule = null, historyLoaded = false, cursor = null, filtered = false;
+	const status = h("div", { role: "status" }), facts = h("div", { class: "pm-check-facts" }), context = h("p", { class: "muted" }), history = h("div");
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("pmc_invalid"));
+		return value;
+	};
+	const valid = (ticket) => {
+		try {
+			alive();
+			return ticket === epoch;
+		} catch {
+			return false;
+		}
+	};
+	const owner = () => permitted(true) && workspace()?.membership?.role === "owner" && ["observe", "manage"].every((scope) => caps()?.scopes?.includes(scope));
+	const recover = () => Boolean(workspace()?.membership) && caps()?.scopes?.includes("manage");
+	const current = () => ready && policy && baseline && lifecycle;
+	const stage = () => ["development", "maintain"].includes(lifecycle?.stage);
+	const canCheck = () => Boolean(current() && owner() && stage() && policy.document.policy.enabled === true && policy.document.scope.github_scope === profile && schedule && !schedule.blocked_reason);
+	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("pmc_unknown_time");
+	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), String(value));
+	const opLink = (id) => h("a", { href: `#/op/${encodeURIComponent(id)}` }, t("pm_operation"));
+	const isId = (value, prefix) => typeof value === "string" && new RegExp(`^${prefix}_[0-9a-f]{32}$`).test(value);
+	const blocker = (code) => t("pmc_block_" + ({
+		PM_MAINTENANCE_AUTHORITY_UNAVAILABLE: "authority",
+		PM_MAINTENANCE_CONTROLLER_CHANGED: "authority",
+		FORBIDDEN: "authority",
+		PM_MAINTENANCE_STAGE_STOPPED: "stage",
+		PM_LIFECYCLE_STOPPED: "stage",
+		PM_LIFECYCLE_EPOCH_CHANGED: "changed",
+		PM_MAINTENANCE_DISABLED: "disabled",
+		PM_MAINTENANCE_SOURCES_UNAVAILABLE: "sources",
+		PM_MAINTENANCE_BUDGET_EXHAUSTED: "budget",
+		PM_MAINTENANCE_DEADLINE: "deadline",
+		PM_MAINTENANCE_PARENT_STOPPED: "stopped",
+		PARENT_STOPPED: "stopped",
+		SOURCE_COVERAGE_INCOMPLETE: "coverage",
+		PM_MAINTENANCE_CONTEXT_CHANGED: "changed",
+		PM_MAINTENANCE_CHILD_UNSETTLED: "unsettled"
+	}[code] || "unknown"));
+	const request = async (...args) => {
+		const ticket = epoch;
+		try {
+			return await api(...args);
+		} catch (error) {
+			if (valid(ticket) && [
+				401,
+				403,
+				404
+			].includes(error.status)) failure(error);
+			throw error;
+		}
+	};
+	const editor = form({
+		action: "pm.maintenance.check",
+		target: { workspace_id: workspaceId },
+		fields: {},
+		api: request,
+		params: () => ({ policy_id: policy.policy_id }),
+		preconditions: () => ({
+			expected_policy_version: policy.revision,
+			expected_baseline_id: baseline.baseline_id,
+			expected_lifecycle_revision: lifecycle.revision
+		}),
+		permitted: canCheck,
+		recoverPermitted: recover,
+		label: "pmc_check",
+		extra: context,
+		onSaved: () => refresh()
+	});
+	editor.box.querySelector("button[type=submit]").className = "secondary";
+	const historyDetails = h("details", { "data-check-history": "" }, h("summary", {}, t("pmc_history")), history);
+	historyDetails.addEventListener("toggle", () => {
+		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
+	});
+	const element = h("div", { "data-pm-maintenance-checks": "" }, h("header", { class: "pm-heading" }, h("h3", {}, t("pmc_title")), h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pmc_refresh"))), status, h("p", { class: "muted" }, t("pmc_intro")), facts, editor.box, historyDetails);
+	function run(row) {
+		if (row?.workspace_id !== workspaceId || !isId(row.run_id, "pmck") || !isId(row.operation_id, "op") || !isId(row.policy_id, "pmmp") || !isId(row.baseline_id, "pmrb") || !Number.isSafeInteger(row.policy_version) || !Number.isSafeInteger(row.lifecycle_revision) || !Number.isSafeInteger(row.execution_epoch) || typeof row.capacity_reserved !== "boolean" || !Number.isFinite(row.created_at) || !Number.isFinite(row.deadline_at) || typeof row.operation_status !== "string") throw Error(t("pmc_invalid"));
+		const box = h("article", { "data-check-run": row.run_id }), doc = row.document, proof = h("details", {}, h("summary", {}, t("pmc_proof")));
+		if (doc) {
+			if (doc.workspace_id !== workspaceId || doc.run_id !== row.run_id || doc.policy_id !== row.policy_id || doc.policy_version !== row.policy_version || doc.baseline_id !== row.baseline_id || doc.lifecycle_revision !== row.lifecycle_revision || doc.execution_epoch !== row.execution_epoch || ![
+				"complete",
+				"incomplete",
+				"stopped"
+			].includes(doc.outcome) || !Array.isArray(doc.children) || doc.children.length > 2 || !Number.isFinite(doc.finished_at) || row.capacity_reserved || doc.automatic_maintenance_authorized !== false || doc.repair_started !== false) throw Error(t("pmc_invalid"));
+			box.append(h("p", { class: "pm-check-outcome" }, t(`pmc_${doc.outcome}`)), line("pmc_finished", stamp(doc.finished_at)));
+			if (doc.reason) box.append(h("p", { class: "muted" }, blocker(doc.reason)));
+			const children = h("ul", { class: "pm-check-children" });
+			for (const child of doc.children) {
+				if (!isId(child.operation_id, "op") || !["pm.github.observe", "pm.workload.capture"].includes(child.action) || ![
+					"succeeded",
+					"failed",
+					"cancelled"
+				].includes(child.status)) throw Error(t("pmc_invalid"));
+				children.append(h("li", {}, t(child.action === "pm.github.observe" ? "pmc_github" : "pmc_workload"), " · ", t(`pmc_status_${[
+					"succeeded",
+					"failed",
+					"cancelled"
+				].includes(child.status) ? child.status : "unknown"}`), " · ", opLink(child.operation_id)));
+			}
+			box.append(children);
+			proof.append(h("p", { class: "muted" }, t("pmc_cost")));
+		} else box.append(h("p", { class: "pm-check-outcome" }, t("pmc_pending")), line("pmc_deadline", stamp(row.deadline_at)));
+		box.append(h("p", { class: "muted" }, t(row.capacity_reserved ? "pmc_reserved" : "pmc_released")));
+		if (current() && (row.policy_id !== policy.policy_id || row.baseline_id !== baseline.baseline_id || row.lifecycle_revision !== lifecycle.revision)) box.append(h("p", { class: "muted" }, t("pmc_old")));
+		proof.append(line("pmc_started", stamp(row.created_at)), line("pmp_revision", row.policy_version), line("pmp_lifecycle", row.lifecycle_revision), h("p", { class: "mono" }, row.run_id), h("p", { class: "mono" }, row.baseline_id), ...row.document_digest ? [h("p", { class: "mono" }, row.document_digest)] : [], opLink(row.operation_id));
+		box.append(proof);
+		return box;
+	}
+	function scheduleView(value) {
+		check(value);
+		const item = value.schedule;
+		if (typeof value.visibility_filtered !== "boolean" || value.visibility_filtered && item !== null) throw Error(t("pmc_invalid"));
+		const box = h("section", { "data-check-schedule": "" }, h("h4", {}, t("pmc_schedule")));
+		if (!item) {
+			box.append(h("p", { class: "muted" }, t(value.visibility_filtered ? "pmc_hidden" : "pmc_no_schedule")));
+			return box;
+		}
+		if (!isId(item.schedule_id, "pmms") || !isId(item.policy_id, "pmmp") || !Number.isSafeInteger(item.policy_version) || !Number.isFinite(item.next_due) || typeof item.overdue !== "boolean" || item.blocked_reason !== null && typeof item.blocked_reason !== "string" || item.automatic_repairs !== false || item.missed_windows !== "coalesce_latest" || !policy || policy && (policy.policy_id !== item.policy_id || policy.revision !== item.policy_version)) throw Error(t("pmc_invalid"));
+		schedule = item;
+		box.append(line("pmc_next", stamp(item.next_due)), h("p", { class: "muted" }, item.blocked_reason ? blocker(item.blocked_reason) : t(item.overdue ? "pmc_overdue" : "pmc_scheduled")), line("pmc_last_success", item.last_success === null ? t("pmc_no_success") : stamp(item.last_success)));
+		if (item.latest_window) {
+			const window = item.latest_window;
+			if (!isId(window.operation_id, "op") || !Number.isSafeInteger(window.coalesced_windows) || window.coalesced_windows < 0) throw Error(t("pmc_invalid"));
+			if (window.coalesced_windows) box.append(line("pmc_skipped", window.coalesced_windows), h("p", { class: "muted" }, t("pmc_coalesced")));
+			box.append(h("details", {}, h("summary", {}, t("pmc_window")), line("pmc_due", stamp(window.scheduled_at)), line("pmc_admitted", stamp(window.admitted_at)), opLink(window.operation_id)));
+		}
+		return box;
+	}
+	function update() {
+		context.textContent = !ready ? "" : !owner() ? t("pmc_owner") : !current() ? t("pmc_context_missing") : !stage() ? t("pmc_block_stage") : policy.document.policy.enabled !== true ? t("pmc_block_disabled") : policy.document.scope.github_scope !== profile ? t("pmc_block_sources") : schedule?.blocked_reason ? blocker(schedule.blocked_reason) : `${t("pmc_context")}: ${t("pmp_revision")} ${policy.revision} · ${baseline.document.release_version.value}`;
+		context.hidden = Boolean(schedule?.blocked_reason && context.textContent === blocker(schedule.blocked_reason));
+		editor.update();
+	}
+	function withdraw() {
+		epoch++;
+		ready = false;
+		policy = null;
+		baseline = null;
+		lifecycle = null;
+		schedule = null;
+		historyLoaded = false;
+		cursor = null;
+		filtered = false;
+		facts.replaceChildren();
+		history.replaceChildren();
+		status.replaceChildren();
+		context.replaceChildren();
+		update();
+	}
+	function failure(error) {
+		withdraw();
+		status.append(h("p", { class: "muted" }, t("pmc_unavailable")), errorBox(error));
+	}
+	async function readHistory(append) {
+		const ticket = epoch, after = append ? cursor : 0;
+		try {
+			const data = check(await api("GET", `${base}/maintenance-checks?after=${after}&limit=20`));
+			if (!valid(ticket)) return;
+			if (!Array.isArray(data.runs) || typeof data.visibility_filtered !== "boolean" || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pmc_invalid"));
+			const rows = data.runs.map(run);
+			if (!append) {
+				history.replaceChildren();
+				filtered = false;
+			} else history.querySelector("[data-check-more]")?.remove();
+			historyLoaded = true;
+			cursor = data.next_cursor;
+			filtered ||= data.visibility_filtered;
+			history.append(...rows);
+			history.querySelector("[data-check-coverage]")?.remove();
+			history.append(h("p", {
+				"data-check-coverage": "",
+				class: "muted"
+			}, t(filtered ? "pmc_filtered" : "pmc_partial")));
+			if (cursor !== null) history.append(h("button", {
+				"data-check-more": "",
+				type: "button",
+				class: "secondary",
+				onclick: (event) => {
+					event.currentTarget.disabled = true;
+					readHistory(true);
+				}
+			}, t("pmc_more")));
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	async function refresh() {
+		withdraw();
+		const ticket = epoch;
+		try {
+			const [p, b, l, s, r] = (await Promise.all([
+				"maintenance-policies/current",
+				"release-baselines/current",
+				"lifecycle",
+				"maintenance-schedule",
+				"maintenance-checks/current"
+			].map((path) => api("GET", `${base}/${path}`)))).map(check);
+			if (!valid(ticket)) return;
+			if (typeof p.visibility_filtered !== "boolean" || typeof b.visibility_filtered !== "boolean" || !Number.isSafeInteger(l.lifecycle?.revision) || !Number.isSafeInteger(p.head?.revision) || !Number.isSafeInteger(b.head?.version) || p.policy && (p.policy.workspace_id !== workspaceId || p.policy.document?.workspace_id !== workspaceId || p.policy.document.policy_id !== p.policy.policy_id || p.policy.document.revision !== p.policy.revision || p.policy.policy_id !== p.head.policy_id || p.policy.revision !== p.head.revision) || b.baseline && (b.baseline.workspace_id !== workspaceId || b.baseline.document?.workspace_id !== workspaceId || b.baseline.document.baseline_id !== b.baseline.baseline_id || b.baseline.document.version !== b.baseline.version || b.baseline.baseline_id !== b.head.baseline_id || b.baseline.version !== b.head.version) || p.visibility_filtered && p.policy !== null || b.visibility_filtered && b.baseline !== null || typeof r.visibility_filtered !== "boolean" || r.visibility_filtered && r.run !== null) throw Error(t("pmc_invalid"));
+			policy = p.visibility_filtered ? null : p.policy;
+			baseline = b.visibility_filtered ? null : b.baseline;
+			lifecycle = l.lifecycle;
+			ready = true;
+			const next = scheduleView(s), latest = h("section", { "data-check-latest": "" }, h("h4", {}, t("pmc_latest")), r.run ? run(r.run) : h("p", { class: "muted" }, t(r.visibility_filtered ? "pmc_hidden" : "pmc_no_run")));
+			facts.replaceChildren(next, latest);
+			update();
+			if (historyDetails.open) await readHistory(false);
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-maintenance-observations.js
 function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, profile = "github_open_prs_and_actions_v1";
@@ -6697,6 +6923,18 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
 	});
 	const permission = h("p", { class: "muted" }, t("pmp_owner"));
+	const maintenanceRuns = caps()?.features?.pm_workspaces?.maintenance_checks?.version === 1 ? maintenanceChecks({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace,
+		caps,
+		permitted,
+		form,
+		errorBox
+	}) : null;
 	const observations = caps()?.features?.pm_workspaces?.workload?.version === 1 ? maintenanceObservations({
 		h,
 		t,
@@ -6716,7 +6954,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t("pmp_runtime")), historyDetails, permission, editorDetails, ...observations ? [observations.element] : []);
+	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t(maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
 	function controls() {
 		editorDetails.hidden = !owner() && !(editor.locked() && recover());
 		permission.hidden = owner();
@@ -6896,6 +7134,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		return h("article", { "data-maintenance-policy": row.policy_id }, h("h3", {}, isCurrent ? t("pmp_current") : `${t("pmp_revision")} ${row.revision}`), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
 	}
 	function withdraw() {
+		maintenanceRuns?.withdraw();
 		observations?.withdraw();
 		epoch++;
 		ready = false;
@@ -6972,6 +7211,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			}
 			controls();
 			if (historyDetails.open) await readHistory(false);
+			if (valid(ticket)) await maintenanceRuns?.refresh();
 			if (valid(ticket)) await observations?.refresh();
 		} catch (error) {
 			if (valid(ticket)) failure(error);
@@ -9838,7 +10078,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_release_baseline",
 			"pm_maintenance_policy",
 			"pm_workload",
-			"pm_github_observation"
+			"pm_github_observation",
+			"pm_maintenance_check"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -13593,6 +13834,132 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-maintenance-checks-strings.js
+var maintenanceCheckStrings = {
+	en: {
+		pmc_title: "Maintenance checks",
+		pmc_refresh: "Refresh maintenance checks",
+		pmc_intro: "The central checks GitHub, then captures current workload within the adopted limits. Each result describes that observation only.",
+		pmc_runtime_available: "Enabled policies schedule bounded checks in Development or Maintain. Repairs and automatic stage changes remain unavailable.",
+		pmc_check: "Check once",
+		pmc_schedule: "Server schedule",
+		pmc_next: "Next due",
+		pmc_last_success: "Last complete observation",
+		pmc_no_success: "None recorded",
+		pmc_scheduled: "The central will check when due, subject to current access and limits.",
+		pmc_overdue: "Due now. The central admits only the latest due window.",
+		pmc_no_schedule: "Adopt a readable policy to see its schedule.",
+		pmc_hidden: "The latest record is outside your current source access.",
+		pmc_skipped: "Earlier windows not run",
+		pmc_coalesced: "Only the latest due window is checked. Earlier windows have no observation coverage.",
+		pmc_window: "Original scheduled operation",
+		pmc_due: "Scheduled for",
+		pmc_admitted: "Admitted at",
+		pmc_latest: "Latest check",
+		pmc_no_run: "No maintenance check has reserved a run yet.",
+		pmc_pending: "Waiting for the original check to settle",
+		pmc_complete: "Observation coverage complete",
+		pmc_incomplete: "Observation coverage incomplete",
+		pmc_stopped: "Check stopped before its next step",
+		pmc_started: "Started at",
+		pmc_finished: "Finished at",
+		pmc_deadline: "Run deadline",
+		pmc_reserved: "Run capacity remains reserved.",
+		pmc_released: "Concurrent capacity released; this run still counts toward the period limit.",
+		pmc_github: "GitHub observation",
+		pmc_workload: "Workload capture",
+		pmc_status_succeeded: "Saved",
+		pmc_status_failed: "Failed",
+		pmc_status_cancelled: "Cancelled",
+		pmc_status_unknown: "Outcome unproven",
+		pmc_cost: "No model requests were made. Provider billing is not measured.",
+		pmc_old: "This check used earlier policy, release or stage versions.",
+		pmc_proof: "Original versions and operation",
+		pmc_owner: "A current workspace owner with observation and management access can start a check.",
+		pmc_context_missing: "Readable current policy, release and project stage are required.",
+		pmc_context: "This check will use",
+		pmc_block_authority: "The original policy owner needs a current credential with observation and management access.",
+		pmc_block_stage: "New checks require Development or Maintain. Earlier requests can still be checked.",
+		pmc_block_disabled: "Maintenance is disabled by the current policy.",
+		pmc_block_sources: "Adopt the supported GitHub workload coverage before starting checks.",
+		pmc_block_budget: "Concurrent or period run capacity is exhausted. Inspect the original check before starting more work.",
+		pmc_block_deadline: "The original run reached its time limit.",
+		pmc_block_stopped: "The original check stopped; its existing receipts are retained.",
+		pmc_block_coverage: "Some sources were not completely observed. This does not establish idle workload.",
+		pmc_block_changed: "The original policy, release or project stage changed.",
+		pmc_block_unsettled: "An original child operation still needs reconciliation; its capacity remains reserved.",
+		pmc_block_unknown: "Current authority or source evidence does not permit another step. Review the original operation.",
+		pmc_history: "Check history",
+		pmc_more: "Load more checks",
+		pmc_partial: "Only loaded check records are shown.",
+		pmc_filtered: "Some original sources are outside your access; this is a partial history.",
+		pmc_unavailable: "Check sources could not be verified. Original requests are kept; refresh to check access.",
+		pmc_invalid: "The check response does not match this workspace or its original versions.",
+		pmc_unknown_time: "Time unproven"
+	},
+	"zh-TW": {
+		pmc_title: "維護檢查",
+		pmc_refresh: "重新讀取維護檢查",
+		pmc_intro: "中央依採用的上限讀取 GitHub，再保存目前工作量。每份結果只代表該次觀察。",
+		pmc_runtime_available: "啟用的政策會在開發或維護階段排程執行有界檢查。目前尚不支援自動修復或自動變更專案階段。",
+		pmc_check: "檢查一次",
+		pmc_schedule: "中央排程",
+		pmc_next: "下次到期時間",
+		pmc_last_success: "上次完整觀察",
+		pmc_no_success: "尚無紀錄",
+		pmc_scheduled: "中央會在到期時依目前權限與額度進行檢查。",
+		pmc_overdue: "已到期，中央只會採用最新一期。",
+		pmc_no_schedule: "採用可讀取的政策後，即可查看排程。",
+		pmc_hidden: "最新紀錄的原始來源不在你目前的讀取權限內。",
+		pmc_skipped: "未執行的較早期數",
+		pmc_coalesced: "只檢查最新到期的一期；較早各期沒有觀察涵蓋。",
+		pmc_window: "原排程操作",
+		pmc_due: "原定時間",
+		pmc_admitted: "受理時間",
+		pmc_latest: "最近一次檢查",
+		pmc_no_run: "尚無維護檢查保留執行額度。",
+		pmc_pending: "等待原檢查完成核對",
+		pmc_complete: "本次觀察範圍已完整涵蓋",
+		pmc_incomplete: "本次觀察涵蓋不完整",
+		pmc_stopped: "檢查已在下一步前停止",
+		pmc_started: "開始時間",
+		pmc_finished: "完成時間",
+		pmc_deadline: "單次截止時間",
+		pmc_reserved: "仍保留本次執行額度。",
+		pmc_released: "已釋放同時執行額度；本次仍計入週期次數上限。",
+		pmc_github: "GitHub 觀察",
+		pmc_workload: "工作量紀錄",
+		pmc_status_succeeded: "已保存",
+		pmc_status_failed: "失敗",
+		pmc_status_cancelled: "已取消",
+		pmc_status_unknown: "結果尚待核對",
+		pmc_cost: "未發出模型請求；未量測供應商計費。",
+		pmc_old: "這次檢查使用較早的政策、發布或專案階段版本。",
+		pmc_proof: "原始版本與操作",
+		pmc_owner: "具觀察與管理權限的現任工作區 owner 可以開始檢查。",
+		pmc_context_missing: "必須能讀取目前政策、發布基準與專案階段。",
+		pmc_context: "本次檢查將使用",
+		pmc_block_authority: "原政策 owner 必須仍持有具觀察與管理權限的有效憑證。",
+		pmc_block_stage: "只有開發或維護階段能開始新檢查，仍可查回先前請求。",
+		pmc_block_disabled: "目前政策停用維護。",
+		pmc_block_sources: "開始檢查前，請採用支援的 GitHub 工作觀察範圍。",
+		pmc_block_budget: "同時執行或週期次數額度已用盡。請先檢視原檢查，再開始其他工作。",
+		pmc_block_deadline: "原檢查已達單次時間上限。",
+		pmc_block_stopped: "原檢查已停止，既有收據仍保留。",
+		pmc_block_coverage: "部分來源未完整觀察，不能據此判定工作量閒置。",
+		pmc_block_changed: "原政策、發布基準或專案階段已變更。",
+		pmc_block_unsettled: "原檢查的其中一步仍待核對，額度會繼續保留。",
+		pmc_block_unknown: "目前權限或來源證據不允許繼續下一步，請檢視原操作。",
+		pmc_history: "檢查歷史",
+		pmc_more: "載入更多檢查",
+		pmc_partial: "此處只顯示已載入的檢查紀錄。",
+		pmc_filtered: "部分原始來源無法讀取，這不是完整歷史。",
+		pmc_unavailable: "目前無法核對檢查來源。原請求已保留，請重新讀取以確認權限。",
+		pmc_invalid: "檢查回應與此工作區或原始版本不一致。",
+		pmc_unknown_time: "時間尚待核對"
+	}
+};
+//#endregion
 //#region src/pm-maintenance-observation-strings.js
 var maintenanceObservationStrings = {
 	en: {
@@ -16406,6 +16773,7 @@ var STRINGS = {
 		...pmReleaseBaselineStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
 		...pmMaintenancePolicyStrings["zh-TW"],
+		...maintenanceCheckStrings["zh-TW"],
 		...maintenanceObservationStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
@@ -17860,6 +18228,7 @@ var STRINGS = {
 		...pmReleaseBaselineStrings.en,
 		...pmPackageHandoffStrings.en,
 		...pmMaintenancePolicyStrings.en,
+		...maintenanceCheckStrings.en,
 		...maintenanceObservationStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",

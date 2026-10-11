@@ -1,4 +1,14 @@
 /* Generated from desktop/src/app.css; npm run build:browser. Do not edit. */
+[data-pm-maintenance-checks] { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; overflow-wrap: anywhere; }
+[data-pm-maintenance-checks] h4 { font-size: 14px; margin: 8px 0; }
+[data-pm-maintenance-checks] p { margin: 8px 0; }
+.pm-check-facts { display: grid; gap: 16px; }
+.pm-check-facts section { min-width: 0; }
+.pm-check-outcome { font-weight: 600; }
+.pm-check-children { padding-left: 20px; margin: 8px 0; }
+.pm-check-children li { margin: 4px 0; }
+[data-check-history] [data-check-run] { border-top: 1px solid var(--line); padding: 8px 0; }
+@media (min-width: 1000px) { .pm-check-facts { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6676; --line: #dfe3ea;
   --accent: #2f5bd3; --accent-text: #ffffff; --ok: #1f8a4c; --warn: #b26a00; --bad: #c0392b; --info: #3f6ad8;
