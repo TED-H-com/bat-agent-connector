@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from . import confinement, lifecycle, registry, resource_policy, service, task_control
+from . import confinement, controller_authority, lifecycle, registry, resource_policy, service, task_control
 from . import orchestration_operations as relay
 from .errors import ResourceReadOnly
 from .operations import (
@@ -195,11 +195,21 @@ async def selection(ops, target, params):
     from .triage import sessions_triage
     tri = await sessions_triage(fleet, host, target.get('workspace'), agent='claude', states=['quota_exhausted'],
                                use_jev='never', include_unloaded=False)
-    managed = [r for r in tri['sessions'] if r.get('api_access') == 'managed']
+    managed, skipped = [], []
+    for row in tri['sessions']:
+        code = row.get('read_only_code')
+        if row.get('api_access') == 'managed':
+            try:
+                controller_authority.require_entry(registry.get(host, row['session_id']))
+            except ResourceReadOnly as error:
+                code = error.code
+            else:
+                managed.append(row)
+                continue
+        skipped.append({'session_id': row['session_id'], 'skipped': 'read_only', 'code': code})
     cap = fleet.config.safety.max_start_per_call
     return {'session_ids': [r['session_id'] for r in managed[:cap]], 'exhausted_found': len(tri['sessions']),
-            'skipped_read_only': [{'session_id': r['session_id'], 'skipped': 'read_only', 'code': r.get('read_only_code')}
-                                 for r in tri['sessions'] if r.get('api_access') != 'managed'],
+            'skipped_read_only': skipped,
             'truncated_by_max_start_per_call': len(managed) > cap}
 
 
@@ -211,6 +221,7 @@ async def resolve(ops, target, params, sid, *, operation_id, index):
     fleet, host = ops.context['fleet'], target['host']
     client, hc = fleet.client(host), fleet.config.host(host)
     tab, ws = await service._resolve_session(client, sid)
+    controller_authority.require_entry(registry.get(host, sid))
     task_control.refuse_owned(fleet, host, sid)
     if service.agent_kind(tab.get('agentPreset')) != 'claude':
         raise StepFailed('FAILOVER_AGENT', 'only standalone Claude sources support failover')
@@ -283,6 +294,8 @@ def guard(ops, plan, *, reserved, ctx=None, consumers=None):
     fleet, host, sid = ops.context['fleet'], plan['host'], plan['source_session_id']
     if ctx:
         ctx.check_cancel()
+        ctx.require_controller()
+    relay.require_record(host, sid, plan['registry'])
     _tier(fleet, host)
     hc = fleet.config.host(host)
     if hc.profile_id != plan['profile_id'] or hc.default_permission_mode != plan['permission_policy']:
@@ -296,6 +309,7 @@ def guard(ops, plan, *, reserved, ctx=None, consumers=None):
     expected = dict(plan['registry'])
     if reserved:
         row = registry.get(host, plan['session_id']) or {}
+        controller_authority.require_entry(row)
         fence = row.get('failover_fence')
         if (not ctx or not _owned(fence) or row.get('task_id') or row.get('role') or row.get('status') in registry.RETIRED
                 or row.get('cwd') != plan['cwd'] or row.get('agent_preset') != plan['preset']
@@ -311,6 +325,7 @@ def guard(ops, plan, *, reserved, ctx=None, consumers=None):
         if _carrier_registry_ids(plan) - consumers.keys():
             raise StepFailed('FAILOVER_SHARED_CARRIER', 'a new carrier consumer has no stopped-writer proof')
         for other, binding in consumers.items():
+            relay.require_record(host, other, binding)
             task_control.refuse_owned(fleet, host, other)
             if _source_record(host, other) != binding:
                 raise StepFailed('FAILOVER_SHARED_CARRIER', 'a shared carrier consumer changed after its idle read')
@@ -360,6 +375,7 @@ async def identity(ops, plan, read, *, reserved, ctx=None):
     consumers.add(plan['source_session_id'])
     bindings = {sid: _source_record(plan['host'], sid) for sid in consumers}
     for sid in sorted(consumers):
+        relay.require_record(plan['host'], sid, bindings[sid])
         task_control.refuse_owned(ops.context['fleet'], plan['host'], sid)
         if sid != plan['source_session_id']:
             row = registry.get(plan['host'], sid) or {}
