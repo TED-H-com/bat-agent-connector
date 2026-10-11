@@ -10,8 +10,8 @@ import pytest
 from bat_agent_connector import api_auth, deployment_store
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.errors import ConfigError
-from bat_agent_connector.operations import ActionDef, OperationService
 from bat_agent_connector.task_journal import Journal
+from tests.legacy_deployment_fixture import legacy_deployment
 
 
 def recipe_config():
@@ -88,19 +88,15 @@ def version2_database(path):
 
 
 def legacy_operations(journal):
-    async def legacy(_):
-        return {}
-    ops = OperationService(journal, actions=[ActionDef(a, "deploy", "legacy", legacy)
-        for a in ("deployment.start", "delivery.merge_and_deploy")])
     actor = api_auth.Principal("deployment-test", frozenset({"deploy"}))
-    success = ops.create(actor, action="deployment.start", target={"recipe": "prod"},
-                         params={"source_sha": "a" * 40}, idempotency_key="old-success")[0]
+    success = legacy_deployment(journal, actor, action="deployment.start", target={"recipe": "prod"},
+                         params={"source_sha": "a" * 40}, idempotency_key="old-success")
     journal.db.execute("UPDATE operations SET status='succeeded',result=? WHERE operation_id=?",
                        (json.dumps({"deployed": True, "source_sha": "a" * 40, "repository": "o/r",
                                     "environment": "production", "workflow": "deploy.yml", "run_id": 12}),
                         success["operation_id"]))
-    pending = ops.create(actor, action="delivery.merge_and_deploy", target={"recipe": "prod", "repository": "o/r"},
-                         idempotency_key="old-pending")[0]
+    pending = legacy_deployment(journal, actor, action="delivery.merge_and_deploy", target={"recipe": "prod", "repository": "o/r"},
+                         idempotency_key="old-pending")
     journal.db.execute("UPDATE operations SET status='waiting_external',external_refs=? WHERE operation_id=?",
                        (json.dumps({"deploy_run_id": 13, "merged_sha": "b" * 40}), pending["operation_id"]))
     journal.db.execute("INSERT INTO operation_steps(operation_id,seq,name,status,request,started_at) "
