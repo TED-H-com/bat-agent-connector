@@ -85,7 +85,10 @@ async def bounded_read(ctx, read):
     if not any(row['operation_id'] == ctx.operation_id for row in rows):
         return await read()
     timeout = delivery.child_timeout(ctx.service, ctx.op, 30)
+    token = delivery._HTTP_BUDGET.set(ctx)
     try:
         return await asyncio.wait_for(read(), timeout)
     except asyncio.TimeoutError:
         raise OperationError('PM_REPAIR_BASELINE_READ_TIMEOUT', 'Original baseline observation exceeded its bounded deadline', 409) from None
+    finally:
+        delivery._HTTP_BUDGET.reset(token)

@@ -1,5 +1,6 @@
 """Verified original deployment advances its existing channel without republishing."""
 import copy
+import re
 
 import pytest
 
@@ -32,7 +33,25 @@ from tests.test_pm_release_baselines import remove_repo
 
 adopted_delivery = fixtures.adopted_delivery
 fixed = fixtures.fixed
-ready_chain = fixtures.ready_chain
+base_ready_chain = fixtures.ready_chain
+
+
+@pytest.fixture
+async def ready_chain(base_ready_chain):
+    w = base_ready_chain
+    after_post = w['after_post']
+    def published(payload):
+        after_post(payload)
+        previous = w['gh'].before_request
+        def refs(method, path, body):
+            if previous:
+                previous(method, path, body)
+            if method == 'GET' and path == '/repos/o/r/git/ref/heads/main':
+                w['gh'].script.append(('GET', re.escape(path) + '$', 200, {}, {
+                    'ref': 'refs/heads/main', 'object': {'type': 'commit', 'sha': w['gh'].branches['main']}}))
+        w['gh'].before_request = refs
+    w['after_post'] = published
+    return w
 
 
 @pytest.fixture
@@ -96,8 +115,7 @@ async def test_verified_same_channel_uses_original_registration_and_keeps_policy
     assert parent['status'] == 'succeeded', parent
     selected = parent['result']['baseline_update']
     original = baseline.child(ops, parent)
-    assert selected['status'] == 'updated', (selected, original and original['reason'],
-        original and [(step['name'], step.get('error')) for step in original.get('steps', [])])
+    assert selected['status'] == 'updated', (selected, original and original.get('status_reason'))
     record = baselines.get_baseline(ops, OWNER, w['workspace_id'], selected['baseline_id'])['baseline']
     assert record['previous_baseline_id'] == w['initial_baseline']['baseline_id']
     assert record['document']['intent']['source']['deployment_id'] == parent['result']['delivery']['deployment']['deployment_id']
