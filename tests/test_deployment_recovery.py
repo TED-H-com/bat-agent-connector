@@ -8,8 +8,9 @@ import pytest
 
 from bat_agent_connector import delivery, deployment
 from bat_agent_connector import deployment_store as store
-from bat_agent_connector.operations import ActionDef, OperationError, OperationService
+from bat_agent_connector.operations import OperationError, OperationService
 from tests import test_delivery as fixtures
+from tests.legacy_deployment_fixture import legacy_deployment
 from tests.test_delivery import HEAD, MERGED, OPERATOR, settle
 from tests.test_deployments import completed, deployed, reconcile_due, source_on_main, start
 
@@ -18,12 +19,9 @@ make_daemon = fixtures.make_daemon
 
 
 def legacy_operation(d, *, status="cancelled", error=None, dispatch=False, merge=False, run=None, result=None):
-    async def obsolete(ctx):
-        return {}
     action = "delivery.merge_and_deploy" if merge else "deployment.start"
-    old = OperationService(d.journal, actions=[ActionDef(action, "deploy", "legacy", obsolete)]).create(
-        OPERATOR, action=action, target={"recipe": "prod", "repository": "o/r", "pull_number": 7},
-        params={"source_sha": MERGED}, preconditions={"expected_head_sha": HEAD}, idempotency_key="legacy")[0]
+    old = legacy_deployment(d.journal, OPERATOR, action=action, target={"recipe": "prod", "repository": "o/r", "pull_number": 7},
+        params={"source_sha": MERGED}, preconditions={"expected_head_sha": HEAD}, idempotency_key="legacy")
     d.journal.db.execute("UPDATE operations SET status=?,error_code=?,result=?,external_refs=? WHERE operation_id=?",
         (status, error, json.dumps(result or {}), json.dumps({"deploy_run_id": run} if run else {}), old["operation_id"]))
     for seq, name in enumerate((["merge.submit"] if merge else []) + (["deploy.dispatch"] if dispatch else []), 1):
@@ -70,6 +68,7 @@ async def test_legacy_run_blocks_alias_of_real_environment_until_provider_termin
     preview = await deployment.preview(d.ops, "alias")
     action = next(a for a in delivery.ACTIONS if a.name == "deployment.start")
     unguarded = OperationService(d.journal, actions=[replace(action, admit=None)])
+    unguarded.context.update(d.ops.context)
     pending = unguarded.create(OPERATOR, action="deployment.start", target={"recipe": "alias"},
         params={"source_sha": MERGED}, preconditions=preview["preconditions"], idempotency_key="previously-admitted")[0]
     waiting = await settle(d, pending["operation_id"], rounds=1)
@@ -166,11 +165,9 @@ async def test_reconcile_budget_skips_twenty_settled_rows_and_polls_current_once
     current = deployment.get(d.ops, done["result"]["deployment_id"])
     template = dict(d.ops.db.execute("SELECT * FROM deployments WHERE deployment_id=?", (current["deployment_id"],)).fetchone())
 
-    async def obsolete(ctx):
-        return {}
-    old_ops = OperationService(d.journal, actions=[ActionDef("deployment.start", "deploy", "fixture", obsolete)])
     for n in range(20):
-        old = old_ops.create(OPERATOR, action="deployment.start", target={"recipe": "prod"}, idempotency_key=f"history-{n}")[0]
+        old = legacy_deployment(d.journal, OPERATOR, action="deployment.start", target={"recipe": "prod"},
+                                idempotency_key=f"history-{n}")
         d.ops.db.execute("UPDATE operations SET status='succeeded' WHERE operation_id=?", (old["operation_id"],))
         row = {**template, "deployment_id": "dep_" + old["operation_id"][3:], "operation_id": old["operation_id"],
                "generation": -n, "run_id": 9000 + n}

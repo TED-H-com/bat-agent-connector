@@ -617,21 +617,17 @@ async def test_delivery_actions_never_mutate_manual_or_unknown_resources(make_da
 
 
 async def test_legacy_dispatched_operation_reads_original_run_and_never_dispatches(make_daemon, gh):
-    from bat_agent_connector.operations import ActionDef
+    from tests.legacy_deployment_fixture import legacy_deployment
 
     d = make_daemon()
 
-    async def obsolete(ctx):
-        return {}
-
-    ops = OperationService(d.journal, actions=[ActionDef("deployment.start", "deploy", "old", obsolete)])
-    old = ops.create(
-        OPERATOR,
+    old = legacy_deployment(
+        d.journal, OPERATOR,
         action="deployment.start",
         target={"recipe": "prod"},
         params={"source_sha": MERGED},
         idempotency_key="old",
-    )[0]
+    )
     run = gh.add_run(status="completed", conclusion="success", job_conclusion="success")
     d.journal.db.execute(
         "UPDATE operations SET status='waiting_external',external_refs=? WHERE operation_id=?",
@@ -653,21 +649,17 @@ async def test_legacy_dispatched_operation_reads_original_run_and_never_dispatch
 
 
 async def test_legacy_undispatched_operation_stops_for_deployment_preview(make_daemon, gh):
-    from bat_agent_connector.operations import ActionDef
+    from tests.legacy_deployment_fixture import legacy_deployment
 
     d = make_daemon()
 
-    async def obsolete(ctx):
-        return {}
-
-    ops = OperationService(d.journal, actions=[ActionDef("deployment.start", "deploy", "old", obsolete)])
-    old = ops.create(
-        OPERATOR,
+    old = legacy_deployment(
+        d.journal, OPERATOR,
         action="deployment.start",
         target={"recipe": "prod"},
         params={"source_sha": MERGED},
         idempotency_key="old",
-    )[0]
+    )
     d.journal.db.execute("PRAGMA user_version=2")
     store.backfill(d.journal)
     done = await settle(d, old["operation_id"])
