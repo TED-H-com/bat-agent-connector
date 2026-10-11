@@ -393,6 +393,34 @@ async def test_prelaunch_rejection_is_provably_not_started(fake_runtime, monkeyp
     assert runtime.process_launch_attempted is False and not processes
 
 
+def test_installation_read_is_cheap_and_keeps_auth_and_execution_unverified(fake_runtime, monkeypatch):
+    _, _, processes, _ = fake_runtime
+
+    def forbidden(*_, **__):
+        raise AssertionError("Capability reads must never spawn a runtime")
+
+    monkeypatch.setattr(native, "_spawn", forbidden)
+    monkeypatch.setattr(native, "_runtime_version", forbidden)
+    capability = native.installation_eligibility()
+    assert capability["eligible_for_preflight"] and capability["auth_file_readable"]
+    assert capability["execution_scope"] == "frozen_context_only"
+    assert capability["auth_validity"] == "unverified"
+    assert capability["version_verification"] == "per_run"
+    assert not capability["options_confirmed"] and not capability["model_execution_verified"]
+    assert "fixture-only" not in json.dumps(capability) and not processes
+
+
+def test_installation_read_distinguishes_missing_auth_without_exposing_its_path(fake_runtime):
+    _, _, processes, _ = fake_runtime
+    _, profile = native._host_paths()
+    auth = profile / "auth.json"
+    auth.unlink()
+    result = native.installation_eligibility()
+    assert result["reason"] == "PM_NATIVE_AUTH_UNAVAILABLE"
+    assert not result["eligible_for_preflight"] and not result["auth_file_readable"]
+    assert str(profile) not in json.dumps(result) and not processes
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux-only namespace boundary")
 async def test_real_offline_preflight_is_zero_prompt_and_leaves_no_process_or_files(tmp_path):
     if not shutil.which("codex") or not shutil.which("bwrap"):

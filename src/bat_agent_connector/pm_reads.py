@@ -45,7 +45,7 @@ def read(ops, principal, method, params):
         from . import pm_runs
         return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
     if method == "pm_capabilities_get":
-        from . import pm_runs, pm_runtime, pm_worktree
+        from . import pm_native_capabilities, pm_runs, pm_runtime, pm_worktree
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
         repositories = {repository.lower() for repository in workspace["repositories"]}
         binding = pm_runs.workspace_worktree(ops.db, workspace_id)
@@ -59,6 +59,7 @@ def read(ops, principal, method, params):
             adoption_reason = "pm_worktree_required"
         else:
             adoption_reason = None
+        native = pm_native_capabilities.read(ops, principal, workspace)
         return {"workspace_id": workspace_id, "context_packages": True,
                 "plan_drafting": "pm.plan.draft" in ops.actions,
                 "plan_adoption": "pm.plan.adopt" in ops.actions,
@@ -67,6 +68,7 @@ def read(ops, principal, method, params):
                                         **{key: binding[key] for key in ("source_ref", "source_sha", "repository_id", "binding_digest")}}
                                        if binding else None),
                 "runtime": pm_runtime.capability_report(),
+                "native_analysis": native,
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":

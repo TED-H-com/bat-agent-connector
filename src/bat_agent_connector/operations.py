@@ -613,6 +613,9 @@ class OperationService:
         if op["action"] == "session.approve_pending":
             from .bulk_approval import cancel
             return cancel(self, principal, op)
+        if op["action"] == "pm.run.analyze":
+            from .pm_native_operations import cancel
+            return cancel(self, principal, op)
         if op["action"] in {"pm.run.prepare", "pm.plan.adopt"}:
             from .pm_run_operations import cancel
             return cancel(self, principal, op)

@@ -450,6 +450,86 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 	};
 }
 //#endregion
+//#region src/pm-native-analysis.js
+function pmNativeAnalysis({ h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh }) {
+	const purpose = input("pm_native_purpose", {
+		multiline: true,
+		max: 4e3
+	});
+	const model = input("pm_native_model", {
+		max: 128,
+		required: false
+	});
+	model.placeholder = t("pm_native_default_model");
+	const explanation = h("p", {
+		class: "muted",
+		"data-pm-native-eligibility": ""
+	});
+	const current = h("div", { "data-pm-native-runs": "" });
+	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
+	const request = form({
+		action: "pm.run.analyze",
+		target,
+		fields: {
+			purpose,
+			model
+		},
+		params: (values) => ({
+			purpose: values.purpose,
+			...values.model.trim() ? { model: values.model.trim() } : {}
+		}),
+		preconditions: () => ({ expected_version: thread().thread.version }),
+		permitted: () => authorized() && capability()?.native_analysis?.eligible_for_preflight === true,
+		recoverPermitted: authorized,
+		label: "pm_native_analyze",
+		onSaved: refresh,
+		extra: h("div", { class: "pm-fields" }, labelled("pm_native_purpose", purpose), labelled("pm_native_model", model))
+	});
+	const box = h("section", {
+		class: "pm-packages pm-native-analysis",
+		"data-pm-native-analysis": ""
+	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), explanation, request.box, current);
+	function update(runs = []) {
+		const native = capability()?.native_analysis;
+		explanation.textContent = t(!authorized() ? "pm_native_permissions" : native?.eligible_for_preflight ? "pm_native_preflight_pending" : {
+			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
+			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
+			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
+			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
+			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
+		}[native?.reason] || "pm_native_unavailable");
+		current.replaceChildren(...runs.filter((run) => run.adapter === "codex-native-linux").map((run) => h("p", { class: "pm-source" }, h("strong", {}, run.purpose), " · ", nativeRunState(t, run), run.outcome?.actual_model ? " · " + run.outcome.actual_model : "", " · ", h("a", { href: `#/op/${encodeURIComponent(run.operation_id)}` }, t("pm_operation")))));
+		request.update();
+	}
+	return {
+		box,
+		update
+	};
+}
+function nativeRunState(t, run) {
+	return t({
+		completed: "pm_native_completed",
+		aborted: "pm_native_aborted",
+		running: "pm_native_running",
+		reserved: "pm_native_preparing",
+		blocked: "pm_native_blocked",
+		unknown: "pm_native_unknown"
+	}[run.state || run.status] || "pm_native_unknown");
+}
+function pmDiscussionMessage({ h, t, message, time, timestamp }) {
+	const assistant = message.role === "assistant";
+	const provenance = message.provenance;
+	const complete = assistant && provenance?.completeness === "complete" && typeof provenance.native_turn_id === "string" && provenance.native_turn_id && typeof provenance.run_id === "string" && /^pmr_[0-9a-f]{32}$/.test(provenance.run_id);
+	const source = provenance?.source_refs || {};
+	const article = h("article", {
+		class: "pm-note",
+		"data-note-id": message.message_id,
+		"data-pm-role": assistant ? "assistant" : "user"
+	}, h("div", { class: "pm-note-stamp" }, h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content));
+	if (assistant) article.append(h("p", { class: "muted" }, t(complete ? "pm_native_reply_recorded" : "pm_native_reply_unproven")), h("details", { class: "pm-source" }, h("summary", {}, t("pm_native_evidence")), h("p", {}, t("pm_native_origin"), " ", String(source.adapter || t("pm_native_unknown_source"))), h("p", {}, t("pm_native_run"), " ", String(provenance?.run_id || "—")), h("p", {}, t("pm_native_thread"), " ", String(source.native_thread_id || provenance?.sdk_session_id || "—")), h("p", {}, t("pm_native_turn"), " ", String(provenance?.native_turn_id || "—")), h("p", {}, t("pm_native_message"), " ", String(provenance?.native_message_id || "—")), h("p", {}, t("pm_native_context"), " ", String(provenance?.context_digest || "—"))));
+	return article;
+}
+//#endregion
 //#region src/pm-workspace.js
 var same$3 = (a, b) => a === b || a && b && typeof a === "object" && typeof b === "object" && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && same$3(a[key], b[key]));
 var retired = (error) => [
@@ -702,7 +782,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
 	const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide && (threadData.thread.mode === "idea" || Boolean(planningRevisionForm));
@@ -785,7 +865,24 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				onSaved: () => load(),
 				extra: h("div", {}, labelled("pm_note_content", text), h("p", { class: "muted" }, t("pm_note_help")))
 			});
-			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), h("p", { class: "muted" }, t("pm_manual")), earlier, notes, coverage, noteForm.box);
+			discussionHint = h("p", { class: "muted" });
+			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), discussionHint, earlier, notes, coverage);
+			if (caps()?.features?.pm_workspaces?.native_analysis) {
+				nativeAnalysis = pmNativeAnalysis({
+					h,
+					t,
+					form,
+					input,
+					labelled,
+					caps,
+					capability: () => pmCapabilities,
+					thread: () => threadData,
+					permitted,
+					target,
+					refresh: load
+				});
+				column.append(nativeAnalysis.box, h("details", { class: "pm-package-preparation" }, h("summary", {}, t("pm_native_note_only")), noteForm.box));
+			} else column.append(noteForm.box);
 			if (caps()?.features?.pm_workspaces?.plan_drafting) {
 				revisions = planRevisions({
 					h,
@@ -975,11 +1072,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		threadTitle.textContent = thread.title;
 		mode.textContent = t("pm_mode_" + thread.mode);
+		discussionHint.textContent = t(nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "pm_native_discussion" : "pm_manual");
 		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
-		notes.replaceChildren(...(data.messages || []).map((message) => h("article", {
-			class: "pm-note",
-			"data-note-id": message.message_id
-		}, h("div", { class: "pm-note-stamp" }, h("strong", {}, message.actor), h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content))));
+		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
+			h,
+			t,
+			message,
+			time,
+			timestamp
+		})));
 		if (!data.messages?.length) notes.append(h("p", { class: "muted pm-empty" }, t("pm_no_notes")));
 		notes.scrollTop = bottom ? notes.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
@@ -1095,7 +1196,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			packageSignature = signature;
 		}
 		for (const run of page.runs || []) {
-			const detail = h("div"), item = h("details", { "data-pm-run": run.run_id }, h("summary", {}, run.purpose, " · ", time(run.created_at)), detail);
+			const detail = h("div"), item = h("details", { "data-pm-run": run.run_id }, h("summary", {}, run.purpose, " · ", time(run.created_at), run.adapter === "codex-native-linux" ? " · " + nativeRunState(t, run) : ""), detail);
 			let fetched = false, pending = false;
 			item.addEventListener("toggle", async () => {
 				if (!item.open || fetched || pending) return;
@@ -1112,7 +1213,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						input.source_ref?.ref || input.source_ref?.message_id,
 						input.source_ref?.path,
 						input.source_ref?.revision
-					].filter(Boolean).join(" · ")))))), h("h4", {}, t("pm_notes")), ...(context.messages || []).map((message) => h("p", {}, h("strong", {}, message.actor + ": "), message.content)), h("p", { class: "muted" }, t("pm_package_frozen")));
+					].filter(Boolean).join(" · ")))))), h("h4", {}, t("pm_notes")), ...(context.messages || []).map((message) => h("p", {}, h("strong", {}, (message.role === "assistant" ? t("pm_native_assistant") : message.actor) + ": "), message.content)), h("p", { class: "muted" }, t("pm_package_frozen")));
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
@@ -1193,7 +1294,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					threadId && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
 					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
 					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
+					threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
 				]);
 				alive();
 				for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -1261,6 +1362,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
 			worktreeChoice?.update();
+			nativeAnalysis?.update(runs?.runs || []);
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -5147,6 +5249,39 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_native_title: "Ask the PM",
+		pm_native_purpose: "What should the PM help you work through?",
+		pm_native_model: "Model (optional)",
+		pm_native_default_model: "Use the native runtime default",
+		pm_native_analyze: "Request PM analysis",
+		pm_native_discussion: "Saved notes and bounded PM analysis",
+		pm_native_note_only: "Save a note without requesting analysis",
+		pm_native_context_only: "One analysis of the saved discussion, source status and PM profile. Repository references stay unverified; files and live sessions are not opened.",
+		pm_native_preflight_pending: "Installation detected; each request verifies runtime restrictions before sending context. Sign-in and model availability are not yet verified.",
+		pm_native_permissions: "PM analysis requires contributor access and permission to start work.",
+		pm_native_platform: "This analysis adapter currently requires a Linux workspace service.",
+		pm_native_install: "The workspace service needs the supported Codex CLI and bubblewrap installation.",
+		pm_native_managed: "This adapter does not yet support the service’s managed Codex configuration.",
+		pm_native_auth: "The workspace service has no readable native Codex sign-in file.",
+		pm_native_unavailable: "Native analysis eligibility is unavailable. Refresh to check the service.",
+		pm_native_assistant: "PM assistant",
+		pm_native_unknown_model: "Model not recorded",
+		pm_native_reply_recorded: "Original native reply · completion recorded",
+		pm_native_reply_unproven: "Completion evidence is unavailable for this reply.",
+		pm_native_evidence: "Reply source",
+		pm_native_origin: "Adapter:",
+		pm_native_unknown_source: "Source not recorded",
+		pm_native_run: "PM run:",
+		pm_native_thread: "Native thread:",
+		pm_native_turn: "Native turn:",
+		pm_native_message: "Native message:",
+		pm_native_context: "Frozen context digest:",
+		pm_native_completed: "Analysis completed",
+		pm_native_aborted: "Analysis stopped without a completed reply",
+		pm_native_running: "Analysis running",
+		pm_native_preparing: "Preparing analysis",
+		pm_native_blocked: "Analysis blocked",
+		pm_native_unknown: "Analysis outcome not confirmed",
 		pm_planning_revision_title: "Update selected planning inputs",
 		pm_planning_revision_rationale: "Why update this direction?",
 		pm_planning_revision_save: "Save updated Planning draft",
@@ -5291,6 +5426,39 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_native_title: "邀請 PM 分析",
+		pm_native_purpose: "這次希望 PM 協助釐清什麼？",
+		pm_native_model: "模型（選填）",
+		pm_native_default_model: "使用原生執行環境預設模型",
+		pm_native_analyze: "請 PM 分析",
+		pm_native_discussion: "已儲存筆記與有界 PM 分析",
+		pm_native_note_only: "只儲存筆記，不請求分析",
+		pm_native_context_only: "分析一次已儲存的討論、來源狀態與 PM 引導設定。Repository 引用仍屬未驗證資料，不會開啟檔案或既有 session。",
+		pm_native_preflight_pending: "已偵測到安裝項目；每次請求會在傳送脈絡前核對執行限制。登入有效性與模型可用性尚未驗證。",
+		pm_native_permissions: "PM 分析需要工作區協作者身分與啟動工作權限。",
+		pm_native_platform: "目前這個分析 adapter 需要 Linux 工作區服務。",
+		pm_native_install: "工作區服務需要支援版本的 Codex CLI 與 bubblewrap。",
+		pm_native_managed: "這個 adapter 尚未支援服務上的受管理 Codex 設定。",
+		pm_native_auth: "工作區服務沒有可讀取的原生 Codex 登入檔。",
+		pm_native_unavailable: "目前無法確認原生分析資格，請重新整理服務狀態。",
+		pm_native_assistant: "PM 助理",
+		pm_native_unknown_model: "未記錄模型",
+		pm_native_reply_recorded: "原生回覆・已保存完成證據",
+		pm_native_reply_unproven: "此回覆缺少可核對的完成證據。",
+		pm_native_evidence: "回覆來源",
+		pm_native_origin: "Adapter：",
+		pm_native_unknown_source: "未記錄來源",
+		pm_native_run: "PM 工作：",
+		pm_native_thread: "原生討論：",
+		pm_native_turn: "原生回合：",
+		pm_native_message: "原生訊息：",
+		pm_native_context: "固定脈絡摘要值：",
+		pm_native_completed: "分析已完成",
+		pm_native_aborted: "分析已停止，未取得完整回覆",
+		pm_native_running: "分析中",
+		pm_native_preparing: "準備分析中",
+		pm_native_blocked: "分析受阻",
+		pm_native_unknown: "分析結果尚未確認",
 		pm_planning_revision_title: "更新選定的規劃資料",
 		pm_planning_revision_rationale: "調整規劃方向的理由",
 		pm_planning_revision_save: "儲存更新後的規劃草稿",
