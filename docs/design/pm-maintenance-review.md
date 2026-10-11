@@ -199,3 +199,15 @@ in its public envelope. Its `previous_context` states
 unavailable. Existing history is untouched, current-period sources remain fully
 gated, and this is never described as no change or resolution. Source withdrawal,
 corruption and other errors do not permit this fallback.
+
+### Fixed repair outcomes
+
+New reports include original maintenance repairs admitted before the period end
+and still unfinished at its start. The saved projection separates publication,
+verified merge/deployment, original runtime completion and held capacity; none
+implies that the reported problem is fixed. Each repair retains its original
+context digest, child operation IDs, bounded receipts and the same source-access
+barrier as its original repair. Old unfinished repairs carry into later reports.
+Later completion does not rewrite a saved report. Counts describe observed
+records; engineering effort and provider charges remain unknown when unmeasured.
+Older reports without this projection preserve their existing render/export.

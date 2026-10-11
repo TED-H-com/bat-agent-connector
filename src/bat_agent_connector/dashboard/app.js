@@ -8774,6 +8774,7 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		"github",
 		"workload",
 		"checks",
+		...coverage.repairs ? ["repairs"] : [],
 		"issues",
 		"dependencies",
 		"research",
@@ -8842,6 +8843,18 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 	}
 	for (const row of report.workloads || []) samples.append(h("article", { class: "pm-fact" }, line("pmrv_sample_at", stamp(row.observed_at)), line("pmrv_workload_classification", label("pmrv_workload", row.classification)), fold("pmrv_proof", sourceProof([row.source_id]))));
 	for (const row of report.checks || []) samples.append(h("article", { class: "pm-fact" }, line("pmrv_check_outcome", label("pmrv_check", row.outcome)), line("pmrv_recorded", stamp(row.started_at)), fold("pmrv_proof", sourceProof([row.source_id]))));
+	for (const row of report.repairs || []) {
+		if (typeof row.capacity_held !== "boolean" || row.observation_basis !== "saved_repair_point" || row.later_changes_included !== false) throw Error(t("pmrv_invalid"));
+		const result = [
+			"published_for_review",
+			"merged",
+			"deployed"
+		].includes(row.outcome) ? label("pmrv_repair", row.outcome) : t("pmrv_repair_pending");
+		samples.append(h("article", {
+			class: "pm-fact",
+			"data-review-repair": row.repair_id
+		}, line("pmrv_repair_outcome", result), text(t("pmrv_repair_limit")), text(t(row.capacity_held ? "pmrv_repair_capacity_held" : "pmrv_repair_capacity_released")), text(t(row.runtime_completion ? "pmrv_repair_runtime_completed" : "pmrv_repair_runtime_unproven")), line("pmrv_recorded", stamp(row.started_at)), fold("pmrv_proof", sourceProof([row.source_id]), op(row.operation_id), ...(row.children || []).map((child) => op(child.operation_id)))));
+	}
 	if (!samples.children.length) samples.append(text(t("pmrv_none")));
 	overview.append(fold("pmrv_source_samples", samples), fold("pmrv_next_focus_report", list((report.next_observation_focus || []).map((value) => ["review_source_coverage", "verify_reported_results"].includes(value) ? label("pmrv_focus", value) : value))));
 	const output = briefExport({
@@ -19105,6 +19118,18 @@ var maintenanceFindingStrings = {
 //#endregion
 //#region src/pm-maintenance-review-strings.js
 var rows$1 = {
+	source_repairs: ["Maintenance repair outcomes", "維護修復成果"],
+	ref_maintenance_repair: ["Original maintenance repair", "原維護修復工作"],
+	repair_outcome: ["Saved repair outcome", "已保存修復結果"],
+	repair_pending: ["Outcome not yet proven", "結果尚未證實"],
+	repair_published_for_review: ["Published for review", "已發布供審查"],
+	repair_merged: ["Merged", "已合併"],
+	repair_deployed: ["Deployed", "已部署"],
+	repair_capacity_held: ["Original execution capacity remains reserved.", "原執行工作仍占用容量。"],
+	repair_capacity_released: ["Original execution capacity released.", "原執行容量已釋放。"],
+	repair_runtime_completed: ["Original native turn completion verified", "原生執行完成已核對"],
+	repair_runtime_unproven: ["Original native turn completion unproven", "原生執行完成尚未證實"],
+	repair_limit: ["These saved receipts distinguish publication, native execution completion and verified release. Later changes do not alter this report.", "這些保存回執分別記錄發布、原生執行完成與已查證版本；後來變化不會改寫本報告。"],
 	finding_changes: ["Configured finding comparisons", "已設定來源的觀察比較"],
 	selection_required: ["Complete the required source, discussion or period selection before recording.", "請先完成必要的來源、討論或期間選取，再保存紀錄。"],
 	source_missing: ["Original choice is unavailable", "原選取目前無法讀取"],

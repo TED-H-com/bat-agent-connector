@@ -8,6 +8,21 @@ test.use({timezoneId:'America/New_York'});
 
 async function saveNote(page:any){await reason(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('Keep this actual discussion');await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();}
 
+for(const locale of ['en','zh-TW'])test(`saved repair distinguishes publication from held original capacity ${locale}`,async({page})=>{
+  const f=reviewFixture(),report=f.state.reviews[0].snapshot.maintenance.report;
+  const repairId='pmrp_'+'a'.repeat(32),operationId='op_'+'a'.repeat(32),sourceId='pmrs_'+'a'.repeat(24);
+  report.sources.push({source_id:sourceId,kind:'maintenance_repair',id:repairId,digest:'a'.repeat(64),basis:'admission_context'});
+  report.coverage.repairs={status:'observed',samples:1};
+  report.repairs=[{repair_id:repairId,operation_id:operationId,source_id:sourceId,outcome:'published_for_review',capacity_held:true,
+    runtime_completion:null,started_at:report.period.start,observation_basis:'saved_repair_point',later_changes_included:false,children:[]}];
+  await mount(page,f,locale);await page.getByText(locale==='en'?'Original saved samples':'原始保存取樣',{exact:true}).click();
+  const sample=page.locator('[data-review-repair]');await expect(sample).toContainText(locale==='en'?'Published for review':'已發布供審查');
+  await expect(sample).toContainText(locale==='en'?'capacity remains reserved':'仍占用容量');
+  await expect(sample).toContainText(locale==='en'?'completion unproven':'完成尚未證實');
+  await sample.locator('summary').click();await expect(sample.locator('a')).toHaveAttribute('href','#/op/'+operationId);
+  expect(f.state.writes).toHaveLength(0);f.state.failRead=true;await page.evaluate(()=>(window as any).refreshReviews());await expect(sample).toHaveCount(0);
+});
+
 for(const locale of ['en','zh-TW'])test(`fixed configured findings remain in the report and withdraw with its source ${locale}`,async({page})=>{
   const f=reviewFixture(),report=f.state.reviews[0].snapshot.maintenance.report;
   const kinds=['issues','dependabot_pull_requests','dependabot_alerts'],findingId='pmfn_'+'a'.repeat(32);

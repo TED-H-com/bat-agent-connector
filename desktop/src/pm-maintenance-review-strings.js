@@ -1,4 +1,10 @@
 const rows={
+  source_repairs:['Maintenance repair outcomes','維護修復成果'],ref_maintenance_repair:['Original maintenance repair','原維護修復工作'],
+  repair_outcome:['Saved repair outcome','已保存修復結果'],repair_pending:['Outcome not yet proven','結果尚未證實'],
+  repair_published_for_review:['Published for review','已發布供審查'],repair_merged:['Merged','已合併'],repair_deployed:['Deployed','已部署'],
+  repair_capacity_held:['Original execution capacity remains reserved.','原執行工作仍占用容量。'],repair_capacity_released:['Original execution capacity released.','原執行容量已釋放。'],
+  repair_runtime_completed:['Original native turn completion verified','原生執行完成已核對'],repair_runtime_unproven:['Original native turn completion unproven','原生執行完成尚未證實'],
+  repair_limit:['These saved receipts distinguish publication, native execution completion and verified release. Later changes do not alter this report.','這些保存回執分別記錄發布、原生執行完成與已查證版本；後來變化不會改寫本報告。'],
   finding_changes:['Configured finding comparisons','已設定來源的觀察比較'],
   selection_required:['Complete the required source, discussion or period selection before recording.','請先完成必要的來源、討論或期間選取，再保存紀錄。'],
   source_missing:['Original choice is unavailable','原選取目前無法讀取'],history_bound:['The history exceeds this view’s bound. Narrow the selection before recording.','歷史超過此畫面的範圍，請先縮小選取再記錄。'],
