@@ -242,6 +242,7 @@ def _scope(ops, document):
         raise _bad("The baseline's original provider configuration changed", "PM_MAINTENANCE_SCOPE_CHANGED", 409)
     return {"repository": document["repository"], "repository_id": document["repository_id"], "channel": document["channel"],
             "project_binding": document["intent"]["project_binding"], "maintenance_branch": document["proof"]["maintenance_branch"],
+            "provider_digest": baselines.sources.digest(document["intent"]["config"]),
             "bat_workspaces": _bat_bindings(ops, document["repository"]), "github_scope": "repository", "central_project": True}
 
 
@@ -342,7 +343,7 @@ def active_record(ops, principal, workspace_id):
         baselines._access(ops, principal, workspace_id, baseline)
         observed = _scope(ops, baseline["document"])
         adopted = current["scope"]
-        fields = ("repository", "repository_id", "channel", "project_binding", "bat_workspaces", "github_scope", "central_project")
+        fields = ("repository", "repository_id", "channel", "project_binding", "bat_workspaces", "github_scope", "central_project", "provider_digest")
         if any(observed[key] != adopted[key] for key in fields):
             raise _bad("Current release or workspace coverage is outside the adopted policy", "PM_MAINTENANCE_SCOPE_CHANGED", 409)
         original_branch, new_branch = adopted["maintenance_branch"], observed["maintenance_branch"]
