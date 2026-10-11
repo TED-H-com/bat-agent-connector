@@ -256,7 +256,7 @@ async def test_original_source_withdrawal_hides_pending_completed_runs_operation
         assert page[entries] == [] and page["next_cursor"] and page["coverage"]["visibility_filtered"]
         page = listing(ops, READER, data["wid"], limit=1, after=page["next_cursor"])
         assert page[entries] == [] and page["next_cursor"] is None
-    feed = pm_access.filter_events(ops.db, READER, ops.journal.api_events(0, 1000))
+    feed = pm_access.filter_events(ops.db, READER, ops.journal.api_events(0, 500))
     assert all(event["body"].get("operation_id") not in {first["operation_id"], second["operation_id"], pending["operation_id"]}
                for event in feed["events"])
     # Recover a committed effect even though no public caller can now retrieve it.
@@ -341,16 +341,18 @@ async def test_import_transaction_rolls_back_assessment_event_and_writer_release
     lost = False
     def lose(kind, resource_id, name, *args, **kwargs):
         nonlocal lost
+        result = original(kind, resource_id, name, *args, **kwargs)
         if kind == "pm_follow_up_assessment" and not lost:
             lost = True
             assert ops.db.execute("SELECT COUNT(*) FROM pm_follow_up_assessments").fetchone()[0] == 1
             assert writer(ops, data["target"]) is None
             raise sqlite3.OperationalError("event receipt lost after insert")
-        return original(kind, resource_id, name, *args, **kwargs)
+        return result
     monkeypatch.setattr(ops.journal, "api_event", lose)
     op = await finish(ops, create(ops, data))
     assert op["status"] == "uncertain" and writer(ops, data["target"])
     assert not ops.db.execute("SELECT 1 FROM pm_follow_up_assessments").fetchone()
+    assert all(event["resource_type"] != "pm_follow_up_assessment" for event in ops.journal.api_events(0, 500)["events"])
     done = await retry(ops, op)
     assert done["status"] == "succeeded" and not writer(ops, data["target"])
     assert len(instances) == 1 and instances[0].sends == 1
