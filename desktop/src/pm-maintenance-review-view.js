@@ -14,6 +14,11 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   const label=(prefix,value)=>t(`${prefix}_${value}`);
   const list=values=>values.length?h('ul',{},...values.map(value=>h('li',{class:'pm-note-text'},String(value)))):text(t('pmrv_none'));
   const op=id=>h('a',{href:`#/op/${encodeURIComponent(id)}`},t('pm_operation'));
+  const sourceById=new Map(report.sources.map(row=>[row.source_id,row]));
+  const sourceProof=ids=>h('div',{},...ids.map(id=>{
+    const source=sourceById.get(id);if(!source)throw Error(t('pmrv_invalid'));
+    return h('div',{class:'pm-review-proof'},line(`pmrv_ref_${source.kind}`,source.id),line('pmrv_source_digest',source.digest));
+  }));
   const release=report.release,coverage=report.coverage,changes=report.changes;
   const reasonGroups={
     source_limit:['source_row_limit','source_reference_limit'],source_access:['source_not_visible','linked_task_unavailable','sprint_source_unavailable','linked_operation_unavailable'],
@@ -36,6 +41,7 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   for(const kind of ['github','workload','checks','issues','dependencies','research','quality','model_analysis']){
     const value=coverage[kind],state=typeof value==='string'?value:value.status;
     sources.append(line(`pmrv_source_${kind}`,label('pmrv_coverage',state)));
+    if(Number.isSafeInteger(value.samples))sources.append(h('p',{class:'muted pm-review-count'},`${t('pmrv_sample_count')}: ${value.samples}`));
   }
   const compared=h('section',{},h('h4',{},t('pmrv_changes')),text(label('pmrv_changes',changes.status)));
   if(changes.scope_changed)compared.append(text(t('pmrv_scope_changed')));
@@ -50,12 +56,23 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   overview.append(fold('pmrv_blockers',text(t('pmrv_blocker_help')),blockers),
     line('pmrv_finished_checks',report.effort.completed_checks),line('pmrv_pending_checks',report.effort.pending_checks),text(t('pmrv_effort_unknown')),
     fold('pmrv_proof',line('pmrv_snapshot',snapshot.snapshot_id),line('pmrv_release',release.baseline_id),text(release.commit_sha),
-      line('pmrv_as_of',stamp(report.as_of)),text(snapshot.snapshot_digest),op(review.operation_id)));
+      line('pmrv_as_of',stamp(report.as_of)),text(snapshot.snapshot_digest),sourceProof(report.sources.map(row=>row.source_id)),op(review.operation_id)));
+  const samples=h('div');
+  for(const row of report.observations||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_sample_at',stamp(row.observed_at)),
+    line('pmrv_open_prs',row.observed_open_pulls),line('pmrv_active_actions',row.observed_nonterminal_actions),
+    fold('pmrv_proof',sourceProof([row.source_id]))));
+  for(const row of report.workloads||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_sample_at',stamp(row.observed_at)),
+    line('pmrv_workload_classification',label('pmrv_workload',row.classification)),fold('pmrv_proof',sourceProof([row.source_id]))));
+  for(const row of report.checks||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_check_outcome',label('pmrv_check',row.outcome)),
+    line('pmrv_recorded',stamp(row.started_at)),fold('pmrv_proof',sourceProof([row.source_id]))));
+  if(!samples.children.length)samples.append(text(t('pmrv_none')));
+  overview.append(fold('pmrv_source_samples',samples),fold('pmrv_next_focus_report',list((report.next_observation_focus||[]).map(value=>
+    ['review_source_coverage','verify_reported_results'].includes(value)?label('pmrv_focus',value):value))));
   const output=briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable,onUnavailable,errorBox});
   overview.append(output.element);
   const discussion=h('section',{'data-review-discussion':''},h('h4',{},t('pmrv_discussion')));
-  const eventView=event=>{
-    if(event.workspace_id!==workspaceId||event.review_id!==review.review_id||typeof event.document!=='object')throw Error(t('pmrv_invalid'));
+  const eventView=(event,expectedReviewId=review.review_id)=>{
+    if(event.workspace_id!==workspaceId||event.review_id!==expectedReviewId||typeof event.document!=='object')throw Error(t('pmrv_invalid'));
     const d=event.document,box=h('article',{class:'pm-fact','data-review-event':event.event_id},
       h('h5',{},label('pmrv_event',event.kind.replaceAll('.','_'))),line('pmrv_recorded',`${event.actor} · ${stamp(event.created_at)}`));
     if(event.kind==='note')box.append(text(d.content));
@@ -65,7 +82,7 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
       box.append(fold('pmrv_options',list(d.options)),fold('pmrv_hypotheses',list(d.hypotheses)));
       for(const source of d.public_sources||[]){
         let url;try{url=new URL(source.url);if(url.protocol!=='https:'||url.username||url.password)throw Error();}catch{throw Error(t('pmrv_invalid'));}
-        box.append(h('a',{href:url.href,target:'_blank',rel:'noopener noreferrer'},source.title),text(t('pmrv_attributed_source')));
+        box.append(h('a',{href:url.href,target:'_blank',rel:'noopener noreferrer'},source.title),line('pmrv_public_date',stamp(source.checked_at)),text(source.claim),text(t('pmrv_attributed_source')));
       }
     }
     if(event.kind==='complete'){
@@ -75,9 +92,18 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
       box.append(h('h5',{},t('pmrv_next_focus')),list(d.next_observation_focus));
     }
     if(event.kind==='follow_up.record')box.append(line('pmrv_followup_status',label('pmrv_followup',d.status)),text(d.result),text(t('pmrv_unassessed')));
-    box.append(fold('pmrv_proof',text(d.rationale),op(event.operation_id)));
+    box.append(fold('pmrv_proof',text(d.rationale),sourceProof(d.source_refs||[]),op(event.operation_id)));
     return box;
   };
+  if(report.previous_review){
+    const previous=report.previous_review,history=fold('pmrv_previous_context',
+      text(t(previous.status==='completed'?'pmrv_completed':'pmrv_prepared')),
+      line('pmrv_snapshot',previous.snapshot_ref.snapshot_id));
+    if(previous.history_truncated)history.append(text(t('pmrv_previous_truncated')));
+    if(previous.completion)history.append(eventView(previous.completion,previous.review_id));
+    for(const event of [...previous.notes,...previous.candidates,...previous.follow_up_results])history.append(eventView(event,previous.review_id));
+    overview.append(history);
+  }
   if(completion)discussion.append(eventView(completion));
   else discussion.append(text(t('pmrv_not_completed')));
   for(const event of events)if(event.event_id!==completion?.event_id)discussion.append(eventView(event));
