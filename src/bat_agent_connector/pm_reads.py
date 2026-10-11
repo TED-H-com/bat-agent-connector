@@ -5,6 +5,7 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_work_deliveries_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_maintenance_reviews_list": ("workspace_id", "after", "limit"),
     "pm_maintenance_review_current_get": ("workspace_id", "history_limit"),
     "pm_maintenance_review_get": ("workspace_id", "review_id", "history_limit"),
@@ -90,6 +91,10 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_work_deliveries_list":
+        from .pm_delivery_lineage import for_work
+        return for_work(ops, principal, workspace_id, params.get("work_item_id"),
+                        after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list"}:
         from . import pm_maintenance_review as review
         if method == "pm_maintenance_review_current_get":

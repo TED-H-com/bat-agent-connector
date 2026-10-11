@@ -1354,3 +1354,9 @@ of a historical verified deployment. Only explicit operation source bindings con
 - No store delete, standalone artifact_materialize tool or dirty directory snapshot. Do not scrape a folder or
   use arbitrary host shell to fill these gaps. Deployed Actions artifacts are separate. The shared UI has the
   manual remote-file chooser; managed capture/accept UI and native OS file pickers have separate delivery status.
+
+Read `pm_work_deliveries_list` for one explicitly associated workspace work item.
+It returns fixed original package references and saved integration, merge and
+deployment receipts without refreshing providers or creating operations. Preserve
+`next_after` through filtered pages. Push, merge, runtime verification and
+requirement acceptance are distinct; delivery does not mark a requirement Done.

@@ -212,6 +212,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/deliveries", self.pm_work_deliveries, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews", self.pm_maintenance_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews/current", self.pm_maintenance_review_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews/(?P<review_id>pmrevw_[0-9a-f]{32})", self.pm_maintenance_review, "observe"),
@@ -461,7 +462,7 @@ class ApiV1:
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
-                      self.pm_brief_export,
+                      self.pm_brief_export, self.pm_work_deliveries,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
@@ -634,7 +635,7 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_work_deliveries_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -769,6 +770,9 @@ class ApiV1:
 
     async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
         return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
+
+    async def pm_work_deliveries(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, "pm_work_deliveries_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
 
     async def pm_maintenance_reviews(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_maintenance_reviews_list", query, workspace_id=workspace_id)
@@ -974,6 +978,7 @@ class ApiV1:
                                                     "maintenance_policy": pm_maintenance_policy.capabilities(self.daemon.ops),
                                                     "maintenance_checks": pm_maintenance_checks.capabilities(),
                                                     "maintenance_review": pm_maintenance_review.capabilities(),
+                                                    "engineering_delivery": {"contract": "pm-engineering-delivery/v1", "read_only": True},
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),

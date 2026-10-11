@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "b5b155e27682929d1093bee989c9fa1ab37a47c32b13ff99b518d9d3f35157e1"
+  canonical_sha256: "b20222cbe4426cc56ce831d0c1b8339660df103ae49adc314eb6dbb75efaebe9"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1377,4 +1377,10 @@ of a historical verified deployment. Only explicit operation source bindings con
 - No store delete, standalone artifact_materialize tool or dirty directory snapshot. Do not scrape a folder or
   use arbitrary host shell to fill these gaps. Deployed Actions artifacts are separate. The shared UI has the
   manual remote-file chooser; managed capture/accept UI and native OS file pickers have separate delivery status.
+
+Read `pm_work_deliveries_list` for one explicitly associated workspace work item.
+It returns fixed original package references and saved integration, merge and
+deployment receipts without refreshing providers or creating operations. Preserve
+`next_after` through filtered pages. Push, merge, runtime verification and
+requirement acceptance are distinct; delivery does not mark a requirement Done.
 <!-- END CANONICAL WORKFLOW -->

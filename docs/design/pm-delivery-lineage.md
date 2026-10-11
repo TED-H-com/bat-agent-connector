@@ -90,3 +90,9 @@ verification and uncertain-result handling remain those of the existing engine.
 
 Implementation and test evidence are recorded separately from this contract;
 this document alone is not a completed W20/W21 acceptance claim.
+
+The shared read route is `GET /pm/workspaces/{workspace_id}/work/{work_item_id}/deliveries`,
+with `after` and `limit` only. RPC/MCP use `pm_work_deliveries_list`. Observe and
+current workspace membership are required. The native bridge allows only that
+fixed GET shape. Membership, original packages and receipt facts share one
+SQLite read snapshot; the byte limit counts the ordinary JSON wire encoding.

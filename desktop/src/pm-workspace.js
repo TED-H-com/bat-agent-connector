@@ -5,6 +5,7 @@ import {workspaceLifecycle} from './pm-lifecycle.js';
 import {workspaceIssueMappings} from './pm-issue-mappings.js';
 import {specSources} from './pm-spec-sources.js';
 import {workspaceFollowUp} from './pm-follow-up.js';
+import {workspaceWorkDeliveries} from './pm-work-deliveries.js';
 import {workspaceWorkPackages} from './pm-work-packages.js';
 import {workspaceSprints} from './pm-sprints.js';
 import {workspaceKanban} from './pm-kanban.js';
@@ -270,9 +271,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available
     ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure:()=>engineering?.withdraw()}) : null;
+  const deliveries = workspaceId && !threadId && caps()?.features?.pm_workspaces?.engineering_delivery?.contract === 'pm-engineering-delivery/v1'
+    ? workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) : null;
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
-    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);}}) : null;
+    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);deliveries?.setWork(row?.work_item_id);}}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
+  if(engineering&&deliveries)engineering.element.append(deliveries.element);
   if(handoff)body.insertBefore(handoff.element,specifications?.element||content);
   if(issues)body.insertBefore(issues.element,specifications?.element||content);
   const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,handoff?.element,issues?.element].filter(Boolean);
@@ -631,6 +635,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     if(handoff&&['project','work_item'].includes(event.resource_type)) {
       eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
+    }
+    if (deliveries && ['operation','deployment','integration'].includes(event.resource_type)) {
+      eventReads=eventReads.catch(()=>{}).then(async()=>{await deliveries.refresh();await kanban?.refresh();});return eventReads;
     }
     if (kanban && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
       eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());
