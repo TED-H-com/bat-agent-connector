@@ -24,7 +24,7 @@ truncation is allowed.
 
 Limits are `max_starts` (1–16), `max_parallel` (1–8, no greater than max_starts),
 `deadline_at` (finite absolute time, at most 24 hours ahead at initial admission),
-and `max_retries` (0–3 original child worker retries before another unsent frame).
+and `max_retries` (0–3 proven-unsent original step retries before another external frame).
 A start budget is consumed atomically by child operation INSERT, never released
 because its outcome is unknown. Retry limits do not authorize a new child key or
 replay an uncertain send. Token/provider cost remains unmeasured and is reported
