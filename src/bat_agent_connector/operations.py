@@ -574,7 +574,7 @@ class OperationService:
             from .cleanup import authorize_controller_existing
             if authorize_controller_existing(self, principal, op, verb):
                 return
-        if action.startswith("task."):
+        if action.startswith("task.") or action == "session.send" and (op.get("target") or {}).get("task_id"):
             from .task_actions import authorize_controller_existing
             authorize_controller_existing(self, principal, op, verb)
             return
