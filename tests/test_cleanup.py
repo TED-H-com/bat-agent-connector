@@ -985,7 +985,8 @@ def repair_facts(d, cp, op, human):
     row = dict(d.journal.db.execute("SELECT * FROM operations WHERE operation_id=?", (op["operation_id"],)).fetchone())
     row.update(operation_id=handoff_id, idem_key="crashed-handoff", action="integration.handoff", target=json.dumps({"operation_id": apply_id}),
                params=json.dumps({"seq": 1}), status="failed", external_refs=json.dumps(
-                   {"seq": 1, "worktree_path": str(wt), "branch": branch}))
+                   {"admission_binding": json.loads(row["external_refs"])["admission_binding"],
+                    "seq": 1, "worktree_path": str(wt), "branch": branch}))
     columns = ",".join(row)
     d.journal.db.execute(f"INSERT INTO operations({columns}) VALUES({','.join('?' for _ in row)})", tuple(row.values()))  # noqa: S608 - fixed fixture keys
     seed_item = {"original_ids": [op["operation_id"]], "observation": {"head": cp["commit_sha"]}}
@@ -1023,7 +1024,8 @@ async def test_e01_empty_integration_temporary_has_exact_intent_and_no_restore_p
     row = dict(daemon.journal.db.execute("SELECT * FROM operations WHERE operation_id=?", (op["operation_id"],)).fetchone())
     preview_op = "op_" + "f" * 32
     row.update(operation_id=preview_op, idem_key="empty-preview", action="integration.preview", target=json.dumps({"host": "h1", "repository": "o/r", "pull_number": 1}),
-               params=json.dumps({"sources": []}), status="failed", external_refs=json.dumps({"area_path": str(area)}))
+               params=json.dumps({"sources": []}), status="failed", external_refs=json.dumps(
+                   {"admission_binding": json.loads(row["external_refs"])["admission_binding"], "area_path": str(area)}))
     columns = ",".join(row)
     daemon.journal.db.execute(f"INSERT INTO operations({columns}) VALUES({','.join('?' for _ in row)})", tuple(row.values()))  # noqa: S608 - fixed fixture keys
     step = dict(daemon.journal.db.execute("SELECT * FROM operation_steps WHERE operation_id=? AND name='worktree.prepare'", (op["operation_id"],)).fetchone())
