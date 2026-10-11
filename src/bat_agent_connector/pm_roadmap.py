@@ -326,6 +326,8 @@ async def _run(ctx):
         saved = ops.db.execute("SELECT result FROM pm_roadmap_applied WHERE operation_id=?", (ctx.operation_id,)).fetchone()
         if saved:
             return json.loads(saved[0])
+        from .pm_lifecycle_gates import require_local
+        require_local(ctx.service.db, ctx.operation_id)
         principal = pm_workspace.admitted_principal(ctx)
         rid = _PREFIX[kind] + ctx.operation_id[3:]
         current, document = _check(ops, principal, ctx.op["action"], ctx.target, ctx.params, ctx.preconditions, rid)
