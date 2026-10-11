@@ -95,3 +95,11 @@ inputs, foreign/manual sessions, stale/incomplete discovery, pending questions,
 active work, and original source withdrawal keep their existing blockers. This
 creates no Task, edits no work state, makes no Maintain transition, and proves
 neither process death nor a fixed Issue or published release.
+
+
+The proven early-SDK path is a fresh Rust Codex coding session. Its existing
+adapter trims Unicode White_Space before native turn input/echo; the immutable
+origin retains both the raw owner-request digest and explicitly labelled native
+text digest. Claude's exact-text normalization is separate. Legacy Claude hosts
+that expose no SDK identity before their first input remain unavailable for this
+completion contract; an idle SDK discovered afterward cannot adopt an old origin.
