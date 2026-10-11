@@ -192,3 +192,24 @@ policy and advance the underlying sequence without exposing their IDs. A visible
 record that cannot fit stays first on the next page; it is never skipped. A page
 must consume at least one underlying record, finish at the end, or explicitly
 return 413. Reads have no journal mutations or new evidence captures.
+
+
+## Original-source visibility on shared operation feeds
+
+Meeting source checks also apply to shared operation GET/list/RPC/MCP reads and
+both operation and meeting event streams. Workspace membership alone does not
+permit access to an operation's quoted notes, draft output, completion summary or
+follow-up results after losing the original source. New admissions save the
+original `meeting_context_revision_id` in server-owned admission metadata, never
+in public target, params or preconditions. Original caller requests and operation
+keys therefore remain unchanged for durable form recovery.
+
+Existing committed operations derive their original context from their immutable
+operation-linked meeting records. Context revision operations check both the old
+and new context; follow-up operations additionally check their own later snapshot.
+Replacing the current context with a public snapshot cannot reauthorize old
+private quotes. Legacy operations without either saved admission context or an
+immutable result stay unavailable publicly until their source can be established;
+the service never substitutes the current head. Replay/control use the same
+original-source check. Internal original-effect receipt recovery is unchanged,
+and source revocation never triggers another write or dispatch.

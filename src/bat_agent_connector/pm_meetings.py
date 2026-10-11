@@ -9,7 +9,7 @@ import json
 import time
 
 from . import pm_snapshots, pm_sprints, pm_workspace
-from .operations import ActionDef, OperationError
+from .operations import ActionDef, OperationError, OperationService
 
 KINDS = ('planning', 'review', 'retro')
 ACTIONS = tuple('pm.meeting.' + name for name in ('create', 'context.revise', 'note', 'draft', 'complete', 'follow_up.record'))
@@ -355,15 +355,88 @@ def _check(ops, principal, action, target, params, pre):
         'rationale': params['rationale'], 'verification_status': 'unassessed', 'execution_authorized': False}
 
 
+class _SourceReader:
+    """Read-only evidence policy adapter; no service/schema/worker construction."""
+    def __init__(self, db):
+        self.db = db
+
+    def get(self, operation_id, *, steps=False, principal=None):
+        row = self.db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
+        # PM operations are never delivery evidence sources. Reject before a
+        # nested PM visibility check, including malformed cyclic source graphs.
+        if row is None or row['action'].startswith('pm.'):
+            raise _bad('NOT_FOUND', 'Source operation not found', 404)
+        return OperationService._decode(row)
+
+
+def operation_visible(db, principal, operation):
+    """Authorize the original sources before exposing params through any feed."""
+    row = db.execute('SELECT * FROM operations WHERE operation_id=?', (operation['operation_id'],)).fetchone()
+    if row is None:
+        return False
+    op = OperationService._decode(row)
+    wid, action = op['target'].get('workspace_id'), op['action']
+    try:
+        pm_workspace.require_member(db, principal, wid)
+        contexts, snapshots = set(), set()
+        binding = (op.get('external_refs') or {}).get('admission_binding') or {}
+        if binding.get('meeting_context_revision_id'):
+            contexts.add(binding['meeting_context_revision_id'])
+        tables = {
+            'pm.meeting.create': 'pm_meeting_contexts', 'pm.meeting.context.revise': 'pm_meeting_contexts',
+            'pm.meeting.note': 'pm_meeting_notes', 'pm.meeting.draft': 'pm_meeting_drafts',
+            'pm.meeting.complete': 'pm_meeting_completions',
+        }
+        if action in tables:
+            table = tables[action]
+            fact = db.execute(f'SELECT * FROM {table} WHERE operation_id=?', (op['operation_id'],)).fetchone()  # noqa: S608
+            if fact:
+                contexts.add(fact['context_revision_id'])
+                if action == 'pm.meeting.context.revise' and fact['previous_context_revision_id']:
+                    contexts.add(fact['previous_context_revision_id'])
+        elif action == 'pm.meeting.follow_up.record':
+            fact = db.execute('SELECT * FROM pm_meeting_follow_up_events WHERE operation_id=?', (op['operation_id'],)).fetchone()
+            if fact:
+                completion = db.execute('SELECT context_revision_id FROM pm_meeting_completions WHERE meeting_id=?', (fact['meeting_id'],)).fetchone()
+                if completion:
+                    contexts.add(completion['context_revision_id'])
+                snapshots.add(json.loads(fact['document'])['snapshot_ref']['snapshot_id'])
+        else:
+            return False
+        if action in {'pm.meeting.create', 'pm.meeting.context.revise', 'pm.meeting.follow_up.record'}:
+            if op['params'].get('snapshot_id'):
+                snapshots.add(op['params']['snapshot_id'])
+        # A pre-effect legacy record did not freeze its context. Looking at the
+        # current head would authorize unrelated sources; retain it internally.
+        if not contexts and action != 'pm.meeting.create':
+            return False
+        for context_id in contexts:
+            context = _document(db, 'pm_meeting_contexts', 'context_revision_id', context_id)
+            snapshots.add(context['document']['snapshot_ref']['snapshot_id'])
+        if not snapshots:
+            return False
+        reader = _SourceReader(db)
+        for snapshot_id in snapshots:
+            source = db.execute('SELECT * FROM pm_document_snapshots WHERE workspace_id=? AND snapshot_id=?', (wid, snapshot_id)).fetchone()
+            if source is None or pm_snapshots._out(reader, principal, source)['snapshot']['visibility']['filtered']:
+                return False
+        return True
+    except OperationError:
+        return False
+
+
 def _admitter(action):
     def admit(ops, principal, target, params, pre):
-        _check(ops, principal, action, target, params, pre)
-        return {'principal': pm_workspace.principal_binding(principal)}
+        meeting, _ = _check(ops, principal, action, target, params, pre)
+        return {'principal': pm_workspace.principal_binding(principal),
+                'meeting_context_revision_id': meeting['context_revision_id'] if meeting else None}
     return admit
 
 
 def _authorize_existing(ops, principal, op, verb):
     _member(ops, principal, op['target']['workspace_id'], write=True)
+    if not operation_visible(ops.db, principal, op):
+        raise _bad('NOT_FOUND', 'Meeting operation sources are unavailable', 404)
     if verb != 'replay' and principal.actor != op['actor']:
         raise _bad('FORBIDDEN', 'Only the requester may control this meeting operation', 403)
     if op['action'] != 'pm.meeting.create':
