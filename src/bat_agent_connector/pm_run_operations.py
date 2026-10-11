@@ -6,14 +6,19 @@ MCP tool boundary, so autonomous PhaseProfile execution remains unavailable.
 """
 from __future__ import annotations
 
+import logging
+import time
+
 from . import controller_authority, pm_discussions, pm_runs, pm_workspace
 from .api_auth import Principal
-from .operations import RERUN, ActionDef, Cancelled, OperationError, StepFailed
+from .errors import ResourceReadOnly
+from .operations import RERUN, ActionDef, Cancelled, OperationError, StepFailed, Uncertain
 
 
 def execution_authority(db, principal, workspace_id, operation_id):
     identity = pm_runs.execution_identity(db, workspace_id)
-    authority = controller_authority.binding(db, Principal(identity["actor"], principal.scopes))
+    scopes = frozenset(scope for scope in ("observe", "manage", "start") if principal.allows(scope))
+    authority = controller_authority.binding(db, Principal(identity["actor"], scopes))
     return {**authority, "pm_workspace_id": workspace_id, "pm_operation_id": operation_id,
             "pm_requester": pm_workspace.principal_binding(principal)}
 
@@ -37,6 +42,8 @@ def require_execution(journal, authority, workspace_id):
 
 
 def _values(ops, principal, target, params, pre):
+    if not principal.allows("observe"):
+        raise OperationError("FORBIDDEN", "Preparing PM context also requires observe", 403)
     if (set(target) != {"workspace_id", "thread_id"}
             or set(params) - {"purpose", "max_chars", "repository_binding"}
             or set(pre) != {"expected_version"}):
@@ -80,21 +87,52 @@ def _admit(ops, principal, target, params, pre):
 
 def _authorize_existing(ops, principal, op, verb):
     pm_workspace.require_member(ops.db, principal, op["target"]["workspace_id"], write=True)
-    if not principal.allows("manage") or ("repository_binding" in op["params"] and not principal.allows("start")):
+    if (not principal.allows("manage") or not principal.allows("observe")
+            or "repository_binding" in op["params"] and not principal.allows("start")):
         raise OperationError("FORBIDDEN", "The original package preparation scopes are required", 403)
     if verb != "replay" and principal.actor != op["actor"]:
         raise OperationError("FORBIDDEN", "Only the original requester may control package preparation", 403)
 
 
+def cancel(ops, principal, op):
+    """Stop new package work while recovering any original host receipts."""
+    operation_id = op["operation_id"]
+    ops.db.execute("UPDATE operations SET cancel_requested=1,updated_at=? WHERE operation_id=?", (time.time(), operation_id))
+    if not ops._running(operation_id):
+        run = pm_runs.get_by_operation(ops.db, operation_id)
+        if op["status"] in {"accepted", "waiting_checks", "waiting_external", "needs_attention"}:
+            if run is None:
+                return ops._transition(operation_id, "cancelled", actor=principal.actor,
+                                       reason="PM package cancelled before its context was frozen")
+            ops._transition(operation_id, "running", actor=principal.actor, next_run_at=0, uncertain_tries=0,
+                            reason="Stopping new PM work and reading back the original preparation")
+        elif op["status"] == "uncertain":
+            ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (operation_id,))
+    ops.kick()
+    return ops.get(operation_id, steps=False)
+
+
 async def _prepare(ctx):
     try:
         return await _prepare_package(ctx)
-    except (OperationError, StepFailed, Cancelled):
+    except (OperationError, StepFailed, Cancelled, ResourceReadOnly) as original_error:
         run = pm_runs.get_by_operation(ctx.service.db, ctx.operation_id)
+        # Local effect callbacks and this read-only selector cannot have sent an
+        # external effect. An uncommitted local receipt means its transaction
+        # rolled back; keep the stricter guard for all external host steps.
         uncertain = ctx.service.db.execute("""SELECT 1 FROM operation_steps WHERE operation_id=?
-            AND status IN ('started','uncertain')""", (ctx.operation_id,)).fetchone()
+            AND status IN ('started','uncertain')
+            AND name NOT IN ('pm.context.freeze','pm.worktree.bind','pm.context.prepared','pm.worktree.select')""",
+            (ctx.operation_id,)).fetchone()
+        if isinstance(original_error, Cancelled) and uncertain:
+            raise Uncertain("pm.preparation", "Cancellation is pending the original PM host effect read-back") from None
         if run and run["state"] not in {"prepared_manual", "failed", "completed", "aborted"} and not uncertain:
-            pm_runs.fail(ctx.service.journal, run["run_id"], run["generation"], "preparation_stopped", before_send=True)
+            try:
+                pm_runs.fail(ctx.service.journal, run["run_id"], run["generation"], "preparation_stopped", before_send=True)
+            except OperationError as release_error:
+                # Native receipts or a newer generation may still forbid
+                # release. Retain the writer and the original operation error.
+                logging.warning("PM preparation writer retained: %s", release_error.code)
         raise
 
 
@@ -122,7 +160,6 @@ async def _prepare_package(ctx):
             if not principal.allows("start"):
                 raise OperationError("FORBIDDEN", "PM worktree creation requires start", 403)
         with controller_authority.use(authority, ctx.service.journal):
-            await check()
             async def select():
                 prior = pm_runs.workspace_worktree(ctx.service.db, run["workspace_id"])
                 if prior:
@@ -144,7 +181,8 @@ async def _prepare_package(ctx):
             snapshot = await pm_worktree.write_snapshot(ctx, plan, run["run_id"], "context",
                 {"context": run["context"], "context_digest": run["context_digest"], "purpose": run["purpose"]}, check=check)
     result = ctx.effect("pm.context.prepared", lambda: pm_runs.complete_preparation(
-        ctx.service.journal, run["run_id"], run["generation"], worktree_binding=binding, snapshot=snapshot))
+        ctx.service.journal, run["run_id"], run["generation"], worktree_binding=binding, snapshot=snapshot),
+        receipt_only=snapshot is not None)
     return _result(result)
 
 
