@@ -66,7 +66,17 @@ def roots(db, kind, identity, *, _seen=None):
     found = {row[0] for row in db.execute("SELECT original_operation_id FROM pm_source_lineage WHERE resource_type=? AND resource_id=?",
                                          (kind, identity))}
     refs = []
-    if kind == "integration":
+    if kind == "operation":
+        row = db.execute("SELECT action,target,params FROM operations WHERE operation_id=?", (identity,)).fetchone()
+        if row:
+            action, target, params = row[0], json.loads(row[1]), json.loads(row[2])
+            if action == "integration.preview":
+                refs.append(("integration_preview", "ipv_" + identity[3:]))
+            elif action == "integration.handoff":
+                refs.append(("operation", target.get("operation_id")))
+            elif action in {"integration.apply", "github.pr.merge", "delivery.merge_and_deploy"}:
+                refs.append(("delivery_preview", params.get("preview_id")))
+    elif kind == "integration":
         refs.append(("operation", identity))
     elif kind in {"delivery_preview", "integration_preview"} and identity.startswith("ipv_"):
         refs.append(("operation", "op_" + identity[4:]))
@@ -255,6 +265,9 @@ def bind_operation(db, operation_id, target, params, binding):
         # integration.handoff uses the existing deterministic creation identity.
         from .checkpoints import _SESSION_NS
         resources.append(("session", binding["pm_delivery"]["host"] + "/" + str(uuid.uuid5(_SESSION_NS, operation_id))))
+    original_ids = sorted(set(original_ids))
+    if len(original_ids) > MAX_ROOTS:
+        raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources including this new operation", 409)
     for kind, identity in resources:
         for original in original_ids:
             db.execute("INSERT OR IGNORE INTO pm_source_lineage VALUES(?,?,?,?)", (kind, identity, original, operation_id))

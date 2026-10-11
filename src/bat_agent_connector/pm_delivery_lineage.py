@@ -70,6 +70,9 @@ def known_pr_roots(ops, target):
 
 def action_roots(ops, action, target, params):
     from .pm_source_lineage import roots
+    if action == "integration.handoff":
+        original = ops._row(target["operation_id"])
+        return roots(ops.db, "delivery_preview", original["params"]["preview_id"])
     if action.startswith("integration.") or action == "github.pr.update":
         return known_pr_roots(ops, target)
     if action == "deployment.start":
@@ -172,6 +175,15 @@ def record(ctx, revision, relation):
             bind(ctx.service.db, ctx.operation_id, selected, revision=revision, relation=relation)
 
 
+def admitted_roots(db, operation_id):
+    """Only INSERT-time original authority, never later native-target associations."""
+    from .pm_source_lineage import installed
+    if not installed(db):
+        return set()
+    return {row[0] for row in db.execute("SELECT original_operation_id FROM pm_source_lineage "
+        "WHERE resource_type='operation' AND resource_id=?", (operation_id,))}
+
+
 def require_target(ctx, *, provider, repository_id, pull_number=None):
     from .pm_source_lineage import roots
     selected = (ctx.admission_binding or {}).get("pm_delivery")
@@ -180,7 +192,7 @@ def require_target(ctx, *, provider, repository_id, pull_number=None):
     number = pull_number if pull_number is not None else ctx.target.get("pull_number", (selected or {}).get("pull_number"))
     key = identity(provider, repository_id, number)
     known = roots(ctx.service.db, "github_pr", key) if key else set()
-    if not known <= roots(ctx.service.db, "operation", ctx.operation_id):
+    if not known <= admitted_roots(ctx.service.db, ctx.operation_id):
         raise OperationError("PM_DELIVERY_SOURCE_CHANGED", "The fixed delivery target has additional PM sources; submit a newly reviewed intent", 409)
 
 
@@ -193,6 +205,8 @@ def observed_roots(ops, operation):
     refs = operation.get("external_refs") or {}
     document = (refs.get("admission_binding") or {}).get("pm_delivery")
     preview_id = operation["params"].get("preview_id")
+    if action == "integration.handoff":
+        preview_id = ops._row(operation["target"]["operation_id"])["params"]["preview_id"]
     if preview_id:
         table = "integration_previews" if preview_id.startswith("ipv_") else "pr_merge_previews"
         row = ops.db.execute(f"SELECT document FROM {table} WHERE preview_id=?", (preview_id,)).fetchone() if _table(ops.db, table) else None  # noqa: S608
@@ -223,8 +237,7 @@ def observed_roots(ops, operation):
 
 
 def require_admitted_sources(ops, operation):
-    from .pm_source_lineage import roots
-    if not observed_roots(ops, operation) <= roots(ops.db, "operation", operation["operation_id"]):
+    if not observed_roots(ops, operation) <= admitted_roots(ops.db, operation["operation_id"]):
         raise OperationError("PM_DELIVERY_SOURCE_CHANGED", "PM sources changed after delivery admission; submit a newly reviewed intent", 409)
 
 
