@@ -140,6 +140,23 @@ PR merge and deployment verification are separate facts. Missing evidence,
 unavailable sources, cost and Definition of Done remain unknown/unassessed.
 Never infer a session control grant or an integration target from an association.
 
+## Fixed project Brief
+
+`pm.snapshot.create` targets `{workspace_id}`, accepts an optional `title`, and
+requires `{expected_plan_version}` from `pm_plan_head_get`. Contributors may save
+one immutable project context; repeated requests use the original operation key.
+Read `pm_snapshots_list`, `pm_snapshot_get`, and `pm_snapshot_latest_get` through
+the central service. A snapshot preserves the accepted plan, explicit work
+associations and their saved captures from one journal transaction. It does not
+refresh providers, adopt drafts, authorize execution, or mark work Done.
+
+The five Brief sections reference that snapshot's own sources. Keep a missing
+accepted baseline distinct from a draft; retain unverified claims and unresolved
+inputs. Source access is rechecked on every read, so use the returned `view_digest`
+and visibility/coverage with the immutable `snapshot_digest`. Unknown quality,
+cost and drift remain unassessed; absence of recorded blockers is not proof that
+work is unblocked. Later activity belongs in a new snapshot.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)

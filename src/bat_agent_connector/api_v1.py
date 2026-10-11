@@ -121,12 +121,20 @@ class ApiV1:
         managed_repairs.install(daemon.ops)
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
-        from . import pm_discussions, pm_evidence, pm_plan_operations, pm_run_operations, pm_workspace
+        from . import (
+            pm_discussions,
+            pm_evidence,
+            pm_plan_operations,
+            pm_run_operations,
+            pm_snapshots,
+            pm_workspace,
+        )
         pm_workspace.install(daemon.ops)
         pm_discussions.install(daemon.ops)
         pm_run_operations.install(daemon.ops)
         pm_plan_operations.install(daemon.ops)
         pm_evidence.install(daemon.ops)
+        pm_snapshots.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -153,6 +161,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/capabilities", self.pm_capabilities, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots", self.pm_snapshots, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/latest", self.pm_snapshot_latest, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})", self.pm_snapshot, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work", self.pm_work, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/evidence", self.pm_evidence, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/evidence/(?P<evidence_id>pme_[0-9a-f]{32})", self.pm_evidence_detail, "observe"),
@@ -503,7 +514,7 @@ class ApiV1:
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         integer_fields = {"limit", "max_chars", "before_message", "before_input"}
-        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list"}:
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list"}:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
@@ -569,6 +580,15 @@ class ApiV1:
     async def pm_capture_latest(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_capture_latest_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_snapshots(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_snapshots_list", query, workspace_id=workspace_id)
+
+    async def pm_snapshot(self, principal, query, workspace_id, snapshot_id, **_):
+        return self._pm_read(principal, "pm_snapshot_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
+
+    async def pm_snapshot_latest(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_snapshot_latest_get", query, workspace_id=workspace_id)
+
     async def capabilities(self, principal, **_):
         fleet = self.daemon.fleet
         from . import worktree_merge_operations
@@ -615,7 +635,8 @@ class ApiV1:
                                                     "runtime_reason": "external_tool_policy_unverified",
                                                     "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
                                                     "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions,
-                                                    "work_evidence": "pm.evidence.capture" in self.daemon.ops.actions, "dispatch": False},
+                                                    "work_evidence": "pm.evidence.capture" in self.daemon.ops.actions,
+                                                    "brief_snapshots": "pm.snapshot.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},

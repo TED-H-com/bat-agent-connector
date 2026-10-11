@@ -76,7 +76,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W09 | P1 | PM runner 與 adapter selection | 第三批：writer／context／reply provenance 基礎與手動脈絡準備；可自動執行的 adapter、工具限制與切換待完成 |
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | 第三批：固定討論脈絡、來源／版本／缺口；AI 參與及跨交付 evidence 關聯待做 |
 | W11 | P1 | Plan diff 與影響分析 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W12 | P1 | Project Brief | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W12 | P1 | Project Brief | 開發分支：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
 | W13 | P1 | Roadmap 與 scope | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W14 | P1 | Kanban | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W15 | P1 | Sprint artifacts 與時間 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -103,7 +103,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W36 | P1 | OpenSpec read adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W39 | P1 | DocumentSnapshot 與五視圖 SVG | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W39 | P1 | DocumentSnapshot 與五視圖 SVG | 開發分支：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
 | W40 | P1 | 專案文件與簡報 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W41 | P1 | Actor 決策責任與 follow-up | 本批：workspace decision role；跨成果決策與 follow-up 待做 |
 | W42 | P1 | Idea 到 Review 真實驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
@@ -128,6 +128,17 @@ Web／Tauri 在討論旁提供明確連結與快照查閱，不依 repo 名稱�
 
 Linux native PM analysis adapter 與有界執行操作另在平行整合；模型執行與認證有效性尚未實測，
 不因離線設定預檢通過就宣稱完整 PM agent 已可日常使用。
+
+## 固定快照與 Project Brief
+
+開發分支加入 `pm.snapshot.create` 與 API／MCP／Web／Tauri 的共同讀取契約。
+五項總覽使用同一個時間點的 accepted plan、明確工作關聯與已保存證據；沒有正式基準時，
+草稿只列為候選。工作回報、驗證、合併與部署保持原來的意義，未評估的品質與偏差清楚標示。
+目前是可追溯的來源總覽，尚不宣稱已完成專業 PM 的完整成果判讀與偏差分析。
+
+工作空間首頁顯示完整總覽；進入討論後，總覽置於右側，對話保留主要位置。
+原始快照保持不變，但每次讀取重新核對來源權限，不向已撤權的讀者顯示私有證據。
+文件／SVG／簡報可沿用此快照；這些 renderer 尚未完成。
 
 ## 後續順序
 

@@ -141,6 +141,173 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-brief.js
+function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let head = null, snapshot = null, signature = "", serial = 0;
+	const title = input("pm_brief_snapshot_title", {
+		max: 160,
+		required: false
+	});
+	const view = h("div", { class: "pm-brief-view" }), history = h("div"), status = h("div", { role: "status" });
+	const create = form({
+		action: "pm.snapshot.create",
+		target: { workspace_id: workspaceId },
+		fields: { title },
+		params: (values) => values.title.trim() ? { title: values.title.trim() } : {},
+		preconditions: () => ({ expected_plan_version: head.version }),
+		permitted: () => Boolean(head) && permitted(false),
+		recoverPermitted: () => permitted(false),
+		label: "pm_brief_create",
+		onSaved: async (result) => {
+			await refresh(result.snapshot_id);
+		},
+		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
+	});
+	const box = h("section", {
+		class: "pm-brief",
+		"data-pm-brief": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_brief_title")), h("p", { class: "muted" }, t("pm_brief_intro"))), create.box), status, view, h("details", {}, h("summary", {}, t("pm_brief_history")), history));
+	const stamp = (value) => typeof value === "number" ? new Date(value * 1e3).toLocaleString() : t("pm_evidence_time_unknown");
+	const check = (data) => {
+		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return data;
+	};
+	const readable = (prefix, value) => {
+		const key = prefix + value, text = t(key);
+		return text === key ? String(value) : text;
+	};
+	function render(data) {
+		snapshot = check(data).snapshot;
+		view.replaceChildren();
+		if (!snapshot) {
+			view.append(h("p", { class: "muted" }, t("pm_brief_empty")));
+			return;
+		}
+		if (snapshot.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		view.append(h("p", { class: "pm-brief-date" }, h("strong", {}, snapshot.title || workspace().name), " · ", t("pm_brief_as_of", { time: stamp(snapshot.as_of) })), h("p", { class: "muted" }, t("pm_brief_fixed")));
+		const sections = h("div", { class: "pm-brief-sections" });
+		for (const name of [
+			"goals",
+			"delivery",
+			"blockers",
+			"deviations",
+			"decisions"
+		]) {
+			const section = snapshot.brief?.[name] || {
+				status: "unavailable",
+				items: []
+			};
+			const values = h("div", { class: "pm-brief-values" });
+			values.append(h("p", { class: "muted" }, readable("pm_brief_status_", section.status)));
+			for (const item of section.items || []) {
+				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.text), details);
+				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
+				if (source.kind === "plan_input") details.append(h("p", { class: "muted" }, t("pm_brief_plan_source")), h("code", {}, source.revision_id), h("p", {}, source.source_ref?.ref || source.source_ref?.message_id || ""));
+				else if (source.kind === "plan_adoption") details.append(h("p", { class: "muted" }, t("pm_brief_decision_source")), h("code", {}, source.revision_id));
+				else if (source.kind === "work_binding") details.append(h("a", { href: `#/work/${source.work_item_id}` }, t("pm_evidence_open_work")));
+				else if (source.kind === "evidence") {
+					const evidence = (snapshot.evidence || []).find((row) => row.evidence_id === source.evidence_id);
+					if (evidence) details.append(h("p", { class: "muted" }, readable("pm_evidence_kind_", evidence.source_kind), " · ", stamp(evidence.source_observed_at)));
+					details.append(h("code", {}, source.evidence_id));
+				}
+				const proof = source.kind === "evidence" ? (snapshot.evidence || []).find((entry) => entry.evidence_id === source.evidence_id) : source.kind === "plan_input" ? snapshot.baseline?.document?.selected_inputs?.find((entry) => entry.input_id === source.input_id) : source.kind === "plan_adoption" ? snapshot.baseline?.adoption : null;
+				if (proof) details.append(h("details", {}, h("summary", {}, t("pm_evidence_original")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(proof, null, 2))));
+				if (item.details) details.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(item.details, null, 2)));
+				values.append(row);
+			}
+			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
+			sections.append(h("section", {
+				class: "pm-brief-row",
+				"data-pm-brief-section": name
+			}, h("h3", {}, t("pm_brief_" + name)), values));
+		}
+		view.append(sections);
+		const trace = h("details", { class: "pm-brief-trace" }, h("summary", {}, t("pm_brief_coverage")), h("p", { class: "muted" }, t("pm_brief_filtered")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			coverage: snapshot.coverage,
+			visibility: snapshot.visibility,
+			journal_cursor: snapshot.journal_cursor,
+			snapshot_digest: snapshot.snapshot_digest,
+			view_digest: snapshot.view_digest
+		}, null, 2)));
+		view.append(trace);
+	}
+	function renderHistory(page, append = false) {
+		if (!append) history.replaceChildren();
+		for (const entry of page.snapshots || []) history.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				const ticket = ++serial;
+				try {
+					const data = await api("GET", `${endpoint}/snapshots/${entry.snapshot_id}`);
+					alive();
+					if (ticket === serial) render(data);
+				} catch (error) {
+					status.replaceChildren(errorBox(error));
+				}
+			}
+		}, `${entry.title || t("pm_brief_title")} · ${stamp(entry.as_of)}`));
+		if (page.next_cursor !== null && page.next_cursor !== void 0) {
+			const more = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: async () => {
+					more.disabled = true;
+					try {
+						const next = check(await api("GET", `${endpoint}/snapshots?after=${page.next_cursor}&limit=20`));
+						alive();
+						if (!more.isConnected) return;
+						more.remove();
+						renderHistory(next, true);
+					} catch (error) {
+						if (more.isConnected) {
+							more.after(errorBox(error));
+							more.disabled = false;
+						}
+					}
+				}
+			}, t("pm_brief_more"));
+			history.append(more);
+		}
+	}
+	async function refresh(selectedId = null) {
+		const ticket = ++serial;
+		head = null;
+		try {
+			const [latest, listing, current] = await Promise.all([
+				api("GET", `${endpoint}/snapshots/${selectedId || snapshot?.snapshot_id || "latest"}`),
+				api("GET", `${endpoint}/snapshots?limit=20`),
+				api("GET", `${endpoint}/plans/head`)
+			]);
+			alive();
+			if (ticket !== serial) return;
+			check(latest);
+			check(listing);
+			if (current.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			head = current.head;
+			status.replaceChildren();
+			const next = JSON.stringify([latest, listing]);
+			if (signature !== next) {
+				signature = next;
+				render(latest);
+				renderHistory(listing);
+			}
+			create.update();
+		} catch (error) {
+			if (ticket === serial) {
+				head = null;
+				create.update();
+				status.replaceChildren(errorBox(error));
+			}
+		}
+	}
+	return {
+		box,
+		refresh
+	};
+}
+//#endregion
 //#region src/pm-evidence.js
 var flatten = (rows) => (rows || []).flatMap((row) => [row, ...flatten(row.children)]);
 function workspaceEvidence({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
@@ -1014,6 +1181,20 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (evidence) body.append(evidence.box);
+	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? projectBrief({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox
+	}) : null;
+	if (brief && !threadId) body.insertBefore(brief.box, content);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
 	const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide && (threadData.thread.mode === "idea" || Boolean(planningRevisionForm));
@@ -1282,6 +1463,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				class: "pm-inspector",
 				"aria-label": t("pm_inputs")
 			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
+			if (brief) inspector.prepend(brief.box);
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
 		}
 		threadTitle.textContent = thread.title;
@@ -1573,6 +1755,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
 			worktreeChoice?.update();
 			if (evidence) await evidence.refresh();
+			if (brief) await brief.refresh();
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -1595,7 +1778,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_thread",
 			"pm_run",
 			"pm_plan",
-			"pm_evidence"
+			"pm_evidence",
+			"pm_snapshot"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -5460,6 +5644,36 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_brief_title: "Project Brief",
+		pm_brief_intro: "Goals, delivery, blockers, deviations and decisions from the same saved sources.",
+		pm_brief_snapshot_title: "Snapshot title",
+		pm_brief_name_optional: "Name this snapshot (optional)",
+		pm_brief_create: "Save project snapshot",
+		pm_brief_history: "Earlier project snapshots",
+		pm_brief_more: "More snapshots",
+		pm_brief_empty: "No project snapshot has been saved yet.",
+		pm_brief_as_of: "As of {time}",
+		pm_brief_fixed: "This view preserves its original plan and evidence. New activity appears in a new snapshot.",
+		pm_brief_goals: "Goals",
+		pm_brief_delivery: "Delivery",
+		pm_brief_blockers: "Blockers",
+		pm_brief_deviations: "Deviations",
+		pm_brief_decisions: "Decisions",
+		pm_brief_status_accepted_sources: "Sources in the accepted plan",
+		pm_brief_status_unavailable: "Information unavailable",
+		pm_brief_status_quality_unassessed: "Definition of Done has not been assessed",
+		pm_brief_status_partial_source_states: "Saved states and known information gaps",
+		pm_brief_status_unassessed: "Not yet assessed",
+		pm_brief_status_recorded_sources: "Recorded decisions and open questions",
+		pm_brief_empty_goals: "No accepted goal source is available.",
+		pm_brief_empty_delivery: "No delivery evidence is recorded in this snapshot.",
+		pm_brief_empty_blockers: "No blocker is established by the included sources. This does not prove the project is unblocked.",
+		pm_brief_empty_deviations: "The baseline and results have not been evaluated for drift.",
+		pm_brief_empty_decisions: "No adopted decision or unresolved plan input is included.",
+		pm_brief_plan_source: "Source in the fixed plan",
+		pm_brief_decision_source: "Recorded plan adoption",
+		pm_brief_coverage: "Source coverage and snapshot record",
+		pm_brief_filtered: "Source visibility is checked when this snapshot is read; restricted facts are omitted.",
 		pm_evidence_state_accepted: "Accepted for execution",
 		pm_evidence_state_queued: "Queued",
 		pm_evidence_state_dispatching: "Dispatching",
@@ -5671,6 +5885,36 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_brief_title: "專案總覽",
+		pm_brief_intro: "以同一份已保存來源，整理目標、交付、阻塞、偏差與決策。",
+		pm_brief_snapshot_title: "快照名稱",
+		pm_brief_name_optional: "命名這份快照（選填）",
+		pm_brief_create: "儲存專案現況",
+		pm_brief_history: "先前的專案快照",
+		pm_brief_more: "更多快照",
+		pm_brief_empty: "尚未保存專案現況快照。",
+		pm_brief_as_of: "截至 {time}",
+		pm_brief_fixed: "這份總覽保留當時的計畫與證據；後續變化會出現在新的快照。",
+		pm_brief_goals: "目標",
+		pm_brief_delivery: "交付",
+		pm_brief_blockers: "阻塞",
+		pm_brief_deviations: "偏差",
+		pm_brief_decisions: "決策",
+		pm_brief_status_accepted_sources: "已採用計畫中的來源",
+		pm_brief_status_unavailable: "資訊尚未取得",
+		pm_brief_status_quality_unassessed: "尚未評估完成定義",
+		pm_brief_status_partial_source_states: "已保存的狀態與已知資訊缺口",
+		pm_brief_status_unassessed: "尚未評估",
+		pm_brief_status_recorded_sources: "已記錄的決策與未決問題",
+		pm_brief_empty_goals: "目前沒有可用的已採用目標來源。",
+		pm_brief_empty_delivery: "此快照尚無交付證據。",
+		pm_brief_empty_blockers: "納入的來源尚未證實存在阻塞；這不代表專案沒有阻塞。",
+		pm_brief_empty_deviations: "尚未對基準與成果進行偏差評估。",
+		pm_brief_empty_decisions: "此快照未納入採用決策或計畫未決事項。",
+		pm_brief_plan_source: "固定計畫中的來源",
+		pm_brief_decision_source: "已記錄的計畫採用",
+		pm_brief_coverage: "來源涵蓋範圍與快照紀錄",
+		pm_brief_filtered: "查閱時會重新核對來源可見性；受限事實不會顯示。",
 		pm_evidence_state_accepted: "已受理執行",
 		pm_evidence_state_queued: "排隊中",
 		pm_evidence_state_dispatching: "派送中",
