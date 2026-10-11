@@ -37,6 +37,8 @@ def schema(journal) -> None:
             PRIMARY KEY(workspace_id,actor))""")
         journal.db.execute("""CREATE TABLE IF NOT EXISTS pm_workspace_applied (
             operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, applied_at REAL NOT NULL)""")
+        from .dashboard_sync import install_pm_access
+        install_pm_access(journal.db)
 
 
 def server_id(db) -> str:
