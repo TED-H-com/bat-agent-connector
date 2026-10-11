@@ -113,11 +113,11 @@ export async function mount(page:Page,f:ReturnType<typeof fixture>,{locale='en',
       if(value==null||value===false)continue;if(key.startsWith('on'))node.addEventListener(key.slice(2),value as any);else node.setAttribute(key,value===true?'':String(value));}
       for(const child of children.flat())if(child!=null&&child!==false)node.append(child instanceof Node?child:String(child));return node;};
     const api=async(method:string,path:string,body?:any,key?:string)=>{const result=await win.followUpFixtureRequest({method,path,body,key});
-      if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code});return result.data;};
+      if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code,status:result.status});return result.data;};
     const input=(key:string,{multiline=false,required=true,value='',max=4000}={})=>{const node=h(multiline?'textarea':'input',{'aria-label':t(key),required,maxlength:max});(node as HTMLInputElement).value=value;return node;};
     const errorBox=(error:any)=>h('p',{class:'error'},error.message),labelled=(key:string,node:any)=>h('label',{},t(key),node);
     const form=(options:any)=>durableForm({h,t,api,caps:()=>caps,guard:()=>{},namespace:'follow-up-fixture.'+caps.actor,errorBox,...options});
-    const ui=workspaceFollowUp({h,t,api,alive:()=>{},workspaceId,pageSize,form,input,labelled,errorBox,caps:()=>caps,
+    const ui=workspaceFollowUp({h,t,api,alive:()=>{},workspaceId,pageSize,namespace:'follow-up-fixture.'+caps.actor,form,input,labelled,errorBox,caps:()=>caps,
       permitted:()=>['owner','contributor'].includes(caps.role)&&caps.scopes.includes('manage')});
     document.getElementById('mount')!.append(ui.element);
     win.refreshFollowUp=async()=>{caps=await win.followUpFixtureCaps();await ui.refresh();};

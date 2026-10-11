@@ -160,6 +160,29 @@ the wire cap. Run lists preserve whole-record prefixes and advancing cursors;
 a single record that cannot fit returns 413. All new DDL is idempotent, append-only
 and allocates no `user_version` or data migration step.
 
+## Shared discussion interface
+
+The workspace displays saved assessments inside the selected Follow-up
+preparation. It does not add another dashboard tab. Selection reads one exact
+assessment; the source disclosure resolves references against that same intake,
+and raw native content is rendered literally. Format validation never appears as
+verified conclusions or adopted scope. An inaccessible selection is cleared and
+is not silently replaced with another assessment.
+
+The optional analysis form fixes the intake and its digest, an existing writable
+Idea/Planning discussion, and that discussion's version. An already bound
+discussion cannot be changed. Unbound intake selection uses the discussion API's
+string cursors. Draft storage includes the original actor namespace, intake and
+thread target. A new discussion version requires an explicit draft rebase;
+ambiguous or acknowledged operations keep their original body, key and receipt.
+Analysis submission shares the same durable form used by other PM commands.
+
+Source or workspace authority withdrawal observed by either child clears the
+parent's quoted intake facts and both children. Drafts and original operation
+keys remain saved. A late response from an earlier intake cannot clear or restore
+the currently selected preparation. New assessment events reread the shared
+workspace view through the normal event handler.
+
 ## Verification scope
 
 Tests use the real operation service and disk-backed journal with a fake native

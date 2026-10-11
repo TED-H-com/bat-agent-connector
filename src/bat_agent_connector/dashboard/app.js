@@ -1137,8 +1137,442 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 	};
 }
 //#endregion
+//#region src/pm-follow-up-analysis.js
+function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, onAccessFailure = () => {}, pageSize = 20 }) {
+	const actor = caps()?.actor, endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/follow-up-assessments`;
+	const number = (value) => Number.isSafeInteger(value) && value >= 0;
+	const identifier = (value) => /^pmfa_[0-9a-f]{32}$/.test(value || "");
+	if (!number(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid assessment page size");
+	let serial = 0, intake = null, rows = [], next = null, reading = false, selected = "", retired = false;
+	const selections = new Map(), status = h("div", { role: "status" }), list = h("div"), detail = h("div");
+	const note = (key) => h("p", { class: "muted" }, t(key));
+	const code = (value) => h("code", { class: "pm-source" }, String(value ?? "—"));
+	const fold = (key, ...children) => h("details", {}, h("summary", {}, t(key)), ...children);
+	const current = (ticket) => {
+		alive();
+		if (actor !== caps()?.actor) {
+			retired = true;
+			throw Error(t("pm_fa_actor_changed"));
+		}
+		return !retired && ticket === serial;
+	};
+	const check = (data) => {
+		if (data?.workspace_id !== workspaceId) throw Error(t("pm_fa_mismatch"));
+		return data;
+	};
+	const date = (value) => {
+		const d = typeof value === "number" ? new Date(value * 1e3) : null;
+		return d && Number.isFinite(d.getTime()) ? d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC") : "—";
+	};
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void loadMore()
+	}, t("pm_fa_more"));
+	const element = h("section", {
+		"data-pm-follow-up-assessments": "",
+		class: "pm-fu-assessments"
+	}, h("h3", {}, t("pm_fa_title")), note("pm_fa_boundary"), status, list, more, detail);
+	function clear() {
+		++serial;
+		intake = null;
+		rows = [];
+		next = null;
+		reading = false;
+		selected = "";
+		status.replaceChildren();
+		list.replaceChildren();
+		detail.replaceChildren();
+		more.hidden = true;
+	}
+	function fail(error) {
+		++serial;
+		reading = false;
+		rows = [];
+		next = null;
+		list.replaceChildren();
+		detail.replaceChildren();
+		more.hidden = true;
+		status.replaceChildren(errorBox(error), note("pm_fa_unavailable"));
+		onAccessFailure(error);
+	}
+	function valid(row) {
+		if (!row || row.workspace_id !== workspaceId || !identifier(row.assessment_id) || !number(row.sequence) || row.intake_id !== intake?.intake_id || row.intake_digest !== intake?.document_digest || !["format_valid", "needs_review"].includes(row.validation?.status) || !Array.isArray(row.validation.errors) || row.validation.conclusions_verified !== false || row.conclusions_verified !== false || row.accepted_plan_changed !== false || row.execution_authorized !== false || row.assessment_basis !== "unadopted_agent_analysis") throw Error(t("pm_fa_mismatch"));
+		return row;
+	}
+	function page(data, after) {
+		check(data);
+		if (!Array.isArray(data.assessments) || data.next_cursor != null && (!number(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pm_fa_mismatch"));
+		let cursor = after;
+		for (const row of data.assessments) {
+			valid(row);
+			if (row.sequence <= cursor) throw Error(t("pm_fa_mismatch"));
+			cursor = row.sequence;
+		}
+		return data;
+	}
+	const path = (after) => `${endpoint}?intake_id=${encodeURIComponent(intake.intake_id)}&after=${after}&limit=${pageSize}`;
+	function navigation() {
+		list.replaceChildren(...rows.map((row) => h("p", {}, h("button", {
+			type: "button",
+			class: "secondary",
+			"aria-pressed": selected === row.assessment_id,
+			onclick: () => {
+				selected = row.assessment_id;
+				selections.set(intake.intake_id, selected);
+				navigation();
+				read(selected);
+			}
+		}, t("pm_fa_record", { sequence: row.sequence }) + " · " + date(row.created_at)), h("span", { class: "muted" }, " · ", t("pm_fa_" + row.validation.status)))));
+		more.hidden = next == null;
+		more.disabled = reading;
+		if (!rows.length) list.append(note(next == null ? "pm_fa_empty" : "pm_fa_filtered_page"));
+	}
+	function sourceValue(pointer) {
+		if (typeof pointer !== "string" || !pointer.startsWith("/")) throw Error(t("pm_fa_mismatch"));
+		let value = intake.document;
+		for (const encoded of pointer.slice(1).split("/")) {
+			if (/~(?![01])/u.test(encoded)) throw Error(t("pm_fa_mismatch"));
+			const key = encoded.replaceAll("~1", "/").replaceAll("~0", "~");
+			if (value === null || typeof value !== "object" || !Object.hasOwn(value, key)) throw Error(t("pm_fa_mismatch"));
+			value = value[key];
+		}
+		return value;
+	}
+	function render(row) {
+		const refs = row.provenance?.source_references;
+		if (typeof row.raw_reply !== "string" || !refs || typeof refs !== "object" || Array.isArray(refs) || row.provenance.intake_id !== intake.intake_id || row.provenance.intake_digest !== intake.document_digest || row.provenance.run_id !== row.run_id || row.provenance.context_digest !== row.context_digest) throw Error(t("pm_fa_mismatch"));
+		const sources = (keys) => {
+			if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string" || !Object.hasOwn(refs, key))) throw Error(t("pm_fa_mismatch"));
+			return fold("pm_fa_sources", ...keys.map((key) => {
+				const ref = refs[key];
+				if (!/^[0-9a-f]{64}$/.test(ref?.digest || "")) throw Error(t("pm_fa_mismatch"));
+				const value = sourceValue(ref.pointer);
+				return h("div", {}, code(key), code(ref.pointer), h("pre", { class: "pm-note-text" }, typeof value === "string" ? value : JSON.stringify(value, null, 2)), code(ref.digest));
+			}));
+		};
+		const content = h("div", { "data-pm-assessment-record": row.assessment_id }, h("h4", {}, t("pm_fa_record", { sequence: row.sequence })), h("p", { class: "muted" }, date(row.created_at), " · ", row.created_by), h("p", { "data-pm-assessment-validation": "" }, t("pm_fa_" + row.validation.status)), note("pm_fa_unverified"));
+		if (row.validation.status === "format_valid") {
+			const doc = row.document;
+			if (doc?.version !== 1 || typeof doc.summary?.text !== "string" || ![
+				"findings",
+				"tradeoffs",
+				"questions",
+				"recommendations"
+			].every((key) => Array.isArray(doc[key])) || doc.questions.length > 3) throw Error(t("pm_fa_mismatch"));
+			content.append(h("p", { class: "pm-note-text" }, doc.summary.text), sources(doc.summary.source_refs));
+			const group = (key, items, renderItem) => h("section", {}, h("h4", {}, t(key)), items.length ? h("ol", {}, ...items.map((item) => h("li", {}, ...renderItem(item), sources(item.source_refs)))) : note("pm_fa_none"));
+			const options = (items) => {
+				if (!Array.isArray(items) || items.length < 2 || items.length > 4 || items.some((item) => typeof item.label !== "string" || typeof item.consequence !== "string")) throw Error(t("pm_fa_mismatch"));
+				return h("dl", {}, ...items.flatMap((item) => [h("dt", {}, item.label), h("dd", { class: "pm-note-text" }, item.consequence)]));
+			};
+			content.append(group("pm_fa_findings", doc.findings, (item) => {
+				if (![
+					"problem",
+					"deviation",
+					"assumption",
+					"unknown",
+					"decision_effect"
+				].includes(item.kind) || typeof item.text !== "string" || typeof item.impact !== "string") throw Error(t("pm_fa_mismatch"));
+				return [
+					h("strong", {}, t("pm_fa_kind_" + item.kind)),
+					h("p", { class: "pm-note-text" }, item.text),
+					h("p", { class: "pm-note-text" }, t("pm_fa_impact"), ": ", item.impact)
+				];
+			}), group("pm_fa_tradeoffs", doc.tradeoffs, (item) => {
+				if (typeof item.decision !== "string") throw Error(t("pm_fa_mismatch"));
+				return [h("strong", {}, item.decision), options(item.options)];
+			}), group("pm_fa_questions", doc.questions, (item) => {
+				if (typeof item.question !== "string" || typeof item.why_now !== "string") throw Error(t("pm_fa_mismatch"));
+				return [
+					h("strong", {}, item.question),
+					h("p", { class: "pm-note-text" }, t("pm_fa_why"), ": ", item.why_now),
+					options(item.options)
+				];
+			}), group("pm_fa_recommendations", doc.recommendations, (item) => {
+				if (typeof item.text !== "string" || item.proposed_owner != null && typeof item.proposed_owner !== "string") throw Error(t("pm_fa_mismatch"));
+				return [h("p", { class: "pm-note-text" }, item.text), item.proposed_owner ? h("p", {}, t("pm_fa_proposed_owner"), ": ", item.proposed_owner) : ""];
+			}));
+		} else content.append(note("pm_fa_raw_review"), h("ul", {}, ...row.validation.errors.map((error) => h("li", {}, String(error)))));
+		content.append(fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
+		detail.replaceChildren(content);
+	}
+	async function read(id) {
+		const ticket = ++serial;
+		reading = false;
+		more.disabled = false;
+		detail.replaceChildren();
+		status.replaceChildren(note("pm_fa_loading"));
+		try {
+			const data = check(await api("GET", `${endpoint}/${encodeURIComponent(id)}`));
+			if (!current(ticket)) return;
+			const row = valid(data.assessment);
+			if (row.assessment_id !== id) throw Error(t("pm_fa_mismatch"));
+			render(row);
+			status.replaceChildren();
+		} catch (error) {
+			if (ticket === serial) fail(error);
+		}
+	}
+	async function loadMore() {
+		if (reading || next == null || !intake) return;
+		const ticket = serial, after = next;
+		reading = true;
+		more.disabled = true;
+		try {
+			const data = page(await api("GET", path(after)), after);
+			if (!current(ticket)) return;
+			rows.push(...data.assessments.filter((row) => !rows.some((old) => old.assessment_id === row.assessment_id)));
+			next = data.next_cursor;
+			navigation();
+		} catch (error) {
+			if (ticket === serial) fail(error);
+		} finally {
+			if (ticket === serial) {
+				reading = false;
+				more.disabled = false;
+			}
+		}
+	}
+	async function load(row) {
+		clear();
+		intake = row;
+		selected = selections.get(row.intake_id) || "";
+		const ticket = serial;
+		status.replaceChildren(note("pm_fa_loading"));
+		try {
+			const data = page(await api("GET", path(0)), 0);
+			if (!current(ticket)) return;
+			rows = data.assessments;
+			next = data.next_cursor;
+			navigation();
+			status.replaceChildren();
+			if (selected) await read(selected);
+			else if (rows.length) detail.append(note("pm_fa_select"));
+		} catch (error) {
+			if (ticket === serial) fail(error);
+		}
+	}
+	async function showResult(result) {
+		const id = result?.outcome?.assessment_id;
+		if (intake && identifier(id) && result.outcome.intake_id === intake.intake_id) {
+			selections.set(intake.intake_id, id);
+			await load(intake);
+		}
+	}
+	return {
+		element,
+		load,
+		clear,
+		showResult
+	};
+}
+//#endregion
+//#region src/pm-follow-up-request.js
+function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespace, form, input, labelled, permitted, errorBox, onSaved, onAccessFailure = () => {} }) {
+	const actor = caps()?.actor, endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let serial = 0, intake = null, capability = null, thread = null, request = null, retired = false, next = null, rows = [];
+	const choices = new Map(), status = h("div", { role: "status" }), body = h("div"), chooser = h("select", { "aria-label": t("pm_fa_thread") });
+	const note = (key) => h("p", { class: "muted" }, t(key));
+	const element = h("details", { "data-pm-follow-up-analyze": "" }, h("summary", {}, t("pm_fa_analyze_prepare")), note("pm_fa_analyze_help"), status, body);
+	const current = (ticket) => {
+		alive();
+		if (caps()?.actor !== actor) {
+			retired = true;
+			throw Error(t("pm_fa_actor_changed"));
+		}
+		return ticket === serial && !retired;
+	};
+	const check = (data) => {
+		if (data?.workspace_id !== workspaceId) throw Error(t("pm_fa_mismatch"));
+		return data;
+	};
+	const authorized = () => Boolean(intake) && !retired && actor === caps()?.actor && permitted(false) && caps()?.scopes?.includes("start") && thread?.capabilities?.write === true;
+	function clear() {
+		++serial;
+		intake = null;
+		thread = null;
+		capability = null;
+		request?.dispose();
+		request = null;
+		rows = [];
+		next = null;
+		body.replaceChildren();
+		status.replaceChildren();
+	}
+	function fail(error) {
+		++serial;
+		thread = null;
+		capability = null;
+		request?.dispose();
+		request = null;
+		body.replaceChildren();
+		status.replaceChildren(errorBox(error));
+		onAccessFailure(error);
+	}
+	function navigation() {
+		const selected = choices.get(intake.intake_id) || intake.document.thread_ref?.thread_id || "";
+		chooser.replaceChildren(h("option", { value: "" }, t("pm_fa_thread_choose")), ...rows.map((row) => h("option", { value: row.thread_id }, row.title)));
+		if (selected && !rows.some((row) => row.thread_id === selected)) chooser.append(h("option", { value: selected }, selected));
+		chooser.value = selected;
+		chooser.disabled = Boolean(intake.document.thread_ref) || Boolean(request?.locked());
+	}
+	async function readThread() {
+		const ticket = ++serial;
+		request?.dispose();
+		request = null;
+		thread = null;
+		body.replaceChildren(labelled("pm_fa_thread", chooser));
+		navigation();
+		if (next != null) body.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => void readThreads(next)
+		}, t("pm_fa_more_threads")));
+		if (!chooser.value) return;
+		status.replaceChildren(note("pm_fa_loading_thread"));
+		try {
+			const data = check(await api("GET", `${endpoint}/threads/${encodeURIComponent(chooser.value)}`));
+			if (!current(ticket)) return;
+			if (data.thread?.thread_id !== chooser.value || data.thread.workspace_id !== workspaceId || !Number.isSafeInteger(data.thread.version) || !["idea", "planning"].includes(data.thread.mode)) throw Error(t("pm_fa_mismatch"));
+			thread = data;
+			status.replaceChildren();
+			const guardedApi = async (...args) => {
+				try {
+					return await api(...args);
+				} catch (error) {
+					try {
+						if (current(ticket)) onAccessFailure(error);
+					} catch {}
+					throw error;
+				}
+			};
+			const purpose = input("pm_fa_purpose", {
+				multiline: true,
+				max: 4e3
+			}), model = input("pm_native_model", {
+				required: false,
+				max: 128
+			});
+			model.placeholder = t("pm_native_default_model");
+			const version = h("input", {
+				type: "hidden",
+				value: String(thread.thread.version)
+			}), warning = note("pm_fa_thread_stale");
+			const stale = () => version.value !== String(thread?.thread.version);
+			const rebase = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					if (request && !request.locked() && authorized()) {
+						request.set("_version", String(thread.thread.version));
+						request.update();
+					}
+				}
+			}, t("pm_fa_use_thread_version"));
+			const sync = () => {
+				warning.hidden = !stale();
+				rebase.hidden = !stale();
+				rebase.disabled = Boolean(request?.locked()) || !authorized();
+				navigation();
+			};
+			const eligible = () => authorized() && capability?.authorized === true && capability?.eligible_for_preflight === true && !stale();
+			request = form({
+				api: guardedApi,
+				namespace: `${namespace}.follow-up.${intake.intake_id}`,
+				action: "pm.follow_up.analyze",
+				target: {
+					workspace_id: workspaceId,
+					thread_id: thread.thread.thread_id
+				},
+				fields: {
+					purpose,
+					model,
+					_version: version
+				},
+				params: (values) => ({
+					intake_id: intake.intake_id,
+					purpose: values.purpose,
+					...values.model.trim() ? { model: values.model.trim() } : {}
+				}),
+				preconditions: () => ({
+					expected_version: Number(version.value),
+					expected_intake_digest: intake.document_digest
+				}),
+				permitted: eligible,
+				recoverPermitted: authorized,
+				label: "pm_fa_analyze",
+				onStateChange: sync,
+				onSaved,
+				extra: h("div", { class: "pm-fields" }, labelled("pm_fa_purpose", purpose), h("details", {}, h("summary", {}, t("pm_fa_model_optional")), labelled("pm_native_model", model)), version)
+			});
+			const reason = !authorized() ? "pm_native_permissions" : capability?.eligible_for_preflight ? "pm_native_preflight_pending" : {
+				PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
+				PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
+				PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
+				PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
+				PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
+			}[capability?.reason] || "pm_native_unavailable";
+			body.append(note(reason), warning, rebase, request.box);
+			request.update();
+		} catch (error) {
+			if (ticket === serial) fail(error);
+		}
+	}
+	async function readThreads(after = null) {
+		const ticket = serial;
+		try {
+			const data = check(await api("GET", `${endpoint}/threads?${after ? `after=${encodeURIComponent(after)}&` : ""}limit=20`));
+			if (!current(ticket)) return;
+			if (!Array.isArray(data.threads) || data.next_cursor != null && (!/^pmt_[0-9a-f]{32}$/.test(data.next_cursor) || data.next_cursor === after) || data.threads.some((row) => row.workspace_id !== workspaceId || !/^pmt_[0-9a-f]{32}$/.test(row.thread_id))) throw Error(t("pm_fa_mismatch"));
+			rows.push(...data.threads.filter((row) => ["idea", "planning"].includes(row.mode) && !rows.some((old) => old.thread_id === row.thread_id)));
+			next = data.next_cursor;
+			await readThread();
+		} catch (error) {
+			if (ticket === serial) fail(error);
+		}
+	}
+	async function prepare() {
+		if (!intake || retired) return;
+		const ticket = ++serial;
+		status.replaceChildren(note("pm_fa_loading_thread"));
+		try {
+			const data = check(await api("GET", `${endpoint}/capabilities`));
+			if (!current(ticket)) return;
+			capability = data.follow_up_analysis;
+			rows = [];
+			next = null;
+			if (intake.document.thread_ref) {
+				choices.set(intake.intake_id, intake.document.thread_ref.thread_id);
+				await readThread();
+			} else await readThreads();
+		} catch (error) {
+			if (ticket === serial) fail(error);
+		}
+	}
+	chooser.addEventListener("change", () => {
+		if (!intake || request?.locked()) return;
+		choices.set(intake.intake_id, chooser.value);
+		readThread();
+	});
+	element.addEventListener("toggle", () => {
+		if (element.open && intake && !request) prepare();
+	});
+	async function load(row) {
+		clear();
+		intake = row;
+		if (element.open) await prepare();
+	}
+	return {
+		element,
+		clear,
+		load
+	};
+}
+//#endregion
 //#region src/pm-follow-up.js
-function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox, caps, pageSize = 20 }) {
+function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox, caps, namespace, pageSize = 20 }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, actor = caps()?.actor;
 	const domains = [
 		"governance",
@@ -1194,6 +1628,40 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		meetings,
 		_baseline: baseline
 	};
+	const onAccessFailure = (error) => {
+		if ([401, 403].includes(error.status) || [
+			"PM_FOLLOW_UP_SOURCE_UNAVAILABLE",
+			"FORBIDDEN",
+			"NOT_FOUND"
+		].includes(error.code)) unavailable(error);
+	};
+	const assessments = caps()?.features?.pm_workspaces?.follow_up_analysis ? followUpAssessments({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		errorBox,
+		onAccessFailure,
+		pageSize
+	}) : null;
+	const analysis = assessments ? followUpAnalysisRequest({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		namespace,
+		form,
+		input,
+		labelled,
+		permitted: () => can(),
+		errorBox,
+		onAccessFailure,
+		onSaved: (result) => assessments.showResult(result)
+	}) : null;
 	const json = (field) => JSON.parse(field.value || "[]");
 	function sourceRefs(refs = []) {
 		return h("ul", { class: "pm-fu-refs" }, ...refs.map((ref) => h("li", {}, ...Object.entries(ref).filter(([key, value]) => (key === "id" || key.endsWith("_id") || key.endsWith("_digest")) && typeof value === "string").map(([key, value]) => {
@@ -1235,6 +1703,8 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		]) updateOptions(node, [], node === snapshotChoice ? "pm_fu_select_snapshot" : "pm_fu_none");
 	}
 	function unavailable(error) {
+		assessments?.clear();
+		analysis?.clear();
 		++serial;
 		++sourceSerial;
 		loaded = false;
@@ -1295,7 +1765,13 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			"no_longer_selected"
 		].map((kind) => h("div", {}, h("h4", {}, t("pm_fu_change_" + kind)), ...(doc.changes?.[kind] || []).map((identifier) => h("p", {}, code(identifier))), !doc.changes?.[kind]?.length ? note("pm_fu_none") : "")), doc.previous_intake_id ? code(doc.previous_intake_id) : note("pm_fu_no_comparison"));
 		const sources = fold("pm_fu_fixed_sources", h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"));
-		view.append(summary, note("pm_fu_preparation_only"), coverageWarning, agenda, knowledge, issues, changes, sources);
+		view.append(summary, note(assessments ? "pm_fa_preparation_basis" : "pm_fu_preparation_only"), coverageWarning, agenda, knowledge, issues, changes, sources);
+		if (assessments) {
+			view.insertBefore(assessments.element, knowledge);
+			view.insertBefore(analysis.element, knowledge);
+			assessments.load(row);
+			analysis.load(row);
+		}
 	}
 	function stale() {
 		if (!baseline.value || head == null || plan == null) return false;
@@ -1642,6 +2118,8 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		return true;
 	}
 	async function refresh() {
+		assessments?.clear();
+		analysis?.clear();
 		const ticket = ++serial;
 		++sourceSerial;
 		loaded = false;
@@ -5928,7 +6406,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		input,
 		labelled,
 		errorBox,
-		caps
+		caps,
+		namespace
 	}) : null;
 	if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
 	const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare ? workspaceWorkPackages({
@@ -6596,6 +7075,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_meeting",
 			"pm_governance",
 			"pm_follow_up",
+			"pm_follow_up_assessment",
 			"pm_work_package"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
@@ -10956,6 +11436,112 @@ var pmFollowUpStrings = {
 	}
 };
 //#endregion
+//#region src/pm-follow-up-analysis-strings.js
+var followUpAnalysisStrings = {
+	en: {
+		pm_fa_thread: "PM discussion",
+		pm_fa_thread_choose: "Select a discussion",
+		pm_fa_more_threads: "Load more discussions",
+		pm_fa_analyze_prepare: "Ask PM to assess this preparation",
+		pm_fa_analyze_help: "Choose the purpose of this analysis. The PM reads this complete fixed preparation and saves an assessment without changing scope or dispatching work.",
+		pm_fa_loading_thread: "Checking the selected discussion…",
+		pm_fa_purpose: "What should PM assess?",
+		pm_fa_analyze: "Analyze this preparation",
+		pm_fa_thread_stale: "This draft uses an earlier discussion version. Review it before using the current version.",
+		pm_fa_use_thread_version: "Use the current discussion version",
+		pm_fa_model_optional: "Model preference (optional)",
+		pm_fa_preparation_basis: "This preparation preserves the selected facts. Saved PM assessments appear below; they do not change the accepted plan or authorize execution.",
+		pm_fa_title: "PM assessment",
+		pm_fa_boundary: "Saved analysis of this preparation. Recommendations remain proposals until explicitly adopted.",
+		pm_fa_actor_changed: "The signed-in actor changed. Reopen this workspace.",
+		pm_fa_mismatch: "The assessment does not match its fixed source. Refresh this preparation.",
+		pm_fa_more: "Load more assessments",
+		pm_fa_unavailable: "The previous assessment has been cleared. Refresh to check current source access.",
+		pm_fa_record: "Assessment {sequence}",
+		pm_fa_format_valid: "Format and source references checked",
+		pm_fa_needs_review: "Response needs review",
+		pm_fa_empty: "No readable assessment for this preparation.",
+		pm_fa_filtered_page: "No readable assessment on this page; more history is available.",
+		pm_fa_sources: "Read the quoted preparation sources",
+		pm_fa_unverified: "Agent analysis; conclusions have not been verified. The accepted plan and execution remain unchanged.",
+		pm_fa_none: "None proposed in this assessment.",
+		pm_fa_findings: "Findings and impact",
+		pm_fa_tradeoffs: "Choices and consequences",
+		pm_fa_questions: "Questions for a decision",
+		pm_fa_recommendations: "Proposed next steps",
+		pm_fa_impact: "Potential impact",
+		pm_fa_why: "Why discuss this now",
+		pm_fa_proposed_owner: "Suggested owner — not assigned",
+		pm_fa_raw_review: "This reply did not pass the structured response checks. Review the original text; it is not a validated assessment.",
+		pm_fa_raw: "Original agent reply",
+		pm_fa_provenance: "Analysis source and receipt",
+		pm_fa_intake: "Fixed discussion preparation",
+		pm_fa_model: "Model",
+		pm_fa_run: "Analysis run",
+		pm_fa_context: "Context digest",
+		pm_fa_reply_digest: "Original reply digest",
+		pm_fa_document_digest: "Structured response digest",
+		pm_fa_loading: "Reading saved assessments…",
+		pm_fa_select: "Select an assessment to read its analysis and fixed sources.",
+		pm_fa_kind_problem: "Problem",
+		pm_fa_kind_deviation: "Deviation",
+		pm_fa_kind_assumption: "Assumption",
+		pm_fa_kind_unknown: "Unknown",
+		pm_fa_kind_decision_effect: "Decision effect"
+	},
+	"zh-TW": {
+		pm_fa_thread: "PM 討論",
+		pm_fa_thread_choose: "選擇討論",
+		pm_fa_more_threads: "載入更多討論",
+		pm_fa_analyze_prepare: "請 PM 評估這份討論準備",
+		pm_fa_analyze_help: "指定這次分析的目的。PM 會讀取完整的固定討論準備並保存評估，不改範圍或派工。",
+		pm_fa_loading_thread: "核對選定的討論…",
+		pm_fa_purpose: "希望 PM 評估什麼？",
+		pm_fa_analyze: "分析這份討論準備",
+		pm_fa_thread_stale: "這份草稿仍使用先前的討論版本，請檢視後再套用目前版本。",
+		pm_fa_use_thread_version: "使用目前討論版本",
+		pm_fa_model_optional: "模型偏好（選填）",
+		pm_fa_preparation_basis: "這份討論準備保存選定的事實。PM 評估列在下方，不會改動已採用計畫或授權執行。",
+		pm_fa_title: "PM 評估",
+		pm_fa_boundary: "依這份討論準備保存的分析。建議需經明確採用，才會成為決定。",
+		pm_fa_actor_changed: "登入身分已變更，請重新開啟工作空間。",
+		pm_fa_mismatch: "評估與固定來源不符，請重新讀取這份討論準備。",
+		pm_fa_more: "載入更多評估",
+		pm_fa_unavailable: "已清除先前評估。重新整理後會再次核對來源權限。",
+		pm_fa_record: "評估 {sequence}",
+		pm_fa_format_valid: "格式與來源引用已核對",
+		pm_fa_needs_review: "回覆需要審閱",
+		pm_fa_empty: "這份討論準備尚無可讀的評估。",
+		pm_fa_filtered_page: "這頁沒有可讀評估，仍可繼續讀取歷史。",
+		pm_fa_sources: "閱讀引用的討論準備來源",
+		pm_fa_unverified: "這是 agent 分析，結論尚未驗證；已採用計畫及執行安排維持原狀。",
+		pm_fa_none: "這份評估未提出此類項目。",
+		pm_fa_findings: "發現與影響",
+		pm_fa_tradeoffs: "選項與後果",
+		pm_fa_questions: "需要決定的問題",
+		pm_fa_recommendations: "建議的下一步",
+		pm_fa_impact: "可能影響",
+		pm_fa_why: "為何現在討論",
+		pm_fa_proposed_owner: "建議負責人，尚未指派",
+		pm_fa_raw_review: "這份回覆未通過結構檢查，請審閱原文；不能當作已通過檢查的評估。",
+		pm_fa_raw: "Agent 原始回覆",
+		pm_fa_provenance: "分析來源與回執",
+		pm_fa_intake: "固定的討論準備",
+		pm_fa_model: "模型",
+		pm_fa_run: "分析執行",
+		pm_fa_context: "上下文摘要值",
+		pm_fa_reply_digest: "原始回覆摘要值",
+		pm_fa_document_digest: "結構回覆摘要值",
+		pm_fa_loading: "讀取已保存的評估…",
+		pm_fa_select: "選擇一份評估，閱讀分析與固定來源。",
+		pm_fa_kind_problem: "問題",
+		pm_fa_kind_deviation: "偏差",
+		pm_fa_kind_assumption: "假設",
+		pm_fa_kind_unknown: "未知",
+		pm_fa_kind_decision_effect: "決策效果"
+	}
+};
+//#endregion
 //#region src/pm-work-packages-strings.js
 var workPackageStrings = {
 	en: {
@@ -11805,6 +12391,7 @@ var pmStrings = {
 		...pmGovernanceStrings.en,
 		...specSourceStrings.en,
 		...pmFollowUpStrings.en,
+		...followUpAnalysisStrings.en,
 		...workPackageStrings.en,
 		pm_roadmap_historical_work: "Previously selected work association",
 		pm_roadmap_missing_dependency: "Removed milestone dependency",
@@ -12128,6 +12715,7 @@ var pmStrings = {
 		...pmGovernanceStrings["zh-TW"],
 		...specSourceStrings["zh-TW"],
 		...pmFollowUpStrings["zh-TW"],
+		...followUpAnalysisStrings["zh-TW"],
 		...workPackageStrings["zh-TW"],
 		pm_roadmap_historical_work: "先前選定的工作關聯",
 		pm_roadmap_missing_dependency: "已移除里程碑的依賴",
