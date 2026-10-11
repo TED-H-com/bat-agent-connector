@@ -107,3 +107,23 @@ lost acknowledgements, crash/restart, live cancellation, membership loss,
 parallel writers, process identity readback and immutable native evidence.
 Runtime protocol/isolation tests are separate. Neither set constitutes real
 model execution or supported-platform acceptance.
+
+
+## Shared execution choice
+
+The existing discussion analysis form offers an explicit choice between
+`pm.run.analyze` on the central native runtime and registered
+`pm.run.bat.analyze` on the selected BAT workspace. Both receive only the same
+purpose, optional model and original thread-version precondition. BAT eligibility
+requires the original prepared PM worktree binding; capability reads do not
+prove sign-in, model execution, native completion or process death.
+
+Each action retains its own original durable form storage, envelope and operation
+key. Switching the displayed execution method never copies or rewrites another
+method's draft or pending request. An unresolved request blocks fresh analysis
+on the other method and remains available through the labelled selection. Known
+operation IDs are read back, and unknown admission is checked with the same exact
+original key even after eligibility or the current thread version changes. The
+selection preference uses the existing principal/connection namespace. Source
+read failure hides the discussion and clears the displayed BAT binding and run
+facts while preserving original request recovery in its private draft storage.

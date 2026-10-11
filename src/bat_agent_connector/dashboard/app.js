@@ -13075,56 +13075,145 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 }
 //#endregion
 //#region src/pm-native-analysis.js
-function pmNativeAnalysis({ h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh }) {
-	const purpose = input("pm_native_purpose", {
-		multiline: true,
-		max: 4e3
+function pmNativeAnalysis({ h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard }) {
+	const specs = [{
+		key: "native_analysis",
+		adapter: "codex-native-linux",
+		action: "pm.run.analyze",
+		label: "pm_analysis_local"
+	}, {
+		key: "bat_analysis",
+		adapter: "bat-pm-linux-v1",
+		action: "pm.run.bat.analyze",
+		label: "pm_analysis_bat"
+	}];
+	const advertised = (spec) => caps()?.features?.pm_workspaces?.[spec.key] === true;
+	const storage = typeof namespace === "string" ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
+	let selected = specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
+	try {
+		const saved = storage && localStorage.getItem(storage);
+		if (specs.some((spec) => spec.key === saved)) {
+			selected = saved;
+			restored = true;
+		}
+	} catch {}
+	const selector = h("select", {
+		"aria-label": t("pm_analysis_adapter"),
+		"data-pm-analysis-adapter": ""
 	});
-	const model = input("pm_native_model", {
-		max: 128,
-		required: false
-	});
-	model.placeholder = t("pm_native_default_model");
 	const explanation = h("p", {
 		class: "muted",
 		"data-pm-native-eligibility": ""
 	});
+	const binding = h("p", {
+		class: "pm-source",
+		"data-pm-analysis-binding": "",
+		hidden: true
+	});
+	const recovery = h("p", {
+		class: "muted",
+		"data-pm-analysis-recovery": "",
+		hidden: true
+	});
 	const current = h("div", { "data-pm-native-runs": "" });
 	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
-	const request = form({
-		action: "pm.run.analyze",
-		target,
-		fields: {
-			purpose,
-			model
-		},
-		params: (values) => ({
-			purpose: values.purpose,
-			...values.model.trim() ? { model: values.model.trim() } : {}
-		}),
-		preconditions: () => ({ expected_version: thread().thread.version }),
-		permitted: () => authorized() && capability()?.native_analysis?.eligible_for_preflight === true,
-		recoverPermitted: authorized,
-		label: "pm_native_analyze",
-		onSaved: refresh,
-		extra: h("div", { class: "pm-fields" }, labelled("pm_native_purpose", purpose), labelled("pm_native_model", model))
+	const requests = [];
+	const otherLocked = (spec) => requests.some((row) => row.spec !== spec && row.request.locked());
+	for (const spec of specs) {
+		const purpose = input("pm_native_purpose", {
+			multiline: true,
+			max: 4e3
+		});
+		const model = input("pm_native_model", {
+			max: 128,
+			required: false
+		});
+		model.placeholder = t("pm_native_default_model");
+		const request = form({
+			action: spec.action,
+			target,
+			fields: {
+				purpose,
+				model
+			},
+			params: (values) => ({
+				purpose: values.purpose,
+				...values.model.trim() ? { model: values.model.trim() } : {}
+			}),
+			preconditions: () => ({ expected_version: thread().thread.version }),
+			permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec) && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
+			recoverPermitted: authorized,
+			label: "pm_native_analyze",
+			onSaved: refresh,
+			onStateChange: () => {
+				if (ready) render();
+			},
+			extra: h("div", { class: "pm-fields" }, labelled("pm_native_purpose", purpose), labelled("pm_native_model", model))
+		});
+		requests.push({
+			spec,
+			request
+		});
+	}
+	if (!restored) selected = requests.find((row) => row.request.locked())?.spec.key || selected;
+	selector.addEventListener("change", () => {
+		try {
+			guard?.();
+		} catch {
+			return;
+		}
+		if (!specs.some((spec) => spec.key === selector.value)) return;
+		selected = selector.value;
+		try {
+			if (storage) localStorage.setItem(storage, selected);
+		} catch {}
+		update();
 	});
 	const box = h("section", {
 		class: "pm-packages pm-native-analysis",
 		"data-pm-native-analysis": ""
-	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), explanation, request.box, current);
-	function update(runs = []) {
-		const native = capability()?.native_analysis;
-		explanation.textContent = t(!authorized() ? "pm_native_permissions" : native?.eligible_for_preflight ? "pm_native_preflight_pending" : {
+	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), h("div", { class: "pm-fields" }, labelled("pm_analysis_adapter", selector)), explanation, binding, recovery, ...requests.map((row) => row.request.box), current);
+	function render() {
+		const active = specs.find((spec) => spec.key === selected);
+		const descriptor = capability()?.[selected];
+		const options = requests.filter((row) => advertised(row.spec) || row.request.locked() || row.spec === active);
+		selector.replaceChildren(...options.map((row) => h("option", { value: row.spec.key }, t(row.spec.label) + (row.request.locked() ? " · " + t("pm_analysis_original") : ""))));
+		selector.value = selected;
+		for (const row of requests) row.request.box.hidden = row.spec !== active;
+		const pending = requests.filter((row) => row.spec !== active && row.request.locked());
+		recovery.hidden = !pending.length;
+		recovery.textContent = pending.length ? t("pm_analysis_recover_other") + " " + pending.map((row) => t(row.spec.label)).join(", ") : "";
+		const eligible = advertised(active) && descriptor?.eligible_for_preflight === true;
+		const reason = selected === "bat_analysis" ? {
+			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
+			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
+			HOST_READ_ONLY: "pm_analysis_bat_readonly"
+		} : {
 			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
 			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
 			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
 			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
 			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
-		}[native?.reason] || "pm_native_unavailable");
-		current.replaceChildren(...runs.filter((run) => run.adapter === "codex-native-linux").map((run) => h("p", { class: "pm-source" }, h("strong", {}, run.purpose), " · ", nativeRunState(t, run), run.outcome?.actual_model ? " · " + run.outcome.actual_model : "", " · ", h("a", { href: `#/op/${encodeURIComponent(run.operation_id)}` }, t("pm_operation")))));
-		request.update();
+		};
+		explanation.textContent = t(!authorized() || descriptor?.authorized === false ? "pm_native_permissions" : eligible ? selected === "bat_analysis" ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : reason[descriptor?.reason] || (selected === "bat_analysis" ? "pm_analysis_bat_unavailable" : "pm_native_unavailable"));
+		const source = thread() && selected === "bat_analysis" && advertised(active) ? descriptor?.selected_binding : null;
+		if (!thread()) current.replaceChildren();
+		binding.hidden = !source;
+		binding.textContent = source ? t("pm_analysis_selected_binding") + " " + [
+			source.host,
+			source.workspace_id,
+			source.repository
+		].filter(Boolean).join(" · ") : "";
 	}
+	let lastRuns = [];
+	function update(runs) {
+		if (runs) lastRuns = runs;
+		render();
+		current.replaceChildren(...lastRuns.filter((run) => specs.some((spec) => spec.adapter === run.adapter)).map((run) => h("p", { class: "pm-source" }, h("strong", {}, run.purpose), " · ", t(specs.find((spec) => spec.adapter === run.adapter).label), " · ", nativeRunState(t, run), run.outcome?.actual_model ? " · " + run.outcome.actual_model : "", " · ", h("a", { href: `#/op/${encodeURIComponent(run.operation_id)}` }, t("pm_operation")))));
+		for (const row of requests) row.request.update();
+	}
+	ready = true;
+	update();
 	return {
 		box,
 		update
@@ -13937,7 +14026,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 			discussionHint = h("p", { class: "muted" });
 			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), discussionHint, earlier, notes, coverage);
-			if (caps()?.features?.pm_workspaces?.native_analysis) {
+			if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
 				nativeAnalysis = pmNativeAnalysis({
 					h,
 					t,
@@ -13945,6 +14034,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					input,
 					labelled,
 					caps,
+					namespace,
+					guard: alive,
 					capability: () => pmCapabilities,
 					thread: () => threadData,
 					permitted,
@@ -14391,7 +14482,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					threadId && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
 					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
 					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-					threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
+					threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
 				]);
 				alive();
 				for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -21801,6 +21892,17 @@ var pmStrings = {
 		pm_evidence_kind_integration_delivery: "Integration result",
 		pm_evidence_kind_pr_observation: "PR observation",
 		pm_evidence_kind_deployment: "Deployment evidence",
+		pm_analysis_adapter: "Run analysis with",
+		pm_analysis_local: "Central service · native Codex",
+		pm_analysis_bat: "Selected BAT workspace · dedicated Codex",
+		pm_analysis_original: "Original request",
+		pm_analysis_recover_other: "Check the original request before starting another analysis. Select:",
+		pm_analysis_bat_preflight: "Uses one new, isolated Codex session on the selected BAT host. Each request checks the runtime first; sign-in and model availability are not yet verified.",
+		pm_analysis_bat_worktree: "Prepare discussion context with the intended repository binding first to establish this workspace’s PM worktree.",
+		pm_analysis_bat_binding_changed: "The saved PM worktree binding changed. Review the repository selection before requesting analysis.",
+		pm_analysis_bat_readonly: "The selected BAT host does not allow managed work.",
+		pm_analysis_bat_unavailable: "Dedicated BAT analysis eligibility is unavailable. Refresh to check the selected workspace.",
+		pm_analysis_selected_binding: "Selected host / workspace / repository:",
 		pm_native_title: "Ask the PM",
 		pm_native_purpose: "What should the PM help you work through?",
 		pm_native_model: "Model (optional)",
@@ -22128,6 +22230,17 @@ var pmStrings = {
 		pm_evidence_kind_integration_delivery: "整合結果",
 		pm_evidence_kind_pr_observation: "PR 觀察",
 		pm_evidence_kind_deployment: "部署證據",
+		pm_analysis_adapter: "分析執行方式",
+		pm_analysis_local: "中央服務・原生 Codex",
+		pm_analysis_bat: "所選 BAT 工作區・獨立 Codex",
+		pm_analysis_original: "原始請求",
+		pm_analysis_recover_other: "開始另一個分析前，請先查回原始請求。請選擇：",
+		pm_analysis_bat_preflight: "在所選 BAT 主機使用一個全新的隔離 Codex session。每次請求都會先檢查執行環境；登入有效性與模型可用性尚未驗證。",
+		pm_analysis_bat_worktree: "請先以預定的 repository 綁定準備討論脈絡，建立此工作區的 PM worktree。",
+		pm_analysis_bat_binding_changed: "已保存的 PM worktree 綁定已變更，請先檢視 repository 選擇再請求分析。",
+		pm_analysis_bat_readonly: "所選 BAT 主機未開放受管理工作。",
+		pm_analysis_bat_unavailable: "目前無法確認獨立 BAT 分析資格，請重新整理所選工作區狀態。",
+		pm_analysis_selected_binding: "所選主機／工作區／repository：",
 		pm_native_title: "邀請 PM 分析",
 		pm_native_purpose: "這次希望 PM 協助釐清什麼？",
 		pm_native_model: "模型（選填）",

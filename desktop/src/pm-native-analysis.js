@@ -1,35 +1,92 @@
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
-export function pmNativeAnalysis({h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh}) {
-  const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
-  const model = input('pm_native_model', {max: 128, required: false});
-  model.placeholder = t('pm_native_default_model');
+export function pmNativeAnalysis({h, t, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard}) {
+  const specs = [
+    {key: 'native_analysis', adapter: 'codex-native-linux', action: 'pm.run.analyze', label: 'pm_analysis_local'},
+    {key: 'bat_analysis', adapter: 'bat-pm-linux-v1', action: 'pm.run.bat.analyze', label: 'pm_analysis_bat'},
+  ];
+  const advertised = spec => caps()?.features?.pm_workspaces?.[spec.key] === true;
+  const storage = typeof namespace === 'string' ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
+  let selected = specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
+  try {
+    const saved = storage && localStorage.getItem(storage);
+    if (specs.some(spec => spec.key === saved)) {selected = saved; restored = true;}
+  } catch { /* A preference cannot grant authority or replace a durable request. */ }
+  const selector = h('select', {'aria-label': t('pm_analysis_adapter'), 'data-pm-analysis-adapter': ''});
   const explanation = h('p', {class: 'muted', 'data-pm-native-eligibility': ''});
+  const binding = h('p', {class: 'pm-source', 'data-pm-analysis-binding': '', hidden: true});
+  const recovery = h('p', {class: 'muted', 'data-pm-analysis-recovery': '', hidden: true});
   const current = h('div', {'data-pm-native-runs': ''});
   const authorized = () => permitted(false) && thread()?.capabilities?.write === true
     && caps()?.scopes?.includes('start');
-  const request = form({action: 'pm.run.analyze', target, fields: {purpose, model},
-    params: values => ({purpose: values.purpose, ...(values.model.trim() ? {model: values.model.trim()} : {})}),
-    preconditions: () => ({expected_version: thread().thread.version}),
-    permitted: () => authorized() && capability()?.native_analysis?.eligible_for_preflight === true,
-    recoverPermitted: authorized, label: 'pm_native_analyze', onSaved: refresh,
-    extra: h('div', {class: 'pm-fields'}, labelled('pm_native_purpose', purpose), labelled('pm_native_model', model))});
+  const requests = [];
+  const otherLocked = spec => requests.some(row => row.spec !== spec && row.request.locked());
+  for (const spec of specs) {
+    const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
+    const model = input('pm_native_model', {max: 128, required: false});
+    model.placeholder = t('pm_native_default_model');
+    const request = form({action: spec.action, target, fields: {purpose, model},
+      params: values => ({purpose: values.purpose, ...(values.model.trim() ? {model: values.model.trim()} : {})}),
+      preconditions: () => ({expected_version: thread().thread.version}),
+      permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec)
+        && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
+      recoverPermitted: authorized, label: 'pm_native_analyze', onSaved: refresh,
+      onStateChange: () => {if (ready) render();},
+      extra: h('div', {class: 'pm-fields'}, labelled('pm_native_purpose', purpose), labelled('pm_native_model', model))});
+    requests.push({spec, request});
+  }
+  if (!restored) selected = requests.find(row => row.request.locked())?.spec.key || selected;
+  selector.addEventListener('change', () => {
+    try {guard?.();} catch {return;}
+    if (!specs.some(spec => spec.key === selector.value)) return;
+    selected = selector.value;
+    try {if (storage) localStorage.setItem(storage, selected);} catch { /* Request drafts remain independently durable. */ }
+    update();
+  });
   const box = h('section', {class: 'pm-packages pm-native-analysis', 'data-pm-native-analysis': ''},
     h('h3', {}, t('pm_native_title')), h('p', {class: 'muted'}, t('pm_native_context_only')),
-    explanation, request.box, current);
-  function update(runs = []) {
-    const native = capability()?.native_analysis;
-    explanation.textContent = t(!authorized() ? 'pm_native_permissions' : native?.eligible_for_preflight
-      ? 'pm_native_preflight_pending' : {
-          PM_NATIVE_PLATFORM_UNSUPPORTED: 'pm_native_platform', PM_NATIVE_EXECUTABLE_UNAVAILABLE: 'pm_native_install',
-          PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: 'pm_native_managed', PM_NATIVE_AUTH_UNAVAILABLE: 'pm_native_auth',
-          PM_NATIVE_HOME_UNAVAILABLE: 'pm_native_auth',
-        }[native?.reason] || 'pm_native_unavailable');
-    current.replaceChildren(...runs.filter(run => run.adapter === 'codex-native-linux').map(run =>
-      h('p', {class: 'pm-source'}, h('strong', {}, run.purpose), ' · ', nativeRunState(t, run),
+    h('div', {class: 'pm-fields'}, labelled('pm_analysis_adapter', selector)),
+    explanation, binding, recovery, ...requests.map(row => row.request.box), current);
+  function render() {
+    const active = specs.find(spec => spec.key === selected);
+    const descriptor = capability()?.[selected];
+    const options = requests.filter(row => advertised(row.spec) || row.request.locked() || row.spec === active);
+    selector.replaceChildren(...options.map(row => h('option', {value: row.spec.key},
+      t(row.spec.label) + (row.request.locked() ? ' · ' + t('pm_analysis_original') : ''))));
+    selector.value = selected;
+    for (const row of requests) row.request.box.hidden = row.spec !== active;
+    const pending = requests.filter(row => row.spec !== active && row.request.locked());
+    recovery.hidden = !pending.length;
+    recovery.textContent = pending.length ? t('pm_analysis_recover_other') + ' ' + pending.map(row => t(row.spec.label)).join(', ') : '';
+    const eligible = advertised(active) && descriptor?.eligible_for_preflight === true;
+    const reason = selected === 'bat_analysis' ? {
+      PM_WORKTREE_REQUIRED: 'pm_analysis_bat_worktree', REPOSITORY_BINDING_CHANGED: 'pm_analysis_bat_binding_changed',
+      HOST_READ_ONLY: 'pm_analysis_bat_readonly',
+    } : {
+      PM_NATIVE_PLATFORM_UNSUPPORTED: 'pm_native_platform', PM_NATIVE_EXECUTABLE_UNAVAILABLE: 'pm_native_install',
+      PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: 'pm_native_managed', PM_NATIVE_AUTH_UNAVAILABLE: 'pm_native_auth',
+      PM_NATIVE_HOME_UNAVAILABLE: 'pm_native_auth',
+    };
+    explanation.textContent = t(!authorized() || descriptor?.authorized === false ? 'pm_native_permissions'
+      : eligible ? selected === 'bat_analysis' ? 'pm_analysis_bat_preflight' : 'pm_native_preflight_pending'
+      : reason[descriptor?.reason] || (selected === 'bat_analysis' ? 'pm_analysis_bat_unavailable' : 'pm_native_unavailable'));
+    const source = thread() && selected === 'bat_analysis' && advertised(active) ? descriptor?.selected_binding : null;
+    if (!thread()) current.replaceChildren();
+    binding.hidden = !source;
+    binding.textContent = source ? t('pm_analysis_selected_binding') + ' ' + [source.host, source.workspace_id, source.repository].filter(Boolean).join(' · ') : '';
+  }
+  let lastRuns = [];
+  function update(runs) {
+    if (runs) lastRuns = runs;
+    render();
+    current.replaceChildren(...lastRuns.filter(run => specs.some(spec => spec.adapter === run.adapter)).map(run =>
+      h('p', {class: 'pm-source'}, h('strong', {}, run.purpose), ' · ',
+        t(specs.find(spec => spec.adapter === run.adapter).label), ' · ', nativeRunState(t, run),
         run.outcome?.actual_model ? ' · ' + run.outcome.actual_model : '', ' · ',
         h('a', {href: `#/op/${encodeURIComponent(run.operation_id)}`}, t('pm_operation')))));
-    request.update();
+    for (const row of requests) row.request.update();
   }
+  ready = true;
+  update();
   return {box, update};
 }
 
