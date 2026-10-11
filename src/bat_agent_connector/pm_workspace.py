@@ -123,6 +123,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'].startswith('pm.follow_up.'):
+        from .pm_follow_up import operation_visible as follow_up_operation_visible
+        return follow_up_operation_visible(db, principal, op)
     if op['action'].startswith('pm.governance.'):
         from .pm_governance import operation_visible as governance_operation_visible
         return governance_operation_visible(db, principal, op)
