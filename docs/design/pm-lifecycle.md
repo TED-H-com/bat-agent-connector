@@ -94,11 +94,18 @@ optional `writer:{run_id,generation,status}`, and optional
 path, raw request or response. Disposition is `unresolved`, `retained`, `settled`
 or `held` (an old queued intent with no unknown external effect).
 
-`capabilities(ops)` returns `{version:1,gated_actions,record_actions}`.
+`capabilities(ops)` returns `{version:1,gated_actions,record_actions,record_variants}`.
 `gated_actions` contains the exact registered PM investment actions with a bound
 workspace, excluding global workspace creation. `get_lifecycle.blocked_actions`
 contains this set while stopped. UI recovery of an admitted original key is
 separate from enabling a new intent. The backend gate is authoritative.
+`record_variants` is a narrow draft hint: when `pm.issue.cancel` is installed it
+contains `{"pm.issue.cancel":{"absent_params":["public_reason"]}}`. A local stop
+of issue tracking can proceed while paused/closed; an optional new public comment
+cannot. The UI can permit that exact absence variant even though the action name
+remains in `blocked_actions`. Backend classification uses only the immutable
+server-admitted issue intent and its matching canonical digest, never the caller's
+claim that a request is local. Every unexpected external step still hits the gate.
 
 Reads use the actual JSON encoding budget, including spacing/escaping, bounded
 at 2,000,000 bytes. Page cursors are nonnegative SQLite 64-bit integers and limits

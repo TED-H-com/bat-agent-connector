@@ -208,7 +208,8 @@ def _metadata(row):
 def capabilities(ops):
     return {'version': 1, 'gated_actions': sorted(action for action, definition in ops.actions.items()
             if action.startswith('pm.') and 'workspace_id' in definition.target_keys and gates.kind(action) == 'investment'),
-            'record_actions': sorted(gates.RECORD_ACTIONS)}
+            'record_actions': sorted(gates.RECORD_ACTIONS),
+            'record_variants': {action: value for action, value in gates.RECORD_VARIANTS.items() if action in ops.actions}}
 
 
 def _transition_visible(db, principal, row):
@@ -225,7 +226,8 @@ def get_lifecycle(ops, principal, workspace_id):
             'transition': _metadata(transition) if transition is not None and shown else None,
             'transition_visibility_filtered': not shown,
             'blocked_actions': capabilities(ops)['gated_actions'] if current['stage'] in gates.STOPPED else [],
-            'record_actions': sorted(gates.RECORD_ACTIONS), 'available_stages': list(STAGES),
+            'record_actions': sorted(gates.RECORD_ACTIONS), 'record_variants': capabilities(ops)['record_variants'],
+            'available_stages': list(STAGES),
             'maintenance': {'available': False, 'reason': 'release_baseline_and_policy_required'},
             'inflight_summary': _summary(ops, principal, tid)})
 
