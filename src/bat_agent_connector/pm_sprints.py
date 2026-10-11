@@ -16,6 +16,7 @@ ACTIONS = tuple(f'pm.{kind}.revise' for kind in KINDS) + (
     'pm.sprint.start', 'pm.sprint.close', 'pm.sprint.cancel')
 ITEM_ID = re.compile(r'[a-z][a-z0-9_.-]{0,79}')
 MAX_ITEMS = 100
+MAX_READ_BYTES = 2_000_000
 
 
 def _bad(code, message, status=422):
@@ -457,12 +458,54 @@ def _page(after, limit):
         raise _bad('INVALID_PARAMS', 'Use a nonnegative sequence and limit 1–100')
 
 
+def _read_size(value):
+    # Match HTTP's UTF-8 JSON separators, including spaces and escaped controls.
+    return len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8'))
+
+
+def _checked_read(value):
+    if _read_size(value) > MAX_READ_BYTES:
+        raise _bad('PM_SPRINT_READ_TOO_LARGE', 'Complete Sprint state or one history record exceeds the read byte limit', 413)
+    return value
+
+
+def _coverage(after, rows):
+    return {'after': after, 'returned': 0, 'has_more': bool(rows), 'byte_limited': bool(rows)}
+
+
+def _fill_page(response, records, rows, decode, limit, cursors, cursor_key, coverage):
+    # rows contain only bounded identifiers/sequences. Materialize one full record
+    # at a time; a large history must not first be loaded in its entirety.
+    for index, row in enumerate(rows[:limit]):
+        previous = dict(coverage)
+        previous_cursor = cursors[cursor_key]
+        records.append(decode(row))
+        more = index + 1 < len(rows)
+        cursors[cursor_key] = row['sequence'] if more else None
+        coverage.update(returned=index + 1, has_more=more, byte_limited=index + 1 < min(limit, len(rows)))
+        if _read_size(response) > MAX_READ_BYTES:
+            records.pop()
+            cursors[cursor_key] = previous_cursor
+            coverage.update(previous)
+            break
+
+
+def _list_page(envelope, key, rows, decode, after, limit):
+    coverage = {'max_bytes': MAX_READ_BYTES, **_coverage(after, rows)}
+    result = {**envelope, key: [], 'next_cursor': after if rows else None, 'coverage': coverage}
+    _checked_read(result)
+    _fill_page(result, result[key], rows, decode, limit, result, 'next_cursor', coverage)
+    if rows and not result[key]:
+        raise _bad('PM_SPRINT_READ_TOO_LARGE', 'One complete Sprint history record exceeds the read byte limit', 413)
+    return result
+
+
 def get_artifacts(ops, principal, workspace_id):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
-        return {'version': 1, 'workspace_id': workspace_id,
+        return _checked_read({'version': 1, 'workspace_id': workspace_id,
                 **{kind: _artifact(ops.db, workspace_id, revision, kind) if (revision := _head(ops.db, workspace_id, kind)) else None for kind in KINDS},
-                'execution_authorized': False, 'quality_evaluation': 'unavailable'}
+                'execution_authorized': False, 'quality_evaluation': 'unavailable'})
 
 
 def list_revisions(ops, principal, workspace_id, kind, *, after=0, limit=50):
@@ -473,52 +516,67 @@ def list_revisions(ops, principal, workspace_id, kind, *, after=0, limit=50):
             raise _bad('INVALID_PARAMS', 'Unknown Sprint artifact kind')
         rows = ops.db.execute('SELECT revision_id,sequence FROM pm_sprint_artifact_revisions WHERE workspace_id=? AND kind=? AND sequence>? ORDER BY sequence LIMIT ?',
                               (workspace_id, kind, after, limit + 1)).fetchall()
-        return {'version': 1, 'revisions': [_artifact(ops.db, workspace_id, row['revision_id'], kind) for row in rows[:limit]],
-                'next_cursor': rows[limit-1]['sequence'] if len(rows) > limit else None}
+        return _list_page({'version': 1}, 'revisions', rows,
+                          lambda row: _artifact(ops.db, workspace_id, row['revision_id'], kind), after, limit)
 
 
 def get_artifact(ops, principal, workspace_id, kind, revision_id):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
-        return {'version': 1, 'artifact': _artifact(ops.db, workspace_id, revision_id, kind)}
+        return _checked_read({'version': 1, 'artifact': _artifact(ops.db, workspace_id, revision_id, kind)})
 
 
 HISTORY = {'goals': ('pm_sprint_goal_revisions', None), 'selections': ('pm_sprint_selections', 'items'),
            'events': ('pm_sprint_events', 'document')}
 
 
-def _history(db, sprint_id, kind, after, limit):
+def _history_rows(db, sprint_id, kind, after, limit):
     _page(after, limit)
     if not isinstance(kind, str) or kind not in HISTORY:
         raise _bad('INVALID_PARAMS', 'Unknown Sprint history kind')
-    table, field = HISTORY[kind]
+    table, _ = HISTORY[kind]
     # The table name comes only from the closed HISTORY map above.
-    rows = db.execute(f'SELECT * FROM {table} WHERE sprint_id=? AND sequence>? ORDER BY sequence LIMIT ?',  # noqa: S608
+    return db.execute(f'SELECT sequence FROM {table} WHERE sprint_id=? AND sequence>? ORDER BY sequence LIMIT ?',  # noqa: S608
                       (sprint_id, after, limit + 1)).fetchall()
-    return {'records': [{**dict(row), **({field: json.loads(row[field])} if field else {})} for row in rows[:limit]],
-            'next_cursor': rows[limit-1]['sequence'] if len(rows) > limit else None}
+
+
+def _history_record(db, kind, sequence):
+    table, field = HISTORY[kind]
+    row = db.execute(f'SELECT * FROM {table} WHERE sequence=?', (sequence,)).fetchone()  # noqa: S608
+    return {**dict(row), **({field: json.loads(row[field])} if field else {})}
 
 
 def list_history(ops, principal, workspace_id, sprint_id, kind, *, after=0, limit=50):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
         _sprint(ops.db, workspace_id, sprint_id)
-        return {'version': 1, 'workspace_id': workspace_id, 'sprint_id': sprint_id, 'kind': kind,
-                **_history(ops.db, sprint_id, kind, after, limit)}
+        rows = _history_rows(ops.db, sprint_id, kind, after, limit)
+        return _list_page({'version': 1, 'workspace_id': workspace_id, 'sprint_id': sprint_id, 'kind': kind},
+                          'records', rows, lambda row: _history_record(ops.db, kind, row['sequence']), after, limit)
 
 
 def get_sprint(ops, principal, workspace_id, sprint_id, *, history_limit=50):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
         sprint = _sprint(ops.db, workspace_id, sprint_id)
-        histories = {kind: _history(ops.db, sprint_id, kind, 0, history_limit) for kind in HISTORY}
+        rows = {kind: _history_rows(ops.db, sprint_id, kind, 0, history_limit) for kind in HISTORY}
         goal = dict(ops.db.execute('SELECT * FROM pm_sprint_goal_revisions WHERE revision_id=?', (sprint['goal_revision_id'],)).fetchone())
-        return {'version': 1, 'sprint': sprint, 'goal': goal, 'goal_revisions': histories['goals']['records'],
-                'selection_revisions': histories['selections']['records'], 'selected_items': _selection(ops.db, sprint),
-                'history': histories['events']['records'], 'history_next_cursors': {kind: value['next_cursor'] for kind, value in histories.items()},
+        coverage = {kind: _coverage(0, entries) for kind, entries in rows.items()}
+        result = _checked_read({'version': 1, 'sprint': sprint, 'goal': goal, 'goal_revisions': [],
+                'selection_revisions': [], 'selected_items': _selection(ops.db, sprint),
+                'history': [], 'history_next_cursors': {kind: 0 if entries else None for kind, entries in rows.items()},
                 'timebox_elapsed': time.time() >= _date(sprint['definition']['ends_at']).timestamp(),
                 'quality': 'unassessed', 'review_available': False, 'retro_available': False,
-                'execution_authorized': False, 'owner_reassignment_available': False}
+                'execution_authorized': False, 'owner_reassignment_available': False,
+                'coverage': {'max_bytes': MAX_READ_BYTES, 'histories': coverage}})
+        # Deterministic prefix order: Goals, selections, events. Each history has
+        # its own continuation; an omitted first record keeps that cursor at zero.
+        keys = {'goals': 'goal_revisions', 'selections': 'selection_revisions', 'events': 'history'}
+        for kind, entries in rows.items():
+            _fill_page(result, result[keys[kind]], entries,
+                       lambda row, kind=kind: _history_record(ops.db, kind, row['sequence']), history_limit,
+                       result['history_next_cursors'], kind, coverage[kind])
+        return result
 
 
 def list_sprints(ops, principal, workspace_id, *, after=0, limit=50):
@@ -526,5 +584,5 @@ def list_sprints(ops, principal, workspace_id, *, after=0, limit=50):
         _member(ops, principal, workspace_id)
         _page(after, limit)
         rows = ops.db.execute('SELECT sprint_id,sequence FROM pm_sprints WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?', (workspace_id, after, limit + 1)).fetchall()
-        return {'version': 1, 'sprints': [_sprint(ops.db, workspace_id, row['sprint_id']) for row in rows[:limit]],
-                'next_cursor': rows[limit-1]['sequence'] if len(rows) > limit else None}
+        return _list_page({'version': 1}, 'sprints', rows,
+                          lambda row: _sprint(ops.db, workspace_id, row['sprint_id']), after, limit)
