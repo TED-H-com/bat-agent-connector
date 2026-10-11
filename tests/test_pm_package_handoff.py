@@ -329,3 +329,14 @@ async def test_unrelated_legacy_start_and_prose_remain_outside_pm_lineage(fixed,
     with pytest.raises(OperationError) as caught:
         lineage.read_response(ops.db, OWNER, frozen)
     assert caught.value.code == "NOT_FOUND" and frozen == saved
+
+
+async def test_engineering_base_selection_uses_contributor_role_without_new_owner_approval(fixed):
+    from bat_agent_connector.api_auth import Principal
+    from tests.test_pm_work_packages import member
+    contributor = Principal("implementation-author", frozenset({"observe", "manage", "start"}))
+    await member(fixed, contributor.actor, "contributor")
+    op, created = fixed["d"].ops.create(contributor, **await request(fixed))
+    assert created
+    await settle_operations(fixed["d"].ops)
+    assert fixed["d"].ops.get(op["operation_id"])["status"] == "succeeded"
