@@ -5,6 +5,9 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_github_observations_list": ("workspace_id", "after", "limit"),
+    "pm_github_observation_current_get": ("workspace_id",),
+    "pm_github_observation_get": ("workspace_id", "observation_id"),
     "pm_workload_snapshots_list": ("workspace_id", "after", "limit"),
     "pm_workload_snapshot_current_get": ("workspace_id",),
     "pm_workload_snapshot_get": ("workspace_id", "snapshot_id"),
@@ -96,6 +99,14 @@ def read(ops, principal, method, params):
         return pm_issue_mappings.list_mappings(ops, principal, workspace_id,
                                                after=params.get("after", 0), limit=params.get("limit", 50))
 
+    if method in {"pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get"}:
+        from . import pm_github_observation
+        if method == "pm_github_observation_current_get":
+            return pm_github_observation.current_observation(ops, principal, workspace_id)
+        if method == "pm_github_observation_get":
+            return pm_github_observation.get_observation(ops, principal, workspace_id, params.get("observation_id"))
+        return pm_github_observation.list_observations(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
     if method in {"pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get"}:
         from . import pm_workload
         if method == "pm_workload_snapshot_current_get":

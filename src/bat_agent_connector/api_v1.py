@@ -126,6 +126,7 @@ class ApiV1:
             pm_evidence,
             pm_follow_up,
             pm_follow_up_analysis,
+            pm_github_observation,
             pm_governance,
             pm_issue_mappings,
             pm_lifecycle,
@@ -162,6 +163,7 @@ class ApiV1:
         pm_release_baselines.install(daemon.ops)
         pm_maintenance_policy.install(daemon.ops)
         pm_workload.install(daemon.ops)
+        pm_github_observation.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -206,6 +208,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/github-observations", self.pm_github_observations, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/github-observations/current", self.pm_github_observation_current, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/github-observations/(?P<observation_id>pmgh_[0-9a-f]{32})", self.pm_github_observation, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/workload-snapshots", self.pm_workload_snapshots, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/workload-snapshots/current", self.pm_workload_snapshot_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/workload-snapshots/(?P<snapshot_id>pmwl_[0-9a-f]{32})", self.pm_workload_snapshot, "observe"),
@@ -448,6 +453,7 @@ class ApiV1:
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
+                      self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
@@ -614,7 +620,8 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list", "pm_workload_snapshots_list"}
+        wide_cursor = method in {"pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+                                 "pm_workload_snapshots_list", "pm_github_observations_list"}
         if wide_cursor:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
@@ -749,6 +756,15 @@ class ApiV1:
     async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
         return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
 
+    async def pm_github_observations(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_github_observations_list", query, workspace_id=workspace_id)
+
+    async def pm_github_observation_current(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_github_observation_current_get", query, workspace_id=workspace_id)
+
+    async def pm_github_observation(self, principal, query, workspace_id, observation_id, **_):
+        return self._pm_read(principal, "pm_github_observation_get", query, workspace_id=workspace_id, observation_id=observation_id)
+
     async def pm_workload_snapshots(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_workload_snapshots_list", query, workspace_id=workspace_id)
 
@@ -855,7 +871,7 @@ class ApiV1:
         return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
 
     async def capabilities(self, principal, **_):
-        from . import pm_lifecycle
+        from . import pm_github_observation, pm_lifecycle
         fleet = self.daemon.fleet
         from . import pm_maintenance_policy, pm_release_baselines, pm_workload, worktree_merge_operations
         gh_cfg = self.daemon.ops.context["github_config"]
@@ -896,6 +912,7 @@ class ApiV1:
                       "features": {"dashboard_sync": {"version": 1, "bootstrap": "/api/v1/bootstrap", "checkpoint_replay": True},
                                   "controller_isolation": {"version": 1, "identity": "server_actor",
                                       "unproven_legacy": "read_only", "admin_takeover": False},
+                                  "pm_github_observation": pm_github_observation.capabilities(),
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,

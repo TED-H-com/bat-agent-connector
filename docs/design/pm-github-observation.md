@@ -85,12 +85,14 @@ Whole spaced UTF-8 JSON responses are capped at 2 MB. Membership, original sourc
 checks and pagination run in one journal read snapshot. DDL is idempotent and
 allocates no migration data step or `user_version`.
 
-The shared entrypoint integrator exposes these reads through
+The shared API exposes these reads through
 `/pm/workspaces/{workspace_id}/github-observations`, `/current` and `/{id}` and
 RPC/MCP `pm_github_observations_list`, `pm_github_observation_current_get`,
-`pm_github_observation_get`. It must install operation/event privacy hooks before
-exposing those routes. `features.pm_github_observation` advertises the exact
-profile and bounds, never full GitHub repository coverage.
+`pm_github_observation_get`. Operation/event privacy hooks apply the same original
+sources. Tauri permits only these exact GET paths and list cursor/limit queries;
+detail/current reject all query selectors. List cursors preserve signed 64-bit
+sequence values. `features.pm_github_observation` advertises the exact profile and
+bounds, never full GitHub repository coverage.
 
 W45 reads the newest saved observation in its local journal transaction. It
 requires the same original intent, scope and unexpired observation; a later

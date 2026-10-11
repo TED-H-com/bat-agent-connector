@@ -45,6 +45,10 @@ def event_visible(db, principal, event):
         from .pm_issue_mappings import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_github_observation" or event["kind"].startswith("pm.github."):
+        from .pm_github_observation import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_workload" or event["kind"].startswith("pm.workload."):
         from .pm_workload import operation_visible
         operation_id = event.get("body", {}).get("operation_id")

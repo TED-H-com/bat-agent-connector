@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.4
 license: MIT
 metadata:
-  workflow_version: "2026-10-11.6"
+  workflow_version: "2026-10-11.7"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "0fefa1139e69b6d92451fe6f4c4f57324b80d8c1a021840c0404bf72f39d456e"
+  canonical_sha256: "c586f24876e94c2db4290a3e069accf4ee6f6d2e7cf03043286f13ea5b6944e9"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -545,8 +545,34 @@ available while Paused or Closed and does not restart work.
 Capture reads saved central evidence only. It does not refresh providers, certify
 DoD, resolve uncertain effects, release worktrees, control another session or
 authorize automatic maintenance. The repository-wide GitHub coverage gap stays
-unknown. No caller field can assert idle, completeness, freshness or controller
+unknown unless a separately adopted, explicitly bounded observation profile is
+satisfied. No caller field can assert idle, completeness, freshness or controller
 authority. A completed observation is evidence to review, not a dispatch request.
+
+### Observe the adopted GitHub workload profile
+
+When `features.pm_github_observation` advertises
+`github_open_prs_and_actions_v1`, an owner may explicitly adopt that value as
+`policy.observation.github_profile`. An older policy with repository-wide scope
+does not silently narrow to this profile. It observes open PR identities and
+heads, their check suites/runs/statuses, and nonterminal GitHub Actions in the
+original repository. It does not enumerate arbitrary third-party CI or certify
+all development activity, code quality or a complete machine.
+
+An explicit `pm.github.observe` request uses the same fixed target, policy and
+preconditions as `pm.workload.capture`, through the shared operation endpoint.
+The backend performs bounded authenticated GET pages and compares two complete
+traversals. A timeout, pagination gap, changed head, missing original receipt or
+late source/lifecycle change cannot become complete evidence. Reuse the exact
+original key to recover; do not restart an interrupted traversal to replace its
+original observation time. Explicit observation may run while stopped, but a
+lifecycle change during the traversal refuses further pages and recording.
+
+Use `pm_github_observations_list`, `pm_github_observation_current_get` and
+`pm_github_observation_get` to read saved observations without provider refresh.
+Retain freshness, profile, outside-scope facts and source visibility. A saved
+observation may contribute to a later explicit workload capture. Neither action
+authorizes maintenance, repairs, publication, merge or deployment.
 
 ### Adopt bounded maintenance policy
 
