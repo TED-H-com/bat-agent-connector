@@ -2316,14 +2316,30 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		}, ...[
 			"idea",
 			"planning",
-			"development"
+			"development",
+			"maintain"
 		].map((value) => h("option", { value }, stageName(value)))) : null;
 		if (choice) choice.dataset.pmDefault = "idea";
+		const maintenance = stage ? hidden() : null;
 		const values = {
 			reason,
 			version,
-			...choice ? { stage: choice } : {},
+			...choice ? {
+				stage: choice,
+				maintenance
+			} : {},
 			...fields
+		};
+		const selectedMaintenance = () => {
+			try {
+				return JSON.parse(maintenance?.value || "null");
+			} catch {
+				return null;
+			}
+		};
+		const maintenanceReady = () => !choice || choice.value !== "maintain" || current?.maintenance?.available === true && JSON.stringify(selectedMaintenance()) === JSON.stringify(current.maintenance.reference);
+		const captureMaintenance = () => {
+			if (maintenance) editor.set("maintenance", choice.value === "maintain" && current?.maintenance?.available ? JSON.stringify(current.maintenance.reference) : "");
 		};
 		let editor;
 		editor = form({
@@ -2333,17 +2349,18 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			params: (data) => ({
 				reason: data.reason,
 				...choice ? { stage: data.stage } : {},
+				...choice && data.stage === "maintain" ? { maintenance_ref: JSON.parse(data.maintenance) } : {},
 				...params(data)
 			}),
 			preconditions: () => ({ expected_lifecycle_revision: Number(version.value) }),
-			permitted: () => Boolean(gate() && eligible() && version.value !== "" && Number(version.value) === current.lifecycle.revision),
+			permitted: () => Boolean(gate() && eligible() && maintenanceReady() && version.value !== "" && Number(version.value) === current.lifecycle.revision),
 			recoverPermitted: () => permitted(true),
 			label: kind === "retain_inflight" ? "pm_lifecycle_retain" : "pm_lifecycle_" + kind,
 			onStateChange: () => {
 				if (kind === "retain_inflight") for (const check of retentionChoices.querySelectorAll("input")) check.disabled = retentionLocked();
 			},
 			onSaved: () => refresh(),
-			extra: h("div", {}, choice ? labelled("pm_lifecycle_stage", choice) : "", extra, labelled("pm_lifecycle_reason", reason), version, ...Object.values(fields))
+			extra: h("div", {}, choice ? labelled("pm_lifecycle_stage", choice) : "", extra, labelled("pm_lifecycle_reason", reason), version, maintenance, ...Object.values(fields))
 		});
 		const rebase = h("button", {
 			type: "button",
@@ -2351,10 +2368,17 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			onclick: () => {
 				if (!gate() || editor.locked()) return;
 				editor.set("version", String(current.lifecycle.revision));
+				captureMaintenance();
 				if (kind === "retain_inflight") editor.set("transition", current.lifecycle.transition_id || "");
 				editor.update();
 			}
 		}, t("pm_lifecycle_review_version"));
+		if (choice) choice.addEventListener("change", () => {
+			if (!editor.locked()) {
+				captureMaintenance();
+				editor.update();
+			}
+		});
 		const warning = h("p", {
 			class: "muted",
 			hidden: true
@@ -2366,7 +2390,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			if (current && !editor.locked() && (version.value === "" || empty)) editor.set("version", String(current.lifecycle.revision));
 			if (kind === "retain_inflight" && current && !editor.locked() && (!fields.transition.value || empty)) editor.set("transition", current.lifecycle.transition_id || "");
 			originalUpdate();
-			const stale = Boolean(current && version.value !== "" && Number(version.value) !== current.lifecycle.revision);
+			const stale = Boolean(current && version.value !== "" && (Number(version.value) !== current.lifecycle.revision || !maintenanceReady()));
 			warning.hidden = !stale;
 			rebase.hidden = !stale;
 			rebase.disabled = !gate() || editor.locked();
@@ -2396,7 +2420,8 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		["close", close],
 		["reopen", reopen]
 	]) controls.append(h("details", { "data-pm-lifecycle-intent": kind }, h("summary", {}, t("pm_lifecycle_" + kind)), editor.box));
-	controls.append(h("p", { class: "muted" }, t("pm_lifecycle_maintenance_unavailable")));
+	const maintenanceNote = h("p", { class: "muted" });
+	controls.append(maintenanceNote);
 	const retained = hidden(), transition = hidden(), retentionChoices = h("div");
 	const retain = makeEditor("retain_inflight", {
 		fields: {
@@ -2484,6 +2509,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	function render() {
 		const state = current.lifecycle, stopped = ["paused", "closed"].includes(state.stage);
 		summary.replaceChildren(h("p", { class: "pm-lifecycle-stage" }, h("strong", {}, stageName(["pausing", "closing"].includes(state.status) ? state.status : state.stage))), h("p", { class: "muted" }, t(state.stage === null ? "pm_lifecycle_legacy_help" : stopped ? "pm_lifecycle_stopped_help" : "pm_lifecycle_active_help")));
+		maintenanceNote.textContent = t(state.stage === "maintain" ? "pm_lifecycle_maintenance_active" : current.maintenance?.available ? "pm_lifecycle_maintenance_ready" : "pm_lifecycle_maintenance_unavailable");
 		if (current.transition?.reason) summary.append(h("p", {}, current.transition.reason));
 		if (!permitted(true)) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_reader")));
 		if (current.inflight_summary.visibility_filtered || current.transition_visibility_filtered) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
@@ -2501,6 +2527,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		historyLoaded = false;
 		historyRequest = null;
 		workFiltered = false;
+		maintenanceNote.textContent = "";
 		summary.replaceChildren();
 		work.replaceChildren();
 		retentionChoices.replaceChildren();
@@ -19937,7 +19964,9 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stale: "The activity state changed. Your draft still uses the earlier version; review the current state before submitting it.",
 		pm_lifecycle_no_dispatch: "Selecting a stage does not dispatch work. Reopening leaves old queued requests stopped.",
 		pm_lifecycle_close_help: "Preserve the project history and stop new investment. In-flight work is listed below; closing does not archive the GitHub repository.",
-		pm_lifecycle_maintenance_unavailable: "Maintain becomes available after a release baseline and maintenance policy are configured.",
+		pm_lifecycle_maintenance_unavailable: "Maintain requires a release baseline, an adopted policy and current complete idle-work evidence.",
+		pm_lifecycle_maintenance_ready: "Current original evidence permits Maintain. This decision keeps that exact observation and is checked again before it takes effect.",
+		pm_lifecycle_maintenance_active: "Maintenance uses the adopted policy. Its own repairs keep this stage; new development and unknown work remain visible.",
 		pm_lifecycle_inflight: "Previously admitted work",
 		pm_lifecycle_inflight_empty: "No unresolved work is visible in this recorded management scope.",
 		pm_lifecycle_filtered: "Some records are outside your current source access. Visible rows are not a complete project total.",
@@ -19984,7 +20013,9 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stale: "投入狀態已變更；草稿仍以原版本為準，請檢視目前狀態後再送出。",
 		pm_lifecycle_no_dispatch: "指定管理階段不會派工；重開也不會重新執行之前佇列中的請求。",
 		pm_lifecycle_close_help: "保留專案歷史並停止新投入。在途工作列於下方，結案不會封存 GitHub repository。",
-		pm_lifecycle_maintenance_unavailable: "設定發布基準與維護政策後，才可進入維護。",
+		pm_lifecycle_maintenance_unavailable: "進入維護需要發布基準、已採用政策，以及新鮮完整的閒置工作證據。",
+		pm_lifecycle_maintenance_ready: "目前原始證據允許進入維護；這項決定會保存選定觀察，生效前再次核對。",
+		pm_lifecycle_maintenance_active: "維護沿用已採用政策；自身修復不反覆切換階段，新的開發與未知工作仍持續顯示。",
 		pm_lifecycle_inflight: "先前已受理的工作",
 		pm_lifecycle_inflight_empty: "這次管理範圍的可讀紀錄中，沒有尚待核對的工作。",
 		pm_lifecycle_filtered: "部分紀錄不在你目前的來源權限內；可見列數不是整個專案的總數。",

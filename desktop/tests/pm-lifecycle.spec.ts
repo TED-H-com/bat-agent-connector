@@ -7,7 +7,7 @@ const gated=['pm.run.prepare','pm.thread.plan','pm.input.confirm','pm.plan.draft
 function fixture(){
   const base=pmFixture();
   const state={stage:'idea' as string|null,status:'active',revision:0,epoch:0,transition:null as any,filtered:false,
-    failed:false,admin:false,pageFiltered:false,historyDenied:false,historyGate:null as Promise<void>|null,readGate:null as Promise<void>|null,
+    maintenance:null as any,failed:false,admin:false,pageFiltered:false,historyDenied:false,historyGate:null as Promise<void>|null,readGate:null as Promise<void>|null,
     lost:false,pending:false,writes:[] as any[],reads:[] as any[],ops:new Map<string,any>(),inflight:[] as any[]};
   const stopped=()=>['paused','closed'].includes(state.stage||'');
   function stop(){state.stage='paused';state.status='pausing';state.revision++;state.epoch++;state.transition={transition_id:transitionId,reason:'Keep the released version while reviewing unresolved work.',actor:'reader'};
@@ -28,8 +28,8 @@ function fixture(){
       if(path===endpoint)return {status:200,data:{workspace_id:workspaceId,
         lifecycle:{stage:state.stage,status:state.status,revision:state.revision,execution_epoch:state.epoch,transition_id:state.transition?.transition_id||null,coverage:state.stage===null?'legacy_unclassified':'recorded'},
         transition:state.filtered?null:structuredClone(state.transition),transition_visibility_filtered:state.filtered,
-        blocked_actions:stopped()?gated:[],record_actions:['pm.message.append','pm.input.record'],available_stages:['idea','planning','development'],
-        maintenance:{available:false,reason:'release_baseline_and_policy_required'},inflight_summary:{visible_unresolved:state.inflight.filter(row=>row.disposition==='unresolved').length,visible_retained:0,visibility_filtered:state.filtered}}};
+        blocked_actions:stopped()?gated:[],record_actions:['pm.message.append','pm.input.record'],available_stages:['idea','planning','development',...(state.maintenance?['maintain']:[])],
+        maintenance:state.maintenance?{available:true,reason:null,reference:structuredClone(state.maintenance)}:{available:false,reason:'release_baseline_and_policy_required'},inflight_summary:{visible_unresolved:state.inflight.filter(row=>row.disposition==='unresolved').length,visible_retained:0,visibility_filtered:state.filtered}}};
       if(path.endsWith('/inflight'))return {status:200,data:{workspace_id:workspaceId,transition_id:state.transition?.transition_id,inflight:structuredClone(state.inflight),next_cursor:null,visibility_filtered:state.filtered||state.pageFiltered}};
       if(path.endsWith('/transitions'))return {status:200,data:{workspace_id:workspaceId,transitions:state.filtered?[]:state.transition?[structuredClone(state.transition)]:[],next_cursor:null,visibility_filtered:state.filtered}};
       if(state.historyGate)await state.historyGate;
@@ -168,4 +168,26 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`li
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.evaluate(()=>scrollTo(0,0));
   const out=process.env.PM_LIFECYCLE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}await context.close();
+});
+
+for(const native of [false,true])test(`fixed Maintain evidence survives unknown reply ${native?'IPC':'browser'}`,async({page})=>{
+  const f=fixture();f.state.stage='development';f.state.maintenance={policy_id:'pmmp_'+'1'.repeat(32),policy_version:1,baseline_id:'pmrb_'+'2'.repeat(32),snapshot_id:'pmwl_'+'3'.repeat(32),snapshot_digest:'4'.repeat(64)};
+  await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+  const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('maintain');
+  await editor.getByLabel('Reason and retained context').fill('Use the original complete workload');
+  f.state.lost=true;await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+  await expect(editor).toContainText('Reply unavailable');const original=structuredClone(f.state.writes[0]);
+  expect(original.body.params.maintenance_ref).toEqual(f.state.maintenance);
+  f.state.maintenance.snapshot_digest='5'.repeat(64);f.state.stage='paused';f.state.revision++;
+  await page.reload();await edit(page,'set_stage');await action(page,'set_stage').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1]).toEqual(original);
+});
+test('a newer Maintain observation requires explicit review before a fresh decision',async({page})=>{
+  const f=fixture();f.state.stage='development';f.state.maintenance={policy_id:'pmmp_'+'1'.repeat(32),policy_version:1,baseline_id:'pmrb_'+'2'.repeat(32),snapshot_id:'pmwl_'+'3'.repeat(32),snapshot_digest:'4'.repeat(64)};
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
+  const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('maintain');await editor.getByLabel('Reason and retained context').fill('Review this observed idle state');
+  f.state.maintenance.snapshot_digest='6'.repeat(64);f.base.state.cursor++;
+  await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeDisabled({timeout:10000});
+  await editor.getByRole('button',{name:'Review current activity state',exact:true}).click();await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+  expect(f.state.writes[0].body.params.maintenance_ref).toEqual(f.state.maintenance);
 });

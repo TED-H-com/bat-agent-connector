@@ -91,7 +91,7 @@ def capabilities(ops=None):
     from . import pm_maintenance_review_schedule as weekly
     return {'version': 1, 'action': ACTION, 'required_scopes': sorted(REQUIRED),
         'server_schedule': True, 'missed_windows': 'coalesce_latest', 'automatic_repairs': False,
-        'automatic_lifecycle_transition': False, 'weekly_review_execution': bool(ops and weekly.available(ops)),
+        'automatic_lifecycle_transition': True, 'weekly_review_execution': bool(ops and weekly.available(ops)),
         'cost_coverage': {'model_requests': 'none', 'provider_billing': 'unmeasured'},
         'retry_behavior': 'original_child_receipts_only'}
 
@@ -398,6 +398,12 @@ async def _run(ctx):
     snapshot = workload._record(ctx.service.db, ctx.target['workspace_id'], children['workload']['result']['snapshot_id'])
     complete = (children['github']['result'].get('coverage_status') == 'complete'
         and all(source['status'] == 'complete' for source in snapshot['document']['source_coverage']))
+    if complete:
+        from . import pm_maintenance_lifecycle
+        try:
+            pm_maintenance_lifecycle.admit_from_check(ctx, snapshot['snapshot_id'])
+        except OperationError as exc:
+            return _finish(ctx, 'stopped', exc.code)
     return _finish(ctx, 'complete' if complete else 'incomplete', None if complete else 'SOURCE_COVERAGE_INCOMPLETE')
 
 

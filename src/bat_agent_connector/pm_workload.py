@@ -316,7 +316,7 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=20):
     return _bounded(result)
 
 
-def evaluate_for_maintenance(ops, principal, workspace_id, snapshot_id, policy, *, now=None):
+def evaluate_for_maintenance(ops, principal, workspace_id, snapshot_id, policy, *, now=None, allow_stopped=False):
     """Call inside the final lifecycle/scheduler transaction; never an authority token.
 
     Current source changes, missing coverage, expired observations and stop epochs
@@ -335,7 +335,7 @@ def evaluate_for_maintenance(ops, principal, workspace_id, snapshot_id, policy, 
     reasons = []
     if current != policy or _intent(current, lifecycle) != intent:
         reasons.append('context_changed')
-    if lifecycle['stage'] in {'paused', 'closed'}:
+    if lifecycle['stage'] in {'paused', 'closed'} and not allow_stopped:
         reasons.append('lifecycle_stopped')
     if (current['policy']['enabled'] is not True
             or current['policy']['after_release_policy'] != 'maintain_when_idle'):
