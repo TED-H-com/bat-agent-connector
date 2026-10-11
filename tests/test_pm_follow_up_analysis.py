@@ -138,6 +138,9 @@ async def test_fixed_intake_imports_one_assessment_raw_proof_and_no_chat_or_adop
     assert ops.create(OWNER, **original)[0]["operation_id"] == op["operation_id"]
     with pytest.raises(OperationError, match="PM_OUTPUT_DESTINATION_REFUSED"):
         pm_native_journal.import_reply(ops.journal, saved["run_id"], saved["generation"])
+    with pytest.raises(OperationError, match="PM_OUTPUT_DESTINATION_REFUSED"):
+        pm_runs.import_reply(ops.journal, saved["run_id"], saved["generation"], content=result["raw_reply"],
+                             native_turn_id=TURN, sdk_session_id="not-a-BAT-session")
     for verb in ("UPDATE pm_follow_up_assessments SET raw_reply='replacement'", "DELETE FROM pm_follow_up_assessments"):
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):
             ops.db.execute(verb)
@@ -533,3 +536,14 @@ async def test_assessment_cursor_rejects_non_sqlite_sequences(world, after):
     data = await setup(ops)
     with pytest.raises(OperationError, match="PM_FOLLOW_UP_ANALYSIS_INVALID"):
         analysis.list_assessments(ops, OWNER, data["wid"], after=after)
+
+
+@pytest.mark.parametrize("external_refs", [None, "{}"])
+async def test_missing_original_admission_never_exposes_or_launches_analysis(world, external_refs):
+    ops, _, instances = world
+    data = await setup(ops)
+    op = create(ops, data)
+    ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (external_refs, op["operation_id"]))
+    assert not analysis.operation_visible(ops.db, OWNER, op)
+    done = await finish(ops, op)
+    assert done["status"] == "failed" and not instances and not writer(ops, data["target"])
