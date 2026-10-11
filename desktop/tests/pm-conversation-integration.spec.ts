@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
-import {pmFixture,pmRoute,workspaceId} from './pm-fixture.ts';
+import {pmFixture,pmRoute,pmPath,workspaceId} from './pm-fixture.ts';
 import {proposalFixture,proposalId,PROPOSE,ADOPT} from './pm-plan-proposals-fixture.ts';
 
 for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts sourced plan review beside the original discussion`,async({page},testInfo)=>{
@@ -10,6 +10,7 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
     const path=new URL(input.path,'http://fixture').pathname;
     if(path.includes('/conversation-proposals')||input.body?.action?.startsWith('pm.conversation.'))return proposal.dispatch(input);
     const value=await base.dispatch(input);
+    if(path===pmPath&&value.status===200)value.data.next_message_cursor=1;
     if(path==='/bootstrap'||path==='/capabilities'){
       const caps=path==='/bootstrap'?value.data.capabilities:value.data;
       caps.features.pm_workspaces.conversation_proposals={version:1};caps.actions.push(...[PROPOSE,ADOPT].map(action=>({action,allowed:true})));
@@ -39,5 +40,11 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   expect(base.state.writes).toEqual([]);
   expect(proposal.state.writes[0].body.params.review.rows.find((row:any)=>row.key==='referral').include).toBe(false);
   await expect(page.locator('.pm-notes')).toContainText('Visitors should find their first useful action');
-
+  await expect(panel.getByRole('combobox',{name:'Saved proposal',exact:true})).toHaveValue('');
+  await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
+  base.state.failRead=true;
+  await page.getByRole('button',{name:'Load earlier notes',exact:true}).click();
+  await expect(panel).not.toBeVisible();
+  await expect(page.locator('.pm-notes')).not.toBeVisible();
+  expect(proposal.state.writes).toHaveLength(1);
 });
