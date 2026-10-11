@@ -547,3 +547,19 @@ async def test_missing_original_admission_never_exposes_or_launches_analysis(wor
     assert not analysis.operation_visible(ops.db, OWNER, op)
     done = await finish(ops, op)
     assert done["status"] == "failed" and not instances and not writer(ops, data["target"])
+
+
+async def test_hidden_run_page_budgets_metadata_growth_without_skipping_cursor(world, monkeypatch):
+    ops, _, _ = world
+    data = await setup(ops, private=True)
+    for _ in range(11):
+        assert (await finish(ops, create(ops, data)))["status"] == "succeeded"
+    identifiers = [row[0] for row in ops.db.execute("SELECT run_id FROM pm_runs ORDER BY run_id")]
+    withdraw(ops, data)
+    prefix = {"workspace_id": data["wid"], "runs": [], "next_cursor": identifiers[8],
+              "coverage": {"visibility_filtered": True, "scanned": 9}}
+    monkeypatch.setattr(pm_runs, "MAX_READ_BYTES", pm_sprints._read_size(prefix))
+    page = pm_runs.list_runs(ops, READER, data["wid"])
+    assert page == prefix
+    rest = pm_runs.list_runs(ops, READER, data["wid"], after=page["next_cursor"])
+    assert rest["runs"] == [] and rest["coverage"]["scanned"] == 2 and rest["next_cursor"] is None
