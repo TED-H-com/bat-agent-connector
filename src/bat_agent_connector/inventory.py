@@ -26,7 +26,7 @@ from .redact import redact
 MATERIAL = ("workspace", "workspace_id", "title", "cwd", "agent_kind", "agent_preset", "model", "loaded",
             "streaming", "runtime_status", "pending", "worktree_branch", "orchestrated", "has_tab", "provenance",
             "api_access", "read_only_code", "isolation", "write_scope", "confinement", "current_verification",
-            "fields_stale", "field_evidence")
+            "fields_stale", "field_evidence", "sdk_session_id", "native_input_state", "registry_origin")
 GONE_AFTER_MISSES = 2
 MAX_PAGE = 200
 CURSOR_ERROR = "cursor does not match these filters; start again without it"

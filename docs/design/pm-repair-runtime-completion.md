@@ -73,3 +73,25 @@ source access remains authorized. Withdrawal of any original package, finding,
 quality/verifier or delivery source hides the whole record. Workload and report
 consumers must select this exact immutable proof and its original execution; a
 matching session string or generic succeeded operation is insufficient.
+
+## Current input identity and workload
+
+Completion additionally requires `inputState` from authenticated native metadata:
+`{schema:"bat_input_state_v1",epoch,received,pending}`. The epoch is a new runtime
+nonce; `received` counts cumulative ordinary input entries, including queued and
+preparation phases; `pending` retains entries until their original processing has
+settled. The original pre-send receipt fixes that epoch at zero received/pending.
+The completed native replay and final metadata must retain the same epoch with
+one received input and zero pending. SDK `numTurns` is not a user-input count.
+A host without this evidence cannot release the repair reservation or gain it
+retroactively from a later read.
+
+A later workload capture excludes only the original maintenance execution,
+unchanged fixed work-item version/content, and same registered session when its
+fresh authenticated inventory preserves that exact completed input identity.
+Source references retain the original immutable completion receipt and its full
+policy/package/verification/publication source chain. New SDKs, second or queued
+inputs, foreign/manual sessions, stale/incomplete discovery, pending questions,
+active work, and original source withdrawal keep their existing blockers. This
+creates no Task, edits no work state, makes no Maintain transition, and proves
+neither process death nor a fixed Issue or published release.

@@ -32,11 +32,18 @@ repair_ready = repair_fixture
 @pytest.fixture(autouse=True)
 def native_replay(mock):
     state = {'reason': None, 'after': None, 'gap': False, 'extra_input': False, 'page_size': 100,
-        'before_input': False, 'drift': False}
+        'before_input': False, 'drift': False, 'input_identity': True, 'input_pending': 0}
     def sync(params):
         sid = params['sessionId']
         meta = mock.metas[sid]
         meta.update(sdkSessionId='native-' + sid, numTurns=int(bool(mock.states[sid]['messages'])))
+        if state['drift']:
+            meta.update(permissionMode='bypassPermissions', codexSandboxMode='danger-full-access')
+        if state['input_identity']:
+            meta['inputState'] = {'schema': runtime.INPUT_SCHEMA, 'epoch': 'a' * 32,
+                'received': int(bool(mock.states[sid]['messages'])), 'pending': state['input_pending']}
+        else:
+            meta.pop('inputState', None)
         cursor = params.get('cursor')
         source = mock.states[sid]['messages']
         if cursor is None or state['gap']:
