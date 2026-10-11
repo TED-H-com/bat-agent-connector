@@ -80,6 +80,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
            "pm_governance_list": "observe", "pm_governance_get": "observe", "pm_governance_history_list": "observe",
            "pm_work_deliveries_list": "observe",
+           "pm_maintenance_repairs_list": "observe", "pm_maintenance_repair_current_get": "observe", "pm_maintenance_repair_get": "observe", "pm_quality_reviews_list": "observe", "pm_quality_review_get": "observe", "pm_work_quality_get": "observe",
            "pm_work_batches_list": "observe", "pm_work_batch_get": "observe", "pm_maintenance_findings_current_get": "observe",
            "pm_spec_materializations_list": "observe", "pm_spec_materialization_get": "observe",
            "pm_maintenance_reviews_list": "observe", "pm_maintenance_review_current_get": "observe",
@@ -953,6 +954,11 @@ class TaskDaemon:
                     pm_maintenance_checks.tick(self.ops)
                 except Exception as exc:  # a malformed record must not stop task coordination
                     logging.warning("maintenance scheduling error: %s", type(exc).__name__)
+                try:
+                    from . import pm_maintenance_repairs
+                    pm_maintenance_repairs.tick(self.ops)
+                except Exception as exc:
+                    logging.warning("maintenance repair scheduling error: %s", type(exc).__name__)
             for task in self.journal.list_active() + self.journal.list_cleanup_pending():
                 tid = task["task_id"]
                 if time.monotonic() < self._cleanup_retry_after.get(tid, 0):

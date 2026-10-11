@@ -132,10 +132,12 @@ class ApiV1:
             pm_lifecycle,
             pm_maintenance_checks,
             pm_maintenance_policy,
+            pm_maintenance_repairs,
             pm_maintenance_review,
             pm_meetings,
             pm_native_operations,
             pm_plan_operations,
+            pm_quality_reviews,
             pm_release_baselines,
             pm_roadmap,
             pm_run_operations,
@@ -172,6 +174,8 @@ class ApiV1:
         pm_github_observation.install(daemon.ops)
         pm_maintenance_checks.install(daemon.ops)
         pm_maintenance_review.install(daemon.ops)
+        pm_maintenance_repairs.install(daemon.ops)
+        pm_quality_reviews.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -237,6 +241,12 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines", self.pm_release_baselines, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/current", self.pm_release_baseline_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/(?P<baseline_id>pmrb_[0-9a-f]{32})", self.pm_release_baseline, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs", self.pm_maintenance_repairs, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs/current", self.pm_maintenance_repair_current, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs/(?P<repair_id>pmrp_[0-9a-f]{32})", self.pm_maintenance_repair, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews", self.pm_quality_reviews, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})", self.pm_quality_review, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/quality", self.pm_work_quality, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches", self.pm_work_batches, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches/(?P<batch_id>pmbt_[0-9a-f]{32})", self.pm_work_batch, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-findings/current", self.pm_maintenance_findings_current, "observe"),
@@ -474,6 +484,7 @@ class ApiV1:
                       self.pm_brief_export, self.pm_work_deliveries,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
+                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_work_quality,
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
@@ -646,7 +657,7 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -784,6 +795,24 @@ class ApiV1:
 
     async def pm_work_deliveries(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_work_deliveries_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_maintenance_repairs(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_maintenance_repairs_list", query, workspace_id=workspace_id)
+
+    async def pm_maintenance_repair_current(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_maintenance_repair_current_get", query, workspace_id=workspace_id)
+
+    async def pm_maintenance_repair(self, principal, query, workspace_id, repair_id, **_):
+        return self._pm_read(principal, "pm_maintenance_repair_get", query, workspace_id=workspace_id, repair_id=repair_id)
+
+    async def pm_quality_reviews(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_quality_reviews_list", query, workspace_id=workspace_id)
+
+    async def pm_quality_review(self, principal, query, workspace_id, review_id, **_):
+        return self._pm_read(principal, "pm_quality_review_get", query, workspace_id=workspace_id, review_id=review_id)
+
+    async def pm_work_quality(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, "pm_work_quality_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
 
     async def pm_work_batches(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_work_batches_list", query, workspace_id=workspace_id)
@@ -944,7 +973,9 @@ class ApiV1:
         from . import (
             pm_maintenance_checks,
             pm_maintenance_policy,
+            pm_maintenance_repairs,
             pm_maintenance_review,
+            pm_quality_reviews,
             pm_release_baselines,
             pm_spec_materialization,
             pm_work_batches,
@@ -955,6 +986,8 @@ class ApiV1:
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
+                               and (a.name != "pm.maintenance.repair" or principal.allows("observe") and principal.allows("manage"))
+                               and (a.name not in {"pm.maintenance.repair.evidence.record", *pm_quality_reviews.ACTIONS} or principal.allows("observe"))
                                and (a.name not in {"pm.spec.materialize", "pm.work_batch.start", "pm.work_batch.evidence.record"}
                                     or principal.allows("observe") and principal.allows("start"))
                                and (a.name not in {"artifact.capture", "artifact.capture.managed", "session.approve_pending"} or principal.allows("observe"))}
@@ -1008,6 +1041,8 @@ class ApiV1:
                                                     "maintenance_policy": pm_maintenance_policy.capabilities(self.daemon.ops),
                                                     "maintenance_checks": pm_maintenance_checks.capabilities(self.daemon.ops),
                                                     "maintenance_review": pm_maintenance_review.capabilities(),
+                                                    "maintenance_repairs": pm_maintenance_repairs.capabilities(self.daemon.ops),
+                                                    "quality_reviews": pm_quality_reviews.capabilities(),
                                                     "engineering_delivery": {"contract": "pm-engineering-delivery/v1", "read_only": True},
                                                     "spec_materialization": pm_spec_materialization.capabilities(),
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),

@@ -5,6 +5,12 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_maintenance_repairs_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_repair_current_get": ("workspace_id",),
+    "pm_maintenance_repair_get": ("workspace_id", "repair_id"),
+    "pm_quality_reviews_list": ("workspace_id", "after", "limit"),
+    "pm_quality_review_get": ("workspace_id", "review_id"),
+    "pm_work_quality_get": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_deliveries_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_batches_list": ("workspace_id", "after", "limit"),
     "pm_work_batch_get": ("workspace_id", "batch_id"),
@@ -96,6 +102,21 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get"}:
+        from . import pm_maintenance_repairs as repairs
+        if method == "pm_maintenance_repair_get":
+            return repairs.get_repair(ops, principal, workspace_id, params.get("repair_id"))
+        if method == "pm_maintenance_repair_current_get":
+            return repairs.current_repair(ops, principal, workspace_id)
+        return repairs.list_repairs(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get"}:
+        from . import pm_quality_reviews as quality
+        if method == "pm_quality_review_get":
+            return quality.get_review(ops, principal, workspace_id, params.get("review_id"))
+        if method == "pm_work_quality_get":
+            return quality.for_work(ops, principal, workspace_id, params.get("work_item_id"),
+                after=params.get("after", 0), limit=params.get("limit", 50))
+        return quality.list_reviews(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 50))
     if method == "pm_work_deliveries_list":
         from .pm_delivery_lineage import for_work
         return for_work(ops, principal, workspace_id, params.get("work_item_id"),

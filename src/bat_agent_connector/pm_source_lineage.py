@@ -187,6 +187,10 @@ def visible_roots(db, principal, original_ids):
             from .pm_spec_materialization import source_visible as spec_visible
             if not spec_visible(db, principal, operation):
                 return False
+        elif operation["action"] == "pm.maintenance.repair":
+            from .pm_maintenance_repairs import source_visible as repair_visible
+            if not repair_visible(db, principal, operation):
+                return False
         elif not source_visible(db, principal, operation):
             return False
     return True
@@ -254,7 +258,7 @@ def bind_operation(db, operation_id, target, params, binding):
         return
     original_ids = binding.get("pm_source_roots", [])
     resources = [("operation", operation_id)]
-    if binding.get("pm_spec_materialization") is not None:
+    if binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None:
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
         from .checkpoints import _SESSION_NS
@@ -281,6 +285,8 @@ def require_new_effect(ops, operation_id):
     op = ops._row(operation_id)
     from .pm_work_batches import require_child
     require_child(ops, op)
+    from .pm_maintenance_repairs import require_new_effect as require_repair_effect
+    require_repair_effect(ops, op)
     require_admitted_sources(ops, op)
     originals = roots(ops.db, "operation", operation_id)
     if not originals:
@@ -311,6 +317,8 @@ def require_frame():
     ops, operation_id = current
     from .pm_work_batches import require_child
     require_child(ops, ops._row(operation_id))
+    from .pm_maintenance_repairs import require_child as require_repair_child
+    require_repair_child(ops, ops._row(operation_id))
     from .pm_delivery_lineage import require_admitted_sources
     require_admitted_sources(ops, ops._row(operation_id))
     if not roots(ops.db, "operation", operation_id):

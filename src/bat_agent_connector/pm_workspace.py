@@ -134,6 +134,12 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'] == 'pm.maintenance.check':
         from .pm_maintenance_checks import operation_visible as maintenance_visible
         return maintenance_visible(db, principal, op)
+    if op['action'].startswith('pm.maintenance.repair'):
+        from .pm_maintenance_repairs import operation_visible as repair_visible
+        return repair_visible(db, principal, op)
+    if op['action'].startswith('pm.quality.review.'):
+        from .pm_quality_reviews import operation_visible as quality_visible
+        return quality_visible(db, principal, op)
     if op['action'].startswith('pm.work_batch.'):
         from .pm_work_batches import operation_visible as batch_visible
         return batch_visible(db, principal, op)

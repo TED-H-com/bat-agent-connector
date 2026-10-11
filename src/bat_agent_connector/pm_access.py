@@ -49,6 +49,14 @@ def event_visible(db, principal, event):
         from .pm_maintenance_checks import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_maintenance_repair" or event["kind"].startswith("pm.maintenance.repair."):
+        from .pm_maintenance_repairs import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_quality_review" or event["kind"].startswith("pm.quality.review."):
+        from .pm_quality_reviews import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_work_batch" or event["kind"].startswith("pm.work_batch."):
         from .pm_work_batches import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
