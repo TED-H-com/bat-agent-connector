@@ -62,6 +62,7 @@ READ_TOOLS = [
     "projects_list",
     "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_profiles_get",
     "pm_runs_list", "pm_run_get", "pm_capabilities_get",
+    "pm_spec_sources_get", "pm_spec_source_capabilities_get",
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
     "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
@@ -340,7 +341,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         if principal_only and token is None:
             raise WriteRefused("BATC_API_TOKEN is required for the principal-only profile (including reads)")
         return asyncio.to_thread(task_request, method, _auth_token=token,
-                                 timeout=40.0, entry="mcp", **params)
+                                 timeout=90.0 if method == "pm_spec_sources_get" else 40.0, entry="mcp", **params)
 
     def cleanup_read(path: str, **params):
         from .cleanup import http_request
@@ -512,6 +513,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def pm_workspaces_list() -> dict[str, Any]:
         """PM workspaces this principal can read; separate from BAT runtime workspaces."""
         return await pm_daemon("pm_workspaces_list")
+
+    async def pm_spec_source_capabilities_get(workspace_id: str) -> dict[str, Any]:
+        """Cheap fixed-Git source eligibility. No host read, CLI detection or runtime startup."""
+        return await pm_daemon("pm_spec_source_capabilities_get", workspace_id=workspace_id)
+
+    async def pm_spec_sources_get(workspace_id: str, repository: str, commit_sha: str,
+                                  paths: list[str] | None = None) -> dict[str, Any]:
+        """Read bounded OpenSpec documents at the existing PM carrier's original fixed commit.
+        Paths are optional exact standard artifact paths; no fetch, apply or source checkout writes.
+        Checkboxes and archive location are document reports, not verification or delivery evidence."""
+        return await pm_daemon("pm_spec_sources_get", workspace_id=workspace_id,
+                               repository=repository, commit_sha=commit_sha, paths=paths)
 
     async def pm_workspace_get(workspace_id: str) -> dict[str, Any]:
         """Durable workspace identity, explicit repository bindings and this principal's membership."""
@@ -760,6 +773,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                integrations_list, projects_list, project_get, work_items_list, work_item_get,
                pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_profiles_get,
                pm_runs_list, pm_run_get, pm_capabilities_get,
+               pm_spec_sources_get, pm_spec_source_capabilities_get,
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
                pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,

@@ -132,3 +132,36 @@ Fixtures use temporary disk Git repositories and mock BAT/GitHub. They cover
 source identity and authority, dirty worktrees, untrusted paths and metadata,
 document bounds, archive/task semantics and asynchronous revocation. They are not
 installed or live OpenSpec/BAT acceptance evidence.
+
+## Transport and shared frontend
+
+HTTP exposes observe-only reads at:
+
+- `GET /api/v1/pm/workspaces/{workspace_id}/spec-sources/capabilities` (no query).
+- `GET /api/v1/pm/workspaces/{workspace_id}/spec-sources?repository=example/project&commit_sha=<SHA>`.
+  Optional `paths` is one comma-separated selection of distinct exact artifact paths.
+
+Unknown or repeated query fields are rejected. Repository and commit are required;
+they are never defaulted from a moving branch. RPC and read-only MCP expose
+`pm_spec_source_capabilities_get(workspace_id)` and
+`pm_spec_sources_get(workspace_id, repository, commit_sha, paths=None)`. They share
+the asynchronous `pm_spec_reads.read` dispatcher with HTTP. Blocking Git work is
+not inserted into the synchronous PM read dispatcher. MCP uses the caller's token;
+there is no local-admin fallback for these reads.
+
+`features.pm_workspaces.spec_sources=true` advertises the reader, while the
+workspace capability determines source eligibility. The native bridge allows only
+the exact GET routes and bounded selectors, including rejecting traversal,
+duplicate paths/query fields and unsupported artifacts. It retains its existing
+4,096-character request-route limit. The shared component checks this limit before
+submitting an optional path selection.
+
+`specSources({h,t,api,alive,workspaceId,errorBox})` returns `{element,refresh}`.
+The parent mounts it under that feature gate. `refresh` checks cheap eligibility
+and current membership; it never automatically reads Git. Only the explicit read
+button requests document bytes. An unchanged eligible binding preserves expanded
+source details and the path draft. Source changes, lost access and failed identity
+checks clear old source facts; late responses cannot repopulate them. Refresh hides
+existing documents until its current capability check succeeds. Source text is
+rendered as text nodes, including markup and commands appearing inside documents.
+The component has no operation keys or write actions because both calls are reads.

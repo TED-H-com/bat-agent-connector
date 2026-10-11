@@ -74,6 +74,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
            "pm_thread_get": "observe", "pm_context_get": "observe", "pm_profiles_get": "observe",
            "pm_runs_list": "observe", "pm_run_get": "observe", "pm_capabilities_get": "observe",
+           "pm_spec_sources_get": "observe", "pm_spec_source_capabilities_get": "observe",
            "pm_plans_list": "observe", "pm_plan_get": "observe", "pm_plan_accepted_get": "observe", "pm_plan_head_get": "observe",
            "pm_projects_list": "observe", "pm_work_list": "observe", "pm_evidence_list": "observe",
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
@@ -282,6 +283,9 @@ class TaskDaemon:
             raise OperationError("FORBIDDEN", f"{method} needs the {scope!r} scope", 403)
         entry = params.pop("entry", None)
         entry = entry if entry in {"mcp", "cli"} else "rpc"
+        if method in {"pm_spec_sources_get", "pm_spec_source_capabilities_get"}:
+            from .pm_spec_reads import read
+            return await read(self.ops, principal, method, params)
         if method.startswith("pm_"):
             from .pm_reads import read
             return read(self.ops, principal, method, params)
