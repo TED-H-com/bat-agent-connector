@@ -1,11 +1,12 @@
+import {maintenanceRepairPolicyControls,maintenanceRepairPolicyView} from './pm-maintenance-repair-policy.js';
 import {findingPolicyControls,findingPolicyView} from './pm-maintenance-findings.js';
 import {maintenanceChecks} from './pm-maintenance-checks.js';
 import {maintenanceObservations} from './pm-maintenance-observations.js';
 // One durable decision; selecting sources never runs monitoring or repair work.
-export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox}) {
+export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,reviewedHandoff=()=>null}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,action='pm.maintenance_policy.adopt';
   const sourceKinds=['issues','pull_requests','dependencies','documentation','research'],workKinds=['dependency_fix','bug_fix','documentation'];
-  let epoch=0,ready=false,current=null,baseline=null,lifecycle=null,editor=null,syncing=false,historyLoaded=false,historyCursor=null,historyFiltered=false;
+  let repairSourcesReady=false;let epoch=0,ready=false,current=null,baseline=null,lifecycle=null,editor=null,syncing=false,historyLoaded=false,historyCursor=null,historyFiltered=false;
   const view=h('div',{'data-maintenance-current':''}),status=h('div',{role:'status'}),source=h('div',{'data-maintenance-source':''}),history=h('div');
   const check=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('pmp_invalid'));return value;};
   const valid=ticket=>{try{alive();return ticket===epoch;}catch{return false;}};
@@ -20,7 +21,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const select=(label,options)=>h('select',{'aria-label':t(label)},...options.map(([value,key])=>h('option',{value},t(key))));
   const bool=label=>select(label,[['true','pmp_yes'],['false','pmp_no']]);
   const numeric=(label,low,high)=>{const field=input(label,{required:false,max:16});field.type='number';field.min=low;field.max=high;field.step=1;return field;};
-  const fields={initialized:hidden(),context:hidden(),enabled:select('pmp_enabled',[['false','pmp_enabled_no'],['true','pmp_enabled_yes']]),
+  const fields={original_policy:hidden(),initialized:hidden(),context:hidden(),enabled:select('pmp_enabled',[['false','pmp_enabled_no'],['true','pmp_enabled_yes']]),
     after:select('pmp_after',['manual','maintain_when_idle','continue_development'].map(key=>[key,`pmp_${key}`])),sources:hidden(),works:hidden(),profile:select('pmp_github_profile',[['','pmp_profile_choose'],...(profileAvailable()?[[githubProfile,'pmp_profile_github']]:[])]),
     paths:input('pmp_paths',{multiline:true,required:false,max:51300}),delivery:select('pmp_delivery',['report','pull_request','merge','deploy'].map(key=>[key,`pmp_${key}`])),
     environment:input('pmp_environment',{required:false,max:256}),ci:bool('pmp_ci'),review:bool('pmp_review'),
@@ -31,6 +32,11 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     rationale:input('pmp_rationale',{multiline:true,required:false,max:4000})};
   const findingControls=findingPolicyControls({h,t,input,labelled,available:()=>caps()?.features?.pm_github_observation?.maintenance_findings?.version===1});
   Object.assign(fields,findingControls.fields);
+  const repairControls=maintenanceRepairPolicyControls({h,t,input,labelled,reviewedHandoff,baseline:()=>baseline?.baseline,
+    available:()=>caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1,
+    ciAvailable:()=>caps()?.features?.pm_github_observation?.required_ci?.profiles?.includes('github_required_status_checks_v1')===true,
+    editable:()=>ready&&allowed()&&!editor?.locked(),changed:()=>editor?.changed()});
+  Object.assign(fields,repairControls.fields);
   const selected=(field)=>{try{const values=JSON.parse(field.value);return Array.isArray(values)?values:[];}catch{return [];}};
   const checks=[];
   function choices(field,values,label){
@@ -49,7 +55,8 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const stale=h('p',{class:'muted',hidden:true},t('pmp_stale'));
   const useVersions=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{
     if(!ready||!allowed()||stopped()||editor.locked()||!context())return;
-    editor.set('context',JSON.stringify(context()));editor.update();
+    if(!fields.original_policy.value)Object.entries(repairControls.initialize(current.policy?.document?.policy||{})).forEach(([key,value])=>editor.set(key,value));
+    editor.set('original_policy',JSON.stringify(current.policy?.document?.policy||{}));editor.set('context',JSON.stringify(context()));editor.update();
   }},t('pmp_use_versions'));
   const eligibility=h('p',{class:'muted'});
   const extra=h('div',{},source,stale,useVersions,grid(['enabled','pmp_enabled'],['after','pmp_after']),
@@ -57,7 +64,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       choices(fields.works,workKinds,'pmp_work'),h('p',{class:'muted'},t('pmp_work_help')),labelled('pmp_paths',fields.paths),h('p',{class:'muted'},t('pmp_paths_help')),
       grid(['delivery','pmp_delivery']),envLabel,h('p',{class:'muted'},t('pmp_delivery_help'))),
     group('pmp_verification',grid(['ci','pmp_ci'],['review','pmp_review']),labelled('pmp_acceptance',fields.acceptance),h('p',{class:'muted'},t('pmp_acceptance_help'))),
-    findingControls.element,
+    findingControls.element,repairControls.element,
     group('pmp_schedule',profileLabel,profileHelp,grid(['timezone','pmp_timezone'],['interval','pmp_interval'],['weekday','pmp_weekday'],['time','pmp_time'],['age','pmp_max_age'],['stable','pmp_stable'])),
     group('pmp_limits',grid(['parallel','pmp_parallel'],['run','pmp_run_seconds'],['period','pmp_period_seconds'],['runs','pmp_period_runs'],['cost','pmp_cost'],['retries','pmp_retries'])),
     labelled('pmp_rationale',fields.rationale),eligibility);
@@ -76,12 +83,19 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const baseUpdate=editor.update;
   editor.update=()=>{if(syncing)return;syncing=true;try{
     if(ready&&allowed()&&!editor.locked()&&!fields.initialized.value&&context())initialize();
+    // Upgrade old drafts only when their original decision versions still match.
+    if(ready&&matches()&&!editor.locked()&&!fields.original_policy.value){
+      fields.original_policy.value=JSON.stringify(current.policy?.document?.policy||{});
+      Object.entries(repairControls.initialize(current.policy?.document?.policy||{})).forEach(([key,value])=>fields[key].value=value);
+      editor.changed();
+    }
     baseUpdate();
     const editing=ready&&allowed()&&!editor.locked();
     for(const [key,field]of Object.entries(fields))if(!['context','initialized'].includes(key))field.disabled=!editing;
     for(const item of checks){item.check.checked=selected(item.field).includes(item.value);item.check.disabled=!editing;}
     profileLabel.hidden=!profileAvailable();fields.profile.disabled=!editing||!profileAvailable();
     envLabel.hidden=fields.delivery.value!=='deploy';fields.environment.disabled=!editing||envLabel.hidden;
+    repairControls.update(ready&&repairSourcesReady);
     stale.hidden=editor.locked()||!ready||!fields.context.value||Boolean(matches());
     useVersions.hidden=stale.hidden||!context();useVersions.disabled=!editing||stopped();
     editorDetails.hidden=!owner()&&!(editor.locked()&&recover());permission.hidden=owner();
@@ -98,18 +112,18 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     ?maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
   const element=h('section',{class:'pm-brief pm-maintenance-policy','data-pm-maintenance-policy':''},h('header',{class:'pm-heading'},
     h('div',{},h('h2',{},t('pmp_title')),h('p',{class:'muted'},t('pmp_intro'))),h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmp_refresh'))),
-    status,view,h('p',{class:'muted'},t(maintenanceRuns?'pmc_runtime_available':'pmp_runtime')),historyDetails,permission,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
+    status,view,h('p',{class:'muted'},t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1?'pmr_policy_runtime':maintenanceRuns?'pmc_runtime_available':'pmp_runtime')),historyDetails,permission,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
   function controls(){editorDetails.hidden=!owner()&&!(editor.locked()&&recover());permission.hidden=owner();editor.update();}
   function initialize(){
     const p=current.policy?.document?.policy||{enabled:false,after_release_policy:'manual',sources:['issues','pull_requests'],allowed_work_kinds:[],allowed_paths:['.'],
       delivery:{maximum:'report',environment:null},verification:{required_ci:true,review_required:true,acceptance_evidence:[]},
       schedule:{timezone:'UTC',check_interval_seconds:3600,review_weekday:0,review_local_time:'09:00'},observation:{max_age_seconds:1800,stable_for_seconds:300},
       limits:{max_parallel:1,run_seconds:1800,period_seconds:86400,period_runs:4,cost_microusd:null,retries:0}};
-    const values={initialized:'1',context:JSON.stringify(context()),enabled:String(p.enabled),after:p.after_release_policy,sources:JSON.stringify(p.sources),works:JSON.stringify(p.allowed_work_kinds),paths:p.allowed_paths.join('\n'),
+    const values={original_policy:JSON.stringify(p),initialized:'1',context:JSON.stringify(context()),enabled:String(p.enabled),after:p.after_release_policy,sources:JSON.stringify(p.sources),works:JSON.stringify(p.allowed_work_kinds),paths:p.allowed_paths.join('\n'),
       delivery:p.delivery.maximum,environment:p.delivery.environment||'',ci:String(p.verification.required_ci),review:String(p.verification.review_required),acceptance:p.verification.acceptance_evidence.join('\n'),
       profile:p.observation.github_profile||'',timezone:p.schedule.timezone,interval:p.schedule.check_interval_seconds,weekday:p.schedule.review_weekday,time:p.schedule.review_local_time,age:p.observation.max_age_seconds,stable:p.observation.stable_for_seconds,
       parallel:p.limits.max_parallel,run:p.limits.run_seconds,period:p.limits.period_seconds,runs:p.limits.period_runs,cost:p.limits.cost_microusd===null?'':String(p.limits.cost_microusd/1000000),retries:p.limits.retries,rationale:''};
-    Object.assign(values,findingControls.initialize(p.observation));
+    Object.assign(values,findingControls.initialize(p.observation),repairControls.initialize(p));
     for(const [key,value]of Object.entries(values))fields[key].value=String(value);editor.changed();
   }
   function required(value,max){if(typeof value!=='string'||!value.trim()||[...value].length>max||value.includes('\0'))throw Error(t('pmp_validation'));return value;}
@@ -126,12 +140,18 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     if(profileAvailable()&&v.profile!==githubProfile||v.profile&&!profileAvailable())throw Error(t('pmp_profile_required'));
     const works=selection(v.works,workKinds,true);
     if(works.length&&(v.delivery==='report'||baseline?.baseline?.document?.proof?.maintenance_branch?.status!=='verified_at_observation'))throw Error(t('pmp_repair_invalid'));
-    return {enabled:v.enabled==='true',after_release_policy:v.after,sources:selection(v.sources,sourceKinds),allowed_work_kinds:works,allowed_paths:paths,
-      delivery:{maximum:v.delivery,environment:v.delivery==='deploy'?required(v.environment,256):null},
-      observation:{max_age_seconds:integer(v.age,1,86400),stable_for_seconds:integer(v.stable,0,604800),...(v.profile?{github_profile:v.profile}:{}),...findingControls.build(v,selection(v.sources,sourceKinds),v.profile,baseline?.baseline)},
-      schedule:{timezone:v.timezone,check_interval_seconds:integer(v.interval,60,2678400),review_weekday:integer(v.weekday,0,6),review_local_time:v.time},
-      limits:{max_parallel:integer(v.parallel,1,16),run_seconds:integer(v.run,1,86400),period_seconds:integer(v.period,60,2678400),period_runs:integer(v.runs,1,1000),cost_microusd:cost,retries:integer(v.retries,0,10)},
-      verification:{required_ci:v.ci==='true',review_required:v.review==='true',acceptance_evidence:list(v.acceptance,40,2000)}};
+    const original=JSON.parse(v.original_policy||'{}');
+    const finding=findingControls.build(v,selection(v.sources,sourceKinds),v.profile,baseline?.baseline);
+    // Preserve optional provider fields that this editor does not understand.
+    const merge=(old,value)=>value&&typeof value==='object'&&!Array.isArray(value)
+      ?Object.fromEntries(Object.entries({...old,...value}).map(([key,item])=>[key,Object.hasOwn(value,key)?merge(old?.[key],item):item])):value;
+    const findingPolicy=merge(original.observation?.maintenance_sources?{maintenance_sources:original.observation.maintenance_sources}:{},finding);
+    return {...original,...repairControls.build(v),enabled:v.enabled==='true',after_release_policy:v.after,sources:selection(v.sources,sourceKinds),allowed_work_kinds:works,allowed_paths:paths,
+      delivery:{...original.delivery,maximum:v.delivery,environment:v.delivery==='deploy'?required(v.environment,256):null},
+      observation:{...original.observation,...(v.repair_ci?{required_ci_profile:v.repair_ci}:{}),max_age_seconds:integer(v.age,1,86400),stable_for_seconds:integer(v.stable,0,604800),...(v.profile?{github_profile:v.profile}:{}),...findingPolicy},
+      schedule:{...original.schedule,timezone:v.timezone,check_interval_seconds:integer(v.interval,60,2678400),review_weekday:integer(v.weekday,0,6),review_local_time:v.time},
+      limits:{...original.limits,max_parallel:integer(v.parallel,1,16),run_seconds:integer(v.run,1,86400),period_seconds:integer(v.period,60,2678400),period_runs:integer(v.runs,1,1000),cost_microusd:cost,retries:integer(v.retries,0,10)},
+      verification:{...original.verification,required_ci:v.ci==='true',review_required:v.review==='true',acceptance_evidence:list(v.acceptance,40,2000)}};
   }
   function fixed(row){
     if(row?.workspace_id!==workspaceId||row.document?.workspace_id!==workspaceId||row.document.policy_id!==row.policy_id||row.document.revision!==row.revision||!/^pmmp_[0-9a-f]{32}$/.test(row.policy_id)||!Number.isSafeInteger(row.revision)||row.document.automatic_execution_started!==false)throw Error(t('pmp_invalid'));
@@ -152,6 +172,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       line('pmp_cost',p.limits.cost_microusd===null?t('pmp_cost_none'):String(p.limits.cost_microusd/1000000)),line('pmp_reason',doc.rationale),line('pmp_author',row.actor),line('pmp_recorded',stamp(row.created_at)),
       line('pmp_original_baseline',row.baseline_id),line('pmp_lifecycle',doc.lifecycle_revision),line('pmp_revision',row.revision),
       h('p',{class:'mono'},row.document_digest),h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation')));
+    const repairPolicy=maintenanceRepairPolicyView({h,t,policy:p});if(repairPolicy)details.append(repairPolicy);
     const findingPolicy=findingPolicyView({h,t,config:p.observation.maintenance_sources});if(findingPolicy)details.append(findingPolicy);
     return h('article',{'data-maintenance-policy':row.policy_id},h('h3',{},isCurrent?t('pmp_current'):`${t('pmp_revision')} ${row.revision}`),
       h('p',{},h('strong',{},`${t('pmp_revision')} ${row.revision}`),' · ',s.repository,' · ',s.channel),
@@ -159,7 +180,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       h('p',{class:'muted'},p.allowed_work_kinds.length?names(p.allowed_work_kinds):t('pmp_observation')),
       line('pmp_github_profile',t(s.github_scope===githubProfile?'pmp_profile_github':'pmp_profile_legacy')),details);
   }
-  function withdraw(){maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();controls();}
+  function withdraw(){repairSourcesReady=false;maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();controls();}
   function failure(error){withdraw();status.replaceChildren(h('p',{class:'muted'},t('pmp_unavailable')),errorBox(error));}
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
@@ -193,8 +214,9 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
           h('details',{},h('summary',{},t('pmp_versions')),line('pmp_revision',p.head.revision),line('pmp_lifecycle',l.lifecycle.revision),
             line('pmp_original_baseline',row.baseline_id),h('p',{class:'mono'},row.document_digest)));
       }
-      controls();if(historyDetails.open)await readHistory(false);if(valid(ticket))await maintenanceRuns?.refresh();if(valid(ticket))await observations?.refresh();
+      controls();if(!p.visibility_filtered&&!b.visibility_filtered){await repairControls.checkSources({api,endpoint,workspaceId,valid:()=>valid(ticket)});if(!valid(ticket))return;repairSourcesReady=true;controls();}
+      if(historyDetails.open)await readHistory(false);if(valid(ticket))await maintenanceRuns?.refresh();if(valid(ticket))await observations?.refresh();
     }catch(error){if(valid(ticket))failure(error);}
   }
-  controls();return {element,refresh,withdraw};
+  controls();return {element,refresh,withdraw,update:()=>editor.update()};
 }
