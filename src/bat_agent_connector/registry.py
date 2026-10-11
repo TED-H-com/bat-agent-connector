@@ -306,6 +306,14 @@ def _preserve_controller(row, fields):
             raise ResourceReadOnly("CONTROLLER_IMMUTABLE", "Registry projection cannot replace controller creation evidence")
 
 
+def is_pending_worktree_source(entry):
+    """A durable fresh-worktree start reads this cwd; it has no carrier there yet."""
+    return (isinstance(entry.get("start_operation_id"), str) and bool(entry["start_operation_id"])
+            and entry.get("creates_worktree") is True and entry.get("start_sent") is False
+            and not entry.get("worktree_path")
+            and not any(entry.get(key) for key in ("shares_worktree_with", "lead_session_id", "failover_of")))
+
+
 def _require_owned_carriers(host, entry, items, *, replaces=None):
     from . import controller_authority
     related = {value for value in (replaces, entry.get("failover_of"), entry.get("shares_worktree_with"),
@@ -313,10 +321,10 @@ def _require_owned_carriers(host, entry, items, *, replaces=None):
     for sid in related:
         row = next((e for e in items if e.get("host") == host and e.get("session_id") == sid), None)
         controller_authority.require_entry(row)
-    paths = {entry.get("cwd"), entry.get("worktree_path")} - {None, ""}
+    paths = {entry.get("worktree_path"), None if is_pending_worktree_source(entry) else entry.get("cwd")} - {None, ""}
     for row in items:
         if row.get("host") == host and row.get("session_id") != entry.get("session_id") and paths & {
-                row.get("cwd"), row.get("worktree_path")}:
+                None if is_pending_worktree_source(row) else row.get("cwd"), row.get("worktree_path")}:
             controller_authority.require_entry(row)
 
 

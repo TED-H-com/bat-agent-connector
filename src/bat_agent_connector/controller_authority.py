@@ -156,7 +156,7 @@ def stamp(entry: dict) -> dict:
     """Stamp a new reservation, never upgrade an existing unowned row."""
     authority = require()
     if "controller_authority" in entry or "controller_incarnation" in entry:
-        require_entry(entry)
+        require_entry(entry, expected_incarnation=reservation_identity(entry["host"], entry["session_id"]))
         return copy.deepcopy(entry)
     return {**entry, "controller_authority": authority,
             "controller_incarnation": reservation_identity(entry["host"], entry["session_id"])}
