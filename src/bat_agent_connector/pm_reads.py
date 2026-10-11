@@ -5,6 +5,8 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_issue_mappings_list": ("workspace_id", "after", "limit"),
+    "pm_issue_mapping_get": ("workspace_id", "mapping_id"),
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
     "pm_work_package_readiness_get": ("workspace_id", "package_id"),
@@ -63,6 +65,12 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_issue_mappings_list", "pm_issue_mapping_get"}:
+        from . import pm_issue_mappings
+        if method == "pm_issue_mapping_get":
+            return pm_issue_mappings.get_mapping(ops, principal, workspace_id, params.get("mapping_id"))
+        return pm_issue_mappings.list_mappings(ops, principal, workspace_id,
+                                               after=params.get("after", 0), limit=params.get("limit", 50))
     if method == "pm_brief_export_get":
         from .pm_brief_exports import render_brief
         return render_brief(ops, principal, workspace_id, params.get("snapshot_id"),

@@ -4,7 +4,7 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.4
 license: MIT
 metadata:
-  workflow_version: "2026-10-11.4"
+  workflow_version: "2026-10-11.5"
   api_version: "1"
   contract_version: "2026-10-08"
 ---
@@ -411,6 +411,23 @@ feeds, including after a waited response. A withdrawn source must not be recover
 through the raw response, an older event or a newer readable intake.
 
 ### Prepare and review engineering work
+
+When `features.pm_workspaces.issue_mapping` is available, inspect
+`pm_issue_mappings_list(workspace_id)` and
+`pm_issue_mapping_get(workspace_id, mapping_id)` before publication. One existing
+WorkItem maps to one Issue; reordering engineering tasks or retrying work does not
+create another Issue. `pm.issue.publish` selects one exact package/digest,
+original mapping revision (or null for a first publication), and explicit
+`public_title` / `public_body`. Only that selected text is published; never copy
+private plan, specification, source evidence or workspace details automatically.
+The first publication creates the Issue; later revisions append a new comment,
+preserving external title/body/state. `pm.issue.cancel` stops this workspace's
+tracking with a private `rationale`; omit `public_reason` for no external message.
+Supplying `public_reason` explicitly publishes that text in one new comment.
+Stopping tracking does not close the GitHub Issue or stop a coding session.
+Retain the original operation/key after an unknown response; missing or edited
+remote marker evidence does not authorize another POST or a fresh key. These
+publication receipts do not prove implementation, verification or delivery.
 
 When `features.pm_workspaces.work_package_prepare` is available, use
 `pm_work_packages_list`, `pm_work_package_get` and

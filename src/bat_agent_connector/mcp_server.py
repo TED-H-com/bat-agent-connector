@@ -68,6 +68,7 @@ READ_TOOLS = [
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
+    "pm_issue_mappings_list", "pm_issue_mapping_get",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
     "pm_brief_export_get",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
@@ -611,6 +612,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
         return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_issue_mappings_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read source-visible whole-work Issue mappings; no GitHub call or publication."""
+        return await pm_daemon("pm_issue_mappings_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_issue_mapping_get(workspace_id: str, mapping_id: str) -> dict[str, Any]:
+        """Read one original mapping and immutable publication history under current source access."""
+        return await pm_daemon("pm_issue_mapping_get", workspace_id=workspace_id, mapping_id=mapping_id)
+
     async def pm_work_packages_list(workspace_id: str, work_item_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read fixed engineering packages with original source visibility; no dispatch."""
         return await pm_daemon("pm_work_packages_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
@@ -832,6 +841,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
+               pm_issue_mappings_list, pm_issue_mapping_get,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
                pm_brief_export_get,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,
