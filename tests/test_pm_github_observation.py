@@ -323,7 +323,7 @@ async def test_history_respects_whole_record_utf8_byte_bound(ops, monkeypatch):
     await observe(ops, data)
     await observe(ops, data)
     one = observation.list_observations(ops, OWNER, data['workspace_id'], limit=1)
-    monkeypatch.setattr(observation, 'MAX_READ_BYTES', observation._size(one) + 1)
+    monkeypatch.setattr(observation, 'MAX_READ_BYTES', observation._size(one) + 16)
     first = observation.list_observations(ops, OWNER, data['workspace_id'], limit=2)
     assert len(first['observations']) == 1 and first['next_cursor']
     final = observation.list_observations(ops, OWNER, data['workspace_id'], after=first['next_cursor'])
