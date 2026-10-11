@@ -150,16 +150,20 @@ async def capture(ctx, sid, text):
         replay = await asyncio.wait_for(pm_runtime.sync_session(client, sid), min(10, max(0.001, remaining)))
         if not getattr(client, 'auth_info', None):
             raise _bad('Original BAT transport was not authenticated')
-        sdk = (replay.get('state') or {}).get('meta', {}).get('sdkSessionId')
+        meta = (replay.get('state') or {}).get('meta', {})
+        sdk = meta.get('sdkSessionId')
         cursor = pm_runtime.fresh_owned_send_cursor(replay, sdk, doc['confinement'])
         doc.update(status='captured', reason=None, send_cursor=cursor, sdk_session_id=sdk)
+        doc['input_state'] = input_state(meta)
+        if doc['input_state'] is not None and not same_original_input(doc, doc['input_state'], fresh=True):
+            raise NeedsAttention('PM_REPAIR_RUNTIME_INPUT_NOT_FRESH', 'Native input history is not a fresh original session')
     except (pm_runtime.RuntimeEvidenceError, confinement.ConfinementRefused) as exc:
         if getattr(exc, 'code', None) in {'PM_SESSION_NOT_FRESH', 'CONFINEMENT_MISMATCH'}:
             raise NeedsAttention(exc.code, 'The original new coding session is not fresh and confined') from exc
         # An unsupported producer remains explicit and cannot later be upgraded
         # from an idle snapshot. Existing first-send behavior is retained.
         doc['reason'] = getattr(exc, 'code', 'native_replay_unavailable')
-    except OperationError:
+    except (OperationError, NeedsAttention):
         raise
     except Exception:  # noqa: BLE001 - read-only capability unavailable; no completion authority
         doc['reason'] = 'native_replay_unavailable'
@@ -200,11 +204,37 @@ async def before_send_frame(ctx):
 
 
 
+INPUT_SCHEMA = 'bat_input_state_v1'
+
+
+def input_state(meta):
+    """Authoritative runtime counter, never the SDK's usage/assistant turn count."""
+    value = meta.get('inputState') if isinstance(meta, dict) else None
+    if (not isinstance(value, dict) or set(value) != {'schema', 'epoch', 'received', 'pending'}
+            or value.get('schema') != INPUT_SCHEMA or not isinstance(value.get('epoch'), str)
+            or not re.fullmatch('[0-9a-f]{32}', value['epoch'])
+            or type(value.get('received')) is not int or not 0 <= value['received'] <= 2**53 - 1
+            or type(value.get('pending')) is not int or not 0 <= value['pending'] <= value['received']):
+        return None
+    return dict(value)
+
+
+def same_original_input(doc, value, *, fresh=False):
+    original = doc.get('input_state')
+    return (isinstance(original, dict) and original['received'] == original['pending'] == 0
+        and value is not None and value['epoch'] == original['epoch']
+        and value['received'] == (0 if fresh else 1) and value['pending'] == 0)
+
+
 def _meta(doc, meta, *, fresh=False):
     if (not isinstance(meta, dict) or meta.get('sdkSessionId') != doc['sdk_session_id']
-            or type(meta.get('numTurns')) is not int or meta['numTurns'] != (0 if fresh else 1)
-            or meta.get('isStreaming') is not False):
-        raise _bad('Original native session or sole turn is no longer proven')
+            or meta.get('isStreaming') is not False
+            or fresh and (type(meta.get('numTurns')) is not int or meta['numTurns'] != 0)):
+        raise _bad('Original native session or sole input is no longer proven')
+    # Older BATs can retain their original read receipts, but cannot release a
+    # reservation from SDK usage counters or retrospectively acquired identity.
+    if (not fresh or doc.get('input_state') is not None) and not same_original_input(doc, input_state(meta), fresh=fresh):
+        raise _bad('Original native input/queue identity is unavailable or changed', 'PM_REPAIR_RUNTIME_INPUT_UNPROVEN')
     confinement.ensure_confirmed(doc['confinement'], meta)
 
 def _access(ops, principal, parent):
@@ -468,6 +498,7 @@ async def _observe(ctx):
             'execution_operation_id': doc['execution_operation_id'], 'observation_operation_id': ctx.operation_id,
             'host': doc['host'], 'session_id': doc['session_id'], 'registry_incarnation': doc['registry_incarnation'],
             'origin_digest': repairs.checks._digest(doc), 'sdk_session_id': doc['sdk_session_id'],
+            'input_state': input_state(meta),
             'native_turn_id': assessed['native_turn_id'], 'send_cursor': doc['send_cursor'], 'completion_cursor': replay['cursor'],
             'event_digest': repairs.checks._digest(events), 'event_count': len(events), 'delivery': settled,
             'capacity_held': False, 'runtime_status': 'original_turn_completed', 'process_death_proven': False,
