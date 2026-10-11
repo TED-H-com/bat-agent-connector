@@ -60,6 +60,7 @@ class GitHubClient:
         self._read_opener = urllib.request.build_opener(*handlers, _NoReadRedirect())
         self._bounded_read_slot = threading.BoundedSemaphore(1)
         self._bounded_create_slot = threading.BoundedSemaphore(1)
+        self._bounded_delivery_slot = threading.BoundedSemaphore(1)
 
     def _bounded_get(self, path, query, max_bytes, timeout_s):
         """Opt-in GET with byte/time bounds and metadata for object AND list pages.
@@ -147,7 +148,8 @@ class GitHubClient:
             abandoned.set()
             raise
 
-    def _request(self, method: str, path: str, body: dict | None = None, query: dict | None = None) -> tuple[int, dict]:
+    def _request(self, method: str, path: str, body: dict | None = None, query: dict | None = None,
+                 *, timeout_s: float | None = None) -> tuple[int, dict]:
         url = self.cfg.api_url + path + (("?" + urlencode({k: v for k, v in query.items() if v is not None}))
                                          if query else "")
         data = json.dumps(body).encode() if body is not None else None
@@ -156,20 +158,49 @@ class GitHubClient:
             try:
                 token = self._last_token = self.cfg.token()
             except TokenUnavailable:
+                if timeout_s is not None:
+                    raise  # Private repair calls never borrow a prior provider token.
                 # Mid-rotation: send with the last good token so GitHub's answer decides. Raising here would record
                 # a write that was never sent as uncertain, and a dispatch read-back can never prove it unsent.
                 token = self._last_token
+        deadline = time.monotonic() + timeout_s if timeout_s is not None else None
+        def read_response(response):
+            if deadline is None:
+                return response.read()
+            chunks, size = [], 0
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('Original delivery response deadline')
+                sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+                if sock is not None:
+                    sock.settimeout(min(self.cfg.timeout_s, remaining))
+                chunk = getattr(response, 'read1', response.read)(min(65_536, 8_000_001 - size))
+                size += len(chunk)
+                if size > 8_000_000:
+                    raise OSError('Original delivery response exceeds byte bound')
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            raw = b''.join(chunks)
+            length = response.headers.get('Content-Length')
+            if length is not None and (not length.isdigit() or int(length) != len(raw)):
+                raise OSError('Original delivery response is incomplete')
+            return raw
         req = urllib.request.Request(url, data=data, method=method, headers={  # noqa: S310 - https or loopback
             "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": self.cfg.api_version,
             "Authorization": "Bearer " + token, "User-Agent": f"bat-agent-connector/{__version__}",
             **({"Content-Type": "application/json"} if data is not None else {})})
         try:
-            with self._opener.open(req, timeout=self.cfg.timeout_s) as resp:  # noqa: S310
-                status, raw = resp.status, resp.read()
+            opener = self._read_opener if timeout_s is not None else self._opener
+            with opener.open(req, timeout=min(self.cfg.timeout_s, timeout_s) if timeout_s is not None else self.cfg.timeout_s) as resp:  # noqa: S310
+                status, raw = resp.status, read_response(resp)
         except urllib.error.HTTPError as e:
             try:
-                raw = e.read()
+                raw = read_response(e)
             except (http.client.HTTPException, OSError):
+                if timeout_s is not None:
+                    raise GitHubAmbiguous('Original delivery error response is incomplete') from None
                 raw = b""
             try:
                 payload = json.loads(raw) if raw else {}
@@ -201,6 +232,22 @@ class GitHubClient:
             raise GitHubAmbiguous(f"GitHub {method} {path} answered {status} with an unreadable body") from None
 
     async def call(self, method: str, path: str, body: dict | None = None, query: dict | None = None):
+        from .pm_maintenance_repair_delivery import http_timeout
+        timeout_s = http_timeout(method)
+        if timeout_s is not None:
+            if not self._bounded_delivery_slot.acquire(blocking=False):
+                raise GitHubAmbiguous('Original delivery transport is still finishing')
+            def run():
+                try:
+                    return self._request(method, path, body, query, timeout_s=timeout_s)
+                finally:
+                    self._bounded_delivery_slot.release()
+            task = asyncio.create_task(asyncio.to_thread(run))
+            task.add_done_callback(lambda result: result.exception() if not result.cancelled() else None)
+            try:
+                return await asyncio.wait_for(asyncio.shield(task), timeout_s)
+            except asyncio.TimeoutError:
+                raise GitHubAmbiguous('Original delivery transport deadline expired') from None
         return await asyncio.to_thread(self._request, method, path, body, query)
 
     @staticmethod

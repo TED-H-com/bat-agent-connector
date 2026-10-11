@@ -144,7 +144,7 @@ def progress(ops, parent):
         reason = 'PM_REPAIR_DEADLINE'
     if row['finished_at'] is not None:
         reason = 'PM_REPAIR_STOPPED_WITHOUT_START'
-    if (parent.get('result') or {}).get('outcome') == 'published_for_review':
+    if (parent.get('result') or {}).get('outcome') in {'published_for_review', 'merged', 'deployed'}:
         reason = 'PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN' if row['finished_at'] is None else None
     try:
         repairs._guard(ops, parent)
@@ -394,6 +394,11 @@ def delivery_binding(ops, principal, action, target, params, selected, originals
     for parent in parents:
         repairs._guard(ops, parent, scopes=repairs.REQUIRED | {ops.actions[action].scope})
         if policies_for(ops, parent)['verification']['required_ci']:
+            from . import pm_maintenance_repair_delivery as delivery
+            automatic = delivery.selected(ops, parent)
+            if automatic is not None:
+                references[parent['operation_id']] = automatic
+                continue
             rows = [doc for doc in _receipts(ops, parent) if doc['selection']['kind'] == 'required_ci']
             if not rows:
                 raise _bad('Select the original required-CI observation first', 'PM_REPAIR_REQUIRED_CI_UNPROVEN')

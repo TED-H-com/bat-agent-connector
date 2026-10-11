@@ -211,6 +211,9 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
                     "observed_only": True}
         # Still open: asking again is safe; a pending request for this PR comes back as 409 with its UUID.
         if status == 200 and again.get("state") == "open":
+            from . import pm_maintenance_repair_delivery
+            if pm_maintenance_repair_delivery.private_child(ctx.service, ctx.op):
+                return None  # The original private repair never resends an unknown merge.
             try:
                 await pr_delivery.check_scope(ctx, preview, expiry=False)
             except NeedsAttention as exc:
@@ -305,7 +308,8 @@ async def _merged_result(ctx, pr, preview, submitted, repository, number, method
 
 async def _run_merge(ctx: OpContext) -> dict:
     repository = _repo_or_403(ctx.service, ctx.target["repository"])
-    return await _merge(ctx, repository, ctx.target["pull_number"], ctx.preconditions["expected_head_sha"])
+    from .pm_maintenance_repair_delivery import bounded_run
+    return await bounded_run(ctx, lambda: _merge(ctx, repository, ctx.target["pull_number"], ctx.preconditions["expected_head_sha"]))
 
 
 # --------------------------------------------------------------------------- deploy
@@ -338,8 +342,9 @@ def _admit_merge_and_deploy(ops: OperationService, principal: Principal, target:
 
 async def _run_merge_and_deploy(ctx: OpContext) -> dict:
     repository = _repo_or_403(ctx.service, ctx.target["repository"])
-    return await deployment.run_combined(ctx, lambda before: _merge(
-        ctx, repository, ctx.target["pull_number"], ctx.preconditions["expected_head_sha"], before_submit=before))
+    from .pm_maintenance_repair_delivery import bounded_run
+    return await bounded_run(ctx, lambda: deployment.run_combined(ctx, lambda before: _merge(
+        ctx, repository, ctx.target["pull_number"], ctx.preconditions["expected_head_sha"], before_submit=before)))
 
 
 async def reconcile_deployments(ops):

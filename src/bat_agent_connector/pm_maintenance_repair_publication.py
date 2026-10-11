@@ -22,10 +22,11 @@ def schema(journal):
 def _request(ops, parent, quality_ref):
     source = repairs._child(ops, parent)
     original = evidence.quality_assessment(ops, repairs._guard(ops, parent, scopes=repairs.REQUIRED | {'integrate'}), parent, quality_ref)
-    return _frozen_request(parent, source, quality_ref, original['context']['native_result'])
+    draft = evidence.policies_for(ops, parent)['delivery']['maximum'] == 'pull_request'
+    return _frozen_request(parent, source, quality_ref, original['context']['native_result'], draft=draft)
 
 
-def _frozen_request(parent, source, quality_ref, native):
+def _frozen_request(parent, source, quality_ref, native, *, draft=True):
     intent = repairs._intent(parent)
     number = intent['finding']['native']['number']
     if type(number) is not int or number <= 0:
@@ -35,7 +36,7 @@ def _frozen_request(parent, source, quality_ref, native):
         'params': {'candidate_sha': native['candidate_commit'],
             'base_ref': intent['rule']['handoff']['params']['source_ref'].removeprefix('refs/heads/'),
             'public_title': 'Maintenance repair for #' + str(number), 'public_body': 'Fixes #' + str(number),
-            'draft': True, 'quality_ref': quality_ref},
+            'draft': draft, 'quality_ref': quality_ref},
         'preconditions': {'repository_id': native['repository_id'], 'expected_base_sha': intent['rule']['release']['commit_sha']},
         'idempotency_key': 'pm-repair-publication:' + parent['operation_id']}
 
@@ -50,7 +51,9 @@ def child(ops, parent):
     native = {'repository': request['target']['repository'], 'repository_id': request['preconditions']['repository_id'],
               'candidate_commit': request['params']['candidate_sha']}
     bound = ((op.get('external_refs') or {}).get('admission_binding') or {}).get('controller_authority') or {}
-    if (request != _frozen_request(parent, source, ref, native)
+    draft = request['params'].get('draft')
+    if (type(draft) is not bool or not draft and evidence.policies_for(ops, parent)['delivery']['maximum'] not in {'merge', 'deploy'}
+            or request != _frozen_request(parent, source, ref, native, draft=draft)
             or repairs.checks._digest(request) != row['request_digest'] or repairs.checks._digest(ref) != row['quality_digest']
             or any(op.get(key) != value for key, value in request.items()) or op['actor'] != parent['actor']
             or any(bound.get(key) != repairs._intent(parent)['check']['controller'][key] for key in ('server_id', 'controller_id', 'actor'))
@@ -119,13 +122,16 @@ def finish_for_review(ctx):
     return ctx.effect('pm.repair.published_for_review', finish, receipt_only=True)
 
 
-def advance(ctx):
+async def advance(ctx):
     parent = repairs._operation(ctx.service, ctx.operation_id)
     original = child(ctx.service, parent)
     if original:
         if (evidence.policies_for(ctx.service, parent)['delivery']['maximum'] == 'pull_request'
                 and original['status'] == 'succeeded' and not repairs.checks._unsettled(ctx.service, original)):
             return finish_for_review(ctx)
+        if evidence.policies_for(ctx.service, parent)['delivery']['maximum'] in {'merge', 'deploy'}:
+            from . import pm_maintenance_repair_delivery as delivery
+            return await delivery.advance(ctx)
         raise Wait('waiting_external', 'Original PR publication ' + original['status'] + '; awaiting delivery receipts', 15)
     try:
         principal = repairs._guard(ctx.service, parent, scopes=repairs.REQUIRED | {'integrate'})
