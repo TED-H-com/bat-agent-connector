@@ -30,6 +30,37 @@ def install(journal):
                            (str(uuid.uuid4()), secrets.token_hex(32)))
         journal.db.execute("""CREATE TRIGGER IF NOT EXISTS api_sync_deleted AFTER DELETE ON api_events
             BEGIN UPDATE api_sync_metadata SET retained_after=MAX(retained_after,OLD.seq) WHERE singleton=1; END""")
+        journal.db.execute("""CREATE TABLE IF NOT EXISTS api_sync_pm_access (
+            actor TEXT PRIMARY KEY, generation INTEGER NOT NULL DEFAULT 0)""")
+
+
+def install_pm_access(db):
+    """Install with the membership schema; changes and invalidation commit together.
+
+    The generation survives removal and event retention. In particular, revoke
+    followed by regrant between polls cannot reuse an old visibility checkpoint.
+    It is not a new principal identity or a source of authorization.
+    """
+    db.execute("""CREATE TRIGGER IF NOT EXISTS api_sync_pm_access_insert
+        AFTER INSERT ON pm_workspace_members BEGIN
+        INSERT INTO api_sync_pm_access(actor,generation) VALUES(NEW.actor,1)
+        ON CONFLICT(actor) DO UPDATE SET generation=generation+1;
+        END""")
+    db.execute("""CREATE TRIGGER IF NOT EXISTS api_sync_pm_access_delete
+        AFTER DELETE ON pm_workspace_members BEGIN
+        INSERT INTO api_sync_pm_access(actor,generation) VALUES(OLD.actor,1)
+        ON CONFLICT(actor) DO UPDATE SET generation=generation+1;
+        END""")
+    db.execute("""CREATE TRIGGER IF NOT EXISTS api_sync_pm_access_update
+        AFTER UPDATE ON pm_workspace_members
+        WHEN OLD.role IS NOT NEW.role OR OLD.actor IS NOT NEW.actor
+            OR OLD.workspace_id IS NOT NEW.workspace_id BEGIN
+        INSERT INTO api_sync_pm_access(actor,generation) VALUES(OLD.actor,1)
+        ON CONFLICT(actor) DO UPDATE SET generation=generation+1;
+        INSERT INTO api_sync_pm_access(actor,generation)
+        SELECT NEW.actor,1 WHERE NEW.actor IS NOT OLD.actor
+        ON CONFLICT(actor) DO UPDATE SET generation=generation+1;
+        END""")
 
 
 def _canonical(value):
@@ -51,6 +82,17 @@ def identity(journal, principal):
     scope = {"actor": principal.actor, "scopes": sorted(principal.scopes), "admin": principal.admin}
     return {"server_id": _metadata(journal)["server_id"],
             "principal_id": hashlib.sha256(_canonical(scope)).hexdigest()}
+
+
+def _access_id(journal, principal):
+    # All of this actor's workspaces matter: a displayed snapshot or meeting may
+    # reference a source in another workspace. Never reveal those IDs in claims.
+    members = []
+    if journal.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_workspace_members'").fetchone():
+        members = [tuple(row) for row in journal.db.execute(
+            "SELECT workspace_id,role FROM pm_workspace_members WHERE actor=? ORDER BY workspace_id", (principal.actor,))]
+    row = journal.db.execute("SELECT generation FROM api_sync_pm_access WHERE actor=?", (principal.actor,)).fetchone()
+    return hashlib.sha256(_canonical({"generation": row[0] if row else 0, "members": members})).hexdigest()
 
 
 def _window(journal):
@@ -90,6 +132,8 @@ def check(journal, principal, after, token=None):
             raise ResetRequired("principal_changed")
         if type(claims.get("cursor")) is not int or claims["cursor"] != after:
             raise ResetRequired("checkpoint_cursor_mismatch")
+        if claims.get("access_id") != _access_id(journal, principal):
+            raise ResetRequired("access_changed")
     bounds = _window(journal)
     if after > bounds["head_cursor"]:
         raise ResetRequired("cursor_ahead")
@@ -101,14 +145,16 @@ def check(journal, principal, after, token=None):
 
 
 def checkpoint(journal, principal, cursor=None):
-    bounds = _window(journal)
-    cursor = bounds["head_cursor"] if cursor is None else cursor
-    current = identity(journal, principal)
-    check(journal, principal, cursor)
-    payload = _canonical({**current, "cursor": cursor, "anchor": _anchor(journal, cursor)})
-    signature = hmac.digest(bytes.fromhex(_metadata(journal)["signing_key"]), payload, "sha256")
-    return {"version": 1, **current, **bounds,
-            "checkpoint": {"cursor": cursor, "token": "s1." + _b64(payload) + "." + _b64(signature)}}
+    with journal.tx():
+        bounds = _window(journal)
+        cursor = bounds["head_cursor"] if cursor is None else cursor
+        current = identity(journal, principal)
+        check(journal, principal, cursor)
+        payload = _canonical({**current, "cursor": cursor, "anchor": _anchor(journal, cursor),
+                              "access_id": _access_id(journal, principal)})
+        signature = hmac.digest(bytes.fromhex(_metadata(journal)["signing_key"]), payload, "sha256")
+        return {"version": 1, **current, **bounds,
+                "checkpoint": {"cursor": cursor, "token": "s1." + _b64(payload) + "." + _b64(signature)}}
 
 
 def require_unfiltered(token, **filters):

@@ -1,8 +1,12 @@
 import {pmSprintStrings} from './pm-sprint-strings.js';
+import {pmKanbanStrings} from './pm-kanban-strings.js';
+import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
     ...pmSprintStrings.en,
+    ...pmKanbanStrings.en,
+    ...pmMeetingStrings.en,
     pm_roadmap_historical_work: "Previously selected work association",
     pm_roadmap_missing_dependency: "Removed milestone dependency",
     pm_roadmap_work_scope: "Select an overlapping requirement first",
@@ -217,6 +221,8 @@ export const pmStrings = {
   },
   'zh-TW': {
     ...pmSprintStrings['zh-TW'],
+    ...pmKanbanStrings['zh-TW'],
+    ...pmMeetingStrings['zh-TW'],
     pm_roadmap_historical_work: "先前選定的工作關聯",
     pm_roadmap_missing_dependency: "已移除里程碑的依賴",
     pm_roadmap_work_scope: "請先選定有重疊的需求",

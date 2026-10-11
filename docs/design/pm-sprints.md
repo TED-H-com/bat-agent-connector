@@ -51,10 +51,11 @@ workspace policy. Missing membership follows its non-disclosing not-found rule.
 Two explicit modes exist:
 
 - `personal_iteration`: a lightweight iteration using these artifacts.
-- `scrum`: **Scrum artifacts (events not yet implemented)**. The read model reports
+- `scrum`: **Scrum artifacts (conformance not established)**. The read model reports
   `scrum_conformance: not_established`; setting this value does not claim complete
-  Scrum implementation. Planning meetings, Daily Scrum, Review and Retrospective
-  behavior are separate W16 work.
+  Scrum implementation. Planning, Review and Retrospective records are provided by
+  the meeting service; Daily Scrum and quality assessment remain separate work.
+  Historical definitions retain their originally saved label.
 
 Both modes use an immutable positive period of at most one calendar month.
 Timestamps require an explicit UTC offset. The month boundary preserves the UTC
@@ -174,8 +175,12 @@ external sent-effect uncertainty or retry dispatch.
 Immutable revision, Sprint-definition and event tables reject UPDATE/DELETE.
 Mutable heads/current state are derived management pointers. These actions do not
 alter accepted plans, PM messages, writer slots, work claims, quality assessments,
-Git/PR facts or deployment evidence. W16 meetings, evidence-backed Increment
-assessment and Sprint-to-execution authorization remain explicit follow-up work.
+Git/PR facts or deployment evidence. Evidence-backed Increment assessment and
+Sprint-to-execution authorization remain explicit follow-up work. Current Sprint
+reads advertise Review/Retro preparation when the meeting service is installed,
+the Sprint actually started and the caller has current write membership and
+manage scope. Preparing a meeting still requires an explicit authorized snapshot;
+these flags do not claim that a meeting occurred or the Increment was verified.
 
 ## Shared reads and client
 

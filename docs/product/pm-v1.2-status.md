@@ -78,9 +78,9 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W11 | P1 | Plan diff 與影響分析 | 開發分支：固定版本／來源／接受條件比較、明確工作關聯的影響候選；語意判讀與採用變更流程仍待做 |
 | W12 | P1 | Project Brief | 開發分支：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
 | W13 | P1 | Roadmap 與 scope | 開發分支：固定採用需求、里程碑／依賴、原定／預測／實際證據與歷史；Git materialization、里程碑品質驗收仍待做 |
-| W14 | P1 | Kanban | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W14 | P1 | Kanban | 開發分支：原工作與執行紀錄的唯讀工作看板、逐頁 WIP／時間來源／attempts；相依、分派、WIP 政策與就緒判斷待做 |
 | W15 | P1 | Sprint artifacts 與時間 | 開發分支：Product Goal／有序 Backlog／DoD、固定 Sprint Goal／角色／期間、選入工作與關閉歷史；品質驗收與完整事件待做 |
-| W16 | P1 | Planning Review Retro | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W16 | P1 | Planning Review Retro | 開發分支：各自輸出、固定討論依據、明確完成與改善追蹤；Daily Scrum、LLM 會議引導與品質判定待做 |
 | W17 | P1 | Risk change decision view | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W18 | P1 | GitHub issue mapping | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W19 | P1 | Orchestrator readiness 與派工 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -105,7 +105,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W39 | P1 | DocumentSnapshot 與五視圖 SVG | 開發分支：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
 | W40 | P1 | 專案文件與簡報 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W41 | P1 | Actor 決策責任與 follow-up | 本批：workspace decision role；跨成果決策與 follow-up 待做 |
+| W41 | P1 | Actor 決策責任與 follow-up | workspace decision role、指定 Sprint owner 的會議決策與有責任人的改善追蹤；自動效果核對與跨會議聚合待做 |
 | W42 | P1 | Idea 到 Review 真實驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W44 | P0 | ReleaseBaseline 與發布 receipt | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -182,4 +182,22 @@ Sprint 固定角色、期間及承諾引用；選入工作保留 How、原始 bi
 
 Web／Tauri 在同頁查看及操作；API／MCP 共用服務。結束／取消不停止 session，
 也不自動搬移工作到下一輪。尚未評估 DoD 的工作不計為已驗證 Increment，
-但不因此聲稱實作或測試失敗。Scrum 模式目前提供 artifacts，完整 events 仍在 W16。
+但不因此聲稱實作或測試失敗。Scrum 模式不宣稱完整符合；Daily Scrum 與品質判定尚未完成。
+
+## 工作流與專業討論
+
+工作看板直接投影既有 work、command、operation 與原始事件，一工作一卡。
+已受理執行、完成聲稱、內容核可及品質驗收各自呈現；時間證據缺失就維持未知。
+WIP 只涵蓋目前回傳頁，固定證據快照與現在執行狀態分開，不另存一套進度。
+
+Planning、Review、Retro 引用固定 Sprint 承諾與明確選定的專案快照。
+準備摘要仍是草稿；指定且仍有權的方向負責人明確記錄討論結果後才完成。
+會議決策不自動採用 scope、改動 backlog 或派工；後續改善保留責任人、預期效果、
+驗證方法及原始紀錄，回報完成也不等同已證實改善有效。
+
+工作看板、Sprint 與討論共置於 workspace 畫面，修改表單按需展開。
+原始操作來源被撤權時，衍生紀錄與事件一併隱藏；會員變更使既有
+checkpoint 失效，即使仍在輸入也立即清除舊畫面。草稿與原操作 key 留在
+原 principal 分區，恢復授權後可查回，沒有重新派送工作的副作用。
+
+這批在開發分支接入 API／MCP／Web／Tauri，尚未安裝或宣稱 M3／M4 完成。

@@ -65,6 +65,7 @@ READ_TOOLS = [
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
     "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
+    "pm_kanban_get", "pm_kanban_card_get", "pm_meetings_list", "pm_meeting_get", "pm_meeting_history_list",
     "pm_sprint_artifacts_get",
     "pm_sprint_artifact_revisions_list",
     "pm_sprint_artifact_get",
@@ -592,6 +593,26 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
         return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_kanban_get(workspace_id: str, project_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Project existing work into one card per item; WIP covers this page, quality remains unassessed."""
+        return await pm_daemon("pm_kanban_get", workspace_id=workspace_id, project_id=project_id, after=after, limit=limit)
+
+    async def pm_kanban_card_get(workspace_id: str, work_item_id: str) -> dict[str, Any]:
+        """Read current work flow and execution separately from the last fixed evidence capture."""
+        return await pm_daemon("pm_kanban_card_get", workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_meetings_list(workspace_id: str, sprint_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """List currently visible Planning, Review and Retro records without preparing a meeting."""
+        return await pm_daemon("pm_meetings_list", workspace_id=workspace_id, sprint_id=sprint_id, after=after, limit=limit)
+
+    async def pm_meeting_get(workspace_id: str, meeting_id: str, history_limit: int = 50) -> dict[str, Any]:
+        """Read fixed meeting sources, draft, explicit completion and follow-up; no quality or execution approval."""
+        return await pm_daemon("pm_meeting_get", workspace_id=workspace_id, meeting_id=meeting_id, history_limit=history_limit)
+
+    async def pm_meeting_history_list(workspace_id: str, meeting_id: str, kind: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read immutable contexts, notes, drafts or follow_ups with current source visibility."""
+        return await pm_daemon("pm_meeting_history_list", workspace_id=workspace_id, meeting_id=meeting_id, kind=kind, after=after, limit=limit)
+
     async def pm_sprint_artifacts_get(workspace_id: str) -> dict[str, Any]:
         """Read current versioned Product Goal, Backlog and DoD; no execution is authorized."""
         return await pm_daemon("pm_sprint_artifacts_get", workspace_id=workspace_id)
@@ -742,6 +763,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
                pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
+               pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,
                pm_sprint_artifacts_get, pm_sprint_artifact_revisions_list, pm_sprint_artifact_get, pm_sprints_list, pm_sprint_get, pm_sprint_history_list,
                pm_plan_compare,
                pm_roadmap_get, pm_roadmap_revisions_list, pm_roadmap_revision_get,

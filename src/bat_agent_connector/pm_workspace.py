@@ -37,6 +37,8 @@ def schema(journal) -> None:
             PRIMARY KEY(workspace_id,actor))""")
         journal.db.execute("""CREATE TABLE IF NOT EXISTS pm_workspace_applied (
             operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, applied_at REAL NOT NULL)""")
+        from .dashboard_sync import install_pm_access
+        install_pm_access(journal.db)
 
 
 def server_id(db) -> str:
@@ -121,6 +123,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'].startswith('pm.meeting.'):
+        from .pm_meetings import operation_visible as meeting_operation_visible
+        return meeting_operation_visible(db, principal, op)
     return True
 
 

@@ -1111,7 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1239,6 +1239,11 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let snapshot_list = path.ends_with("/snapshots");
             let comparison = path.ends_with("/plan-comparison");
             let roadmap_list = path.ends_with("/roadmap/revisions");
+            let kanban_list = path.ends_with("/kanban");
+            let meeting_list = path.ends_with("/meetings");
+            let meeting_history = path.contains("/meetings/") && path.contains("/history/");
+            let meeting_detail =
+                path.split('/').nth(4) == Some("meetings") && path.split('/').count() == 6;
             let sprint_list = path.ends_with("/sprints");
             let sprint_history = path.contains("/sprints/") && path.contains("/history/");
             let artifact_list = path.contains("/sprint-artifacts/")
@@ -1256,7 +1261,10 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || roadmap_list
                 || sprint_list
                 || sprint_history
-                || artifact_list;
+                || artifact_list
+                || kanban_list
+                || meeting_list
+                || meeting_history;
             let thread_detail = path
                 .split('/')
                 .nth(5)
@@ -1289,7 +1297,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 "kind" if roadmap_list => {
                     matches!(value.as_ref(), "baseline" | "forecast" | "observation")
                 }
-                "history_limit" if sprint_detail => {
+                "history_limit" if sprint_detail || meeting_detail => {
                     !value.is_empty()
                         && value.len() <= 3
                         && value.bytes().all(|b| b.is_ascii_digit())
@@ -1321,7 +1329,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u32>().is_ok()
                 }
-                "project_id" if work_list => {
+                "project_id" if work_list || kanban_list => {
                     value.len() == 24
                         && value.starts_with("prj_")
                         && value[4..]
@@ -1332,6 +1340,13 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                     value.len() == 23
                         && value.starts_with("wi_")
                         && value[3..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "sprint_id" if meeting_list => {
+                    value.len() == 36
+                        && value.starts_with("pms_")
+                        && value[4..]
                             .bytes()
                             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
@@ -1835,6 +1850,12 @@ mod tests {
             format!("{workspace}/plans?limit=100&after=0"),
             format!("{workspace}/projects?limit=100&after=0"),
             format!("{workspace}/plan-comparison?from_revision_id=pmrev_33333333333333333333333333333333&to_revision_id=pmrev_44444444444444444444444444444444&binding_ids=pmwb_55555555555555555555555555555555&journal_cursor=0"),
+            format!("{workspace}/kanban?limit=100&after=0&project_id=prj_55555555555555555555"),
+            format!("{workspace}/kanban/wi_55555555555555555555"),
+            format!("{workspace}/meetings?limit=1&after=0&sprint_id=pms_88888888888888888888888888888888"),
+            format!("{workspace}/meetings/pmmeet_88888888888888888888888888888888?history_limit=1"),
+            format!("{workspace}/meetings/pmmeet_88888888888888888888888888888888/history/contexts?limit=1&after=0"),
+            format!("{workspace}/meetings/pmmeet_88888888888888888888888888888888/history/follow_ups?limit=1&after=0"),
             format!("{workspace}/sprint-artifacts"),
             format!("{workspace}/sprint-artifacts/product_goal?limit=100&after=0"),
             format!("{workspace}/sprint-artifacts/product_goal/pmgoal_88888888888888888888888888888888"),
@@ -1894,6 +1915,16 @@ mod tests {
             format!("{workspace}/plan-comparison?journal_cursor=1.5"),
             format!("{workspace}/plan-comparison?actor=other"),
             format!("{workspace}/plan-comparison?limit=10"),
+            format!("{workspace}/kanban?actor=other"),
+            format!("{workspace}/kanban?limit=0"),
+            format!("{workspace}/kanban?project_id=../../etc"),
+            format!("{workspace}/kanban/wi_55555555555555555555?limit=1"),
+            format!("{workspace}/meetings?kind=review"),
+            format!("{workspace}/meetings?sprint_id=pmmeet_88888888888888888888888888888888"),
+            format!("{workspace}/meetings?after=0&after=1"),
+            format!("{workspace}/meetings/pmmeet_88888888888888888888888888888888?history_limit=0"),
+            format!("{workspace}/meetings/pmmeet_88888888888888888888888888888888/history/unknown"),
+            format!("{workspace}/meetings/pmmeet_88888888888888888888888888888888/history/notes?history_limit=1"),
             format!("{workspace}/sprint-artifacts?limit=1"),
             format!("{workspace}/sprint-artifacts/unknown"),
             format!("{workspace}/sprint-artifacts/product_goal/pmdod_88888888888888888888888888888888"),

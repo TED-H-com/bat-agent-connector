@@ -187,6 +187,7 @@ async function api(method, path, body, key, collectReceipt) {
   if (status < 200 || status >= 300) {
     const error = new ApiError(status, data.error?.code, data.error?.message);
     error.admissionRefused = data.error?.admission_refused === true;
+    error.reason = data.error?.reason;
     throw error;
   }
   return data;
@@ -655,10 +656,20 @@ async function streamEvents() {
       live.className = "live down"; live.textContent = t("offline_actions_paused");
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
+        const accessChanged = error.reason === "access_changed";
+        if (accessChanged) {
+          // A changed access boundary invalidates displayed facts immediately. Drafts stay
+          // in their original principal namespace, even when bootstrap is unavailable.
+          generation++; state.viewReady = false;
+          teardown?.(); teardown = null; freshPage();
+          workspaceSidebar?.dispose(); workspaceSidebar = null;
+          workspaceNav?.dispose(); workspaceNav = null; workspaceIdentity = "";
+          document.getElementById("main").replaceChildren(h("p", {class: "muted"}, t("sync_waiting")));
+        }
         try {
           await activate(state.caps, state.endpoint, true);
           // Keep open forms intact. Mutations wait until refreshed evidence is mounted.
-          if (state.namespace === previous.namespace && (editing || typing())) idleReload = route;
+          if (!accessChanged && state.namespace === previous.namespace && (editing || typing())) idleReload = route;
           else await route();
         } catch { state.sync = previous.sync; state.viewReady = true; /* retry continuity proof */ }
       }
