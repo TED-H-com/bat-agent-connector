@@ -299,6 +299,7 @@ async def _run(ctx):
                 'origin_cwd': plan['folder'], 'origin_root': plan['origin_root'], 'cwd': plan['folder'],
                 'model': plan['model'], 'title': plan['title'], 'isolation': plan['isolation'],
                 'start_sent': False, 'start_operation_id': ctx.operation_id, 'role': plan.get('role'),
+                'creates_worktree': plan['use_worktree'],
                 'confinement': plan['confinement'], 'write_scope': plan['write_scope'],
                 **registry_permission_fields(plan['permission_options'])}, hc.orchestrate_max_sessions)
             return {'session_id': sid, 'created_at': registry.get(host, sid)['created_at']}
