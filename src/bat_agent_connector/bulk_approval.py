@@ -11,6 +11,7 @@ import uuid
 from . import (
     api_auth,
     confinement,
+    controller_authority,
     dashboard_sync,
     registry,
     resource_policy,
@@ -28,7 +29,7 @@ MAX_TOKEN = 98304
 MAX_PREVIEW = 262144
 MIN_PARENT_WAIT_S = 1.0
 MAX_PARENT_WAIT_S = 30.0
-REGISTRY_FIELDS = session_permissions.BINDING_FIELDS
+REGISTRY_FIELDS = (*session_permissions.BINDING_FIELDS, 'controller_authority', 'controller_incarnation')
 
 
 def canonical(value):
@@ -86,8 +87,11 @@ def prompt(state):
 def static(ops, item, *, mode=None, command_id=None):
     from .api_actions import _admit_session
     from .cleanup import guard as cleanup_guard
+    from .orchestration_operations import require_record, task_binding
     fleet = ops.context["fleet"]
     host, sid = item["host"], item["session_id"]
+    authority = controller_authority.require()
+    require_record(host, sid, item["registry"])
     cleanup_guard(host, session_id=sid, path=item["registry"].get("worktree_path") or item["registry"].get("cwd"))
     if record(host, sid) != item["registry"]:
         raise TaskControlRefused("BULK_BINDING_CHANGED", "reviewed session creation, ownership or policy changed")
@@ -96,10 +100,10 @@ def static(ops, item, *, mode=None, command_id=None):
     if owner != (expected or {}).get("task_id"):
         raise TaskControlRefused("TASK_BINDING_MISMATCH", "reviewed session task owner changed")
     pre = {"control_version": expected["control_version"]} if expected else {}
-    p = api_auth.Principal("bulk-validation", frozenset({"operate", "observe"}))
+    p = api_auth.Principal(authority['actor'], frozenset(authority['scopes']), admin=authority['admin'])
     actual = _admit_session(ops, p, {"host": host, "session_id": sid}, {}, pre,
                             "permissions" if mode is not None else "answer", _command_id=command_id)
-    if actual != expected:
+    if task_binding(actual) != task_binding(expected):
         raise TaskControlRefused("TASK_BINDING_MISMATCH", "reviewed task incarnation changed")
     confinement.guard_answer(host, sid, item["tool_name"], dont_ask_again=True, allow=True)
     if mode is not None:
@@ -107,6 +111,11 @@ def static(ops, item, *, mode=None, command_id=None):
 
 
 async def preview(ops, principal, request):
+    with controller_authority.use(controller_authority.binding(ops.db, principal), ops.journal):
+        return await _preview(ops, principal, request)
+
+
+async def _preview(ops, principal, request):
     if not principal.allows("observe"):
         raise OperationError("FORBIDDEN", "approval preview requires observe", 403)
     who = identity(ops, principal)
@@ -128,6 +137,7 @@ async def preview(ops, principal, request):
         item_id = "bapi_" + digest({"host": host, "sid": sid})[:24]
         row = {"item_id": item_id, "host": host, "session_id": sid, "eligible": False}
         try:
+            controller_authority.require_entry(registry.get(host, sid))
             cls = resource_policy.classify(hc, sid, terminal=terminal, entries=registry.list_entries(host))
             if cls.code:
                 raise TaskControlRefused(cls.code, cls.reason)
@@ -271,6 +281,7 @@ def receipt(ops, parent_id, name):
 
 
 def child_binding(ctx, *, allow_cancel=False):
+    from .orchestration_operations import require_child_authority, task_binding
     link = linked(ctx.op)
     if not link:
         return None
@@ -285,8 +296,9 @@ def child_binding(ctx, *, allow_cancel=False):
                 if phase == "answer" and item else {"mode": (item or {}).get("mode")})
     if (phase not in {"answer", "permissions"} or not saved or saved.get("operation_id") != ctx.operation_id
             or ctx.op["action"] != action or ctx.target != {"host": item["host"], "session_id": item["session_id"]}
-            or ctx.params != expected or ctx.admission_binding != item["task_binding"]):
+            or ctx.params != expected or task_binding(ctx.admission_binding) != task_binding(item["task_binding"])):
         raise TaskControlRefused("BULK_BINDING_CHANGED", "bulk child does not match its fixed reviewed receipt")
+    require_child_authority(ctx, parent)
     if not allow_cancel and (parent["cancel_requested"] or parent["status"] in {"failed", "cancelled"}):
         raise TaskControlRefused("BULK_CANCEL_REQUESTED", "batch cancelled before this frame")
     return item
