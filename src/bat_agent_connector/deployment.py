@@ -419,6 +419,8 @@ async def dispatch(ctx, dep):
               "artifact_id": str(dep["identity"].get("artifact_id", "")), "artifact_digest": dep["identity"].get("artifact_digest", "")}
     inputs = {k: values[v] for k, v in s["inputs"]}
     async def send():
+        from .pm_source_lineage import require_frame
+        require_frame()
         store.update(ctx.service.journal, dep["deployment_id"], state="uncertain",
                      facts={"dispatch_sent": True, "provider_kind": "run", "dispatch_sent_at": dep.get("dispatch_sent_at") or time.time()})
         status, body = await gh.dispatch(s["repository"], s["workflow"], s["ref"], inputs)
@@ -506,7 +508,8 @@ async def read_step(ctx, prefix, fn):
             return {"waiting": "GitHub did not answer; retrying", "delay": 30}
     async def reconcile(_):
         return RERUN
-    return await ctx.step(name, safe, reconcile=reconcile)
+    from .pm_delivery_lineage import readback_step
+    return await readback_step(ctx, name, safe, reconcile=reconcile)
 
 
 def apply_receipt(ctx, dep, receipt, wait_key):
@@ -585,7 +588,8 @@ async def finish(ctx, dep, merged=None):
     async def reconcile(_):
         saved = get(ctx.service, dep["deployment_id"])
         return saved.get("recorded_result") or RERUN
-    result = await ctx.step("deploy.record", save, reconcile=reconcile)
+    from .pm_delivery_lineage import sent_readback
+    result = await ctx.step("deploy.record", save, reconcile=reconcile, receipt_only=sent_readback(ctx, "deploy.record"))
     if not result["is_current"]:
         raise NeedsAttention("DEPLOY_SUPERSEDED", "a newer desired deployment superseded this result")
     ctx.set_refs(deployment_id=dep["deployment_id"], deployed_source_sha=dep["identity"]["source_sha"])
