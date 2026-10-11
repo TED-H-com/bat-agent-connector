@@ -16,6 +16,7 @@ from bat_agent_connector.task_bat import BatTaskAdapter
 from bat_agent_connector.task_core import TaskCoordinator
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.task_journal import Journal
+from tests.conftest import adopt
 from tests.test_task_service import FakeBAT
 
 ALICE = Principal("alice", frozenset({"start", "operate", "manage"}))
@@ -180,3 +181,43 @@ def test_failover_commands_keep_original_authority(journal):
         first, handoff = journal.reserve_failover(task["task_id"], "lead", "successor")
     assert json.loads(first["controller_authority"]) == task_control.authority(task)
     assert json.loads(handoff["controller_authority"]) == task_control.authority(task)
+
+
+def test_task_cannot_capture_another_journals_controller(journal, tmp_path):
+    other = Journal(tmp_path / "other.db")
+    try:
+        with ca.use(ca.binding(other.db, ALICE), other):
+            with pytest.raises(ResourceReadOnly, match="CONTROLLER_SERVER_CHANGED"):
+                journal.submit(project="p", host="h1", workspace="w", original_words="requested work",
+                               idempotency_key="wrong-server")
+        assert not journal.db.execute("SELECT 1 FROM tasks").fetchone()
+    finally:
+        other.close()
+
+
+def test_task_frame_keeps_original_session_incarnation(journal, monkeypatch):
+    from bat_agent_connector import registry
+    task = submit(journal)
+    with ca.use(task_control.authority(task), journal):
+        adopt("lead", task_id=task["task_id"], role="lead")
+        journal.change(task["task_id"], "dispatching")
+        task = journal.change(task["task_id"], "accepted", fields={"session_id": "lead"})
+        prompt_hash = hashlib.sha256(b"fixed words").hexdigest()
+        command, _ = journal.command(task["task_id"], "send", "lead", {"prompt_sha256": prompt_hash}, "send")
+        guard = task_control.FrameGuard(journal, task["task_id"], "h1", "lead", task["control_version"],
+                                        command_id=command["command_id"], prompt_sha256=prompt_hash)
+        guard.check()
+        owner = registry.get("h1", "lead")
+        monkeypatch.setattr(registry, "get", lambda *_: {**owner, "controller_incarnation": "f" * 32})
+        with pytest.raises(ResourceReadOnly, match="CONTROLLER_INCARNATION_CHANGED"):
+            guard.check()
+
+
+async def test_foreign_admin_cannot_mint_reconciliation_capability(journal):
+    task = submit(journal)
+    daemon = SimpleNamespace(journal=journal)
+    with ca.use(ca.binding(journal.db, BOB), journal):
+        with pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+            await TaskDaemon._call_bound(daemon, "work_reconcile_capability",
+                                         {"task_id": task["task_id"], "command_id": "unused"})
+    assert not journal.db.execute("SELECT 1 FROM capabilities").fetchone()

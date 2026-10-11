@@ -93,6 +93,10 @@ def admission_binding(task, *, session=False, role="lead"):
     if session:
         field = "reviewer_session_id" if role == "reviewer" else "session_id"
         binding.update(host=task["host"], session_id=task.get(field), role=role)
+        entry = registry.get(task["host"], task.get(field)) if task.get(field) else None
+        if entry and entry.get("controller_incarnation"):
+            binding["session_controller"] = {"host": task["host"], "session_id": task[field],
+                                              "controller_incarnation": entry["controller_incarnation"]}
     return binding
 
 
@@ -110,6 +114,13 @@ def check_binding(ctx):
         field = "reviewer_session_id" if role == "reviewer" else "session_id"
         if task["host"] != binding["host"] or task.get(field) != sid:
             raise TaskControlRefused("TASK_BINDING_MISMATCH", "task session changed since admission")
+        if sid:
+            expected = binding.get("session_controller") or {}
+            if (expected.get("host") != task["host"] or expected.get("session_id") != sid
+                    or not expected.get("controller_incarnation")):
+                raise TaskControlRefused("CONTROLLER_BINDING_UNPROVEN", "task operation has no fixed session creation")
+            controller_authority.require_entry(registry.get(task["host"], sid),
+                                               expected_incarnation=expected["controller_incarnation"])
     return task
 
 
@@ -228,6 +239,11 @@ class FrameGuard:
     abort: bool = False
     prompt_sha256: str | None = None
     frames: list = field(default_factory=list, compare=False)
+    controller_incarnation: str | None = None
+
+    def __post_init__(self):
+        owner = registry.get(self.host, self.session_id) or {}
+        object.__setattr__(self, "controller_incarnation", owner.get("controller_incarnation"))
 
     def __call__(self):
         # Only the command's effect frames count; preliminary writes use check() directly.
@@ -240,7 +256,7 @@ class FrameGuard:
         task = self.journal.get(self.task_id)
         require_authority(task)
         owner = registry.get(self.host, self.session_id)
-        controller_authority.require_entry(owner)
+        controller_authority.require_entry(owner, expected_incarnation=self.controller_incarnation)
         if (task["host"] != self.host or self.session_id not in
                 {task.get("session_id"), task.get("reviewer_session_id")}
                 or not owner or owner.get("task_id") != self.task_id
@@ -261,6 +277,9 @@ class FrameGuard:
         command = self.journal.command_get(self.command_id) if self.command_id else None
         if command:
             controller_authority.require_binding(authority(command))
+            original = json.loads(command["payload"]).get("controller_incarnation")
+            if original is not None:
+                controller_authority.require_entry(owner, expected_incarnation=original)
         if (not command or command["kind"] != self.action or command["task_id"] != self.task_id or command["session_id"] != self.session_id
                 or command["status"] not in {"intent", "needs_review"}):
             raise TaskControlRefused("TASK_COMMAND_PENDING", "frame has no dispatchable task command")
