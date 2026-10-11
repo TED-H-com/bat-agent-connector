@@ -1,4 +1,5 @@
 export const pmPackageHandoffStrings={en:{
+  ph_batch_waiting:'This fixed base can be selected for a bounded batch while it waits for the declared prerequisites. Starting this handoff alone still requires their qualified original assessments.',
   ph_quality_help:'For each declared prerequisite, explicitly choose a qualified original assessment from the same adopted plan. Recheck this handoff after changing a choice.',ph_quality_requirement:'Accepted prerequisite',ph_quality_none:'Keep prerequisite unassessed',ph_quality_missing:'Original qualified assessment unavailable',ph_quality_version:'Assessment version',
   ph_spec_attachment:'Specification delivery',ph_inline:'Complete spec in first prompt',ph_fixed_attachment:'Fixed specification attachment',ph_spec_help:'Select a saved attachment when needed, then review this handoff again. The exact attachment revision and digest will be preserved.',ph_spec_missing:'The originally selected specification attachment is unavailable.',ph_spec_filtered:'Some specification attachments are hidden by current source access.',
   ph_workspace:'Selected BAT workspace',
@@ -16,6 +17,7 @@ export const pmPackageHandoffStrings={en:{
   ph_invalid:'The response does not match the selected fixed engineering package.',ph_reading:'Reading the original package, project and published base…',
   ph_started:'Implementation was started. Verification and delivery remain unassessed.',ph_open:'Open managed execution',ph_preparation:'Preparation',ph_project_version:'Project version',
 },'zh-TW':{
+  ph_batch_waiting:'這份固定基底可選入受限批次，等待宣告的前置需求。若要單獨開始這份交接，仍須先選定前置需求的合格原始評估。',
   ph_quality_help:'為每個宣告的前置需求，明確選擇相同採納計畫的合格原始評估。修改選擇後請重新核對交接。',ph_quality_requirement:'已驗收前置需求',ph_quality_none:'保留前置需求未評估',ph_quality_missing:'無法讀取原本合格評估',ph_quality_version:'評估版本',
   ph_spec_attachment:'規格交付方式',ph_inline:'在首則指示中包含完整規格',ph_fixed_attachment:'固定規格附件',ph_spec_help:'需要時選取已保存附件，再重新核對此次交接；保留附件的精確版次與摘要值。',ph_spec_missing:'原選取的規格附件目前無法讀取。',ph_spec_filtered:'部分規格附件因目前來源權限而隱藏。',
   ph_workspace:'所選 BAT 工作區',

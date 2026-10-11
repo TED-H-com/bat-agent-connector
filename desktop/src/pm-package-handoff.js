@@ -51,7 +51,11 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
       ||value.ready_for!=='engineering_handoff_review'||value.execution_authorized!==false||value.execution_available!==false
       ||value.dispatch_readiness!=='separate_fixed_handoff_admission'||handoff?.contract!==contract||handoff.action!=='repository.continue'
       ||handoff.code_basis_required!==true||handoff.compatibility!=='unverified'||!['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(handoff.source_materialization)||!Array.isArray(value.checks))throw Error(t('ph_invalid'));
-    if(value.checks.some(check=>check.status!=='passed'&&check.check!=='spec_code_alignment'))throw Object.assign(Error(t('ph_blocked')),{code:'PM_HANDOFF_BLOCKED'});
+    const waiting=value.checks.filter(check=>check.status!=='passed'&&check.check!=='spec_code_alignment');
+    const batch=caps()?.features?.pm_workspaces?.work_batches;
+    const canWait=qualityAvailable()&&batch?.version===1&&batch.actions?.includes('pm.work_batch.start')&&batch.profiles?.includes('accepted_requirements_v1')
+      &&waiting.every(check=>check.status==='blocked'&&row.document.requirements.some(req=>req.depends_on?.length&&check.check===`dependency:${req.id}`&&equal(check.requirement_ids,req.depends_on)));
+    if(waiting.length&&!canWait)throw Object.assign(Error(t('ph_blocked')),{code:'PM_HANDOFF_BLOCKED'});return waiting.length===0;
   }
   const hostReady=row=>caps()?.hosts?.some(host=>host.host===row.document.code_source.host&&host.writes===true&&host.orchestrate===true)
     &&caps()?.features?.repository_sync?.some(binding=>binding.exact_ref_head_only===true&&['repository','host','workspace_id'].every(key=>binding[key]===row.document.code_source[key]));
@@ -96,7 +100,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
         return response;}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))fail(error);throw error;}};
       value=form({namespace:`${namespace}.package-handoff.${row.package_id}`,api:guardedApi,action:'repository.continue',target:target(row),
         fields:{review:fixed,basis,prompt,agent,title,model,spec_selection:spec,quality_selection:quality},params:handoffParams,preconditions:()=>JSON.parse(fixed.value).preconditions,
-        permitted:()=>authorized()&&hostReady(active)&&matches()&&!reading,recoverPermitted:authorized,label:'ph_start',
+        permitted:()=>authorized()&&hostReady(active)&&matches()&&prepared.readyForStart&&!reading,recoverPermitted:authorized,label:'ph_start',
         onStateChange:()=>{if(value&&!syncing)value.update();onReviewChange();},onSaved:result=>{
           if(!resultMatches(result))throw Error(t('ph_invalid'));
           prepared=null;facts.replaceChildren();outcome.replaceChildren(h('p',{},t('ph_started')),
@@ -155,7 +159,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
         const catalog=await readRequirementReviews(api,workspaceId,()=>valid(ticket));if(!catalog||!valid(ticket))return;qualityCatalog=catalog.rows;
       }else qualityCatalog=[];
       qualityOptions(row);const quality=selectedQuality(row),hasQuality=Object.keys(quality).length>0;
-      const readiness=await api('GET',`${endpoint}/${id}/readiness${hasQuality?'?quality_refs='+encodeURIComponent(JSON.stringify(quality)):''}`);if(!valid(ticket))return;readinessCheck(readiness,row);
+      const readiness=await api('GET',`${endpoint}/${id}/readiness${hasQuality?'?quality_refs='+encodeURIComponent(JSON.stringify(quality)):''}`);if(!valid(ticket))return;const readyForStart=readinessCheck(readiness,row);
       const choice=editor.fields.spec_selection,chosen=choice.value;
       choice.replaceChildren(h('option',{value:''},t('ph_inline')),...specs.rows.map(spec=>h('option',{value:spec.materialization_id},`${t('ph_fixed_attachment')} · ${spec.sequence}`)));
       if(chosen&&!specs.rows.some(spec=>spec.materialization_id===chosen))choice.append(h('option',{value:chosen},t('ph_spec_missing')));
@@ -173,13 +177,13 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
       const response=await api('POST','/repository-previews',{...target(row),source_ref:code.source_ref});
       if(!valid(ticket)||active?.package_id!==id)return;
       if(!sameCode(row,response.preview))throw Error(t('ph_target_changed'));
-      prepared={row,project,fixed:{params:{source_ref:code.source_ref,source_sha:code.source_sha,project_id:work.project_id,work_item_id:work.work_item_id,
+      prepared={row,project,readyForStart,fixed:{params:{source_ref:code.source_ref,source_sha:code.source_sha,project_id:work.project_id,work_item_id:work.work_item_id,
         pm_package_ref:{workspace_id:workspaceId,package_id:id,document_digest:row.document_digest},...(hasQuality?{pm_requirement_quality_refs:quality}:{}),...(fixedSpec?fixedSpecSelection(fixedSpec,workspaceId):{})},
         preconditions:{repository_id:code.repository_id,binding_digest:code.binding_digest,expected_project_version:project.version,expected_work_item_fingerprint:work.work_fingerprint}}};
       const proof=h('details',{},h('summary',{},t('ph_sources')),h('p',{class:'mono'},`${t('ph_base')}: ${code.source_sha}`),
         ...(row.document.sources?.documents||[]).map(source=>h('p',{class:'mono'},`${t('ph_spec')}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)),
         h('p',{class:'mono'},`${code.host} · ${code.workspace_id}`),h('p',{class:'mono'},row.package_id),h('p',{class:'mono'},row.document_digest),h('p',{class:'mono'},work.work_fingerprint));
-      facts.replaceChildren(h('h4',{},t('ph_reviewed')),h('p',{},project.name,' · ',code.repository,' · ',code.source_ref.replace(/^refs\/heads\//,'')),
+      facts.replaceChildren(h('h4',{},t('ph_reviewed')),readyForStart?null:h('p',{class:'muted'},t('ph_batch_waiting')),h('p',{},project.name,' · ',code.repository,' · ',code.source_ref.replace(/^refs\/heads\//,'')),
         h('p',{},code.host,' · ',response.preview.workspace.name||t('ph_workspace')),h('p',{class:'muted'},`${t('ph_project_version')} ${project.version}`),
         h('p',{class:'muted'},t('ph_separate')),fixedSpec?h('p',{class:'pm-source'},t('ph_fixed_attachment'),': ',fixedSpec.materialization_id,' · ',fixedSpec.artifact_ref.artifact_id,' · ',fixedSpec.document_digest):null,
         specs.filtered?h('p',{class:'muted'},t('ph_spec_filtered')):null,proof);status.replaceChildren();
