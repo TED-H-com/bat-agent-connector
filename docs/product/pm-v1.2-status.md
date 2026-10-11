@@ -100,7 +100,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W33 | P0 | InputRecord 與循序資訊取得 | 本批：來源與確認者、假設／未知分離、context-first 契約；研究 runner 待做 |
 | W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿修訂、文件與 accepted scope 分開；Sprint／batch 與工程 work package 待做 |
 | W35 | P1 | 架構與 SDD 工程工作包 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W36 | P1 | OpenSpec read adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W36 | P1 | OpenSpec read adapter | 開發分支：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W39 | P1 | DocumentSnapshot 與五視圖 SVG | 開發分支：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
