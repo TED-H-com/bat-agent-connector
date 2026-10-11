@@ -122,6 +122,7 @@ class ApiV1:
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
         from . import (
+            pm_conversation_proposals,
             pm_discussions,
             pm_evidence,
             pm_execution_verification,
@@ -165,6 +166,7 @@ class ApiV1:
         pm_governance.install(daemon.ops)
         pm_follow_up.install(daemon.ops)
         pm_follow_up_analysis.install(daemon.ops)
+        pm_conversation_proposals.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
         pm_spec_materialization.install(daemon.ops)
         pm_work_batches.install(daemon.ops)
@@ -264,6 +266,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages", self.pm_work_packages, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})", self.pm_work_package, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})/readiness", self.pm_work_package_readiness, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/conversation-proposals", self.pm_conversation_proposals, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/conversation-proposals/(?P<proposal_id>pmcp_[0-9a-f]{32})", self.pm_conversation_proposal, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments", self.pm_follow_up_assessments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/brief-export", self.pm_brief_export, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments/(?P<assessment_id>pmfa_[0-9a-f]{32})", self.pm_follow_up_assessment, "observe"),
@@ -490,6 +494,7 @@ class ApiV1:
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
+                      self.pm_conversation_proposals, self.pm_conversation_proposal,
                       self.pm_brief_export, self.pm_work_deliveries,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
@@ -677,7 +682,7 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -933,6 +938,12 @@ class ApiV1:
     async def pm_work_package_readiness(self, principal, query, workspace_id, package_id, **_):
         return self._pm_read(principal, "pm_work_package_readiness_get", query, workspace_id=workspace_id, package_id=package_id)
 
+    async def pm_conversation_proposals(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_conversation_proposals_list", query, workspace_id=workspace_id)
+
+    async def pm_conversation_proposal(self, principal, query, workspace_id, proposal_id, **_):
+        return self._pm_read(principal, "pm_conversation_proposal_get", query, workspace_id=workspace_id, proposal_id=proposal_id)
+
     async def pm_follow_up_assessments(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_follow_up_assessments_list", query, workspace_id=workspace_id)
 
@@ -1006,6 +1017,7 @@ class ApiV1:
         from . import pm_github_observation, pm_lifecycle
         fleet = self.daemon.fleet
         from . import (
+            pm_conversation_proposals,
             pm_execution_verification,
             pm_maintenance_checks,
             pm_maintenance_policy,
@@ -1097,6 +1109,7 @@ class ApiV1:
                                                         "materialization_action": "pm.spec.materialize",
                                                         "requirement_acceptance_profiles": ["accepted_requirements_v1"]},
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
+                                                    "conversation_proposals": pm_conversation_proposals.capabilities(),
                                                     "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 2},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     "kanban": True, "spec_sources": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},

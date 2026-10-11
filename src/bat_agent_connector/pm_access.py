@@ -96,6 +96,10 @@ def event_visible(db, principal, event):
         from .pm_work_packages import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_conversation_proposal" or event["kind"].startswith("pm.conversation."):
+        from .pm_conversation_proposals import operation_visible as conversation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and conversation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_follow_up_assessment" or event["kind"] == "pm.follow_up.analyze":
         from .pm_follow_up_analysis import operation_visible as assessment_visible
         operation_id = event.get("body", {}).get("operation_id")

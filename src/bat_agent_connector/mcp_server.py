@@ -85,6 +85,7 @@ READ_TOOLS = [
     "pm_release_baseline_sources_list", "pm_release_baseline_releases_list",
     "pm_release_baseline_deployments_list", "pm_release_baseline_preview",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
+    "pm_conversation_proposals_list", "pm_conversation_proposal_get",
     "pm_brief_export_get",
     "pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
@@ -813,6 +814,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id,
                                **({'quality_refs': quality_refs} if quality_refs is not None else {}))
 
+    async def pm_conversation_proposals_list(workspace_id: str, thread_id: str | None = None, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
+        """List sourced conversation proposal metadata; no adoption or execution."""
+        return await pm_daemon("pm_conversation_proposals_list", workspace_id=workspace_id, thread_id=thread_id, after=after, limit=limit)
+
+    async def pm_conversation_proposal_get(workspace_id: str, proposal_id: str) -> dict[str, Any]:
+        """Read one fixed proposal, original quotes, raw reply and baseline for owner review."""
+        return await pm_daemon("pm_conversation_proposal_get", workspace_id=workspace_id, proposal_id=proposal_id)
+
     async def pm_follow_up_assessments_list(workspace_id: str, intake_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """List fixed Follow-up assessment metadata; source filtering retains the original cursor."""
         return await pm_daemon("pm_follow_up_assessments_list", workspace_id=workspace_id, intake_id=intake_id, after=after, limit=limit)
@@ -1054,6 +1063,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_release_baseline_sources_list, pm_release_baseline_releases_list,
                pm_release_baseline_deployments_list, pm_release_baseline_preview,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
+               pm_conversation_proposals_list, pm_conversation_proposal_get,
                pm_brief_export_get,
                pm_lifecycle_get, pm_lifecycle_transitions_list, pm_lifecycle_transition_get, pm_lifecycle_inflight_list,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,

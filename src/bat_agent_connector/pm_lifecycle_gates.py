@@ -114,6 +114,9 @@ def operation_binding(db, operation_id):
 
 def require_local(db, operation_id, *, bookkeeping=False):
     """Invoke after receipt lookup, INSIDE the local mutation transaction."""
+    if not bookkeeping:
+        from .pm_conversation_adoption import require_child
+        require_child(db, operation_id)
     binding = operation_binding(db, operation_id)
     if binding and binding['kind'] == 'investment' and not bookkeeping:
         _require(head(db, binding['workspace_id']), binding['execution_epoch'])

@@ -50,6 +50,8 @@ FIELDS = {
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
     "pm_work_package_readiness_get": ("workspace_id", "package_id", "quality_refs"),
+    "pm_conversation_proposals_list": ("workspace_id", "thread_id", "after", "limit"),
+    "pm_conversation_proposal_get": ("workspace_id", "proposal_id"),
     "pm_follow_up_assessments_list": ("workspace_id", "intake_id", "after", "limit"),
     "pm_follow_up_assessment_get": ("workspace_id", "assessment_id"),
     "pm_follow_up_list": ("workspace_id", "after", "limit"),
@@ -229,6 +231,12 @@ def read(ops, principal, method, params):
             return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"), quality_refs=params.get('quality_refs'))
         return pm_work_packages.list_packages(ops, principal, workspace_id, work_item_id=params.get("work_item_id"),
                                               after=params.get("after", 0), limit=params.get("limit", 50))
+    if method in {"pm_conversation_proposals_list", "pm_conversation_proposal_get"}:
+        from . import pm_conversation_proposals
+        if method == "pm_conversation_proposal_get":
+            return pm_conversation_proposals.get_proposal(ops, principal, workspace_id, params.get("proposal_id"))
+        return pm_conversation_proposals.list_proposals(ops, principal, workspace_id, thread_id=params.get("thread_id"),
+            after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_follow_up_assessments_list", "pm_follow_up_assessment_get"}:
         from . import pm_follow_up_analysis
         if method == "pm_follow_up_assessment_get":
@@ -367,6 +375,8 @@ def read(ops, principal, method, params):
                 "native_analysis": native,
                 "bat_analysis": pm_bat_operations.capabilities(ops, principal, workspace),
                 "follow_up_analysis": follow_up,
+                "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
+                    "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":
