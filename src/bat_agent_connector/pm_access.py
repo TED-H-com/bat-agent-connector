@@ -15,6 +15,9 @@ def visible(db, principal, operation):
     from .pm_source_lineage import visible as source_visible
     if not source_visible(db, principal, "operation", operation.get("operation_id")):
         return False
+    if operation.get('action') == 'github.pr.publish':
+        from .pr_publication import operation_visible
+        return operation_visible(db, principal, operation)
     if not operation.get("action", "").startswith("pm."):
         return True
     from .pm_workspace import operation_visible

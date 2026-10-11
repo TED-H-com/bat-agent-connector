@@ -176,6 +176,8 @@ class ApiV1:
         pm_maintenance_review.install(daemon.ops)
         pm_maintenance_repairs.install(daemon.ops)
         pm_quality_reviews.install(daemon.ops)
+        from . import pr_publication
+        pr_publication.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -244,6 +246,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs", self.pm_maintenance_repairs, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs/current", self.pm_maintenance_repair_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs/(?P<repair_id>pmrp_[0-9a-f]{32})", self.pm_maintenance_repair, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/pr-publications/(?P<publication_operation_id>op_[0-9a-f]{32})", self.pm_pr_publication, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews", self.pm_quality_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})", self.pm_quality_review, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/quality", self.pm_work_quality, "observe"),
@@ -484,7 +487,7 @@ class ApiV1:
                       self.pm_brief_export, self.pm_work_deliveries,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
-                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_work_quality,
+                      self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_work_quality, self.pm_pr_publication,
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
@@ -805,6 +808,9 @@ class ApiV1:
     async def pm_maintenance_repair(self, principal, query, workspace_id, repair_id, **_):
         return self._pm_read(principal, "pm_maintenance_repair_get", query, workspace_id=workspace_id, repair_id=repair_id)
 
+    async def pm_pr_publication(self, principal, query, workspace_id, publication_operation_id, **_):
+        return self._pm_read(principal, 'pm_pr_publication_get', query, workspace_id=workspace_id, publication_operation_id=publication_operation_id)
+
     async def pm_quality_reviews(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_quality_reviews_list", query, workspace_id=workspace_id)
 
@@ -983,9 +989,11 @@ class ApiV1:
             worktree_merge_operations,
         )
         gh_cfg = self.daemon.ops.context["github_config"]
+        from . import pr_publication
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
+                               and (a.name != pr_publication.ACTION or all(principal.allows(s) for s in pr_publication.REQUIRED))
                                and (a.name != "pm.maintenance.repair" or principal.allows("observe") and principal.allows("manage"))
                                and (a.name not in {"pm.maintenance.repair.evidence.record", *pm_quality_reviews.ACTIONS} or principal.allows("observe"))
                                and (a.name not in {"pm.spec.materialize", "pm.work_batch.start", "pm.work_batch.evidence.record"}
@@ -1043,6 +1051,7 @@ class ApiV1:
                                                     "maintenance_review": pm_maintenance_review.capabilities(),
                                                     "maintenance_repairs": pm_maintenance_repairs.capabilities(self.daemon.ops),
                                                     "quality_reviews": pm_quality_reviews.capabilities(),
+                                                    "pr_publication": pr_publication.capabilities(),
                                                     "engineering_delivery": {"contract": "pm-engineering-delivery/v1", "read_only": True},
                                                     "spec_materialization": pm_spec_materialization.capabilities(),
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),

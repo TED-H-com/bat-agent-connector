@@ -1,10 +1,13 @@
 """Identical read contracts for the Dashboard, RPC and MCP PM entry points."""
 from __future__ import annotations
 
+import re
+
 from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_pr_publication_get": ("workspace_id", "publication_operation_id"),
     "pm_maintenance_repairs_list": ("workspace_id", "after", "limit"),
     "pm_maintenance_repair_current_get": ("workspace_id",),
     "pm_maintenance_repair_get": ("workspace_id", "repair_id"),
@@ -102,6 +105,16 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == 'pm_pr_publication_get':
+        from . import pr_publication
+        pm_workspace.require_member(ops.db, principal, workspace_id)
+        oid = params.get('publication_operation_id')
+        if not isinstance(oid, str) or not re.fullmatch('op_[0-9a-f]{32}', oid):
+            raise OperationError('INVALID_PARAMS', 'Select an original publication operation ID', 422)
+        op = pr_publication._operation(ops.db, oid)
+        if op['target'].get('workspace_id') != workspace_id:
+            raise OperationError('NOT_FOUND', 'Publication not found', 404)
+        return {'workspace_id': workspace_id, **pr_publication.get_publication(ops, principal, oid)}
     if method in {"pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get"}:
         from . import pm_maintenance_repairs as repairs
         if method == "pm_maintenance_repair_get":

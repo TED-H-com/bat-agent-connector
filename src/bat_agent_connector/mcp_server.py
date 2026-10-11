@@ -72,7 +72,7 @@ READ_TOOLS = [
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
     "pm_work_deliveries_list",
-    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get",
+    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get", "pm_pr_publication_get",
     "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
@@ -675,6 +675,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read original source-gated maintenance repair receipts."""
         return await pm_daemon("pm_maintenance_repair_get", workspace_id=workspace_id, repair_id=repair_id)
 
+    async def pm_pr_publication_get(workspace_id: str, publication_operation_id: str) -> dict[str, Any]:
+        """Read original native PR creation proof without refreshing or resending."""
+        return await pm_daemon('pm_pr_publication_get', workspace_id=workspace_id, publication_operation_id=publication_operation_id)
+
     async def pm_quality_reviews_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read original source-gated acceptance and DoD review evidence."""
         return await pm_daemon("pm_quality_reviews_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -1027,7 +1031,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_issue_mappings_list, pm_issue_mapping_get,
 
                pm_work_deliveries_list,
-               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_work_quality_get,
+               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_work_quality_get, pm_pr_publication_get,
                pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,

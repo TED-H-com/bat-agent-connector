@@ -125,6 +125,11 @@ MUTATIONS: tuple[Mutation, ...] = (
              "PR whose [[github.repos]] entry has integrate, sent to integrate.remote_url with the host's git "
              "credentials; never a +refspec, an empty source, --force, --force-with-lease, --mirror, --all, "
              "--tags, --delete or --prune; never the base, default or a protected branch"),
+    Mutation("github.pr.publish", "github", "remote", frozenset(), ("operation_submit",),
+             "observe/manage/integrate principal; exact owned PM handoff result, registered bare integration area, "
+             "one generated refs/heads/batc/pr-<operation> branch with an exact empty-ref create-only lease; "
+             "never replace an existing remote ref; explicit bounded public text; original native HTTP 201 receipt "
+             "is the only creation proof; an unknown POST is never resent or adopted from a matching remote PR"),
     Mutation("github.pr.merge", "github", "remote", frozenset(),
              ("github_pr_merge", "operation_submit", "batc delivery merge", "Delivery merge preview"),
              "merge principal and configured repository/method; immutable reviewed head/base/scope checked "

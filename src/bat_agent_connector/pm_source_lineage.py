@@ -16,7 +16,7 @@ from .operations import OperationError, OperationService
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
 # Other derived writes must first implement fixed lineage and original recovery.
-DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept",
+DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept", "github.pr.publish",
     "session.send", "session.answer", "session.interrupt", "session.read", "session.position",
     "session.labels.set", "session.record_verification", "work_item.update", "work_item.pin",
     "work_item.order", "work_item.approve", "work_item.continue"})
