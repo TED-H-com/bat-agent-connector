@@ -142,6 +142,7 @@ class ApiV1:
             pm_snapshots,
             pm_spec_materialization,
             pm_sprints,
+            pm_work_batches,
             pm_work_packages,
             pm_workload,
             pm_workspace,
@@ -161,6 +162,7 @@ class ApiV1:
         pm_follow_up_analysis.install(daemon.ops)
         pm_work_packages.install(daemon.ops)
         pm_spec_materialization.install(daemon.ops)
+        pm_work_batches.install(daemon.ops)
         pm_lifecycle.install(daemon.ops)
         pm_issue_mappings.install(daemon.ops)
 
@@ -234,6 +236,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines", self.pm_release_baselines, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/current", self.pm_release_baseline_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/(?P<baseline_id>pmrb_[0-9a-f]{32})", self.pm_release_baseline, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches", self.pm_work_batches, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-batches/(?P<batch_id>pmbt_[0-9a-f]{32})", self.pm_work_batch, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-findings/current", self.pm_maintenance_findings_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/spec-materializations", self.pm_spec_materializations, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/spec-materializations/(?P<materialization_id>pmsp_[0-9a-f]{32})", self.pm_spec_materialization, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages", self.pm_work_packages, "observe"),
@@ -468,6 +473,7 @@ class ApiV1:
                       self.pm_brief_export,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
+                      self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
                       self.pm_maintenance_reviews, self.pm_maintenance_review_current, self.pm_maintenance_review, self.pm_maintenance_review_events,
@@ -639,7 +645,7 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -774,6 +780,15 @@ class ApiV1:
 
     async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
         return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
+
+    async def pm_work_batches(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_work_batches_list", query, workspace_id=workspace_id)
+
+    async def pm_work_batch(self, principal, query, workspace_id, batch_id, **_):
+        return self._pm_read(principal, "pm_work_batch_get", query, workspace_id=workspace_id, batch_id=batch_id)
+
+    async def pm_maintenance_findings_current(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_maintenance_findings_current_get", query, workspace_id=workspace_id)
 
     async def pm_spec_materializations(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_spec_materializations_list", query, workspace_id=workspace_id)
@@ -928,6 +943,7 @@ class ApiV1:
             pm_maintenance_review,
             pm_release_baselines,
             pm_spec_materialization,
+            pm_work_batches,
             pm_workload,
             worktree_merge_operations,
         )
@@ -935,7 +951,8 @@ class ApiV1:
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
-                               and (a.name != "pm.spec.materialize" or principal.allows("observe") and principal.allows("start"))
+                               and (a.name not in {"pm.spec.materialize", "pm.work_batch.start", "pm.work_batch.evidence.record"}
+                                    or principal.allows("observe") and principal.allows("start"))
                                and (a.name not in {"artifact.capture", "artifact.capture.managed", "session.approve_pending"} or principal.allows("observe"))}
                    for a in self.daemon.ops.actions.values()]
         hosts = [{"host": h, "observe": True, "writes": fleet.writes_enabled(h),
@@ -988,6 +1005,7 @@ class ApiV1:
                                                     "maintenance_checks": pm_maintenance_checks.capabilities(self.daemon.ops),
                                                     "maintenance_review": pm_maintenance_review.capabilities(),
                                                     "spec_materialization": pm_spec_materialization.capabilities(),
+                                                    "work_batches": pm_work_batches.capabilities(self.daemon.ops),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),

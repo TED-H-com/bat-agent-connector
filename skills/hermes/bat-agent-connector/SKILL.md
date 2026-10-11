@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "4383fe40cbca65b68aeeb1b0678330fed5a514fa8b9fe9465c0bef0f58f8b7e9"
+  canonical_sha256: "44136b2c86b256e25513acdad0903fd57786bc9848da8b84b9e4888daf4601b2"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -567,6 +567,14 @@ late source/lifecycle change cannot become complete evidence. Reuse the exact
 original key to recover; do not restart an interrupted traversal to replace its
 original observation time. Explicit observation may run while stopped, but a
 lifecycle change during the traversal refuses further pages and recording.
+
+When the adopted optional `observation.maintenance_sources` configures exact
+Issue labels or Dependabot identities/manifests, `pm_maintenance_findings_current_get`
+reads their saved occurrence and current freshness. Missing, incomplete, stale,
+context-changed or stopped coverage does not mean clean; disappearance does not
+mean resolved. Alerts do not prove released-version applicability. No finding
+or successful observation authorizes repairs. Preserve the original observation
+ID/digest and provider-native finding identity.
 
 Use `pm_github_observations_list`, `pm_github_observation_current_get` and
 `pm_github_observation_get` to read saved observations without provider refresh.
@@ -1381,6 +1389,18 @@ of a historical verified deployment. Only explicit operation source bindings con
 `pm.spec.materialize` freezes the selected engineering package in the workspace's
 owned PM Git carrier and one ordinary immutable artifact. Use its exact package
 digest and adopted scope revision; it does not execute engineering or adopt scope.
+For an explicit bounded selection, `pm.work_batch.start` composes 1–16 fixed
+`repository.continue` handoff envelopes under workspace/lifecycle CAS, absolute
+deadline, start/concurrency and proven-unsent retry limits. Reuse the original
+key. Read `pm_work_batches_list` / `pm_work_batch_get` for original children and
+blocked reasons. Source withdrawal, pause, cancellation or budget exhaustion
+stops new effects; unknown sent effects retain their original children/capacity.
+`pm.work_batch.evidence.record` attaches exact registered verifier receipts at
+the current batch version. Dispatch success is not engineering completion or
+semantic acceptance. Dependencies require the selected fixed result profile;
+batch evidence does not bypass intrinsic package readiness. Provider cost is
+unmeasured, never implied by the start budget.
+
 Read `pm_spec_materializations_list` / `pm_spec_materialization_get` for original
 receipts and stable task identities. An optional `repository.continue.pm_spec_ref`
 must match the fixed package and the explicitly included ordinary artifact ref;

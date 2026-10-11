@@ -71,6 +71,7 @@ READ_TOOLS = [
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
+    "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
@@ -656,6 +657,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
             project_binding_id=project_binding_id, repository=repository, kind=kind, release_id=release_id,
             deployment_id=deployment_id, maintenance_branch=maintenance_branch)
 
+    async def pm_work_batches_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read saved bounded engineering batches; never dispatch or refresh providers."""
+        return await pm_daemon("pm_work_batches_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_work_batch_get(workspace_id: str, batch_id: str) -> dict[str, Any]:
+        """Read one original selected batch with current source access."""
+        return await pm_daemon("pm_work_batch_get", workspace_id=workspace_id, batch_id=batch_id)
+
+    async def pm_maintenance_findings_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read configured immutable findings and current freshness; does not authorize repairs."""
+        return await pm_daemon("pm_maintenance_findings_current_get", workspace_id=workspace_id)
+
     async def pm_spec_materializations_list(workspace_id: str, package_id: str | None = None, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read immutable owned spec receipts, optionally for one exact package; never write or execute."""
         return await pm_daemon("pm_spec_materializations_list", workspace_id=workspace_id, package_id=package_id, after=after, limit=limit)
@@ -983,6 +996,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 
+               pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
