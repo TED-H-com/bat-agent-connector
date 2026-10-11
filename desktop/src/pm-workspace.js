@@ -8,6 +8,7 @@ import {workspaceKanban} from './pm-kanban.js';
 import {workspaceMeetings} from './pm-meetings.js';
 import {workspaceRoadmap} from './pm-roadmap.js';
 import {projectBrief} from './pm-brief.js';
+import {workspaceReleaseBaselines} from './pm-release-baselines.js';
 import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
@@ -226,6 +227,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
     ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, content);
+  const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines
+    ? workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace}) : null;
+  if(releaseBaselines)body.insertBefore(releaseBaselines.element,content);
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   if(roadmap)body.insertBefore(roadmap.box,content);
@@ -253,7 +257,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
     ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
-  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element].filter(Boolean);
+  const sourceSections = () => [content, evidence?.box, brief?.box, releaseBaselines?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -526,6 +530,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
+    releaseBaselines?.withdraw();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -578,7 +583,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering]) {
+      for (const section of [evidence, brief, releaseBaselines, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -597,7 +602,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package', 'pm_release_baseline'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
