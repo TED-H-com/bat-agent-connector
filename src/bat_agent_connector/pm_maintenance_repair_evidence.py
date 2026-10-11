@@ -52,6 +52,11 @@ def evaluate(ops, principal, parent, selected):
         value = {'kind': kind, 'proof': proof, 'semantic_acceptance': 'not_evaluated', 'required_ci': 'unproven'}
         require_selected_sources(ops, principal, parent, selected, value)
         return value
+    if kind == 'required_ci':
+        from . import pm_required_ci
+        receipt, _ = owned_creation(ops, principal, parent)
+        proof = pm_required_ci.historical(ops, principal, parent, receipt, ref)
+        return {'kind': kind, **proof}
     if kind == 'quality':
         original = quality_assessment(ops, principal, parent, ref)
         return {'kind': kind, 'reference': ref, 'context_digest': original['context_digest'],
@@ -96,6 +101,11 @@ def require_selected_sources(ops, principal, parent, selected, evidence):
         pm_source_lineage.require(ops.db, principal, 'execution', proof['task_id'])
         from .pm_access import require_visible
         require_visible(ops.db, principal, repairs._child(ops, parent))
+    elif selected['kind'] == 'required_ci':
+        from . import pm_required_ci
+        receipt, _ = owned_creation(ops, principal, parent)
+        if pm_required_ci.historical(ops, principal, parent, receipt, selected['reference']) != {key: value for key, value in evidence.items() if key != 'kind'}:
+            raise _bad('The original required-CI receipt changed')
     elif selected['kind'] == 'quality':
         original = quality_assessment(ops, principal, parent, selected['reference'])
         if original['context_digest'] != evidence['context_digest']:
@@ -140,7 +150,9 @@ def progress(ops, parent):
         'publication': published['status'] if published else 'not_admitted',
         'acceptance': [doc['evidence'] for doc in docs if doc['evidence']['kind'] == 'acceptance'],
         'delivery_receipts': delivery, 'blocked_reason': reason, 'new_investment_blocked_reason': investment_blocked,
-        'required_ci': 'unproven', 'release_publication': 'not_inferred'}
+        'required_ci': 'unproven',
+        'required_ci_receipts': [doc['evidence'] for doc in docs if doc['evidence']['kind'] == 'required_ci'],
+        'release_publication': 'not_inferred'}
 
 
 def _check(ops, principal, target, params, pre):
@@ -281,7 +293,7 @@ def require_publication(ops, principal, parent, *, child_operation_id, candidate
     return require_quality(ops, principal, parent, quality_ref, candidate_sha=candidate_sha, candidate_tree=candidate_tree)
 
 
-def require_owned_pr(ops, principal, parent, operation):
+def owned_creation(ops, principal, parent):
     from . import pm_maintenance_repair_publication as publication
     child = publication.child(ops, parent)
     if child is None:
@@ -295,6 +307,11 @@ def require_owned_pr(ops, principal, parent, operation):
     receipt = pr_publication.require_creation_receipt(ops, principal, child['operation_id'],
         child_operation_id=source['operation_id'], provider_origin=original['config']['provider_origin'],
         repository_id=original['repository_id'], repair_parent_id=parent['operation_id'])
+    return receipt, child
+
+
+def require_owned_pr(ops, principal, parent, operation):
+    receipt, child = owned_creation(ops, principal, parent)
     selected = ((operation.get('external_refs') or {}).get('admission_binding') or {}).get('pm_delivery') or {}
     if any(selected.get(key) != receipt[key] for key in ('provider_origin', 'repository_id', 'pull_number')):
         raise _bad('Delivery must retain the original central PR creation target', 'PM_REPAIR_OWNED_PR_UNPROVEN')
@@ -340,7 +357,10 @@ def require_delivery(ops, principal, parent, operation):
     _paths([path for item in preview['files'] for path in (item.get('filename'), item.get('previous_filename')) if path is not None], repairs._intent(parent), policy)
     require_quality(ops, principal, parent, published['params']['quality_ref'], candidate_sha=receipt['candidate_sha'])
     if policy['verification']['required_ci']:
-        raise _bad('Required CI policy coverage is not proven by the available receipt profile', 'PM_REPAIR_REQUIRED_CI_UNPROVEN')
+        from . import pm_required_ci
+        bound = ((operation.get('external_refs') or {}).get('admission_binding') or {}).get('pm_delivery') or {}
+        ref = (bound.get('pm_repair_required_ci') or {}).get(parent['operation_id'])
+        pm_required_ci.require(ops, principal, parent, receipt, ref)
     if level == 3:
         from . import deployment
         recipe = deployment.recipe(ops, operation['target']['recipe'])
@@ -352,3 +372,27 @@ def require_delivery(ops, principal, parent, operation):
 def policies_for(ops, parent):
     intent = repairs._intent(parent)
     return repairs.policies._record(ops.db, parent['target']['workspace_id'], intent['check']['workload']['policy_id'])['document']['policy']
+
+
+def delivery_binding(ops, principal, action, target, params, selected, originals):
+    """Freeze only server-selected original repair references during admission."""
+    if action not in {'github.pr.merge', 'delivery.merge_and_deploy'} or not repairs.installed(ops.db):
+        return selected
+    parents = [repairs._operation(ops, oid) for oid in sorted(originals)]
+    parents = [parent for parent in parents if parent['action'] == repairs.ACTION]
+    if not parents:
+        return selected
+    references = {}
+    for parent in parents:
+        repairs._guard(ops, parent, scopes=repairs.REQUIRED | {ops.actions[action].scope})
+        if policies_for(ops, parent)['verification']['required_ci']:
+            rows = [doc for doc in _receipts(ops, parent) if doc['selection']['kind'] == 'required_ci']
+            if not rows:
+                raise _bad('Select the original required-CI observation first', 'PM_REPAIR_REQUIRED_CI_UNPROVEN')
+            references[parent['operation_id']] = rows[-1]['selection']['reference']
+    result = {**selected, **({'pm_repair_required_ci': references} if references else {})}
+    original = {'action': action, 'target': target, 'params': params,
+        'external_refs': {'admission_binding': {'pm_delivery': result}}}
+    for parent in parents:
+        require_delivery(ops, principal, parent, original)
+    return result
