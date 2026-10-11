@@ -90,7 +90,10 @@ async def ancestor(gh, repository, base, head, ctx=None) -> bool:
 
 def identity(pr: dict) -> dict:
     head, base = pr.get("head") or {}, pr.get("base") or {}
-    return {"number": pr.get("number"), "title": pr.get("title"), "html_url": pr.get("html_url"),
+    native = ({"native_pr_id": pr["id"]} if type(pr.get("id")) is int and pr["id"] > 0 else {})
+    if isinstance(pr.get("node_id"), str) and pr["node_id"]:
+        native["native_pr_node_id"] = pr["node_id"]
+    return {**native, "number": pr.get("number"), "title": pr.get("title"), "html_url": pr.get("html_url"),
             "head_sha": head.get("sha"), "head_ref": head.get("ref"),
             "head_repo_id": (head.get("repo") or {}).get("id"), "base_sha": base.get("sha"),
             "base_ref": base.get("ref"), "repository_id": (base.get("repo") or {}).get("id")}

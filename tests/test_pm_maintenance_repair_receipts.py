@@ -28,15 +28,9 @@ repair_ready = repair_fixture
 def observed(w, parent, *, own=True, passed=True):
     ops = w['d'].ops
     child = repairs._child(ops, parent)
-    tid = ops.journal.submit(project='fixture', host='h1', workspace='ws-1', original_words='Exact observed task',
-        idempotency_key=uuid.uuid4().hex)['task_id']
-    sha, tree = 'c' * 40, 'd' * 40
-    ops.db.execute("UPDATE tasks SET session_id=?, state='done', verification_commit=?, verification_tree=? WHERE task_id=?",
-        (child['result']['session_id'] if own else 'other-session', sha, tree, tid))
-    cursor = ops.db.execute('''INSERT INTO observed_verifications(task_id,candidate_commit,tree_hash,command,exit_code,
-        log_ref,output_sha256,created_at) VALUES(?,?,?,?,?,?,?,?)''',
-        (tid, sha, tree, 'pytest', 0 if passed else 1, 'fixture-only-log', 'f' * 64, w['clock'][0]))
-    return {'kind': 'verification', 'reference': {'verification_id': cursor.lastrowid, 'candidate_commit': sha, 'tree_hash': tree}}
+    from tests.test_pm_work_batches import observed as original_observed
+    return {'kind': 'verification', 'reference': original_observed(w, child,
+        session_id=None if own else 'other-session', candidate='c' * 40, tree='d' * 40, exit_code=0 if passed else 1)}
 
 
 def record(w, parent, selected, *, version=1):

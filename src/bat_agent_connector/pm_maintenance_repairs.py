@@ -34,7 +34,9 @@ def installed(db):
 
 
 def schema(journal):
+    from . import pm_maintenance_repair_publication as publication
     with journal.tx():
+        publication.schema(journal)
         journal.db.execute('''CREATE TABLE IF NOT EXISTS pm_maintenance_repairs (
             sequence INTEGER PRIMARY KEY AUTOINCREMENT,repair_id TEXT NOT NULL UNIQUE,
             operation_id TEXT NOT NULL UNIQUE,workspace_id TEXT NOT NULL,policy_id TEXT NOT NULL,
@@ -77,7 +79,7 @@ def install(ops):
 def capabilities(ops=None):
     return {'version': 1, 'actions': [ACTION, RECORD], 'policy_field': 'repair_rules',
         'sources': ['issues'], 'engine': 'repository.continue', 'automatic_new_work_item': False,
-        'automatic_pr_creation': False, 'alert_applicability_supported': False,
+        'automatic_pr_creation': ops is not None and 'github.pr.publish' in ops.actions, 'alert_applicability_supported': False,
         'cost_coverage': 'model_provider_unmeasured', 'hard_cost_ceiling_supported': False,
         'automatic_semantic_acceptance': False, 'automatic_release': False,
         'available': ops is not None and ACTION in ops.actions and 'repository.continue' in ops.actions}
@@ -459,6 +461,9 @@ async def _run(ctx):
         return ctx.effect('pm.repair.stopped', lambda: {'repair_id': 'pmrp_' + ctx.operation_id[3:],
             'outcome': 'execution_failed', 'operation_id': child['operation_id'],
             'repair_verified': False, 'capacity_held': True}, receipt_only=True)
+    if child['status'] == 'succeeded':
+        from . import pm_maintenance_repair_publication as publication
+        publication.advance(ctx)
     # A succeeded repository.continue is only a start receipt. Evidence recording
     # and the parent do not manufacture coding, verification or publication success.
     raise Wait('waiting_external', 'Awaiting original fixed verification and delivery receipts', 15)
@@ -469,10 +474,17 @@ def _local_record_or_stop(operation):
     return pm_lifecycle_gates.kind(operation['action'], bound) == 'record' or operation['action'] == 'session.interrupt'
 
 
+def require_publication_child(ops, operation):
+    from . import pm_maintenance_repair_publication as publication
+    if installed(ops.db):
+        return publication.require_child(ops, operation)
+
+
 def require_new_effect(ops, operation):
     if _local_record_or_stop(operation):
         return  # Existing local records/stop still pass the shared original-source gate.
     require_child(ops, operation)
+    require_publication_child(ops, operation)
     if not installed(ops.db):
         return
     from . import pm_maintenance_repair_evidence as evidence
@@ -494,9 +506,12 @@ def get_repair(ops, principal, workspace_id, repair_id):
         _full_access(ops, principal, parent)
         from . import pm_maintenance_repair_evidence as evidence
         child = _child(ops, parent)
+        from . import pm_maintenance_repair_publication as publication
+        published = publication.child(ops, parent)
         proofs = [json.loads(r[0]) for r in ops.db.execute('SELECT document FROM pm_maintenance_repair_evidence WHERE parent_id=? ORDER BY sequence LIMIT 64', (parent['operation_id'],))]
         return _bounded({'workspace_id': workspace_id, 'repair': {**row,
             'operation_status': parent['status'], 'child': ({key: child[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if child else None),
+            'publication_child': ({key: published[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if published else None),
             'evidence': proofs, 'capacity_held': row['finished_at'] is None,
             'repair_fixed': False, 'release_status': 'not_inferred', 'cost_coverage': 'model_provider_unmeasured',
             'progress': evidence.progress(ops, parent),
