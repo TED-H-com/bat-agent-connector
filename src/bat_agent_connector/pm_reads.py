@@ -5,6 +5,9 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
+    "pm_work_package_get": ("workspace_id", "package_id"),
+    "pm_work_package_readiness_get": ("workspace_id", "package_id"),
     "pm_follow_up_list": ("workspace_id", "after", "limit"),
     "pm_follow_up_get": ("workspace_id", "intake_id"),
     "pm_follow_up_latest_get": ("workspace_id",),
@@ -57,6 +60,14 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get"}:
+        from . import pm_work_packages
+        if method == "pm_work_package_get":
+            return pm_work_packages.get_package(ops, principal, workspace_id, params.get("package_id"))
+        if method == "pm_work_package_readiness_get":
+            return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"))
+        return pm_work_packages.list_packages(ops, principal, workspace_id, work_item_id=params.get("work_item_id"),
+                                              after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get"}:
         from . import pm_follow_up
         if method == "pm_follow_up_get":

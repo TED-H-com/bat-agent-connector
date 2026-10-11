@@ -1156,7 +1156,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1287,6 +1287,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let roadmap_list = path.ends_with("/roadmap/revisions");
             let governance_list = path.ends_with("/governance");
             let follow_up_list = path.ends_with("/follow-ups");
+            let work_package_list = path.ends_with("/work-packages");
             let governance_history = path.contains("/governance/") && path.ends_with("/history");
             let kanban_list = path.ends_with("/kanban");
             let meeting_list = path.ends_with("/meetings");
@@ -1313,6 +1314,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 || artifact_list
                 || governance_list
                 || follow_up_list
+                || work_package_list
                 || governance_history
                 || kanban_list
                 || meeting_list
@@ -1414,7 +1416,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                             .bytes()
                             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
-                "work_item_id" if evidence_list => {
+                "work_item_id" if evidence_list || work_package_list => {
                     value.len() == 23
                         && value.starts_with("wi_")
                         && value[3..]
@@ -1916,6 +1918,62 @@ mod tests {
         input.body = Some(serde_json::json!({"host":"other"}));
         assert!(validate_request(&input).is_err());
         input.body = None;
+        input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn work_package_reads_only_allow_exact_queries() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/work-packages";
+        let package = "pmwp_22222222222222222222222222222222";
+        for suffix in [
+            "".to_string(),
+            "?after=0&limit=100&work_item_id=wi_33333333333333333333".into(),
+            format!("/{package}"),
+            format!("/{package}/readiness"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?after=",
+            "?limit=",
+            "?actor=",
+            "?work_item_id=",
+            "?work_item_id=wi_bad",
+            "?after=0&after=1",
+            "?limit=&limit=1",
+            "?after=-1",
+            "?after=1000000000",
+            "?limit=101",
+            "?work_item_id=wi_33333333333333333333&work_item_id=wi_33333333333333333333",
+            "?execute=true",
+            "?package_id=pmwp_22222222222222222222222222222222",
+            "/pmwp_bad",
+            "/latest",
+            "/readiness",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?limit=1",
+            "?actor=",
+            "/readiness?after=0",
+            "/readiness?execute=true",
+            "/dispatch",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}/{package}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        assert!(validate_request(&request("POST", root)).is_err());
+        let mut input = get(root);
         input.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&input).is_err());
     }

@@ -67,6 +67,7 @@ READ_TOOLS = [
     "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
+    "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
     "pm_kanban_get", "pm_kanban_card_get", "pm_meetings_list", "pm_meeting_get", "pm_meeting_history_list",
     "pm_sprint_artifacts_get",
@@ -608,6 +609,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
         return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_work_packages_list(workspace_id: str, work_item_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read fixed engineering packages with original source visibility; no dispatch."""
+        return await pm_daemon("pm_work_packages_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+
+    async def pm_work_package_get(workspace_id: str, package_id: str) -> dict[str, Any]:
+        """Read one immutable engineering package and its original provenance."""
+        return await pm_daemon("pm_work_package_get", workspace_id=workspace_id, package_id=package_id)
+
+    async def pm_work_package_readiness_get(workspace_id: str, package_id: str) -> dict[str, Any]:
+        """Check engineering handoff review readiness only; never execution authorization."""
+        return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id)
+
     async def pm_follow_up_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read fixed Follow-up intake metadata with current membership and original source visibility."""
         return await pm_daemon("pm_follow_up_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -804,6 +817,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
                pm_governance_list, pm_governance_get, pm_governance_history_list,
+               pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,
                pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,
                pm_sprint_artifacts_get, pm_sprint_artifact_revisions_list, pm_sprint_artifact_get, pm_sprints_list, pm_sprint_get, pm_sprint_history_list,
