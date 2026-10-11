@@ -203,6 +203,7 @@ pub struct ConnectorResponse {
 pub struct NativeStatus {
     pub updates: bool,
     pub file_transfers: bool,
+    pub brief_exports: bool,
     pub endpoint: Option<String>,
     pub expected_actor: Option<String>,
     pub error: Option<String>,
@@ -376,6 +377,7 @@ impl Bridge {
         NativeStatus {
             updates: true,
             file_transfers: true,
+            brief_exports: true,
             endpoint: config.map(|c| c.endpoint.clone()),
             expected_actor: config.map(|c| c.expected_actor.clone()),
             error: state

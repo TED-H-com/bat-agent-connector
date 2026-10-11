@@ -8,6 +8,7 @@ fn main() {
             "native_files_drop_target",
             "native_files_upload",
             "native_files_save",
+            "native_brief_save",
             "native_files_control",
             "native_files_preview",
             "native_status",
