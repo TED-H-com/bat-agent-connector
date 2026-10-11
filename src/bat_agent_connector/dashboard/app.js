@@ -6516,6 +6516,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
 			receiptPolling = false;
+			if (disposed) return;
+			try {
+				guard();
+			} catch {
+				return;
+			}
 			if (!retired(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
