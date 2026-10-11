@@ -88,6 +88,7 @@ from tests.conftest import adopt  # noqa: E402
 
 SID = "sess-claude-0001"
 OWNER = api_auth.Principal("operator-dashboard", frozenset(api_auth.SCOPES))
+ADMIN = api_auth.Principal(api_auth.ADMIN_ACTOR, frozenset(), admin=True)
 
 
 def capability_caller(d, tid):
@@ -107,7 +108,7 @@ async def call_owned(d, method, params, **kwargs):
 
 
 @pytest.fixture
-async def owned(mock, tmp_path):
+async def owned(mock, tmp_path, controller_context):
     daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=["/srv"],
                                     default_permission_mode="allow_all", safety={"write_min_interval_s": 0}),
                         tmp_path / "tasks.db")
@@ -853,7 +854,9 @@ async def test_a05_submission_refs_commit_with_receipt_and_replay_without_effect
         monkeypatch.setattr(restarted.journal, "record_continuation" if continuation else "submit", no_effect)
         await settle_operations(restarted.ops)
         done = restarted.ops.get(op["operation_id"])
-        assert done["status"] == "succeeded" and done["external_refs"] == refs
+        assert done["status"] == "succeeded"
+        expected = refs if not old_row or continuation else {"task_id": refs["task_id"]}
+        assert done["external_refs"] == expected  # Missing original authority is never fabricated.
         assert done["result"]["task_id"] == refs["task_id"]
         assert task_effect_snapshot(restarted, refs["task_id"]) == snapshot
         assert restarted.journal.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == count
@@ -1217,7 +1220,8 @@ async def test_a07_task_pause_abort_is_journaled_control(owned, mock):
     assert len(writes(mock)) == 1
 
 
-async def test_a09_second_client_uses_central_owner(owned, mock, fleet_factory, monkeypatch):
+@pytest.mark.parametrize("caller", ["owner", "missing", "foreign_admin"])
+async def test_a09_second_client_uses_central_owner(owned, mock, fleet_factory, monkeypatch, caller):
     import asyncio
     d, tid = owned
     client = fleet_factory(writes=True, orchestrate=True, managed_roots=["/srv"], safety={"write_min_interval_s": 0})
@@ -1225,9 +1229,20 @@ async def test_a09_second_client_uses_central_owner(owned, mock, fleet_factory, 
     port = server.sockets[0].getsockname()[1]
     d._endpoint = f"http://127.0.0.1:{port}/rpc"
     d._write_owner_pointer()
+    token = api_auth.issue(d.journal.db, OWNER.actor, ["operate"]) if caller == "owner" else d._admin_token
+    monkeypatch.delenv("BATC_API_TOKEN", raising=False)
+    if caller != "missing":
+        monkeypatch.setenv("BATC_API_TOKEN", token)
     try:
+        if caller != "owner":
+            code = "CONTROLLER_AUTHORITY_REQUIRED" if caller == "missing" else "FOREIGN_CONTROLLER"
+            with pytest.raises(TaskControlRefused, match=code):
+                await service.session_send(client, "h1", SID, "through owner", confirm=True)
+            assert not d.journal.commands(tid) and not writes(mock)
+            return
         result = await service.session_send(client, "h1", SID, "through owner", confirm=True)
         assert result["accepted"]
+        assert d.ops.list()["operations"][0]["actor"] == OWNER.actor
         commands = d.journal.commands(tid)
         assert len(commands) == 1 and commands[0]["kind"] == "send"
         assert len(writes(mock)) == 1
@@ -1248,9 +1263,10 @@ async def test_a05_task_submit_actor_scope_continuation_and_upgrade_replay(owned
     assert other["task_id"] != first["task_id"]
     with pytest.raises(OperationError, match="IDEMPOTENCY_CONFLICT"):
         await call_owned(d, "work_submit", {**payload, "original_words": "different"})
-    old = d.journal.submit(project="p", host="h1", workspace="demo-project", original_words="historical",
-                           engine="goose", recipe="goose-session", idempotency_key="historical")
-    linked = await call_owned(d, "work_submit", {**payload, "original_words": "historical", "idempotency_key": "historical"})
+    with controller_scope(d.journal, ADMIN):
+        old = d.journal.submit(project="p", host="h1", workspace="demo-project", original_words="historical",
+                               engine="goose", recipe="goose-session", idempotency_key="historical")
+    linked = await call_owned(d, "work_submit", {**payload, "original_words": "historical", "idempotency_key": "historical"}, principal=ADMIN)
     assert linked["task_id"] == old["task_id"]
     separate = await call_owned(d, "work_submit", {**payload, "original_words": "historical", "idempotency_key": "historical"}, principal=p)
     assert separate["task_id"] != old["task_id"]
@@ -1265,8 +1281,9 @@ async def test_a05_task_submit_actor_scope_continuation_and_upgrade_replay(owned
 async def test_a05_restart_after_effect_commit_replays_without_increment(mock, tmp_path):
     config = make_config(mock, writes=True, orchestrate=True)
     first = TaskDaemon(config, tmp_path / "restart.db")
-    task = first.journal.submit(project="p", host="h1", workspace="w", original_words="do it", idempotency_key="old")
     principal = api_auth.Principal("operator-dashboard", frozenset({"operate"}))
+    with controller_scope(first.journal, principal):
+        task = first.journal.submit(project="p", host="h1", workspace="w", original_words="do it", idempotency_key="old")
     op, _ = first.ops.create(principal, action="task.pause", target={"task_id": task["task_id"]},
                               preconditions={"control_version": 0}, idempotency_key="crash")
     ctx = OpContext(first.ops, first.ops._row(op["operation_id"]))
@@ -1577,14 +1594,15 @@ async def test_a05_rpc_http_and_mcp_share_task_action_keys(owned, monkeypatch):
     server = await asyncio.start_server(d._handle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
-    monkeypatch.setenv("BATC_TASK_ADMIN_TOKEN_FILE", str(d.admin_token_path))
+    token = api_auth.issue(d.journal.db, OWNER.actor, list(OWNER.scopes))
+    monkeypatch.setenv("BATC_API_TOKEN", token)
     mcp, mcp_fleet = build_server(d.fleet.config)
     try:
         first = await mcp.call_tool("work_pause", {"task_id": tid, "idempotency_key": "shared"})
         text = json.dumps(first.model_dump(), default=str)
         op = d.ops.list()["operations"][0]
         assert op["operation_id"] in text
-        status, result = await http(port, "POST", "/api/v1/operations?wait=2", tok=d._admin_token,
+        status, result = await http(port, "POST", "/api/v1/operations?wait=2", tok=token,
                                     body={"action": "task.pause", "target": {"task_id": tid},
                                           "params": {"abort_current": False, "actor": "service", "source_message_id": None},
                                           "idempotency_key": "shared"})
@@ -1620,7 +1638,7 @@ async def test_a05_long_legacy_task_key_keeps_its_original_payload(owned):
 
 async def test_a07_scoped_operation_observes_late_control_version(owned, mock):
     d, tid = owned
-    principal = OWNER
+    principal = capability_caller(d, tid)
     op, _ = d.ops.create(principal, action="session.send", target={"task_id": tid},
                          params={"text": "instruction", "step_id": "step"},
                          preconditions={"control_version": 0}, idempotency_key="late")
@@ -1793,8 +1811,9 @@ async def test_a07_verifying_refusal_does_not_wait_for_coordinator_lock(owned):
 
 async def test_a05_historical_bridge_and_operation_intent_are_atomic(owned, monkeypatch):
     d, _ = owned
-    old = d.journal.submit(project="p", host="h1", workspace="demo-project", original_words="historical",
-                           engine="goose", recipe="goose-session", idempotency_key="pre-upgrade")
+    with controller_scope(d.journal, ADMIN):
+        old = d.journal.submit(project="p", host="h1", workspace="demo-project", original_words="historical",
+                               engine="goose", recipe="goose-session", idempotency_key="pre-upgrade")
     original = d.ops._step_done
     monkeypatch.setattr(d.ops, "kick", lambda: None)
 
@@ -1804,10 +1823,10 @@ async def test_a05_historical_bridge_and_operation_intent_are_atomic(owned, monk
     params = {"project": "p", "host": "h1", "workspace": "demo-project", "original_words": "historical",
               "idempotency_key": "pre-upgrade"}
     with pytest.raises(RuntimeError, match="bridge commit"):
-        await call_owned(d, "work_submit", params)
+        await call_owned(d, "work_submit", params, principal=ADMIN)
     assert d.journal.db.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
     monkeypatch.setattr(d.ops, "_step_done", original)
-    result = await call_owned(d, "work_submit", params)
+    result = await call_owned(d, "work_submit", params, principal=ADMIN)
     assert result["task_id"] == old["task_id"]
 
 
@@ -1815,8 +1834,9 @@ async def test_a05_historical_bridge_survives_restart_before_task_effect(mock, t
     config = make_config(mock, writes=True, orchestrate=True)
     path = tmp_path / "upgrade.db"
     first = TaskDaemon(config, path)
-    old = first.journal.submit(project="p", host="h1", workspace="w", original_words="historical",
-                               engine="goose", recipe="goose-session", idempotency_key="pre-upgrade")
+    with controller_scope(first.journal, ADMIN):
+        old = first.journal.submit(project="p", host="h1", workspace="w", original_words="historical",
+                                   engine="goose", recipe="goose-session", idempotency_key="pre-upgrade")
     monkeypatch.setattr(first.ops, "kick", lambda: None)
 
     async def crash():
@@ -1824,7 +1844,7 @@ async def test_a05_historical_bridge_survives_restart_before_task_effect(mock, t
     monkeypatch.setattr(first.ops, "run_due", crash)
     with pytest.raises(RuntimeError, match="admission commit"):
         await first.call("work_submit", {"project": "p", "host": "h1", "workspace": "w", "original_words": "historical",
-                                         "idempotency_key": "pre-upgrade"})
+                                         "idempotency_key": "pre-upgrade"}, principal=ADMIN)
     op_id = first.journal.db.execute("SELECT operation_id FROM operations").fetchone()[0]
     await first.fleet.close()
     first.journal.close()
@@ -1873,8 +1893,14 @@ async def test_a05_cli_reconcile_retries_keep_command_capability_identity(owned,
     import asyncio
 
     from bat_agent_connector import cli
-    d, tid = owned
-    cmd, _ = d.journal.command(tid, "send", SID, {"purpose": "goose:one", "prompt_sha256": "d" * 64}, "old-send")
+    d, _ = owned
+    with controller_scope(d.journal, ADMIN):
+        task = d.journal.submit(project="p", host="h1", workspace="demo-project", original_words="admin task",
+                                engine="goose", idempotency_key="admin-task")
+        tid = task["task_id"]
+        d.journal.db.execute("UPDATE tasks SET state='accepted',session_id=? WHERE task_id=?", ("admin-lead", tid))
+        adopt("admin-lead", cwd="/srv/admin", task_id=tid, role="lead")
+    cmd, _ = d.journal.command(tid, "send", "admin-lead", {"purpose": "goose:one", "prompt_sha256": "d" * 64}, "old-send")
     d.journal.command_status(cmd["command_id"], "uncertain")
     d.journal.change(tid, "uncertain")
     server = await asyncio.start_server(d._handle, "127.0.0.1", 0)
@@ -1962,7 +1988,10 @@ def admission_control(d, tid, mock, kind, *, scoped=False, pre=None, key="admiss
 async def test_a07_session_operation_keeps_admission_incarnation(owned, mock, kind, raced, explicit):
     d, tid = owned
     principal, request, op = admission_control(d, tid, mock, kind, pre={"control_version": 0} if explicit else {})
-    binding = {"task_id": tid, "control_version": 0, "host": "h1", "session_id": SID, "role": "lead"}
+    binding = {"task_id": tid, "control_version": 0, "host": "h1", "session_id": SID, "role": "lead",
+               "controller_authority": task_control.authority(d.journal.get(tid)),
+               "session_controller": {"host": "h1", "session_id": SID,
+                                      "controller_incarnation": registry.get("h1", SID)["controller_incarnation"]}}
     assert op["external_refs"]["admission_binding"] == binding
     assert op["preconditions"] == request["preconditions"]  # server metadata never changes the hashed request
     if raced:
@@ -2015,7 +2044,7 @@ async def test_a07_send_refuses_replaced_admission_session(owned, mock, scoped):
                                     "task.resume", "task.command.reconcile", "task.submit"])
 async def test_a07_task_actions_keep_admission_version(owned, mock, action):
     d, tid = owned
-    principal = OWNER
+    principal = capability_caller(d, tid) if action in {"task.verify", "task.request_ted"} else OWNER
     target, params = {"task_id": tid}, {}
     if action == "task.mark_stage":
         finish_verified_task(d, tid)
@@ -2072,15 +2101,17 @@ async def test_a05_admission_binding_is_atomic_with_operation_row(owned, mock, m
 
 
 @pytest.mark.parametrize("kind,scoped", [("send", False), ("answer", False), ("interrupt", False), ("send", True)])
-async def test_a07_preupgrade_operation_without_admission_binding_keeps_old_behavior(owned, mock, kind, scoped):
+async def test_a07_preupgrade_operation_without_admission_binding_stays_read_only(owned, mock, kind, scoped):
     d, tid = owned
     _, _, op = admission_control(d, tid, mock, kind, scoped=scoped)
     d.journal.db.execute("UPDATE operations SET external_refs=NULL WHERE operation_id=?", (op["operation_id"],))
     d.journal.pause(tid)
     d.journal.resume(tid)
     await settle_operations(d.ops)
-    assert d.ops.get(op["operation_id"])["status"] == "succeeded"
-    assert len(writes(mock)) == len(d.journal.commands(tid)) == 1
+    done = d.ops.get(op["operation_id"])
+    assert done["status"] == "failed" and done["error_code"] in {
+        "CONTROLLER_BINDING_UNPROVEN", "CONTROLLER_AUTHORITY_REQUIRED"}
+    assert not writes(mock) and not d.journal.commands(tid)
 
 
 @pytest.mark.parametrize("entry", ["rpc", "mcp", "cli"])
@@ -2089,7 +2120,9 @@ async def test_a05_legacy_task_door_records_admission_binding(owned, entry):
     result = await call_owned(d, "work_pause", {"task_id": tid, "entry": entry, "idempotency_key": "legacy-door"})
     op = d.ops.get(result["operation_id"])
     assert op["entry"] == entry and op["preconditions"] == {}
-    assert op["external_refs"]["admission_binding"] == {"task_id": tid, "control_version": 0}
+    binding = op["external_refs"]["admission_binding"]
+    assert binding == {"task_id": tid, "control_version": 0,
+                       "controller_authority": task_control.authority(d.journal.get(tid))}
     d.journal.resume(tid)
     assert await call_owned(d, "work_pause", {"task_id": tid, "entry": entry, "idempotency_key": "legacy-door"}) == result
 
@@ -2120,7 +2153,7 @@ async def test_a07_task_session_actions_refuse_replaced_admission_role(owned, mo
     d, tid = owned
     target = {"task_id": tid}
     params = {"abort_current": True} if action == "task.pause" else {}
-    principal = OWNER
+    principal = capability_caller(d, tid) if action == "task.verify" else OWNER
     if action == "task.command.reconcile":
         reviewer = "sess-codex-0002"
         adopt(reviewer, task_id=tid, role="reviewer", agent_preset="codex-agent")
@@ -2309,7 +2342,7 @@ async def test_a07_legacy_mcp_answer_without_prompt_id_uses_owner_resolution(own
     server = await asyncio.start_server(d._handle, "127.0.0.1", 0)
     d._endpoint = f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}/rpc"
     d._write_owner_pointer()
-    token = api_auth.issue(d.journal.db, "legacy-mcp-answer", ["operate"])
+    token = api_auth.issue(d.journal.db, OWNER.actor, ["operate"])
     monkeypatch.setenv("BATC_API_TOKEN", token)
     monkeypatch.setenv("BATC_TASK_URL", d._endpoint)
     mcp, fleet = build_server(d.fleet.config)
@@ -2319,7 +2352,7 @@ async def test_a07_legacy_mcp_answer_without_prompt_id_uses_owner_resolution(own
         assert json.loads(d.journal.commands(tid)[0]["payload"])["tool_use_id"] == prompt_id
         assert d.journal.commands(tid)[0]["status"] == "settled"
         op = d.ops.list()["operations"][0]
-        assert op["actor"] == "legacy-mcp-answer" and op["entry"] == "mcp"
+        assert op["actor"] == OWNER.actor and op["entry"] == "mcp"
         assert op["external_refs"]["resolved_params"] == {"tool_use_id": prompt_id}
         assert op["external_refs"]["admission_binding"]["task_id"] == tid
         assert len(writes(mock)) == 1

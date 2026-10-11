@@ -10,7 +10,7 @@ from bat_agent_connector.errors import TaskControlRefused
 from bat_agent_connector.mcp_server import build_server
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests import test_api_v1 as api
-from tests.conftest import make_config
+from tests.conftest import controller_scope, make_config
 from tests.test_lifecycle import _add_wt_claude
 
 daemon, served = api.daemon, api.served
@@ -20,22 +20,23 @@ daemon, served = api.daemon, api.served
 async def failover_owned(mock, tmp_path):
     daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=["/srv/demo"],
                                     safety={"write_min_interval_s": 0}), tmp_path / "tasks.db")
-    sid = _add_wt_claude(mock)
-    task = daemon.journal.submit(project="p", host="h1", workspace="demo-project", original_words="do it",
-                                 engine="goose", lead_agent="claude", idempotency_key="failover-fixture")
-    tid = task["task_id"]
-    daemon.journal.change(tid, "dispatching")
-    daemon.journal.change(tid, "accepted", fields={"session_id": sid})
-    daemon.journal.add_branch(tid, session_id=sid, provider="claude", role="lead", reason="test")
-    daemon.journal.change(tid, "running")
-    task = daemon.journal.change(tid, "quota_limited")
-    registry.update("h1", sid, task_id=tid, role="lead")
-    try:
-        yield daemon, task, sid
-    finally:
-        await daemon.fleet.close()
-        await daemon.inventory.close()
-        daemon.journal.close()
+    with controller_scope(daemon.journal, api.api_auth.Principal("operator-dashboard", frozenset(api.api_auth.SCOPES))):
+        sid = _add_wt_claude(mock)
+        task = daemon.journal.submit(project="p", host="h1", workspace="demo-project", original_words="do it",
+                                     engine="goose", lead_agent="claude", idempotency_key="failover-fixture")
+        tid = task["task_id"]
+        daemon.journal.change(tid, "dispatching")
+        daemon.journal.change(tid, "accepted", fields={"session_id": sid})
+        daemon.journal.add_branch(tid, session_id=sid, provider="claude", role="lead", reason="test")
+        daemon.journal.change(tid, "running")
+        task = daemon.journal.change(tid, "quota_limited")
+        registry.update("h1", sid, task_id=tid, role="lead")
+        try:
+            yield daemon, task, sid
+        finally:
+            await daemon.fleet.close()
+            await daemon.inventory.close()
+            daemon.journal.close()
 
 
 def reserved_authority(daemon, task, sid):
@@ -152,7 +153,7 @@ async def test_a07_standalone_failover_arguments_use_the_central_owner(served, m
     config = d.fleet.config
     mock.handlers['git:log'] = lambda p: [{'hash': 'a' * 40}]
     monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
-    monkeypatch.setenv('BATC_API_TOKEN', api.token(d, 'standalone-failover', 'start', 'operate'))
+    monkeypatch.setenv('BATC_API_TOKEN', api.token(d, 'operator-dashboard', 'start', 'operate'))
     if door == "mcp":
         server, fleet = build_server(config)
         try:

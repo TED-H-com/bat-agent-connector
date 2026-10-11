@@ -300,7 +300,7 @@ async def test_task_http_mcp_cli_share_preview_and_operation(daemon, mock, monke
     from tests.test_api_v1 import http
     _, op = await setup_work(daemon, mock)
     tid = owned(daemon, op["result"]["session_id"])
-    token = api_auth.issue(daemon.journal.db, "cleaner", ["observe", "cleanup"])
+    token = api_auth.issue(daemon.journal.db, CLEANER.actor, ["observe", "cleanup"])
     observer = api_auth.issue(daemon.journal.db, "observer", ["observe"])
     server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
@@ -433,7 +433,7 @@ async def test_same_actor_replay_requires_scope_and_automatic_replay_requires_in
     await settle_operations(daemon.ops, timeout=60)
     assert daemon.ops.get(operation["operation_id"])["status"] == "succeeded"
     for scopes in (frozenset(), task_cleanup.SYSTEM.scopes):
-        with pytest.raises(OperationError, match="FORBIDDEN"):
+        with pytest.raises(OperationError, match="FORBIDDEN" if not scopes else "CONTROLLER_MISMATCH"):
             daemon.ops.create(api_auth.Principal(task_cleanup.SYSTEM.actor, scopes), **copy.deepcopy(request))
     same, created = daemon.ops.create(task_cleanup.SYSTEM, **copy.deepcopy(request))
     assert not created and same["operation_id"] == operation["operation_id"]
