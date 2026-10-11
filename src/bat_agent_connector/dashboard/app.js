@@ -884,7 +884,20 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	const gate = () => ready && current && caps()?.actor === actor && permitted(true);
 	const hidden = () => h("input", { type: "hidden" });
 	const stageName = (value) => t("pm_lifecycle_" + (value || "unclassified"));
-	const canAction = (action) => Array.isArray(feature.gated_actions) && (!feature.gated_actions.includes(action) || Boolean(ready && current && !current.blocked_actions.includes(action)));
+	const canAction = (action, readParams) => {
+		if (!Array.isArray(feature.gated_actions)) return false;
+		if (!feature.gated_actions.includes(action)) return true;
+		if (!ready || !current) return false;
+		if (!current.blocked_actions.includes(action)) return true;
+		const rule = current.record_variants?.[action];
+		if (!Array.isArray(rule?.absent_params) || !rule.absent_params.length || typeof readParams !== "function") return false;
+		try {
+			const params = readParams();
+			return params && rule.absent_params.every((key) => typeof key === "string" && !Object.hasOwn(params, key));
+		} catch {
+			return false;
+		}
+	};
 	const notify = () => {
 		for (const editor of editors) editor.update();
 		onChange();
@@ -1204,6 +1217,364 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		refresh,
 		withdraw,
 		newActionAllowed: canAction
+	};
+}
+//#endregion
+//#region src/pm-issue-mappings.js
+function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/issue-mappings`;
+	const id = /^pmim_[0-9a-f]{32}$/, revision = /^pmir_[0-9a-f]{32}$/, digest = /^[0-9a-f]{64}$/;
+	let serial = 0, loaded = false, rows = [], cursor = null, pages = 1, filtered = false, packageRow = null, selectedId = null, current = null;
+	const publishers = new Map(), cancellers = new Map(), status = h("div", { role: "status" }), catalog = h("div"), selected = h("div"), publication = h("div"), detail = h("div");
+	const refreshButton = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pmi_refresh"));
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			pages++;
+			refresh();
+		}
+	}, t("pmi_more"));
+	const element = h("section", {
+		"data-pm-issue-mappings": "",
+		class: "pm-issues"
+	}, h("div", { class: "actions" }, h("h3", {}, t("pmi_title")), refreshButton), h("p", { class: "muted" }, t("pmi_intro")), status, catalog, more, selected, publication, detail);
+	const valid = (ticket) => {
+		alive();
+		return element.isConnected && ticket === serial;
+	};
+	const hidden = () => h("input", { type: "hidden" }), fold = (label, ...children) => h("details", {}, h("summary", {}, t(label)), ...children);
+	const checkScope = (value) => {
+		if (value?.version !== 1 || value.workspace_id !== workspaceId) throw Error(t("pmi_invalid"));
+		return value;
+	};
+	const checkRow = (row) => {
+		if (!id.test(row?.mapping_id) || !revision.test(row.revision_id) || !digest.test(row.document_digest) || row.workspace_id !== workspaceId || row.document?.mapping_id !== row.mapping_id || row.document?.work_item_id !== row.work_item_id || row.document?.revision_id !== row.revision_id || !["tracking", "cancelled"].includes(row.document?.state) || row.document.execution_authorized !== false || row.document.counts_as_done !== false) throw Error(t("pmi_invalid"));
+		return row;
+	};
+	function update() {
+		refreshButton.disabled = !loaded;
+		more.disabled = !loaded;
+		more.hidden = cursor === null;
+		for (const editor of [...publishers.values(), ...cancellers.values()]) editor.update();
+	}
+	const matching = () => packageRow ? rows.filter((row) => row.work_item_id === packageRow.work_item_id && row.document.relation.repository_id === packageRow.document.code_source.repository_id) : [];
+	function publicationReady() {
+		if (!loaded || !packageRow || !permitted(false)) return false;
+		const found = matching();
+		if (found.length > 1) return false;
+		if (found.length) return current?.mapping_id === found[0].mapping_id && current.revision_id === found[0].revision_id && current.document.state === "tracking";
+		return cursor === null && !filtered;
+	}
+	function publishEditor() {
+		const workId = packageRow.work_item_id;
+		if (publishers.has(workId)) return publishers.get(workId);
+		const title = input("pmi_public_title", { max: 200 }), body = input("pmi_public_body", {
+			max: 32e3,
+			multiline: true
+		}), packageId = hidden(), packageDigest = hidden(), mappingRevision = hidden();
+		let editor = null, syncing = false;
+		editor = form({
+			action: "pm.issue.publish",
+			target: {
+				workspace_id: workspaceId,
+				work_item_id: workId
+			},
+			fields: {
+				title,
+				body,
+				package: packageId,
+				digest: packageDigest,
+				revision: mappingRevision
+			},
+			params: (values) => ({
+				package_id: values.package,
+				public_title: values.title,
+				public_body: values.body
+			}),
+			preconditions: () => ({
+				expected_package_digest: packageDigest.value,
+				expected_mapping_revision: mappingRevision.value || null
+			}),
+			permitted: () => publicationReady() && packageRow.work_item_id === workId && packageId.value === packageRow.package_id && packageDigest.value === packageRow.document_digest && mappingRevision.value === (matching()[0]?.revision_id || ""),
+			recoverPermitted: () => loaded && permitted(false),
+			label: "pmi_publish",
+			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (editor && !syncing) editor.update();
+			},
+			extra: h("div", {}, h("p", { class: "muted" }, t("pmi_public_help")), labelled("pmi_public_title", title), labelled("pmi_public_body", body), packageId, packageDigest, mappingRevision)
+		});
+		const originalUpdate = editor.update, stale = h("p", {
+			class: "muted",
+			hidden: true
+		}, t("pmi_stale"));
+		const select = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (editor.locked() || !publicationReady() || packageRow.work_item_id !== workId) return;
+				editor.set("package", packageRow.package_id);
+				editor.set("digest", packageRow.document_digest);
+				editor.set("revision", matching()[0]?.revision_id || "");
+				editor.update();
+			}
+		}, t("pmi_review_source"));
+		editor.box.append(stale, select);
+		editor.update = () => {
+			if (syncing) return;
+			syncing = true;
+			try {
+				const selectedWork = packageRow?.work_item_id === workId;
+				if (selectedWork && publicationReady() && !editor.locked() && (!packageId.value || !title.value && !body.value)) {
+					editor.set("package", packageRow.package_id);
+					editor.set("digest", packageRow.document_digest);
+					editor.set("revision", matching()[0]?.revision_id || "");
+				}
+				originalUpdate();
+				const changed = selectedWork && packageId.value && (packageId.value !== packageRow.package_id || packageDigest.value !== packageRow.document_digest || mappingRevision.value !== (matching()[0]?.revision_id || ""));
+				stale.hidden = !changed;
+				select.hidden = !changed;
+				select.disabled = editor.locked() || !publicationReady();
+			} finally {
+				syncing = false;
+			}
+		};
+		publishers.set(workId, editor);
+		return editor;
+	}
+	function cancelEditor(row) {
+		const mid = row.mapping_id;
+		if (cancellers.has(mid)) return cancellers.get(mid);
+		const reason = input("pmi_private_reason", {
+			max: 4e3,
+			multiline: true
+		}), publicReason = input("pmi_public_reason", {
+			max: 8e3,
+			multiline: true,
+			required: false
+		}), version = hidden();
+		let editor = null, syncing = false;
+		editor = form({
+			action: "pm.issue.cancel",
+			target: {
+				workspace_id: workspaceId,
+				mapping_id: mid
+			},
+			fields: {
+				reason,
+				publicReason,
+				version
+			},
+			params: (values) => ({
+				rationale: values.reason,
+				...values.publicReason ? { public_reason: values.publicReason } : {}
+			}),
+			preconditions: () => ({ expected_mapping_revision: version.value }),
+			permitted: () => loaded && permitted(false) && current?.mapping_id === mid && current.document.state === "tracking" && version.value === current.revision_id,
+			recoverPermitted: () => loaded && permitted(false),
+			label: "pmi_stop",
+			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (editor && !syncing) editor.update();
+			},
+			extra: h("div", {}, h("p", { class: "muted" }, t("pmi_stop_help")), labelled("pmi_private_reason", reason), labelled("pmi_public_reason", publicReason), version)
+		});
+		const updateOriginal = editor.update, warning = h("p", {
+			class: "muted",
+			hidden: true
+		}, t("pmi_stale"));
+		const review = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (editor.locked() || !loaded || !permitted(false) || current?.mapping_id !== mid) return;
+				editor.set("version", current.revision_id);
+				editor.update();
+			}
+		}, t("pmi_review_source"));
+		const removePublic = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				if (editor.locked() || !loaded || !permitted(false)) return;
+				editor.set("publicReason", "");
+				editor.update();
+			}
+		}, t("pmi_remove_public"));
+		editor.box.append(warning, review, removePublic);
+		editor.update = () => {
+			if (syncing) return;
+			syncing = true;
+			try {
+				if (current?.mapping_id === mid && !editor.locked() && (!version.value || !reason.value && !publicReason.value)) editor.set("version", current.revision_id);
+				updateOriginal();
+				const changed = current?.mapping_id === mid && version.value && version.value !== current.revision_id;
+				warning.hidden = !changed;
+				review.hidden = !changed;
+				review.disabled = editor.locked() || !loaded || !permitted(false);
+				removePublic.hidden = !publicReason.value;
+				removePublic.disabled = editor.locked() || !loaded || !permitted(false);
+			} finally {
+				syncing = false;
+			}
+		};
+		publicReason.addEventListener("input", () => editor.update());
+		cancellers.set(mid, editor);
+		return editor;
+	}
+	function renderPublication() {
+		selected.replaceChildren();
+		publication.replaceChildren();
+		if (!packageRow) {
+			selected.append(h("p", { class: "muted" }, t("pmi_select_package")));
+			return;
+		}
+		selected.append(h("p", {}, t("pmi_fixed_package"), " ", packageRow.sequence, " · ", packageRow.document.title));
+		const found = matching();
+		if (found[0]?.document.state === "cancelled") {
+			publication.append(h("p", { class: "muted" }, t("pmi_cancelled_help")));
+			const editor = publishEditor();
+			if (editor.locked()) publication.append(fold("pmi_prepare", editor.box));
+		} else if (!found.length && (cursor !== null || filtered)) publication.append(h("p", { class: "muted" }, t("pmi_incomplete")));
+		else publication.append(fold("pmi_prepare", publishEditor().box));
+		update();
+	}
+	function renderDetail(record) {
+		const row = record.current, doc = row.document;
+		detail.replaceChildren(h("h4", {}, `${doc.relation.repository} · #${doc.issue.number}`), h("p", {}, t("pmi_" + doc.state)), h("p", { class: "muted" }, t("pmi_not_done")), fold("pmi_history", ...record.revisions.map((item) => {
+			const d = item.document, selected = d.selected;
+			return h("details", {}, h("summary", {}, `${t("pmi_revision")} ${item.sequence} · ${item.actor}`), selected.public_title ? h("h4", {}, selected.public_title) : "", selected.public_body ? h("pre", { class: "pm-note-text" }, selected.public_body) : "", selected.public_reason ? h("pre", { class: "pm-note-text" }, selected.public_reason) : "", selected.rationale ? h("p", {}, t("pmi_private_reason"), ": ", selected.rationale) : "", h("p", { class: "pm-source" }, item.revision_id, " · ", d.package_ref.package_id), h("a", { href: `#/op/${item.operation_id}` }, t("pm_operation")));
+		})), fold("pmi_stop", cancelEditor(row).box));
+	}
+	async function readSelected(ticket) {
+		if (!selectedId) return;
+		const data = checkScope(await api("GET", `${endpoint}/${selectedId}`));
+		if (!valid(ticket)) return;
+		if (data.mapping_id !== selectedId || data.execution_authorized !== false || !Array.isArray(data.revisions) || !data.revisions.length) throw Error(t("pmi_invalid"));
+		data.revisions.forEach(checkRow);
+		current = checkRow(data.current);
+		if (current.mapping_id !== selectedId || data.revisions.at(-1).revision_id !== current.revision_id || data.revisions.some((row) => row.mapping_id !== selectedId)) throw Error(t("pmi_invalid"));
+		const catalogRow = rows.find((row) => row.mapping_id === selectedId);
+		if (catalogRow && catalogRow.revision_id !== current.revision_id) throw Error(t("pmi_changed"));
+		renderDetail(data);
+	}
+	function renderCatalog() {
+		catalog.replaceChildren(...rows.map((row) => h("button", {
+			type: "button",
+			class: "secondary",
+			"aria-pressed": row.mapping_id === selectedId,
+			onclick: () => void selectMapping(row.mapping_id)
+		}, `${row.document.relation.repository} · #${row.document.issue.number} · ${t("pmi_" + row.document.state)}`)));
+		if (!rows.length) catalog.append(h("p", { class: "muted" }, t("pmi_empty")));
+		if (filtered) catalog.append(h("p", { class: "muted" }, t("pmi_filtered")));
+	}
+	function withdraw() {
+		serial++;
+		loaded = false;
+		rows = [];
+		cursor = null;
+		filtered = false;
+		current = null;
+		catalog.replaceChildren();
+		detail.replaceChildren();
+		publication.replaceChildren();
+		selected.replaceChildren();
+		update();
+	}
+	function failure(error, ticket) {
+		try {
+			if (!valid(ticket)) return;
+		} catch {
+			return;
+		}
+		packageRow = null;
+		withdraw();
+		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pmi_unavailable")));
+		refreshButton.disabled = false;
+	}
+	async function selectMapping(mid) {
+		if (!loaded) return;
+		selectedId = mid;
+		const ticket = ++serial;
+		loaded = false;
+		current = null;
+		detail.replaceChildren();
+		publication.replaceChildren();
+		update();
+		try {
+			await readSelected(ticket);
+			if (!valid(ticket)) return;
+			loaded = true;
+			renderCatalog();
+			renderPublication();
+			update();
+		} catch (error) {
+			failure(error, ticket);
+		}
+	}
+	async function refresh() {
+		withdraw();
+		const ticket = serial;
+		status.replaceChildren(h("p", { class: "muted" }, t("pmi_loading")));
+		try {
+			let after = 0;
+			for (let page = 0; page < pages; page++) {
+				const data = checkScope(await api("GET", `${endpoint}?after=${after}&limit=20`));
+				if (!valid(ticket)) return;
+				if (!Array.isArray(data.mappings) || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pmi_invalid"));
+				const known = new Set(rows.map((row) => row.mapping_id));
+				for (const row of data.mappings) {
+					checkRow(row);
+					if (known.has(row.mapping_id)) throw Error(t("pmi_invalid"));
+					known.add(row.mapping_id);
+					rows.push(row);
+				}
+				filtered ||= Boolean(data.coverage?.visibility_filtered);
+				cursor = data.next_cursor;
+				if (cursor === null) break;
+				after = cursor;
+			}
+			if (packageRow) {
+				const expected = packageRow, data = checkScope(await api("GET", `/pm/workspaces/${workspaceId}/work-packages/${packageRow.package_id}`));
+				if (!valid(ticket)) return;
+				if (data.package?.package_id !== expected.package_id || data.package?.work_item_id !== expected.work_item_id || data.package?.document_digest !== expected.document_digest) throw Error(t("pmi_invalid"));
+				packageRow = data.package;
+			}
+			const found = matching();
+			if (found.length === 1) selectedId = found[0].mapping_id;
+			if (selectedId && !rows.some((row) => row.mapping_id === selectedId)) selectedId = null;
+			await readSelected(ticket);
+			if (!valid(ticket)) return;
+			loaded = true;
+			status.replaceChildren();
+			renderCatalog();
+			renderPublication();
+			update();
+		} catch (error) {
+			failure(error, ticket);
+		}
+	}
+	async function setPackage(row) {
+		packageRow = row;
+		if (!row) {
+			withdraw();
+			status.replaceChildren();
+			refreshButton.disabled = false;
+			return;
+		}
+		await refresh();
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		setPackage
 	};
 }
 //#endregion
@@ -2525,7 +2896,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 }
 //#endregion
 //#region src/pm-work-packages.js
-function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSize = 20 }) {
+function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSize = 20, onSelection = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
 	const idPattern = /^pmwp_[0-9a-f]{32}$/, digestPattern = /^[0-9a-f]{64}$/;
 	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false;
@@ -2613,6 +2984,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		checked(readiness);
 		if (row.package_id !== id || readiness.package_id !== id || readiness.document_digest !== row.document_digest || readiness.ready_for !== "engineering_handoff_review" || readiness.execution_authorized !== false || readiness.execution_available !== false || readiness.dispatch_readiness !== "not_implemented" || !["ready", "blocked"].includes(readiness.status) || !Array.isArray(readiness.checks)) throw Error(t("wp_invalid"));
 		render(row, readiness);
+		onSelection(row);
 	}
 	function failed(error, ticket) {
 		try {
@@ -2624,6 +2996,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		cursor = null;
 		list.replaceChildren();
 		facts.replaceChildren();
+		onSelection(null);
 		status.replaceChildren(errorBox(error), paragraph(t("wp_unavailable")));
 	}
 	async function select(id) {
@@ -2632,6 +3005,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		const ticket = ++sequence;
 		busy = true;
 		facts.replaceChildren();
+		onSelection(null);
 		renderList();
 		controls();
 		status.replaceChildren(paragraph(t("wp_loading")));
@@ -2657,6 +3031,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		cursor = null;
 		list.replaceChildren();
 		facts.replaceChildren();
+		onSelection(null);
 		controls();
 		status.replaceChildren(paragraph(t("wp_loading")));
 		try {
@@ -6936,7 +7311,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			namespace,
 			errorBox,
 			...options,
-			permitted: () => options.permitted() && (lifecycle?.newActionAllowed(options.action) ?? true),
+			permitted: () => options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: options.recoverPermitted || options.permitted
 		});
 		forms.push(value);
@@ -7129,15 +7504,29 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace
 	}) : null;
 	if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
+	const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping ? workspaceIssueMappings({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox
+	}) : null;
 	const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare ? workspaceWorkPackages({
 		h,
 		t,
 		api,
 		alive,
 		workspaceId,
-		errorBox
+		errorBox,
+		onSelection: (row) => issues?.setPackage(row)
 	}) : null;
 	if (engineering) body.insertBefore(engineering.element, specifications?.element || content);
+	if (issues) body.insertBefore(issues.element, specifications?.element || content);
 	const sourceSections = () => [
 		content,
 		lifecycle?.element,
@@ -7150,7 +7539,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		governance?.element,
 		specifications?.element,
 		followUp?.element,
-		engineering?.element
+		engineering?.element,
+		issues?.element
 	].filter(Boolean);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
@@ -7666,6 +8056,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		refresh.disabled = true;
 		lifecycle?.withdraw();
+		issues?.withdraw();
 		try {
 			alive();
 			const list = await api("GET", "/pm/workspaces");
@@ -7758,7 +8149,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				governance,
 				specifications,
 				followUp,
-				engineering
+				engineering,
+				issues
 			]) {
 				if (section) await section.refresh();
 				alive();
@@ -7774,6 +8166,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				threadData = null;
 				brief?.withdraw();
 				lifecycle?.withdraw();
+				issues?.withdraw();
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
 				for (const section of sourceSections()) section.hidden = true;
@@ -7804,7 +8197,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_follow_up",
 			"pm_follow_up_assessment",
 			"pm_work_package",
-			"pm_lifecycle"
+			"pm_lifecycle",
+			"pm_issue_mapping"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -11869,6 +12263,76 @@ var pmLifecycleStrings = {
 	}
 };
 //#endregion
+//#region src/pm-issue-strings.js
+var pmIssueStrings = {
+	en: {
+		pmi_title: "GitHub issue tracking",
+		pmi_intro: "Keep one issue associated with the same whole work item across fixed engineering preparations.",
+		pmi_refresh: "Refresh issue mappings",
+		pmi_more: "Load more issue mappings",
+		pmi_loading: "Reading original issue mappings…",
+		pmi_empty: "No readable issue mappings on this page.",
+		pmi_filtered: "Some mappings are outside your current source access.",
+		pmi_invalid: "The issue mapping does not match its fixed workspace or source.",
+		pmi_changed: "The mapping changed while it was being read. Refresh before publishing.",
+		pmi_unavailable: "Original source access could not be verified. Previously displayed mapping details have been removed.",
+		pmi_select_package: "Select an engineering work package above to prepare an issue publication.",
+		pmi_fixed_package: "Selected preparation",
+		pmi_incomplete: "Read the remaining mappings before creating an issue. Hidden mappings cannot be treated as absent.",
+		pmi_prepare: "Prepare selected public text",
+		pmi_public_title: "Public issue title",
+		pmi_public_body: "Public issue description",
+		pmi_public_help: "Only the text you enter here will be published. Existing issue revisions are added as comments; original titles, descriptions and state are preserved.",
+		pmi_publish: "Publish selected text",
+		pmi_stale: "The selected preparation or issue revision changed. Your draft retains its original version.",
+		pmi_review_source: "Use the currently reviewed version",
+		pmi_history: "Publication history",
+		pmi_revision: "Revision",
+		pmi_tracking: "Tracking",
+		pmi_cancelled: "Tracking stopped",
+		pmi_cancelled_help: "This mapping was explicitly stopped. Publishing does not implicitly reopen it.",
+		pmi_not_done: "An issue publication records shared work. Implementation, acceptance, merge and release remain separate results.",
+		pmi_stop: "Stop this workspace’s tracking",
+		pmi_private_reason: "Private management reason",
+		pmi_public_reason: "Optional public explanation",
+		pmi_remove_public: "Remove the public explanation",
+		pmi_stop_help: "Leave the public explanation empty to stop local tracking without contacting GitHub. This action keeps the issue and all sessions open."
+	},
+	"zh-TW": {
+		pmi_title: "GitHub issue 追蹤",
+		pmi_intro: "不同工程準備版本仍對應同一份完整工作與 issue。",
+		pmi_refresh: "更新 issue 關聯",
+		pmi_more: "載入更多 issue 關聯",
+		pmi_loading: "讀取原始 issue 關聯…",
+		pmi_empty: "這一頁沒有可讀的 issue 關聯。",
+		pmi_filtered: "部分關聯不在你目前的來源權限內。",
+		pmi_invalid: "Issue 關聯與指定工作區或固定來源不符。",
+		pmi_changed: "讀取時關聯已有新版本，請更新後再發布。",
+		pmi_unavailable: "無法核對原始來源權限，已移除先前顯示的關聯內容。",
+		pmi_select_package: "選取上方的工程工作包，再準備要發布的 issue 內容。",
+		pmi_fixed_package: "選定的工程準備",
+		pmi_incomplete: "建立 issue 前需讀完其餘關聯；不能把不可讀的關聯當作不存在。",
+		pmi_prepare: "準備指定的公開內容",
+		pmi_public_title: "公開 issue 標題",
+		pmi_public_body: "公開 issue 說明",
+		pmi_public_help: "只發布你在這裡輸入的文字。既有 issue 的後續版本以留言新增，保留原標題、內文與狀態。",
+		pmi_publish: "發布指定文字",
+		pmi_stale: "選定的工程準備或 issue 已有新版本；草稿仍保留原本的版本。",
+		pmi_review_source: "使用目前檢視的版本",
+		pmi_history: "發布歷史",
+		pmi_revision: "版本",
+		pmi_tracking: "持續追蹤",
+		pmi_cancelled: "已停止追蹤",
+		pmi_cancelled_help: "這份關聯已明確停止，發布不會自動重新開啟。",
+		pmi_not_done: "發布 issue 是分享工作依據；實作、驗收、合併與發布成果仍分別核對。",
+		pmi_stop: "停止此工作區的追蹤",
+		pmi_private_reason: "私有管理理由",
+		pmi_public_reason: "公開說明（可留空）",
+		pmi_remove_public: "移除公開說明",
+		pmi_stop_help: "公開說明留空時，只停止本地追蹤，不連線 GitHub；issue 與各個 session 保持開啟。"
+	}
+};
+//#endregion
 //#region src/pm-follow-up-strings.js
 var pmFollowUpStrings = {
 	en: {
@@ -13120,6 +13584,7 @@ var pmMeetingStrings = {
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		...pmIssueStrings.en,
 		...pmLifecycleStrings.en,
 		...pmSprintStrings.en,
 		...pmKanbanStrings.en,
@@ -13446,6 +13911,7 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		...pmIssueStrings["zh-TW"],
 		...pmLifecycleStrings["zh-TW"],
 		...pmSprintStrings["zh-TW"],
 		...pmKanbanStrings["zh-TW"],

@@ -1,5 +1,5 @@
 // The central service owns preparation and source policy. This view only reads.
-export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSize=20}) {
+export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSize=20,onSelection=()=>{}}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
   const idPattern=/^pmwp_[0-9a-f]{32}$/, digestPattern=/^[0-9a-f]{64}$/;
   let sequence=0,rows=[],cursor=null,pages=1,selected=null,busy=false;
@@ -82,21 +82,21 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
     if(row.package_id!==id||readiness.package_id!==id||readiness.document_digest!==row.document_digest
       ||readiness.ready_for!=='engineering_handoff_review'||readiness.execution_authorized!==false||readiness.execution_available!==false
       ||readiness.dispatch_readiness!=='not_implemented'||!['ready','blocked'].includes(readiness.status)||!Array.isArray(readiness.checks))throw Error(t('wp_invalid'));
-    render(row,readiness);
+    render(row,readiness);onSelection(row);
   }
   function failed(error,ticket){
     try{if(!valid(ticket))return;}catch{return;}
     // A later source/permission failure must not leave an earlier quoted title or document visible.
-    rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();status.replaceChildren(errorBox(error),paragraph(t('wp_unavailable')));
+    rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);status.replaceChildren(errorBox(error),paragraph(t('wp_unavailable')));
   }
   async function select(id){
     if(busy||!idPattern.test(id))return;
-    selected=id;const ticket=++sequence;busy=true;facts.replaceChildren();renderList();controls();status.replaceChildren(paragraph(t('wp_loading')));
+    selected=id;const ticket=++sequence;busy=true;facts.replaceChildren();onSelection(null);renderList();controls();status.replaceChildren(paragraph(t('wp_loading')));
     try{await readSelected(ticket);if(valid(ticket))status.replaceChildren();}catch(error){failed(error,ticket);}
     finally{try{if(valid(ticket)){busy=false;renderList();controls();}}catch{}}
   }
   async function refresh(){
-    const ticket=++sequence;busy=true;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();controls();
+    const ticket=++sequence;busy=true;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);controls();
     status.replaceChildren(paragraph(t('wp_loading')));
     try{
       let after=0,next=null;const loaded=[];

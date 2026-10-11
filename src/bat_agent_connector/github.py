@@ -113,6 +113,25 @@ class GitHubClient:
     async def repository(self, repository: str):
         return await self.call("GET", self._repo(repository))
 
+    # Issue publication only creates objects; it never overwrites another
+    # author's mutable title/body or treats an ETag GET as a PATCH precondition.
+    async def issue(self, repository: str, number: int):
+        return await self.call("GET", f"{self._repo(repository)}/issues/{int(number)}")
+
+    async def issues(self, repository: str, *, page: int = 1):
+        return await self.call("GET", f"{self._repo(repository)}/issues",
+                               query={"state": "all", "sort": "created", "direction": "asc", "per_page": 100, "page": page})
+
+    async def create_issue(self, repository: str, *, title: str, body: str):
+        return await self.call("POST", f"{self._repo(repository)}/issues", {"title": title, "body": body})
+
+    async def issue_comments(self, repository: str, number: int, *, page: int = 1):
+        return await self.call("GET", f"{self._repo(repository)}/issues/{int(number)}/comments",
+                               query={"per_page": 100, "page": page})
+
+    async def create_issue_comment(self, repository: str, number: int, *, body: str):
+        return await self.call("POST", f"{self._repo(repository)}/issues/{int(number)}/comments", {"body": body})
+
     async def branch_ref(self, repository: str, branch: str):
         return await self.call("GET", f"{self._repo(repository)}/git/ref/heads/{quote(branch, safe='')}")
 

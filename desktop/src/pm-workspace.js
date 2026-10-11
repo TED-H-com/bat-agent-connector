@@ -1,6 +1,7 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
 import {workspaceGovernance} from './pm-governance.js';
 import {workspaceLifecycle} from './pm-lifecycle.js';
+import {workspaceIssueMappings} from './pm-issue-mappings.js';
 import {specSources} from './pm-spec-sources.js';
 import {workspaceFollowUp} from './pm-follow-up.js';
 import {workspaceWorkPackages} from './pm-work-packages.js';
@@ -197,7 +198,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const labelled = (label, field) => h('label', {}, t(label), field);
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, ...options,
-      permitted:()=>options.permitted()&&(lifecycle?.newActionAllowed(options.action)??true),
+      permitted:()=>options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:options.recoverPermitted||options.permitted}); forms.push(value); return value;
   };
   const status = h('div', {role: 'status', class: 'pm-status'}), workspaceList = h('div', {class: 'pm-workspace-list'});
@@ -256,10 +257,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare
     ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace}) : null;
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
+  const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping
+    ? workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
-    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox}) : null;
+    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>issues?.setPackage(row)}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
-  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element].filter(Boolean);
+  if(issues)body.insertBefore(issues.element,specifications?.element||content);
+  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -533,7 +537,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
-    lifecycle?.withdraw();
+    lifecycle?.withdraw();issues?.withdraw();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -586,7 +590,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [lifecycle, evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering]) {
+      for (const section of [lifecycle, evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,issues]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -597,7 +601,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         brief?.withdraw();
-        lifecycle?.withdraw();
+        lifecycle?.withdraw();issues?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -607,7 +611,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package', 'pm_lifecycle'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package', 'pm_lifecycle','pm_issue_mapping'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;

@@ -35,6 +35,10 @@ def event_visible(db, principal, event):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and lifecycle_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_issue_mapping" or event["kind"].startswith("pm.issue."):
+        from .pm_issue_mappings import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_work_package" or event["kind"].startswith("pm.work_package."):
         from .pm_work_packages import operation_visible
         operation_id = event.get("body", {}).get("operation_id")

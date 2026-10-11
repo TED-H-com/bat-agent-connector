@@ -710,3 +710,14 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-lifecycle textarea,.pm-lifecycle select {max-width:100%;}
 .pm-lifecycle [data-pm-lifecycle-operation] {border-top:1px solid var(--line);}
 @media(max-width:640px){.pm-lifecycle :is(button,summary,select){min-height:44px}.pm-lifecycle :is(input,textarea,select){font-size:16px}}
+.pm-issues {padding:16px 0;border-bottom:1px solid var(--line);min-width:0;}
+.pm-issues h3 {font-size:16px;margin:0;}
+.pm-issues h4 {font-size:14px;}
+.pm-issues p,.pm-issues pre {overflow-wrap:anywhere;white-space:pre-wrap;}
+.pm-issues details {padding:8px 0;}
+.pm-issues summary {cursor:pointer;min-height:28px;}
+.pm-issues form {max-width:720px;}
+.pm-issues form label {display:block;margin:8px 0;}
+.pm-issues input,.pm-issues textarea {max-width:100%;}
+.pm-issues button {margin-right:6px;}
+@media(max-width:640px){.pm-issues :is(button,summary){min-height:44px}.pm-issues :is(input,textarea){font-size:16px}}
