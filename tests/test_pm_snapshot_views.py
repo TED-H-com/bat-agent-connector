@@ -67,7 +67,7 @@ async def test_sprint_meeting_and_cards_keep_original_revisions_after_later_edit
     assert len(records(original, 'kanban')) == 2
     assert selected[0]['data']['sprint']['status'] == 'planned'
     await sprints.change(ops, sprint, 'goal.revise', goal='Later goal')
-    await meetings.note(ops, meeting, content='Later private discussion')
+    await meetings.apply(ops, meeting, 'note', who=CONTRIBUTOR, content='Later private discussion')
     ops.db.execute("UPDATE work_items SET title='Later work title',version=version+1 WHERE work_item_id=?", (data['work'][0],))
     again = fixed(ops, data['workspace_id'], original['snapshot_id'])
     assert again == original
