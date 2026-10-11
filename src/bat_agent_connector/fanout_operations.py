@@ -162,6 +162,7 @@ def child_plan(ctx, link, parent, *, allow_cancel=False):
             or parent['actor'] != ctx.actor or saved.get('operation_id') != ctx.operation_id
             or {k: ctx.op[k] for k in ('action', 'target', 'params', 'preconditions')} != saved.get('intent')):
         raise TaskControlRefused('FANOUT_BINDING_CHANGED', 'child differs from the fixed fanout receipt')
+    relay.require_child_authority(ctx, parent)
     if not allow_cancel and (parent['cancel_requested'] or parent['status'] in {'failed', 'cancelled'}):
         raise TaskControlRefused('FANOUT_CANCEL_REQUESTED', 'fanout cancelled before this frame')
     return plan
@@ -185,10 +186,12 @@ def create_child(ctx, plan, item):
 
 def _stop_guard(ctx, plan):
     ctx.check_cancel()
+    ctx.require_controller()
     fleet, source, host = ctx.service.context['fleet'], plan['source'], plan['host']
     from .session_start_operations import _tier
     _tier(fleet, host)
     sid = source['session_id']
+    relay.require_record(host, sid, source['registry'])
     if (fleet.config.host(host).profile_id != plan['profile_id'] or relay.record(host, sid) != source['registry']
             or source['registry'].get('role') != 'planner' or source['registry'].get('task_id')
             or task_control.owner_task(fleet, host, sid)):
@@ -290,6 +293,10 @@ async def stop_planner(ctx, plan):
                 'reason': observed.get('reason', 'runtime is still loaded; capacity retained')}
     async def retire():
         row = registry.get(host, sid) or {}
+        try:
+            relay.require_record(host, sid, source['registry'])
+        except BatError as error:
+            return {'capacity_released': False, 'capacity_reason': error.code}
         if relay.record(host, sid) != source['registry'] and (row.get('retirement') or {}).get('operation_id') != ctx.operation_id:
             return {'capacity_released': False, 'capacity_reason': 'generation_changed'}
         if task_control.owner_task(fleet, host, sid):

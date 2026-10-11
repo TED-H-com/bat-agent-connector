@@ -13,6 +13,7 @@ import shlex
 import sqlite3
 import time
 
+from . import orchestration_operations as relay
 from . import registry, resource_policy, service, task_control
 from .errors import ResourceReadOnly
 from .operations import (
@@ -212,6 +213,7 @@ def _activity(ops, plan, own_op):
 def guard(ops, plan, *, ctx=None, reserved=False):
     if ctx:
         ctx.check_cancel()
+        ctx.require_controller()
     if not getattr(ops.journal, 'owner_valid', lambda: False)():
         raise StepFailed('MERGE_OWNER_LOST', 'central owner lease is no longer valid')
     fleet, host = ops.context['fleet'], plan['host']
@@ -234,6 +236,7 @@ def guard(ops, plan, *, ctx=None, reserved=False):
             raise StepFailed('TASK_OWNED_CONTROL_REQUIRED', 'a task owns a carrier; use the Task Service')
         cleanup_guard(host, path=path)
     for sid, binding in plan['consumers'].items():
+        relay.require_record(host, sid, binding)
         task_control.refuse_owned(fleet, host, sid)
         if _binding(host, sid) != binding:
             raise StepFailed('MERGE_CONSUMER_CHANGED', 'a carrier consumer changed its original owner')
@@ -363,6 +366,7 @@ async def prepare(ctx):
     plan['consumers'] = {other: _binding(host, other) for other in consumers}
     plan['runtime'] = {}
     for other in sorted(consumers):
+        relay.require_record(host, other, plan['consumers'][other])
         terminal = plan['terminals'].get(other) or service.registry_terminal(registry.get(host, other) or {})
         cls = resource_policy.classify(hc, other, terminal=terminal, entries=_document()['sessions'])
         if cls.code or service.agent_kind(terminal.get('agentPreset')) not in {'claude', 'codex'}:
