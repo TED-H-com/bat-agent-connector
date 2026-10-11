@@ -63,6 +63,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "op_get": "observe", "op_list": "observe", "op_cancel": "?", "op_resume": "?",
            "work_status": "observe", "work_result": "observe", "work_events": "observe",
            "api_events": "observe", "inventory_sessions": "observe", "inventory_hosts": "observe",
+           "session_policy": "observe",
            "inventory_session": "observe", "inventory_worktree": "observe", "resource_history": "observe", "resource_relations": "observe",
            "api_capabilities": "observe", "github_pr_preview": "observe", "github_merge_preview_get": "observe",
            "deployment_preview": "observe", "deployment_status": "observe", "deployments_list": "observe",
@@ -275,6 +276,9 @@ class TaskDaemon:
         if method == "repository_preview":
             from .repository_sync import preview
             return {"preview": await preview(self.ops, principal, params)}
+        if method == "session_policy":
+            from .resource_policy import session_policy
+            return await session_policy(self.fleet, params.get("host"), params.get("session_id"))
         if method in {"session_start", "workspaces_list"}:
             from . import session_start_operations
             if method == "workspaces_list":
@@ -339,6 +343,7 @@ class TaskDaemon:
                                            related_resource_type=params.get("related_resource_type"), related_resource_id=params.get("related_resource_id")))
         if method == "inventory_sessions":
             return session_reading.decorate(self.journal, principal, self.inventory.list_sessions(
+                principal=principal,
                 host=params.get("host"), provenance=params.get("provenance"), api_access=params.get("access"),
                 attention=params.get("attention"), include_gone=bool(params.get("include_gone")),
                 order=params.get("order") or "activity", cursor=params.get("cursor"),

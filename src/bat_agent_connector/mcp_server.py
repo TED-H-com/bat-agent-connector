@@ -273,6 +273,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         session_id: provenance (manual = created in BAT, connector_managed, unknown), the folder it works in and
         who owns it, the evidence, and per write action whether the API may do it and the refusal code.
         Sessions created in BAT are always read-only; do not look for another way to write to them."""
+        if os.environ.get("BATC_API_TOKEN"):
+            return await daemon("session_policy", host=host, session_id=session_id)
         return await resource_policy.session_policy(fleet, host, session_id)
 
     for fn in (

@@ -32,14 +32,16 @@ dry-run 預覽保留。完整錯誤與 recovery 合約見 [session-permissions.m
 
 | 主體 | 取得方式 | 權限 |
 |---|---|---|
-| `local-admin` | daemon 的 `task-admin.token`（0600） | 全部 |
+| `local-admin` | daemon 的 `task-admin.token`（0600） | 全部 scopes；不接管其他 controller 資源 |
 | API token | `batc api-token issue --actor operator-dashboard --scope observe --scope operate` | 發行時指定的 scopes |
 
 Scopes：`observe`（讀目錄、操作、事件、政策）、`operate`（驅動 managed session）、`start`（開新的 managed agent session，例如 `checkpoint.continue`）、`manage`（專案、工作項目與連結）、`approve`（確認工作項目完成；與 `manage` 分開，回報完成的 agent 不能自己簽核，見 [work-items.md](work-items.md)）、`merge`、`deploy`、`integrate`（PR metadata 更新與把成果推送到 head 分支；兩個 action 分開，metadata 另需 repo allow_pr_update，見 [delivery.md](delivery.md)／[integration.md](integration.md)）、`cleanup`（reviewed resource cleanup／release）、`cleanup_discard`（只丟棄未提交內容；person-controlled，agents 不要求，Hermes／Grokbot tokens 不給）。Journal 只存 token 的 SHA-256。操作的 actor 一律取自 token；request body 或 MCP 參數自報的名字沒有授權效果。冪等鍵的唯一性以 actor 為範圍：同 actor、同 key、同內容回原 operation；同 key 不同內容回 409。
 
+Controller 由持久 `server_id` 與已認證 actor 產生；同 actor 的多 client、換 token 與重啟維持身分。Session reservation 保存 `controller_authority` 與 `controller_incarnation`；BAT `workspace_id` 和可選 `pm_workspace_id` 分開。新操作受理及最後 BAT frame 都核對原建立者，背景 task／reviewer／failover／清理沿用持久 authority。缺少建立證據的舊資源維持唯讀；已送出但不明的舊效果仍可回查，不重新認領或重送。`features.controller_isolation` 宣告此契約，inventory 的 `api_access` 依目前 caller 計算，`provenance` 保留客觀來源。
+
 瀏覽器防護：Host 必須是 loopback（擋 DNS rebinding）；有 Origin 時須是 loopback 或 `[api] allowed_origins`；只接受 bearer token，不用 cookie，所以沒有 CSRF 面。只有列在 `allowed_origins` 的 Origin 會收到 CORS 標頭（含 `OPTIONS` preflight）；Dashboard 與 API 同源，不需要它。
 
-MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confirm=true`，而且只以 `BATC_API_TOKEN` 的主體執行，不退回本機 admin token：這個 client 能做什麼由它自己的 token scopes 決定，不是由 MCP server 啟動時的主機 tier 決定。讀取工具沒有 token 時仍用 admin token。
+MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confirm=true`，而且只以 `BATC_API_TOKEN` 的主體執行，不退回本機 admin token：這個 client 能做什麼由它自己的 token scopes 決定，不是由 MCP server 啟動時的主機 tier 決定。PM 及共用 operation／event 讀取也要求 `BATC_API_TOKEN`；legacy Fleet 觀察保留原本唯讀方式。
 
 ## Operation
 
@@ -54,7 +56,7 @@ MCP 的 `operation_submit`、`operation_cancel`、`operation_resume` 要 `confir
 
 每個外部呼叫是一個具名步驟（`operation_steps`）。步驟意圖在呼叫前先 commit。逾時、連線中斷或之後的本機記錄失敗（`OSError`）時步驟記為 `uncertain`，之後由該步驟的 `reconcile` 讀回外部狀態：證明已發生就補記成功，無法證明（包括回查本身連不上）就維持 `uncertain` 並退避重試回查，五次後轉 `needs_attention`。回查次數用自己的計數（`uncertain_tries`），等待 checks／workflow 的輪詢不會用掉它。已完成的步驟在重跑時直接回傳保存的結果。
 
-取消只在下一步之前生效，而且不跳過回查：`uncertain` 的操作收到取消時先立刻回查，證明那一步已發生就照常完成，所以 `cancelled` 不會掩蓋已送出的動作。`needs_attention` 可以取消（原因會註明哪一步從未證明），也可以 `resume`：已完成的步驟不重做，未證明的步驟再回查一次，不重送。操作的 actor、admin，或擁有該 action scope 的主體可以取消或 resume；事件記在實際操作的人名下。`delivery.merge_and_deploy` resume 另外要求目前 principal 同時有 merge/deploy（admin 沿用全權），與新建一致；缺少任一 scope 回 FORBIDDEN，連原 actor 也不能繞過。唯讀與背景 reconciliation 不依賴使用者在線或 resume 授權。
+取消只在下一步之前生效，而且不跳過回查：`uncertain` 的操作收到取消時先立刻回查，證明那一步已發生就照常完成，所以 `cancelled` 不會掩蓋已送出的動作。`needs_attention` 可以取消（原因會註明哪一步從未證明），也可以 `resume`：已完成的步驟不重做，未證明的步驟再回查一次，不重送。資源操作的 replay／cancel／resume 另外要求原 controller；admin 或相同 scope 不授予接管權。Task capability 僅可依原任務授權，system cleanup 僅限原 task lifecycle。其他管理與 GitHub 交付操作沿用各 action 的授權；事件記在實際操作的人名下。`delivery.merge_and_deploy` resume 另外要求目前 principal 同時有 merge/deploy（admin 沿用全權），與新建一致；缺少任一 scope 回 FORBIDDEN，連原 actor 也不能繞過。唯讀與背景 reconciliation 不依賴使用者在線或 resume 授權。
 
 `NeedsAttention` 從外部 `ctx.step` 傳出時，operation 停在 `needs_attention`，該 step 保留 `uncertain`。重啟或 resume 都先執行原 reconcile；沒有 reconcile 或回 None 時只讀回等待，不能再次呼叫 fn。回傳已知結果就補記成功；只有 reconcile 明確回 `RERUN`、證明原呼叫未生效時才可重新派送。這與 `ctx.effect` 的本地交易回執不同：effect 與 journal 變更在同一交易內，回滾後可安全重做本地變更。
 

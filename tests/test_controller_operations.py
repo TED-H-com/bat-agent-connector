@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import api_auth, controller_authority, registry
+from bat_agent_connector import api_auth, cli, controller_authority, registry
 from bat_agent_connector.errors import InvokeTimeout
+from bat_agent_connector.mcp_server import build_server
 from bat_agent_connector.operations import OperationError
 from tests import test_api_v1 as api
 from tests.operation_helpers import settle_operations
+from tests.test_mcp_principal import call
 
 daemon = api.daemon
 served = api.served
@@ -76,6 +79,49 @@ async def test_foreign_inventory_is_read_only_without_relabeling_provenance(serv
         assert body["session"]["provenance"] == "connector_managed"
         if access == "read_only":
             assert body["session"]["read_only_code"] == "FOREIGN_CONTROLLER"
+    for access in ("managed", "read_only"):
+        status, listing = await api.http(port, "GET", f"/api/v1/sessions?access={access}", tok=other)
+        assert status == 200
+        assert all(row["api_access"] == access for row in listing["sessions"])
+        assert (sid in {row["session_id"] for row in listing["sessions"]}) == (access == "read_only")
+
+
+async def test_bootstrap_session_cursor_continues_for_original_controller(served, mock):
+    d, port = served
+    sample = next(t for t in mock.ws_doc["terminals"] if t["id"] == "sess-unload-0003")
+    mock.ws_doc["terminals"] += [{**sample, "id": f"unloaded-{i:03d}"} for i in range(55)]
+    await d.inventory.refresh_host("h1")
+    own = api.token(d, OWNER.actor, "observe")
+    other = api.token(d, OTHER.actor, "observe")
+    status, bootstrap = await api.http(port, "GET", "/api/v1/bootstrap", tok=own)
+    assert status == 200
+    first = bootstrap["snapshot"]["sessions"]
+    assert first["next_cursor"] and len(first["sessions"]) == 50
+    path = "/api/v1/sessions?order=id&include_gone=true&cursor=" + first["next_cursor"]
+    status, second = await api.http(port, "GET", path, tok=own)
+    assert status == 200, second
+    assert second["sessions"]
+    assert not ({r["resource_id"] for r in first["sessions"]} & {r["resource_id"] for r in second["sessions"]})
+    status, rejected = await api.http(port, "GET", path, tok=other)
+    assert status == 422, rejected
+
+
+async def test_legacy_policy_reads_use_authenticated_controller(served, mock, monkeypatch):
+    d, port = served
+    sid, _ = await start(d, mock)
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    server, fleet = build_server(d.fleet.config)
+    before = len(api.write_frames(mock))
+    try:
+        for actor, expected in ((OWNER.actor, "managed"), (OTHER.actor, "read_only")):
+            monkeypatch.setenv("BATC_API_TOKEN", api.token(d, actor, "observe"))
+            policy, _ = await cli._run(SimpleNamespace(cmd="policy", host="h1", session=sid))
+            assert policy["api_access"] == expected
+            result = await call(server, "session_policy", {"host": "h1", "session_id": sid})
+            assert ("FOREIGN_CONTROLLER" in result) == (expected == "read_only"), result
+        assert len(api.write_frames(mock)) == before
+    finally:
+        await fleet.close()
 
 
 async def test_unproven_legacy_creation_is_never_assigned_to_caller(daemon, mock):
