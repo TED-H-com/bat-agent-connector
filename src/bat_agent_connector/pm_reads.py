@@ -5,6 +5,10 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_plan_compare": ("workspace_id", "from_revision_id", "to_revision_id", "binding_ids", "journal_cursor"),
+    "pm_roadmap_get": ("workspace_id",),
+    "pm_roadmap_revisions_list": ("workspace_id", "kind", "after", "limit"),
+    "pm_roadmap_revision_get": ("workspace_id", "revision_id"),
     "pm_workspaces_list": (),
     "pm_workspace_get": ("workspace_id",),
     "pm_threads_list": ("workspace_id", "limit", "after"),
@@ -36,6 +40,20 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_plan_compare":
+        from . import pm_plan_diff
+        if not all(isinstance(params.get(key), str) and params[key] for key in ("from_revision_id", "to_revision_id")):
+            raise OperationError("INVALID_PARAMS", "Both fixed revision IDs are required", 422)
+        return pm_plan_diff.compare(ops, principal, workspace_id, params.get("from_revision_id"), params.get("to_revision_id"),
+                                    binding_ids=params.get("binding_ids", []), journal_cursor=params.get("journal_cursor"))
+    if method in {"pm_roadmap_get", "pm_roadmap_revisions_list", "pm_roadmap_revision_get"}:
+        from . import pm_roadmap
+        if method == "pm_roadmap_get":
+            return pm_roadmap.get_roadmap(ops, principal, workspace_id)
+        if method == "pm_roadmap_revision_get":
+            return pm_roadmap.get_revision(ops, principal, workspace_id, params.get("revision_id"))
+        return pm_roadmap.list_revisions(ops, principal, workspace_id, kind=params.get("kind"),
+                                        after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get"}:
         from . import pm_snapshots
         if method == "pm_snapshots_list":

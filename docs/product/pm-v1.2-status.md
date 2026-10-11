@@ -57,8 +57,8 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 保留 unknown，不假稱只是成果回填。Git 已保存但採用未完成，仍保留先前正式版本。
 Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與採用操作，API／MCP 使用相同契約。
 
-第一、二批已合併於 #86、#90。第三批在 [#92](https://github.com/teddashh/bat-agent-connector/pull/92)
-驗證；第四批在 [#93](https://github.com/teddashh/bat-agent-connector/pull/93) 驗證。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
+第一、二、三批已合併於 #86、#90、[#92](https://github.com/teddashh/bat-agent-connector/pull/92)。
+第四批在 [#93](https://github.com/teddashh/bat-agent-connector/pull/93) 驗證。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
 
 下表的「本批」是這次的實作範圍；測試／審查以 PR 證據為準。未完成部分保留在原編號下，
 不以新增一張畫面或資料表當作完整 PM 能力完成。
@@ -75,9 +75,9 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W08 | P0 | Plan revision 與採用流程 | 第四批：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；取消／撤權／回覆遺失整合驗證中 |
 | W09 | P1 | PM runner 與 adapter selection | 第三批：writer／context／reply provenance 基礎與手動脈絡準備；可自動執行的 adapter、工具限制與切換待完成 |
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | 第三批：固定討論脈絡、來源／版本／缺口；AI 參與及跨交付 evidence 關聯待做 |
-| W11 | P1 | Plan diff 與影響分析 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W11 | P1 | Plan diff 與影響分析 | 開發分支：固定版本／來源／接受條件比較、明確工作關聯的影響候選；語意判讀與採用變更流程仍待做 |
 | W12 | P1 | Project Brief | 開發分支：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
-| W13 | P1 | Roadmap 與 scope | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W13 | P1 | Roadmap 與 scope | 開發分支：固定採用需求、里程碑／依賴、原定／預測／實際證據與歷史；Git materialization、里程碑品質驗收仍待做 |
 | W14 | P1 | Kanban | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W15 | P1 | Sprint artifacts 與時間 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W16 | P1 | Planning Review Retro | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -158,3 +158,17 @@ Linux native PM analysis adapter 已在開發分支整合：明確要求一次�
 真人實機驗收由使用者負責；Agent 仍提供自動測試、fixture、操作說明與未驗證標示。
 正式簽章、Mac 公證、正式更新通道及 Linux 原生憑證持久儲存維持先前排除範圍。
 公開文件、測試、issues 與 PR 只使用一般化範例，不包含個人機隊資訊。
+
+## 固定計畫比較與排程
+
+W11 比較兩份明確指定的不可變計畫，顯示來源、需求、接受條件與管理領域的原始差異。
+工作影響只涵蓋明確選入的歷史 binding；不讀取最新工作來假造歷史，也不自動改派或開 issue。
+保留固定 journal cursor，缺少保留的建立證據就回報無法證明，文字的語意影響維持未評估。
+
+W13 在 workspace 主畫面加入範圍與里程碑。排程基準、預測與已保存成果分開記錄；
+里程碑引用固定已採用需求與工作，重訂基準保留最早承諾及所有歷史。觀察只使用選定快照，
+無法從工作聲稱、測試或 merged PR 推定 DoD、實際完成日期或里程碑通過。
+
+API／MCP／Web／Tauri 共用相同 reads 與 operations。回覆遺失保留原 request key、
+版本與內容；編輯草稿可恢復，換用目前基準是明確操作。自動化包含 mock BAT 加真實磁碟 Git
+採用、工作關聯、排程、預測及成果快照串接；這不是使用者機隊實測。

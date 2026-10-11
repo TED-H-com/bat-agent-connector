@@ -1,3 +1,5 @@
+import {planComparison} from './pm-plan-diff.js';
+
 // Immutable central plan revisions, displayed beside the source discussion.
 export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox}) {
   let head = null, capability = null, signature = '', busy = false;
@@ -15,6 +17,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
   const draftBox = h('details', {'data-pm-revision-editor': ''}, h('summary', {}, t('pm_revision_new')), editor.box);
   const current = h('div', {'data-pm-accepted-plan': ''}), rows = h('div', {class: 'pm-revision-list'});
   const box = h('section', {class: 'pm-plans', 'data-pm-plans': ''}, h('h3', {}, t('pm_plan_versions')), current, draftBox, rows);
+  const comparison = planComparison({h, t, api, alive, workspaceId, errorBox}); box.append(comparison.box);
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
 
   function revisionRow(summary) {
@@ -100,7 +103,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
   return {box, update(page, accepted, capabilities) {
     if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t('pm_stale'));
-    head = page.head; capability = capabilities;
+    head = page.head; capability = capabilities; comparison.update(page);
     draftBox.hidden = thread().thread.mode !== 'planning' && !editor.locked();
     const nextSignature = JSON.stringify([page, accepted, capabilities]);
     if (signature !== nextSignature) {
