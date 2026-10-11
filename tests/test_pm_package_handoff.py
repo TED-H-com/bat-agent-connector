@@ -1,10 +1,13 @@
 """Fixed engineering handoffs exercise real disk Git and mock BAT only."""
 from __future__ import annotations
 
+import base64
 import copy
 import json
+import shlex
 import sqlite3
 import uuid
+import zlib
 
 import pytest
 
@@ -14,7 +17,7 @@ from bat_agent_connector import pm_work_packages, repository_sync, work_items
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.operations import OperationError
 from tests.operation_helpers import settle_operations
-from tests.test_checkpoints import bat_writes, git, snapshot
+from tests.test_checkpoints import LocalRunner, bat_writes, git, snapshot
 from tests.test_pm_plan_operations import OWNER
 from tests.test_pm_work_packages import create, read
 from tests.test_pm_work_packages import pm as pm_fixture
@@ -27,10 +30,38 @@ pm = pm_fixture
 ready = ready_fixture
 
 
+class HandoffRunner(LocalRunner):
+    """Execute real disk Git scripts for both existing PM and dispatch protocols."""
+    def __init__(self):
+        super().__init__()
+        self.before, self.after, self.phases = {}, {}, []
+
+    async def run(self, host, script, timeout_s=None):
+        raw = base64.b64decode(shlex.split(script)[-1])
+        try:
+            raw = zlib.decompress(raw)
+        except zlib.error:
+            pass  # Published repository scripts use the existing plain envelope.
+        phase = json.loads(raw)["phase"]
+        self.phases.append(phase)
+        if phase in self.before:
+            self.before.pop(phase)(phase)
+        result = await super().run(host, script, timeout_s)
+        if phase in self.after:
+            self.after.pop(phase)(phase)
+        return result
+
+
+def dispatch_runner(w):
+    w["runner"] = HandoffRunner()
+    w["d"].ops.context["git_runner"] = w["runner"]
+
+
 @pytest.fixture
 async def fixed(ready):
     op = await create(ready)
     ready["package"] = read(ready, op)
+    dispatch_runner(ready)
     return ready
 
 
@@ -52,7 +83,9 @@ async def request(w, **changes):
 async def run(w, envelope):
     op, _ = w["d"].ops.create(OWNER, **envelope)
     await settle_operations(w["d"].ops)
-    return w["d"].ops.get(op["operation_id"])
+    result = w["d"].ops.get(op["operation_id"])
+    assert result["error_code"] != "INTERNAL", [(row["name"], row["error"]) for row in result["steps"] if row["error"]]
+    return result
 
 
 def revoke(w):
@@ -101,6 +134,7 @@ async def test_explicit_distinct_code_and_spec_versions_are_not_false_compatibil
         for key in ("source_ref", "source_sha", "repository_id", "binding_digest")}}
     package = await create(w)
     w["package"] = read(w, package)
+    dispatch_runner(w)
     assert w["package"]["document"]["source_refs"][0]["commit_sha"] != w["state"]["sha"]
     readiness = pm_work_packages.readiness(w["d"].ops, OWNER, w["workspace_id"], w["package"]["package_id"])
     assert [check["check"] for check in readiness["checks"] if check["status"] != "passed"] == ["spec_code_alignment"]
@@ -289,3 +323,9 @@ async def test_unrelated_legacy_start_and_prose_remain_outside_pm_lineage(fixed,
         "path": done["result"]["worktree_path"], "name": fixed["target"]["work_item_id"]})
     assert lineage.document_roots(ops.db, {"operation_id": done["operation_id"]}) == {done["operation_id"]}
     assert mock.channels().count("claude:start-session") == 2
+    frozen = {"version": 1, "snapshot": {"projection": {"work": [{"work_item_id": fixed["target"]["work_item_id"]}]}}}
+    saved = copy.deepcopy(frozen)
+    revoke(fixed)
+    with pytest.raises(OperationError) as caught:
+        lineage.read_response(ops.db, OWNER, frozen)
+    assert caught.value.code == "NOT_FOUND" and frozen == saved
