@@ -17,6 +17,9 @@ const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b =
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
 const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
+// A remounted form can recover an acknowledged ID without resending an unknown
+// POST. Notifications contain no result; the active form reads with current access.
+const receiptSubscribers = new Map();
 // Only disclosure preferences survive a same-principal remount. Facts are always
 // removed and reread after an access reset; drafts retain their existing namespace.
 const threadDisclosures = new Map();
@@ -58,6 +61,21 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes('manage')
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
+  const receiveReceipt = () => {
+    if (disposed || damaged || !saved.intent) return;
+    try {
+      guard();
+      const stored = JSON.parse(localStorage.getItem(storage));
+      if (stored?.intent?.key !== saved.intent.key || !same(stored.intent.request, saved.intent.request)
+        || !/^op_[0-9a-f]{32}$/.test(stored.intent.operation_id)
+        || saved.intent.operation_id && saved.intent.operation_id !== stored.intent.operation_id) return;
+      saved.intent.operation_id = stored.intent.operation_id;
+      receiptPolling = true;
+      update();
+    } catch { /* a retired or unreadable form cannot apply the receipt */ }
+  };
+  const subscribers = receiptSubscribers.get(storage) || new Set();
+  subscribers.add(receiveReceipt); receiptSubscribers.set(storage, subscribers);
   const terminal = () => ['failed', 'cancelled'].includes(operation?.status);
   const reset = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {
     try {
@@ -104,15 +122,31 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         saved.intent = {key: crypto.randomUUID(), request}; persist(); firstAttempt = true;
       }
       update();
-      const intent = saved.intent; persist();
-      const data = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`)
-        : await api('POST', '/operations?wait=3', intent.request, intent.key);
+      const intent = saved.intent, actor = caps()?.actor; persist();
+      let collected = false;
+      const collectReceipt = data => {
+        if (collected) return;
+        const op = data.operation;
+        if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== actor || op.idempotency_key !== intent.key
+          || !same({action: op.action, target: op.target, params: op.params, preconditions: op.preconditions}, intent.request)
+          || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
+        // Only enrich the still-matching original intent. Do not overwrite a newer
+        // draft or save any result/private source after a view/identity change.
+        const stored = JSON.parse(localStorage.getItem(storage));
+        if (stored?.intent?.key === intent.key && same(stored.intent.request, intent.request)) {
+          if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
+          stored.intent.operation_id = op.operation_id;
+          localStorage.setItem(storage, JSON.stringify(stored));
+          for (const notify of receiptSubscribers.get(storage) || []) notify();
+        }
+        collected = true;
+      };
+      const data = intent.operation_id ? await api('GET', `/operations/${intent.operation_id}`, undefined, undefined, collectReceipt)
+        : await api('POST', '/operations?wait=3', intent.request, intent.key, collectReceipt);
+      collectReceipt(data);
       guard();
-      if (disposed || !allowed()) {receiptPolling = false; return;}
+      if (disposed || !allowed()) return;
       const op = data.operation;
-      if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key
-        || !same({action: op.action, target: op.target, params: op.params, preconditions: op.preconditions}, intent.request)
-        || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t('pm_receipt_mismatch'));
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', String(op.status));
       if (op.status === 'succeeded') {
@@ -136,7 +170,10 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   update();
   return {box: form, fields, update, changed, locked: () => busy || damaged || Boolean(saved.intent),
-    dispose: () => {disposed = true; receiptPolling = false; stopTimer();},
+    dispose: () => {
+      disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
+      if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
+    },
     set: (name, value) => {if (!busy && !saved.intent && !damaged) {fields[name].value = value; changed();}},
     values: () => capture()};
 }
