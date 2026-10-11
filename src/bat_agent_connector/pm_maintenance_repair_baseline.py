@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 
-from . import pm_delivery_lineage
+from . import deployment_store
 from . import pm_maintenance_repair_delivery as delivery
 from . import pm_maintenance_repair_evidence as evidence
 from . import pm_maintenance_repairs as repairs
@@ -28,11 +28,14 @@ def request(ops, parent, completed):
     policy = evidence.policies_for(ops, parent)
     if doc['intent']['source']['kind'] != 'deployment' or policy['delivery']['maximum'] != 'deploy':
         return None
-    facts = pm_delivery_lineage._facts(ops, completed)
-    merged, deployed = facts.get('merge') or {}, facts.get('deployment') or {}
+    # Access checks also run through DB-only readers. Reuse the original durable
+    # receipts, not a current deployment-status view dependent on live config.
+    merged = (completed.get('result') or {}).get('merge') or {}
+    record = deployment_store.deployment(ops.db, operation_id=completed['operation_id']) or {}
+    deployed = record.get('recorded_result') or {}
     if (completed['status'] != 'succeeded' or repairs.checks._unsettled(ops, completed)
             or merged.get('merged') is not True or merged.get('verified') is not True
-            or deployed.get('verified') is not True or deployed.get('state') != 'succeeded'
+            or record.get('verified') is not True or record.get('provider_terminal') is not True
             or deployed.get('source_sha') != merged.get('merged_sha')
             or deployed.get('environment') != doc['channel'] or doc['channel'] != policy['delivery']['environment']):
         raise evidence._bad('Original deployment does not prove the adopted baseline channel', 'PM_REPAIR_BASELINE_UNPROVEN')
