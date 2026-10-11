@@ -174,12 +174,15 @@ function dropKey(scope, namespace) { try { localStorage.removeItem(`batc.key.${n
 class ApiError extends Error {
   constructor(status, code, message) { super(message || code); this.status = status; this.code = code; }
 }
-async function api(method, path, body, key) {
+async function api(method, path, body, key, collectReceipt) {
   if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
   if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady))
     throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
   const epoch = state.epoch;
   const { status, data } = await connectorRequest(method, path, body, key, state.token);
+  // A retired view may collect its exact original operation ID in its original
+  // namespace. It must reread that ID under current authority before using results.
+  if (status >= 200 && status < 300) collectReceipt?.(data);
   if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
   if (status < 200 || status >= 300) {
     const error = new ApiError(status, data.error?.code, data.error?.message);
