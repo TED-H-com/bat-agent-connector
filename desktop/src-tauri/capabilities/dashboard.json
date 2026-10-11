@@ -27,6 +27,7 @@
     "allow-native-files-drop-target",
     "allow-native-files-upload",
     "allow-native-files-save",
+    "allow-native-brief-save",
     "allow-native-files-control",
     "allow-native-files-preview"
   ]

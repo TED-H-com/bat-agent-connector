@@ -8,9 +8,10 @@ export interface NativeStatus {
   endpoint: string | null; error: string | null; credential_available: boolean;
   expected_actor?: string; credential_source?: "launch_environment" | "windows_credential_manager" | null;
   credential_saved?: boolean; enrollment_supported?: boolean; configuration_reload?: boolean; configuration_setup?: boolean;
-  configuration_file?: string; connected?: boolean; file_transfers?: boolean;
+  configuration_file?: string; connected?: boolean; file_transfers?: boolean; brief_exports?: boolean;
 }
 export let nativeFileSupport = false;
+export let nativeBriefExportSupport = false;
 export const browserSessionToken = "managed-browser-session";
 let browserCsrf: string | null = null;
 export async function restoreBrowserSession(): Promise<boolean> {
@@ -38,6 +39,7 @@ export function forgetBrowserSession() {
 export async function nativeStatus() {
   const status = await invoke<NativeStatus>("native_status");
   nativeFileSupport = status.file_transfers === true;
+  nativeBriefExportSupport = status.brief_exports === true;
   return status;
 }
 export const nativeFilesStatus = () => invoke<any>("native_files_status");
@@ -46,6 +48,16 @@ export const nativeFilesUpload = (handleId: string) => invoke<any>("native_files
 export const nativeFilesDropTarget = (draftId: string, enabled: boolean) => invoke<void>("native_files_drop_target", {draftId, enabled});
 export const nativeFilesControl = (transferId: string, action: string) => invoke<void>("native_files_control", {transferId, action});
 export const nativeFilesSave = (reference: unknown) => invoke<any>("native_files_save", {reference});
+export interface BriefExportReference {
+  workspace_id: string; snapshot_id: string; format: "markdown" | "html" | "svg"; locale: "en" | "zh-TW";
+  expected_view_digest: string; expected_output_digest: string;
+}
+export interface BriefExportReceipt {
+  stage: "saved"; workspace_id: string; snapshot_id: string; format: "markdown" | "html" | "svg";
+  locale: "en" | "zh-TW"; view_digest: string; output_digest: string; byte_length: number; display_name: string;
+}
+export const nativeBriefSave = (reference: BriefExportReference) =>
+  invoke<BriefExportReceipt | null>("native_brief_save", {reference});
 export const nativeFilesPreview = (reference: unknown) => invoke<any>("native_files_preview", {reference});
 export const nativeConnect = () => invoke<any>("connector_connect");
 export const managedControl = (input: {action: "status" | "open_browser"} | {action: "set_login"; enabled: boolean}) =>

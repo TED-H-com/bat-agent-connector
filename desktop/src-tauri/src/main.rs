@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bridge;
+mod brief_files;
 mod credentials;
 mod desktop_preferences;
 mod files;
@@ -471,6 +472,48 @@ async fn native_files_save(
     local_main(&window)?;
     save_file(&window, state.get()?, reference, None).await
 }
+
+#[tauri::command]
+async fn native_brief_save(
+    window: WebviewWindow,
+    state: State<'_, NativeFiles>,
+    bridge: State<'_, Arc<Bridge>>,
+    reference: brief_files::Reference,
+) -> Result<Option<brief_files::Receipt>, String> {
+    local_main(&window)?;
+    reference.validate()?;
+    let files = state.get()?;
+    let _dialog = files
+        .dialog
+        .try_lock()
+        .map_err(|_| "A native file dialog is already open")?;
+    let bridge = bridge.inner().clone();
+    let scope = bridge.file_scope()?;
+    // Refuse invalid, unavailable or changed reports before asking for a destination.
+    brief_files::read(&bridge, &scope, &reference).await?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title(reference.dialog_title())
+        .set_file_name(reference.filename())
+        .add_filter(reference.filter_label(), &[reference.extension()])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let Some(path) = rx.await.map_err(|_| "Save dialog interrupted")? else {
+        return Ok(None);
+    };
+    let path = path
+        .into_path()
+        .map_err(|_| "Only local destinations are supported")?;
+    let destination = files::Destination::from_selection(&path)?;
+    // Recheck original source access after an arbitrarily long user dialog.
+    brief_files::save(bridge, scope, reference, destination)
+        .await
+        .map(Some)
+}
 #[tauri::command]
 async fn native_files_control(
     window: WebviewWindow,
@@ -815,6 +858,7 @@ fn main() {
             native_files_drop_target,
             native_files_upload,
             native_files_save,
+            native_brief_save,
             native_files_control,
             native_files_preview,
             native_status,
