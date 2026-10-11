@@ -53,6 +53,7 @@ FIELDS = {
     "pm_snapshots_list": ("workspace_id", "after", "limit"),
     "pm_snapshot_get": ("workspace_id", "snapshot_id"),
     "pm_snapshot_latest_get": ("workspace_id",),
+    "pm_brief_export_get": ("workspace_id", "snapshot_id", "format", "locale"),
 }
 
 
@@ -62,6 +63,10 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_brief_export_get":
+        from .pm_brief_exports import render_brief
+        return render_brief(ops, principal, workspace_id, params.get("snapshot_id"),
+                            format=params.get("format", "markdown"), locale=params.get("locale", "en"))
     if method in {"pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get"}:
         from . import pm_work_packages
         if method == "pm_work_package_get":
