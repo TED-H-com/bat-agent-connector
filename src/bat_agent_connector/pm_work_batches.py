@@ -648,14 +648,23 @@ def list_batches(ops, principal, workspace_id, *, after=0, limit=50):
     rows = ops.db.execute('SELECT batch_id,sequence FROM pm_work_batches WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?',
         (workspace_id, after, limit + 1)).fetchall()
     scanned = after
-    for stub in rows[:limit]:
+    for index, stub in enumerate(rows[:limit]):
         row = _batch(ops, workspace_id, stub['batch_id'])
+        # At the known end the wire cursor is null. Otherwise reserve whichever
+        # is wider: this exact prefix cursor or a final null after later scans.
+        cursor = row['sequence'] if index + 1 < len(rows) and row['sequence'] >= 1000 else None
         if not operation_visible(ops.db, principal, {'operation_id': row['operation_id']}):
+            candidate = {**result, 'visibility_filtered': True, 'next_cursor': cursor}
+            if _size(candidate) > MAX_READ_BYTES:
+                if scanned == after:
+                    raise _bad('PM_BATCH_READ_TOO_LARGE', 'The whole list envelope exceeds the public read budget', 413)
+                result['next_cursor'] = scanned
+                return _bounded(result)
             result['visibility_filtered'] = True
             scanned = row['sequence']
             continue
         item = _view(ops, row)
-        candidate = {**result, 'batches': [*result['batches'], item], 'next_cursor': 2**63 - 1}
+        candidate = {**result, 'batches': [*result['batches'], item], 'next_cursor': cursor}
         if _size(candidate) > MAX_READ_BYTES:
             if scanned == after:
                 raise _bad('PM_BATCH_READ_TOO_LARGE', 'One whole batch exceeds the public read budget', 413)
