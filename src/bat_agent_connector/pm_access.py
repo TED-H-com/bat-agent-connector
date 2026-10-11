@@ -31,6 +31,10 @@ def event_visible(db, principal, event):
             return not event.get("body", {}).get("action", "").startswith("pm.")
         return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
                                       "result": json.loads(row["result"]) if row["result"] else None})
+    if event["resource_type"] == "pm_work_package" or event["kind"].startswith("pm.work_package."):
+        from .pm_work_packages import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_follow_up" or event["kind"].startswith("pm.follow_up."):
         from .pm_follow_up import event_visible as follow_up_event_visible
         return follow_up_event_visible(db, principal, event)

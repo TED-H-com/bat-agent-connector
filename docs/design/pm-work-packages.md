@@ -169,8 +169,40 @@ original params, step receipts or results through operation GET/list/events/MCP.
 It loads the immutable original admission context by operation ID. It does not
 construct a new service or borrow the operation creator's principal. Global event
 integration must also consult that original operation, because event metadata is
-not a separate source authorization. No public entrypoint is installed by this
-increment.
+not a separate source authorization. The shared entrypoints below apply this policy to the original admission even
+before a package is recorded.
+
+## Shared entrypoints
+
+The operation catalog installs `pm.work_package.create`; creation uses the existing
+`POST /api/v1/operations`, idempotency key, scopes, current membership and durable
+receipts. The `features.pm_workspaces.work_package_prepare` flag advertises this
+preparation action, separately from PM analysis context packages or execution.
+
+All reads require `observe` and current workspace/source access:
+
+| HTTP GET | RPC / MCP |
+| --- | --- |
+| `/pm/workspaces/{workspace_id}/work-packages?work_item_id&after&limit` | `pm_work_packages_list` |
+| `/pm/workspaces/{workspace_id}/work-packages/{package_id}` | `pm_work_package_get` |
+| `/pm/workspaces/{workspace_id}/work-packages/{package_id}/readiness` | `pm_work_package_readiness_get` |
+
+HTTP paths are relative to `/api/v1`. List selectors are optional; detail and
+readiness accept no query selectors. Unknown, repeated, blank or invalid
+selectors fail rather than becoming defaults. MCP exposes these as read-only
+tools and requires the caller's token; it never falls back to local admin. The
+native bridge allows exactly the same read routes and bounded selectors. It
+provides no direct package write, start or dispatch route.
+
+Each public read uses the same synchronous journal contract. It never rereads
+Git files, fetches, starts an adapter or changes package/work state. Readiness
+reports only current local engineering review checks. Global operation GET/list,
+operation events and `pm.work_package.created` events all consult the immutable
+original admission and full predecessor source lineage. Withdrawing an original
+source hides a later package that omitted its explicit evidence reference as well
+as its operation parameters and event metadata. A pending admitted operation is
+protected before a package row exists. Filtered list pages retain their forward
+cursor, including pages with no visible packages.
 
 ## Engineering review readiness
 
