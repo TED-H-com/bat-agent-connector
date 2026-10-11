@@ -53,3 +53,16 @@ own session and explicitly selected revision under the existing writer rules.
 This slice supports accepted plan documents in bounded analysis. It does not
 claim native coding, arbitrary PM directory access, a durable workspace adapter
 selection or automatic cross-tool handoff. Those use separate contracts.
+
+The shared read is exposed as `GET /pm/workspaces/{workspace_id}/threads/{thread_id}/context-bundle`
+and `pm_context_bundle_preview` on RPC/MCP. The optional `max_chars` uses the
+existing 2,000–64,000 discussion bound; the complete schema-2 byte budget is
+independent. The native bridge accepts only that fixed read route and bounded
+selector. `features.pm_workspaces.accepted_context_bundle` advertises the schema,
+context version, byte ceiling and explicit whole-file selection.
+
+The discussion form defaults to its existing context. The user may preview and
+explicitly select complete or visibly partial accepted files. A restored draft
+rechecks its saved selector before a new request; a pending/unknown request keeps
+its original envelope and key even if capability, sources or accepted version
+later change. Previewing a newer revision never silently updates that intent.

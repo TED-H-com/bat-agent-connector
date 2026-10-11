@@ -228,3 +228,62 @@ async def test_bundle_http_rpc_mcp_share_original_preview_and_reject_ambiguous_q
         server.close()
         await server.wait_closed()
         await fleet.close()
+
+
+async def test_withdrawn_workspace_repository_hides_bundle_run_reply_and_operation(bundle_world):
+    w = bundle_world
+    op = await finish(w, request(w, ref=preview(w)['context_bundle_ref']))
+    assert op['status'] == 'succeeded', op
+    ops = w['d'].ops
+    run = pm_runs.get_by_operation(ops.db, op['operation_id'])
+    message_id = op['result']['outcome']['message_id']
+    assert bundles.operation_visible(ops.db, plans.OWNER, op)
+    ops.db.execute('UPDATE pm_workspaces SET repositories=? WHERE workspace_id=?', ('[]', w['workspace_id']))
+    with pytest.raises(OperationError):
+        preview(w)
+    with pytest.raises(OperationError):
+        pm_runs.read(ops, plans.OWNER, w['workspace_id'], run['run_id'])
+    assert not bundles.operation_visible(ops.db, plans.OWNER, op)
+    assert message_id not in json.dumps(pm_discussions.get_thread(ops, plans.OWNER, **plans.target(w)))
+    assert op['operation_id'] not in json.dumps(ops.list(principal=plans.OWNER))
+    # Removing access does not rewrite or erase the immutable original receipt.
+    assert pm_runs.get(ops.db, run['run_id'])['context_digest'] == run['context_digest']
+
+
+async def test_complete_saved_bundle_survives_fresh_service_journal_without_new_native_process(bundle_world, monkeypatch):
+    from bat_agent_connector import pm_native_operations, pm_workspace
+    from bat_agent_connector.operations import OpContext, OperationService, Uncertain
+    from bat_agent_connector.task_journal import Journal
+    w = bundle_world
+    original_step = OpContext.step
+    lost = False
+    async def lose_ack(ctx, name, *args, **kwargs):
+        nonlocal lost
+        value = await original_step(ctx, name, *args, **kwargs)
+        if name == 'pm.native.execute' and not lost:
+            lost = True
+            raise Uncertain(name, 'fixture lost execution ACK before import')
+        return value
+    monkeypatch.setattr(OpContext, 'step', lose_ack)
+    op = await finish(w, request(w, ref=preview(w)['context_bundle_ref']))
+    assert op['status'] == 'uncertain', op
+    original = pm_runs.get_by_operation(w['d'].ops.db, op['operation_id'])
+    journal = Journal(w['d'].journal.path)
+    resumed = OperationService(journal)
+    pm_workspace.install(resumed)
+    pm_discussions.install(resumed)
+    pm_native_operations.install(resumed)
+    resumed.context.update(w['d'].ops.context)
+    def no_new_process(*args, **kwargs):
+        pytest.fail('Original bundle recovery launched a second native process')
+    resumed.context['pm_native_runtime_factory'] = no_new_process
+    try:
+        journal.db.execute('UPDATE operations SET next_run_at=0 WHERE operation_id=?', (op['operation_id'],))
+        await settle_operations(resumed)
+        result = resumed.get(op['operation_id'])
+        assert result['status'] == 'succeeded', result
+        recovered = pm_runs.get_by_operation(journal.db, op['operation_id'])
+        assert recovered['context'] == original['context'] and recovered['context_digest'] == original['context_digest']
+        assert len(w['native_instances']) == 1 and w['native_instances'][0].sends == 1
+    finally:
+        journal.close()
