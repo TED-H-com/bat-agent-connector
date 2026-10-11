@@ -185,3 +185,109 @@ for(const locale of ['en','zh-TW'])test(`selection editor layout ${locale}`,asyn
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_SPRINT_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/sprint-editor-${locale}-390.png`,fullPage:true});
 });
+
+// Model the real bounded backend: the terminal event may not fit in the first
+// detail response at all (cursor 0), or may follow fifty ordinary decisions.
+function closureFixture({initial=50,total=51,cancelled=false}: {initial?:number,total?:number,cancelled?:boolean}={}) {
+  const f=fixture(), sprint=f.state.sprints[0], requests:string[]=[];
+  sprint.status=cancelled?'cancelled':'closed';
+  const events=Array.from({length:total},(_,index)=>({workspace_id:workspaceId,sprint_id:sprint.sprint_id,sequence:index+1,
+    actor:'owner',action:index===total-1?(cancelled?'pm.sprint.cancel':'pm.sprint.close'):'pm.sprint.select',
+    document:{rationale:index===total-1?'Keep the unverified recovery work visible <script>literal</script>':`Selection decision ${index+1}`,
+      items:index===total-1?[{...sprint.selected[0],quality:'unassessed',counts_as_done:false,
+        disposition:'requires_product_backlog_consideration',reason:'Recovery behavior still needs acceptance evidence'}]:[]}}));
+  let invalidCursor:any=undefined, wrongRecord=false, hold:Promise<void>|null=null;
+  const original=f.dispatch;
+  f.dispatch=async(input:any)=>{
+    const url=new URL(input.path,'http://fixture');
+    if(input.method==='GET'&&url.pathname.endsWith('/history/events')) {
+      requests.push(input.path);if(hold)await hold;
+      if(f.state.failRead)return original(input);
+      const after=Number(url.searchParams.get('after')), rows=events.filter(row=>row.sequence>after).slice(0,50);
+      return {status:200,data:{version:1,workspace_id:workspaceId,sprint_id:sprint.sprint_id,kind:'events',
+        records:wrongRecord?rows.map(row=>({...row,sprint_id:'pms_'+'9'.repeat(32)})):rows,
+        next_cursor:invalidCursor===undefined?(events.some(row=>row.sequence>(rows.at(-1)?.sequence||after))?rows.at(-1)!.sequence:null):invalidCursor}};
+    }
+    const result=await original(input);
+    if(input.method==='GET'&&url.pathname.endsWith('/sprints/'+sprint.sprint_id)&&result.status===200) {
+      result.data={...result.data,history:events.slice(0,initial),history_next_cursors:{events:initial<events.length?initial:null},
+        coverage:{histories:{events:{returned:initial,has_more:initial<events.length,byte_limited:initial===0}}}};
+    }
+    return result;
+  };
+  return {f,requests,events,setInvalidCursor:(value:any)=>{invalidCursor=value;},setWrongRecord:()=>{wrongRecord=true;},setHold:(value:Promise<void>)=>{hold=value;}};
+}
+
+test('terminal event after first fifty decisions updates the main closure and full history work disposition',async({page})=>{
+  const {f,requests}=closureFixture();await mount(page,f);
+  const closure=page.locator('[data-pm-sprint-closure]');
+  await expect(closure).toContainText('has not been loaded yet');expect(requests).toHaveLength(0);
+  await closure.getByRole('button',{name:'Load next decision history page',exact:true}).click();
+  await expect(closure).toContainText('Recovery behavior still needs acceptance evidence');
+  await expect(closure).toContainText('Unassessed');await expect(closure).toContainText('Requires Product Backlog consideration');
+  await expect(closure.getByRole('button')).toHaveCount(0);expect(requests).toHaveLength(1);expect(requests[0]).toContain('after=50&limit=50');
+  await page.getByText('Goal, selection and decision history',{exact:true}).click();
+  const history=page.locator('[data-pm-sprint-history="events"]');await history.getByText('#51 · Close elapsed Sprint',{exact:true}).click();
+  await expect(history.locator('[data-pm-sprint-ended-work]')).toContainText('Recovery behavior still needs acceptance evidence');
+  await expect(history).toContainText('Review and Retrospective are not recorded by closing');
+  await expect(page.locator('[data-pm-sprints] script')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+});
+
+test('byte capped initial history cursor zero is pending and is read explicitly',async({page})=>{
+  const {f,requests}=closureFixture({initial:0,total:1,cancelled:true});await mount(page,f);
+  const closure=page.locator('[data-pm-sprint-closure]');await expect(closure).toContainText('has not been loaded yet');
+  await closure.getByRole('button',{name:'Load next decision history page',exact:true}).click();
+  await expect(closure).toContainText('Keep the unverified recovery work visible');expect(requests[0]).toContain('after=0&limit=50');
+  await page.getByText('Goal, selection and decision history',{exact:true}).click();
+  await page.getByText('#1 · Cancel Sprint',{exact:true}).click();
+  await expect(page.locator('[data-pm-sprint-history="events"] [data-pm-sprint-ended-work]')).toContainText('Unassessed');
+  expect(f.state.writes).toHaveLength(0);
+});
+
+test('history More and closure share each bounded continuation without duplicate records',async({page})=>{
+  const {f,requests}=closureFixture({initial:0,total:101});await mount(page,f);
+  await page.getByText('Goal, selection and decision history',{exact:true}).click();
+  const history=page.locator('[data-pm-sprint-history="events"]'),closure=page.locator('[data-pm-sprint-closure]');
+  await history.getByRole('button',{name:'More decision history',exact:true}).click();
+  await expect(history.locator(':scope > details')).toHaveCount(50);await expect(closure).toContainText('has not been loaded yet');
+  await closure.getByRole('button',{name:'Load next decision history page',exact:true}).click();
+  await expect(history.locator(':scope > details')).toHaveCount(100);await expect(closure).toContainText('has not been loaded yet');
+  await history.getByRole('button',{name:'More decision history',exact:true}).click();
+  await expect(history.locator(':scope > details')).toHaveCount(101);await expect(closure).toContainText('Recovery behavior still needs acceptance evidence');
+  expect(requests.map(value=>new URL(value,'http://fixture').searchParams.get('after'))).toEqual(['0','50','100']);expect(f.state.writes).toHaveLength(0);
+});
+
+test('exhausted retained history reports unavailable closure instead of inventing a reason',async({page})=>{
+  const {f,events}=closureFixture({initial:0,total:1});events[0].action='pm.sprint.select';await mount(page,f);
+  const closure=page.locator('[data-pm-sprint-closure]');await closure.getByRole('button',{name:'Load next decision history page',exact:true}).click();
+  await expect(closure).toContainText('unavailable in the returned history');await expect(closure.getByRole('button')).toHaveCount(0);
+  await expect(closure.locator('[data-pm-sprint-ended-work]')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+});
+
+for(const mode of ['revoked','wrong-record','noninteger-cursor','no-progress'])test(`closure history read fails closed: ${mode}`,async({page})=>{
+  const data=closureFixture(),{f}=data;await mount(page,f);
+  if(mode==='revoked')f.state.failRead='revoked';else if(mode==='wrong-record')data.setWrongRecord();
+  else data.setInvalidCursor(mode==='no-progress'?50:'51');
+  await page.locator('[data-pm-sprint-closure]').getByRole('button',{name:'Load next decision history page',exact:true}).click();
+  await expect(page.locator('[data-pm-sprint-closure]')).toHaveCount(0);
+  expect(await page.locator('[data-pm-sprints]').innerText()).not.toContain('A returning member can sign in');
+  expect(f.state.writes).toHaveLength(0);
+});
+
+test('refresh supersedes an in-flight history read and ignores its stale terminal event',async({page})=>{
+  const data=closureFixture(),{f,requests}=data;let release!:()=>void;data.setHold(new Promise<void>(resolve=>{release=resolve;}));await mount(page,f);
+  const closure=page.locator('[data-pm-sprint-closure]');await closure.getByRole('button',{name:'Load next decision history page',exact:true}).click();
+  await expect.poll(()=>requests.length).toBe(1);await expect(closure.getByRole('button',{name:'Loading decision history…',exact:true})).toBeDisabled();
+  await page.evaluate(()=> (window as any).refreshSprint());release();
+  await expect(closure).toContainText('has not been loaded yet');
+  await expect(closure).not.toContainText('Recovery behavior still needs acceptance evidence');expect(f.state.writes).toHaveLength(0);
+});
+
+for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`closure history layout ${locale} ${width}`,async({page},info)=>{
+  const {f}=closureFixture();await page.setViewportSize({width,height:900});await mount(page,f,locale);
+  const closure=page.locator('[data-pm-sprint-closure]');await closure.getByRole('button').click();
+  await expect(closure).toContainText(locale==='en'?'Unassessed':'尚未評估');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const out=process.env.BATC_PM_SPRINT_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
+  await closure.scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/sprint-closure-${locale}-${width}.png`,fullPage:true});
+});
