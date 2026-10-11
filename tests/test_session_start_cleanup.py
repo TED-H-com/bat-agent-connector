@@ -5,17 +5,18 @@ from pathlib import Path
 
 import pytest
 
-from bat_agent_connector import cleanup, confinement, registry
+from bat_agent_connector import api_auth, cleanup, confinement, registry
 from bat_agent_connector.resource_ids import worktree_id
-from tests.test_cleanup import CLEANER, apply, git
+from tests.test_cleanup import apply, git
 from tests.test_cleanup import daemon as cleanup_daemon
 from tests.test_cleanup import human as cleanup_human
 from tests.test_cleanup import known_live_terminals as cleanup_live
-from tests.test_session_start_operations import create
+from tests.test_session_start_operations import START, create
 
 daemon = cleanup_daemon
 human = cleanup_human
 known_live_terminals = cleanup_live
+CLEANER = api_auth.Principal(START.actor, frozenset({"observe", "cleanup"}))
 
 
 async def refused_start(daemon, mock, tmp_path, monkeypatch):
@@ -59,7 +60,7 @@ async def test_failed_start_carrier_uses_original_id_and_reviewed_cleanup(daemon
     assert item["proven"] and item["decision"] == "reclaim", json.dumps(item, indent=2)
     assert op["operation_id"] in item["original_ids"]
     assert before == (list(daemon.journal.db.iterdump()), registry.registry_path().read_bytes())
-    done = await apply(daemon, doc)
+    done = await apply(daemon, doc, principal=CLEANER)
     assert done["status"] == "succeeded", done
     assert not Path(row["worktree_path"]).exists()
     assert cleanup.lookup(daemon.journal.db, op["operation_id"])

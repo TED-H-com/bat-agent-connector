@@ -238,7 +238,6 @@ async def resolve(ops, target, params, sid, *, operation_id, index, source_ident
     if tab['id'] != sid or source_identity['session_id'] != sid:
         raise StepFailed('SESSION_SOURCE_CHANGED', 'failover source differs from its fixed selection')
     relay.check_source(source_identity)
-    controller_authority.require_entry(registry.get(host, sid))
     task_control.refuse_owned(fleet, host, sid)
     if service.agent_kind(tab.get('agentPreset')) != 'claude':
         raise StepFailed('FAILOVER_AGENT', 'only standalone Claude sources support failover')
@@ -249,6 +248,7 @@ async def resolve(ops, target, params, sid, *, operation_id, index, source_ident
     classification = resource_policy.classify(hc, sid, terminal=tab, entries=registry.list_entries(host))
     if classification.code:
         raise ResourceReadOnly(classification.code, classification.reason)
+    controller_authority.require_entry(registry.get(host, sid))
     existing = [r for r in registry.list_entries(host) if r.get('failover_of') == sid and
                 (r.get('status') in {'active', 'starting', 'uncertain'} or r.get('start_sent') is True)]
     if existing:
