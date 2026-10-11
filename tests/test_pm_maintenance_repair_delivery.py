@@ -1,5 +1,6 @@
 """Actual private publish/observe/merge engines through temporary Git and providers."""
 import copy
+from types import SimpleNamespace
 
 import pytest
 
@@ -56,6 +57,7 @@ def adopted_delivery(monkeypatch, ceiling):
 @pytest.fixture
 async def ready_chain(publishing, monkeypatch, ceiling):
     w, ops = publishing, publishing['d'].ops
+    monkeypatch.setattr(chain, 'time', SimpleNamespace(time=lambda: w['clock'][0]))
     comparison = w['gh'].comparison
     def complete_diff(base, head, page):
         result = comparison(base, head, page)
@@ -133,6 +135,37 @@ async def test_private_unknown_merge_never_resends_and_exact_result_recovers(rea
     parent = await advance(w, parent)
     assert parent['result']['outcome'] == 'merged'
     assert w['gh'].count('PUT', 'merge-async') == 1
+
+
+async def test_unknown_merge_cannot_recover_through_replacement_native_pr(ready_chain):
+    w, ops = ready_chain, ready_chain['d'].ops
+    w['gh'].truncate.append(('PUT', r'/merge-async$'))
+    parent = await advance(w, w['parent'], rounds=10)
+    original = chain.child(ops, parent)
+    number = publication.published_receipt(ops, parent)['pull_number']
+    w['gh'].merge(number)
+    w['gh'].pulls[number]['id'] += 1
+    await ops._execute(original['operation_id'])
+    saved = ops.get(original['operation_id'])
+    assert saved['status'] == 'needs_attention' and saved['error_code'] == 'PM_REPAIR_DELIVERY_TARGET_CHANGED'
+    assert w['gh'].count('PUT', 'merge-async') == 1
+    assert view(w, parent)['capacity_held']
+
+
+async def test_pending_native_ci_never_falls_back_to_any_passing_check_or_new_reservation(ready_chain):
+    w, ops = ready_chain, ready_chain['d'].ops
+    w['pending_ci'] = True
+    parent = await advance(w, w['parent'], rounds=8)
+    assert chain.child(ops, parent) is None
+    assert w['gh'].count('PUT', 'merge-async') == 0
+    assert len(chain._rows(ops, parent, 'observation')) == 1
+    assert view(w, parent)['capacity_held']
+    # The adopted retry ceiling is zero and interval reaches the original
+    # deadline. No extra observer or repair reservation is invented.
+    w['clock'][0] += 120
+    await advance(w, parent, rounds=3)
+    assert len(chain._rows(ops, parent, 'observation')) == 1
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repairs').fetchone()[0] == 1
 
 
 @pytest.mark.parametrize('stop', ['pause', 'revoke'])

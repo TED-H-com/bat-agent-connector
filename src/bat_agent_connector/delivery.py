@@ -152,6 +152,8 @@ def _check_merge_policy(ops: OperationService, repository: str, method: str) -> 
 async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix: str = "merge", *, before_submit=None) -> dict:
     gh = _gh(ctx.service)
     pr = await _read(gh.pull(repository, number), "read the pull request", ctx)
+    from .pm_maintenance_repair_delivery import require_native_target
+    require_native_target(ctx, pr)
     submitted = _has_step(ctx, f"{prefix}.submit")
     preview = pr_delivery.get_preview(ctx.service.db, ctx.params["preview_id"])
     method = preview["method"]
@@ -206,6 +208,7 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
         except GitHubAmbiguous:
             return None
         _read_result(status, again, "read back the merge request", ctx)
+        require_native_target(ctx, again)
         if status == 200 and again.get("merged"):
             return {"http_status": 200, "status": "merged", "details": {"sha": again.get("merge_commit_sha")},
                     "observed_only": True}

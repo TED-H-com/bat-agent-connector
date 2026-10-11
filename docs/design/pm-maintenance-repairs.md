@@ -83,6 +83,56 @@ the idempotent reservation. Bookkeeping, existing registered lifecycle record ac
 session and sent-effect readback consume no retry. The shared source-visibility
 gate still precedes local records; the exception grants no source access.
 
+## Bounded delivery composition
+
+New publication children for an adopted `merge` or `deploy` ceiling create a
+non-draft PR. A `pull_request` ceiling still creates a draft. The actual request
+and private relation are immutable: an older stored draft is never silently
+rewritten or marked ready for review by a metadata update.
+
+After publication, the original parent may create bounded private
+`pm.github.observe` children and one private `github.pr.merge` or
+`delivery.merge_and_deploy` child. These use the parent's existing reservation;
+they do not create another maintenance check or compete with that parent for its
+own `max_parallel=1` capacity. New observation attempts obey the original check
+interval and absolute repair deadline. The first observation is included; each
+later observation consumes one of the same original retry reservations used for
+proven-unsent restarts. An unknown observation is read back at its original key,
+never replaced with a fresh attempt.
+
+Automatic required-CI selection is permitted only when the original policy
+explicitly adopts `github_required_status_checks_v1`. A current, complete,
+two-pass, passing observation must match the original owned PR's native identity,
+full head, base, branch and original policy source binding. Existing explicit
+evidence selection remains supported. The server freezes the selected observation
+ID, digest and native PR ID inside the delivery child's original admission
+binding. Later observations cannot replace it. Its original sources gate
+historical reads even after expiry; every new delivery effect additionally
+requires that exact selection still be current, fresh and passing.
+
+The parent uses the existing complete merge preview and registered delivery
+engines. The private row freezes the whole request, preview/head/base preconditions,
+controller and selected CI reference atomically with child creation. Existing
+in-flight delivery is a blocker, not a source of ownership. A deploy ceiling
+requires exactly one configured recipe matching the original repository,
+maintenance branch and adopted environment, a ready verifier, native repository
+identity, fixed recipe digest and environment generation. Ambiguity blocks.
+
+Before each unsent observation page and delivery frame, the original owner,
+credential, policy, baseline, source chain, lifecycle epoch and deadline are
+rechecked. Private delivery HTTP calls use the remaining original deadline,
+bounded response reads and one outstanding transport worker. A timed-out worker
+may still be finishing; its result is discarded and it never creates a retry.
+Uncertain async merge remains read-only until the original native result can be
+proven. The manual delivery path retains its existing behavior. Receipt recovery
+has a separate bounded read budget after stop/deadline and cannot send a new
+merge or deployment.
+
+Only an original succeeded delivery child with its verified merge/deployment
+receipts yields the parent outcome `merged` or `deployed`. These are distinct
+from version publication and release-baseline advancement. Runtime capacity
+remains held until original runtime termination is independently proven.
+
 At a `pull_request` ceiling the original parent finishes with
 `outcome=published_for_review` after the private publication child is terminal and
 its durable original HTTP 201 proves the fixed native PR. This is a local receipt
