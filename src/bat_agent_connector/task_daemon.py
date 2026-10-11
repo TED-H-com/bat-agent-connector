@@ -98,6 +98,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_issue_mappings_list": "observe", "pm_issue_mapping_get": "observe",
            "pm_follow_up_assessments_list": "observe", "pm_follow_up_assessment_get": "observe",
            "pm_brief_export_get": "observe",
+           "pm_snapshot_view_get": "observe", "pm_snapshot_view_export_get": "observe",
            "pm_lifecycle_get": "observe", "pm_lifecycle_transitions_list": "observe",
            "pm_lifecycle_transition_get": "observe", "pm_lifecycle_inflight_list": "observe",
            "pm_follow_up_list": "observe", "pm_follow_up_get": "observe", "pm_follow_up_latest_get": "observe",

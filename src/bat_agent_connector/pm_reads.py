@@ -95,6 +95,8 @@ FIELDS = {
     "pm_snapshots_list": ("workspace_id", "after", "limit"),
     "pm_snapshot_get": ("workspace_id", "snapshot_id"),
     "pm_snapshot_latest_get": ("workspace_id",),
+    "pm_snapshot_view_get": ("workspace_id", "snapshot_id", "view", "locale"),
+    "pm_snapshot_view_export_get": ("workspace_id", "snapshot_id", "view", "format", "locale"),
     "pm_brief_export_get": ("workspace_id", "snapshot_id", "format", "locale"),
 }
 
@@ -217,6 +219,13 @@ def read(ops, principal, method, params):
             return pm_release_baselines.get_baseline(ops, principal, workspace_id, params.get("baseline_id"))
         return pm_release_baselines.list_baselines(ops, principal, workspace_id,
             after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_snapshot_view_get", "pm_snapshot_view_export_get"}:
+        from . import pm_view_exports
+        selectors = {"view": params.get("view", "roadmap"), "locale": params.get("locale", "en")}
+        if method == "pm_snapshot_view_export_get":
+            return pm_view_exports.render_view(ops, principal, workspace_id, params.get("snapshot_id"),
+                                               format=params.get("format", "svg"), **selectors)
+        return pm_view_exports.get_view(ops, principal, workspace_id, params.get("snapshot_id"), **selectors)
     if method == "pm_brief_export_get":
         from .pm_brief_exports import render_brief
         return render_brief(ops, principal, workspace_id, params.get("snapshot_id"),

@@ -25,6 +25,8 @@ pub struct Reference {
     pub snapshot_id: String,
     pub format: String,
     pub locale: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
     pub expected_view_digest: String,
     pub expected_output_digest: String,
 }
@@ -36,6 +38,12 @@ impl Reference {
             || !self.snapshot_id.starts_with("pmsnap_")
             || !hex(self.snapshot_id.get(7..).unwrap_or(""), 32)
             || !matches!(self.format.as_str(), "markdown" | "html" | "svg")
+            || self.view.as_ref().is_some_and(|view| {
+                !matches!(
+                    view.as_str(),
+                    "roadmap" | "kanban" | "sprint" | "governance"
+                ) || self.format == "markdown"
+            })
             || !matches!(self.locale.as_str(), "en" | "zh-TW")
             || !hex(&self.expected_view_digest, 64)
             || !hex(&self.expected_output_digest, 64)
@@ -48,6 +56,12 @@ impl Reference {
         Ok(())
     }
     fn route(&self) -> String {
+        if let Some(view) = &self.view {
+            return format!(
+                "/pm/workspaces/{}/snapshots/{}/view-export?view={}&format={}&locale={}",
+                self.workspace_id, self.snapshot_id, view, self.format, self.locale
+            );
+        }
         format!(
             "/pm/workspaces/{}/snapshots/{}/brief-export?format={}&locale={}",
             self.workspace_id, self.snapshot_id, self.format, self.locale
@@ -61,6 +75,15 @@ impl Reference {
         }
     }
     pub fn filename(&self) -> String {
+        if let Some(view) = &self.view {
+            return format!(
+                "pm-{}-{}-{}.{}",
+                view,
+                self.snapshot_id,
+                self.locale,
+                self.extension()
+            );
+        }
         format!(
             "pm-brief-{}-{}.{}",
             self.snapshot_id,
@@ -69,6 +92,13 @@ impl Reference {
         )
     }
     pub fn dialog_title(&self) -> &'static str {
+        if self.view.is_some() {
+            return if self.locale == "zh-TW" {
+                "另存固定專案視圖"
+            } else {
+                "Save fixed project view"
+            };
+        }
         if self.locale == "zh-TW" {
             "另存專案摘要"
         } else {
@@ -94,6 +124,8 @@ impl Reference {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Coverage {
+    #[serde(default)]
+    view: Option<Value>,
     snapshot: Value,
     visibility: Value,
     projection: String,
@@ -113,6 +145,10 @@ struct Document {
     view_digest: String,
     template_version: u64,
     renderer_version: u64,
+    #[serde(default)]
+    view: Option<String>,
+    #[serde(default)]
+    view_template_version: Option<u64>,
     locale: String,
     format: String,
     media_type: String,
@@ -140,12 +176,24 @@ fn verify(value: Value, reference: &Reference) -> Result<Verified, String> {
     }
     let mut doc: Document = serde_json::from_value(value).map_err(|_| INVALID)?;
     let raw = doc.content.as_bytes();
+    let renderer_matches = if let Some(view) = &reference.view {
+        doc.view.as_ref() == Some(view)
+            && doc.view_template_version == Some(1)
+            && doc.renderer_version == 1
+            && doc.coverage.projection == *view
+            && doc.coverage.view.as_ref().is_some_and(Value::is_object)
+    } else {
+        doc.view.is_none()
+            && doc.view_template_version.is_none()
+            && doc.coverage.view.is_none()
+            && matches!(
+                (doc.renderer_version, doc.coverage.projection.as_str()),
+                (1 | 3, "project_brief_only") | (2 | 3, "project_brief_with_maintenance_review")
+            )
+    };
     if doc.version != 1
         || doc.template_version != 1
-        || !matches!(
-            (doc.renderer_version, doc.coverage.projection.as_str()),
-            (1 | 3, "project_brief_only") | (2 | 3, "project_brief_with_maintenance_review")
-        )
+        || !renderer_matches
         || doc.workspace_id != reference.workspace_id
         || doc.snapshot_id != reference.snapshot_id
         || doc.format != reference.format
@@ -215,6 +263,8 @@ pub(crate) async fn read(
 
 #[derive(Serialize)]
 pub struct Receipt {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
     pub stage: &'static str,
     pub workspace_id: String,
     pub snapshot_id: String,
@@ -242,6 +292,7 @@ pub(crate) async fn save(
         )?;
         let doc = verified.document;
         Ok(Receipt {
+            view: doc.view,
             stage: "saved",
             workspace_id: doc.workspace_id,
             snapshot_id: doc.snapshot_id,
@@ -283,6 +334,7 @@ mod tests {
             snapshot_id: format!("pmsnap_{}", "2".repeat(32)),
             format: format.into(),
             locale: locale.into(),
+            view: None,
             expected_view_digest: "3".repeat(64),
             expected_output_digest: format!("{:x}", Sha256::digest(content.as_bytes())),
         };

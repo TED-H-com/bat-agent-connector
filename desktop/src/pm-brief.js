@@ -1,3 +1,4 @@
+import {fixedSnapshotViews} from './pm-fixed-views.js';
 // All five Brief sections render one immutable snapshot, filtered for current source access.
 import {briefExport} from './pm-brief-export.js';
 import {qualityFact} from './pm-quality-projections.js';
@@ -5,20 +6,24 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let head = null, snapshot = null, signature = '', serial = 0, selectedSnapshotId = null;
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
+  const fixedEnabled=caps?.()?.features?.pm_workspaces?.fixed_view_exports?.version===1;
+  const management=h('select',{'aria-label':t('pm_fixed_capture')},h('option',{value:'all'},t('pm_fixed_all')),h('option',{value:'brief'},t('pm_fixed_brief')));
   const view = h('div', {class: 'pm-brief-view'}), history = h('div'), status = h('div', {role: 'status'});
-  const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
-    params: values => values.title.trim() ? {title: values.title.trim()} : {},
+  const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title,...(fixedEnabled?{management_views:management}:{})},
+    params: values => ({...(values.title.trim()?{title:values.title.trim()}:{}),...(values.management_views==='all'?{include_management_views:true}:{})}),
     preconditions: () => ({expected_plan_version: head.version}),
     permitted: () => Boolean(head) && permitted(false), recoverPermitted: () => permitted(false),
     label: 'pm_brief_create', onSaved: async result => {await refresh(result.snapshot_id);},
-    extra: h('details', {}, h('summary', {}, t('pm_brief_name_optional')), labelled('pm_brief_snapshot_title', title))});
+    extra: h('details', {}, h('summary', {}, t('pm_brief_name_optional')), labelled('pm_brief_snapshot_title', title),fixedEnabled?labelled('pm_fixed_capture',management):'')});
   const box = h('section', {class: 'pm-brief', 'data-pm-brief': ''}, h('header', {class: 'pm-heading'},
     h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), create.box),
     status, view, h('details', {}, h('summary', {}, t('pm_brief_history')), history));
   const exports=caps?.()?.features?.pm_workspaces?.brief_export
     ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
   if(exports)box.insertBefore(exports.element,box.lastChild);
-  function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();}
+  const fixedViews=fixedEnabled?fixedSnapshotViews({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
+  if(fixedViews)box.insertBefore(fixedViews.element,box.lastChild);
+  function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();fixedViews?.update();}
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error));}
   const stamp = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
@@ -26,7 +31,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   function render(data) {
     snapshot = check(data).snapshot;
     view.replaceChildren();status.replaceChildren();
-    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); exports?.update();return;}
+    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); exports?.update();fixedViews?.update();return;}
     if (snapshot.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     selectedSnapshotId=snapshot.snapshot_id;
     view.append(h('p', {class: 'pm-brief-date'}, h('strong', {}, snapshot.title || workspace().name), ' · ',
@@ -70,12 +75,12 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       h('pre', {class: 'pm-brief-proof'}, JSON.stringify({coverage:snapshot.coverage,visibility:snapshot.visibility,
         journal_cursor:snapshot.journal_cursor,snapshot_digest:snapshot.snapshot_digest,view_digest:snapshot.view_digest},null,2)));
     view.append(trace);
-    exports?.update();
+    exports?.update();fixedViews?.update();
   }
   function renderHistory(page, append = false) {
     if (!append) history.replaceChildren();
     for (const entry of page.snapshots || []) history.append(h('button', {type:'button',class:'secondary',onclick:async()=>{
-      selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();
+      selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();fixedViews?.update();
       try {const data=await api('GET',`${endpoint}/snapshots/${entry.snapshot_id}`);alive();if(ticket===serial)render(data);}
       catch(error){if(ticket===serial)unavailable(error);}
     }}, `${entry.title || t('pm_brief_title')} · ${stamp(entry.as_of)}`));
@@ -90,7 +95,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   }
   async function refresh(selectedId = null) {
     const selected=selectedId||selectedSnapshotId||'latest';if(selectedId)selectedSnapshotId=selectedId;
-    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();exports?.update();
+    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();exports?.update();fixedViews?.update();
     try {
       const [latest, listing, current]=await Promise.all([api('GET',`${endpoint}/snapshots/${selected}`),
         api('GET',`${endpoint}/snapshots?limit=20`),api('GET',`${endpoint}/plans/head`)]);alive();if(ticket!==serial)return;

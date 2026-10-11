@@ -266,6 +266,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})/readiness", self.pm_work_package_readiness, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments", self.pm_follow_up_assessments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/brief-export", self.pm_brief_export, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/view", self.pm_snapshot_view, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/view-export", self.pm_snapshot_view_export, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments/(?P<assessment_id>pmfa_[0-9a-f]{32})", self.pm_follow_up_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-ups", self.pm_follow_ups, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-ups/latest", self.pm_follow_up_latest, "observe"),
@@ -490,7 +492,7 @@ class ApiV1:
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
-                      self.pm_brief_export, self.pm_work_deliveries,
+                      self.pm_brief_export, self.pm_snapshot_view, self.pm_snapshot_view_export, self.pm_work_deliveries,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_execution_verification_configuration, self.pm_execution_verification_get,
@@ -999,6 +1001,12 @@ class ApiV1:
     async def pm_snapshot_latest(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_snapshot_latest_get", query, workspace_id=workspace_id)
 
+    async def pm_snapshot_view(self, principal, query, workspace_id, snapshot_id, **_):
+        return self._pm_read(principal, "pm_snapshot_view_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
+
+    async def pm_snapshot_view_export(self, principal, query, workspace_id, snapshot_id, **_):
+        return self._pm_read(principal, "pm_snapshot_view_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
+
     async def pm_brief_export(self, principal, query, workspace_id, snapshot_id, **_):
         return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
 
@@ -1097,6 +1105,7 @@ class ApiV1:
                                                         "materialization_action": "pm.spec.materialize",
                                                         "requirement_acceptance_profiles": ["accepted_requirements_v1"]},
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
+                                                    "fixed_view_exports": {"version": 1, "views": ["roadmap", "kanban", "sprint", "governance"], "formats": ["svg", "html"], "locales": ["en", "zh-TW"], "snapshot_option": "include_management_views"},
                                                     "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 2},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     "kanban": True, "spec_sources": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},

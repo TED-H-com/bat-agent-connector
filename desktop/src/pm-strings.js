@@ -1,3 +1,4 @@
+import {fixedViewStrings} from './pm-fixed-view-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
 import {pmLifecycleStrings} from './pm-lifecycle-strings.js';
 import {pmIssueStrings} from './pm-issue-strings.js';
@@ -22,6 +23,7 @@ export const pmStrings = {
     ...pmFollowUpStrings.en,
     ...followUpAnalysisStrings.en,
     ...briefExportStrings.en,
+    ...fixedViewStrings.en,
     ...workPackageStrings.en,
     pm_roadmap_historical_work: "Previously selected work association",
     pm_roadmap_missing_dependency: "Removed milestone dependency",
@@ -255,6 +257,7 @@ export const pmStrings = {
     ...pmFollowUpStrings['zh-TW'],
     ...followUpAnalysisStrings['zh-TW'],
     ...briefExportStrings['zh-TW'],
+    ...fixedViewStrings['zh-TW'],
     ...workPackageStrings['zh-TW'],
     pm_roadmap_historical_work: "先前選定的工作關聯",
     pm_roadmap_missing_dependency: "已移除里程碑的依賴",

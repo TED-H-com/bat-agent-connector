@@ -1,0 +1,20 @@
+export const fixedViewStrings={en:{
+  pm_fixed_title:'Saved management views',pm_fixed_help:'Preview and export the same saved snapshot. Live editors keep their current state.',
+  pm_fixed_capture:'Snapshot contents',pm_fixed_all:'Brief and all four management views',pm_fixed_brief:'Project Brief only',
+  pm_fixed_view:'Saved view',pm_fixed_roadmap:'Scope and milestones',pm_fixed_kanban:'Workflow Kanban',
+  pm_fixed_sprint:'Sprint and discussions',pm_fixed_governance:'Risks, changes and decisions',pm_fixed_preview:'Preview saved view',
+  pm_fixed_old:'This snapshot did not capture management views. Create a new snapshot with all views to include them.',
+  pm_fixed_empty:'No saved records in this view. This does not establish completion.',
+  pm_fixed_partial:'Only part of the original source selection is readable. Counts cover the visible saved records.',
+  pm_fixed_native:'This desktop version can preview saved views. Saving them requires a newer desktop or the browser.',
+  pm_fixed_sources:'Original sources and coverage',pm_fixed_historical:'Historical view · read-only',
+},'zh-TW':{
+  pm_fixed_title:'已保存的管理視圖',pm_fixed_help:'預覽與匯出使用同一份已保存快照；當前管理編輯區維持原狀。',
+  pm_fixed_capture:'快照內容',pm_fixed_all:'專案總覽與其他四個管理視圖',pm_fixed_brief:'僅專案總覽',
+  pm_fixed_view:'已保存視圖',pm_fixed_roadmap:'範圍與里程碑',pm_fixed_kanban:'工作流看板',
+  pm_fixed_sprint:'Sprint 與討論',pm_fixed_governance:'風險變更與決策',pm_fixed_preview:'預覽已保存視圖',
+  pm_fixed_old:'這份快照尚未擷取管理視圖。建立包含全部視圖的新快照即可保存。',
+  pm_fixed_empty:'此視圖沒有已保存紀錄；不代表已完成。',pm_fixed_partial:'目前僅能讀取部分原始來源；數值只涵蓋可讀的已保存紀錄。',
+  pm_fixed_native:'此桌面版本可預覽已保存視圖；存檔需要新版桌面或瀏覽器。',
+  pm_fixed_sources:'原始來源與涵蓋範圍',pm_fixed_historical:'歷史視圖 · 唯讀',
+}};

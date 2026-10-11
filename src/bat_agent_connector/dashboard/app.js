@@ -8102,6 +8102,7 @@ async function nativeStatus() {
 	const status = await invoke("native_status");
 	nativeFileSupport = status.file_transfers === true;
 	nativeBriefExportSupport = status.brief_exports === true;
+	nativeFixedViewExportSupport = status.fixed_view_exports === true;
 	return status;
 }
 async function connectorRequest(method, path, body, key, browserToken) {
@@ -8147,12 +8148,13 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, nativeFixedViewExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	nativeDesktop = isTauri();
 	nativeFileSupport = false;
 	nativeBriefExportSupport = false;
+	nativeFixedViewExportSupport = false;
 	browserSessionToken = "managed-browser-session";
 	browserCsrf = null;
 	nativeFilesStatus = () => invoke("native_files_status");
@@ -8187,6 +8189,215 @@ var init_transport = __esmMin((() => {
 	fleetRequest = (input) => invoke("fleet_request", { input });
 	updateRequest = (input) => invoke("desktop_update", { input });
 }));
+//#endregion
+//#region src/pm-fixed-views.js
+init_transport();
+function fixedSnapshotViews({ h, t, api, alive, workspaceId, caps, snapshot, readable, onUnavailable, errorBox }) {
+	const actor = caps()?.actor, views = [
+		"roadmap",
+		"kanban",
+		"sprint",
+		"governance"
+	];
+	let serial = 0, identity = "", model = null, busy = false, receipt = null;
+	const view = h("select", { "aria-label": t("pm_fixed_view") }, ...views.map((value) => h("option", { value }, t("pm_fixed_" + value))));
+	const locale = h("select", { "aria-label": t("pm_export_language") }, h("option", { value: "en" }, "English"), h("option", { value: "zh-TW" }, "繁體中文"));
+	locale.value = navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+	const format = h("select", { "aria-label": t("pm_export_format") }, h("option", { value: "svg" }, "SVG"), h("option", { value: "html" }, "HTML"));
+	const note = h("p", { class: "muted" }), status = h("div", { role: "status" }), content = h("div", { "data-pm-fixed-preview": "" });
+	const preview = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void read()
+	}, t("pm_fixed_preview"));
+	const save = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void download()
+	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
+	const element = h("details", { "data-pm-fixed-views": "" }, h("summary", {}, t("pm_fixed_title")), note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_fixed_view"), view), h("label", {}, t("pm_export_language"), locale), h("label", {}, t("pm_export_format"), format)), h("div", { class: "actions" }, preview, save), status, content);
+	const current = () => JSON.stringify([
+		actor,
+		snapshot()?.snapshot_id,
+		snapshot()?.snapshot_digest,
+		snapshot()?.view_digest,
+		view.value,
+		locale.value
+	]);
+	const canRead = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.management_views?.version === 1 && caps()?.features?.pm_workspaces?.fixed_view_exports?.views?.includes(view.value);
+	const canSave = () => canRead() && Boolean(model) && (!nativeDesktop || nativeFixedViewExportSupport);
+	function update() {
+		const next = current();
+		if (identity !== next) {
+			identity = next;
+			++serial;
+			model = null;
+			content.replaceChildren();
+			status.replaceChildren();
+		}
+		element.hidden = !snapshot();
+		preview.disabled = busy || !canRead();
+		save.disabled = busy || !canSave();
+		view.disabled = locale.disabled = format.disabled = busy;
+		note.textContent = t(!snapshot()?.management_views ? "pm_fixed_old" : nativeDesktop && !nativeFixedViewExportSupport ? "pm_fixed_native" : "pm_fixed_help");
+		if (receipt?.identity === identity) status.replaceChildren(receipt.error ? errorBox(receipt.error) : h("p", { class: "muted" }, receipt.text));
+	}
+	function valid(expected, ticket) {
+		alive();
+		if (ticket !== serial || current() !== expected || !canRead()) throw Object.assign(Error(t("pm_export_changed")), { code: "PM_EXPORT_VIEW_CHANGED" });
+	}
+	function check(value, source, chosen, language) {
+		if (value?.version !== 1 || value.workspace_id !== workspaceId || value.snapshot_id !== source.snapshot_id || value.snapshot_digest !== source.snapshot_digest || value.view_digest !== source.view_digest || value.view !== chosen || value.locale !== language || value.template_version !== 1 || value.view_template_version !== 1 || value.execution_authorized !== false || value.review_completed !== false || value.published !== false || value.coverage?.projection !== chosen || value.coverage.content_truncated !== false) throw Error(t("pm_export_changed"));
+		return value;
+	}
+	function render() {
+		content.replaceChildren(h("p", { class: "muted" }, t("pm_fixed_historical")), h("h3", {}, model.title));
+		if (model.coverage.visibility?.filtered || Object.entries(model.coverage.view || {}).some(([key, value]) => [
+			"truncated",
+			"byte_limited",
+			"visibility_filtered"
+		].includes(key) && value)) content.append(h("p", { class: "muted" }, t("pm_fixed_partial")));
+		if (model.quality) content.append(h("p", {}, t("pq_count", {
+			qualified: model.quality.qualified_requirements,
+			total: model.quality.total_requirements
+		})));
+		for (const group of model.groups) {
+			const items = h("div", { class: "pm-brief-values" });
+			if (!group.items.length) items.append(h("p", { class: "muted" }, t("pm_fixed_empty")));
+			for (const item of group.items) {
+				const details = h("details", { "data-pm-fixed-record": item.id }, h("summary", {}, item.title));
+				for (const field of item.fields) details.append(h("div", {}, h("strong", {}, field.label), h("pre", { class: "pm-brief-proof" }, field.value)));
+				items.append(details);
+			}
+			content.append(h("section", { class: "pm-brief-row" }, h("h3", {}, group.title), items));
+		}
+		content.append(h("details", {}, h("summary", {}, t("pm_fixed_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			snapshot_id: model.snapshot_id,
+			snapshot_digest: model.snapshot_digest,
+			view_digest: model.view_digest,
+			as_of: model.as_of,
+			journal_cursor: model.journal_cursor,
+			scope_revision: model.scope_revision,
+			counts: model.counts,
+			sources: model.sources,
+			coverage: model.coverage
+		}, null, 2))));
+	}
+	function failure(error, expected, ticket) {
+		try {
+			alive();
+		} catch {
+			return;
+		}
+		if (ticket !== serial || current() !== expected || caps()?.actor !== actor) return;
+		model = null;
+		content.replaceChildren();
+		status.replaceChildren(errorBox(error));
+		if ([
+			401,
+			403,
+			404
+		].includes(error?.status) || [
+			"FORBIDDEN",
+			"NOT_FOUND",
+			"PM_SNAPSHOT_VIEW_SOURCE_UNAVAILABLE"
+		].includes(error?.code)) onUnavailable(error);
+	}
+	async function read() {
+		if (busy || !canRead()) return;
+		const source = snapshot(), chosen = view.value, language = locale.value, expected = current(), ticket = ++serial;
+		busy = true;
+		receipt = null;
+		update();
+		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
+		try {
+			const value = await api("GET", `/pm/workspaces/${workspaceId}/snapshots/${source.snapshot_id}/view?view=${chosen}&locale=${language}`);
+			valid(expected, ticket);
+			check(value, source, chosen, language);
+			if (!Array.isArray(value.groups) || value.groups.some((group) => typeof group.title !== "string" || !Array.isArray(group.items) || group.items.some((item) => typeof item.id !== "string" || typeof item.title !== "string" || !Array.isArray(item.fields) || item.fields.some((field) => typeof field.label !== "string" || typeof field.value !== "string")))) throw Error(t("pm_export_changed"));
+			model = value;
+			status.replaceChildren();
+			render();
+		} catch (error) {
+			failure(error, expected, ticket);
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	async function download() {
+		if (busy || !canSave()) return;
+		const source = snapshot(), chosen = view.value, language = locale.value, kind = format.value, expected = current(), ticket = ++serial;
+		busy = true;
+		receipt = null;
+		update();
+		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
+		try {
+			const report = await api("GET", `/pm/workspaces/${workspaceId}/snapshots/${source.snapshot_id}/view-export?view=${chosen}&format=${kind}&locale=${language}`);
+			valid(expected, ticket);
+			check(report, source, chosen, language);
+			const media = kind === "svg" ? "image/svg+xml; charset=utf-8" : "text/html; charset=utf-8";
+			if (report.format !== kind || report.renderer_version !== 1 || report.media_type !== media || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 1 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest) || (kind === "svg" ? !Number.isInteger(report.page_count) || report.page_count < 1 || report.page_count > 32 : report.page_count !== null)) throw Error(t("pm_export_changed"));
+			const bytes = new TextEncoder().encode(report.content), digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (v) => v.toString(16).padStart(2, "0")).join("");
+			valid(expected, ticket);
+			if (bytes.length !== report.byte_length || digest !== report.output_digest) throw Error(t("pm_export_changed"));
+			if (nativeDesktop) {
+				const result = await nativeBriefSave({
+					workspace_id: workspaceId,
+					snapshot_id: source.snapshot_id,
+					view: chosen,
+					format: kind,
+					locale: language,
+					expected_view_digest: report.view_digest,
+					expected_output_digest: report.output_digest
+				});
+				alive();
+				if (caps()?.actor !== actor) return;
+				if (result !== null && (result.stage !== "saved" || result.workspace_id !== workspaceId || result.snapshot_id !== source.snapshot_id || result.view !== chosen || result.format !== kind || result.locale !== language || result.view_digest !== report.view_digest || result.output_digest !== digest || result.byte_length !== bytes.length || typeof result.display_name !== "string")) throw Error(t("pm_export_changed"));
+				receipt = {
+					identity: expected,
+					text: result === null ? t("pm_export_cancelled") : `${t("pm_export_saved")}: ${result.display_name}`
+				};
+			} else {
+				const url = URL.createObjectURL(new Blob([bytes], { type: media }));
+				try {
+					const link = document.createElement("a");
+					link.href = url;
+					link.download = `pm-${chosen}-${source.snapshot_id}-${language}.${kind}`;
+					link.click();
+				} finally {
+					setTimeout(() => URL.revokeObjectURL(url), 1e3);
+				}
+				receipt = {
+					identity: expected,
+					text: t("pm_export_requested")
+				};
+			}
+		} catch (error) {
+			const code = String(error?.code || error?.message || error), key = Object.entries({
+				DESTINATION_EXISTS: "pm_export_exists",
+				DESTINATION_UNAVAILABLE: "pm_export_destination",
+				BRIEF_EXPORT_SAVE_INTERRUPTED: "pm_export_interrupted"
+			}).find(([prefix]) => code.includes(prefix))?.[1];
+			if (key) receipt = {
+				identity: expected,
+				error: Error(t(key))
+			};
+			else failure(error, expected, ticket);
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	view.addEventListener("change", update);
+	locale.addEventListener("change", update);
+	format.addEventListener("change", update);
+	update();
+	return {
+		element,
+		update
+	};
+}
 //#endregion
 //#region src/pm-brief-export.js
 init_transport();
@@ -8247,7 +8458,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		try {
 			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
 			live(expected);
-			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
 			const bytes = new TextEncoder().encode(report.content);
 			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
 			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
@@ -8336,12 +8547,20 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		max: 160,
 		required: false
 	});
+	const fixedEnabled = caps?.()?.features?.pm_workspaces?.fixed_view_exports?.version === 1;
+	const management = h("select", { "aria-label": t("pm_fixed_capture") }, h("option", { value: "all" }, t("pm_fixed_all")), h("option", { value: "brief" }, t("pm_fixed_brief")));
 	const view = h("div", { class: "pm-brief-view" }), history = h("div"), status = h("div", { role: "status" });
 	const create = form({
 		action: "pm.snapshot.create",
 		target: { workspace_id: workspaceId },
-		fields: { title },
-		params: (values) => values.title.trim() ? { title: values.title.trim() } : {},
+		fields: {
+			title,
+			...fixedEnabled ? { management_views: management } : {}
+		},
+		params: (values) => ({
+			...values.title.trim() ? { title: values.title.trim() } : {},
+			...values.management_views === "all" ? { include_management_views: true } : {}
+		}),
 		preconditions: () => ({ expected_plan_version: head.version }),
 		permitted: () => Boolean(head) && permitted(false),
 		recoverPermitted: () => permitted(false),
@@ -8349,7 +8568,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		onSaved: async (result) => {
 			await refresh(result.snapshot_id);
 		},
-		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
+		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title), fixedEnabled ? labelled("pm_fixed_capture", management) : "")
 	});
 	const box = h("section", {
 		class: "pm-brief",
@@ -8368,6 +8587,19 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		errorBox
 	}) : null;
 	if (exports) box.insertBefore(exports.element, box.lastChild);
+	const fixedViews = fixedEnabled ? fixedSnapshotViews({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		snapshot: () => snapshot,
+		readable: canRead,
+		onUnavailable: (error) => unavailable(error),
+		errorBox
+	}) : null;
+	if (fixedViews) box.insertBefore(fixedViews.element, box.lastChild);
 	function withdraw() {
 		++serial;
 		head = null;
@@ -8377,6 +8609,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		history.replaceChildren();
 		create.update();
 		exports?.update();
+		fixedViews?.update();
 	}
 	function unavailable(error) {
 		withdraw();
@@ -8398,6 +8631,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		if (!snapshot) {
 			view.append(h("p", { class: "muted" }, t("pm_brief_empty")));
 			exports?.update();
+			fixedViews?.update();
 			return;
 		}
 		if (snapshot.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
@@ -8458,6 +8692,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		}, null, 2)));
 		view.append(trace);
 		exports?.update();
+		fixedViews?.update();
 	}
 	function renderHistory(page, append = false) {
 		if (!append) history.replaceChildren();
@@ -8471,6 +8706,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				signature = "";
 				view.replaceChildren();
 				exports?.update();
+				fixedViews?.update();
 				try {
 					const data = await api("GET", `${endpoint}/snapshots/${entry.snapshot_id}`);
 					alive();
@@ -8510,6 +8746,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		view.replaceChildren();
 		history.replaceChildren();
 		exports?.update();
+		fixedViews?.update();
 		try {
 			const [latest, listing, current] = await Promise.all([
 				api("GET", `${endpoint}/snapshots/${selected}`),
@@ -20138,6 +20375,48 @@ var pmPackageHandoffStrings = {
 	}
 };
 //#endregion
+//#region src/pm-fixed-view-strings.js
+var fixedViewStrings = {
+	en: {
+		pm_fixed_title: "Saved management views",
+		pm_fixed_help: "Preview and export the same saved snapshot. Live editors keep their current state.",
+		pm_fixed_capture: "Snapshot contents",
+		pm_fixed_all: "Brief and all four management views",
+		pm_fixed_brief: "Project Brief only",
+		pm_fixed_view: "Saved view",
+		pm_fixed_roadmap: "Scope and milestones",
+		pm_fixed_kanban: "Workflow Kanban",
+		pm_fixed_sprint: "Sprint and discussions",
+		pm_fixed_governance: "Risks, changes and decisions",
+		pm_fixed_preview: "Preview saved view",
+		pm_fixed_old: "This snapshot did not capture management views. Create a new snapshot with all views to include them.",
+		pm_fixed_empty: "No saved records in this view. This does not establish completion.",
+		pm_fixed_partial: "Only part of the original source selection is readable. Counts cover the visible saved records.",
+		pm_fixed_native: "This desktop version can preview saved views. Saving them requires a newer desktop or the browser.",
+		pm_fixed_sources: "Original sources and coverage",
+		pm_fixed_historical: "Historical view · read-only"
+	},
+	"zh-TW": {
+		pm_fixed_title: "已保存的管理視圖",
+		pm_fixed_help: "預覽與匯出使用同一份已保存快照；當前管理編輯區維持原狀。",
+		pm_fixed_capture: "快照內容",
+		pm_fixed_all: "專案總覽與其他四個管理視圖",
+		pm_fixed_brief: "僅專案總覽",
+		pm_fixed_view: "已保存視圖",
+		pm_fixed_roadmap: "範圍與里程碑",
+		pm_fixed_kanban: "工作流看板",
+		pm_fixed_sprint: "Sprint 與討論",
+		pm_fixed_governance: "風險變更與決策",
+		pm_fixed_preview: "預覽已保存視圖",
+		pm_fixed_old: "這份快照尚未擷取管理視圖。建立包含全部視圖的新快照即可保存。",
+		pm_fixed_empty: "此視圖沒有已保存紀錄；不代表已完成。",
+		pm_fixed_partial: "目前僅能讀取部分原始來源；數值只涵蓋可讀的已保存紀錄。",
+		pm_fixed_native: "此桌面版本可預覽已保存視圖；存檔需要新版桌面或瀏覽器。",
+		pm_fixed_sources: "原始來源與涵蓋範圍",
+		pm_fixed_historical: "歷史視圖 · 唯讀"
+	}
+};
+//#endregion
 //#region src/pm-governance-strings.js
 var pmGovernanceStrings = {
 	en: {
@@ -21787,6 +22066,7 @@ var pmStrings = {
 		...pmFollowUpStrings.en,
 		...followUpAnalysisStrings.en,
 		...briefExportStrings.en,
+		...fixedViewStrings.en,
 		...workPackageStrings.en,
 		pm_roadmap_historical_work: "Previously selected work association",
 		pm_roadmap_missing_dependency: "Removed milestone dependency",
@@ -22125,6 +22405,7 @@ var pmStrings = {
 		...pmFollowUpStrings["zh-TW"],
 		...followUpAnalysisStrings["zh-TW"],
 		...briefExportStrings["zh-TW"],
+		...fixedViewStrings["zh-TW"],
 		...workPackageStrings["zh-TW"],
 		pm_roadmap_historical_work: "先前選定的工作關聯",
 		pm_roadmap_missing_dependency: "已移除里程碑的依賴",

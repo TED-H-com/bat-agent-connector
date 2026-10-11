@@ -8,10 +8,11 @@ export interface NativeStatus {
   endpoint: string | null; error: string | null; credential_available: boolean;
   expected_actor?: string; credential_source?: "launch_environment" | "windows_credential_manager" | null;
   credential_saved?: boolean; enrollment_supported?: boolean; configuration_reload?: boolean; configuration_setup?: boolean;
-  configuration_file?: string; connected?: boolean; file_transfers?: boolean; brief_exports?: boolean;
+  configuration_file?: string; connected?: boolean; file_transfers?: boolean; brief_exports?: boolean; fixed_view_exports?: boolean;
 }
 export let nativeFileSupport = false;
 export let nativeBriefExportSupport = false;
+export let nativeFixedViewExportSupport = false;
 export const browserSessionToken = "managed-browser-session";
 let browserCsrf: string | null = null;
 export async function restoreBrowserSession(): Promise<boolean> {
@@ -40,6 +41,7 @@ export async function nativeStatus() {
   const status = await invoke<NativeStatus>("native_status");
   nativeFileSupport = status.file_transfers === true;
   nativeBriefExportSupport = status.brief_exports === true;
+  nativeFixedViewExportSupport = status.fixed_view_exports === true;
   return status;
 }
 export const nativeFilesStatus = () => invoke<any>("native_files_status");
@@ -49,10 +51,12 @@ export const nativeFilesDropTarget = (draftId: string, enabled: boolean) => invo
 export const nativeFilesControl = (transferId: string, action: string) => invoke<void>("native_files_control", {transferId, action});
 export const nativeFilesSave = (reference: unknown) => invoke<any>("native_files_save", {reference});
 export interface BriefExportReference {
+  view?: "roadmap" | "kanban" | "sprint" | "governance";
   workspace_id: string; snapshot_id: string; format: "markdown" | "html" | "svg"; locale: "en" | "zh-TW";
   expected_view_digest: string; expected_output_digest: string;
 }
 export interface BriefExportReceipt {
+  view?: "roadmap" | "kanban" | "sprint" | "governance";
   stage: "saved"; workspace_id: string; snapshot_id: string; format: "markdown" | "html" | "svg";
   locale: "en" | "zh-TW"; view_digest: string; output_digest: string; byte_length: number; display_name: string;
 }

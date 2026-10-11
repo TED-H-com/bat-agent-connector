@@ -86,6 +86,7 @@ READ_TOOLS = [
     "pm_release_baseline_deployments_list", "pm_release_baseline_preview",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
     "pm_brief_export_get",
+    "pm_snapshot_view_get", "pm_snapshot_view_export_get",
     "pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
     "pm_kanban_get", "pm_kanban_card_get", "pm_meetings_list", "pm_meeting_get", "pm_meeting_history_list",
@@ -837,6 +838,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Page original in-flight operations with current source access; retained or unknown does not mean completed."""
         return await pm_daemon("pm_lifecycle_inflight_list", workspace_id=workspace_id, transition_id=transition_id, after=after, limit=limit)
 
+    async def pm_snapshot_view_get(workspace_id: str, snapshot_id: str, view: str = "roadmap", locale: str = "en") -> dict[str, Any]:
+        """Read one historical management-view projection from an explicitly captured snapshot."""
+        return await pm_daemon("pm_snapshot_view_get", workspace_id=workspace_id, snapshot_id=snapshot_id, view=view, locale=locale)
+
+    async def pm_snapshot_view_export_get(workspace_id: str, snapshot_id: str, view: str = "roadmap", format: str = "svg", locale: str = "en") -> dict[str, Any]:
+        """Render fixed original management facts as passive SVG or printable HTML; no publication."""
+        return await pm_daemon("pm_snapshot_view_export_get", workspace_id=workspace_id, snapshot_id=snapshot_id, view=view, format=format, locale=locale)
+
     async def pm_brief_export_get(workspace_id: str, snapshot_id: str, format: str = "markdown", locale: str = "en") -> dict[str, Any]:
         """Render a fixed authorized Project Brief as passive markdown/html/svg in JSON; does not save or publish a file."""
         return await pm_daemon("pm_brief_export_get", workspace_id=workspace_id, snapshot_id=snapshot_id, format=format, locale=locale)
@@ -1054,7 +1063,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_release_baseline_sources_list, pm_release_baseline_releases_list,
                pm_release_baseline_deployments_list, pm_release_baseline_preview,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
-               pm_brief_export_get,
+               pm_brief_export_get, pm_snapshot_view_get, pm_snapshot_view_export_get,
                pm_lifecycle_get, pm_lifecycle_transitions_list, pm_lifecycle_transition_get, pm_lifecycle_inflight_list,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,
                pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,

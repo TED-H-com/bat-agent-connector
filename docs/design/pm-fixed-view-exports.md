@@ -1,5 +1,11 @@
 # Fixed five-view snapshots and portable exports
 
+Implementation checkpoint (2026-10-11): this W39 branch is parked while the
+conversation-to-review/adoption loop takes priority. Capture/source filtering has
+focused regression evidence; the renderer, new routes, native extension and
+preview below are work in progress. Browser build and Ruff are sanity checks,
+not complete API/native/UI acceptance. Do not advertise this slice as delivered.
+
 W39 completes the four views beside Project Brief: Roadmap (scope and milestones),
 Kanban, Sprint and discussions, and risk/change/decisions. They reuse the existing
 PM domains. Saving or exporting a view never adopts a plan, dispatches work,
