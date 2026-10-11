@@ -70,6 +70,7 @@ def admit(ops, caller, target, params, pre):
     _tier(ops.context['fleet'], target['host'])
     if not available(ops, target['host']):
         raise OperationError('MERGE_GIT_UNAVAILABLE', 'merge requires verifier SSH mapped to the BAT Git account/configuration context', 409)
+    return relay.admit_source(target)
 
 
 def authorize_existing(ops, caller, op, verb):
@@ -322,7 +323,7 @@ async def prepare(ctx):
     ops, host = ctx.service, ctx.target['host']
     fleet, client = ops.context['fleet'], ops.context['fleet'].client(host)
     hc = fleet.config.host(host)
-    tab, doc = await service._resolve_session(client, ctx.target['session_id'])
+    tab, doc, pinned = await relay.resolve_source(ops, ctx.target, ctx=ctx)
     sid = tab['id']
     task_control.refuse_owned(fleet, host, sid)
     await authorize(fleet, host, tab, live=False)
@@ -340,6 +341,7 @@ async def prepare(ctx):
     if (not isinstance(wt, dict) or wt.get('worktreePath') != source or wt.get('branchName') != tab.get('worktreeBranch')
             or not wt.get('sourceBranch')):
         raise StepFailed('MERGE_SOURCE_UNPROVEN', 'original worktree/source branch binding is unavailable; no rehydrate guess')
+    relay.check_source(pinned)
     report = _summ(host, tab, wt, False, 0)
     report['rehydrated'] = False
     plan = {'operation_id': ctx.operation_id, 'host': host, 'session_id': sid, 'source': source, 'destination': destination,
@@ -364,6 +366,7 @@ async def prepare(ctx):
                          if t.get('id') and any(_inside(t.get(k), plan['roots']) for k in ('cwd', 'worktreePath'))}
     consumers = set(plan['terminals']) | _registry_consumers(host, plan['roots'])
     plan['consumers'] = {other: _binding(host, other) for other in consumers}
+    relay.check_source(pinned)
     plan['runtime'] = {}
     for other in sorted(consumers):
         relay.require_record(host, other, plan['consumers'][other])

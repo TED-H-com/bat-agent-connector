@@ -79,7 +79,7 @@ def admit(ops, principal, target, params, pre):
         raise OperationError('UNKNOWN_HOST', 'unknown relay host', 404)
     if not fleet.writes_enabled(target['host']):
         raise OperationError('TIER_DISABLED', 'relay host write tier is disabled', 403)
-    return {'orchestration': {'accepted_scopes': sorted(scopes(params))}}
+    return {'orchestration': {'accepted_scopes': sorted(scopes(params))}, **admit_source(target)}
 
 
 def authorize_existing(ops, principal, op, verb):
@@ -105,6 +105,70 @@ def require_record(host, sid, original):
         expected_incarnation=original['controller_incarnation'])
 
 
+def source_snapshot(host, selector=None):
+    """Pin registry identity before asynchronous source discovery, including absence.
+
+    Prefix selectors remain supported; this evidence permits reading a foreign
+    source, but never grants authority to mutate it.
+    """
+    selector = selector.strip() if selector else None
+    entries = {}
+    for row in registry.list_entries(host):
+        sid = row.get('session_id')
+        if not isinstance(sid, str) or selector and not sid.startswith(selector):
+            continue
+        if sid in entries:
+            raise StepFailed('SESSION_SOURCE_CHANGED', 'source registry identity is ambiguous')
+        entries[sid] = _source_identity(row)
+    return {'host': host, 'selector': selector, 'entries': entries}
+
+
+def _source_identity(row):
+    return {'present': row is not None, **{key: (row or {}).get(key) for key in
+            ('created_at', 'controller_authority', 'controller_incarnation')}}
+
+
+def admit_source(target):
+    return ({'session_source': source_snapshot(target['host'], target['session_id'])}
+            if target.get('session_id') else {})
+
+
+def source_pin(snapshot, host, sid):
+    if (not isinstance(snapshot, dict) or snapshot.get('host') != host
+            or not isinstance(snapshot.get('entries'), dict)
+            or snapshot.get('selector') and not sid.startswith(snapshot['selector'])):
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'original source selection evidence is unavailable')
+    pinned = {'host': host, 'session_id': sid,
+              'identity': snapshot['entries'].get(sid, _source_identity(None))}
+    check_source(pinned)
+    return pinned
+
+
+def check_source(pinned):
+    if (not isinstance(pinned, dict) or not pinned.get('host') or not pinned.get('session_id')
+            or pinned.get('identity') != _source_identity(registry.get(pinned['host'], pinned['session_id']))):
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'original source controller or incarnation changed')
+
+
+async def resolve_source(ops, target, *, ctx=None, snapshot=None, step='source.identity'):
+    """Resolve once and durably retain the concrete ID before any further reads."""
+    host = target['host']
+    if snapshot is None:
+        snapshot = ((ctx.admission_binding or {}).get('session_source') if ctx else
+                    source_snapshot(host, target['session_id']))
+    saved = receipt(ops, ctx.operation_id, step) if ctx else None
+    if saved:
+        check_source(saved)
+    tab, doc = await service._resolve_session(ops.context['fleet'].client(host),
+                                            saved['session_id'] if saved else target['session_id'])
+    pinned = source_pin(snapshot, host, tab['id'])
+    if saved and saved != pinned:
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'resolved source differs from the original selection')
+    pinned = ctx.effect(step, lambda: pinned) if ctx else pinned
+    check_source(pinned)
+    return tab, doc, pinned
+
+
 def task_binding(value):
     """The task incarnation is independent of the enclosing controller authority."""
     return {k: v for k, v in (value or {}).items() if k not in {'controller_authority', 'session_controller'}} or None
@@ -121,17 +185,24 @@ def receipt(ops, operation_id, name):
     return json.loads(row['response']) if row else None
 
 
-async def select(ops, target, params, pre):
+async def select(ops, target, params, pre, *, ctx=None):
     """Only reads here. The successful step fixes every later branch and prompt."""
     fleet, host = ops.context['fleet'], target['host']
     hc, client = fleet.config.host(host), fleet.client(host)
     workspace = target.get('workspace')
-    chosen = ({'session_id': target['session_id']} if target.get('session_id') else
-              await lifecycle.main_session(fleet, host, workspace) or {'session_id': None})
+    snapshot = None
+    if target.get('session_id'):
+        chosen = {'session_id': target['session_id']}
+    else:
+        snapshot = (ctx.effect('relay.candidate_sources', lambda: source_snapshot(host)) if ctx else source_snapshot(host))
+        chosen = receipt(ops, ctx.operation_id, 'relay.source_choice') if ctx else None
+        if chosen is None:
+            chosen = await lifecycle.main_session(fleet, host, workspace) or {'session_id': None}
+            chosen = ctx.effect('relay.source_choice', lambda: chosen) if ctx else chosen
     sid, ws_name = chosen['session_id'], workspace or chosen.get('workspace')
     tab, denied, meta = None, None, None
     if sid:
-        tab, ws = await service._resolve_session(client, sid)
+        tab, ws, pinned = await resolve_source(ops, {'host': host, 'session_id': sid}, ctx=ctx, snapshot=snapshot)
         sid = tab['id']
         # Journal ownership survives missing/drifted registry evidence. A task control
         # refusal can never select the independent-start compatibility fallback.
@@ -147,6 +218,7 @@ async def select(ops, target, params, pre):
             if owner or task_control.owner_task(fleet, host, sid):
                 raise
             denied = {'read_only': True, 'read_only_code': exc.code, 'reason': str(exc)}
+        check_source(pinned)
     else:
         ws = await service._workspace(client)
     n = min(fleet.config.safety.max_start_per_call, params.get('max_items') or fleet.config.safety.max_start_per_call)
@@ -182,6 +254,7 @@ async def select(ops, target, params, pre):
         raise StepFailed('RELAY_AGENT_UNSUPPORTED', 'relay supports managed Claude or Codex only')
     bound_task = task_binding(api_actions._admit_session(ops, None, {'host': host, 'session_id': sid}, {}, pre))
     original = record(host, sid)
+    check_source(pinned)
     meta = await service._meta(client, sid)
     if await lifecycle._quota_stopped(fleet, host, sid):
         return {**out, 'route': 'none', 'sent': False, 'quota_stopped': True,
@@ -309,7 +382,7 @@ def create_child(ctx, plan):
 async def run(ctx):
     async def reread(_):
         return RERUN
-    plan = await ctx.step('relay.resolve', lambda: select(ctx.service, ctx.target, ctx.params, ctx.preconditions), reconcile=reread)
+    plan = await ctx.step('relay.resolve', lambda: select(ctx.service, ctx.target, ctx.params, ctx.preconditions, ctx=ctx), reconcile=reread)
     ctx.set_refs(relay_selection=plan)
     if plan['route'] == 'none':
         return plan

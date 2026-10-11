@@ -87,7 +87,7 @@ def admit(ops, caller, target, params, pre, action):
     _tier(ops.context['fleet'], target['host'])
     if 'plan' in params and len(params['plan']) > min(ops.context['fleet'].config.safety.max_start_per_call, params.get('max_items', 16)):
         raise OperationError('FANOUT_CAP', 'fixed plan exceeds the configured per-call start cap', 422)
-    return {'fanout': {'accepted_scopes': sorted(scopes(action, target))}}
+    return {'fanout': {'accepted_scopes': sorted(scopes(action, target))}, **relay.admit_source(target)}
 
 
 def authorize_existing(ops, caller, op, verb):
@@ -100,7 +100,7 @@ def principal(ctx):
     return api_auth.Principal(ctx.actor, frozenset(ctx.admission_binding['fanout']['accepted_scopes']))
 
 
-async def resolve(ops, action, target, params):
+async def resolve(ops, action, target, params, *, ctx=None):
     fleet, host = ops.context['fleet'], target['host']
     client, hc = fleet.client(host), fleet.config.host(host)
     cap = min(fleet.config.safety.max_start_per_call, params.get('max_items') or 16)
@@ -112,9 +112,10 @@ async def resolve(ops, action, target, params):
             human_name=fleet.config.human_name, relay_name=fleet.config.relay_name, request_fanout=True, max_items=cap)
         plan = [{'index': 1, 'title': 'fan-out planner', 'prompt': text}]
     elif target.get('session_id'):
-        tab, _ = await service._resolve_session(client, target['session_id'])
+        tab, _, pinned = await relay.resolve_source(ops, target, ctx=ctx)
         sid = tab['id']
         before = relay.record(host, sid)
+        relay.check_source(pinned)
         read = await service.session_read(fleet, host, sid, last_n=6, max_chars=60000, max_message_chars=40000)
         replies = [m.get('text') or '' for m in reversed(read['messages']) if m.get('role') not in ('user', 'system')]
         block = next((t for t in replies if 'bat-fanout' in t.lower()), None)
@@ -312,7 +313,7 @@ async def stop_planner(ctx, plan):
 async def run(ctx):
     async def reread(_):
         return RERUN
-    plan = await ctx.step('fanout.resolve', lambda: resolve(ctx.service, ctx.op['action'], ctx.target, ctx.params), reconcile=reread)
+    plan = await ctx.step('fanout.resolve', lambda: resolve(ctx.service, ctx.op['action'], ctx.target, ctx.params, ctx=ctx), reconcile=reread)
     ctx.set_refs(fanout_selection=plan)
     started = []
     stop_exists = ctx.service.db.execute('SELECT 1 FROM operation_steps WHERE operation_id=? AND name=?',
