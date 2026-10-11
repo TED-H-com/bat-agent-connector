@@ -12,7 +12,7 @@ from pathlib import Path
 from bat_agent_connector import api_auth, platform_files
 from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
 from bat_agent_connector.task_daemon import TaskDaemon
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 from tests.mockbat import TOKEN, MockBat
 
 SID = "sess-claude-0001"
@@ -29,14 +29,15 @@ async def main():
         await mock.start()
         daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=["/srv"],
                                        default_permission_mode="allow_all", safety={"write_min_interval_s": 0}), root / "journal.db")
-        task = daemon.journal.submit(project="Temporary task controls", host="h1", workspace="demo-project",
-                                     original_words="Do not execute work; exercise coordinator controls only",
-                                     engine="goose", idempotency_key="fixture-task")
-        tid = task["task_id"]
-        daemon.journal.db.execute("UPDATE tasks SET state='accepted',session_id=? WHERE task_id=?", (SID, tid))
-        adopt(SID, task_id=tid, role="lead", agent_preset="claude-code")
         token = api_auth.issue(daemon.journal.db, "task-controls-browser", ["observe", "operate"])
-        principal = api_auth.authenticate(daemon.journal.db, token, "synthetic-admin-fixture")
+        principal = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token)
+        with controller_scope(daemon.journal, principal):
+            task = daemon.journal.submit(project="Temporary task controls", host="h1", workspace="demo-project",
+                                         original_words="Do not execute work; exercise coordinator controls only",
+                                         engine="goose", idempotency_key="fixture-task")
+            tid = task["task_id"]
+            daemon.journal.db.execute("UPDATE tasks SET state='accepted',session_id=? WHERE task_id=?", (SID, tid))
+            adopt(SID, task_id=tid, role="lead", agent_preset="claude-code")
         server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
         worker = asyncio.create_task(daemon.ops.loop(0.1))
         print(json.dumps({"port": server.sockets[0].getsockname()[1], "token": token, "task_id": tid}), flush=True)
@@ -46,7 +47,8 @@ async def main():
                 if command["action"] == "stop":
                     break
                 if command["action"] == "change-version":
-                    daemon.journal.pause(tid)
+                    with controller_scope(daemon.journal, principal):
+                        daemon.journal.pause(tid)
                     print(json.dumps({"version": daemon.journal.get(tid)["control_version"]}), flush=True)
                 elif command["action"] == "verify":
                     op = daemon.ops.get(command["operation_id"])

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from bat_agent_connector import api_auth, platform_files
 from bat_agent_connector.task_daemon import TaskDaemon
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 from tests.mockbat import TOKEN, MockBat
 
 
@@ -24,10 +24,12 @@ async def main():
         mock = MockBat()
         await mock.start()
         daemon = TaskDaemon(make_config(mock, managed_roots=["/srv"]), root / "journal.db")
-        adopt("sess-claude-0001")
-        await daemon.inventory.refresh_host("h1")
         with daemon.journal.tx():
             token = api_auth.issue(daemon.journal.db, "fixture-operator", ["observe", "operate"])
+        principal = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token)
+        with controller_scope(daemon.journal, principal):
+            adopt("sess-claude-0001")
+        await daemon.inventory.refresh_host("h1")
         server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
         print(json.dumps({"port": server.sockets[0].getsockname()[1], "token": token}), flush=True)
         try:

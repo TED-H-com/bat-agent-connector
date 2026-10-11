@@ -10,7 +10,7 @@ from pathlib import Path
 
 from bat_agent_connector import api_auth, observation, platform_files
 from bat_agent_connector.task_daemon import TaskDaemon
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 from tests.mockbat import TOKEN, MockBat
 
 
@@ -24,17 +24,19 @@ async def main():
         await mock.start()
         daemon = TaskDaemon(make_config(mock, managed_roots=["/srv"]), root / "journal.db")
         sid = "sess-claude-0001"
-        adopt(sid)
-        await daemon.inventory.refresh_host("h1")
         journal = daemon.journal
-        task = journal.submit(project="fixture", host="h1", workspace="w", original_words="Fixture observation only", idempotency_key="fixture")
-        command, _ = journal.command(task["task_id"], "start_lead", sid, {"agent": "claude"}, "fixture-start")
-        journal.command_status(command["command_id"], "settled")
-        journal.add_branch(task["task_id"], session_id=sid, provider="claude", role="lead", reason="start")
+        token = api_auth.issue(journal.db, "observation-browser", ["observe", "operate"])
+        principal = api_auth.authenticate(journal.db, token, daemon._admin_token)
+        with controller_scope(journal, principal):
+            adopt(sid)
+            task = journal.submit(project="fixture", host="h1", workspace="w", original_words="Fixture observation only", idempotency_key="fixture")
+            command, _ = journal.command(task["task_id"], "start_lead", sid, {"agent": "claude"}, "fixture-start")
+            journal.command_status(command["command_id"], "settled")
+            journal.add_branch(task["task_id"], session_id=sid, provider="claude", role="lead", reason="start")
+        await daemon.inventory.refresh_host("h1")
         wid = observation.worktree(journal, "h1", "fixture", "fixture-intent", "lead", path="/srv/fixture-worktree", session_id=sid)
         for _ in range(25):
             journal.api_event("session", f"h1/{sid}", "session.updated", {"worktree_id": wid})
-        token = api_auth.issue(journal.db, "observation-browser", ["observe", "operate"])
         server = await asyncio.start_server(daemon._handle, "127.0.0.1", 0)
         print(json.dumps({"port": server.sockets[0].getsockname()[1], "token": token,
                           "execution_id": task["task_id"], "worktree_id": wid}), flush=True)
