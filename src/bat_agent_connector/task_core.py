@@ -511,7 +511,9 @@ class TaskCoordinator:
         # Evidence only; engine, recipes and command identity stay unchanged.
         from . import registry
         entry = registry.get(task["host"], sid) or {}
-        payload = json.loads(command["payload"])
+        # start() persisted its original creation proof before the BAT frame.
+        # Merge into that durable receipt, not the pre-reservation command copy.
+        payload = json.loads(self.journal.command_get(command["command_id"])["payload"])
         payload.update({k: entry[k] for k in ("confinement", "write_scope", "permission_mode_claude", "agent_params", "start_sent")
                         if k in entry})
         self.journal.db.execute("UPDATE commands SET payload=? WHERE command_id=?",
