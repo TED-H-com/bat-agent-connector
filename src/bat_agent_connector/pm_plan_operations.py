@@ -55,7 +55,7 @@ async def _adopt(ctx):
         run = pm_runs.get_by_operation(ctx.service.db, ctx.operation_id)
         uncertain = ctx.service.db.execute("""SELECT 1 FROM operation_steps WHERE operation_id=?
             AND status IN ('started','uncertain')
-            AND name NOT IN ('pm.plan.freeze','pm.plan.git-receipt','pm.plan.accepted')""", (ctx.operation_id,)).fetchone()
+            AND name NOT IN ('pm.plan.freeze','pm.plan.git-receipt','pm.plan.accepted','pm.revision.verify')""", (ctx.operation_id,)).fetchone()
         if isinstance(error, Cancelled) and uncertain:
             raise Uncertain("pm.plan.adopt", "Cancellation is waiting for the original Git result") from None
         if run and run["state"] not in pm_runs.TERMINAL and not uncertain:
@@ -82,7 +82,9 @@ async def _adopt_plan(ctx):
             adapter="connector.git", purpose="Adopt plan " + revision["revision_id"], execution_authority=authority)
         pm_runs.bind_worktree(ctx.service.journal, run["run_id"], run["generation"], plan)
         previous = pm_plans.latest_git_receipt(ctx.service.db, workspace_id)
+        source = pm_plans.original_git_receipt(ctx.service.db, workspace_id, revision["revision_id"])
         return {"run_id": run["run_id"], "generation": run["generation"], "plan": plan,
+                "source_operation_id": source["operation_id"] if source else None,
                 "expected_parent": previous["commit_sha"] if previous else plan["source_sha"]}
 
     fixed = ctx.effect("pm.plan.freeze", freeze)
@@ -103,15 +105,19 @@ async def _adopt_plan(ctx):
     receipt = _git_receipt(ctx)
     if receipt is None:
         with controller_authority.use(authority, ctx.service.journal):
-            started = ctx.service.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND name='pm.revision.commit'",
-                                            (ctx.operation_id,)).fetchone()
-            # Once Git may have run, go straight to its original readback. A new
-            # carrier step must not block reconciliation after cancellation.
-            if not started:
-                await pm_worktree.ensure(ctx, fixed["plan"], check=check)
-            receipt = await pm_worktree.commit_revision(ctx, fixed["plan"],
-                pm_plans.revision_files(ctx.service.db, workspace_id, ctx.target["revision_id"]),
-                expected_parent=fixed["expected_parent"], check=check)
+            files = pm_plans.revision_files(ctx.service.db, workspace_id, ctx.target["revision_id"])
+            if fixed.get("source_operation_id"):
+                receipt = await pm_revision_git.verify_revision(ctx, fixed["plan"], files,
+                    source_operation_id=fixed["source_operation_id"], check=check)
+            else:
+                started = ctx.service.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND name='pm.revision.commit'",
+                                                (ctx.operation_id,)).fetchone()
+                # Once Git may have run, go straight to its original readback. A new
+                # carrier step must not block reconciliation after cancellation.
+                if not started:
+                    await pm_worktree.ensure(ctx, fixed["plan"], check=check)
+                receipt = await pm_worktree.commit_revision(ctx, fixed["plan"], files,
+                    expected_parent=fixed["expected_parent"], check=check)
         ctx.effect("pm.plan.git-receipt", lambda: pm_plans.record_git_receipt(ctx, receipt), receipt_only=True)
 
     def accept():

@@ -87,8 +87,27 @@ A Git-only result leaves the former accepted plan valid. A response lost after
 adoption is recovered from the original durable operation receipt before any
 new effect. Membership loss can prevent an unapplied adoption while still
 allowing an already occurred Git effect to be recorded. It does not falsify a
-previously completed adoption. Competing adoptions cannot overwrite each other,
-and a new operation cannot borrow another operation's Git receipt.
+previously completed adoption. Competing adoptions cannot overwrite each other.
+A new operation needs its own verified evidence before adopting an earlier Git
+result.
+
+An owner can explicitly adopt the **same fixed revision** again when an earlier
+operation committed it to Git but did not adopt it, for example after cancellation.
+The new operation acquires its own writer and selects the original Git creation
+fact from the journal. It reads the original operation's exact commit, files,
+operation ref and current owned Git chain again. No new Git commit is created,
+and the original cancellation remains intact. The new read receipt carries its
+own `operation_id` plus `source_operation_id` naming the original creation.
+Recording that receipt requires the new operation's successful exact readback;
+forwarded sources, mismatched workspace/binding/files and supplied receipts are
+rejected. Adoption then performs the usual current-owner and accepted-baseline
+checks. Public decision evidence includes `commit_operation_id`, and reused
+evidence also includes `source_operation_id`.
+
+Read receipts do not become the next Git parent. Only original creation receipts
+advance that pointer, even if the newly adopted document belongs to an older
+commit in the verified owned chain. An unresolved read alone has no Git mutation;
+cancelling it releases its own writer without changing the original Git fact.
 
 An owner may explicitly adopt a proposal, including transparent assumptions and
 unknowns. That decision adopts the **whole fixed document**, including its
