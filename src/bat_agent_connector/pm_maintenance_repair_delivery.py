@@ -7,7 +7,15 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from . import delivery, deployment, pm_delivery_lineage, pm_release_baselines, pm_source_lineage, pr_delivery
+from . import (
+    delivery,
+    deployment,
+    deployment_store,
+    pm_delivery_lineage,
+    pm_release_baselines,
+    pm_source_lineage,
+    pr_delivery,
+)
 from . import pm_github_observation as observations
 from . import pm_maintenance_repair_evidence as evidence
 from . import pm_maintenance_repairs as repairs
@@ -241,11 +249,14 @@ def _finish(ctx, parent, original, baseline):
         facts = pm_delivery_lineage._facts(ctx.service, op)
         merged = facts.get('merge') or {}
         deployed = facts.get('deployment') or {}
+        saved_deployment = deployment_store.deployment(ctx.service.db, operation_id=op['operation_id']) or {}
         ceiling = evidence.policies_for(ctx.service, parent)['delivery']['maximum']
         if (op['operation_id'] != original['operation_id'] or op['status'] != 'succeeded'
                 or repairs.checks._unsettled(ctx.service, op) or merged.get('merged') is not True
                 or merged.get('verified') is not True or ceiling == 'deploy' and
-                (deployed.get('verified') is not True or deployed.get('state') != 'succeeded')):
+                (deployed.get('verified') is not True or deployed.get('state') not in {'succeeded', 'superseded'}
+                    or saved_deployment.get('provider_terminal') is not True
+                    or (saved_deployment.get('recorded_result') or {}).get('source_sha') != merged.get('merged_sha'))):
             raise evidence._bad('Original verified delivery is incomplete', 'PM_REPAIR_DELIVERY_UNPROVEN')
         return {'repair_id': 'pmrp_' + ctx.operation_id[3:], 'outcome': 'deployed' if ceiling == 'deploy' else 'merged',
             'delivery_operation_id': op['operation_id'], 'delivery': facts, 'repair_fixed': False,
