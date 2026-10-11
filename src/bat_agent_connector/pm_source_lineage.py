@@ -137,7 +137,14 @@ def visible_roots(db, principal, original_ids):
     from .pm_package_handoff import source_visible
     for original_id in original_ids:
         row = db.execute("SELECT * FROM operations WHERE operation_id=?", (original_id,)).fetchone()
-        if row is None or not source_visible(db, principal, OperationService._decode(row)):
+        if row is None:
+            return False
+        operation = OperationService._decode(row)
+        if operation["action"] == "pm.spec.materialize":
+            from .pm_spec_materialization import source_visible as spec_visible
+            if not spec_visible(db, principal, operation):
+                return False
+        elif not source_visible(db, principal, operation):
             return False
     return True
 
@@ -198,6 +205,8 @@ def bind_operation(db, operation_id, target, params, binding):
         return
     original_ids = binding.get("pm_source_roots", [])
     resources = [("operation", operation_id)]
+    if binding.get("pm_spec_materialization") is not None:
+        original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
         from .checkpoints import _SESSION_NS
         original_ids = [operation_id, *original_ids]
