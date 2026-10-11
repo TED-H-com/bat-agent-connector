@@ -148,6 +148,17 @@ try {
   await page.getByLabel('Connector project',{exact:true}).selectOption(project.project_id);
   const projectForm=page.locator('[data-pm-action="pm.project.bind"]');
   await projectForm.getByLabel('Why associate this work?',{exact:true}).fill('Track this existing project in the PM workspace');
+  // A background refresh can start between filling a form and clicking it. Keep
+  // its visible controls in step with the read gate instead of swallowing a click.
+  let releaseCatalog, markCatalogRead;
+  const catalogBlocked=new Promise(resolve=>{releaseCatalog=resolve;}),catalogRead=new Promise(resolve=>{markCatalogRead=resolve;});
+  await page.route(origin+'/api/v1/projects',async route=>{markCatalogRead();await catalogBlocked;await route.continue();},{times:1});
+  try {
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await bounded(catalogRead,30000,'Project catalog refresh was not requested');
+    await expect(projectForm.getByRole('button',{name:'Associate project',exact:true})).toBeDisabled();
+  }finally{releaseCatalog();}
+  await expect(projectForm.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Track this existing project in the PM workspace');
   await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
   await page.locator('[data-pm-work] > summary').click();
   await page.getByText('Track this work',{exact:true}).first().click();
