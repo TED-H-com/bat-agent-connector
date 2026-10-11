@@ -298,7 +298,7 @@ async def test_retained_private_source_cannot_leak_through_lifecycle_history_or_
     pause = await submit(d, port, request(wid, "pause", 0), principal=SOURCE_OWNER)
     assert pause["result"]["status"] == "pausing"
     retained = await submit(d, port, request(wid, "retain_inflight", 1,
-        transition_id=pause["result"]["transition_id"], operation_ids=[pending[0]],
+        transition_id=pause["result"]["transition_id"], operation_ids=pending,
         reason="PRIVATE ORIGINAL SOURCE disposition"), principal=SOURCE_OWNER, key="original-retention")
     tid = retained["result"]["transition_id"]
     auth = token(d, SOURCE_READER.actor, "observe")
@@ -317,6 +317,8 @@ async def test_retained_private_source_cannot_leak_through_lifecycle_history_or_
         assert filtered["next_cursor"] is not None
         second = (await http(port, "GET", root + f"/inflight?transition_id={tid}&limit=1&after={filtered['next_cursor']}", tok=auth))[1]
         assert second["inflight"][0]["operation_id"] == pending[1] and second["next_cursor"] is None
+        assert second["inflight"][0]["disposition"] == "retained"
+        assert "PRIVATE ORIGINAL SOURCE" not in json.dumps(second)
         state = (await http(port, "GET", root, tok=auth))[1]
         assert state["lifecycle"]["stage"] == "paused" and state["transition"] is None
         assert state["transition_visibility_filtered"]
