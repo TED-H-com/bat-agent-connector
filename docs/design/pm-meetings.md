@@ -156,3 +156,31 @@ metadata. `list_history(..., kind, after=0, limit=50)` pages `contexts`, `notes`
 `drafts` or `follow_ups`. Limits are 1–100; non-boolean nonnegative integer insertion
 sequences provide stable ordering despite clock rollback. The first slice does
 not install a second discussion UI or assign writer control to these records.
+
+
+All meeting read payloads have the shared 2,000,000-byte UTF-8 JSON budget,
+including HTTP's ordinary JSON separator spaces and coverage metadata. This is
+the domain payload size; RPC/MCP envelopes add their own transport framing.
+`get_meeting` first reserves the complete current context, authorized snapshot,
+draft and original completion. It never shortens their text, source references,
+criteria or claims. If those mandatory facts cannot fit, it returns
+`PM_MEETING_READ_TOO_LARGE` (413), including when the snapshot itself is large.
+
+Notes and follow-up histories then fill whole-record prefixes in that order under
+one shared budget. Additive `coverage: {max_bytes, histories: {notes, follow_ups}}`
+records `after`, `returned`, `has_more` and `byte_limited` for each stream. An empty
+initial history may have cursor `0`; this means request its standalone history
+from the beginning, not that no records exist. History pages expose the same
+coverage fields at the top level and distinguish byte limits from count limits.
+An oversized first standalone record returns 413 instead of repeating its cursor.
+Every returned history record still checks its original context's source access;
+follow-up records additionally check their own later snapshot. Lightweight
+sequence rows are batched, while full documents load only until the first record
+that does not fit. The byte limit does not permit bypassing source visibility.
+
+Meeting metadata lists are similarly bounded and report `scanned` and
+`visibility_filtered` in coverage. Inaccessible entries retain the prior filtering
+policy and advance the underlying sequence without exposing their IDs. A visible
+record that cannot fit stays first on the next page; it is never skipped. A page
+must consume at least one underlying record, finish at the end, or explicitly
+return 413. Reads have no journal mutations or new evidence captures.
