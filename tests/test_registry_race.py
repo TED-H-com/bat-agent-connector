@@ -6,23 +6,26 @@ import multiprocessing as mp
 
 import pytest
 
-from bat_agent_connector import registry
+from bat_agent_connector import controller_authority, registry
 from bat_agent_connector.errors import WriteRefused
+from tests.conftest import adopt
 
 
-def _reserve_successor(start, out, sid):
+def _reserve_successor(start, out, sid, authority):
     start.wait()
-    existing = registry.reserve(
-        "h1", {"session_id": sid, "failover_of": "old-claude", "worktree_path": "/srv/worktree"}, 10
-    )
+    with controller_authority.use(authority):
+        existing = registry.reserve(
+            "h1", {"session_id": sid, "failover_of": "old-claude", "worktree_path": "/srv/worktree"}, 10
+        )
     out.put(existing.get("session_id") if existing else sid)
 
 
-def test_simultaneous_successor_reservation():
+def test_simultaneous_successor_reservation(controller_context):
+    adopt("old-claude", cwd="/srv/worktree")
     ctx = mp.get_context("spawn")
     start = ctx.Event()
     out = ctx.Queue()
-    procs = [ctx.Process(target=_reserve_successor, args=(start, out, f"new-{i}")) for i in range(2)]
+    procs = [ctx.Process(target=_reserve_successor, args=(start, out, f"new-{i}", controller_context[1])) for i in range(2)]
     for proc in procs:
         proc.start()
     start.set()
@@ -39,7 +42,9 @@ def test_simultaneous_successor_reservation():
     assert len(successors) == 1
 
 
-def test_second_source_cannot_fail_over_into_owned_worktree():
+def test_second_source_cannot_fail_over_into_owned_worktree(controller_context):
+    adopt("old-a", cwd="/srv/first")
+    adopt("old-b", cwd="/srv/second")
     registry.reserve(
         "h1", {"session_id": "first", "failover_of": "old-a", "worktree_path": "/srv/worktree"}, 10
     )

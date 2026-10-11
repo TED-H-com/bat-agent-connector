@@ -154,7 +154,7 @@ def test_b01_current_connector_evidence_preserves_policy_refusal_and_has_no_bat_
 
 @pytest.mark.parametrize("marker", [{}, {"worktree_made_by": "connector"}, {"checkpoint_id": "cp"},
                                   {"integration_operation_id": "op"}, {"branch": "batc/task-fixture"}])
-def test_b01_warm_claim_keeps_creation_markers_and_identity(marker):
+def test_b01_warm_claim_keeps_creation_markers_and_identity(marker, controller_context):
     """B01, §08: actual warm reuse transfers task ownership without changing creation evidence."""
     registry.reserve("h1", {"session_id": "root", "workspace_id": "ws", "cwd": "/srv/wt",
                             "worktree_path": "/srv/wt", "branch": "bat/worktree-fixture", "task_id": "old",

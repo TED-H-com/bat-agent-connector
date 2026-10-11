@@ -11,7 +11,7 @@ from bat_agent_connector import service
 from bat_agent_connector.config import SafetyConfig
 from bat_agent_connector.errors import WriteRefused
 from bat_agent_connector.safety import Audit, audit_path
-from tests.conftest import adopt
+from tests.conftest import adopt, controller_scope
 from tests.mockbat import TOKEN
 
 MANAGED = {"writes": True, "managed_roots": ["/srv"]}
@@ -125,22 +125,23 @@ async def test_write_refused_when_disabled_or_unconfirmed(fleet_factory, mock):
 
 
 async def test_direct_send_is_blocked_for_verifying_task_session(fleet_factory, mock, monkeypatch, tmp_path):
-    adopt_all()
     f = fleet_factory(**MANAGED)
     from bat_agent_connector import registry
     from bat_agent_connector.task_journal import Journal
 
     journal = Journal(tmp_path / "tasks.db")
-    task = journal.submit(project="p", host="h1", workspace="w", original_words="do it", idempotency_key="k")
-    journal.db.execute("UPDATE tasks SET state='verifying',session_id=? WHERE task_id=?",
-                       ("sess-claude-0001", task["task_id"]))
-    registry.update("h1", "sess-claude-0001", task_id=task["task_id"], role="lead")
-    monkeypatch.setattr(service, "task_service_db", lambda: journal.path)
-    with pytest.raises(WriteRefused, match="TASK_VERIFYING"):
-        await service.session_send(f, "h1", "sess-claude-0001", "outside task service", confirm=True)
-    journal.close()
-    assert "claude:send-message" not in mock.channels()
-    await f.close()
+    with controller_scope(journal):
+        adopt_all()
+        task = journal.submit(project="p", host="h1", workspace="w", original_words="do it", idempotency_key="k")
+        journal.db.execute("UPDATE tasks SET state='verifying',session_id=? WHERE task_id=?",
+                           ("sess-claude-0001", task["task_id"]))
+        registry.update("h1", "sess-claude-0001", task_id=task["task_id"], role="lead")
+        monkeypatch.setattr(service, "task_service_db", lambda: journal.path)
+        with pytest.raises(WriteRefused, match="TASK_VERIFYING"):
+            await service.session_send(f, "h1", "sess-claude-0001", "outside task service", confirm=True)
+        journal.close()
+        assert "claude:send-message" not in mock.channels()
+        await f.close()
 
 
 async def test_task_send_fence_uses_daemon_db_and_fails_closed(tmp_path, fleet_factory, mock):
@@ -149,27 +150,28 @@ async def test_task_send_fence_uses_daemon_db_and_fails_closed(tmp_path, fleet_f
     from bat_agent_connector.errors import TaskControlRefused
     from bat_agent_connector.task_journal import Journal
 
-    sid = "sess-claude-0001"
-    adopt(sid, task_id="missing-task", role="lead")
-    fleet = fleet_factory(**MANAGED)
-    pointer = registry.registry_path().parent / service.TASK_SERVICE_POINTER
-    for pointer_body in (None, {"db_path": str(tmp_path / "missing.db")}):
-        if pointer_body:
-            pointer.write_text(json.dumps(pointer_body))
+    journal = Journal(tmp_path / "elsewhere" / "custom.db")
+    with controller_scope(journal):
+        sid = "sess-claude-0001"
+        adopt(sid, task_id="missing-task", role="lead")
+        fleet = fleet_factory(**MANAGED)
+        pointer = registry.registry_path().parent / service.TASK_SERVICE_POINTER
+        for pointer_body in (None, {"db_path": str(tmp_path / "missing.db")}):
+            if pointer_body:
+                pointer.write_text(json.dumps(pointer_body))
+            with pytest.raises(TaskControlRefused, match="TASK_OWNER_UNAVAILABLE"):
+                await service.session_send(fleet, "h1", sid, "outside", confirm=True)
+        pointer.write_text(json.dumps({"db_path": str(journal.path)}))
         with pytest.raises(TaskControlRefused, match="TASK_OWNER_UNAVAILABLE"):
             await service.session_send(fleet, "h1", sid, "outside", confirm=True)
-    journal = Journal(tmp_path / "elsewhere" / "custom.db")
-    pointer.write_text(json.dumps({"db_path": str(journal.path)}))
-    with pytest.raises(TaskControlRefused, match="TASK_OWNER_UNAVAILABLE"):
-        await service.session_send(fleet, "h1", sid, "outside", confirm=True)
-    task = journal.submit(project="p", host="h1", workspace="w", original_words="do it", idempotency_key="k")
-    journal.db.execute("UPDATE tasks SET state='verifying',session_id=? WHERE task_id=?", (sid, task["task_id"]))
-    registry.update("h1", sid, task_id=task["task_id"])
-    with pytest.raises(TaskControlRefused, match="TASK_VERIFYING"):
-        await service.session_send(fleet, "h1", sid, "outside", confirm=True)
-    assert "claude:send-message" not in mock.channels()
-    journal.close()
-    await fleet.close()
+        task = journal.submit(project="p", host="h1", workspace="w", original_words="do it", idempotency_key="k")
+        journal.db.execute("UPDATE tasks SET state='verifying',session_id=? WHERE task_id=?", (sid, task["task_id"]))
+        registry.update("h1", sid, task_id=task["task_id"])
+        with pytest.raises(TaskControlRefused, match="TASK_VERIFYING"):
+            await service.session_send(fleet, "h1", sid, "outside", confirm=True)
+        assert "claude:send-message" not in mock.channels()
+        journal.close()
+        await fleet.close()
 
 
 async def test_send_resume_idempotent_rate_limit_audit(fleet_factory, mock):

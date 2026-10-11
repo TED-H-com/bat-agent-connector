@@ -83,7 +83,7 @@ def test_hardlinked_private_file_is_not_truncated_or_replaced(tmp_path):
     assert victim.read_bytes() == alias.read_bytes() == b"preserve"
 
 
-async def test_registry_first_use_leaves_state_ready_for_service_owner(mock, tmp_path):
+async def test_registry_first_use_leaves_state_ready_for_service_owner(mock, tmp_path, controller_context):
     from bat_agent_connector import registry
     from bat_agent_connector.task_daemon import TaskDaemon
     from tests.conftest import adopt, make_config
