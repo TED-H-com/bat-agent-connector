@@ -1,20 +1,75 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
-import {fixture as followUpFixture,snapshotId} from './pm-follow-up-fixture.ts';
+import {fixture as followUpFixture,snapshotId,intakeId,threadId as followUpThreadId} from './pm-follow-up-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
 
-function fixture(){
+const assessmentId=(n:number)=>'pmfa_'+n.toString(16).padStart(32,'0');
+function assessment(n:number){
+  const runId='pmr_'+n.toString(16).padStart(32,'0'),contextDigest='c'.repeat(64);
+  return {sequence:n,assessment_id:assessmentId(n),workspace_id:workspaceId,thread_id:followUpThreadId,
+    operation_id:'op_'+(100+n).toString(16).padStart(32,'0'),run_id:runId,intake_id:intakeId(3),intake_digest:'3'.repeat(64),context_digest:contextDigest,
+    raw_reply:'A fixed-source PM assessment. Scope and execution remain unchanged.',raw_reply_digest:'d'.repeat(64),document_digest:'e'.repeat(64),
+    document:{version:1,summary:{text:'The reported recovery repair still needs acceptance evidence.',source_refs:['knowledge.scope']},
+      findings:[],tradeoffs:[],questions:[],recommendations:[]},validation:{status:'format_valid',errors:[],conclusions_verified:false},
+    provenance:{run_id:runId,context_digest:contextDigest,intake_id:intakeId(3),intake_digest:'3'.repeat(64),actual_model:'fixture-model',
+      source_references:{'knowledge.scope':{pointer:'/knowledge/scope',digest:'f'.repeat(64)}}},
+    created_at:1791705700+n,created_by:'pm:'+workspaceId,assessment_basis:'unadopted_agent_analysis',conclusions_verified:false,
+    accepted_plan_changed:false,execution_authorized:false};
+}
+function fixture({analysisEnabled=false}={}){
   const base=pmFixture(),followUp=followUpFixture(),prefix=`/pm/workspaces/${workspaceId}`;
   followUp.state.actor=base.state.actor;
+  base.state.start=analysisEnabled;
+  const analysis={enabled:analysisEnabled,rows:[assessment(1)],reads:[] as string[],writes:[] as any[],ops:new Map<string,any>(),
+    lost:false,pending:false,polls:0,eventType:'pm_follow_up'};
   const dispatch=async(input:any)=>{
-    const p=new URL(input.path,'http://fixture').pathname;
+    const url=new URL(input.path,'http://fixture'),p=url.pathname;
     if(p==='/bootstrap'||p==='/capabilities'){
       const result=await base.dispatch(input),caps=p==='/bootstrap'?result.data.capabilities:result.data;
-      caps.features.pm_workspaces.follow_up_prepare=true;caps.actions.push(...followUp.caps().actions);return result;
+      caps.features.pm_workspaces.follow_up_prepare=true;caps.actions.push(...followUp.caps().actions);
+      caps.features.pm_workspaces.follow_up_analysis=analysis.enabled;
+      if(analysis.enabled)caps.actions.push({action:'pm.follow_up.analyze',allowed:true});return result;
     }
     if(p==='/events'){
-      const result=await base.dispatch(input);for(const event of result.data.events)event.resource_type='pm_follow_up';return result;
+      const result=await base.dispatch(input);for(const event of result.data.events){event.resource_type=analysis.eventType;
+        event.kind=analysis.eventType==='pm_follow_up_assessment'?'pm.follow_up.analyze':'pm.follow_up.prepare';}return result;
+    }
+    if(input.method==='POST'&&input.body?.action==='pm.follow_up.analyze'){
+      analysis.writes.push(structuredClone(input));let operation=analysis.ops.get(input.idempotency_key);
+      if(!operation){
+        if(input.body.preconditions.expected_version!==followUp.state.threadVersion||input.body.preconditions.expected_intake_digest!=='3'.repeat(64))
+          return {status:409,data:{error:{code:'VERSION_CONFLICT',message:'The fixed discussion version changed',admission_refused:true}}};
+        const row=assessment(analysis.rows.length+1);analysis.rows.push(row);
+        operation={...structuredClone(input.body),operation_id:row.operation_id,actor:base.state.actor,idempotency_key:input.idempotency_key,
+          status:analysis.pending?'running':'succeeded',result:{run_id:row.run_id,workspace_id:workspaceId,thread_id:followUpThreadId,
+            state:'completed',context_digest:row.context_digest,adapter:'codex-native-linux',execution_authorized:false,
+            outcome:{assessment_id:row.assessment_id,intake_id:row.intake_id,validation_status:'format_valid',conclusions_verified:false,
+              assessment_adopted:false,assistant_imported:false}}};analysis.ops.set(input.idempotency_key,operation);
+      }
+      if(analysis.lost){analysis.lost=false;return {status:503,data:{error:{code:'LOST_REPLY',message:'Original assessment reply lost'}}};}
+      return {status:200,data:{operation:structuredClone(operation)}};
+    }
+    const operation=[...analysis.ops.values()].find(row=>p===`/operations/${row.operation_id}`);
+    if(operation){analysis.polls++;operation.status='succeeded';return {status:200,data:{operation:structuredClone(operation)}};}
+    if(p===prefix+'/capabilities'){
+      const result=await base.dispatch(input);result.data.follow_up_analysis={authorized:true,eligible_for_preflight:true};return result;
+    }
+    if(p===prefix+'/threads/'+followUpThreadId&&analysis.enabled){
+      const result=await followUp.dispatch(input);result.data.thread.mode='planning';result.data.capabilities={write:true};return result;
+    }
+    if(p.startsWith(prefix+'/follow-up-assessments')){
+      analysis.reads.push(input.path);
+      if(p===prefix+'/follow-up-assessments'){
+        const after=Number(url.searchParams.get('after')||0),limit=Number(url.searchParams.get('limit')||20);
+        const records=analysis.rows.filter(row=>row.intake_id===url.searchParams.get('intake_id')&&row.sequence>after),page=records.slice(0,limit);
+        return {status:200,data:{version:1,workspace_id:workspaceId,
+          assessments:page.map(({document,raw_reply,provenance,...row})=>row),next_cursor:records.length>limit?page.at(-1)!.sequence:null,
+          coverage:{visibility_filtered:false}}};
+      }
+      const row=analysis.rows.find(row=>p.endsWith('/'+row.assessment_id));
+      return row?{status:200,data:{version:1,workspace_id:workspaceId,assessment:structuredClone(row)}}
+        :{status:404,data:{error:{code:'PM_FOLLOW_UP_ANALYSIS_NOT_FOUND',message:'Assessment not found'}}};
     }
     if(p.startsWith(prefix+'/follow-ups')||p.startsWith(prefix+'/snapshots')||p===prefix+'/plans/head'
       ||p.startsWith(prefix+'/threads')||p.startsWith(prefix+'/governance')||p.startsWith(prefix+'/meetings')
@@ -22,7 +77,7 @@ function fixture(){
       return followUp.dispatch({...input,key:input.idempotency_key});
     return base.dispatch(input);
   };
-  return{base,followUp,dispatch};
+  return{base,followUp,analysis,dispatch};
 }
 const route=`/dashboard/#/pm/${workspaceId}`,section=(page:any)=>page.locator('[data-pm-follow-up]'),editor=(page:any)=>page.locator('[data-pm-fu-editor]');
 async function open(page:any){
@@ -62,6 +117,65 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
     f.base.state.failRead=false;f.base.state.cursor++;
     await expect(section(page)).toBeVisible({timeout:10000});await expect(page.getByLabel('Evidence snapshot',{exact:true})).toHaveValue(snapshotId);
     expect(f.followUp.state.writes).toHaveLength(0);
+  });
+  test('analysis feature flag keeps existing preparation available without mounting or reading assessments',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    await expect(page.locator('[data-pm-follow-up-assessments]')).toHaveCount(0);
+    await expect(page.locator('[data-pm-follow-up-analyze]')).toHaveCount(0);
+    expect(f.analysis.reads).toEqual([]);expect(f.analysis.writes).toEqual([]);
+  });
+  test('home submits fixed analysis through the shared transport and polls only its original operation',async({page})=>{
+    const f=fixture({analysisEnabled:true});f.analysis.pending=true;
+    await mountConversation(page,native,f.dispatch);await page.goto(route);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    await page.locator('[data-pm-follow-up-analyze] > summary').click();
+    await page.getByLabel('What should PM assess?',{exact:true}).fill('Compare the original recovery commitment with the fixed evidence.');
+    await page.getByRole('button',{name:'Analyze this preparation',exact:true}).click();
+    const result=page.locator('[data-pm-assessment-record]');await expect(result).toHaveAttribute('data-pm-assessment-record',assessmentId(2));
+    await expect(result).toContainText('conclusions have not been verified');
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);await expect(page.getByRole('tab')).toHaveCount(0);
+    expect(f.analysis.writes).toHaveLength(1);expect(f.analysis.polls).toBe(1);
+    expect(f.analysis.writes[0].body).toEqual({action:'pm.follow_up.analyze',target:{workspace_id:workspaceId,thread_id:followUpThreadId},
+      params:{intake_id:intakeId(3),purpose:'Compare the original recovery commitment with the fixed evidence.'},
+      preconditions:{expected_version:5,expected_intake_digest:'3'.repeat(64)}});
+    expect(f.analysis.writes[0].idempotency_key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(f.followUp.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+    expect(f.followUp.state.threadVersion).toBe(5);expect(f.followUp.state.plan).toBe(2);
+  });
+  test('assessment event refreshes the selected result on the workspace home without dispatching work',async({page})=>{
+    const f=fixture({analysisEnabled:true});await mountConversation(page,native,f.dispatch);await page.goto(route);
+    const assessments=page.locator('[data-pm-follow-up-assessments]');
+    await assessments.getByRole('button',{name:/^Assessment 1 ·/}).click();
+    await expect(assessments).toContainText('The reported recovery repair still needs acceptance evidence.');
+    const reads=f.analysis.reads.length;
+    const later=assessment(2);later.document.summary.text='Another fixed assessment was saved; no scope decision was adopted.';
+    f.analysis.rows.push(later);
+    f.analysis.eventType='pm_follow_up_assessment';f.base.state.cursor++;
+    await expect(assessments.getByRole('button',{name:/^Assessment 2 ·/})).toBeVisible({timeout:10000});
+    await expect(page.locator('[data-pm-assessment-record]')).toHaveAttribute('data-pm-assessment-record',assessmentId(1));
+    expect(f.analysis.reads.length).toBeGreaterThan(reads);
+    expect(f.analysis.reads.at(-1)).toBe(`/pm/workspaces/${workspaceId}/follow-up-assessments/${assessmentId(1)}`);
+    await assessments.getByRole('button',{name:/^Assessment 2 ·/}).click();
+    await expect(assessments).toContainText('Another fixed assessment was saved; no scope decision was adopted.');
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    expect(f.analysis.writes).toHaveLength(0);expect(f.followUp.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+  });
+  test('home reload keeps a lost analysis admission on the original key and thread CAS',async({page})=>{
+    const f=fixture({analysisEnabled:true});f.analysis.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(route);
+    await page.locator('[data-pm-follow-up-analyze] > summary').click();
+    await page.getByLabel('What should PM assess?',{exact:true}).fill('Keep this exact analysis across reconnect.');
+    await page.getByRole('button',{name:'Analyze this preparation',exact:true}).click();
+    await expect(page.locator('[data-pm-follow-up-analyze]')).toContainText('Original assessment reply lost');
+    const original=structuredClone(f.analysis.writes[0]);f.followUp.state.threadVersion=6;await page.reload();
+    await page.locator('[data-pm-follow-up-analyze] > summary').click();
+    await page.locator('[data-pm-follow-up-analyze]').getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect(page.locator('[data-pm-assessment-record]')).toHaveAttribute('data-pm-assessment-record',assessmentId(2));
+    expect(f.analysis.ops.size).toBe(1);expect(f.analysis.writes).toHaveLength(2);
+    expect(f.analysis.writes.at(-1).body).toEqual(original.body);
+    expect(f.analysis.writes.at(-1).idempotency_key).toBe(original.idempotency_key);
+    expect(original.body.preconditions.expected_version).toBe(5);
+    expect(f.followUp.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   });
 });
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`workspace Follow-up layout ${locale} ${width}`,async({browser,baseURL})=>{
