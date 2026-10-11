@@ -114,6 +114,7 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
             "capabilities_get": set(),
             "pm_follow_up_assessments_list": {"workspace_id", "intake_id", "after", "limit"},
             "pm_follow_up_assessment_get": {"workspace_id", "assessment_id"},
+            "pm_brief_export_get": {"workspace_id", "snapshot_id", "format", "locale"},
             "work_status": {"task_id"},
             "work_item_get": {"work_item_id"},
             "operations_list": {"statuses", "action"},

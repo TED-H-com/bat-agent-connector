@@ -1156,7 +1156,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1282,6 +1282,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let work_list = path.ends_with("/work");
             let evidence_list = path.ends_with("/evidence");
             let snapshot_list = path.ends_with("/snapshots");
+            let brief_export = path.ends_with("/brief-export");
             let comparison = path.ends_with("/plan-comparison");
             let spec_sources = path.ends_with("/spec-sources");
             let roadmap_list = path.ends_with("/roadmap/revisions");
@@ -1327,6 +1328,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
+                "format" if brief_export => matches!(value.as_ref(), "markdown" | "html" | "svg"),
+                "locale" if brief_export => matches!(value.as_ref(), "en" | "zh-TW"),
                 "repository" if spec_sources => {
                     value.len() <= 256
                         && value.split('/').count() == 2
@@ -1984,6 +1987,56 @@ mod tests {
         assert!(validate_request(&request("POST", root)).is_err());
         let mut input = get(root);
         input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn brief_export_reads_only_allow_fixed_snapshot_formats() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/snapshots";
+        let fixed = format!("{root}/pmsnap_22222222222222222222222222222222/brief-export");
+        assert!(validate_request(&get(&fixed)).is_ok());
+        for format in ["markdown", "html", "svg"] {
+            for locale in ["en", "zh-TW"] {
+                assert!(validate_request(&get(&format!(
+                    "{fixed}?format={format}&locale={locale}"
+                )))
+                .is_ok());
+            }
+        }
+        for query in [
+            "?format=",
+            "?locale=",
+            "?format=pdf",
+            "?format=HTML",
+            "?locale=zh",
+            "?format=html&format=svg",
+            "?locale=&locale=en",
+            "?actor=",
+            "?limit=1",
+            "?format=html&path=report.html",
+            "?url=https://example.invalid",
+            "?content=untrusted",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{fixed}{query}"))).is_err(),
+                "{query}"
+            );
+        }
+        for path in [
+            format!("{root}/latest/brief-export"),
+            format!("{root}/brief-export"),
+            format!("{root}/pmsnap_bad/brief-export"),
+            format!("{fixed}/content"),
+            format!("{root}/pmsnap_22222222222222222222222222222222?format=html"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        assert!(validate_request(&request("POST", &fixed)).is_err());
+        let mut input = get(&fixed);
+        input.idempotency_key = Some("not-a-write".into());
+        assert!(validate_request(&input).is_err());
+        input.idempotency_key = None;
+        input.body = Some(serde_json::json!({"format": "html"}));
         assert!(validate_request(&input).is_err());
     }
 

@@ -139,6 +139,35 @@ export. The renderer never silently truncates text, references or sections. A
 snapshot whose own source coverage is partial can still be exported, with its
 original partial-coverage flags preserved; that differs from truncating an export.
 
+## Shared read entrypoints
+
+`GET /api/v1/pm/workspaces/{workspace_id}/snapshots/{snapshot_id}/brief-export`
+returns the complete renderer JSON through the existing central API. Optional
+query fields are `format=markdown|html|svg` and `locale=en|zh-TW`; omitted values
+default to `markdown` and `en`. Blank, repeated, unknown or invalid selectors are
+rejected. The path requires exact workspace and snapshot IDs; there is no
+`latest/brief-export` alias, content URL, filename, filesystem path or caller
+supplied content parameter.
+
+RPC and MCP expose the same `pm_brief_export_get(workspace_id, snapshot_id,
+format="markdown", locale="en")` contract with `observe` scope. Each invocation
+rechecks current membership and filters the original snapshot through its existing
+source reader. Tauri's fixed GET allowlist admits only these paths and enum
+queries, with no operation key or request body. All entrypoints preserve complete
+JSON or the renderer's explicit 413; none return a shortened report.
+
+`features.pm_workspaces.brief_export` advertises the supported formats, locales
+and renderer version. It means that the read renderer is available; it does not
+claim that a local save dialog, presentation editor or all five view exports
+exist. The canonical skill and its generated agent bundles describe this same
+fixed read and output boundary.
+
+This entrypoint does not use ordinary artifact storage or grants. It creates no
+durable operations, files, share links or publication. A future user-initiated
+download can validate `byte_length` and `output_digest` against the UTF-8 content,
+then save the bytes through an explicit local destination workflow. Report text
+must never become app HTML, an executable instruction or a URL to open.
+
 ## Validation
 
 Focused tests use real central-journal snapshots and mock source records to check
