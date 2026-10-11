@@ -1,3 +1,4 @@
+import {planProposals} from './pm-plan-proposals.js';
 import {workspaceWorkDeliveries} from './pm-work-deliveries.js';
 import {workspaceSpecMaterialization} from './pm-spec-materialization.js';
 import {workspaceWorkBatches} from './pm-work-batches.js';
@@ -232,7 +233,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   main.append(h('div', {class: 'pm-shell'}, h('aside', {}, nav), body));
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
   lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
     ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>updateForms()}) : null;
   if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
@@ -355,6 +356,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation', 'data-pm-note-only': ''},
           h('summary', {}, t('pm_native_note_only')), noteForm.box));
       } else column.append(noteForm.box);
+      if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
+        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
+          thread:()=>threadData,permitted,refresh:load,errorBox});
+        column.append(proposalReview.box);
+      }
       if (caps()?.features?.pm_workspaces?.plan_drafting) {
         revisions = planRevisions({h, t, api, alive, workspaceId, threadId, thread: () => threadData,
           form, input, labelled, permitted, refresh: load, errorBox});
@@ -580,7 +586,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
-    releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();
+    releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -632,6 +638,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         renderPackages(runs);
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
+      if (proposalReview) {
+        proposalReview.update({head: plans?.head, capabilities: workspaceCaps});
+        await proposalReview.refresh();
+        alive(); if (ticket !== sequence) return;
+      }
       worktreeChoice?.update();
       for (const section of [lifecycle, evidence, brief, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,workBatches,issues]) {
         if (section) await section.refresh();
@@ -643,7 +654,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
-        brief?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();
+        brief?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
@@ -654,7 +665,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
@@ -681,6 +692,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
+    proposalReview?.dispose();
     for (const value of forms) value.dispose();
   };
 }
