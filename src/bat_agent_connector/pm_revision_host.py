@@ -31,7 +31,24 @@ else:
     _base_carrier = globals()["pm_carrier"]
 
 _REVISIONS = "batc-pm-revisions.json"
-_REV_PATH = re.compile(r"docs/pm/revisions/pmrev_[0-9a-f]{32}/plan\.(?:json|md)")
+_REV_PATH = re.compile(r"(?:docs/pm/revisions/pmrev_[0-9a-f]{32}/plan\.(?:json|md)|"
+    r"openspec/changes/pm-[0-9a-f]{32}/revisions/pmwp_[0-9a-f]{32}/(?:package\.json|proposal\.md|requirements\.md|design\.md|tasks\.md|manifest\.json)|"
+    r"docs/pm/specs/pm-[0-9a-f]{32}/revisions/pmwp_[0-9a-f]{32}\.json)")
+
+
+def rev_paths(data):
+    if data.get("artifact_kind") == "pm-spec":
+        if (not re.fullmatch(r"pmsp_[0-9a-f]{32}", data["revision_id"])
+                or not re.fullmatch(r"pm-[0-9a-f]{32}", data["change_id"])
+                or not re.fullmatch(r"pmwp_[0-9a-f]{32}", data["package_id"])):
+            raise ValueError("PM_REVISION_INVALID")
+        prefix = "openspec/changes/" + data["change_id"] + "/revisions/" + data["package_id"] + "/"
+        return {prefix + name for name in ("package.json", "proposal.md", "requirements.md", "design.md", "tasks.md", "manifest.json")} | {
+            "docs/pm/specs/" + data["change_id"] + "/revisions/" + data["package_id"] + ".json"}
+    if "artifact_kind" in data or not re.fullmatch(r"pmrev_[0-9a-f]{32}", data["revision_id"]):
+        raise ValueError("PM_REVISION_INVALID")
+    return {"docs/pm/revisions/" + data["revision_id"] + "/plan." + ext for ext in ("md", "json")}
+
 
 
 def rev_json(value):
@@ -74,14 +91,13 @@ def rev_load(req):
             if (row["parent"] != parent or row["state"] not in {"prepared", "complete"}
                     or row["state"] == "prepared" and index != len(rows) - 1
                     or receipt["binding_id"] != rev_binding(req) or receipt["workspace_id"] != req["pm_workspace_id"]
-                    or not re.fullmatch(r"pmrev_[0-9a-f]{32}", receipt["revision_id"])
                     or not re.fullmatch(r"op_[0-9a-f]{32}", receipt["operation_id"])
                     or receipt["operation_id"] in operations or receipt["revision_id"] in revisions
                     or any(not re.fullmatch(r"[0-9a-f]{40}", receipt[key]) for key in ("commit_sha", "tree_sha"))
                     or not re.fullmatch(r"[0-9a-f]{64}", row["index_before"])
                     or row["state"] == "complete" and not re.fullmatch(r"[0-9a-f]{64}", row["index_after"])):
                 raise ValueError("PM_REVISION_MANIFEST_CHANGED")
-            expected_paths = {"docs/pm/revisions/" + receipt["revision_id"] + "/plan." + ext for ext in ("md", "json")}
+            expected_paths = rev_paths(receipt)
             if set(receipt["file_digests"]) != expected_paths:
                 raise ValueError("PM_REVISION_MANIFEST_CHANGED")
             operations.add(receipt["operation_id"])
@@ -187,13 +203,11 @@ def rev_parent(path, relative, *, create=False):
 def rev_request(req):
     data = req["revision"]
     try:
-        prefix = "docs/pm/revisions/" + data["revision_id"] + "/"
         if (data["workspace_id"] != req["pm_workspace_id"] or data["binding_id"] != rev_binding(req)
-                or not re.fullmatch(r"pmrev_[0-9a-f]{32}", data["revision_id"])
                 or not re.fullmatch(r"op_[0-9a-f]{32}", data["operation_id"])
                 or not re.fullmatch(r"[0-9a-f]{40}", data["expected_parent"])
                 or type(data["timestamp"]) is not int or not 0 < data["timestamp"] < 32_503_680_000
-                or set(data["files"]) != {prefix + "plan.json", prefix + "plan.md"}):
+                or set(data["files"]) != rev_paths(data)):
             raise ValueError("PM_REVISION_INVALID")
         files = {path: content.encode() for path, content in data["files"].items()}
         if (sum(map(len, files.values())) > 512_000
@@ -310,6 +324,8 @@ def rev_transaction(req, *, write):
         pm_carrier(req)
     tree, objects = rev_tree(req, data["expected_parent"], files)
     receipt = {key: data[key] for key in ("workspace_id", "revision_id", "operation_id", "document_digest", "file_digests", "binding_id")}
+    if data.get("artifact_kind") == "pm-spec":
+        receipt.update({key: data[key] for key in ("artifact_kind", "change_id", "package_id")})
     receipt.update(tree_sha=tree, status="verified")
     proposed = {"receipt": receipt, "parent": data["expected_parent"], "timestamp": data["timestamp"],
                 "state": "prepared", "request_digest": digest, "index_before": rev_index(req)}
