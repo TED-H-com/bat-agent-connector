@@ -279,6 +279,8 @@ def bind_operation(db, operation_id, target, params, binding):
 def require_new_effect(ops, operation_id):
     from .pm_delivery_lineage import require_admitted_sources
     op = ops._row(operation_id)
+    from .pm_work_batches import require_child
+    require_child(ops, op)
     require_admitted_sources(ops, op)
     originals = roots(ops.db, "operation", operation_id)
     if not originals:
@@ -307,6 +309,8 @@ def require_frame():
     if current is None:
         return
     ops, operation_id = current
+    from .pm_work_batches import require_child
+    require_child(ops, ops._row(operation_id))
     from .pm_delivery_lineage import require_admitted_sources
     require_admitted_sources(ops, ops._row(operation_id))
     if not roots(ops.db, "operation", operation_id):
