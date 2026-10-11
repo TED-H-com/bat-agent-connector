@@ -41,6 +41,8 @@ and final transport checks require the original completed run, death proof,
 controller, incarnation, same carrier creation/configuration and current writer.
 A retired label alone, an unknown exit, a foreign session or a reused path grants
 no sharing authority. Sequential completed turns work with a host cap of one.
+Cancellation after successful import also permits this proven local retirement;
+current original source and identity checks remain mandatory.
 
 The BAT prerequisite is the additive `codex-pm-linux-v1` contract on top of
 audited upstream `b7419892fbc9946799b64cca24c2ec8c7fa15c42`, with pinned Codex
