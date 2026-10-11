@@ -61,7 +61,7 @@ READ_TOOLS = [
     "integration_get",
     "integrations_list",
     "projects_list",
-    "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_profiles_get",
+    "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_context_bundle_preview", "pm_profiles_get",
     "pm_runs_list", "pm_run_get", "pm_capabilities_get",
     "pm_spec_sources_get", "pm_spec_source_capabilities_get",
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
@@ -570,6 +570,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         read grants no execution authority and does not start an LLM runner."""
         return await pm_daemon("pm_context_get", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
 
+    async def pm_context_bundle_preview(workspace_id: str, thread_id: str, max_chars: int = 32000) -> dict[str, Any]:
+        """Preview the exact accepted revision, original Git receipt and complete-file coverage.
+        Explicitly select its context_bundle_ref in pm.run.analyze or pm.run.bat.analyze;
+        partial coverage never authorizes adoption or execution."""
+        return await pm_daemon("pm_context_bundle_preview", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
+
     async def pm_profiles_get() -> dict[str, Any]:
         """Versioned discussion purposes, inputs, question policies and outputs; check executable_modes."""
         return await pm_daemon("pm_profiles_get")
@@ -1039,7 +1045,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                github_pr_preview, github_merge_preview_get, deployment_preview, deployment_status, deployments_list,
                deployment_environment_get, checkpoints_list, checkpoint_preview, repository_preview, integration_candidates, integration_get,
                integrations_list, projects_list, project_get, work_items_list, work_item_get,
-               pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_profiles_get,
+               pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_context_bundle_preview, pm_profiles_get,
                pm_runs_list, pm_run_get, pm_capabilities_get,
                pm_spec_sources_get, pm_spec_source_capabilities_get,
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,

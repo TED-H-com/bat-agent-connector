@@ -177,6 +177,10 @@ def source_visible(db, principal, run):
     if not operation_source_visible(db, principal, run["operation_id"]):
         return False
     row = db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
+    if run['context'].get('version') == 2 and 'context_bundle' in run['context']:
+        from .pm_context_bundles import operation_visible
+        if not operation_visible(db, principal, {'operation_id': run['operation_id']}):
+            return False
     if run["context"].get("output_destination") == "follow_up_assessment" or row and row[0] == "pm.follow_up.analyze":
         from .pm_follow_up_analysis import operation_visible
         return operation_visible(db, principal, {"operation_id": run["operation_id"]})
@@ -286,8 +290,13 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
         if slot and slot["run_id"]:
             raise _error("A PM turn still owns this workspace writer", "PM_WRITER_BUSY")
         generation = slot["generation"] + 1 if slot else 1
-        context = (_context_factory() if _context_factory else
-                   pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars))
+        if _context_factory:
+            context = _context_factory()
+        else:
+            from .pm_context_bundles import for_operation
+            context = for_operation(ops, principal, operation_id, max_chars=max_chars, purpose=purpose)
+            if context is None:
+                context = pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars)
         if _context_factory:
             row = ops.db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
             destinations = {"pm.follow_up.analyze": "follow_up_assessment", "pm.conversation.propose": "conversation_proposal"}

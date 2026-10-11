@@ -80,6 +80,7 @@ FIELDS = {
     "pm_threads_list": ("workspace_id", "limit", "after"),
     "pm_thread_get": ("workspace_id", "thread_id", "limit", "before_message", "before_input"),
     "pm_context_get": ("workspace_id", "thread_id", "max_chars"),
+    "pm_context_bundle_preview": ("workspace_id", "thread_id", "max_chars"),
     "pm_profiles_get": (),
     "pm_runs_list": ("workspace_id", "thread_id", "limit", "after"),
     "pm_run_get": ("workspace_id", "run_id"),
@@ -107,6 +108,9 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_context_bundle_preview":
+        from .pm_context_bundles import preview
+        return preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))
     if method == 'pm_pr_publication_get':
         from . import pr_publication
         pm_workspace.require_member(ops.db, principal, workspace_id)

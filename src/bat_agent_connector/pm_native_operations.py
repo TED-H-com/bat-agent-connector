@@ -25,7 +25,8 @@ def _scopes(principal):
 
 def _values(ops, principal, target, params, pre):
     _scopes(principal)
-    if (set(target) != {"workspace_id", "thread_id"} or set(params) - {"purpose", "model", "max_chars", "timeout_s"}
+    if (set(target) != {"workspace_id", "thread_id"}
+            or set(params) - {"purpose", "model", "max_chars", "timeout_s", "context_bundle_ref"}
             or set(pre) != {"expected_version"}):
         raise OperationError("INVALID_PARAMS", "Supply a discussion, bounded analysis purpose and expected version", 422)
     pm_workspace.require_member(ops.db, principal, target["workspace_id"], write=True)
@@ -38,11 +39,13 @@ def _values(ops, principal, target, params, pre):
     budget, timeout = params.get("max_chars", 32000), params.get("timeout_s", 300)
     if type(budget) is not int or not 2000 <= budget <= 64000 or type(timeout) is not int or not 1 <= timeout <= 3600:
         raise OperationError("INVALID_PARAMS", "Use 2000–64000 context characters and 1–3600 seconds", 422)
+    from .pm_context_bundles import admission
+    return admission(ops, principal, target['workspace_id'], params)
 
 
 def _admit(ops, principal, target, params, pre):
-    _values(ops, principal, target, params, pre)
-    return {"principal": pm_workspace.principal_binding(principal)}
+    context = _values(ops, principal, target, params, pre)
+    return {"principal": pm_workspace.principal_binding(principal), **context}
 
 
 def _authorize_existing(ops, principal, op, verb):
@@ -218,6 +221,8 @@ async def _analyze_once(ctx, *, prepare=None, import_reply=None):
         ctx.check_cancel()
         _scopes(principal)
         pm_run_operations.require_execution(ctx.service.journal, authority, run["workspace_id"])
+        from .pm_context_bundles import require_current
+        require_current(ctx.service, principal, run)
 
     with controller_authority.use(authority, ctx.service.journal):
         try:

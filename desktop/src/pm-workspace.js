@@ -351,7 +351,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const column = h('section', {class: 'pm-discussion'},
         h('div', {class: 'pm-thread-heading'}, threadTitle, mode), discussionHint, earlier, notes, coverage);
       if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
-        nativeAnalysis = pmNativeAnalysis({h, t, form, input, labelled, caps, namespace, guard: alive,
+        nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, guard: alive,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
         column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation', 'data-pm-note-only': ''},
           h('summary', {}, t('pm_native_note_only')), noteForm.box));

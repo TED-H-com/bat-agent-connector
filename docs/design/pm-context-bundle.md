@@ -32,6 +32,8 @@ as omitted with its original digest and byte length. It is never silently
 truncated or replaced with a summary. Omitted acceptance metadata makes accepted
 requirements coverage explicitly incomplete; context completeness is not
 adoption or execution permission even when every file fits.
+Preview reserves the maximum JSON size of a valid 4,000-character purpose, so
+adding that purpose cannot silently change which complete accepted files fit.
 
 The existing run context/digest is the immutable bundle snapshot. No migration
 number, mutable global context pointer or additional writer is allocated.

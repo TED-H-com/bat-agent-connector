@@ -301,6 +301,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/(?P<revision_id>pmrev_[0-9a-f]{32})", self.pm_plan, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})", self.pm_thread, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})/context", self.pm_context, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})/context-bundle", self.pm_context_bundle, "observe"),
             ("POST", r"/api/v1/artifacts", self.create_artifact, "manage"),
             ("POST", r"/api/v1/artifact-capture-previews", self.artifact_capture_preview, "observe"),
             ("POST", r"/api/v1/artifact-managed-capture-previews", self.artifact_managed_capture_preview, "observe"),
@@ -495,7 +496,7 @@ class ApiV1:
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
                       self.pm_conversation_proposals, self.pm_conversation_proposal,
-                      self.pm_brief_export, self.pm_work_deliveries,
+                      self.pm_brief_export, self.pm_work_deliveries, self.pm_context_bundle,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
                       self.pm_execution_verification_configuration, self.pm_execution_verification_get,
@@ -727,6 +728,9 @@ class ApiV1:
 
     async def pm_context(self, principal, query, workspace_id, thread_id, **_):
         return self._pm_read(principal, "pm_context_get", query, workspace_id=workspace_id, thread_id=thread_id)
+
+    async def pm_context_bundle(self, principal, query, workspace_id, thread_id, **_):
+        return self._pm_read(principal, "pm_context_bundle_preview", query, workspace_id=workspace_id, thread_id=thread_id)
 
     async def pm_runs(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_runs_list", query, workspace_id=workspace_id)
@@ -1078,6 +1082,8 @@ class ApiV1:
                                   "pm_github_observation": pm_github_observation.capabilities(),
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
+                                                    "accepted_context_bundle": {"schema": "pm_context_bundle_v1", "context_version": 2,
+                                                        "max_utf8_bytes": 262144, "explicit_selection": True, "complete_files_only": True},
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
                                                     "bat_analysis": "pm.run.bat.analyze" in self.daemon.ops.actions,
                                                     "runtime_reason": "external_tool_policy_unverified",

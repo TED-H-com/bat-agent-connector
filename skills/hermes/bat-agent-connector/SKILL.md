@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "eef01bdf443e0294766643f3200c6887599b4e770481a9dea7dbdd0b4deccf4c"
+  canonical_sha256: "83863203f1841fc37f03f21bc0c65fe9c14ecac6f83e8f0856b48eb5cd9a80a5"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -98,6 +98,14 @@ explicit `BATC_API_TOKEN` even in the legacy MCP profile; they do not fall back 
 the local administrator. Existing direct Fleet observation tools keep their original behavior.
 
 Read `pm_threads_list`, `pm_thread_get` and `pm_context_get` before asking questions.
+To include accepted plan files, first read `pm_context_bundle_preview` for that exact
+workspace/thread. Inspect its adopted revision, original Git receipt and per-file
+coverage, then explicitly pass the returned `context_bundle_ref` to the existing
+`pm.run.analyze` or `pm.run.bat.analyze` operation. The service fixes these original
+bytes in context schema 2; omitting the selector keeps schema 1 unchanged. A missing
+file or incomplete coverage is not the full accepted requirements and cannot authorize
+adoption or execution. Preserve the original selector/key on recovery; a newer
+accepted revision requires a newly reviewed preview and a separate request.
 The versioned profile prepares existing facts first, distinguishes confirmed inputs,
 attributed repository claims, assumptions, unresolved/conflicting items and non-applicable
 information, and asks at most three consequential questions, including none when
