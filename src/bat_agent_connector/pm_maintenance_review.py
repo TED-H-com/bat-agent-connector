@@ -98,6 +98,8 @@ def schema(journal):
 
 def install(ops):
     schema(ops.journal)
+    from . import pm_maintenance_review_schedule
+    pm_maintenance_review_schedule.schema(ops.journal)
     for action in ACTIONS:
         if action not in ops.actions:
             target = ('workspace_id',) if action == PREFIX + 'prepare' else ('workspace_id', 'review_id')
@@ -172,7 +174,8 @@ def _previous(ops, principal, wid, rid):
     snapshot = _snapshot(ops, principal, row)
     events = ops.db.execute('''SELECT * FROM pm_maintenance_review_events
         WHERE workspace_id=? AND review_id=? ORDER BY sequence LIMIT 101''', (wid, rid)).fetchall()
-    refs, notes, candidates, results, completion = list(row['source_binding']), [], [], [], None
+    refs = [*row['source_binding'], sources.ref('snapshot_identity', snapshot['snapshot_id'], snapshot['snapshot_digest'])]
+    notes, candidates, results, completion = [], [], [], None
     for event in events[:100]:
         saved = _decode(event)
         _access(ops, principal, saved)
@@ -423,6 +426,8 @@ async def _run(ctx):
         binding = ctx.admission_binding or {}
         now = time.time()
         if ctx.op['action'] == PREFIX + 'prepare':
+            from . import pm_maintenance_review_schedule as weekly
+            scheduled = weekly.guard(ops, ctx.op)
             workspace, plan_head, fixed, previous, refs = _prepare_check(ops, principal, ctx.target, ctx.params, ctx.preconditions)
             if (fixed != binding.get('maintenance_review_intent')
                     or baselines.sources.digest(fixed) != binding.get('maintenance_review_intent_digest')):
@@ -430,6 +435,11 @@ async def _run(ctx):
             period = {'start': ctx.params['period_start'], 'end': ctx.params['period_end'], 'bounds': '[start,end)',
                 'selection_basis': 'saved_observations_and_check_completion_times'}
             report, source_refs = sources.build(ops, principal, wid, fixed['workload'], period, now, previous)
+            report['schedule'] = weekly.projection(scheduled)
+            if scheduled and scheduled['context']['calendar']['continuity'] == 'omitted_source_limit':
+                report['previous_context'] = {'status': 'omitted_source_limit', 'comparison_available': False}
+                report['changes'] = {**sources._changes(None, None), 'scope_changed': False}
+                report['report_status'] = 'data_gaps'
             snapshot = pm_snapshots._build(ctx, principal, workspace, plan_head)
             # Every original project fact is a source of the complete report too;
             # withdrawal must not leave a partial Brief beside quoted report text.
@@ -437,6 +447,7 @@ async def _run(ctx):
                 *[sources.ref('evidence', item['evidence_id'], item['fact_digest']) for item in snapshot['evidence']]])
             rid = 'pmrevw_' + ctx.operation_id[3:]
             snapshot['maintenance'] = {'schema_version': 1, 'review_id': rid, 'report': report, 'access_refs': source_refs}
+            weekly.guard(ops, ctx.op)
             snap_result = pm_snapshots._insert(ctx, workspace, snapshot)
             snapshot_ref = {key: snap_result[key] for key in ('snapshot_id', 'snapshot_digest', 'as_of', 'journal_cursor')}
             document = {'schema_version': 1, 'review_id': rid, 'workspace_id': wid, 'snapshot_ref': snapshot_ref,
@@ -449,6 +460,7 @@ async def _run(ctx):
                 (rid, wid, revision, ctx.params['title'], snapshot_ref['snapshot_id'], baselines._json(document), digest,
                  baselines._json(source_refs), ctx.actor, now, ctx.operation_id))
             ops.db.execute('INSERT INTO pm_maintenance_review_state VALUES(?,1,?,NULL)', (rid, 'prepared'))
+            weekly.finish(ops, ctx.operation_id, outcome='prepared', review_id=rid)
             # Reserve the actual public core wrapper before this atomic effect commits.
             _core(ops, principal, _row(ops.db, wid, rid))
             result = {'workspace_id': wid, 'review_id': rid, 'revision': revision, 'version': 1,
