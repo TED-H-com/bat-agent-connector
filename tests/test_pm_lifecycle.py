@@ -114,9 +114,17 @@ async def test_only_actual_current_owner_can_decide_even_with_admin_capability(o
 async def test_owner_revocation_after_admission_and_cas_preserve_original_head(ops):
     target = await prepared(ops)
     wid = target['workspace_id']
-    old = ops.create(OWNER, **request(ops, wid, 'pause'))[0]
     await member(ops, pm_workspace.get_workspace(ops.db, OWNER, wid), CONTRIBUTOR.actor, 'owner')
-    await member(ops, pm_workspace.get_workspace(ops.db, OWNER, wid), OWNER.actor, 'contributor')
+    old = ops.create(OWNER, **request(ops, wid, 'pause'))[0]
+    # The ordinary membership helper settles every pending operation. Execute
+    # only this demotion so the admitted pause really runs after withdrawal.
+    current = pm_workspace.get_workspace(ops.db, OWNER, wid)
+    demotion = ops.create(OWNER, action='pm.workspace.member.set', target={'workspace_id': wid},
+        params={'actor': OWNER.actor, 'role': 'contributor'}, preconditions={'expected_version': current['version']},
+        idempotency_key=uuid.uuid4().hex)[0]
+    await ops._execute(demotion['operation_id'])
+    assert ops.get(demotion['operation_id'])['status'] == 'succeeded'
+    assert gates.head(ops.db, wid)['revision'] == 0
     await ops._execute(old['operation_id'])
     assert ops.get(old['operation_id'])['error_code'] == 'FORBIDDEN'
     assert gates.head(ops.db, wid)['revision'] == 0
