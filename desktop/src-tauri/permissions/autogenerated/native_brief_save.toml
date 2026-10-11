@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-brief-save"
+description = "Enables the native_brief_save command without any pre-configured scope."
+commands.allow = ["native_brief_save"]
+
+[[permission]]
+identifier = "deny-native-brief-save"
+description = "Denies the native_brief_save command without any pre-configured scope."
+commands.deny = ["native_brief_save"]
