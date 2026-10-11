@@ -69,6 +69,7 @@ def admit(ops, caller, target, params, pre):
     validate(target, params, pre)
     require(caller)
     _tier(ops.context['fleet'], target['host'])
+    return relay.admit_source(target)
 
 
 def authorize_existing(ops, caller, op, verb):
@@ -187,15 +188,23 @@ def owning(ctx, plan):
         _OWNER.reset(token)
 
 
-async def selection(ops, target, params):
+async def selection(ops, target, params, *, ctx=None):
     fleet, host = ops.context['fleet'], target['host']
+    saved = relay.receipt(ops, ctx.operation_id, 'failover.sources') if ctx else None
+    if saved:
+        return saved
     if target.get('session_id'):
-        tab, _ = await service._resolve_session(fleet.client(host), target['session_id'])
-        return {'session_ids': [tab['id']], 'exhausted_found': 1, 'skipped_read_only': [], 'truncated_by_max_start_per_call': False}
+        tab, _, pinned = await relay.resolve_source(ops, target, ctx=ctx)
+        chosen = {'session_ids': [tab['id']], 'source_identities': {tab['id']: pinned},
+                  'exhausted_found': 1, 'skipped_read_only': [], 'truncated_by_max_start_per_call': False}
+        return ctx.effect('failover.sources', lambda: chosen) if ctx else chosen
+    # A retry must retain the registry evidence from before the first triage read.
+    snapshot = (ctx.effect('failover.candidate_sources', lambda: relay.source_snapshot(host)) if ctx else
+                relay.source_snapshot(host))
     from .triage import sessions_triage
     tri = await sessions_triage(fleet, host, target.get('workspace'), agent='claude', states=['quota_exhausted'],
                                use_jev='never', include_unloaded=False)
-    managed, skipped = [], []
+    managed, skipped, identities = [], [], {}
     for row in tri['sessions']:
         code = row.get('read_only_code')
         if row.get('api_access') == 'managed':
@@ -204,28 +213,37 @@ async def selection(ops, target, params):
             except ResourceReadOnly as error:
                 code = error.code
             else:
+                identities[row['session_id']] = relay.source_pin(snapshot, host, row['session_id'])
                 managed.append(row)
                 continue
         skipped.append({'session_id': row['session_id'], 'skipped': 'read_only', 'code': code})
     cap = fleet.config.safety.max_start_per_call
-    return {'session_ids': [r['session_id'] for r in managed[:cap]], 'exhausted_found': len(tri['sessions']),
+    chosen = {'session_ids': [r['session_id'] for r in managed[:cap]],
+            'source_identities': {r['session_id']: identities[r['session_id']] for r in managed[:cap]},
+            'exhausted_found': len(tri['sessions']),
             'skipped_read_only': skipped,
             'truncated_by_max_start_per_call': len(managed) > cap}
+    return ctx.effect('failover.sources', lambda: chosen) if ctx else chosen
 
 
 def _source_record(host, sid):
     return {**relay.record(host, sid), 'failover_fence': (registry.get(host, sid) or {}).get('failover_fence')}
 
 
-async def resolve(ops, target, params, sid, *, operation_id, index):
+async def resolve(ops, target, params, sid, *, operation_id, index, source_identity):
     fleet, host = ops.context['fleet'], target['host']
     client, hc = fleet.client(host), fleet.config.host(host)
+    relay.check_source(source_identity)
     tab, ws = await service._resolve_session(client, sid)
+    if tab['id'] != sid or source_identity['session_id'] != sid:
+        raise StepFailed('SESSION_SOURCE_CHANGED', 'failover source differs from its fixed selection')
+    relay.check_source(source_identity)
     controller_authority.require_entry(registry.get(host, sid))
     task_control.refuse_owned(fleet, host, sid)
     if service.agent_kind(tab.get('agentPreset')) != 'claude':
         raise StepFailed('FAILOVER_AGENT', 'only standalone Claude sources support failover')
     before = _source_record(host, sid)
+    relay.check_source(source_identity)
     if before['status'] in registry.RETIRED:
         raise ResourceReadOnly('SESSION_RETIRED', 'the original source is retired; choose a new managed start')
     classification = resource_policy.classify(hc, sid, terminal=tab, entries=registry.list_entries(host))
@@ -568,11 +586,13 @@ async def item(ctx, plan, index):
 async def run(ctx):
     async def reread(_):
         return RERUN
-    chosen = await ctx.step('failover.selection', lambda: selection(ctx.service, ctx.target, ctx.params), reconcile=reread)
+    selected = await ctx.step('failover.selection', lambda: selection(ctx.service, ctx.target, ctx.params, ctx=ctx), reconcile=reread)
+    chosen = {key: value for key, value in selected.items() if key != 'source_identities'}
     plans = []
     for index, sid in enumerate(chosen['session_ids'], 1):
         plans.append(await ctx.step('source.resolve.' + str(index),
-            lambda sid=sid, index=index: resolve(ctx.service, ctx.target, ctx.params, sid, operation_id=ctx.operation_id, index=index), reconcile=reread))
+            lambda sid=sid, index=index: resolve(ctx.service, ctx.target, ctx.params, sid, operation_id=ctx.operation_id,
+                index=index, source_identity=selected.get('source_identities', {}).get(sid)), reconcile=reread))
     results = []
     try:
         for index, plan in enumerate(plans, 1):
@@ -630,8 +650,10 @@ async def legacy(ops, caller, request, *, entry):
         if not caller.allows('observe'):
             raise OperationError('FORBIDDEN', 'failover preview requires observe', 403)
         validate(target, params, {})
-        chosen = await selection(ops, target, params)
-        plans = [await resolve(ops, target, params, sid, operation_id='preview', index=i)
+        selected = await selection(ops, target, params)
+        chosen = {key: value for key, value in selected.items() if key != 'source_identities'}
+        plans = [await resolve(ops, target, params, sid, operation_id='preview', index=i,
+                              source_identity=selected['source_identities'][sid])
                  for i, sid in enumerate(chosen['session_ids'], 1)]
         rows = [{'old_session_id': p['source_session_id'], 'cwd': p.get('cwd'), 'branch': p.get('branch'),
                  'same_worktree': p.get('same_worktree'), 'handoff_preview': p.get('prompt', '')[:1500],
