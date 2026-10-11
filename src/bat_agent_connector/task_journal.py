@@ -757,6 +757,9 @@ class Journal:
         refs = _context_refs(context_refs)
         from . import controller_authority
         authority = controller_authority.current()
+        if authority is not None:
+            with controller_authority.use(authority, self):
+                pass  # Reject a binding inherited from a different central journal.
         if parent_task_id is not None:
             parent = self.db.execute("SELECT project,host,workspace FROM tasks WHERE task_id=?",
                                      (parent_task_id,)).fetchone() if isinstance(parent_task_id, str) else None
@@ -1173,6 +1176,10 @@ class Journal:
                 raise ValueError("task has a command requiring reconciliation")
             command_id = str(uuid.uuid4())
             now = time.time()
+            from . import registry
+            owner = registry.get(task["host"], session_id) if session_id else None
+            if owner and owner.get("controller_incarnation"):
+                payload = {**payload, "controller_incarnation": owner["controller_incarnation"]}
             self.db.execute("""INSERT INTO commands(command_id,task_id,idem_key,session_id,kind,status,
                 message_id,payload,created_at,updated_at,controller_authority) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                 (command_id, task_id, idem_key, session_id, kind,
