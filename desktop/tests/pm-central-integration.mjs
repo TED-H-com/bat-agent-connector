@@ -2,20 +2,45 @@
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {delimiter, resolve} from 'node:path';
-import {readFile} from 'node:fs/promises';
-import {once} from 'node:events';
-import {setTimeout as delay} from 'node:timers/promises';
+import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
+import {homedir} from 'node:os';
 import assert from 'node:assert/strict';
 import {chromium, expect as baseExpect} from '@playwright/test';
 const expect = baseExpect.configure({timeout: 30000});
 const source = resolve('..'), backend = resolve(process.env.BATC_PM_BACKEND || source);
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-const child = spawn(python, [resolve('tests/pm-central-fixture.py')], {cwd: backend,
-  env: {...process.env, PYTHONPATH: [resolve(backend, 'src'), backend].join(delimiter)}, stdio: ['pipe', 'pipe', 'inherit']});
-const stopped = once(child, 'exit'), lines = createInterface({input: child.stdout})[Symbol.asyncIterator]();
-const next = async () => {const line = await lines.next(); if (line.done) throw Error('PM fixture stopped'); return JSON.parse(line.value);};
-const browser = await chromium.launch();
+const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
+await mkdir(scratch, {recursive:true});
+const temporary = await mkdtemp(resolve(scratch, 'pm-central-run-'));
+let child, browser, output, stopped, spawnError;
+async function bounded(promise, milliseconds, message) {
+  let timer;
+  try {return await Promise.race([promise, new Promise((_, reject) => {timer = setTimeout(() => reject(Error(message)), milliseconds);})]);}
+  finally {clearTimeout(timer);}
+}
+async function exitedWithin(milliseconds) {
+  let timer;
+  try {return await Promise.race([stopped.then(() => true), new Promise(resolve => {timer = setTimeout(() => resolve(false), milliseconds);})]);}
+  finally {clearTimeout(timer);}
+}
 try {
+  child = spawn(python, [resolve('tests/pm-central-fixture.py')], {cwd: backend,
+    env: {...process.env, BATC_PM_FIXTURE_TEMP: temporary, PYTHONPATH: [resolve(backend, 'src'), backend].join(delimiter)}, stdio: ['pipe', 'pipe', 'inherit']});
+  // A spawn error has no exit event; handle it immediately instead of leaving a rejected promise.
+  stopped = new Promise(resolve => {
+    child.once('exit', resolve);
+    child.once('error', error => {if (!child.pid) {spawnError = error; resolve();}});
+  });
+  child.stdin.on('error', () => {}); // An exiting child may close stdin before the stop line arrives.
+  output = createInterface({input: child.stdout});
+  const lines = output[Symbol.asyncIterator]();
+  const next = async () => {
+    const line = await bounded(Promise.race([lines.next(), stopped.then(() => {throw spawnError || Error('PM fixture stopped');})]),
+      30000, 'Timed out waiting for PM fixture output');
+    if (line.done) throw spawnError || Error('PM fixture stopped');
+    return JSON.parse(line.value);
+  };
+  browser = await chromium.launch();
   const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`, page = await browser.newPage({locale: 'en-US'}), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   // Test this checkout's exact generated frontend even when the backend is supplied by an integration worktree.
@@ -74,7 +99,19 @@ try {
   assert.deepEqual(errors, []);
   console.log('Actual central PM browser flow passed: workspace, Idea, numeric note timestamps, immutable source confirmation, retained candidate, Planning draft; zero hosts or tasks.');
 } finally {
-  await browser.close();
-  if (child.exitCode === null && child.signalCode === null) child.stdin.end(JSON.stringify({action:'stop'})+'\n');
-  await Promise.race([stopped, delay(3000, undefined, {ref:false}).then(() => child.kill())]);
+  try {await browser?.close();}
+  finally {
+    try {
+      if (child) {
+        if (!spawnError && child.exitCode === null && child.signalCode === null) child.stdin.end(JSON.stringify({action:'stop'})+'\n');
+        if (!await exitedWithin(3000)) {
+          child.kill('SIGTERM');
+          if (!await exitedWithin(5000)) child.kill('SIGKILL');
+          await bounded(stopped, 10000, 'PM fixture did not exit after termination');
+        }
+      }
+      // Only remove this harness-owned directory after the process is proven stopped.
+      await rm(temporary, {recursive:true, force:true});
+    } finally {output?.close();}
+  }
 }
