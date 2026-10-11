@@ -40,8 +40,9 @@ try {
     if (line.done) throw spawnError || Error('PM fixture stopped');
     return JSON.parse(line.value);
   };
+  const fixture = await next();
   browser = await chromium.launch();
-  const fixture = await next(), origin = `http://127.0.0.1:${fixture.port}`, page = await browser.newPage({locale: 'en-US'}), errors = [];
+  const origin = `http://127.0.0.1:${fixture.port}`, page = await browser.newPage({locale: 'en-US'}), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   // Test this checkout's exact generated frontend even when the backend is supplied by an integration worktree.
   for (const file of ['app.js', 'app.css']) await page.route(`**/dashboard/${file}`, route =>
@@ -162,10 +163,20 @@ try {
   assert.equal(captured.capture.work_item_id,work.work_item_id); assert.equal(captured.capture.dod,'unassessed');
   assert.equal(captured.capture.evidence.length,1); assert.equal(captured.capture.evidence[0].source_kind,'work_claim');
   assert.equal(captured.capture.execution_authorized,false);
+  await page.locator('[data-pm-action="pm.snapshot.create"] button[type="submit"]').click();
+  await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+  await expect(page.locator('[data-pm-brief-section="delivery"]')).toContainText('quality unassessed');
+  const brief=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/snapshots/latest`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
+  assert.equal(brief.snapshot.baseline.status,'unavailable');
+  assert.equal(brief.snapshot.candidate_document.revision_id,updatedPlans.head.latest_revision_id);
+  assert.equal(brief.snapshot.work[0].capture.capture_id,captured.capture.capture_id);
+  assert.equal(brief.snapshot.brief.deviations.status,'unassessed');
+  await page.reload();
+  await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
-  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture'].sort());
+  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association and fixed evidence; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association and fixed evidence and five-section Brief; zero hosts or tasks.');
 } finally {
   try {await browser?.close();}
   finally {

@@ -578,8 +578,24 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 
 .pm-evidence {margin-top:1rem; min-width:0;}
 .pm-evidence select {max-width:100%;}
-.pm-evidence-rows > details {padding:.65rem 0; border-bottom:1px solid var(--border);}
+.pm-evidence-rows > details {padding:.65rem 0; border-bottom:1px solid var(--line);}
 .pm-evidence-rows summary {cursor:pointer; overflow-wrap:anywhere;}
 .pm-evidence-fields {display:grid; grid-template-columns:minmax(7rem,1fr) minmax(0,3fr); gap:.35rem .75rem; font-size:.85rem;}
 .pm-evidence-fields dd {margin:0; overflow-wrap:anywhere; white-space:pre-wrap;}
 .pm-evidence-fields dt {overflow-wrap:anywhere;}
+
+.pm-brief {margin-bottom:1.5rem; min-width:0;}
+.pm-brief h2 {margin:0;}
+.pm-brief .pm-heading form {max-width:22rem;}
+.pm-brief-row {display:grid; grid-template-columns:8rem minmax(0,1fr); gap:1rem; padding:.65rem 0; border-top:1px solid var(--line);}
+.pm-brief-row h3 {font-size:.95rem; margin:.25rem 0;}
+.pm-brief-values p {margin:.25rem 0 .5rem;}
+.pm-brief-values summary {cursor:pointer; overflow-wrap:anywhere; padding:.25rem 0;}
+.pm-brief-proof {max-height:18rem; overflow:auto; overflow-wrap:anywhere; white-space:pre-wrap; font-size:.8rem;}
+.pm-brief-trace {margin-top:.75rem;}
+@media(max-width:600px){.pm-brief .pm-heading{display:block}.pm-brief-row{grid-template-columns:5rem minmax(0,1fr);gap:.5rem}.pm-brief .pm-heading form{max-width:none}}
+
+.pm-inspector .pm-brief .pm-heading {display:block;}
+.pm-inspector .pm-brief-row {grid-template-columns:3.5rem minmax(0,1fr); gap:.5rem;}
+.pm-inspector .pm-brief .pm-heading p {margin-bottom:.5rem;}
+.pm-inspector .pm-brief-date {font-size:.85rem;}

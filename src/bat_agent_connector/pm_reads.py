@@ -24,6 +24,9 @@ FIELDS = {
     "pm_evidence_get": ("workspace_id", "evidence_id"),
     "pm_capture_get": ("workspace_id", "capture_id"),
     "pm_capture_latest_get": ("workspace_id", "work_item_id"),
+    "pm_snapshots_list": ("workspace_id", "after", "limit"),
+    "pm_snapshot_get": ("workspace_id", "snapshot_id"),
+    "pm_snapshot_latest_get": ("workspace_id",),
 }
 
 
@@ -33,6 +36,14 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get"}:
+        from . import pm_snapshots
+        if method == "pm_snapshots_list":
+            return pm_snapshots.list_snapshots(ops, principal, workspace_id,
+                                               after=params.get("after", 0), limit=params.get("limit", 50))
+        if method == "pm_snapshot_get":
+            return pm_snapshots.get_snapshot(ops, principal, workspace_id, params.get("snapshot_id"))
+        return pm_snapshots.latest_snapshot(ops, principal, workspace_id)
     if method in {"pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get",
                   "pm_capture_get", "pm_capture_latest_get"}:
         from . import pm_evidence

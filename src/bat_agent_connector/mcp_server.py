@@ -64,6 +64,7 @@ READ_TOOLS = [
     "pm_runs_list", "pm_run_get", "pm_capabilities_get",
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
     "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
+    "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
     "project_get",
     "work_items_list",
     "work_item_get", "artifacts_list", "artifact_get", "artifact_capture_preview", "artifact_managed_capture_preview", "approval_preview", "cleanup_preview", "cleanup_retained", "cleanup_tombstones",
@@ -583,6 +584,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
         return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_snapshots_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Saved project Brief metadata. Each snapshot retains its original time, baseline and source versions."""
+        return await pm_daemon("pm_snapshots_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_snapshot_get(workspace_id: str, snapshot_id: str) -> dict[str, Any]:
+        """Read a fixed project snapshot with currently visible evidence, coverage and unassessed areas."""
+        return await pm_daemon("pm_snapshot_get", workspace_id=workspace_id, snapshot_id=snapshot_id)
+
+    async def pm_snapshot_latest_get(workspace_id: str) -> dict[str, Any]:
+        """Read the last saved Brief; this does not collect fresh evidence or infer verified project completion."""
+        return await pm_daemon("pm_snapshot_latest_get", workspace_id=workspace_id)
+
     async def projects_list(include_archived: bool = False) -> dict[str, Any]:
         """The project tree in display order (pinned first, then the saved order), with work item counts per
         state. Projects and work items are the connector's own records; change them with operation_submit
@@ -678,6 +691,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_runs_list, pm_run_get, pm_capabilities_get,
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
                pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
+               pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 

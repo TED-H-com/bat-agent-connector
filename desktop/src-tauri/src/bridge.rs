@@ -1111,7 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1236,7 +1236,9 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let project_list = path.ends_with("/projects");
             let work_list = path.ends_with("/work");
             let evidence_list = path.ends_with("/evidence");
-            let sequence_list = plan_list || project_list || work_list || evidence_list;
+            let snapshot_list = path.ends_with("/snapshots");
+            let sequence_list =
+                plan_list || project_list || work_list || evidence_list || snapshot_list;
             let thread_detail = path
                 .split('/')
                 .nth(5)
@@ -1782,6 +1784,9 @@ mod tests {
             format!("{workspace}/runs/pmr_22222222222222222222222222222222"),
             format!("{workspace}/plans?limit=100&after=0"),
             format!("{workspace}/projects?limit=100&after=0"),
+            format!("{workspace}/snapshots?limit=100&after=0"),
+            format!("{workspace}/snapshots/latest"),
+            format!("{workspace}/snapshots/pmsnap_66666666666666666666666666666666"),
             format!("{workspace}/work?limit=100&after=0&project_id=prj_11111111111111111111"),
             format!("{workspace}/work/wi_11111111111111111111/capture"),
             format!("{workspace}/evidence?limit=1&after=0&work_item_id=wi_11111111111111111111"),
@@ -1818,6 +1823,10 @@ mod tests {
             format!("{workspace}/runs/pmr_22222222222222222222222222222222/start"),
             format!("{workspace}/plans?limit=101"),
             format!("{workspace}/projects?after=-1"),
+            format!("{workspace}/snapshots?limit=101"),
+            format!("{workspace}/snapshots?after=1&after=2"),
+            format!("{workspace}/snapshots/latest?actor=owner"),
+            format!("{workspace}/snapshots/pmsnap_66666666666666666666666666666666?limit=1"),
             format!("{workspace}/work?project_id=prj_bad"),
             format!("{workspace}/work?project_id=prj_11111111111111111111&project_id=prj_11111111111111111111"),
             format!("{workspace}/work/wi_11111111111111111111/capture?limit=1"),

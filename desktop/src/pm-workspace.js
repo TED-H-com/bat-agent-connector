@@ -1,4 +1,5 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+import {projectBrief} from './pm-brief.js';
 import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
@@ -143,6 +144,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
     ? workspaceEvidence({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (evidence) body.append(evidence.box);
+  const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
+    ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
+  if (brief && !threadId) body.insertBefore(brief.box, content);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -253,6 +257,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
         draft, h('section', {'data-pm-plan': ''}, h('h2', {}, t('pm_direction')), planForm.box),
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '');
+      if (brief) inspector.prepend(brief.box);
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
     }
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
@@ -454,6 +459,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
       if (evidence) await evidence.refresh();
+      if (brief) await brief.refresh();
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {loaded = false; updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
@@ -462,7 +468,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
