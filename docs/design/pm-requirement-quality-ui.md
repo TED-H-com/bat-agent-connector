@@ -39,3 +39,11 @@ The controls reuse the existing shared tokens, fields, details and action layout
 There is no new workspace tab, JSON editor, hash entry, or acceptance checkbox.
 English and zh-TW use the same browser/native source. Parent integration owns
 mounting and generated assets.
+
+A fixed base may also be reviewed for batch selection when the only remaining
+checks are `dependency:<requirement>` for that package's exact declared
+prerequisites. This requires the acceptance and batch capabilities. The single
+handoff submit remains disabled. The user explicitly chooses an upstream batch
+entry with its frozen result condition; the service keeps the dependent blocked
+until actual selected result evidence exists. Scope, work, source, coverage and
+other readiness failures still prevent this preparation path.

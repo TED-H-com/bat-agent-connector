@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
 import {batchFixture,mountBatch,panel,start,proof,handoff,workspaceId} from './pm-work-batches-fixture.ts';
 
@@ -18,12 +19,12 @@ function fixture(){
     if(url.pathname.endsWith('/readiness')){
       const out=await dispatch(input),row=f.base.fixture.state.packages.find(row=>url.pathname.includes(row.package_id));
       if(row.document.requirements.some(req=>req.depends_on.length)){
-        const refs=JSON.parse(url.searchParams.get('quality_refs')||'{}');out.data.checks=out.data.checks.filter(check=>check.check!=='dependency:recovery');
-        out.data.checks.push({check:'dependency:recovery',status:JSON.stringify(refs.recovery?.reference)===JSON.stringify(ref())?'passed':'blocked'});
+        const refs=JSON.parse(url.searchParams.get('quality_refs')||'{}');out.data.checks=out.data.checks.filter(check=>!check.check.startsWith('dependency:'));
+        out.data.checks.push({check:'dependency:downstream',requirement_ids:['recovery'],status:JSON.stringify(refs.recovery?.reference)===JSON.stringify(ref())?'passed':'blocked'});
       }return out;
     }
     const result=await dispatch(input);
-    if(url.pathname==='/capabilities'){result.data.features.pm_workspaces.work_batches.profiles.push(PROFILE);result.data.features.pm_workspaces.quality_reviews={version:1};if(state.capability)result.data.features.pm_workspaces.package_handoff.requirement_acceptance_profiles=[PROFILE];}
+    if(['/capabilities','/bootstrap'].includes(url.pathname)){const caps=url.pathname==='/bootstrap'?result.data.capabilities:result.data;caps.features.pm_workspaces.work_batches.profiles.push(PROFILE);caps.features.pm_workspaces.quality_reviews={version:1};if(state.capability)caps.features.pm_workspaces.package_handoff.requirement_acceptance_profiles=[PROFILE];}
     return result;
   };
   function saved(){const batch=f.evidence();batch.entries[0].result_condition=structuredClone(condition);batch.requirement_acceptance='see_explicit_original_evidence';return batch;}
@@ -31,7 +32,7 @@ function fixture(){
     row.work_item_id=row.document.work_item_id=row.document.context.work_ref.work_item_id='wi_'+'9'.repeat(20);row.document.requirements=[{id:'downstream',title:'Downstream',depends_on:['recovery'],acceptance:[{source_input_id:'in_c',text:'Use accepted recovery'}]}];f.base.fixture.state.packages.push(row);return row;}
   return {...f,review,reviews,condition,ref,quality:state,saved,downstream};
 }
-async function reviewed(page:Page){await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base'})).toBeVisible();await handoff(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Reviewed original base');await handoff(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Implement exact selected original requirements.');}
+async function reviewed(page:Page){await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base'})).toBeVisible();const rebase=handoff(page).getByRole('button',{name:'Use this reviewed project version',exact:true});if(await rebase.isVisible())await rebase.click();await handoff(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Reviewed original base');await handoff(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Implement exact selected original requirements.');}
 async function selectProof(page:Page,f:ReturnType<typeof fixture>){await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Qualified original assessment',{exact:true}).selectOption(JSON.stringify(f.ref()));await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Select the original complete reasoned assessment.');}
 
 test('explicit result profile freezes every original acceptance identity and never treats dependency checkbox as proof',async({page})=>{
@@ -67,7 +68,7 @@ test('uncertain semantic evidence reply reconciles original key despite later re
 
 test('handoff readiness carries only explicitly selected original prerequisite map',async({page})=>{
   const f=fixture(),downstream=f.downstream();await mountBatch(page,f);await page.evaluate(id=>(window as any).batchSelect(id),downstream.package_id);
-  await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();const selection=handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true});await expect(selection).toHaveValue('');await expect(handoff(page)).toContainText('unresolved checks beyond');
+  await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();const selection=handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true});await expect(selection).toHaveValue('');await expect(handoff(page)).toContainText('can be selected for a bounded batch');await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();
   await selection.selectOption({index:1});await reviewed(page);await handoff(page).getByRole('button',{name:'Start implementation',exact:true}).click();await expect.poll(()=>f.base.state.writes.length).toBe(1);
   const expected={recovery:{condition:f.condition,reference:f.ref(),execution_operation_id:f.review.context.execution_operation_id}};
   expect(f.base.state.writes[0].body.params.pm_requirement_quality_refs).toEqual(expected);
@@ -98,8 +99,8 @@ test('a changed selected assessment cannot silently rebase the handoff and origi
 
 test('withdrawn prerequisite sources clear handoff selectors before any code preview or new operation',async({page})=>{
   const f=fixture(),row=f.downstream();await mountBatch(page,f);await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();
-  await handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true}).selectOption({index:1});f.quality.deny=true;await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();
-  await expect(handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true})).toHaveCount(0);await expect(handoff(page)).not.toContainText('responsible-reviewer');expect(f.base.state.writes).toHaveLength(0);expect(f.base.state.reads.some(row=>row.path==='/repository-previews')).toBe(false);
+  await handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true}).selectOption({index:1});const before=f.base.state.reads.filter(row=>row.path==='/repository-previews').length;f.quality.deny=true;await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();
+  await expect(handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true})).toHaveCount(0);await expect(handoff(page)).not.toContainText('responsible-reviewer');expect(f.base.state.writes).toHaveLength(0);expect(f.base.state.reads.filter(row=>row.path==='/repository-previews')).toHaveLength(before);
 });
 
 test('quality catalog cursor must advance before proof options become available',async({page})=>{
@@ -125,4 +126,28 @@ test('batch fresh-start preflight rechecks original prerequisite assessment sour
   await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true}).selectOption({index:1});await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();
   await start(page).getByLabel('Reason for this request',{exact:true}).fill('Exact reviewed selection');const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
   f.quality.deny=true;await start(page).locator('button[type=submit]').click();await expect(panel(page)).toContainText('Original batch sources are unavailable');expect(f.state.writes).toHaveLength(0);
+});
+
+test('declared unmet prerequisites can wait in explicit batch but never enable single handoff start',async({page})=>{
+  const f=fixture();await mountBatch(page,f);await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
+  const row=f.downstream();await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);await reviewed(page);await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();
+  await expect(handoff(page)).toContainText('waits for the declared prerequisites');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();const rows=start(page).locator('.pm-batch-entry');await rows.nth(1).getByText('Prerequisites in this selection',{exact:true}).click();await rows.nth(1).getByRole('checkbox').check();
+  await start(page).getByLabel('Reason for this request',{exact:true}).fill('Await original upstream acceptance before downstream starts');const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  await start(page).getByLabel('Maximum starts',{exact:true}).fill('2');await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
+  const entries=f.state.writes[0].body.params.entries;expect(entries[1].depends_on).toEqual([{entry_key:entries[0].key,condition:f.condition}]);expect(entries[1].handoff.params.pm_requirement_quality_refs).toBeUndefined();expect(f.base.state.writes).toHaveLength(0);
+});
+
+test('batch preparation never bypasses unrelated original source readiness checks',async({page})=>{
+  const f=fixture(),row=f.downstream();f.base.state.blocked='scope';await mountBatch(page,f);await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();
+  await expect(handoff(page)).toContainText('unresolved checks beyond');await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeDisabled();await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();expect(f.base.state.reads.some(row=>row.path==='/repository-previews')).toBe(false);
+});
+
+for(const native of [false,true])test(`mounted ${native?'native':'browser'} batch preserves unmet declared prerequisites without single dispatch`,async({page})=>{
+  const f=fixture();f.reviews.length=0;await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);
+  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();await handoff(page).locator('details>summary').first().click();await reviewed(page);
+  await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
+  f.downstream();await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Downstream implementation · Preparation 2',exact:true}).click();await reviewed(page);
+  await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();const entries=start(page).locator('.pm-batch-entry');await entries.nth(1).getByText('Prerequisites in this selection',{exact:true}).click();await entries.nth(1).getByRole('checkbox').check();
+  await start(page).getByLabel('Maximum starts',{exact:true}).fill('2');await start(page).getByLabel('Reason for this request',{exact:true}).fill('Bounded dependency admission');const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.entries[1].depends_on[0].condition).toEqual(f.condition);expect(f.base.state.writes).toHaveLength(0);
 });
