@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 import { instructionReceiptStrings } from "../desktop/src/instruction-receipts.js";
+import { pmStrings } from "../desktop/src/pm-strings.js";
 
 // Browser assets are generated bundles; exercise the shared canonical source directly.
 const root = new URL("../desktop/src/", import.meta.url);
@@ -21,7 +22,7 @@ class FixtureNode {
 
 function render(language, effect, agent, declared = true) {
   const context = vm.createContext({
-    navigator: { language }, Node: FixtureNode, nativeDesktop: false, instructionReceiptStrings,
+    navigator: { language }, Node: FixtureNode, nativeDesktop: false, instructionReceiptStrings, pmStrings,
     document: { createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
   });
   vm.runInContext(i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
