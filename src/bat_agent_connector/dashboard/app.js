@@ -1278,7 +1278,8 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			max: 32e3,
 			multiline: true
 		}), packageId = hidden(), packageDigest = hidden(), mappingRevision = hidden();
-		const editor = form({
+		let editor = null, syncing = false;
+		editor = form({
 			action: "pm.issue.publish",
 			target: {
 				workspace_id: workspaceId,
@@ -1304,6 +1305,9 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			recoverPermitted: () => loaded && permitted(false),
 			label: "pmi_publish",
 			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (editor && !syncing) editor.update();
+			},
 			extra: h("div", {}, h("p", { class: "muted" }, t("pmi_public_help")), labelled("pmi_public_title", title), labelled("pmi_public_body", body), packageId, packageDigest, mappingRevision)
 		});
 		const originalUpdate = editor.update, stale = h("p", {
@@ -1323,17 +1327,23 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}, t("pmi_review_source"));
 		editor.box.append(stale, select);
 		editor.update = () => {
-			const selectedWork = packageRow?.work_item_id === workId;
-			if (selectedWork && publicationReady() && !editor.locked() && (!packageId.value || !title.value && !body.value)) {
-				editor.set("package", packageRow.package_id);
-				editor.set("digest", packageRow.document_digest);
-				editor.set("revision", matching()[0]?.revision_id || "");
+			if (syncing) return;
+			syncing = true;
+			try {
+				const selectedWork = packageRow?.work_item_id === workId;
+				if (selectedWork && publicationReady() && !editor.locked() && (!packageId.value || !title.value && !body.value)) {
+					editor.set("package", packageRow.package_id);
+					editor.set("digest", packageRow.document_digest);
+					editor.set("revision", matching()[0]?.revision_id || "");
+				}
+				originalUpdate();
+				const changed = selectedWork && packageId.value && (packageId.value !== packageRow.package_id || packageDigest.value !== packageRow.document_digest || mappingRevision.value !== (matching()[0]?.revision_id || ""));
+				stale.hidden = !changed;
+				select.hidden = !changed;
+				select.disabled = editor.locked() || !publicationReady();
+			} finally {
+				syncing = false;
 			}
-			originalUpdate();
-			const changed = selectedWork && packageId.value && (packageId.value !== packageRow.package_id || packageDigest.value !== packageRow.document_digest || mappingRevision.value !== (matching()[0]?.revision_id || ""));
-			stale.hidden = !changed;
-			select.hidden = !changed;
-			select.disabled = editor.locked() || !publicationReady();
 		};
 		publishers.set(workId, editor);
 		return editor;
@@ -1349,7 +1359,8 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			multiline: true,
 			required: false
 		}), version = hidden();
-		const editor = form({
+		let editor = null, syncing = false;
+		editor = form({
 			action: "pm.issue.cancel",
 			target: {
 				workspace_id: workspaceId,
@@ -1369,6 +1380,9 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			recoverPermitted: () => loaded && permitted(false),
 			label: "pmi_stop",
 			onSaved: () => refresh(),
+			onStateChange: () => {
+				if (editor && !syncing) editor.update();
+			},
 			extra: h("div", {}, h("p", { class: "muted" }, t("pmi_stop_help")), labelled("pmi_private_reason", reason), labelled("pmi_public_reason", publicReason), version)
 		});
 		const updateOriginal = editor.update, warning = h("p", {
@@ -1395,14 +1409,20 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}, t("pmi_remove_public"));
 		editor.box.append(warning, review, removePublic);
 		editor.update = () => {
-			if (current?.mapping_id === mid && !editor.locked() && (!version.value || !reason.value && !publicReason.value)) editor.set("version", current.revision_id);
-			updateOriginal();
-			const changed = current?.mapping_id === mid && version.value && version.value !== current.revision_id;
-			warning.hidden = !changed;
-			review.hidden = !changed;
-			review.disabled = editor.locked() || !loaded || !permitted(false);
-			removePublic.hidden = !publicReason.value;
-			removePublic.disabled = editor.locked() || !loaded || !permitted(false);
+			if (syncing) return;
+			syncing = true;
+			try {
+				if (current?.mapping_id === mid && !editor.locked() && (!version.value || !reason.value && !publicReason.value)) editor.set("version", current.revision_id);
+				updateOriginal();
+				const changed = current?.mapping_id === mid && version.value && version.value !== current.revision_id;
+				warning.hidden = !changed;
+				review.hidden = !changed;
+				review.disabled = editor.locked() || !loaded || !permitted(false);
+				removePublic.hidden = !publicReason.value;
+				removePublic.disabled = editor.locked() || !loaded || !permitted(false);
+			} finally {
+				syncing = false;
+			}
 		};
 		publicReason.addEventListener("input", () => editor.update());
 		cancellers.set(mid, editor);
@@ -1417,8 +1437,11 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}
 		selected.append(h("p", {}, packageRow.document.title), h("p", { class: "pm-source" }, t("pmi_fixed_package"), ": ", packageRow.package_id));
 		const found = matching();
-		if (found[0]?.document.state === "cancelled") publication.append(h("p", { class: "muted" }, t("pmi_cancelled_help")));
-		else if (!found.length && (cursor !== null || filtered)) publication.append(h("p", { class: "muted" }, t("pmi_incomplete")));
+		if (found[0]?.document.state === "cancelled") {
+			publication.append(h("p", { class: "muted" }, t("pmi_cancelled_help")));
+			const editor = publishEditor();
+			if (editor.locked()) publication.append(fold("pmi_prepare", editor.box));
+		} else if (!found.length && (cursor !== null || filtered)) publication.append(h("p", { class: "muted" }, t("pmi_incomplete")));
 		else publication.append(fold("pmi_prepare", publishEditor().box));
 		update();
 	}
