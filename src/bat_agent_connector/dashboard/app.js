@@ -6002,7 +6002,6 @@ var threadDisclosureSelectors = [
 	"[data-pm-note-only]",
 	"[data-pm-prepare-context]"
 ];
-var receiptSubscribers = new Map();
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
 function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
