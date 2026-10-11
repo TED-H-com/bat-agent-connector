@@ -325,7 +325,7 @@ def _adoption_context(ctx):
 def _validate_receipt(ctx, revision, receipt):
     required = {"operation_id", "workspace_id", "revision_id", "commit_sha", "tree_sha", "document_digest",
                 "file_digests", "binding_id", "status"}
-    if not isinstance(receipt, dict) or set(receipt) != required:
+    if not isinstance(receipt, dict) or set(receipt) not in (required, required | {"source_operation_id"}):
         raise _bad("PM_GIT_RECEIPT_INVALID", "A verified exact Git receipt is required", 409)
     files = revision_files(ctx.service.db, revision["workspace_id"], revision["revision_id"])
     if (receipt["operation_id"] != ctx.operation_id or receipt["workspace_id"] != revision["workspace_id"]
@@ -337,6 +337,21 @@ def _validate_receipt(ctx, revision, receipt):
             or len(receipt["commit_sha"]) != len(receipt["tree_sha"])
             or not isinstance(receipt["binding_id"], str) or not DIGEST.fullmatch(receipt["binding_id"])):
         raise _bad("PM_GIT_RECEIPT_INVALID", "Git evidence does not identify this operation's exact revision files", 409)
+    if "source_operation_id" in receipt:
+        source_id = receipt["source_operation_id"]
+        if not isinstance(source_id, str) or source_id == ctx.operation_id:
+            raise _bad("PM_GIT_RECEIPT_INVALID", "Read verification needs an original Git operation", 409)
+        saved = ctx.service.db.execute("SELECT receipt FROM pm_plan_git_receipts WHERE operation_id=?", (source_id,)).fetchone()
+        source = json.loads(saved[0]) if saved else None
+        if (not source or "source_operation_id" in source
+                or receipt != {**source, "operation_id": ctx.operation_id, "source_operation_id": source_id}):
+            raise _bad("PM_GIT_RECEIPT_INVALID", "Read verification must reference the exact original Git fact", 409)
+        proof = ctx.service.db.execute("SELECT status,response FROM operation_steps WHERE operation_id=? AND name='pm.revision.verify'",
+                                       (ctx.operation_id,)).fetchone()
+        observed = json.loads(proof["response"] or "{}") if proof else {}
+        observed.pop("reconciled", None)  # OperationService's receipt metadata, not Git evidence.
+        if not proof or proof["status"] != "succeeded" or observed != receipt:
+            raise _bad("PM_GIT_RECEIPT_INVALID", "This adoption needs its own exact managed Git readback", 409)
     return receipt
 
 
@@ -388,7 +403,10 @@ def adopt_revision(ctx):
                   "structured_scope_digest": revision["scope_digest"], "previous_revision_id": previous_id,
                   "decision_id": "pmdec_" + ctx.operation_id[3:], "document_digest": revision["document_digest"],
                   "commit_sha": receipt["commit_sha"], "tree_sha": receipt["tree_sha"], "adopted_by": ctx.actor,
+                  "commit_operation_id": receipt.get("source_operation_id", ctx.operation_id),
                   "status": "adopted", "execution_authorized": False, "version": current["version"] + 1}
+        if "source_operation_id" in receipt:
+            result["source_operation_id"] = receipt["source_operation_id"]
         ctx.service.db.execute("INSERT INTO pm_plan_adoptions VALUES(?,?,?,?,?,?,?,?,?,?)", (ctx.operation_id, workspace_id,
             revision["revision_id"], previous_id, scope_revision, result["decision_id"], ctx.params["rationale"], ctx.actor, time.time(), _json(result)))
         ctx.service.db.execute("UPDATE pm_plan_heads SET accepted_revision_id=?,version=version+1 WHERE workspace_id=?",
@@ -399,11 +417,24 @@ def adopt_revision(ctx):
 
 def latest_git_receipt(db, workspace_id):
     """Internal previous Git fact, including commits not yet adopted in SQLite."""
+    return original_git_receipt(db, workspace_id)
+
+
+def original_git_receipt(db, workspace_id, revision_id=None):
+    """Find actual Git creation evidence, never another decision's read proof."""
     # Writers serialize these immutable facts. Wall time may move backwards;
-    # insertion order, not a timestamp, identifies the next Git parent.
-    row = db.execute("SELECT receipt FROM pm_plan_git_receipts WHERE workspace_id=? ORDER BY rowid DESC LIMIT 1",
-                      (workspace_id,)).fetchone()
-    return json.loads(row[0]) if row else None
+    # insertion order identifies the next Git parent. Verifying an older commit
+    # again must not move that parent backwards.
+    query = "SELECT receipt FROM pm_plan_git_receipts WHERE workspace_id=?"
+    args = [workspace_id]
+    if revision_id is not None:
+        query += " AND revision_id=?"
+        args.append(revision_id)
+    for row in db.execute(query + " ORDER BY rowid DESC", args):
+        receipt = json.loads(row[0])
+        if "source_operation_id" not in receipt:
+            return receipt
+    return None
 
 
 def _read(ops, principal, workspace_id):

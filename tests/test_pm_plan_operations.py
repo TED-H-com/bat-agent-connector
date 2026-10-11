@@ -10,7 +10,7 @@ import pytest
 
 from bat_agent_connector import pm_discussions, pm_plan_operations, pm_plans, pm_runs, pm_worktree
 from bat_agent_connector.api_auth import Principal
-from bat_agent_connector.operations import AmbiguousOutcome, OpContext, OperationError
+from bat_agent_connector.operations import AmbiguousOutcome, OpContext, OperationError, Uncertain
 from tests.operation_helpers import settle_operations
 from tests.test_checkpoints import bat_writes, git, snapshot
 from tests.test_pm_worktree import pm as pm_fixture
@@ -288,3 +288,168 @@ async def test_zero_effect_unknown_can_cancel_without_retaining_writer(ready):
     assert run(w, first)["state"] == "completed_service"
     assert not receipt(w, first)
     assert not Path(w["plan"]["clone_path"], ".git", "batc-pm-revisions.json").exists()
+
+
+async def git_only(w, revision=None):
+    w["runner"].after["pm-revision"] = lambda request: w["d"].ops.cancel(OWNER, request["revision"]["operation_id"])
+    op = await adopt(w, revision)
+    assert op["status"] == "cancelled" and receipt(w, op), op
+    return op
+
+
+async def test_explicit_same_revision_adoption_reuses_verified_git_without_new_commit(ready):
+    w = ready
+    original = await git_only(w)
+    proof = receipt(w, original)
+    recovered = await adopt(w)
+    assert recovered["status"] == "succeeded", recovered
+    result = recovered["result"]
+    assert result["commit_sha"] == proof["commit_sha"]
+    assert result["commit_operation_id"] == result["source_operation_id"] == original["operation_id"]
+    assert receipt(w, recovered) == {**proof, "operation_id": recovered["operation_id"], "source_operation_id": original["operation_id"]}
+    assert w["d"].ops.get(original["operation_id"])["cancel_requested"]
+    assert w["runner"].phases.count("pm-revision") == 1
+    assert git(w["plan"]["worktree_path"], "rev-list", "--count", w["sha"] + "..HEAD") == "1"
+    assert pm_plans.latest_git_receipt(w["d"].ops.db, w["workspace_id"]) == proof
+
+
+async def test_reusing_older_revision_does_not_move_next_git_parent_backwards(ready):
+    w = ready
+    first = await git_only(w)
+    second_revision = await draft(w)
+    second = await git_only(w, second_revision)
+    source_head = receipt(w, second)["commit_sha"]
+    accepted = await adopt(w)
+    assert accepted["status"] == "succeeded", accepted
+    assert accepted["result"]["commit_sha"] == receipt(w, first)["commit_sha"]
+    assert git(w["plan"]["worktree_path"], "rev-parse", "HEAD") == source_head
+    next_revision = await draft(w)
+    next_adopted = await adopt(w, next_revision)
+    assert next_adopted["status"] == "succeeded", next_adopted
+    assert git(w["plan"]["worktree_path"], "rev-parse", "HEAD^") == source_head
+    assert w["runner"].phases.count("pm-revision") == 3
+
+
+async def test_read_verification_lost_ack_recovers_original_source_without_writing(ready):
+    w = ready
+    original = await git_only(w)
+    w["runner"].after["read.pm-revision"] = lose
+    first = await adopt(w)
+    assert first["status"] == "uncertain", first
+    recovered = await resume(w, first)
+    assert recovered["status"] == "succeeded", recovered
+    assert recovered["result"]["source_operation_id"] == original["operation_id"]
+    assert w["runner"].phases.count("pm-revision") == 1
+
+
+async def test_cancel_unknown_read_verification_releases_only_new_reader_writer(ready):
+    w = ready
+    original = await git_only(w)
+    w["runner"].before["read.pm-revision"] = lose
+    first = await adopt(w)
+    assert first["status"] == "uncertain", first
+    reads = w["runner"].phases.count("read.pm-revision")
+    w["d"].ops.cancel(OWNER, first["operation_id"])
+    cancelled = await resume(w, first)
+    assert cancelled["status"] == "cancelled", cancelled
+    assert run(w, cancelled)["state"] == "completed_service"
+    assert receipt(w, original) and not receipt(w, cancelled)
+    assert w["runner"].phases.count("read.pm-revision") == reads
+    assert w["runner"].phases.count("pm-revision") == 1
+    # A third decision still refers directly to the actual creation operation.
+    completed = await adopt(w)
+    assert completed["status"] == "succeeded", completed
+    assert completed["result"]["source_operation_id"] == original["operation_id"]
+
+
+@pytest.mark.parametrize("change", ["commit_ref", "head", "document", "config"])
+async def test_reused_revision_requires_fresh_owned_chain_and_binding_proof(ready, change):
+    w = ready
+    original = await git_only(w)
+    path = Path(w["plan"]["worktree_path"])
+    proof = receipt(w, original)
+    if change == "commit_ref":
+        git(path, "update-ref", "refs/batc/pm-revisions/" + original["operation_id"][3:], w["sha"])
+    elif change == "head":
+        tree = git(path, "rev-parse", "HEAD^{tree}")
+        foreign = git(path, "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit-tree", tree, "-p", "HEAD", "-m", "foreign")
+        git(path, "update-ref", "refs/heads/" + w["plan"]["branch"], foreign)
+    elif change == "document":
+        Path(path, next(iter(proof["file_digests"]))).write_text("Unrelated edit")
+    else:
+        w["d"].fleet.config.hosts["h1"].default_permission_mode = "changed"
+    failed = await adopt(w)
+    assert failed["status"] in {"failed", "needs_attention"}, failed
+    assert not receipt(w, failed)
+    assert not pm_plans.head(w["d"].ops.db, w["workspace_id"])["accepted_revision_id"]
+    assert w["runner"].phases.count("pm-revision") == 1
+
+
+async def test_owner_revoked_during_reuse_read_records_proof_without_new_decision(ready):
+    w = ready
+    original = await git_only(w)
+    w["runner"].after["read.pm-revision"] = lambda _: revoke(w)
+    stopped = await adopt(w)
+    assert stopped["status"] == "failed", stopped
+    assert receipt(w, stopped)["source_operation_id"] == original["operation_id"]
+    assert run(w, stopped)["state"] == "completed_service"
+    assert not pm_plans.head(w["d"].ops.db, w["workspace_id"])["accepted_revision_id"]
+    assert w["runner"].phases.count("pm-revision") == 1
+
+
+async def test_source_receipt_alone_cannot_bypass_fresh_host_verification(ready):
+    w = ready
+    original = await git_only(w)
+    requested = adoption(w)
+    borrowed = {**receipt(w, original), "operation_id": requested["operation_id"], "source_operation_id": original["operation_id"]}
+    with pytest.raises(OperationError, match="PM_GIT_RECEIPT_INVALID"):
+        pm_plans.record_git_receipt(OpContext(w["d"].ops, requested), borrowed)
+    assert not receipt(w, requested)
+    await settle_operations(w["d"].ops)
+    assert w["d"].ops.get(requested["operation_id"])["status"] == "succeeded"
+
+
+async def test_repeated_cancelled_read_decisions_reference_original_creation_directly(ready):
+    w = ready
+    original = await git_only(w)
+    w["runner"].after["read.pm-revision"] = lambda request: w["d"].ops.cancel(OWNER, request["active_operation_id"])
+    verification = await adopt(w)
+    assert verification["status"] == "cancelled", verification
+    requested = adoption(w)
+    forwarded = {**receipt(w, verification), "operation_id": requested["operation_id"],
+                 "source_operation_id": verification["operation_id"]}
+    with pytest.raises(OperationError, match="PM_GIT_RECEIPT_INVALID"):
+        pm_plans.record_git_receipt(OpContext(w["d"].ops, requested), forwarded)
+    await settle_operations(w["d"].ops)
+    completed = w["d"].ops.get(requested["operation_id"])
+    assert completed["status"] == "succeeded", completed
+    assert completed["result"]["source_operation_id"] == original["operation_id"]
+    assert w["runner"].phases.count("pm-revision") == 1
+
+
+@pytest.mark.parametrize("reuse", [False, True])
+async def test_restart_between_reconciled_host_step_and_journal_fact_keeps_exact_receipt(ready, monkeypatch, reuse):
+    w = ready
+    if reuse:
+        await git_only(w)
+    w["runner"].after["read.pm-revision" if reuse else "pm-revision"] = lose
+    first = await adopt(w)
+    assert first["status"] == "uncertain", first
+    record = pm_plans.record_git_receipt
+    armed = {"value": True}
+    def interrupted(ctx, proof):
+        if armed["value"]:
+            armed["value"] = False
+            raise Uncertain("pm.plan.git-receipt", "Simulated restart before the local fact transaction")
+        return record(ctx, proof)
+    monkeypatch.setattr(pm_plans, "record_git_receipt", interrupted)
+    gap = await resume(w, first)
+    assert gap["status"] == "uncertain" and not receipt(w, gap), gap
+    step = next(item for item in gap["steps"] if item["name"] == ("pm.revision.verify" if reuse else "pm.revision.commit"))
+    assert step["status"] == "succeeded"
+    before = len(w["runner"].phases)
+    completed = await resume(w, gap)
+    assert completed["status"] == "succeeded", completed
+    assert len(w["runner"].phases) == before
+    assert "reconciled" not in receipt(w, completed)
+    assert w["runner"].phases.count("pm-revision") == 1
