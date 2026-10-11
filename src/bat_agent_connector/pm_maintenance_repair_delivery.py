@@ -7,7 +7,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from . import delivery, deployment, pm_delivery_lineage, pm_source_lineage, pr_delivery
+from . import delivery, deployment, pm_delivery_lineage, pm_release_baselines, pm_source_lineage, pr_delivery
 from . import pm_github_observation as observations
 from . import pm_maintenance_repair_evidence as evidence
 from . import pm_maintenance_repairs as repairs
@@ -32,7 +32,7 @@ def schema(journal):
 
 def _rows(ops, parent, role=None):
     return ops.db.execute('SELECT * FROM pm_maintenance_repair_deliveries WHERE parent_id=? '
-        'AND (? IS NULL OR role=?) ORDER BY created_at,role,ordinal LIMIT 13',
+        'AND (? IS NULL OR role=?) ORDER BY created_at,role,ordinal LIMIT 14',
         (parent['operation_id'], role, role)).fetchall()
 
 
@@ -40,7 +40,7 @@ def _child(ops, parent, row):
     request = json.loads(row['request'])
     op = repairs._operation(ops, row['operation_id'])
     authority = ((op.get('external_refs') or {}).get('admission_binding') or {}).get('controller_authority') or {}
-    allowed = {'observation': {observations.ACTION}, 'delivery': DELIVERY_ACTIONS}
+    allowed = {'observation': {observations.ACTION}, 'delivery': DELIVERY_ACTIONS, 'baseline': {pm_release_baselines.ACTION}}
     if (row['role'] not in allowed or op['action'] not in allowed[row['role']]
             or repairs.checks._digest(request) != row['request_digest']
             or any(op.get(key) != value for key, value in request.items())
@@ -53,6 +53,10 @@ def _child(ops, parent, row):
         selected = ((op.get('external_refs') or {}).get('admission_binding') or {}).get('pm_delivery') or {}
         if (selected.get('pm_repair_required_ci') or {}).get(parent['operation_id']) != json.loads(row['required_ci']):
             raise evidence._bad('The frozen required-CI selection changed', 'PM_REPAIR_DELIVERY_CHANGED')
+    if row['role'] == 'baseline':
+        from . import pm_maintenance_repair_baseline
+        if request != pm_maintenance_repair_baseline.request(ops, parent, child(ops, parent)):
+            raise evidence._bad('The original baseline selection changed', 'PM_REPAIR_BASELINE_UNPROVEN')
     return op
 
 
@@ -77,7 +81,7 @@ def require_child(ops, operation):
     original = _child(ops, parent, row)
     if any(original.get(key) != operation.get(key) for key in ('operation_id', 'action', 'target', 'params', 'preconditions', 'actor', 'idempotency_key')):
         raise evidence._bad('The repair delivery request changed', 'PM_REPAIR_DELIVERY_CHANGED')
-    scopes = repairs.REQUIRED | ({'merge', 'deploy'} if operation['action'] == 'delivery.merge_and_deploy'
+    scopes = repairs.REQUIRED | ({'merge', 'deploy'} if operation['action'] == 'delivery.merge_and_deploy' or row['role'] == 'baseline'
         else {'merge'} if row['role'] == 'delivery' else set())
     repairs._guard(ops, parent, scopes=scopes)
     return repairs._record_for(ops, parent)['deadline_at']
@@ -139,14 +143,20 @@ def require_sources(ops, principal, parent):
         reference = json.loads(row['required_ci'])
         if reference is not None:
             required_ci.historical(ops, principal, parent, publication.published_receipt(ops, parent), reference)
+    for row in _rows(ops, parent, 'baseline'):
+        original = _child(ops, parent, row)
+        if not pm_release_baselines.operation_visible(ops.db, principal, original):
+            raise OperationError('NOT_FOUND', 'Original release baseline sources unavailable', 404)
 
 
 def projection(ops, parent):
     rows = _rows(ops, parent)
     observed = [_child(ops, parent, row) for row in rows if row['role'] == 'observation']
     selected = [json.loads(row['required_ci']) for row in rows if row['role'] == 'delivery']
+    baseline = next((_child(ops, parent, row) for row in rows if row['role'] == 'baseline'), None)
     return {'observation_children': [{key: op[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')}
-        for op in observed], 'required_ci_selection': selected[0] if selected else None}
+        for op in observed], 'required_ci_selection': selected[0] if selected else None,
+        'baseline_child': {key: baseline[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if baseline else None}
 
 
 def _selection(ops, principal, parent, receipt):
@@ -171,7 +181,7 @@ def _create(ctx, role, ordinal, request, reference, *, charge_retry=False):
     ops = ctx.service
     def create():
         parent = repairs._operation(ops, ctx.operation_id)
-        scopes = repairs.REQUIRED | ({'merge', 'deploy'} if request['action'] == 'delivery.merge_and_deploy'
+        scopes = repairs.REQUIRED | ({'merge', 'deploy'} if request['action'] == 'delivery.merge_and_deploy' or role == 'baseline'
             else {'merge'} if role == 'delivery' else set())
         principal = repairs._guard(ops, parent, scopes=scopes)
         if charge_retry:
@@ -225,7 +235,7 @@ def _observe(ctx, parent):
     raise Wait('waiting_external', 'Original private required-CI observation admitted', 1)
 
 
-def _finish(ctx, parent, original):
+def _finish(ctx, parent, original, baseline):
     def record():
         op = child(ctx.service, parent)
         facts = pm_delivery_lineage._facts(ctx.service, op)
@@ -240,6 +250,7 @@ def _finish(ctx, parent, original):
         return {'repair_id': 'pmrp_' + ctx.operation_id[3:], 'outcome': 'deployed' if ceiling == 'deploy' else 'merged',
             'delivery_operation_id': op['operation_id'], 'delivery': facts, 'repair_fixed': False,
             'release_publication': 'not_inferred', 'capacity_held': True,
+            'baseline_update': baseline,
             'capacity_reason': 'PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN'}
     return ctx.effect('pm.repair.delivered', record, receipt_only=True)
 
@@ -249,7 +260,8 @@ async def advance(ctx):
     original = child(ops, parent)
     if original:
         if original['status'] == 'succeeded' and not repairs.checks._unsettled(ops, original):
-            return _finish(ctx, parent, original)
+            from . import pm_maintenance_repair_baseline as baseline
+            return _finish(ctx, parent, original, baseline.advance(ctx, parent, original))
         raise Wait('waiting_external', 'Original delivery remains ' + original['status'], 15)
     try:
         policy = evidence.policies_for(ops, parent)

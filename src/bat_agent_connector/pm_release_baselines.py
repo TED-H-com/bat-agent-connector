@@ -295,6 +295,8 @@ def _authorize_existing(ops, principal, op, verb):
 
 def _current(ctx, principal):
     ctx.check_cancel()
+    from . import pm_maintenance_repairs
+    pm_maintenance_repairs.require_delivery_child(ctx.service, ctx.op)
     intent = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
     binding = ctx.admission_binding or {}
     if intent != binding.get("release_baseline_intent") or sources.digest(intent) != binding.get("release_baseline_intent_digest"):
@@ -326,7 +328,9 @@ async def _run(ctx):
 
     async def read():
         try:
-            return await sources.observe(ctx.service, intent, lambda: _current(ctx, principal))
+            from . import pm_maintenance_repair_baseline
+            return await pm_maintenance_repair_baseline.bounded_read(ctx,
+                lambda: sources.observe(ctx.service, intent, lambda: _current(ctx, principal)))
         except Cancelled:
             raise OperationError("CANCELLED", "Stopped release source reads before baseline selection", 409) from None
 
