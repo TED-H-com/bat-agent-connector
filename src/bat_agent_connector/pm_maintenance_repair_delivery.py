@@ -164,6 +164,7 @@ def projection(ops, parent):
     baseline = next((_child(ops, parent, row) for row in rows if row['role'] == 'baseline'), None)
     return {'observation_children': [{key: op[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')}
         for op in observed], 'required_ci_selection': selected[0] if selected else None,
+        'baseline_update': (parent.get('result') or {}).get('baseline_update'),
         'baseline_child': {key: baseline[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if baseline else None}
 
 
