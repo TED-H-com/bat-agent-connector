@@ -303,3 +303,30 @@ def test_new_reservation_cannot_copy_another_sessions_incarnation(identities):
         with pytest.raises(ResourceReadOnly, match="CONTROLLER_INCARNATION_CHANGED"):
             registry.reserve("h1", {**original, "session_id": "copy"}, 8)
         assert registry.get("h1", "copy") is None
+
+
+async def test_unsent_retry_preserves_original_pm_scope_and_authority_snapshot(tmp_path):
+    from bat_agent_connector import pm_workspace
+    from bat_agent_connector.operations import OperationService
+    from tests.test_pm_workspace import OWNER, create
+
+    journal = Journal(tmp_path / "retry.db")
+    ops = OperationService(journal)
+    pm_workspace.install(ops)
+    try:
+        workspace = await create(ops)
+        original = authority.binding(journal.db, OWNER, pm_workspace_id=workspace["workspace_id"])
+        with authority.use(original, journal):
+            registry.reserve("h1", {"session_id": "retry", "start_sent": False}, 8)
+            registry.fail_reservation("h1", "retry")
+        before = registry.get("h1", "retry")
+        base = authority.binding(journal.db, OWNER)
+        with authority.use(base, journal):
+            with pytest.raises(ResourceReadOnly, match="CONTROLLER_IMMUTABLE"):
+                registry.reserve("h1", {**before, "controller_authority": base}, 8)
+            registry.reserve("h1", {"session_id": "retry", "start_sent": False}, 8)
+        after = registry.get("h1", "retry")
+        assert after["controller_authority"] == original
+        assert after["controller_incarnation"] == before["controller_incarnation"]
+    finally:
+        journal.close()

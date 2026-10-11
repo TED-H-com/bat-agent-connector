@@ -154,9 +154,16 @@ def reservation_identity(host: str, session_id: str) -> str:
 
 def stamp(entry: dict) -> dict:
     """Stamp a new reservation, never upgrade an existing unowned row."""
+    from . import registry
     authority = require()
+    original = registry.get(entry["host"], entry["session_id"])
+    if original is not None:
+        require_entry(original)
+        authority = copy.deepcopy(original["controller_authority"])
+    incarnation = reservation_identity(entry["host"], entry["session_id"])
     if "controller_authority" in entry or "controller_incarnation" in entry:
-        require_entry(entry, expected_incarnation=reservation_identity(entry["host"], entry["session_id"]))
+        require_entry(entry, expected_incarnation=incarnation)
+        if entry["controller_authority"] != authority:
+            raise ResourceReadOnly("CONTROLLER_IMMUTABLE", "Reservation cannot replace original controller authority")
         return copy.deepcopy(entry)
-    return {**entry, "controller_authority": authority,
-            "controller_incarnation": reservation_identity(entry["host"], entry["session_id"])}
+    return {**entry, "controller_authority": authority, "controller_incarnation": incarnation}
