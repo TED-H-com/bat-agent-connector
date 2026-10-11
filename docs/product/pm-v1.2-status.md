@@ -97,7 +97,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W30 | P2 | 成本與較完整預測 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W31 | P0 | Idea thread 與明確轉 Planning | 本批：持久 Idea 與指定輸入轉 Planning 草稿 |
 | W32 | P0 | PhaseProfile 與 command policy | 本批：九種 profile 契約；Idea／Planning 可用，runtime 限制待接 adapter |
-| W33 | P0 | InputRecord 與循序資訊取得 | 本批：來源與確認者、假設／未知分離、context-first 契約；研究 runner 待做 |
+| W33 | P0 | InputRecord 與循序資訊取得 | 開發分支：來源與確認者、假設／未知分離、固定八領域資訊與已確認回答的續接；語意缺口判斷、循序提問與研究 runner 待做 |
 | W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿修訂、文件與 accepted scope 分開；Sprint／batch 與工程 work package 待做 |
 | W35 | P1 | 架構與 SDD 工程工作包 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W36 | P1 | OpenSpec read adapter | 開發分支：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
@@ -105,7 +105,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W39 | P1 | DocumentSnapshot 與五視圖 SVG | 開發分支：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
 | W40 | P1 | 專案文件與簡報 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W41 | P1 | Actor 決策責任與 follow-up | workspace decision role、指定 Sprint owner 的會議決策與有責任人的改善追蹤；自動效果核對與跨會議聚合待做 |
+| W41 | P1 | Actor 決策責任與 follow-up | 開發分支：指定決策者、改善責任、固定治理／會議結果與最多三項 Follow-up 議程、明確前次比較；語意效果判斷與自動討論待做 |
 | W42 | P1 | Idea 到 Review 真實驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W44 | P0 | ReleaseBaseline 與發布 receipt | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -210,3 +210,17 @@ checkpoint 失效，即使仍在輸入也立即清除舊畫面。草稿與原操
 採用關聯核對原 successful operation、候選文件與先前基準；不會修改
 scope 或再送一次 adopt。所有讀取、操作結果及事件重新核對原始來源。
 目前是有來源的管理紀錄，尚未完成自動根因分析或完整 PM Follow-up。
+
+## 先整理資訊的 Follow-up
+
+工作區首頁可準備固定版本的討論資料：沿用已採用計畫與證據快照，明確選定
+討論、治理版本及已完成會議的改善紀錄。八個管理領域保留原始資訊身分；
+後來確認的回答另列來源，不偷偷改寫原本未決的基準。
+
+同一問題保留穩定身分；指定前次資料後可比較新增、變動與未再選入。
+最多三項議程依已記錄的待處理狀態排列，沒有問題就不湊題，也不假造商業優先級。
+API／MCP／Web／Tauri 共用原操作與版本檢查。來源撤權時，衍生資料、原操作及事件
+一併隱藏；恢復授權仍查回原請求，不另做一次。
+
+這批完成討論前的資料整理，尚未接模型討論、語意根因／影響判讀、提醒或維護排程。
+既有成果回報仍未經品質驗收；準備議程不代表完成 Follow-up 會議或已採用變更。

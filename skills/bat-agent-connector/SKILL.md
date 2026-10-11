@@ -332,6 +332,33 @@ shared operation results and event feeds; do not recover a hidden quote from his
 Unknown verification and remaining lifecycle work stay explicit. Automatic causal
 analysis, reminders and cross-snapshot follow-up are not implied by these records.
 
+### Prepare a sourced Follow-up
+
+When `features.pm_workspaces.follow_up_prepare` is available, read
+`pm_follow_up_latest_get`, `pm_follow_up_list` and `pm_follow_up_get` before
+preparing another discussion. These are fixed management projections, not AI
+conclusions or evidence that a meeting took place.
+
+Submit `pm.follow_up.prepare` to `{workspace_id}` with a fixed `snapshot_id`.
+Optional inputs are `thread_id`, exact `governance_revision_ids`,
+`meeting_follow_up_refs` (original completion, follow-up and optional result event),
+and an explicitly selected `previous_intake_id`. Read current heads and supply
+`expected_version`, `expected_plan_version`, plus `expected_thread_version` only
+when selecting a thread. Reuse the original operation key after a missing reply.
+
+The eight knowledge domains preserve the original accepted inputs. An explicit
+confirmed successor can supply an answer without changing that baseline. Unknown
+information stays unknown; an absent issue in a comparison is `no_longer_selected`,
+not resolved. The at-most-three agenda entries use recorded source conditions,
+not inferred business priority. Keep source versions, coverage and unverified
+completion reports visible. Preparation does not run a model, adopt a plan,
+execute work, complete a meeting or authorize maintenance.
+
+Original source access applies to intakes, operation history and events. Do not
+substitute a newer readable source for a withdrawn original or recover its text
+through another entry point. Semantic assessment and runtime discussion remain
+separate capabilities.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)

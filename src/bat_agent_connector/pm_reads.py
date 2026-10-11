@@ -5,6 +5,9 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_follow_up_list": ("workspace_id", "after", "limit"),
+    "pm_follow_up_get": ("workspace_id", "intake_id"),
+    "pm_follow_up_latest_get": ("workspace_id",),
     "pm_governance_list": ("workspace_id", "kind", "after", "limit"),
     "pm_governance_get": ("workspace_id", "record_id"),
     "pm_governance_history_list": ("workspace_id", "record_id", "after", "limit"),
@@ -54,6 +57,13 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get"}:
+        from . import pm_follow_up
+        if method == "pm_follow_up_get":
+            return pm_follow_up.get_intake(ops, principal, workspace_id, params.get("intake_id"))
+        if method == "pm_follow_up_latest_get":
+            return pm_follow_up.latest_intake(ops, principal, workspace_id)
+        return pm_follow_up.list_intakes(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_governance_list", "pm_governance_get", "pm_governance_history_list"}:
         from . import pm_governance
         if method == "pm_governance_get":
