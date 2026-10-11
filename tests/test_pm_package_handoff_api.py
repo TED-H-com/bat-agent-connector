@@ -205,3 +205,28 @@ async def test_paused_reading_records_keep_source_policy_and_replay_identity(dis
     with pytest.raises(OperationError) as caught:
         d.ops.create(w["person"], **envelope)
     assert caught.value.code == "NOT_FOUND"
+
+
+async def test_model_catalog_uses_current_sources_before_and_after_remote_read(dispatched, monkeypatch):
+    from bat_agent_connector import product_preferences
+    w, d = dispatched, dispatched["d"]
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = product_preferences._observe
+    async def delayed(*args, **kwargs):
+        result = await original(*args, **kwargs)
+        if args[2] == "models":
+            entered.set()
+            await release.wait()
+        return result
+    monkeypatch.setattr(product_preferences, "_observe", delayed)
+    pending = asyncio.create_task(product_preferences.read(d.ops, w["person"], "h1", agent="claude", session_id=w["sid"], refresh=True))
+    await asyncio.wait_for(entered.wait(), 5)
+    revoke(w)
+    release.set()
+    with pytest.raises(OperationError) as caught:
+        await pending
+    assert caught.value.code == "NOT_FOUND"
+    with pytest.raises(OperationError):
+        await product_preferences.read(d.ops, w["person"], "h1", agent="claude", session_id=w["sid"])
+    status, body = await http(w["port"], "GET", "/api/v1/hosts/h1/preferences?agent=claude", tok=w["token"])
+    assert status == 200 and w["sid"] not in json.dumps(body), body

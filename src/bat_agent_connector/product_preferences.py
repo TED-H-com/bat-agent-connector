@@ -244,11 +244,13 @@ async def read(ops, principal, host, *, agent=None, session_id=None, refresh=Fal
     if session_id is not None:
         if not _text(session_id):
             raise OperationError("INVALID_PARAMS", "invalid session ID", 422)
+        from .pm_source_lineage import require_session
+        require_session(ops.db, principal, host, session_id)
         session = inventory.get_session(host, session_id) if inventory else None
         if not session or session.get("agent_kind") != agent:
             raise OperationError("SESSION_NOT_FOUND", "choose an observed session of this host and agent", 404)
     elif inventory:
-        rows = inventory.list_sessions(host=host, provider=agent, limit=200)["sessions"]
+        rows = inventory.list_sessions(host=host, provider=agent, limit=200, principal=principal)["sessions"]
         session = next((item for item in rows if not item.get("stale") and not item.get("gone_at")), None)
     model = {"status": "unavailable", "models": [], "reason": "no_observed_session", "source": "bat_host",
              "observed_at": None, "stale": False}
@@ -262,6 +264,8 @@ async def read(ops, principal, host, *, agent=None, session_id=None, refresh=Fal
     results = await asyncio.gather(*tasks)
     agents, usage = results[:2]
     if session:
+        from .pm_source_lineage import require_session
+        require_session(ops.db, principal, host, session["session_id"])
         model = results[2]
     usage.setdefault("providers", [])
     agents.setdefault("agents", [])
