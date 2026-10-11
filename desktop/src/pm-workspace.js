@@ -1,5 +1,6 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
 import {workspaceGovernance} from './pm-governance.js';
+import {workspaceLifecycle} from './pm-lifecycle.js';
 import {specSources} from './pm-spec-sources.js';
 import {workspaceFollowUp} from './pm-follow-up.js';
 import {workspaceWorkPackages} from './pm-work-packages.js';
@@ -142,7 +143,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, onEvents, errorBox}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
-  let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1;
+  let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
   const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
   const permitted = decide => loaded && Boolean(workspace) && (caps()?.scopes?.includes('admin')
@@ -153,7 +154,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   const labelled = (label, field) => h('label', {}, t(label), field);
   const form = options => {
-    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, ...options}); forms.push(value); return value;
+    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, ...options,
+      permitted:()=>options.permitted()&&(lifecycle?.newActionAllowed(options.action)??true),
+      recoverPermitted:options.recoverPermitted||options.permitted}); forms.push(value); return value;
   };
   const status = h('div', {role: 'status', class: 'pm-status'}), workspaceList = h('div', {class: 'pm-workspace-list'});
   const name = input('pm_workspace_name', {max: 120}), repositories = input('pm_repositories', {required: false});
@@ -178,12 +181,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
     packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
+  lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
+    ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>updateForms()}) : null;
+  if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
   const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
     ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (evidence) body.append(evidence.box);
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
     ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
-  if (brief && !threadId) body.insertBefore(brief.box, content);
+  if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element||content);
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   if(roadmap)body.insertBefore(roadmap.box,content);
@@ -211,7 +217,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
     ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
-  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element].filter(Boolean);
+  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -330,6 +336,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         draft, h('section', {'data-pm-plan': ''}, h('h2', {}, t('pm_direction')), planForm.box),
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '');
       if (brief) inspector.prepend(brief.box);
+      if (lifecycle) inspector.prepend(lifecycle.element);
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
       const disclosures = threadDisclosures.get(disclosureKey);
       for (const selector of threadDisclosureSelectors) {
@@ -479,11 +486,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t('pm_scope_mismatch'));
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
-      if (!retired(error) && ticket === sequence) {loaded = false; brief?.withdraw();updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
+      if (!retired(error) && ticket === sequence) {loaded = false; brief?.withdraw();lifecycle?.withdraw();updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}}
   }
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
+    lifecycle?.withdraw();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -536,7 +544,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering]) {
+      for (const section of [lifecycle, evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -547,6 +555,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         brief?.withdraw();
+        lifecycle?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -556,7 +565,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package', 'pm_lifecycle'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
