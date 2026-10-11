@@ -149,6 +149,8 @@ class Traversal:
             from . import pm_maintenance_checks
             timeout_s = pm_maintenance_checks.child_timeout(self.ctx.service, self.ctx.op,
                 max(0.001, min(30, self.deadline - time.monotonic())))
+            from . import pm_maintenance_repairs
+            timeout_s = pm_maintenance_repairs.delivery_child_timeout(self.ctx.service, self.ctx.op, timeout_s)
             try:
                 answer = await self.gh.bounded_get(path, query=query,
                     max_bytes=min(PAGE_BYTES, MAX_BYTES - self.bytes),
