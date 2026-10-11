@@ -28,6 +28,14 @@ zero cost, no risk or complete verification. Optional Markdown is preserved
 exactly. When omitted, a readable draft is generated from the same statements
 and their statuses.
 
+Default section mapping uses the declared Idea and Planning profile slots. In
+particular, Idea `problem` maps to scope, `alternatives` to governance and
+`unknowns` to risk. Mapping does not confirm a source or create a requirement.
+Custom unmapped slots stay explicitly unclassified. An owner may revise a
+Planning discussion's selected sources through `pm.thread.plan.revise` with exact
+thread/draft preconditions; existing plan documents and accepted scope remain
+fixed until a separate document draft and explicit adoption.
+
 Requirements have stable caller-selected keys, a selected source input, optional
 acceptance source IDs, proposed priority and local dependency IDs. Requirement
 and acceptance text comes from the frozen sources. The caller cannot replace
@@ -55,6 +63,10 @@ is the original exact text. Each file digest is SHA-256 of its UTF-8 bytes. The
 document digest is SHA-256 of the sorted canonical JSON map of path to file
 digest, without a trailing newline. Documents do not embed their own Git commit
 or content digest. Existing repository specs and `docs/pm/plan.md` are preserved.
+The two exact files together must fit within 512,000 UTF-8 bytes, matching the
+managed Git carrier's existing bound. Draft admission checks that total, including
+metadata and its trailing newline, so an oversized revision cannot be saved as a
+seemingly adoptable draft. The separate Markdown character limit also applies.
 
 The managed Git integration owns commit creation, its original operation marker,
 parent comparison, repository binding, fixed-path readback and recovery. The

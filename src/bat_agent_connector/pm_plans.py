@@ -19,7 +19,8 @@ REVISION_ID = re.compile(r"pmrev_[0-9a-f]{32}")
 ITEM_ID = re.compile(r"[a-z][a-z0-9_.-]{0,79}")
 GIT_SHA = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 DIGEST = re.compile(r"[0-9a-f]{64}")
-MAX_DOCUMENT_BYTES = 1024 * 1024
+# Match the managed Git carrier's bound on the two exact revision files.
+MAX_DOCUMENT_BYTES = 512_000
 
 
 def _json(value):
@@ -144,7 +145,8 @@ def _document(db, workspace_id, thread, params, revision_id):
     selected = draft["selected_inputs"]
     sources = {item["input_id"]: item for item in selected}
     mapping = params.get("sections")
-    slot_domains = {slot["key"]: slot["domain"] for slot in pm_profiles.get("planning")["input_slots"]}
+    slot_domains = {slot["key"]: slot["domain"] for mode in ("idea", "planning")
+                    for slot in pm_profiles.get(mode)["input_slots"]}
     if mapping is None:
         mapping = {domain: [item["input_id"] for item in selected if slot_domains.get(item["slot"]) == domain]
                    for domain in pm_profiles.DOMAINS}
@@ -225,8 +227,9 @@ def _document(db, workspace_id, thread, params, revision_id):
     # belongs to an adopted plan too; prose changes have unknown scope impact.
     scope = {"sections": {key: sections[key] for key in ("governance", "scope", "quality")},
              "requirements": requirements}
-    if len(_json(document).encode("utf-8")) > MAX_DOCUMENT_BYTES:
-        raise _bad("PM_PLAN_TOO_LARGE", "Plan document exceeds the bounded revision size")
+    files = _files(revision_id, document)["files"]
+    if sum(len(content.encode("utf-8")) for content in files.values()) > MAX_DOCUMENT_BYTES:
+        raise _bad("PM_PLAN_TOO_LARGE", "Plan Markdown and metadata exceed 512,000 UTF-8 bytes in total")
     return document, _digest(_json(scope))
 
 

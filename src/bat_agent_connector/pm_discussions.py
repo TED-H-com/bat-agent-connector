@@ -16,8 +16,9 @@ from .operations import ActionDef, OperationError
 THREAD_ID = re.compile(r"pmt_[0-9a-f]{32}")
 INPUT_ID = re.compile(r"pmi_[0-9a-f]{32}")
 MESSAGE_ID = re.compile(r"pmm_[0-9a-f]{32}")
+DRAFT_ID = re.compile(r"pmd_[0-9a-f]{32}")
 SLOT = re.compile(r"[a-z][a-z0-9_.-]{0,79}")
-ACTIONS = ("pm.thread.create", "pm.message.append", "pm.input.record", "pm.input.confirm", "pm.thread.plan")
+ACTIONS = ("pm.thread.create", "pm.message.append", "pm.input.record", "pm.input.confirm", "pm.thread.plan", "pm.thread.plan.revise")
 
 
 def install(ops):
@@ -45,6 +46,12 @@ def install(ops):
                 title TEXT NOT NULL, rationale TEXT NOT NULL, selected_input_ids TEXT NOT NULL,
                 candidate_input_ids TEXT NOT NULL, source_thread_version INTEGER NOT NULL,
                 created_by TEXT NOT NULL, created_at REAL NOT NULL, operation_id TEXT NOT NULL UNIQUE)""",
+            """CREATE TABLE IF NOT EXISTS pm_planning_draft_revisions (
+                draft_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, thread_id TEXT NOT NULL,
+                title TEXT NOT NULL, rationale TEXT NOT NULL, selected_input_ids TEXT NOT NULL,
+                candidate_input_ids TEXT NOT NULL, source_thread_version INTEGER NOT NULL,
+                created_by TEXT NOT NULL, created_at REAL NOT NULL, operation_id TEXT NOT NULL UNIQUE,
+                previous_draft_id TEXT NOT NULL UNIQUE)""",
             """CREATE TABLE IF NOT EXISTS pm_discussion_applied (
                 operation_id TEXT PRIMARY KEY, result TEXT NOT NULL, applied_at REAL NOT NULL)""",
             "CREATE INDEX IF NOT EXISTS pm_thread_workspace ON pm_threads(workspace_id,created_at,thread_id)",
@@ -53,7 +60,7 @@ def install(ops):
         ):
             ops.db.execute(statement)
         # The model is append-only even for confirmation/correction. Keep source history intact.
-        for table in ("pm_messages", "pm_inputs", "pm_planning_drafts"):
+        for table in ("pm_messages", "pm_inputs", "pm_planning_drafts", "pm_planning_draft_revisions"):
             for verb in ("UPDATE", "DELETE"):
                 ops.db.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_{verb.lower()}_immutable BEFORE {verb} ON {table} "
                                "BEGIN SELECT RAISE(ABORT, 'PM source history is immutable'); END")
@@ -100,7 +107,7 @@ def _input(db, thread_id, input_id, *, current=False):
 
 
 def _decision(action, params):
-    return action in {"pm.input.confirm", "pm.thread.plan"} or (
+    return action in {"pm.input.confirm", "pm.thread.plan", "pm.thread.plan.revise"} or (
         action == "pm.input.record" and params.get("status") == "user_confirmed")
 
 
@@ -148,14 +155,21 @@ def _check(ops, principal, action, target, params, pre):
     create = action == "pm.thread.create"
     if set(target) != ({"workspace_id"} if create else {"workspace_id", "thread_id"}):
         raise _bad("PM action needs exact workspace and discussion targets")
-    if set(pre) != {"expected_version"} or type(pre.get("expected_version")) is not int:
-        raise _bad("expected_version is required", "PRECONDITION_REQUIRED")
+    revise = action == "pm.thread.plan.revise"
+    expected = {"expected_version", "expected_draft_id"} if revise else {"expected_version"}
+    if set(pre) != expected or type(pre.get("expected_version")) is not int:
+        raise _bad("exact expected_version and expected_draft_id are required" if revise else "expected_version is required",
+                   "PRECONDITION_REQUIRED")
+    if revise and (not isinstance(pre["expected_draft_id"], str) or not DRAFT_ID.fullmatch(pre["expected_draft_id"])):
+        raise _bad("expected_draft_id must identify the current Planning draft", "PRECONDITION_REQUIRED")
     thread = None if create else _thread(ops.db, workspace["workspace_id"], target["thread_id"])
     version = workspace["version"] if create else thread["version"]
     if pre["expected_version"] != version:
         raise _bad("read the current PM version before changing it", "VERSION_CONFLICT", 409)
     if thread and action not in pm_profiles.get(thread["mode"])["allowed_commands"]:
         raise _bad("command is unavailable in this discussion mode", "PM_MODE_REFUSED", 409)
+    if revise and pre["expected_draft_id"] != thread["draft_id"]:
+        raise _bad("read the current Planning draft before revising its sources", "PM_DRAFT_CONFLICT", 409)
     if create:
         _only(params, ("title",))
         _text(params.get("title"), "title", 160)
@@ -186,7 +200,7 @@ def _check(ops, principal, action, target, params, pre):
         _only(params, ("input_id", "rationale"))
         _input(ops.db, thread["thread_id"], params.get("input_id"), current=True)
         _text(params.get("rationale"), "rationale", 4000)
-    elif action == "pm.thread.plan":
+    elif action in {"pm.thread.plan", "pm.thread.plan.revise"}:
         _only(params, ("selected_input_ids", "rationale", "title"))
         selected = params.get("selected_input_ids")
         if (not isinstance(selected, list) or not 1 <= len(selected) <= 50
@@ -257,9 +271,15 @@ def _apply(ctx, thread):
                 AND NOT EXISTS(SELECT 1 FROM pm_inputs n WHERE n.supersedes_input_id=i.input_id)
                 ORDER BY sequence""", (thread_id,)) if row[0] not in selected]
             result.update(draft_id="pmd_" + suffix, mode="planning", execution_authorized=False)
-            db.execute("INSERT INTO pm_planning_drafts VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (result["draft_id"], workspace_id, thread_id, params.get("title", thread["title"]), params["rationale"],
-                 json.dumps(selected), json.dumps(candidates), thread["version"], ctx.actor, now, ctx.operation_id))
+            revise = action == "pm.thread.plan.revise"
+            title = _draft_row(db, thread)["title"] if revise else thread["title"]
+            values = (result["draft_id"], workspace_id, thread_id, params.get("title", title), params["rationale"],
+                      json.dumps(selected), json.dumps(candidates), thread["version"], ctx.actor, now, ctx.operation_id)
+            if revise:
+                result["previous_draft_id"] = thread["draft_id"]
+                db.execute("INSERT INTO pm_planning_draft_revisions VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (*values, thread["draft_id"]))
+            else:
+                db.execute("INSERT INTO pm_planning_drafts VALUES(?,?,?,?,?,?,?,?,?,?,?)", values)
             db.execute("UPDATE pm_threads SET mode='planning',draft_id=? WHERE thread_id=?", (result["draft_id"], thread_id))
         db.execute("UPDATE pm_threads SET version=version+1,updated_at=? WHERE thread_id=?", (now, thread_id))
     result["workspace_id"] = workspace_id
@@ -307,10 +327,27 @@ def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
             "runtime": {"available": False, "reason": "manual_discussion_only"}}
 
 
-def _draft(db, thread):
-    if not thread["draft_id"]:
+def _draft_row(db, thread, *, draft_id=None):
+    """Read an exact immutable selection, including the original pre-revision table."""
+    draft_id = thread["draft_id"] if draft_id is None else draft_id
+    if not draft_id:
         return None
-    draft = dict(db.execute("SELECT * FROM pm_planning_drafts WHERE draft_id=?", (thread["draft_id"],)).fetchone())
+    if not isinstance(draft_id, str) or not DRAFT_ID.fullmatch(draft_id):
+        raise _bad("no such Planning draft", "PM_DRAFT_NOT_FOUND", 404)
+    params = (thread["workspace_id"], thread["thread_id"], draft_id)
+    row = db.execute("SELECT *,NULL AS previous_draft_id FROM pm_planning_drafts WHERE workspace_id=? AND thread_id=? AND draft_id=?",
+                     params).fetchone()
+    if row is None:
+        row = db.execute("SELECT * FROM pm_planning_draft_revisions WHERE workspace_id=? AND thread_id=? AND draft_id=?", params).fetchone()
+    if row is None:
+        raise _bad("no such Planning draft", "PM_DRAFT_NOT_FOUND", 404)
+    return dict(row)
+
+
+def _draft(db, thread, *, draft_id=None):
+    draft = _draft_row(db, thread, draft_id=draft_id)
+    if draft is None:
+        return None
     for field in ("selected_input_ids", "candidate_input_ids"):
         draft[field] = json.loads(draft[field])
     # Selected sources are always returned in full even if the current-input page excludes them.
