@@ -205,3 +205,30 @@ revocation, predecessor/record CAS races and exact-key lost-response replay.
 Current and frozen projections must preserve original scope and DoD, deduplicate
 multiple attempts, and hide all original proof sources after withdrawal. No test
 may write a live provider/host, invoke a model, or modify a human checkout.
+
+### Shared frontend review workflow
+
+`workspaceQualityReviews` owns one workspace panel and its WorkItem selector. It
+reads only visible original work packages, successful fixed handoff operations,
+saved DoD revisions, review history, and registered verification receipts. The
+owner appoints a responsible current writer and the complete original criterion
+policy; the reviewer records a rationale and proof selection for every criterion.
+The central computes qualification. A passing check selection alone is never an
+acceptance conclusion. Source withdrawal removes private facts and selector
+labels while retaining user drafts and the durable operation key for recovery.
+
+The module exposes `element`, `setWork(workItemId)`, `refresh()`, `withdraw()`, and
+`selection()`. `onSelectionChange(workItemId, ref)` receives a value only after
+explicitly choosing a currently qualified assessment. Its exact fields are
+`review_id`, original assessment `operation_id`, `version`, `document_digest`, and
+`candidate_commit`. Refresh clears selection, then restores it only if the same
+original assessment remains qualified; a later assessment never replaces it.
+Consumers must re-read this exact selection and validate their own binding,
+scope, candidate, and DoD before admitting a new effect. The navigation selector
+chooses the work context; it does not select a package or candidate implicitly.
+
+The view uses the existing design tokens, compact panel/field/action components,
+and English/zh-TW translations. Original criteria, hashes, and receipt details
+wrap without abbreviation. Appointing, recording, and revoking use the existing
+durable form and explicit original-request recovery, including stale-version
+rebase rather than silently replacing a saved version.
