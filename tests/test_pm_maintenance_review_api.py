@@ -1,10 +1,13 @@
 """One original maintenance report across shared reads, exports and stopped stages."""
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import mcp_server, pm_brief_exports
+from bat_agent_connector import mcp_server, pm_brief_exports, pm_snapshots
+from bat_agent_connector import pm_maintenance_checks as checks
 from bat_agent_connector import pm_maintenance_review as review
+from bat_agent_connector import pm_maintenance_review_schedule as weekly
 from tests import test_pm_github_observation_api as githubapi
 from tests import test_pm_maintenance_review as domain
 from tests.test_api_v1 import http, token, write_frames
@@ -21,6 +24,36 @@ from tests.test_pm_release_baselines import OWNER, READER
 from tests.test_pm_run_api import unpack
 
 ready = githubapi.ready
+
+
+async def test_installed_weekly_schedule_uses_existing_worker_and_shared_status(ready, monkeypatch):
+    d, port, wid, _ = ready
+    await decide(d.ops, wid, 'set_stage', params={'stage': 'development'})
+    token(d, OWNER.actor, 'observe', 'manage')
+    record = checks.policies.current_policy(d.ops, OWNER, wid)['policy']
+    now = weekly.timing(record, record['created_at'])['next_due'] + 1
+    for module in (checks, review, pm_snapshots):
+        monkeypatch.setattr(module, 'time', SimpleNamespace(time=lambda: now))
+    tick = checks.tick(d.ops)
+    assert tick['weekly_scheduled'] == 1
+    original = d.ops.db.execute('SELECT operation_id FROM pm_maintenance_review_windows').fetchone()[0]
+    reads = list(d.ops.context['github'].reads)
+    await d.ops._execute(original)
+    done = d.ops.get(original)
+    assert done['status'] == 'succeeded', done
+    assert d.ops.context['github'].reads == reads
+    auth = token(d, READER.actor, 'observe')
+    caps = (await http(port, 'GET', '/api/v1/capabilities', tok=auth))[1]
+    assert caps['features']['pm_workspaces']['maintenance_checks']['weekly_review_execution']
+    status, value = await http(port, 'GET', f'/api/v1/pm/workspaces/{wid}/maintenance-schedule', tok=auth)
+    assert status == 200 and value['schedule']['weekly_review']['execution_available']
+    assert value['schedule']['weekly_review']['pending_report'] == done['result']['review_id']
+    current = review.current_review(d.ops, READER, wid)
+    assert current['review']['status'] == 'prepared' and current['completion'] is None
+    report = current['snapshot']['maintenance']['report']
+    assert current['review']['operation_id'] == original and current['snapshot']['operation_id'] == original
+    assert report['schedule']['window'] == 1
+    assert not report['schedule']['missed_weeks_checked']
 
 
 async def prepare(d, port, wid):

@@ -4,7 +4,8 @@
 then `pm.workload.capture`, through the existing `OperationService` worker. It
 never starts a second runtime, model, repair, merge, task or lifecycle transition.
 A complete observation remains evidence for the separate workload/owner gate;
-it does not authorize Maintain by itself. Weekly Review execution is W49.
+it does not authorize Maintain by itself. Installed W49 uses this same tick and
+capacity helper for [weekly report preparation](pm-maintenance-review.md).
 
 ## Admission and continuing authority
 
@@ -102,8 +103,9 @@ exposing their documents. Check events, operation events, historical event reads
 and all API/native transport routes must use the same operation visibility gate.
 
 Schedule status exposes the latest window, next due instant, overdue flag,
-current blocker and latest complete check time. It also describes the policy's
-weekly Review intent while explicitly marking execution unavailable in W48.
+current blocker and latest complete check time. Weekly Review execution becomes
+available only when its registered action and schedule schema are both installed;
+otherwise the response preserves the policy's intent with execution unavailable.
 Missed windows and sampled empty evidence never claim whole-period coverage.
 
 ## Shared integration hooks

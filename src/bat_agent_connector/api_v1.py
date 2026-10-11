@@ -972,7 +972,7 @@ class ApiV1:
                                                     "governance": "pm.governance.record" in self.daemon.ops.actions,
                                                     "release_baselines": pm_release_baselines.capabilities(),
                                                     "maintenance_policy": pm_maintenance_policy.capabilities(self.daemon.ops),
-                                                    "maintenance_checks": pm_maintenance_checks.capabilities(),
+                                                    "maintenance_checks": pm_maintenance_checks.capabilities(self.daemon.ops),
                                                     "maintenance_review": pm_maintenance_review.capabilities(),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,

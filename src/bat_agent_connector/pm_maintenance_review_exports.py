@@ -29,6 +29,8 @@ _TEXT = {
         'not_requested': 'Not requested', 'comparison_unavailable': 'Comparison unavailable',
         'observed_changes': 'Changes in selected observations', 'observed_changes_partial': 'Changes in a partial comparison',
         'no_observed_changes': 'No change between selected observations', 'data_gaps': 'Source coverage gaps', 'unknown': 'Unknown',
+        'continuity_gap': 'Earlier comparison context exceeded the report limit. It remains in its original history; this report cannot compare it.',
+        'missed_weeks': 'Coalesced missed weeks', 'missed_help': 'Only the latest due period is covered. Earlier missed weeks were not checked.',
     },
     'zh-TW': {
         'title': '維護 Review', 'period': '報告期間（包含起點、不包含終點）',
@@ -54,6 +56,8 @@ _TEXT = {
         'not_requested': '尚未要求', 'comparison_unavailable': '無法比較',
         'observed_changes': '所選觀察有變化', 'observed_changes_partial': '部分比較有變化',
         'no_observed_changes': '所選觀察之間沒有變化', 'data_gaps': '來源涵蓋有缺口', 'unknown': '未知',
+        'continuity_gap': '先前比較脈絡超過報告上限，仍保留在原歷史紀錄；這份報告無法進行該比較。',
+        'missed_weeks': '已合併的漏跑週數', 'missed_help': '只涵蓋最近到期期間，更早漏跑週期未經檢查。',
     },
 }
 
@@ -78,6 +82,10 @@ def blocks(extension, locale):
         ('note', release['baseline_id'] + ' · ' + release['commit_sha']),
         ('body', text['policy'] + ': ' + str(policy['version']) + ' · ' + policy['policy_id']),
         ('subheading', text['coverage'])]
+    if report.get('previous_context', {}).get('status') == 'omitted_source_limit':
+        result.append(('warning', text['continuity_gap']))
+    if report.get('schedule'):
+        result.extend([('body', text['missed_weeks'] + ': ' + str(report['schedule']['coalesced_windows'])), ('note', text['missed_help'])])
     for kind in ('github', 'workload', 'checks', 'issues', 'dependencies', 'research', 'quality', 'model_analysis'):
         coverage = report['coverage'][kind]
         state = coverage['status'] if isinstance(coverage, dict) else coverage
