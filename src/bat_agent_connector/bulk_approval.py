@@ -137,10 +137,10 @@ async def _preview(ops, principal, request):
         item_id = "bapi_" + digest({"host": host, "sid": sid})[:24]
         row = {"item_id": item_id, "host": host, "session_id": sid, "eligible": False}
         try:
-            controller_authority.require_entry(registry.get(host, sid))
             cls = resource_policy.classify(hc, sid, terminal=terminal, entries=registry.list_entries(host))
             if cls.code:
                 raise TaskControlRefused(cls.code, cls.reason)
+            controller_authority.require_entry(registry.get(host, sid))
             meta = await service._meta(client, sid)
             kind = service.agent_kind(terminal.get("agentPreset"))
             if kind not in {"claude", "codex"} or not service._state_safe(kind, meta):

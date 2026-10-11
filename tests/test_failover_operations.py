@@ -1,6 +1,8 @@
 """Durable standalone failover against real central operations and MockBat transport."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from bat_agent_connector import api_auth, registry, resource_policy, service
@@ -13,12 +15,12 @@ from tests.operation_helpers import settle_operations
 from tests.test_lifecycle import _add_wt_claude
 
 daemon, served = api.daemon, api.served
-P = api_auth.Principal('failover-caller', frozenset({'observe', 'start', 'operate'}))
+P = api_auth.Principal('operator-dashboard', frozenset({'observe', 'start', 'operate'}))
 SID = 'wt-claude-0007'
 
 
 @pytest.fixture(autouse=True)
-def source(mock):
+def source(mock, daemon):
     _add_wt_claude(mock, SID)
     mock.handlers['git:log'] = lambda p: [{'hash': 'a' * 40}]
     return SID
@@ -239,9 +241,13 @@ async def test_completed_successor_requires_readable_exact_owner_receipts(daemon
         registry.registry_path().write_text('unreadable')
     with pytest.raises(ResourceReadOnly):
         resource_policy.check_grant(grant, 'h1', 'claude:send-message', {'sessionId': sid})
-    # Stop/interrupt stay available even when owner receipts need repair.
-    stop_grant = resource_policy.WriteGrant('h1', 'session.stop', sid, frozenset({'claude:stop-session'}))
-    resource_policy.check_grant(stop_grant, 'h1', 'claude:stop-session', {'sessionId': sid})
+    # Broken failover receipts do not block stop while original controller evidence survives.
+    stop_grant = replace(grant, action='session.stop', channels=frozenset({'claude:stop-session'}))
+    if loss == 'registry':
+        with pytest.raises(ResourceReadOnly):
+            resource_policy.check_grant(stop_grant, 'h1', 'claude:stop-session', {'sessionId': sid})
+    else:
+        resource_policy.check_grant(stop_grant, 'h1', 'claude:stop-session', {'sessionId': sid})
     await daemon.fleet.close()
 
 
@@ -267,7 +273,7 @@ async def test_current_caller_scopes_apply_to_admission_replay_and_controls(daem
             else:
                 getattr(daemon.ops, verb)(weaker, out['operation_id'])
     stranger = api_auth.Principal('different-actor', P.scopes)
-    with pytest.raises(OperationError, match='FORBIDDEN'):
+    with pytest.raises(OperationError, match='CONTROLLER_MISMATCH'):
         daemon.ops.cancel(stranger, out['operation_id'])
     assert mock.channels().count('claude:start-session') == 1
     await daemon.fleet.close()
@@ -338,7 +344,7 @@ async def test_real_cli_observe_preview_and_failure_exit(served, mock, monkeypat
     from bat_agent_connector import cli
     d, port = served
     monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
-    monkeypatch.setenv('BATC_API_TOKEN', api.token(d, 'preview', 'observe'))
+    monkeypatch.setenv('BATC_API_TOKEN', api.token(d, P.actor, 'observe'))
     monkeypatch.setattr(cli, 'load_config', lambda _: d.fleet.config)
     before = registry.registry_path().read_bytes()
     assert await asyncio.to_thread(cli.main, ['--json', '--read-only', 'failover', 'h1', SID, '--dry-run']) == 0
@@ -473,10 +479,13 @@ async def test_other_managed_carrier_writes_are_fenced_but_new_worktree_starts_a
     mock.metas[other] = None
     out = await create(daemon)
     assert out['status'] == 'succeeded', out
-    grant = resource_policy.WriteGrant('h1', 'session.send', other, frozenset({'claude:send-message'}), '/srv/demo/.bat-worktrees/abc')
+    grant = resource_policy.WriteGrant('h1', 'session.send', other, frozenset({'claude:send-message'}),
+        '/srv/demo/.bat-worktrees/abc', controller_authority=registry.get('h1', other)['controller_authority'],
+        controller_incarnation=registry.get('h1', other)['controller_incarnation'])
     with pytest.raises(ResourceReadOnly, match='FAILOVER_SHARED_CARRIER'):
         resource_policy.check_grant(grant, 'h1', 'claude:send-message', {'sessionId': other})
     own = resource_policy.authorize_new_session(daemon.fleet.config.host('h1'), 'independent', folder='/srv/demo', use_worktree=True)
+    registry.reserve('h1', {'session_id': 'independent', 'cwd': '/srv/demo'}, 32)
     resource_policy.check_grant(own, 'h1', 'worktree:create', {'sessionId': 'independent'})
     await daemon.fleet.close()
 
@@ -511,8 +520,10 @@ async def test_managed_root_failover_does_not_block_a_fresh_independent_worktree
     out = await create(daemon, target={'host': 'h1', 'session_id': sid}, params={'force': True})
     assert out['status'] == 'succeeded' and out['result']['same_worktree'] is False, (out['status_reason'], out['steps'])
     grant = resource_policy.authorize_new_session(daemon.fleet.config.host('h1'), 'new-worktree', folder='/srv/demo', use_worktree=True)
+    registry.reserve('h1', {'session_id': 'new-worktree', 'cwd': '/srv/demo'}, 32)
     resource_policy.check_grant(grant, 'h1', 'worktree:create', {'sessionId': 'new-worktree'})
     shared = resource_policy.authorize_new_session(daemon.fleet.config.host('h1'), 'new-shared', folder='/srv/demo', use_worktree=False)
+    registry.reserve('h1', {'session_id': 'new-shared', 'cwd': '/srv/demo'}, 32)
     with pytest.raises(ResourceReadOnly, match='FAILOVER_SHARED_CARRIER'):
         resource_policy.check_grant(shared, 'h1', 'claude:start-session', {'sessionId': 'new-shared'})
     await daemon.fleet.close()

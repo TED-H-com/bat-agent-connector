@@ -15,7 +15,7 @@ daemon, served, owned = api.daemon, api.served, task_tests.owned
 SID = "sess-codex-0002"
 
 
-def caller(d, actor="bulk-caller", scopes=("operate", "observe")):
+def caller(d, actor="operator-dashboard", scopes=("operate", "observe")):
     token = api.token(d, actor, *scopes)
     return token, api_auth.authenticate(d.journal.db, token, d._admin_token)
 
@@ -185,7 +185,8 @@ async def test_preview_binding_and_replay_authority(served, mock, monkeypatch, c
     if change in {"credential", "scope"}:
         op, _ = d.ops.create(principal, **body)
         for verb in ("replay", "resume", "cancel"):
-            with pytest.raises(OperationError, match="FORBIDDEN"):
+            code = "FORBIDDEN" if other.actor == principal.actor else "CONTROLLER_MISMATCH"
+            with pytest.raises(OperationError, match=code):
                 if verb == "replay":
                     d.ops.create(other, **body)
                 else:
@@ -327,7 +328,7 @@ async def test_actual_transports_share_original_intent_and_no_key_is_independent
             assert await through(door) == op_id
         result = await settle_batch(d, op_id)
         assert result["result"]["all_succeeded"] and len(api.write_frames(mock)) == 1
-        assert d.ops.get(op_id)["actor"] == "bulk-caller"
+        assert d.ops.get(op_id)["actor"] == "operator-dashboard"
         args.pop("idempotency_key")
         one = await mcp_result(server, "approve_pending", args)
         two = await mcp_result(server, "approve_pending", args)
@@ -537,7 +538,8 @@ async def test_linked_child_controls_require_original_actor_and_combined_scope(d
         # Another actor's key namespace creates a distinct ordinary action; it cannot
         # replay this child. Existing-child controls still require the original actor.
         for verb in (("replay", "cancel", "resume") if other.actor == principal.actor else ("cancel", "resume")):
-            with pytest.raises(OperationError, match="FORBIDDEN"):
+            code = "FORBIDDEN" if other.actor == principal.actor else "CONTROLLER_MISMATCH"
+            with pytest.raises(OperationError, match=code):
                 if verb == "replay":
                     daemon.ops.create(other, **{k: child[k] for k in ("action", "target", "params", "preconditions", "idempotency_key")})
                 else:
@@ -611,8 +613,9 @@ async def test_explicit_parent_controls_clear_wait_deadline(daemon, mock, contro
     child = next(iter(daemon.ops.get(op["operation_id"])["external_refs"]["bulk_children"].values()))
     daemon.ops._transition(child, "running")
     daemon.ops._transition(child, "uncertain", next_run_at=time.time() + 600)
+    scheduled_after = time.time()
     await daemon.ops._execute(op["operation_id"])
-    assert daemon.ops.get(op["operation_id"])["next_run_at"] >= time.time() + 28
+    assert daemon.ops.get(op["operation_id"])["next_run_at"] >= scheduled_after + 28
     if control == "resume":
         daemon.ops._transition(child, "needs_attention")
         await daemon.ops._execute(op["operation_id"])

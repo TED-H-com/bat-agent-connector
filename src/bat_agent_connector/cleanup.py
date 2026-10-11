@@ -67,6 +67,11 @@ REASONS = {
     "UNKNOWN_READ_ONLY": "Creation ownership is not proven.",
     "WORKDIR_NOT_MANAGED": "The workdir is outside the managed roots.",
     "BINDING_MISMATCH": "The resource does not match its creation binding.",
+    "FOREIGN_CONTROLLER": "This resource or one of its consumers belongs to another controller.",
+    "CONTROLLER_AUTHORITY_REQUIRED": "The original controller authority is not proven.",
+    "CONTROLLER_OWNER_UNPROVEN": "The original resource incarnation is not proven.",
+    "CONTROLLER_INCARNATION_CHANGED": "The original resource incarnation changed.",
+    "CONTROLLER_MEMBERSHIP_CHANGED": "Current PM membership no longer permits this resource mutation.",
     "CLONE_NOT_OURS": "The repository has no matching connector creation markers.",
     "CLONE_CONFIG_TAMPERED": "Repository config or object storage is unsafe.",
     "OBSERVATION_UNAVAILABLE": "Live observation was unavailable: the host is unconfigured or its read deadline expired.",
@@ -1640,6 +1645,7 @@ async def _phase_consumers(ctx, item):
                 raise OperationError("PREVIEW_STALE", "an unreviewed session uses this worktree", 409)
         if item.get("task_cleanup"):
             task_cleanup.check(ops, item)
+        ctx.require_controller()
         _require_resource_controller(ops, item)
     except asyncio.TimeoutError:
         raise OperationError("OBSERVATION_UNAVAILABLE", "live consumer read deadline expired; preview again", 409) from None
