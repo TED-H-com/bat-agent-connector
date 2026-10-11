@@ -5,6 +5,7 @@ latest reviews, or reinterpret passing verification as semantic acceptance.
 """
 from __future__ import annotations
 
+import json
 import re
 
 from . import pm_evidence, pm_package_handoff, pm_plans, pm_quality_projections
@@ -16,6 +17,7 @@ PROFILE = 'accepted_requirements_v1'
 PARAM = 'pm_requirement_quality_refs'
 MAX_REQUIREMENTS = 100
 MAX_CRITERIA = 200
+MAX_REFERENCE_BYTES = 16 * 1024
 PLAN_FIELDS = ('revision_id', 'document_digest', 'scope_revision')
 
 
@@ -142,6 +144,12 @@ def _dependencies(ops, principal, downstream_package, references, *, current):
     needed = {rid for row in doc['requirements'] for rid in row['depends_on']}
     if references is None:
         return []
+    try:
+        size = len(json.dumps(references, ensure_ascii=False, allow_nan=False).encode('utf-8'))
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise bad('Prerequisite references must be bounded JSON identities') from exc
+    if size > MAX_REFERENCE_BYTES:
+        raise OperationError('PM_REQUIREMENT_ACCEPTANCE_LIMIT', 'Original prerequisite references exceed 16 KiB', 413)
     if (not isinstance(references, dict) or len(references) > MAX_REQUIREMENTS or set(references) - needed):
         raise bad('Select only declared original prerequisite requirements')
     passed, cached = [], {}
