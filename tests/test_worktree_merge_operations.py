@@ -789,7 +789,8 @@ async def test_no_key_is_independent_and_scope_replay_controls_stay_original_act
     assert mock.channels().count('worktree:merge') == 1  # second request truthfully observes already merged
     op, _ = daemon.ops.create(P, **intent())
     for caller in (api_auth.Principal(P.actor, frozenset({'observe'})), api_auth.Principal('different', P.scopes)):
-        with pytest.raises(OperationError, match='FORBIDDEN'):
+        code = 'FORBIDDEN' if caller.actor == P.actor else 'CONTROLLER_MISMATCH'
+        with pytest.raises(OperationError, match=code):
             daemon.ops.cancel(caller, op['operation_id'])
     with pytest.raises(OperationError, match='IDEMPOTENCY_KEY_REQUIRED'):
         daemon.ops.create(P, **intent(idempotency_key=None))
