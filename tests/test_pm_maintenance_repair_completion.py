@@ -7,6 +7,7 @@ import pytest
 from bat_agent_connector import pm_maintenance_repair_runtime as runtime
 from bat_agent_connector import pm_maintenance_review_sources as reports
 from bat_agent_connector.operations import OperationError
+from tests import test_pm_maintenance_repair_runtime as native_fixtures
 from tests.test_pm_maintenance_repair_baseline import (  # noqa: F401
     OWNER,
     adopted_delivery,
@@ -29,20 +30,11 @@ from tests.test_pm_maintenance_repair_baseline import (  # noqa: F401
 from tests.test_pm_maintenance_repair_baseline import (
     ready_chain as ready_chain_fixture,
 )
-from tests.test_pm_maintenance_repair_runtime import (  # noqa: F401
-    native_replay as native_replay_fixture,
-)
-from tests.test_pm_maintenance_repair_runtime import (
-    observe,
-)
-from tests.test_pm_maintenance_repair_runtime import (
-    original_native_agent as original_native_agent_fixture,
-)
 from tests.test_pm_release_baselines import remove_repo
 
 ready_chain = ready_chain_fixture
-native_replay = native_replay_fixture
-original_native_agent = original_native_agent_fixture
+native_replay = native_fixtures.native_replay
+original_native_agent = native_fixtures.original_native_agent
 
 
 async def test_deployment_baseline_completion_and_fixed_review_share_original_receipts(ready_chain, native_replay, monkeypatch, mock):
@@ -62,7 +54,7 @@ async def test_deployment_baseline_completion_and_fixed_review_share_original_re
     w['parent'] = await advance(w, parent, rounds=10)
     assert w['parent']['status'] == 'succeeded', w['parent']
     assert w['parent']['result']['baseline_update']['status'] == 'updated'
-    reader = await observe(w)
+    reader = await native_fixtures.observe(w)
     assert reader['status'] == 'succeeded', {
         'reason': reader['status_reason'], 'code': reader['error_code'], 'steps': reader['steps'],
         'derived': [dict(row) for row in ops.db.execute('''SELECT o.action,o.status,o.status_reason,s.name,s.status AS step_status
