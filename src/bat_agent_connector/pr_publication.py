@@ -437,7 +437,8 @@ async def _run(ctx):
         if "source_ready " + intent["candidate_sha"] not in lines:
             raise _bad("PR_SOURCE_CHANGED", "The exact current owned result could not be pinned")
         prepared = [line.split() for line in lines if line.startswith("prepared ")]
-        if len(prepared) != 1 or len(prepared[0]) != 3:
+        if (len(prepared) != 1 or len(prepared[0]) != 3 or prepared[0][1] != intent["candidate_sha"]
+                or not integration.SHA.fullmatch(prepared[0][2])):
             raise GitHubAmbiguous("The local candidate pin was not observed")
         raw = [line[5:] for line in lines if line.startswith("file ")]
         if "files_end" not in lines or len(raw) > 500 or sum(len(p.encode()) + 1 for p in raw) > 128_000:
