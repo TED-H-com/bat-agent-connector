@@ -14,7 +14,7 @@ import time
 from . import pm_plans, pm_sprints, pm_workspace, repository_sync
 from . import pm_work_packages as packages
 from .github import GitHubAmbiguous
-from .operations import TERMINAL, ActionDef, OperationError, OperationService, Wait
+from .operations import RERUN, TERMINAL, ActionDef, Cancelled, OperationError, OperationService, Wait
 
 PUBLISH = "pm.issue.publish"
 CANCEL = "pm.issue.cancel"
@@ -388,12 +388,22 @@ async def _run(ctx):
         if gh is None:
             raise Wait("waiting_external", "Original GitHub publication needs its configured connection", 30)
         if not existing:
-            try:
-                await _repository(gh, intent)
-                if intent["issue"] is not None:
-                    await _read_issue(gh, intent)
-            except GitHubAmbiguous:
-                raise Wait("waiting_external", "GitHub issue preflight is unavailable; nothing has been sent", 30) from None
+            async def preflight():
+                try:
+                    _current(ctx, principal)
+                    await _repository(gh, intent)
+                    if intent["issue"] is not None:
+                        await _read_issue(gh, intent)
+                    _current(ctx, principal)
+                    return {"repository_id": intent["relation"]["repository_id"], "issue": intent["issue"]}
+                except Cancelled:
+                    raise _bad("CANCELLED", "Issue preflight stopped without publication") from None
+
+            async def reread(_):
+                return RERUN  # Pure bounded reads; restart still passes the epoch gate.
+
+            await ctx.step("pm.issue.preflight", preflight, reconcile=reread,
+                request={"intent_digest": ctx.admission_binding["issue_intent_digest"]})
             _current(ctx, principal)
 
         async def send():
