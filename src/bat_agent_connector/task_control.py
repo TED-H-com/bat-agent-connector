@@ -256,6 +256,8 @@ class FrameGuard:
         task = self.journal.get(self.task_id)
         require_authority(task)
         owner = registry.get(self.host, self.session_id)
+        if not self.controller_incarnation:
+            raise TaskControlRefused("CONTROLLER_BINDING_UNPROVEN", "task frame has no original session creation")
         controller_authority.require_entry(owner, expected_incarnation=self.controller_incarnation)
         if (task["host"] != self.host or self.session_id not in
                 {task.get("session_id"), task.get("reviewer_session_id")}
@@ -278,8 +280,9 @@ class FrameGuard:
         if command:
             controller_authority.require_binding(authority(command))
             original = json.loads(command["payload"]).get("controller_incarnation")
-            if original is not None:
-                controller_authority.require_entry(owner, expected_incarnation=original)
+            if not original:
+                raise TaskControlRefused("CONTROLLER_BINDING_UNPROVEN", "task command has no original session creation")
+            controller_authority.require_entry(owner, expected_incarnation=original)
         if (not command or command["kind"] != self.action or command["task_id"] != self.task_id or command["session_id"] != self.session_id
                 or command["status"] not in {"intent", "needs_review"}):
             raise TaskControlRefused("TASK_COMMAND_PENDING", "frame has no dispatchable task command")
@@ -353,18 +356,26 @@ def guarded(action):
                             return [dict(r) for r in conn.execute("SELECT * FROM commands WHERE task_id=?", (tid,))]
                     task = check(Reader(), task_id, host, sid, action, params.get("control_version"))
                 pointer = json.loads((registry.registry_path().parent / service.TASK_SERVICE_POINTER).read_text())
+                import os
+
                 from .task_daemon import request
-                params["control_version"] = task["control_version"]
-                return await asyncio.to_thread(request, "task_session_control", timeout=60,
-                                               _url=pointer.get("endpoint"),
-                                               _auth_token=(db.parent / "task-admin.token").read_text().strip(),
-                                               task_id=task_id,
-                                               host=host, session_id=sid, action=action, control=params)
+                token = os.environ.get("BATC_API_TOKEN")
+                if not token:
+                    raise TaskControlRefused("CONTROLLER_AUTHORITY_REQUIRED", "forwarding requires the original caller API token")
+                fields = {"send": {"text", "message_id", "queue"},
+                          "answer": {"answers", "permission", "deny_message", "tool_use_id", "dont_ask_again"},
+                          "interrupt": {"mode"}, "permissions": {"mode"}}[action]
+                forwarded = {k: params[k] for k in fields if k in params}
+                method = "session_set_permissions" if action == "permissions" else "session_" + action
+                return await asyncio.to_thread(request, method, timeout=60,
+                                               _url=pointer.get("endpoint"), _auth_token=token,
+                                               host=host, session_id=sid, confirm=True,
+                                               control_version=task["control_version"], **forwarded)
             except TaskControlRefused:
                 raise
             except (OSError, ValueError, sqlite3.Error) as exc:
                 code = str(exc).split(":", 1)[0]
-                if code.startswith(("TASK_", "CONTROL_VERSION_")):
+                if code.startswith(("TASK_", "CONTROL_VERSION_", "CONTROLLER_", "FOREIGN_CONTROLLER")):
                     raise TaskControlRefused(code, "task owner refused the control") from None
                 raise TaskControlRefused("TASK_OWNER_UNAVAILABLE", "task owner cannot be reached") from None
         return wrapper

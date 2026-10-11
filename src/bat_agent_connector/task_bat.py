@@ -264,6 +264,8 @@ class BatTaskAdapter:
                 registry.claim_warm(host, session_id, previous_task_id=previous["task_id"],
                                     task_id=task["task_id"], workspace_id=identity["workspace_id"],
                                     cwd=identity["cwd"], branch=identity["branch"])
+                confinement.record_task_start(self.journal, task["task_id"], session_id,
+                                              registry.get(host, session_id) or {})
                 # The reused branch's verified HEAD is the next task's diff baseline.
                 self.journal.change(task["task_id"], "dispatching", fields={
                     "base_commit": previous["verification_commit"]}, event="warm_base_recorded")

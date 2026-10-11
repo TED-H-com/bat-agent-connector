@@ -749,13 +749,10 @@ class TaskDaemon:
             if method == "work_reconcile":
                 target["command_id"] = params.pop("command_id")
         if principal is None:
-            if auth_token:
-                digest = hashlib.sha256(auth_token.encode()).hexdigest()
-                prefix = (f"reconcile:{target['task_id']}:{target['command_id']}:" if method == "work_reconcile"
-                          else f"task:{target['task_id']}:")
-                principal = api_auth.Principal(prefix + digest, frozenset({"operate"}))
-            else:
-                principal = api_auth.Principal(api_auth.ADMIN_ACTOR, frozenset(), admin=True)
+            principal = (self.capability_principal(auth_token, task_actions.METHODS[method], target, key)
+                         if auth_token else None)
+            if principal is None:
+                raise LegacyTaskError("FORBIDDEN", "authenticated task caller or valid task capability required", 403)
         try:
             # A restart must see both the admitted intent and its historical-key bridge, or neither.
             with self.journal.tx():
@@ -960,7 +957,17 @@ class TaskDaemon:
             if any(c["kind"] == "goose_run" for c in self.journal.commands(task_id)):
                 return
             entry = registry.get(task["host"], task["session_id"])
-            if not entry or not entry.get("cwd"):
+            from . import controller_authority
+            start = next((c for c in self.journal.commands(task_id)
+                          if c["kind"] == "start_lead" and c["session_id"] == task["session_id"]), None)
+            original_nonce = json.loads(start["payload"]).get("controller_incarnation") if start else None
+            if not original_nonce:
+                raise TaskControlRefused("CONTROLLER_BINDING_UNPROVEN", "Goose has no original task session creation")
+            controller_authority.require_binding(task_control.authority(start))
+            controller_authority.require_entry(entry, expected_incarnation=original_nonce)
+            if (entry.get("task_id") != task_id or entry.get("role") != "lead"):
+                raise TaskControlRefused("TASK_BINDING_MISMATCH", "Goose requires the original task session")
+            if not entry.get("cwd"):
                 self.journal.change(task_id, "uncertain")
                 return
             cmd, _ = self.journal.command(task_id, "goose_run", task["session_id"], {},

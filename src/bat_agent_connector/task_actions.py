@@ -73,6 +73,8 @@ def admit_task(ops, principal, target, params, pre):
         with controller_authority.use(task_control.authority(task), ops.journal):
             task_control.require_authority(task)
     else:
+        if principal and principal.actor.startswith(("task:", "reconcile:")):
+            raise OperationError("FORBIDDEN", "task capability is invalid", 403)
         task_control.require_authority(task)
     version = pre.get("control_version")
     if version is not None and (type(version) is not int or version != task["control_version"]):
