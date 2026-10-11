@@ -413,3 +413,44 @@ async def test_full_assessment_history_keeps_one_reserved_terminal_revocation(re
     assert not final['qualified'] and final['original_outcome']['qualified']
     assert len(final['history']) == quality.MAX_HISTORY + 1
     assert original_assessment(w, review, saved['assessment'])['assessment']['document']['qualified']
+
+
+async def test_revocation_projection_retains_the_original_responsible_reason_and_receipt(reviewed):
+    w, ops = reviewed, reviewed['d'].ops
+    review = await new_review(w)
+    await execute(w, assessment(w, review), actor=REVIEWER)
+    assert read(w, review)['revocation'] is None
+    reason = '原始登入驗證出現反例；保留原結論並撤回本次驗收。'
+    envelope = {'action': quality.REVOKE, 'target': {'workspace_id': w['workspace_id'], 'review_id': review['review_id']},
+        'params': {'reason': reason}, 'preconditions': {'expected_version': 2}, 'idempotency_key': uuid.uuid4().hex}
+    done = await execute(w, envelope)
+    current = read(w, review)
+    revoked = current['revocation']
+    assert revoked['document'] == {'reason': reason, 'qualified': False}
+    assert revoked['operation_id'] == done['operation_id'] and revoked['actor'] == OWNER.actor
+    assert current['assessment']['document']['qualified'] and not current['qualified']
+    assert quality.for_work(ops, OWNER, w['workspace_id'], w['target']['work_item_id'])['reviews'][0]['revocation'] == revoked
+    replay, fresh = ops.create(OWNER, **envelope)
+    assert not fresh and replay['operation_id'] == done['operation_id']
+    assert read(w, review) == current
+
+
+@pytest.mark.parametrize('field', ['policy', 'criterion', 'assessment', 'revoke'])
+async def test_unpaired_unicode_is_refused_before_original_quality_admission(reviewed, field):
+    w, ops = reviewed, reviewed['d'].ops
+    if field in {'policy', 'criterion'}:
+        envelope, who = selection(w), OWNER
+        if field == 'policy':
+            envelope['params']['rationale'] = '\ud800'
+        else:
+            envelope['params']['criteria'][0]['criterion']['input_id'] = '\ud800'
+    else:
+        review = await new_review(w)
+        envelope, who = assessment(w, review), REVIEWER
+        if field == 'assessment':
+            envelope['params']['conclusions'][0]['rationale'] = '\ud800'
+        else:
+            envelope.update(action=quality.REVOKE, params={'reason': '\ud800'})
+    with pytest.raises(OperationError) as invalid:
+        ops.create(who, **envelope)
+    assert invalid.value.code == 'PM_QUALITY_INVALID' and invalid.value.status == 422
