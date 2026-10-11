@@ -185,3 +185,16 @@ change-set execution workflow. Fresh observations from a different snapshot need
 a future explicit context/follow-up operation; current revisions intentionally keep
 the original source boundary. Work/spec changes still use their existing explicitly
 authorized actions. Resolving a finding does not prove an improvement effective.
+
+## Shared service entry points
+
+The workspace service registers these reads under the same observe permission:
+`GET /pm/workspaces/{workspace_id}/governance?kind&after&limit`,
+`GET /pm/workspaces/{workspace_id}/governance/{record_id}`, and
+`GET /pm/workspaces/{workspace_id}/governance/{record_id}/history?after&limit`.
+Their RPC/MCP counterparts are `pm_governance_list`, `pm_governance_get` and
+`pm_governance_history_list`. No hidden actor override, detail history limit or
+unrecognized query is accepted. The native bridge validates the same route/query
+shape; backend membership and original source checks remain authoritative.
+Shared `operation_get`, operation lists and event feeds apply the original
+admission source gate before returning any governance narration.

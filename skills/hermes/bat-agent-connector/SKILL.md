@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "08057887514c11f95959d4462f02292cddffbfb1d0a66a2ab695deb5e3dc8832"
+  canonical_sha256: "12e6bdd2884bedb334e80a48e531195814ff0af9ca0624385f399243717a30ac"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -305,6 +305,37 @@ read rechecks source authority. Completion does not adopt scope, edit backlog,
 dispatch work or prove DoD. Retro may explicitly select no new improvements with
 a reason; useful reflection does not require manufacturing new work. Shared
 quality assessment, Daily Scrum and complete Scrum conformance remain separate.
+
+## Sourced risks, changes and decisions
+
+Use `pm_governance_list`, `pm_governance_get` and `pm_governance_history_list`
+for attributed findings and immutable decision history. Select an existing adopted
+Project Brief snapshot; original plan inputs, requirements, evidence and work-binding
+references preserve their versions and information status. A drift report needs both
+an observed fact and its fixed plan reference; it is still an attributed interpretation.
+
+`pm.governance.record` targets `{workspace_id}` with `expected_plan_version`.
+Supply `kind` (risk, assumption, issue, dependency, drift or change), an explicit
+`root_cause_key`, `snapshot_id`, title, description, owner_actor, source_refs and
+rationale. Do not invent deadlines, impact scores or confirmed requirements.
+The same kind/cause is deduplicated without applying new wording; revise it explicitly.
+Distinct causes supported by overlapping sources require the exact candidate record
+IDs and a reason in `disambiguation`.
+
+Other actions target `{workspace_id,record_id}` with `expected_version`:
+
+- `pm.governance.revise` replaces management fields while preserving the original
+  snapshot and sources. A reported resolution is not verification.
+- `pm.governance.decide` records the current owner's `adopted_direction` or `rejected`
+  decision for an exact change proposal. Neither action adopts the plan or dispatches work.
+- `pm.governance.adoption.link` references an existing successful `adoption_operation_id`
+  for that exact proposed revision and its original baseline. It records the actual
+  adoption result; it never sends another adoption request.
+
+Read every non-null cursor. Original source access is checked again on records,
+shared operation results and event feeds; do not recover a hidden quote from history.
+Unknown verification and remaining lifecycle work stay explicit. Automatic causal
+analysis, reminders and cross-snapshot follow-up are not implied by these records.
 
 ## Concept
 

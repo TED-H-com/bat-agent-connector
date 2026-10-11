@@ -58,7 +58,7 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與採用操作，API／MCP 使用相同契約。
 
 第一、二、三批已合併於 #86、#90、[#92](https://github.com/teddashh/bat-agent-connector/pull/92)。
-第四批在 [#93](https://github.com/teddashh/bat-agent-connector/pull/93) 驗證。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
+第四批計畫採用 [#93](https://github.com/teddashh/bat-agent-connector/pull/93)、工作證據 [#95](https://github.com/teddashh/bat-agent-connector/pull/95)、Project Brief [#96](https://github.com/teddashh/bat-agent-connector/pull/96) 與原生分析 [#97](https://github.com/teddashh/bat-agent-connector/pull/97) 已合併。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
 
 下表的「本批」是這次的實作範圍；測試／審查以 PR 證據為準。未完成部分保留在原編號下，
 不以新增一張畫面或資料表當作完整 PM 能力完成。
@@ -69,8 +69,8 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W02 | P0 | 全入口 controller policy | 第二批：既有執行入口、最後 frame、背景恢復與清理已接入原 controller／incarnation；驗證見 #87 的實作 PR |
 | W03 | P0 | Operation request key 與查回 | 已接入 PM 原 request key、Git／journal 查回與取消；部分 Git transaction 保留原 writer，驗證以各批 PR 為準 |
 | W04 | P0 | BAT capability adapter | 第三批：唯讀選項、native replay／completion 與能力缺口；自動 PM 執行仍缺工具限制契約 |
-| W05 | P0 | Evidence IDs 與 replay 去重 | #94 開發分支：固定來源／digest／journal cursor、快照與重播去重；DoD 尚未評估，不把收集證據算成驗收 |
-| W06 | P0 | Session worktree work 關聯 | #94 開發分支：原 project／work 明確綁定、固定已採用 plan／需求引用、既有來源關聯；不轉移 session 控制權 |
+| W05 | P0 | Evidence IDs 與 replay 去重 | #95 已合併：固定來源／digest／journal cursor、快照與重播去重；DoD 尚未評估，不把收集證據算成驗收 |
+| W06 | P0 | Session worktree work 關聯 | #95 已合併：原 project／work 明確綁定、固定已採用 plan／需求引用、既有來源關聯；不轉移 session 控制權 |
 | W07 | P0 | PM worktree bootstrap | 第三、四批：設定綁定、固定來源、自有 worktree、不可覆寫草稿與計畫 commit；不夾帶程式或其他 index 修改 |
 | W08 | P0 | Plan revision 與採用流程 | 第四批：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；取消／撤權／回覆遺失整合驗證中 |
 | W09 | P1 | PM runner 與 adapter selection | 第三批：writer／context／reply provenance 基礎與手動脈絡準備；可自動執行的 adapter、工具限制與切換待完成 |
@@ -81,7 +81,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W14 | P1 | Kanban | 開發分支：原工作與執行紀錄的唯讀工作看板、逐頁 WIP／時間來源／attempts；相依、分派、WIP 政策與就緒判斷待做 |
 | W15 | P1 | Sprint artifacts 與時間 | 開發分支：Product Goal／有序 Backlog／DoD、固定 Sprint Goal／角色／期間、選入工作與關閉歷史；品質驗收與完整事件待做 |
 | W16 | P1 | Planning Review Retro | 開發分支：各自輸出、固定討論依據、明確完成與改善追蹤；Daily Scrum、LLM 會議引導與品質判定待做 |
-| W17 | P1 | Risk change decision view | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W17 | P1 | 風險、變更與決策 | 開發分支：固定計畫／快照來源、明確根因去重、版本決策與原採用結果關聯；自動分析、跨快照追蹤與提醒待做 |
 | W18 | P1 | GitHub issue mapping | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W19 | P1 | Orchestrator readiness 與派工 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -124,9 +124,9 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 保存原工作版本、已採用計畫引用及需求 ID。證據由中央 journal 收集，不接受 caller 提供的
 完成內容；工作回報、驗證、PR 合併與部署保持各自的來源與時間。讀取時重新檢查來源可見性。
 Web／Tauri 在討論旁提供明確連結與快照查閱，不依 repo 名稱自動推測歸屬。
-本批仍在分支驗證，尚未包含完整品質判定、偏差分析與五視圖。
+工作證據基礎已在 #95 合併，尚未包含完整品質判定、偏差分析與五視圖。
 
-Linux native PM analysis adapter 已在開發分支整合：明確要求一次分析後，使用新建的自有
+Linux native PM analysis adapter 已在 #97 合併：明確要求一次分析後，使用新建的自有
 原生 thread、固定討論脈絡與限制工具的 runtime。API／MCP／Web／Tauri 共用原 operation，
 完成回覆連同模型、原生事件與來源保存；取消與失聯查回原程序，不重送或接管其他 session。
 
@@ -201,3 +201,12 @@ checkpoint 失效，即使仍在輸入也立即清除舊畫面。草稿與原操
 原 principal 分區，恢復授權後可查回，沒有重新派送工作的副作用。
 
 這批在開發分支接入 API／MCP／Web／Tauri，尚未安裝或宣稱 M3／M4 完成。
+
+## 固定來源的治理紀錄
+
+風險、假設、問題、相依、偏差及變更提案保存原計畫與快照。
+同一明確根因不重複產生紀錄；不同問題共用證據時須留下區分理由。
+方向決策只由目前 workspace owner 記錄，正式採用仍沿用既有操作。
+採用關聯核對原 successful operation、候選文件與先前基準；不會修改
+scope 或再送一次 adopt。所有讀取、操作結果及事件重新核對原始來源。
+目前是有來源的管理紀錄，尚未完成自動根因分析或完整 PM Follow-up。

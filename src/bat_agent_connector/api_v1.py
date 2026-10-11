@@ -124,6 +124,7 @@ class ApiV1:
         from . import (
             pm_discussions,
             pm_evidence,
+            pm_governance,
             pm_meetings,
             pm_native_operations,
             pm_plan_operations,
@@ -143,6 +144,7 @@ class ApiV1:
         pm_roadmap.install(daemon.ops)
         pm_sprints.install(daemon.ops)
         pm_meetings.install(daemon.ops)
+        pm_governance.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -172,6 +174,9 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-comparison", self.pm_plan_comparison, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban", self.pm_kanban, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban/(?P<work_item_id>wi_[0-9a-f]{20})", self.pm_kanban_card, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/governance", self.pm_governance_records, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/governance/(?P<record_id>pmgov_[0-9a-f]{32})", self.pm_governance_record, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/governance/(?P<record_id>pmgov_[0-9a-f]{32})/history", self.pm_governance_history, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/meetings", self.pm_meetings, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/meetings/(?P<meeting_id>pmmeet_[0-9a-f]{32})", self.pm_meeting, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/meetings/(?P<meeting_id>pmmeet_[0-9a-f]{32})/history/(?P<kind>contexts|notes|drafts|follow_ups)", self.pm_meeting_history, "observe"),
@@ -384,7 +389,8 @@ class ApiV1:
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal))
             if fn in {self.repair_evidence, self.work_item_repair, self.session_instructions,
-                      self.host_preferences, self.project_skills, self.work_item_results}:
+                      self.host_preferences, self.project_skills, self.work_item_results,
+                      self.pm_governance_records, self.pm_governance_record, self.pm_governance_history}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
             from . import controller_authority
@@ -537,7 +543,7 @@ class ApiV1:
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
-        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list"}:
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list"}:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
@@ -613,6 +619,15 @@ class ApiV1:
 
     async def pm_kanban_card(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_kanban_card_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_governance_records(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_governance_list", query, workspace_id=workspace_id)
+
+    async def pm_governance_record(self, principal, query, workspace_id, record_id, **_):
+        return self._pm_read(principal, "pm_governance_get", query, workspace_id=workspace_id, record_id=record_id)
+
+    async def pm_governance_history(self, principal, query, workspace_id, record_id, **_):
+        return self._pm_read(principal, "pm_governance_history_list", query, workspace_id=workspace_id, record_id=record_id)
 
     async def pm_meetings(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_meetings_list", query, workspace_id=workspace_id)
@@ -710,6 +725,7 @@ class ApiV1:
                                                     "brief_snapshots": "pm.snapshot.create" in self.daemon.ops.actions,
                                                     "roadmap": "pm.roadmap.baseline.set" in self.daemon.ops.actions,
                                                     "sprints": "pm.sprint.create" in self.daemon.ops.actions,
+                                                    "governance": "pm.governance.record" in self.daemon.ops.actions,
                                                     "kanban": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},

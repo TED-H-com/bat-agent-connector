@@ -141,6 +141,696 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-governance.js
+function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = [
+		"risk",
+		"assumption",
+		"issue",
+		"dependency",
+		"drift",
+		"change"
+	];
+	let serial = 0, loaded = false, dirty = false, stale = false, signature = "", selectedId = "", model = null, forms = [], widgets = [];
+	let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null;
+	const navigationKey = `batc.pm.governance.selection.${workspaceId}.${caps()?.actor}`;
+	try {
+		const saved = sessionStorage.getItem(navigationKey);
+		if (/^pmgov_[0-9a-f]{32}$/.test(saved || "")) selectedId = saved;
+	} catch {}
+	const selectRecord = (value) => {
+		selectedId = value;
+		try {
+			alive();
+			sessionStorage.setItem(navigationKey, value);
+		} catch {}
+	};
+	const status = h("div", { role: "status" }), list = h("div", { class: "pm-evidence-rows" }), detail = h("div"), editors = h("div");
+	const warning = h("p", {
+		class: "muted",
+		hidden: true
+	}, t("pm_gov_stale"));
+	const review = h("button", {
+		class: "secondary",
+		type: "button",
+		hidden: true,
+		onclick: () => {
+			if (loaded) renderEditors(true);
+		}
+	}, t("pm_gov_review_fresh"));
+	const element = h("section", {
+		class: "panel pm-evidence",
+		"data-pm-governance": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_gov_title")), h("p", { class: "muted" }, t("pm_gov_intro"))), h("button", {
+		class: "secondary",
+		type: "button",
+		onclick: () => void refresh()
+	}, t("pm_gov_refresh"))), status, list, detail, warning, review, editors);
+	const actor = () => caps()?.actor;
+	const can = () => loaded && permitted(false);
+	const owner = () => {
+		const ws = workspace(), role = Array.isArray(ws?.members) ? ws.members.find((member) => member.actor === actor())?.role : ws?.membership?.role;
+		return can() && role === "owner";
+	};
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return value;
+	};
+	const id = (value) => h("code", { class: "pm-source" }, value || t("pm_gov_unknown"));
+	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
+	const fold = (key, content, open = false) => h("details", { open }, h("summary", {}, t(key)), content);
+	const line = (key, value) => h("section", { class: "pm-brief-row" }, h("h3", {}, t(key)), h("div", { class: "pm-brief-values" }, value));
+	const text = (value) => h("p", { class: "pm-note-text" }, value || t("pm_gov_unknown"));
+	const hidden = (value) => {
+		const node = h("input", {
+			type: "hidden",
+			value: JSON.stringify(value)
+		});
+		node.dataset.pmDefault = JSON.stringify(value);
+		return node;
+	};
+	const select = (key, choices, value = "") => {
+		const node = h("select", { "aria-label": t(key) }, ...choices.map(([value, label]) => h("option", { value }, label)));
+		node.value = value;
+		node.dataset.pmDefault = value;
+		return node;
+	};
+	const reason = (value) => input("pm_gov_reason", {
+		multiline: true,
+		max: 4e3,
+		value: value || ""
+	});
+	const target = () => ({
+		workspace_id: workspaceId,
+		record_id: selectedId
+	});
+	const invalid = () => {
+		throw Error(t("pm_scope_mismatch"));
+	};
+	function checkedEntry(entry, expectedId) {
+		check(entry.record);
+		if (expectedId && entry.record.record_id !== expectedId || entry.revision?.record_id !== entry.record.record_id || entry.revision?.revision_id !== entry.record.revision_id || entry.revision?.version !== entry.record.version) invalid();
+		return entry;
+	}
+	function update() {
+		forms.forEach((editor) => editor.update());
+		widgets.forEach((widget) => widget());
+		warning.hidden = !stale;
+		review.hidden = !stale;
+		review.disabled = !loaded;
+	}
+	function unavailable(error) {
+		loaded = false;
+		++sourceTicket;
+		list.replaceChildren();
+		detail.replaceChildren();
+		editors.hidden = true;
+		update();
+		status.replaceChildren(errorBox(error));
+	}
+	function localForm(options, rebase = false) {
+		const expected = JSON.stringify({
+			preconditions: options.preconditions(),
+			context: options.context
+		});
+		const baseline = h("input", {
+			type: "hidden",
+			value: expected
+		});
+		baseline.dataset.pmDefault = expected;
+		let editor;
+		editor = form({
+			...options,
+			fields: {
+				...options.fields,
+				_baseline: baseline
+			},
+			extra: h("div", {}, options.extra, baseline),
+			params: (values) => {
+				if (options.valid && !options.valid()) throw Error(t("pm_gov_check_sources"));
+				return options.params(Object.fromEntries(Object.entries(values).filter(([key]) => key !== "_baseline")));
+			},
+			onStateChange: () => {
+				options.onStateChange?.();
+				if (editor && !editor.locked() && options.valid && !options.valid()) editor.box.querySelector("button[type=submit]").disabled = true;
+			},
+			preconditions: () => JSON.parse(baseline.value).preconditions,
+			permitted: () => !stale && options.permitted(),
+			recoverPermitted: can,
+			onSaved: async (result) => {
+				if (result?.workspace_id !== workspaceId || !/^pmgov_[0-9a-f]{32}$/.test(result.record_id)) invalid();
+				selectRecord(result.record_id);
+				await refresh(true);
+				if (result.deduplicated) status.replaceChildren(note("pm_gov_deduplicated"));
+			}
+		});
+		if (rebase && !editor.locked()) editor.set("_baseline", expected);
+		if (!editor.locked() && baseline.value !== expected) stale = true;
+		editor.box.addEventListener("input", () => {
+			dirty = true;
+		});
+		editor.box.addEventListener("change", () => {
+			dirty = true;
+			update();
+		});
+		forms.push(editor);
+		return editor;
+	}
+	function sourceLabel(kind, source) {
+		const words = source.value || source.text || source.title || source.description || source.summary || source.source_kind || source.work_item_id;
+		const state = source.status || source.verification_status;
+		const stateKey = "pm_gov_info_" + state, label = state ? t(stateKey) : "";
+		return [
+			t("pm_gov_source_" + kind),
+			typeof words === "string" ? words : "",
+			label === stateKey ? state : label
+		].filter(Boolean).join(" · ");
+	}
+	function sourceChoices(snapshot) {
+		const baseline = snapshot?.baseline?.document;
+		if (!baseline) return [];
+		return [
+			...baseline.selected_inputs.map((row) => ({
+				kind: "plan_input",
+				id: row.input_id,
+				source: row
+			})),
+			...baseline.requirements.map((row) => ({
+				kind: "requirement",
+				id: row.id,
+				source: row
+			})),
+			...snapshot.evidence.map((row) => ({
+				kind: "evidence",
+				id: row.evidence_id,
+				source: row
+			})),
+			...snapshot.work.map((row) => ({
+				kind: "work_binding",
+				id: row.binding.binding_id,
+				source: row.binding
+			}))
+		];
+	}
+	const key = (ref) => `${ref.kind}:${ref.id}`;
+	function refsWidget(field, holder, snapshot, getEditor, original = []) {
+		const choices = sourceChoices(snapshot), saved = JSON.parse(field.value || "[]"), required = new Set(original.map(key));
+		for (const ref of saved) if (!choices.some((choice) => key(choice) === key(ref))) choices.push({
+			...ref,
+			missing: true
+		});
+		const controls = choices.map((choice) => {
+			const checkbox = h("input", { type: "checkbox" });
+			const label = choice.missing ? t("pm_gov_source_missing") : sourceLabel(choice.kind, choice.source);
+			checkbox.addEventListener("change", () => {
+				if (!can() || stale || getEditor().locked() || required.has(key(choice))) return;
+				const refs = JSON.parse(field.value || "[]").filter((ref) => key(ref) !== key(choice));
+				if (checkbox.checked) refs.push({
+					kind: choice.kind,
+					id: choice.id
+				});
+				getEditor().set("source_refs", JSON.stringify(refs));
+				dirty = true;
+				update();
+			});
+			return {
+				choice,
+				checkbox,
+				element: h("label", { class: "pm-fact-heading" }, checkbox, h("span", { class: "pm-source" }, label, " · ", id(choice.id)))
+			};
+		});
+		const sync = () => {
+			const selected = new Set(JSON.parse(field.value || "[]").map(key));
+			for (const { choice, checkbox } of controls) {
+				checkbox.checked = selected.has(key(choice));
+				checkbox.disabled = !can() || stale || getEditor().locked() || getEditor().fields.title.disabled || required.has(key(choice));
+			}
+		};
+		holder.replaceChildren(note("pm_gov_source_help"), ...controls.map((row) => row.element));
+		sync();
+		return sync;
+	}
+	function documentView(entry) {
+		const d = entry.document;
+		return h("div", {}, text(d.description), line("pm_gov_owner", text(d.owner_actor)), line("pm_gov_response", h("div", {}, text(d.response), d.trigger ? text(t("pm_gov_trigger") + ": " + d.trigger) : note("pm_gov_trigger_unknown"), text(t("pm_gov_review_at") + ": " + (d.review_at || t("pm_gov_unscheduled"))))), d.dimension ? line("pm_gov_dimension", text(t("pm_gov_" + d.dimension))) : "", line("pm_gov_assessment", h("div", {}, note("pm_gov_unassessed"), note(d.assessment_basis === "attributed_assumption" ? "pm_gov_assumption_basis" : "pm_gov_finding_basis"))), d.affected_requirement_ids.length ? line("pm_gov_affected", text(d.affected_requirement_ids.join(", "))) : "", d.alternatives.length ? line("pm_gov_alternatives", h("ul", {}, ...d.alternatives.map((value) => h("li", { class: "pm-note-text" }, value)))) : "", d.decision ? line("pm_gov_decision", h("div", {}, text(t("pm_gov_" + d.decision.disposition)), text(d.decision.rationale), text(d.decision.recorded_by), note("pm_gov_direction_only"))) : "", d.adoption ? line("pm_gov_adoption", h("div", {}, note("pm_gov_adoption_historical"), id(d.adoption.revision_id), h("p", {}, h("a", { href: `#/op/${d.adoption.operation_id}` }, t("pm_operation"))), text(d.adoption.adopted_by))) : "", d.proposed_revision ? fold("pm_gov_proposed", h("div", {}, id(d.proposed_revision.revision_id), text(d.proposed_revision.document_digest), note("pm_gov_direction_only"))) : "", fold("pm_gov_sources", h("div", {}, ...d.sources.map((ref) => h("article", { class: "pm-fact" }, text(sourceLabel(ref.kind, ref.source)), id(ref.id), fold("pm_gov_exact_source", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref.source, null, 2))))))), d.disambiguation ? fold("pm_gov_distinction", h("div", {}, text(d.disambiguation.rationale), ...d.disambiguation.record_ids.map(id))) : "", line("pm_gov_reason", text(d.rationale)));
+	}
+	function historyView(record) {
+		const holder = h("div"), container = fold("pm_gov_history", holder);
+		let cursor = 0, started = false, busy = false;
+		const load = async () => {
+			if (busy) return;
+			busy = true;
+			try {
+				const page = check(await api("GET", `${endpoint}/governance/${record.record_id}/history?after=${cursor}&limit=20`));
+				alive();
+				if (!container.isConnected) return;
+				if (page.record_id !== record.record_id || JSON.stringify(page.context) !== JSON.stringify(record.context) || !Array.isArray(page.revisions) || page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= cursor)) invalid();
+				let last = cursor;
+				for (const row of page.revisions) {
+					if (row.record_id !== record.record_id || !Number.isSafeInteger(row.sequence) || row.sequence <= last) invalid();
+					last = row.sequence;
+					holder.append(h("details", {}, h("summary", {}, `#${row.version} · ${row.actor} · ${t("pm_gov_action_" + row.action.split(".").slice(2).join("_"))}`), documentView(row), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation"))));
+				}
+				more.remove();
+				cursor = page.next_cursor;
+				if (cursor != null) holder.append(more);
+			} catch (error) {
+				if (container.isConnected) unavailable(error);
+			} finally {
+				busy = false;
+				more.disabled = false;
+			}
+		};
+		const more = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				more.disabled = true;
+				load();
+			}
+		}, t("pm_gov_more_history"));
+		container.addEventListener("toggle", () => {
+			if (container.open && !started) {
+				started = true;
+				load();
+			}
+		});
+		return container;
+	}
+	function renderRead() {
+		const ordered = [...model.records].sort((a, b) => {
+			const score = (row) => row.revision.document.status === "reported_resolved" ? 2 : row.revision.document.status === "monitoring" ? 1 : 0;
+			return score(a) - score(b) || (a.record.kind === "change" ? -1 : 0) - (b.record.kind === "change" ? -1 : 0) || a.record.sequence - b.record.sequence;
+		});
+		list.replaceChildren(...ordered.length ? ordered.map(({ record, revision }) => h("article", {
+			class: "pm-fact",
+			"data-pm-governance-row": record.record_id
+		}, h("div", { class: "pm-fact-heading" }, h("strong", { class: "pm-source" }, revision.document.title), h("span", { class: "muted" }, t("pm_gov_" + record.kind))), h("p", { class: "muted" }, t("pm_gov_" + revision.document.status), " · ", revision.document.owner_actor, revision.document.decision ? " · " + t("pm_gov_" + revision.document.decision.disposition) : ""), h("button", {
+			type: "button",
+			class: "secondary",
+			"aria-pressed": selectedId === record.record_id,
+			onclick: () => {
+				selectRecord(record.record_id);
+				refresh(true);
+			}
+		}, t(selectedId === record.record_id ? "pm_gov_selected" : "pm_gov_inspect")))) : [note("pm_gov_empty")]);
+		if (model.nextCursor != null) list.append(note("pm_gov_partial"), h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				pageCount++;
+				refresh();
+			}
+		}, t("pm_gov_more")));
+		detail.replaceChildren();
+		if (!model.detail) return;
+		const { record, revision } = model.detail;
+		detail.append(h("section", { "data-pm-governance-detail": record.record_id }, h("h3", { class: "pm-source" }, revision.document.title), documentView(revision), fold("pm_gov_baseline", h("div", {}, id(record.context.plan_revision_id), text(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id), text(record.context.snapshot_ref.as_of), text(t("pm_gov_root") + ": " + record.root_cause_key))), historyView(record)));
+	}
+	function findingEditor(existing, rebase) {
+		const doc = existing?.revision.document, creating = !existing, snapshot = creating ? null : model.fixed;
+		const fields = {
+			title: input("pm_gov_name", {
+				max: 200,
+				value: doc?.title || ""
+			}),
+			description: input("pm_gov_description", {
+				multiline: true,
+				max: 8e3,
+				value: doc?.description || ""
+			}),
+			owner_actor: input("pm_gov_owner", {
+				max: 200,
+				value: doc?.owner_actor || actor()
+			}),
+			rationale: reason(),
+			source_refs: hidden(doc?.sources.map(({ kind, id }) => ({
+				kind,
+				id
+			})) || []),
+			status: select("pm_gov_status", [
+				"open",
+				"monitoring",
+				"reported_resolved"
+			].map((value) => [value, t("pm_gov_" + value)]), doc?.status || "open"),
+			affected_requirement_ids: input("pm_gov_affected_ids", {
+				required: false,
+				value: doc?.affected_requirement_ids.join(", ") || ""
+			}),
+			trigger: input("pm_gov_trigger", {
+				multiline: true,
+				max: 4e3,
+				required: false,
+				value: doc?.trigger || ""
+			}),
+			response: input("pm_gov_response", {
+				multiline: true,
+				max: 4e3,
+				required: false,
+				value: doc?.response || ""
+			}),
+			review_at: input("pm_gov_review_time", {
+				required: false,
+				value: doc?.review_at || ""
+			}),
+			dimension: select("pm_gov_dimension", [["", t("pm_gov_unknown")], ...[
+				"scope",
+				"schedule",
+				"quality",
+				"resources"
+			].map((value) => [value, t("pm_gov_" + value)])], doc?.dimension || ""),
+			alternatives: input("pm_gov_alternatives_lines", {
+				multiline: true,
+				max: 20009,
+				required: false,
+				value: doc?.alternatives.join("\n") || ""
+			}),
+			proposed_revision_id: input("pm_gov_proposed_id", {
+				required: false,
+				value: doc?.proposed_revision?.revision_id || ""
+			}),
+			related_ids: input("pm_gov_related_ids", {
+				required: false,
+				value: doc?.disambiguation?.record_ids.join(", ") || ""
+			}),
+			distinction: input("pm_gov_distinction_reason", {
+				multiline: true,
+				required: false,
+				value: doc?.disambiguation?.rationale || ""
+			})
+		};
+		if (creating) {
+			fields.kind = select("pm_gov_kind", kinds.map((value) => [value, t("pm_gov_" + value)]), "risk");
+			fields.root_cause_key = input("pm_gov_root", { max: 120 });
+			fields.snapshot_id = select("pm_gov_snapshot", model.snapshots.map((row) => [row.snapshot_id, row.title || row.snapshot_id]), model.snapshots.at(-1)?.snapshot_id || "");
+		}
+		const sourceHolder = h("div"), sourceStatus = h("div", { role: "status" }), proofStatus = h("div", { role: "status" }), driftHint = note("pm_gov_drift_help");
+		let editor, sourceSync = () => {}, proof = doc?.proposed_revision?.revision_id || "", proofSerial = 0;
+		const allowed = () => can() && (creating || owner() || doc.owner_actor === actor());
+		const inspect = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				const candidate = fields.proposed_revision_id.value.trim(), ticket = ++proofSerial;
+				proof = "";
+				inspect.disabled = true;
+				try {
+					if (!/^pmrev_[0-9a-f]{32}$/.test(candidate)) throw Error(t("pm_gov_invalid_id"));
+					const value = await api("GET", `${endpoint}/plans/${candidate}`);
+					alive();
+					if (!editor.box.isConnected || ticket !== proofSerial || fields.proposed_revision_id.value.trim() !== candidate) return;
+					check(value.plan);
+					if (value.plan.revision_id !== candidate) invalid();
+					proof = candidate;
+					proofStatus.replaceChildren(text(value.plan.document?.title || candidate), text(value.plan.document_digest), note("pm_gov_direction_only"));
+				} catch (error) {
+					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error));
+				} finally {
+					update();
+				}
+			}
+		}, t("pm_gov_inspect_plan"));
+		fields.proposed_revision_id.addEventListener("input", () => {
+			proof = "";
+			++proofSerial;
+			proofStatus.replaceChildren();
+			update();
+		});
+		const extra = h("div", { class: "pm-fields" }, creating ? h("div", { class: "capture-fields" }, labelled("pm_gov_kind", fields.kind), labelled("pm_gov_snapshot", fields.snapshot_id)) : "", creating ? labelled("pm_gov_root", fields.root_cause_key) : note("pm_gov_revision_fixed"), labelled("pm_gov_name", fields.title), labelled("pm_gov_description", fields.description), h("div", { class: "capture-fields" }, labelled("pm_gov_owner", fields.owner_actor), labelled("pm_gov_status", fields.status)), driftHint, fold("pm_gov_sources", h("div", {}, sourceStatus, sourceHolder), true), fold("pm_gov_response_fields", h("div", { class: "pm-fields" }, labelled("pm_gov_trigger", fields.trigger), labelled("pm_gov_response", fields.response), labelled("pm_gov_review_time", fields.review_at), note("pm_gov_no_schedule"), labelled("pm_gov_affected_ids", fields.affected_requirement_ids), labelled("pm_gov_dimension", fields.dimension))), fold("pm_gov_options", h("div", { class: "pm-fields" }, labelled("pm_gov_alternatives_lines", fields.alternatives), labelled("pm_gov_proposed_id", fields.proposed_revision_id), inspect, proofStatus, note("pm_gov_proposed_help"), labelled("pm_gov_related_ids", fields.related_ids), labelled("pm_gov_distinction_reason", fields.distinction))), labelled("pm_gov_reason", fields.rationale));
+		editor = localForm({
+			action: "pm.governance." + (creating ? "record" : "revise"),
+			target: creating ? { workspace_id: workspaceId } : target(),
+			fields,
+			context: creating ? "create" : existing.record.context_digest,
+			extra,
+			label: creating ? "pm_gov_save" : "pm_gov_save_revision",
+			preconditions: () => creating ? { expected_plan_version: model.head.version } : { expected_version: existing.record.version },
+			permitted: allowed,
+			valid: () => {
+				const chosen = JSON.parse(fields.source_refs.value), fixed = creating ? createSnapshot : snapshot, kind = creating ? fields.kind.value : existing.record.kind;
+				return Boolean(fixed && (!creating || fixed.snapshot_id === fields.snapshot_id.value)) && (!fields.proposed_revision_id.value.trim() || kind === "change" && proof === fields.proposed_revision_id.value.trim()) && (kind !== "drift" || fields.dimension.value && chosen.some((ref) => ref.kind === "evidence") && chosen.some((ref) => ["plan_input", "requirement"].includes(ref.kind))) && chosen.length > 0 && chosen.length <= 50 && chosen.every((ref) => sourceChoices(fixed).some((choice) => key(choice) === key(ref)));
+			},
+			onStateChange: () => {
+				sourceSync();
+				inspect.disabled = !allowed() || stale || Boolean(editor?.locked());
+				driftHint.hidden = (creating ? fields.kind.value : existing.record.kind) !== "drift";
+			},
+			params: (values) => {
+				const split = (value) => value.split(",").map((part) => part.trim()).filter(Boolean);
+				const result = {
+					...values,
+					source_refs: JSON.parse(values.source_refs),
+					affected_requirement_ids: split(values.affected_requirement_ids),
+					alternatives: values.alternatives.split("\n").map((value) => value.trim()).filter(Boolean),
+					trigger: values.trigger.trim() || null,
+					response: values.response.trim() || null,
+					review_at: values.review_at.trim() || null,
+					dimension: values.dimension || null,
+					proposed_revision_id: values.proposed_revision_id.trim() || null
+				};
+				delete result.related_ids;
+				delete result.distinction;
+				if (values.related_ids.trim() || values.distinction.trim()) result.disambiguation = {
+					record_ids: split(values.related_ids),
+					rationale: values.distinction
+				};
+				return result;
+			}
+		}, rebase);
+		if (creating) {
+			createEditor = editor;
+			const readSource = async () => {
+				const snapshotId = fields.snapshot_id.value, ticket = ++sourceTicket;
+				createSnapshot = null;
+				sourceHolder.replaceChildren();
+				sourceStatus.replaceChildren();
+				update();
+				if (!snapshotId) {
+					sourceStatus.append(note("pm_gov_no_snapshot"));
+					return;
+				}
+				try {
+					const result = await api("GET", `${endpoint}/snapshots/${encodeURIComponent(snapshotId)}`);
+					alive();
+					if (ticket !== sourceTicket || !editor.box.isConnected) return;
+					check(result.snapshot);
+					if (result.snapshot.snapshot_id !== snapshotId || result.snapshot.visibility?.filtered) throw Error(t("pm_gov_source_missing"));
+					if (!result.snapshot.baseline?.document) {
+						sourceStatus.append(note("pm_gov_no_snapshot"));
+						update();
+						return;
+					}
+					createSnapshot = result.snapshot;
+					sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor);
+					update();
+				} catch (error) {
+					if (ticket === sourceTicket && editor.box.isConnected) unavailable(error);
+				}
+			};
+			fields.snapshot_id.addEventListener("change", () => {
+				readSource();
+			});
+			widgets.push(() => {
+				sourceSync();
+			});
+			return {
+				element: fold("pm_gov_new", editor.box, editor.locked()),
+				mount: readSource
+			};
+		}
+		sourceSync = refsWidget(fields.source_refs, sourceHolder, snapshot, () => editor, doc.sources);
+		widgets.push(sourceSync);
+		return {
+			element: fold("pm_gov_edit", editor.box, editor.locked()),
+			mount: async () => {}
+		};
+	}
+	function decisionEditors(rebase) {
+		const current = model.detail, record = current.record, d = current.revision.document, holder = h("div");
+		if (record.kind !== "change") return holder;
+		const rationale = reason(), disposition = select("pm_gov_disposition", ["adopted_direction", "rejected"].map((value) => [value, t("pm_gov_" + value)]), "adopted_direction");
+		const decision = localForm({
+			action: "pm.governance.decide",
+			target: target(),
+			fields: {
+				disposition,
+				rationale
+			},
+			context: record.revision_id,
+			preconditions: () => ({ expected_version: record.version }),
+			permitted: owner,
+			label: "pm_gov_save_decision",
+			params: (values) => values,
+			extra: h("div", { class: "pm-fields" }, note("pm_gov_direction_only"), labelled("pm_gov_disposition", disposition), labelled("pm_gov_reason", rationale))
+		}, rebase);
+		holder.append(fold("pm_gov_decide", decision.box, decision.locked()));
+		const adoption_operation_id = input("pm_gov_operation_id", { max: 35 }), adoptionReason = reason(), receipt = h("div", { role: "status" });
+		let proof = "", editor, ticket = 0;
+		const inspect = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				const value = adoption_operation_id.value.trim(), request = ++ticket;
+				proof = "";
+				inspect.disabled = true;
+				try {
+					if (!/^op_[0-9a-f]{32}$/.test(value)) throw Error(t("pm_gov_invalid_id"));
+					const { operation } = await api("GET", `/operations/${value}`);
+					alive();
+					if (!editor.box.isConnected || request !== ticket || adoption_operation_id.value.trim() !== value) return;
+					if (operation?.operation_id !== value || operation.action !== "pm.plan.adopt" || operation.status !== "succeeded" || operation.target?.workspace_id !== workspaceId || operation.target?.revision_id !== d.proposed_revision?.revision_id || operation.result?.previous_revision_id !== record.context.plan_revision_id) throw Error(t("pm_gov_adoption_mismatch"));
+					proof = value;
+					receipt.replaceChildren(note("pm_gov_adoption_historical"), id(operation.target.revision_id), h("a", { href: `#/op/${value}` }, t("pm_operation")));
+				} catch (error) {
+					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error));
+				} finally {
+					update();
+				}
+			}
+		}, t("pm_gov_inspect_adoption"));
+		adoption_operation_id.addEventListener("input", () => {
+			proof = "";
+			++ticket;
+			receipt.replaceChildren();
+			update();
+		});
+		editor = localForm({
+			action: "pm.governance.adoption.link",
+			target: target(),
+			fields: {
+				adoption_operation_id,
+				rationale: adoptionReason
+			},
+			context: record.revision_id,
+			preconditions: () => ({ expected_version: record.version }),
+			label: "pm_gov_link_adoption",
+			params: (values) => values,
+			permitted: owner,
+			valid: () => d.decision?.disposition === "adopted_direction" && Boolean(d.proposed_revision) && Boolean(proof) && proof === adoption_operation_id.value.trim(),
+			onStateChange: () => {
+				inspect.disabled = !owner() || stale || Boolean(editor?.locked());
+			},
+			extra: h("div", { class: "pm-fields" }, note("pm_gov_link_help"), labelled("pm_gov_operation_id", adoption_operation_id), inspect, receipt, labelled("pm_gov_reason", adoptionReason))
+		}, rebase);
+		holder.append(fold("pm_gov_adoption", editor.box, editor.locked()));
+		return holder;
+	}
+	async function renderEditors(rebase = false) {
+		++sourceTicket;
+		forms = [];
+		widgets = [];
+		dirty = false;
+		stale = false;
+		createSnapshot = null;
+		createEditor = null;
+		editors.replaceChildren();
+		if (model.detail) editors.append(findingEditor(model.detail, rebase).element, decisionEditors(rebase));
+		const create = findingEditor(null, rebase);
+		editors.append(create.element);
+		update();
+		await create.mount();
+	}
+	async function refresh(force = false) {
+		const ticket = ++serial, focused = element.contains(document.activeElement) ? document.activeElement : null;
+		const selection = focused && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
+		loaded = false;
+		update();
+		status.replaceChildren();
+		try {
+			const records = [];
+			let cursor = 0, page;
+			for (let count = 0; count < pageCount; count++) {
+				page = check(await api("GET", `${endpoint}/governance?after=${cursor}&limit=20`));
+				alive();
+				if (ticket !== serial) return;
+				if (!Array.isArray(page.records) || page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= cursor)) invalid();
+				for (const row of page.records) {
+					checkedEntry(row);
+					if (records.some((value) => value.record.record_id === row.record.record_id)) invalid();
+					records.push(row);
+				}
+				if (page.next_cursor == null) break;
+				cursor = page.next_cursor;
+			}
+			const readSnapshots = async () => {
+				const snapshots = [];
+				let after = 0;
+				for (let count = 0; count < 20; count++) {
+					const page = check(await api("GET", `${endpoint}/snapshots?after=${after}&limit=50`));
+					alive();
+					if (!Array.isArray(page.snapshots)) invalid();
+					page.snapshots.forEach(check);
+					snapshots.push(...page.snapshots);
+					if (page.next_cursor == null) return snapshots;
+					if (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= after) invalid();
+					after = page.next_cursor;
+				}
+				throw Error(t("pm_gov_snapshot_partial"));
+			};
+			const [accepted, snapshots] = await Promise.all([api("GET", `${endpoint}/plans/accepted`), readSnapshots()]);
+			alive();
+			if (ticket !== serial) return;
+			check(accepted.head);
+			if (!selectedId) selectedId = records.find((row) => row.revision.document.status === "open")?.record.record_id || records[0]?.record.record_id || "";
+			let current = null, fixed = null;
+			if (selectedId) {
+				current = check(await api("GET", `${endpoint}/governance/${selectedId}`));
+				alive();
+				if (ticket !== serial) return;
+				checkedEntry(current, selectedId);
+				const result = await api("GET", `${endpoint}/snapshots/${current.record.context.snapshot_ref.snapshot_id}`);
+				alive();
+				if (ticket !== serial) return;
+				fixed = check(result.snapshot);
+				if (fixed.snapshot_id !== current.record.context.snapshot_ref.snapshot_id || fixed.snapshot_digest !== current.record.context.snapshot_ref.snapshot_digest || fixed.visibility?.filtered || !fixed.baseline?.document) invalid();
+			}
+			const next = JSON.stringify([
+				selectedId,
+				current?.record.version,
+				accepted.head.version,
+				workspace()?.version
+			]);
+			const changed = signature && signature !== next;
+			model = {
+				records,
+				detail: current,
+				fixed,
+				head: accepted.head,
+				snapshots,
+				nextCursor: page.next_cursor
+			};
+			loaded = true;
+			editors.hidden = false;
+			renderRead();
+			if (force || !signature || changed && !dirty && !forms.some((editor) => editor.locked())) await renderEditors();
+			else {
+				if (changed) stale = true;
+				if (createEditor?.fields.snapshot_id.value) {
+					const expected = createEditor.fields.snapshot_id.value, value = await api("GET", `${endpoint}/snapshots/${expected}`);
+					alive();
+					if (ticket !== serial) return;
+					check(value.snapshot);
+					if (value.snapshot.snapshot_id !== expected || value.snapshot.visibility?.filtered) invalid();
+					createSnapshot = value.snapshot.baseline?.document ? value.snapshot : null;
+				}
+			}
+			if (ticket !== serial) return;
+			signature = next;
+			update();
+			if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {
+				focused.focus({ preventScroll: true });
+				if (selection) focused.setSelectionRange(...selection);
+			}
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		}
+	}
+	return {
+		element,
+		refresh
+	};
+}
+//#endregion
 //#region src/pm-sprints.js
 function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -4083,6 +4773,21 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps
 	}) : null;
 	if (meetings) body.insertBefore(meetings.element, content);
+	const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance ? workspaceGovernance({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox,
+		caps
+	}) : null;
+	if (governance) body.insertBefore(governance.element, content);
 	const sourceSections = () => [
 		content,
 		evidence?.box,
@@ -4090,7 +4795,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		roadmap?.box,
 		kanban?.element,
 		sprints?.box,
-		meetings?.element
+		meetings?.element,
+		governance?.element
 	].filter(Boolean);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
@@ -4678,7 +5384,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				roadmap,
 				kanban,
 				sprints,
-				meetings
+				meetings,
+				governance
 			]) {
 				if (section) await section.refresh();
 				alive();
@@ -4717,7 +5424,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_snapshot",
 			"pm_roadmap",
 			"pm_sprint",
-			"pm_meeting"
+			"pm_meeting",
+			"pm_governance"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -8590,6 +9298,222 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-governance-strings.js
+var pmGovernanceStrings = {
+	en: {
+		pm_gov_title: "Risks, changes and decisions",
+		pm_gov_intro: "What needs attention, why it matters, and which direction was chosen.",
+		pm_gov_refresh: "Refresh findings",
+		pm_gov_unknown: "Unknown",
+		pm_gov_empty: "No readable findings on this page.",
+		pm_gov_inspect: "View finding",
+		pm_gov_selected: "Selected finding",
+		pm_gov_risk: "Risk",
+		pm_gov_assumption: "Assumption",
+		pm_gov_issue: "Issue",
+		pm_gov_dependency: "Dependency",
+		pm_gov_drift: "Reported drift",
+		pm_gov_change: "Change proposal",
+		pm_gov_open: "Open",
+		pm_gov_monitoring: "Monitoring",
+		pm_gov_reported_resolved: "Reported resolved · unassessed",
+		pm_gov_status: "Management status",
+		pm_gov_scope: "Scope",
+		pm_gov_schedule: "Schedule",
+		pm_gov_quality: "Quality",
+		pm_gov_resources: "Resources",
+		pm_gov_dimension: "Affected dimension",
+		pm_gov_owner: "Accountable owner",
+		pm_gov_response: "Response",
+		pm_gov_trigger: "Trigger",
+		pm_gov_trigger_unknown: "Trigger is not defined.",
+		pm_gov_review_at: "Review time",
+		pm_gov_unscheduled: "Not scheduled",
+		pm_gov_review_time: "Review time (ISO timestamp with timezone, optional)",
+		pm_gov_no_schedule: "This records an intended review time; it does not schedule automatic work.",
+		pm_gov_assessment: "Assessment",
+		pm_gov_unassessed: "Verification is unassessed. A management report does not establish Done or verified delivery.",
+		pm_gov_assumption_basis: "This is an attributed assumption, not a confirmed requirement.",
+		pm_gov_finding_basis: "This finding is the recording actor’s interpretation of its fixed sources.",
+		pm_gov_affected: "Affected requirements",
+		pm_gov_affected_ids: "Affected requirement IDs (comma separated, optional)",
+		pm_gov_alternatives: "Alternatives considered",
+		pm_gov_alternatives_lines: "Alternatives (one per line, optional)",
+		pm_gov_decision: "Direction decision",
+		pm_gov_adopted_direction: "Direction adopted",
+		pm_gov_rejected: "Direction rejected",
+		pm_gov_direction_only: "A direction decision does not adopt a plan or authorize execution.",
+		pm_gov_adoption: "Link to actual plan adoption",
+		pm_gov_adoption_historical: "Historical adoption verified by the original operation. Whether this is the current accepted plan is not assessed.",
+		pm_gov_proposed: "Fixed proposed plan",
+		pm_gov_proposed_id: "Proposed plan revision ID (change proposals only)",
+		pm_gov_proposed_help: "Choose an existing immutable plan revision. Drafting and adoption remain separate actions.",
+		pm_gov_sources: "Fixed sources",
+		pm_gov_source_help: "Select 1–50 sources from this exact snapshot. Revisions retain all original sources.",
+		pm_gov_source_missing: "The original source is unavailable; no replacement was selected.",
+		pm_gov_source_plan_input: "Plan input",
+		pm_gov_source_requirement: "Requirement",
+		pm_gov_source_evidence: "Evidence",
+		pm_gov_source_work_binding: "Work association",
+		pm_gov_exact_source: "Original source and information status",
+		pm_gov_info_user_confirmed: "User confirmed",
+		pm_gov_info_agent_assumption: "Agent assumption",
+		pm_gov_info_source_supported: "Source supported",
+		pm_gov_info_unresolved: "Unresolved",
+		pm_gov_info_conflicting: "Conflicting",
+		pm_gov_info_not_applicable: "Not applicable",
+		pm_gov_info_unassessed: "Unassessed",
+		pm_gov_distinction: "Related findings and distinction",
+		pm_gov_related_ids: "Related finding IDs (comma separated, optional)",
+		pm_gov_distinction_reason: "Why this is a different cause",
+		pm_gov_reason: "Reason for this record",
+		pm_gov_baseline: "Original baseline and snapshot",
+		pm_gov_root: "Explicit root cause key",
+		pm_gov_kind: "Kind",
+		pm_gov_snapshot: "Source snapshot",
+		pm_gov_name: "Finding title",
+		pm_gov_description: "What was observed and why it matters",
+		pm_gov_response_fields: "Response, impact and intended review",
+		pm_gov_options: "Alternatives, proposed plan and related findings",
+		pm_gov_no_snapshot: "Create a Project Brief snapshot containing an adopted plan before recording a finding.",
+		pm_gov_revision_fixed: "This revision keeps the original snapshot and baseline. Revise the management finding without replacing its source history.",
+		pm_gov_new: "Record a finding",
+		pm_gov_edit: "Revise this finding",
+		pm_gov_save: "Save finding",
+		pm_gov_save_revision: "Save finding revision",
+		pm_gov_decide: "Record a direction decision",
+		pm_gov_disposition: "Direction",
+		pm_gov_save_decision: "Save direction decision",
+		pm_gov_operation_id: "Successful plan adoption operation ID",
+		pm_gov_inspect_adoption: "Read original adoption",
+		pm_gov_link_adoption: "Link verified adoption",
+		pm_gov_link_help: "Link an existing successful adoption of this exact proposed revision from the original baseline. This does not adopt or dispatch again.",
+		pm_gov_inspect_plan: "Read proposed revision",
+		pm_gov_invalid_id: "Supply an exact existing ID.",
+		pm_gov_adoption_mismatch: "The operation does not prove adoption of this proposal from its fixed baseline.",
+		pm_gov_history: "Finding and decision history",
+		pm_gov_more_history: "More history",
+		pm_gov_more: "More findings",
+		pm_gov_partial: "Showing loaded findings first. More records remain; this is not a complete workspace count.",
+		pm_gov_action_record: "Finding recorded",
+		pm_gov_action_revise: "Finding revised",
+		pm_gov_action_decide: "Direction decided",
+		pm_gov_action_adoption_link: "Actual adoption linked",
+		pm_gov_stale: "The source or record changed. Your draft and original request are preserved; review the new baseline before submitting a new change.",
+		pm_gov_review_fresh: "Review updated baseline",
+		pm_gov_deduplicated: "This root cause already exists. The original finding is shown; the repeated input did not replace it.",
+		pm_gov_snapshot_partial: "The snapshot list is incomplete; read a narrower workspace before selecting a source.",
+		pm_gov_check_sources: "Select the fixed sources and read the proposed plan or original adoption before submitting.",
+		pm_gov_drift_help: "Reported drift needs an affected dimension, an observed evidence fact, and a fixed plan input or requirement. The interpretation remains unassessed."
+	},
+	"zh-TW": {
+		pm_gov_title: "風險、變更與決策",
+		pm_gov_intro: "哪些事項需要關注、為何重要，以及已選擇的方向。",
+		pm_gov_refresh: "重新讀取事項",
+		pm_gov_unknown: "未知",
+		pm_gov_empty: "本頁沒有可讀取的事項。",
+		pm_gov_inspect: "查看事項",
+		pm_gov_selected: "目前選取",
+		pm_gov_risk: "風險",
+		pm_gov_assumption: "假設",
+		pm_gov_issue: "問題",
+		pm_gov_dependency: "依賴",
+		pm_gov_drift: "回報偏差",
+		pm_gov_change: "變更提案",
+		pm_gov_open: "待處理",
+		pm_gov_monitoring: "持續觀察",
+		pm_gov_reported_resolved: "回報已解決 · 尚未評估",
+		pm_gov_status: "管理狀態",
+		pm_gov_scope: "範圍",
+		pm_gov_schedule: "時程",
+		pm_gov_quality: "品質",
+		pm_gov_resources: "資源",
+		pm_gov_dimension: "影響面向",
+		pm_gov_owner: "責任人",
+		pm_gov_response: "因應方式",
+		pm_gov_trigger: "觸發條件",
+		pm_gov_trigger_unknown: "尚未定義觸發條件。",
+		pm_gov_review_at: "檢視時間",
+		pm_gov_unscheduled: "未安排",
+		pm_gov_review_time: "檢視時間（含時區的 ISO 時間，可留空）",
+		pm_gov_no_schedule: "這裡記錄預期檢視時間，不會自動排程工作。",
+		pm_gov_assessment: "評估",
+		pm_gov_unassessed: "驗證尚未評估。管理回報不代表符合 Done 或已驗證交付。",
+		pm_gov_assumption_basis: "這是有記錄者的假設，尚未成為已確認需求。",
+		pm_gov_finding_basis: "這筆事項是記錄者對固定來源的解讀。",
+		pm_gov_affected: "受影響需求",
+		pm_gov_affected_ids: "受影響需求 ID（逗號分隔，可留空）",
+		pm_gov_alternatives: "曾考慮的替代方案",
+		pm_gov_alternatives_lines: "替代方案（每行一項，可留空）",
+		pm_gov_decision: "方向決策",
+		pm_gov_adopted_direction: "已採用方向",
+		pm_gov_rejected: "已否決方向",
+		pm_gov_direction_only: "方向決策不會採用計畫，也不會授權執行。",
+		pm_gov_adoption: "連結實際計畫採用",
+		pm_gov_adoption_historical: "原操作已證明這次歷史採用；尚未評估它是否仍為目前採用的計畫。",
+		pm_gov_proposed: "固定版本提案計畫",
+		pm_gov_proposed_id: "提案計畫版本 ID（僅限變更提案）",
+		pm_gov_proposed_help: "選取既有且不可變的計畫版本。建立草稿與採用計畫仍是獨立操作。",
+		pm_gov_sources: "固定來源",
+		pm_gov_source_help: "從這份固定快照選取 1–50 筆來源。修訂會保留所有原始來源。",
+		pm_gov_source_missing: "原始來源目前無法讀取，沒有自動改用其他來源。",
+		pm_gov_source_plan_input: "計畫輸入",
+		pm_gov_source_requirement: "需求",
+		pm_gov_source_evidence: "證據",
+		pm_gov_source_work_binding: "工作關聯",
+		pm_gov_exact_source: "原始來源與資訊身分",
+		pm_gov_info_user_confirmed: "使用者已確認",
+		pm_gov_info_agent_assumption: "Agent 假設",
+		pm_gov_info_source_supported: "來源支持",
+		pm_gov_info_unresolved: "尚未決定",
+		pm_gov_info_conflicting: "存在衝突",
+		pm_gov_info_not_applicable: "不適用",
+		pm_gov_info_unassessed: "尚未評估",
+		pm_gov_distinction: "相關事項與區別",
+		pm_gov_related_ids: "相關事項 ID（逗號分隔，可留空）",
+		pm_gov_distinction_reason: "為何是不同成因",
+		pm_gov_reason: "本次記錄的理由",
+		pm_gov_baseline: "原始基準與快照",
+		pm_gov_root: "明確的根本成因識別",
+		pm_gov_kind: "類別",
+		pm_gov_snapshot: "來源快照",
+		pm_gov_name: "事項標題",
+		pm_gov_description: "觀察到什麼，以及為何重要",
+		pm_gov_response_fields: "因應、影響與預期檢視",
+		pm_gov_options: "替代方案、提案計畫與相關事項",
+		pm_gov_no_snapshot: "先建立包含已採用計畫的專案總覽快照，再記錄事項。",
+		pm_gov_revision_fixed: "這次修訂沿用原快照與基準。可以更新管理事項，原始來源歷史會保留。",
+		pm_gov_new: "記錄新事項",
+		pm_gov_edit: "修訂這筆事項",
+		pm_gov_save: "儲存事項",
+		pm_gov_save_revision: "儲存事項修訂",
+		pm_gov_decide: "記錄方向決策",
+		pm_gov_disposition: "方向",
+		pm_gov_save_decision: "儲存方向決策",
+		pm_gov_operation_id: "成功採用計畫的操作 ID",
+		pm_gov_inspect_adoption: "查回原採用操作",
+		pm_gov_link_adoption: "連結已驗證採用",
+		pm_gov_link_help: "連結從原基準成功採用這份提案版本的既有操作。不會再次採用或派工。",
+		pm_gov_inspect_plan: "讀取提案版本",
+		pm_gov_invalid_id: "請提供既有物件的完整 ID。",
+		pm_gov_adoption_mismatch: "這筆操作無法證明從固定基準採用了此提案。",
+		pm_gov_history: "事項與決策歷史",
+		pm_gov_more_history: "更多歷史",
+		pm_gov_more: "更多事項",
+		pm_gov_partial: "目前先顯示已讀取事項，仍有其他記錄；這不是工作空間的完整統計。",
+		pm_gov_action_record: "記錄事項",
+		pm_gov_action_revise: "修訂事項",
+		pm_gov_action_decide: "方向決策",
+		pm_gov_action_adoption_link: "連結實際採用",
+		pm_gov_stale: "來源或事項已有變更。草稿與原始請求已保留；送出新修改前請先核對新基準。",
+		pm_gov_review_fresh: "核對更新後基準",
+		pm_gov_deduplicated: "這個成因已經有記錄，目前顯示原事項；重複輸入沒有取代原內容。",
+		pm_gov_snapshot_partial: "尚未取得完整快照清單；請縮小工作空間範圍後再選來源。",
+		pm_gov_check_sources: "送出前請選取固定來源，並查回指定的提案計畫或原採用操作。",
+		pm_gov_drift_help: "回報偏差需要選擇影響面向、觀測證據，以及固定計畫輸入或需求；這份解讀仍尚未驗證。"
+	}
+};
+//#endregion
 //#region src/pm-sprint-strings.js
 var pmSprintStrings = {
 	en: {
@@ -9238,6 +10162,7 @@ var pmStrings = {
 		...pmSprintStrings.en,
 		...pmKanbanStrings.en,
 		...pmMeetingStrings.en,
+		...pmGovernanceStrings.en,
 		pm_roadmap_historical_work: "Previously selected work association",
 		pm_roadmap_missing_dependency: "Removed milestone dependency",
 		pm_roadmap_work_scope: "Select an overlapping requirement first",
@@ -9557,6 +10482,7 @@ var pmStrings = {
 		...pmSprintStrings["zh-TW"],
 		...pmKanbanStrings["zh-TW"],
 		...pmMeetingStrings["zh-TW"],
+		...pmGovernanceStrings["zh-TW"],
 		pm_roadmap_historical_work: "先前選定的工作關聯",
 		pm_roadmap_missing_dependency: "已移除里程碑的依賴",
 		pm_roadmap_work_scope: "請先選定有重疊的需求",

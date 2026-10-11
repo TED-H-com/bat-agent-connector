@@ -1,4 +1,5 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+import {workspaceGovernance} from './pm-governance.js';
 import {workspaceSprints} from './pm-sprints.js';
 import {workspaceKanban} from './pm-kanban.js';
 import {workspaceMeetings} from './pm-meetings.js';
@@ -164,7 +165,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
     ? workspaceMeetings({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
-  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element].filter(Boolean);
+  const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
+    ? workspaceGovernance({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+  if(governance)body.insertBefore(governance.element,content);
+  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -484,7 +488,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings]) {
+      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings, governance]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -503,7 +507,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
