@@ -37,7 +37,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
       live(expected);
       if(report?.version!==1||report.workspace_id!==workspaceId||report.snapshot_id!==source.snapshot_id||report.format!==kind||report.locale!==language
         ||report.snapshot_digest!==source.snapshot_digest||report.view_digest!==source.view_digest||report.media_type!==formats[kind][1]
-        ||report.template_version!==1||report.renderer_version!==(source.maintenance?2:1)
+        ||report.template_version!==1||report.renderer_version!==(source.brief?.delivery?.quality?3:source.maintenance?2:1)
         ||report.coverage?.projection!==(source.maintenance?'project_brief_with_maintenance_review':'project_brief_only')||report.coverage.content_truncated!==false
         ||report.execution_authorized!==false||report.review_completed!==false||report.published!==false||typeof report.content!=='string'
         ||!Number.isSafeInteger(report.byte_length)||report.byte_length<0||report.byte_length>1500000||!(/^[0-9a-f]{64}$/).test(report.output_digest))throw Error(t('pm_export_changed'));
