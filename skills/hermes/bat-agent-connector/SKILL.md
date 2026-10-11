@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "44136b2c86b256e25513acdad0903fd57786bc9848da8b84b9e4888daf4601b2"
+  canonical_sha256: "fff3b600d6baf3b2efbceae4938f1f4901cc17dde82c53045f6f196c0884e312"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1406,4 +1406,10 @@ receipts and stable task identities. An optional `repository.continue.pm_spec_re
 must match the fixed package and the explicitly included ordinary artifact ref;
 keep both in the original operation envelope. Unknown Git results retain the
 original writer and reconcile; never recreate a commit or repurpose a checkout.
+
+Read `pm_work_deliveries_list` for one explicitly associated workspace work item.
+It returns fixed original package references and saved integration, merge and
+deployment receipts without refreshing providers or creating operations. Preserve
+`next_after` through filtered pages. Push, merge, runtime verification and
+requirement acceptance are distinct; delivery does not mark a requirement Done.
 <!-- END CANONICAL WORKFLOW -->

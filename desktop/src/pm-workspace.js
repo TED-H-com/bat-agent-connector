@@ -1,3 +1,4 @@
+import {workspaceWorkDeliveries} from './pm-work-deliveries.js';
 import {workspaceSpecMaterialization} from './pm-spec-materialization.js';
 // PM facts and operations remain central; this client submits explicit durable requests.
 import {workspaceGovernance} from './pm-governance.js';
@@ -277,9 +278,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceSpecMaterialization({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,errorBox,namespace,onSourceFailure:()=>{engineering?.withdraw();handoff?.withdraw();}}) : null;
   const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available
     ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure:()=>{engineering?.withdraw();materialization?.withdraw();}}) : null;
+  const deliveries = workspaceId && !threadId && caps()?.features?.pm_workspaces?.engineering_delivery?.contract === 'pm-engineering-delivery/v1'
+    ? workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) : null;
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
-    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);void materialization?.setPackage(row);}}) : null;
+    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,onSelection:row=>{issues?.setPackage(row);handoff?.setPackage(row);void materialization?.setPackage(row);deliveries?.setWork(row?.work_item_id);}}) : null;
   if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
+  if(engineering&&deliveries)engineering.element.append(deliveries.element);
   if(materialization)body.insertBefore(materialization.element,specifications?.element||content);
   if(handoff)body.insertBefore(handoff.element,specifications?.element||content);
   if(issues)body.insertBefore(issues.element,specifications?.element||content);
@@ -639,6 +643,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     if(handoff&&['project','work_item'].includes(event.resource_type)) {
       eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
+    }
+    if (deliveries && ['operation','deployment','integration'].includes(event.resource_type)) {
+      eventReads=eventReads.catch(()=>{}).then(async()=>{await deliveries.refresh();await kanban?.refresh();});return eventReads;
     }
     if (kanban && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
       eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());

@@ -1383,3 +1383,9 @@ receipts and stable task identities. An optional `repository.continue.pm_spec_re
 must match the fixed package and the explicitly included ordinary artifact ref;
 keep both in the original operation envelope. Unknown Git results retain the
 original writer and reconcile; never recreate a commit or repurpose a checkout.
+
+Read `pm_work_deliveries_list` for one explicitly associated workspace work item.
+It returns fixed original package references and saved integration, merge and
+deployment receipts without refreshing providers or creating operations. Preserve
+`next_after` through filtered pages. Push, merge, runtime verification and
+requirement acceptance are distinct; delivery does not mark a requirement Done.

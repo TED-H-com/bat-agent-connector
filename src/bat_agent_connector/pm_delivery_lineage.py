@@ -11,6 +11,7 @@ import re
 import time
 
 from .operations import OperationError
+from .pm_release_baselines import _snapshot_read
 
 CONTRACT = "pm-engineering-delivery/v1"
 ACTIONS = frozenset({"integration.preview", "integration.apply", "integration.handoff",
@@ -337,6 +338,7 @@ def _facts(ops, op):
     return row
 
 
+@_snapshot_read
 def for_work(ops, principal, workspace_id, work_item_id, *, after=0, limit=50):
     """Read original fixed work receipts; scan cursors survive source filtering."""
     from . import pm_evidence, pm_source_lineage, pm_workspace
@@ -362,6 +364,8 @@ def for_work(ops, principal, workspace_id, work_item_id, *, after=0, limit=50):
     result = {"workspace_id": workspace_id, "work_item_id": work_item_id, "contract": CONTRACT,
         "original_packages": packages, "deliveries": [], "next_after": None,
         "requirement_acceptance": "not_evaluated_by_delivery", "source_visibility_filtered": False}
+    if len(json.dumps({**result, "next_after": 2**63 - 1}, ensure_ascii=False, allow_nan=False).encode()) > 192_000:
+        raise OperationError("PM_DELIVERY_READ_TOO_LARGE", "Original package references exceed the read budget", 413)
     if not originals:
         return result
     marks = ",".join("?" for _ in originals)
@@ -379,7 +383,7 @@ def for_work(ops, principal, workspace_id, work_item_id, *, after=0, limit=50):
             continue
         facts = _facts(ops, op)
         candidate = {**result, "deliveries": [*result["deliveries"], facts], "next_after": 2**63 - 1}
-        if len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode()) > 192_000:
+        if len(json.dumps(candidate, ensure_ascii=False, allow_nan=False).encode()) > 192_000:
             if scanned == after:
                 raise OperationError("PM_DELIVERY_READ_TOO_LARGE", "A whole delivery receipt exceeds the read budget", 413)
             result["next_after"] = scanned

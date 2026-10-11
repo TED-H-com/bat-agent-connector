@@ -71,6 +71,7 @@ READ_TOOLS = [
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
+    "pm_work_deliveries_list",
     "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
@@ -657,6 +658,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
             project_binding_id=project_binding_id, repository=repository, kind=kind, release_id=release_id,
             deployment_id=deployment_id, maintenance_branch=maintenance_branch)
 
+    async def pm_work_deliveries_list(workspace_id: str, work_item_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read fixed original package and delivery receipts; never accept requirements or dispatch work."""
+        return await pm_daemon("pm_work_deliveries_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+
     async def pm_work_batches_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read saved bounded engineering batches; never dispatch or refresh providers."""
         return await pm_daemon("pm_work_batches_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -996,6 +1001,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 
+               pm_work_deliveries_list,
                pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
