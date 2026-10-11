@@ -171,8 +171,13 @@ async def _execute_native(ctx, run, launch, check):
 
 
 async def _analyze(ctx):
+    return await run_analysis(ctx)
+
+
+async def run_analysis(ctx, *, prepare=None, import_reply=None):
+    """Shared one-process execution; only trusted domain code selects the sink."""
     try:
-        return await _analyze_once(ctx)
+        return await _analyze_once(ctx, prepare=prepare, import_reply=import_reply)
     except (OSError, sqlite3.Error):
         # Both a rolled-back local freeze and a completed native process can
         # lose their receipt. Resume this operation's local receipts and exact
@@ -180,10 +185,12 @@ async def _analyze(ctx):
         raise Uncertain("pm.native.execute", "Native analysis receipts require original-operation recovery") from None
 
 
-async def _analyze_once(ctx):
+async def _analyze_once(ctx, *, prepare=None, import_reply=None):
     principal = pm_workspace.admitted_principal(ctx)
     authority = pm_run_operations.execution_authority(ctx.service.db, principal, ctx.target["workspace_id"], ctx.operation_id)
     def freeze():
+        if prepare is not None:
+            return prepare(ctx, principal, authority)
         _values(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         run = pm_runs.create(ctx.service, principal, operation_id=ctx.operation_id, **ctx.target,
             expected_version=ctx.preconditions["expected_version"], adapter=pm_native_journal.ADAPTER,
@@ -220,7 +227,7 @@ async def _analyze_once(ctx):
             await check()
             if result.get("runtime_error"):
                 raise OperationError(result["runtime_error"], "The native PM analysis stopped without an imported reply", 409)
-            completed = ctx.effect("pm.native.import", lambda: pm_native_journal.import_reply(
+            completed = ctx.effect("pm.native.import", lambda: (import_reply or pm_native_journal.import_reply)(
                 ctx.service.journal, run["run_id"], run["generation"]))
             return _result(completed)
         except (Cancelled, OperationError, ResourceReadOnly, StepFailed) as error:

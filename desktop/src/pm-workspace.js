@@ -16,13 +16,13 @@ const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b =
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
 const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
+// A remounted form can recover an acknowledged ID without resending an unknown
+// POST. Notifications contain no result; the active form reads with current access.
+const receiptSubscribers = new Map();
 // Only disclosure preferences survive a same-principal remount. Facts are always
 // removed and reread after an access reset; drafts retain their existing namespace.
 const threadDisclosures = new Map();
 const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]'];
-// A remounted form recovers an acknowledged ID without resending an unknown POST.
-// Notifications carry no result; the active form reads with current access.
-const receiptSubscribers = new Map();
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
@@ -248,7 +248,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     else body.insertBefore(specifications.element, content);
   }
   const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare
-    ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps}) : null;
+    ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace}) : null;
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
   const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
     ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox}) : null;
@@ -597,7 +597,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_work_package'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
