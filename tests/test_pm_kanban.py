@@ -7,7 +7,7 @@ import uuid
 
 import pytest
 
-from bat_agent_connector import controller_authority, pm_evidence, pm_kanban, pm_workspace, work_items
+from bat_agent_connector import controller_authority, pm_kanban, pm_workspace, work_items
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import ActionDef, OperationError
 from tests.test_pm_discussions import OUTSIDER, OWNER, READER, member, settle, workspace
@@ -441,10 +441,10 @@ async def test_utf8_response_bound_continues_without_skipping_the_omitted_work(o
     second = {**target, "work_item_id": await item(ops, pid)}
     await bind_work(ops, second)
     one = board(ops, target, limit=1)
-    bound = len(pm_evidence._json(one).encode()) + 30
+    bound = len(json.dumps(one, ensure_ascii=False).encode()) + 30
     monkeypatch.setattr(pm_kanban, "MAX_BOARD_BYTES", bound)
     first = board(ops, target)
-    assert len(pm_evidence._json(first).encode()) <= bound
+    assert len(json.dumps(first, ensure_ascii=False).encode()) <= bound
     assert len(first["cards"]) == 1 and first["coverage"]["byte_limited"]
     next_page = board(ops, target, after=first["next_cursor"])
     assert next_page["cards"][0]["work_item_id"] == second["work_item_id"]

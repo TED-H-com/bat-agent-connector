@@ -5,6 +5,7 @@ not a quality assessment, and accepted sends are not completed deliverables.
 """
 from __future__ import annotations
 
+import json
 import time
 
 from . import artifact_managed, pm_evidence, work_items
@@ -271,6 +272,11 @@ def _wip(cards):
             "archived_excluded": len(cards) - len(active), "limit": None}
 
 
+def _read_size(value):
+    # Match the UTF-8 HTTP payload, including JSON separators and escapes.
+    return len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8'))
+
+
 def get_board(ops, principal, workspace_id, *, project_id=None, after=0, limit=50):
     with ops.journal.tx():
         # list_work checks current membership, observe, IDs and bounded pagination.
@@ -280,23 +286,23 @@ def get_board(ops, principal, workspace_id, *, project_id=None, after=0, limit=5
                "journal_cursor": cursor, "cards": cards, "next_cursor": page["next_cursor"], "capabilities": _capabilities(),
                "coverage": {"basis": "current_explicit_work_bindings", "network_checked": False,
                             "scope": "returned_page", "pagination_snapshot": False, "byte_limited": False}}
-        size = len(pm_evidence._json(out).encode())
+        size = _read_size(out)
         for binding in page["bindings"]:
             card = _card(ops, principal, workspace_id, binding, now)
-            size += len(pm_evidence._json(card).encode()) + 1
+            size += _read_size(card) + 2
             if size > MAX_BOARD_BYTES:
                 if not cards:
-                    raise OperationError("PM_KANBAN_TOO_LARGE", "This work projection exceeds the bounded board response", 422)
+                    raise OperationError("PM_KANBAN_TOO_LARGE", "This work projection exceeds the bounded board response", 413)
                 out["next_cursor"] = cards[-1]["binding"]["sequence"]
                 out["coverage"]["byte_limited"] = True
                 break
             cards.append(card)
         out["wip"] = _wip(cards)
-        while len(pm_evidence._json(out).encode()) > MAX_BOARD_BYTES:
+        while _read_size(out) > MAX_BOARD_BYTES:
             # Include the actual UTF-8 counter/envelope size without rereading or
             # advancing past a card omitted from the response.
             if len(cards) < 2:
-                raise OperationError("PM_KANBAN_TOO_LARGE", "This work projection exceeds the bounded board response", 422)
+                raise OperationError("PM_KANBAN_TOO_LARGE", "This work projection exceeds the bounded board response", 413)
             cards.pop()
             out["next_cursor"] = cards[-1]["binding"]["sequence"]
             out["coverage"]["byte_limited"] = True
@@ -313,5 +319,8 @@ def get_card(ops, principal, workspace_id, work_item_id):
         if binding is None:
             raise OperationError("PM_WORK_NOT_FOUND", "Work not found in this workspace", 404)
         now = time.time()
-        return {"version": 1, "workspace_id": workspace_id, "observed_at": now, "journal_cursor": ops.journal.api_head(),
-                "card": _card(ops, principal, workspace_id, binding, now)}
+        result = {"version": 1, "workspace_id": workspace_id, "observed_at": now, "journal_cursor": ops.journal.api_head(),
+                  "card": _card(ops, principal, workspace_id, binding, now)}
+        if _read_size(result) > MAX_BOARD_BYTES:
+            raise OperationError("PM_KANBAN_TOO_LARGE", "This work projection exceeds the bounded card response", 413)
+        return result

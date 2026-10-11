@@ -34,9 +34,14 @@ integer `after >= 0` and `1 <= limit <= 100`. It is a current read, not a frozen
 multi-request pagination session: concurrent rebinding may move a work to a
 later page. Consumers deduplicate by WorkItem ID and replace the binding on
 refresh. WIP counters apply to the returned page, with unknown counts explicit;
-they are not workspace totals. The actual UTF-8 board envelope is bounded at
-2 MB. If a page is shortened, the cursor precedes the omitted work; a single
-oversized card fails explicitly.
+they are not workspace totals. Both board and standalone card UTF-8 JSON payloads
+are bounded at 2,000,000 bytes, including ordinary HTTP JSON spacing, escaping,
+coverage and WIP counters. RPC/MCP transport envelopes add their own framing.
+If a board page is shortened, the cursor precedes the first omitted work; whole
+cards are returned and no oversized middle card is skipped. A single oversized
+card or envelope fails explicitly with `PM_KANBAN_TOO_LARGE` (413). Source
+visibility is still checked before size errors; the limit never authorizes
+access or trims evidence within an otherwise returned card.
 
 ## Cards and management stages
 
