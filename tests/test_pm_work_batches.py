@@ -405,3 +405,22 @@ async def test_batch_list_has_whole_wire_budget_and_signed_cursor(batch_ready, m
     with pytest.raises(OperationError) as small:
         batches.list_batches(ops, OWNER, w['workspace_id'])
     assert small.value.status == 413
+
+
+async def test_exact_final_null_wire_budget_accepts_original_int64_record(batch_ready, monkeypatch):
+    from bat_agent_connector import controller_authority
+    from bat_agent_connector.operations import OpContext
+    w, ops = batch_ready, batch_ready['d'].ops
+    ops.db.execute("INSERT INTO sqlite_sequence(name,seq) VALUES('pm_work_batches',?)", (2**63 - 2,))
+    parent = ops.create(OWNER, **envelope(w, [await selected(w, 'first')]))[0]
+    with controller_authority.use(controller_authority.operation_binding(parent), ops.journal):
+        batches._reserve(OpContext(ops, parent))
+    original = batches.list_batches(ops, OWNER, w['workspace_id'])
+    assert original['batches'][0]['sequence'] == 2**63 - 1
+    assert original['next_cursor'] is None
+    monkeypatch.setattr(batches, 'MAX_READ_BYTES', batches._size(original))
+    assert batches.list_batches(ops, OWNER, w['workspace_id']) == original
+    monkeypatch.setattr(batches, 'MAX_READ_BYTES', batches._size(original) - 1)
+    with pytest.raises(OperationError) as too_large:
+        batches.list_batches(ops, OWNER, w['workspace_id'])
+    assert too_large.value.status == 413
