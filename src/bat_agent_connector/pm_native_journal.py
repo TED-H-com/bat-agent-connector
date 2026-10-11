@@ -193,20 +193,40 @@ def abort(journal, run_id, generation, *, reason, code="PM_NATIVE_INCOMPLETE", c
         return pm_runs.get(journal.db, run_id)
 
 
+def verified_reply(journal, run_id, generation):
+    """Internal original-turn proof shared by discussion and assessment sinks.
+
+    Call inside the sink's journal transaction. No public read or completion is
+    performed here, and a caller cannot supply replacement output or proof.
+    """
+    run = _active(journal, run_id, generation)
+    pm_runs.require_requester(journal.db, run)
+    proof = death_proof(journal.db, run_id)
+    observed = assessment(journal.db, run_id)
+    if not proof or not observed.get("complete"):
+        raise _bad("Native completion and process death must both be proven", "PM_COMPLETION_UNPROVEN")
+    sent = lifecycle(journal.db, run_id)["send_intent"]
+    source_refs = {"adapter": ADAPTER, "contract": sent["capability"]["contract"], "run_id": run_id,
+        "context_digest": run["context_digest"], "prompt_digest": sent["prompt_digest"],
+        "native_thread_id": sent["thread_id"], "native_event_seqs": observed["source_event_seqs"],
+        "event_digests": [pm_runs._digest(value) for value in events(journal.db, run_id)],
+        "process": sent["process"], "process_proof": proof, "client_message_id": sent["client_message_id"],
+        "request_id": sent["request_id"], "config_digest": sent["capability"]["config_digest"],
+        "coverage": run["context"]["coverage"]}
+    return run, observed, source_refs
+
+
 def import_reply(journal, run_id, generation):
     """Recompute native completion; never route this evidence through BAT's parser."""
     with journal.tx():
         run = pm_runs.get(journal.db, run_id)
+        if run["context"].get("output_destination") == "follow_up_assessment":
+            raise _bad("Follow-up output cannot enter ordinary discussion history", "PM_OUTPUT_DESTINATION_REFUSED")
         if run["generation"] != generation:
             raise _bad("PM writer changed", "PM_WRITER_CHANGED")
         if run["state"] == "completed":
             return run
-        run = _active(journal, run_id, generation)
-        pm_runs.require_requester(journal.db, run)
-        proof = death_proof(journal.db, run_id)
-        observed = assessment(journal.db, run_id)
-        if not proof or not observed.get("complete"):
-            raise _bad("Native completion and process death must both be proven", "PM_COMPLETION_UNPROVEN")
+        run, observed, source_refs = verified_reply(journal, run_id, generation)
         saved = lifecycle(journal.db, run_id)
         sent = saved["send_intent"]
         content = pm_discussions._text(observed["content"], "assistant content", 128000)
@@ -214,15 +234,8 @@ def import_reply(journal, run_id, generation):
         now = time.time()
         journal.db.execute("INSERT INTO pm_messages(message_id,workspace_id,thread_id,actor,content,created_at,operation_id) VALUES(?,?,?,?,?,?,?)",
                            (message_id, run["workspace_id"], run["thread_id"], run["execution_authority"]["actor"], content, now, run["operation_id"]))
-        source_refs = {"adapter": ADAPTER, "contract": sent["capability"]["contract"], "run_id": run_id,
-                       "context_digest": run["context_digest"], "prompt_digest": sent["prompt_digest"],
-                       "native_thread_id": sent["thread_id"], "native_event_seqs": observed["source_event_seqs"],
-                       "event_digests": [pm_runs._digest(value) for value in events(journal.db, run_id)],
-                       "process": sent["process"], "process_proof": proof, "client_message_id": sent["client_message_id"],
-                       "request_id": sent["request_id"], "config_digest": sent["capability"]["config_digest"],
-                       "coverage": run["context"]["coverage"],
-                       "input_ids": [value["input_id"] for group in run["context"]["inputs_by_status"].values() for value in group],
-                       "message_ids": [value["message_id"] for value in run["context"].get("messages", [])]}
+        source_refs.update(input_ids=[value["input_id"] for group in run["context"]["inputs_by_status"].values() for value in group],
+                           message_ids=[value["message_id"] for value in run["context"].get("messages", [])])
         journal.db.execute("INSERT INTO pm_assistant_provenance VALUES(?,?,?,?,?,?,?,?,?,?)",
                            (message_id, run_id, observed["native_turn_id"], observed["native_message_id"], sent["thread_id"],
                             observed["actual_model"], "complete", pm_runs._json(source_refs), run["context_digest"], now))
