@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 
-from . import pm_revision_host, pm_worktree, repository_sync
+from . import pm_revision_paths, pm_worktree, repository_sync
 from .errors import ResourceReadOnly
 from .operations import RERUN, Cancelled, NeedsAttention, OpContext, OperationError, StepFailed, Uncertain
 
@@ -33,7 +33,7 @@ def request(ctx, plan, revision, expected_parent):
             or not isinstance(expected_parent, str) or not repository_sync.SHA.fullmatch(expected_parent)):
         raise OperationError("PM_REVISION_INVALID", "Fixed revision files and parent commit are required", 422)
     try:
-        paths = pm_revision_host.rev_paths(revision)
+        paths = pm_revision_paths.rev_paths(revision)
     except (KeyError, TypeError, ValueError):
         raise OperationError("PM_REVISION_INVALID", "Only fixed owned revision paths can be committed", 422) from None
     if not isinstance(revision["files"], dict) or set(revision["files"]) != paths:
