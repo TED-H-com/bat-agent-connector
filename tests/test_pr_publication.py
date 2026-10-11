@@ -245,7 +245,7 @@ async def test_receipt_remains_readable_after_workspace_pause(pub):
     w, ops = pub, pub["d"].ops
     done = await settle(w, create(w))
     assert done["status"] == "succeeded", done
-    await decide(ops, w["workspace_id"])
+    await decide(ops, w["workspace_id"], who=DELIVERER)
     assert publication.get_publication(ops, DELIVERER, done["operation_id"])["creation_receipt"]["native_pr_id"] == 801
     with pytest.raises(OperationError, match="PM_LIFECYCLE_STOPPED"):
         create(w)
@@ -255,14 +255,14 @@ async def test_complete_paths_preserve_control_characters_and_both_rename_sides(
     w, ops = pub, pub["d"].ops
     wt = w["original"]["result"]["worktree_path"]
     w["result_sha"] = commit(wt, "line\nbreak.txt", "explicit path\n", "Add quoted filename")
-    git(wt, "mv", "implementation.txt", "renamed.txt")
+    git(wt, "mv", "hello.txt", "renamed.txt")
     git(wt, "commit", "-qm", "Rename implementation")
     w["result_sha"] = git(wt, "rev-parse", "HEAD")
     done = await settle(w, create(w))
     assert done["status"] == "succeeded", done
     pinned = json.loads(ops.db.execute("SELECT response FROM operation_steps WHERE operation_id=? "
         "AND name='pr.publication.prepare'", (done["operation_id"],)).fetchone()[0])
-    assert pinned["files_complete"] and "line\nbreak.txt" in pinned["files"] and "renamed.txt" in pinned["files"]
+    assert pinned["files_complete"] and {"line\nbreak.txt", "hello.txt", "renamed.txt"} <= set(pinned["files"])
 
 
 async def test_source_tip_movement_refuses_publication_of_stale_candidate(pub):
