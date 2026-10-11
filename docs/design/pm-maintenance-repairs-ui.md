@@ -46,3 +46,9 @@ execution-verification component and its quality strings, plus repair/verificati
 read routes and capabilities. The shared workspace mounts the panel, includes
 `pmMaintenanceRepairsStrings` in both locales, imports the CSS, and refreshes it for
 repair, policy, observation, quality, lifecycle and relevant operation events.
+
+A saved `outcome=published_for_review` is shown as a PR review outcome. It does
+not imply repair acceptance, release publication or runtime termination. Capacity
+is projected separately; `PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN` explains why a
+successful parent can retain its reservation. A succeeded child alone does not
+invent this outcome, and source withdrawal clears the saved result as usual.

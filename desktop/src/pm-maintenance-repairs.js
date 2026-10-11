@@ -78,9 +78,10 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   function validate(row){if(row?.workspace_id!==workspaceId||!/^pmrp_[0-9a-f]{32}$/.test(row.repair_id)||!op.test(row.operation_id)||!Number.isSafeInteger(row.version)
     ||!row.context?.rule||!row.context.finding_ref||!Array.isArray(row.evidence))throw invalid();return row;}
   function render(row){const c=row.context,p=row.progress||{},box=h('article',{'data-repair':row.repair_id},h('h3',{},`${t('pmr_issue')} #${c.finding.native.number}`),
-      line('pmr_rule',c.rule.key),line('pmr_dispatch',state(row.child?.status||'not_admitted')),text(row.capacity_held?'pmr_reserved':'pmr_released'),
+      line('pmr_rule',c.rule.key),line('pmr_dispatch',state(row.child?.status||'not_admitted')),text(row.capacity_held===false?'pmr_released':'pmr_reserved'),
       line('pmr_verification',p.verification?state(p.verification.status):t('pmr_unproven')),line('pmr_quality',p.quality?.length?t('pmr_recorded'):t('pmr_unproven')),
       line('pmr_publication',row.publication_child?state(row.publication_child.status):t('pmr_unproven')),line('pmr_ci',p.required_ci_receipts?.length?t('pmr_recorded'):t('pmr_unproven')),text('pmr_not_fixed'));
+    if(row.outcome==='published_for_review')box.prepend(line('pmr_outcome',t('pmr_published_for_review')));
     if(row.child)box.append(h('p',{},t('pmr_child'),' · ',link(row.child.operation_id)));
     if(row.publication_child){box.append(h('p',{},t('pmr_original_publication'),' · ',link(row.publication_child.operation_id)));
       const receipt=row.publication_child.result?.creation_receipt;if(receipt)box.append(line('pmr_native_pr',receipt.native_pr_id),line('pmr_candidate',receipt.candidate_sha));
@@ -93,7 +94,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       for(const [name,value]of Object.entries(proof.reference||item.selection.reference||{}))detail.append(h('p',{class:'pm-source'},name+': '+value));}
     box.append(detail);return box;
   }
-  function reason(code){if(/UNKNOWN|UNSETTLED/.test(code))return t('pmr_unknown');if(/DEADLINE/.test(code))return t('pmr_deadline_block');if(/BUDGET|CAPACITY/.test(code))return t('pmr_budget_block');
+  function reason(code){if(code==='PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN')return t('pmr_runtime_unproven');if(/UNKNOWN|UNSETTLED/.test(code))return t('pmr_unknown');if(/DEADLINE/.test(code))return t('pmr_deadline_block');if(/BUDGET|CAPACITY/.test(code))return t('pmr_budget_block');
     if(/QUALITY/.test(code))return t('pmr_quality_needed');if(/VERIFICATION/.test(code))return t('pmr_verify_needed');if(/STOP|PAUS|EPOCH|CHANGED/.test(code))return t('pmr_stopped');return t('pmr_gate');}
   function proofValid(){return ready&&proofReady&&owner()&&proof&&repair&&Number(proof.fields.version.value)===repair.version&&[...choices.values()].some(choice=>same(choice.selection,parse(proof.fields.selection)));}
   async function loadProof(ticket){
