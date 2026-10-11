@@ -120,7 +120,10 @@ def _retire_completed(ctx, run):
         return result
     with controller_authority.use(run['execution_authority'], ctx.service.journal):
         try:
-            return ctx.effect('pm.bat.retire', retire, lifecycle_bookkeeping=True)
+            # Import already proves the original native input, completion and
+            # process death. This local CAS cannot create an external effect;
+            # cancellation must not strand a positively dead runtime slot.
+            return ctx.effect('pm.bat.retire', retire, receipt_only=True)
         except (OperationError, ResourceReadOnly) as exc:
             raise Uncertain('pm.bat.retire', 'Current original identity/source access is required for local retirement') from exc
 

@@ -227,6 +227,22 @@ async def test_completed_import_recovers_original_local_retirement_without_new_i
     assert successor['status'] == 'succeeded', json.dumps(successor, indent=2)
 
 
+async def test_cancel_after_import_preserves_original_answer_and_retires_dead_capacity(continuation, mock, monkeypatch):
+    w = continuation
+    retire = bat._retire_completed
+    def cancel_after_import(ctx, run):
+        ctx.service.db.execute('UPDATE operations SET cancel_requested=1 WHERE operation_id=?', (ctx.operation_id,))
+        return retire(ctx, run)
+    monkeypatch.setattr(bat, '_retire_completed', cancel_after_import)
+    first = await analyze(w, 'cancel-after-import')
+    assert first['status'] == 'succeeded', json.dumps(first, indent=2)
+    original = pm_runs.get_by_operation(w['d'].ops.db, first['operation_id'])
+    assert original['state'] == 'completed'
+    row = registry.get('h1', original['session_binding']['session_id'])
+    assert row['status'] == 'stopped' and row['retirement']['operation_id'] == first['operation_id']
+    assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 1
+
+
 @pytest.mark.parametrize('changed', ['source', 'pause', 'membership'])
 async def test_new_session_requires_current_original_source_lifecycle_and_member(continuation, mock, changed):
     w = continuation
