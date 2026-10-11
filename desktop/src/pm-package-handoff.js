@@ -3,14 +3,14 @@ import {checkSpecMaterialization,readSpecMaterializations,fixedSpecSelection} fr
 // One fixed PM contract enters the existing repository.continue action.
 const contract='pm-engineering-handoff/v1';
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure=()=>{}}){
+export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure=()=>{},onReviewChange=()=>{}}){
   let active=null,prepared=null,serial=0,reading=false,editor=null;
   const editors=new Map(),facts=h('div'),status=h('div',{role:'status'}),editorView=h('div'),outcome=h('div');
   const summary=h('p',{class:'muted'},t('ph_select')),availabilityNotice=h('p',{class:'muted',hidden:true},t('ph_not_allowed'));
   const review=h('button',{type:'button',class:'secondary',onclick:()=>void inspect()},t('ph_review'));
   const useReview=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{
     if(!editor||editor.locked()||!prepared||!write())return;
-    editor.set('review',JSON.stringify(prepared.fixed));editor.update();
+    editor.set('review',JSON.stringify(prepared.fixed));update();
   }},t('ph_use_review'));
   const controls=h('details',{'data-pm-package-handoff-controls':''},h('summary',{},t('ph_title')),
     h('p',{class:'muted'},t('ph_intro')),summary,h('p',{class:'muted'},t('ph_boundary')),availabilityNotice,review,status,facts,useReview,editorView,outcome);
@@ -52,12 +52,23 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   }
   const hostReady=row=>caps()?.hosts?.some(host=>host.host===row.document.code_source.host&&host.writes===true&&host.orchestrate===true)
     &&caps()?.features?.repository_sync?.some(binding=>binding.exact_ref_head_only===true&&['repository','host','workspace_id'].every(key=>binding[key]===row.document.code_source[key]));
+  const handoffParams=values=>{
+    const frozen=JSON.parse(values.review);
+    return {...frozen.params,agent:values.agent,prompt:values.prompt,pm_code_basis:{mode:'implement_fixed_spec_from_selected_base',rationale:values.basis},
+      ...(values.title?{title:values.title}:{}),...(values.model?{model:values.model}:{})};
+  };
+  function batchSelection(){
+    if(!active||!prepared||!editor||editor.locked()||reading||!write()||!hostReady(active))return null;
+    try{const values=editor.values();if(!equal(JSON.parse(values.review),prepared.fixed)||!values.basis.trim()||!values.prompt.trim())return null;
+      return structuredClone({title:active.document.title,handoff:{target:target(active),params:handoffParams(values),preconditions:prepared.fixed.preconditions}});
+    }catch{return null;}
+  }
   function update(){
     review.disabled=!active||reading||!write()||!hostReady(active);
     availabilityNotice.hidden=!active||Boolean(write()&&hostReady(active));
     if(active)summary.textContent=`${active.document.title} · ${t('ph_preparation')} ${active.sequence}`;
     else summary.textContent=t('ph_select');
-    if(editor)editor.update();
+    if(editor)editor.update();onReviewChange();
   }
   function withdraw(){serial++;reading=false;active=null;prepared=null;facts.replaceChildren();status.replaceChildren();outcome.replaceChildren();editorView.replaceChildren();editor=null;useReview.hidden=true;update();}
   function fail(error){if(error.message?.startsWith('PM_SPEC_'))error=Error(t('ph_invalid'));if([401,403,404].includes(error.status)){withdraw();onSourceFailure();}prepared=null;facts.replaceChildren();outcome.replaceChildren();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('ph_unavailable')));update();}
@@ -79,13 +90,9 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
         if(response.operation?.status==='succeeded'&&!resultMatches(response.operation.result))throw Error(t('ph_invalid'));
         return response;}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))fail(error);throw error;}};
       value=form({namespace:`${namespace}.package-handoff.${row.package_id}`,api:guardedApi,action:'repository.continue',target:target(row),
-        fields:{review:fixed,basis,prompt,agent,title,model,spec_selection:spec},params:values=>{
-          const frozen=JSON.parse(values.review);
-          return {...frozen.params,agent:values.agent,prompt:values.prompt,pm_code_basis:{mode:'implement_fixed_spec_from_selected_base',rationale:values.basis},
-            ...(values.title?{title:values.title}:{}),...(values.model?{model:values.model}:{})};
-        },preconditions:()=>JSON.parse(fixed.value).preconditions,
+        fields:{review:fixed,basis,prompt,agent,title,model,spec_selection:spec},params:handoffParams,preconditions:()=>JSON.parse(fixed.value).preconditions,
         permitted:()=>authorized()&&hostReady(active)&&matches()&&!reading,recoverPermitted:authorized,label:'ph_start',
-        onStateChange:()=>{if(value&&!syncing)value.update();},onSaved:result=>{
+        onStateChange:()=>{if(value&&!syncing)value.update();onReviewChange();},onSaved:result=>{
           if(!resultMatches(result))throw Error(t('ph_invalid'));
           prepared=null;facts.replaceChildren();outcome.replaceChildren(h('p',{},t('ph_started')),
             h('a',{href:`#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}`},t('ph_open')));update();
@@ -99,6 +106,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
         if(!value.locked()&&authorized())for(const field of [basis,prompt,agent,title,model])field.disabled=false;
         if(value===editor)useReview.hidden=value.locked()||!prepared||matches();
       }finally{syncing=false;}};
+      value.box.addEventListener('input',onReviewChange);value.box.addEventListener('change',onReviewChange);
       editors.set(row.package_id,value);
     }
     editor=editors.get(row.package_id);editorView.replaceChildren(editor.box);update();
@@ -146,5 +154,5 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
         specs.filtered?h('p',{class:'muted'},t('ph_spec_filtered')):null,proof);status.replaceChildren();
     }catch(error){if(valid(ticket))fail(error);}finally{if(valid(ticket)){reading=false;update();}}
   }
-  return {element,setPackage,withdraw,refresh:async()=>{prepared=null;facts.replaceChildren();update();}};
+  return {element,setPackage,withdraw,batchSelection,refresh:async()=>{prepared=null;facts.replaceChildren();update();}};
 }
