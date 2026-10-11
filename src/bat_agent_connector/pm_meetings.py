@@ -430,29 +430,35 @@ HISTORY = {'contexts': ('pm_meeting_contexts', 'context_revision_id'), 'notes': 
            'drafts': ('pm_meeting_drafts', 'revision_id'), 'follow_ups': ('pm_meeting_follow_up_events', 'event_id')}
 
 
-def _history(ops, principal, meeting, kind, after, limit):
+def _checked_read(value):
+    if pm_sprints._read_size(value) > pm_sprints.MAX_READ_BYTES:
+        raise _bad('PM_MEETING_READ_TOO_LARGE', 'Complete meeting context, snapshot, draft, completion or one history record exceeds the read byte limit', 413)
+    return value
+
+
+def _history_rows(ops, meeting, kind, after, limit):
     pm_sprints._page(after, limit)
     if not isinstance(kind, str) or kind not in HISTORY:
         raise _bad('INVALID_PARAMS', 'Select contexts, notes, drafts or follow_ups history')
-    table, key = HISTORY[kind]
-    rows = ops.db.execute(f'SELECT * FROM {table} WHERE meeting_id=? AND sequence>? ORDER BY sequence LIMIT ?',  # noqa: S608
+    table, _ = HISTORY[kind]
+    return ops.db.execute(f'SELECT sequence FROM {table} WHERE meeting_id=? AND sequence>? ORDER BY sequence LIMIT ?',  # noqa: S608
                           (meeting['meeting_id'], after, limit + 1)).fetchall()
-    records, checked_contexts = [], set()
-    for row in rows[:limit]:
-        result = dict(row)
-        context_id = row['context_revision_id'] if 'context_revision_id' in row.keys() else meeting['context_revision_id']
-        if context_id not in checked_contexts:
-            context = _document(ops.db, 'pm_meeting_contexts', 'context_revision_id', context_id)
-            _snapshot(ops, principal, meeting['workspace_id'], context['document']['snapshot_ref'])
-            checked_contexts.add(context_id)
-        if 'document' in row.keys():
-            result = _document(ops.db, table, key, row[key])
-            if kind == 'follow_ups':
-                _snapshot(ops, principal, meeting['workspace_id'], result['document']['snapshot_ref'])
-        else:
-            result['source_refs'] = json.loads(row['source_refs'])
-        records.append(result)
-    return {'records': records, 'next_cursor': rows[limit-1]['sequence'] if len(rows) > limit else None}
+
+
+def _history_record(ops, principal, meeting, kind, sequence, checked_contexts):
+    table, key = HISTORY[kind]
+    row = ops.db.execute(f'SELECT * FROM {table} WHERE sequence=?', (sequence,)).fetchone()  # noqa: S608
+    context_id = row['context_revision_id'] if 'context_revision_id' in row.keys() else meeting['context_revision_id']
+    if context_id not in checked_contexts:
+        context = _document(ops.db, 'pm_meeting_contexts', 'context_revision_id', context_id)
+        _snapshot(ops, principal, meeting['workspace_id'], context['document']['snapshot_ref'])
+        checked_contexts.add(context_id)
+    if 'document' in row.keys():
+        result = _document(ops.db, table, key, row[key])
+        if kind == 'follow_ups':
+            _snapshot(ops, principal, meeting['workspace_id'], result['document']['snapshot_ref'])
+        return result
+    return {**dict(row), 'source_refs': json.loads(row['source_refs'])}
 
 
 def get_meeting(ops, principal, workspace_id, meeting_id, *, history_limit=50):
@@ -460,14 +466,23 @@ def get_meeting(ops, principal, workspace_id, meeting_id, *, history_limit=50):
         _member(ops, principal, workspace_id)
         meeting = _meeting(ops.db, workspace_id, meeting_id)
         context, snapshot = _access(ops, principal, meeting)
-        histories = {kind: _history(ops, principal, meeting, kind, 0, history_limit) for kind in ('notes', 'follow_ups')}
+        rows = {kind: _history_rows(ops, meeting, kind, 0, history_limit) for kind in ('notes', 'follow_ups')}
         draft = _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id']) if meeting['draft_revision_id'] else None
         completion = _document(ops.db, 'pm_meeting_completions', 'completion_id', meeting['completion_id']) if meeting['completion_id'] else None
-        return {'version': 1, 'workspace_id': workspace_id, 'meeting': meeting, 'context': context,
+        coverage = {kind: pm_sprints._coverage(0, entries) for kind, entries in rows.items()}
+        result = _checked_read({'version': 1, 'workspace_id': workspace_id, 'meeting': meeting, 'context': context,
                 'snapshot': snapshot, 'draft': draft, 'completion': completion,
-                'notes': histories['notes']['records'], 'follow_up_events': histories['follow_ups']['records'],
-                'history_next_cursors': {kind: value['next_cursor'] for kind, value in histories.items()},
-                'quality': 'unassessed', 'execution_authorized': False}
+                'notes': [], 'follow_up_events': [],
+                'history_next_cursors': {kind: 0 if entries else None for kind, entries in rows.items()},
+                'quality': 'unassessed', 'execution_authorized': False,
+                'coverage': {'max_bytes': pm_sprints.MAX_READ_BYTES, 'histories': coverage}})
+        keys = {'notes': 'notes', 'follow_ups': 'follow_up_events'}
+        checked_contexts = {meeting['context_revision_id']}
+        for kind, entries in rows.items():
+            pm_sprints._fill_page(result, result[keys[kind]], entries,
+                lambda row, kind=kind: _history_record(ops, principal, meeting, kind, row['sequence'], checked_contexts),
+                history_limit, result['history_next_cursors'], kind, coverage[kind])
+        return result
 
 
 def list_meetings(ops, principal, workspace_id, *, sprint_id=None, after=0, limit=50):
@@ -478,18 +493,38 @@ def list_meetings(ops, principal, workspace_id, *, sprint_id=None, after=0, limi
             pm_sprints._sprint(ops.db, workspace_id, sprint_id)
         rows = ops.db.execute('SELECT meeting_id,sequence FROM pm_meetings WHERE workspace_id=? AND (? IS NULL OR sprint_id=?) AND sequence>? ORDER BY sequence LIMIT ?',
                               (workspace_id, sprint_id, sprint_id, after, limit + 1)).fetchall()
-        meetings = []
-        for row in rows[:limit]:
+        coverage = {'max_bytes': pm_sprints.MAX_READ_BYTES, **pm_sprints._coverage(after, rows),
+                    'scanned': 0, 'visibility_filtered': False}
+        result = _checked_read({'version': 1, 'workspace_id': workspace_id, 'meetings': [],
+                                'next_cursor': after if rows else None, 'coverage': coverage})
+        for index, row in enumerate(rows[:limit]):
             meeting = _meeting(ops.db, workspace_id, row['meeting_id'])
+            visible = True
             try:
                 _access(ops, principal, meeting)
             except OperationError as error:
                 if error.status != 404:
                     raise
-                continue
-            meetings.append(meeting)
-        return {'version': 1, 'workspace_id': workspace_id, 'meetings': meetings,
-                'next_cursor': rows[limit-1]['sequence'] if len(rows) > limit else None}
+                visible = False
+            previous, previous_cursor = dict(coverage), result['next_cursor']
+            if visible:
+                result['meetings'].append(meeting)
+            more = index + 1 < len(rows)
+            result['next_cursor'] = row['sequence'] if more else None
+            coverage.update(returned=len(result['meetings']), scanned=index + 1, has_more=more,
+                            byte_limited=index + 1 < min(limit, len(rows)),
+                            visibility_filtered=coverage['visibility_filtered'] or not visible)
+            if pm_sprints._read_size(result) > pm_sprints.MAX_READ_BYTES:
+                if visible:
+                    result['meetings'].pop()
+                coverage.update(previous)
+                result['next_cursor'] = previous_cursor
+                break
+        # Filtering may yield no visible records, but still consumes their
+        # underlying sequences. Never jump over an oversized visible meeting.
+        if rows and not coverage['scanned']:
+            raise _bad('PM_MEETING_READ_TOO_LARGE', 'One complete meeting record exceeds the read byte limit', 413)
+        return result
 
 
 def list_history(ops, principal, workspace_id, meeting_id, kind, *, after=0, limit=50):
@@ -497,5 +532,14 @@ def list_history(ops, principal, workspace_id, meeting_id, kind, *, after=0, lim
         _member(ops, principal, workspace_id)
         meeting = _meeting(ops.db, workspace_id, meeting_id)
         _access(ops, principal, meeting)
-        return {'version': 1, 'workspace_id': workspace_id, 'meeting_id': meeting_id, 'kind': kind,
-                **_history(ops, principal, meeting, kind, after, limit)}
+        rows = _history_rows(ops, meeting, kind, after, limit)
+        coverage = {'max_bytes': pm_sprints.MAX_READ_BYTES, **pm_sprints._coverage(after, rows)}
+        result = _checked_read({'version': 1, 'workspace_id': workspace_id, 'meeting_id': meeting_id, 'kind': kind,
+                                'records': [], 'next_cursor': after if rows else None, 'coverage': coverage})
+        checked_contexts = {meeting['context_revision_id']}
+        pm_sprints._fill_page(result, result['records'], rows,
+            lambda row: _history_record(ops, principal, meeting, kind, row['sequence'], checked_contexts),
+            limit, result, 'next_cursor', coverage)
+        if rows and not result['records']:
+            raise _bad('PM_MEETING_READ_TOO_LARGE', 'One complete meeting history record exceeds the read byte limit', 413)
+        return result
