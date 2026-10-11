@@ -11,7 +11,7 @@ import json
 import sqlite3
 from dataclasses import dataclass, field
 
-from . import registry, resource_policy
+from . import controller_authority, registry, resource_policy
 from .errors import TaskControlRefused, WriteRefused
 
 RUNTIME_KINDS = {"send", "answer", "interrupt", "permissions", "failover"}
@@ -72,8 +72,24 @@ def replay_command_refs(ctx):
             ctx.effect(name, lambda row=row: json.loads(row["response"]), refs=command_refs)
 
 
+def authority(task):
+    """The original accepted task authority, including raw SQL rows used by cleanup."""
+    value = task.get("controller_authority")
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return None
+    return value if isinstance(value, dict) else None
+
+
+def require_authority(task):
+    return controller_authority.require_binding(authority(task))
+
+
 def admission_binding(task, *, session=False, role="lead"):
-    binding = {"task_id": task["task_id"], "control_version": task["control_version"]}
+    binding = {"task_id": task["task_id"], "control_version": task["control_version"],
+               "controller_authority": authority(task)}
     if session:
         field = "reviewer_session_id" if role == "reviewer" else "session_id"
         binding.update(host=task["host"], session_id=task.get(field), role=role)
@@ -82,9 +98,10 @@ def admission_binding(task, *, session=False, role="lead"):
 
 def check_binding(ctx):
     binding = ctx.admission_binding
-    if not binding:  # pre-upgrade operations retain their original execution-time binding
+    if not binding or "task_id" not in binding:
         return None
     task = ctx.service.journal.get(binding["task_id"])
+    require_authority(task)
     if task["control_version"] != binding["control_version"]:
         raise TaskControlRefused("CONTROL_VERSION_CONFLICT", "task control_version changed since admission")
     if "session_id" in binding:
@@ -121,9 +138,11 @@ def start_guard(journal, task, session_id, role):
                     if c["kind"] == "start_" + role and c["session_id"] == session_id), None)
 
     def guard():
+        require_authority(task)
         current = check_incarnation(journal, task)
         if command:
             row = journal.command_get(command["command_id"])
+            controller_authority.require_binding(authority(row))
             payload = json.loads(row["payload"])
             if (row["kind"] != "start_" + role or row["task_id"] != task["task_id"]
                     or row["session_id"] != session_id
@@ -170,7 +189,9 @@ def check(journal, task_id: str, host: str, sid: str, action: str, version=None,
         task = journal.get(task_id)
     except (ValueError, KeyError):
         raise TaskControlRefused("TASK_OWNER_UNAVAILABLE", "task owner row is unavailable") from None
+    require_authority(task)
     owner = registry.get(host, sid)
+    controller_authority.require_entry(owner)
     if task["host"] != host or not owner or owner.get("task_id") != task_id:
         raise TaskControlRefused("TASK_BINDING_MISMATCH", "task session ownership does not match")
     if task.get("session_id") != sid or owner.get("role") != "lead":
@@ -217,7 +238,9 @@ class FrameGuard:
         if getattr(self.journal, "owner_valid", None) and not self.journal.owner_valid():
             raise TaskControlRefused("TASK_OWNER_UNAVAILABLE", "fleet owner lease is no longer held")
         task = self.journal.get(self.task_id)
+        require_authority(task)
         owner = registry.get(self.host, self.session_id)
+        controller_authority.require_entry(owner)
         if (task["host"] != self.host or self.session_id not in
                 {task.get("session_id"), task.get("reviewer_session_id")}
                 or not owner or owner.get("task_id") != self.task_id
@@ -236,6 +259,8 @@ class FrameGuard:
                 raise TaskControlRefused("TASK_STATE_BLOCKED", "task no longer allows trusted verification")
             return
         command = self.journal.command_get(self.command_id) if self.command_id else None
+        if command:
+            controller_authority.require_binding(authority(command))
         if (not command or command["kind"] != self.action or command["task_id"] != self.task_id or command["session_id"] != self.session_id
                 or command["status"] not in {"intent", "needs_review"}):
             raise TaskControlRefused("TASK_COMMAND_PENDING", "frame has no dispatchable task command")

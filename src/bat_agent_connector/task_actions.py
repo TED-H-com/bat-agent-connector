@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from . import api_actions, api_auth, task_control
+from . import api_actions, api_auth, controller_authority, task_control
 from .errors import TaskControlRefused
 from .operations import RERUN, ActionDef, OperationError, Uncertain
 
@@ -24,6 +24,42 @@ def _task_capability(ops, principal, tid):
                                "AND scope='task' AND expires_at>strftime('%s','now')", (digest, tid)).fetchone())
 
 
+def _delegated(ops, principal, target):
+    if principal is None:
+        return False
+    tid = target.get("task_id")
+    if not isinstance(tid, str):
+        return False
+    if _task_capability(ops, principal, tid):
+        return True
+    cid = target.get("command_id")
+    prefix = f"reconcile:{tid}:{cid}:"
+    return bool(principal.actor.startswith(prefix) and ops.db.execute(
+        "SELECT 1 FROM capabilities WHERE token_hash=? AND task_id=? AND command_id=? "
+        "AND scope='reconcile' AND expires_at>strftime('%s','now')",
+        (principal.actor[len(prefix):], tid, cid)).fetchone())
+
+
+def authorize_controller_existing(ops, principal, op, verb):
+    """Capability identity delegates one task's authority, never another controller."""
+    definition = ops.actions.get(op["action"])
+    if not definition or not principal.allows(definition.scope):
+        raise OperationError("FORBIDDEN", "task operation control requires its current action scope", 403)
+    target = op.get("target") or {}
+    tid = target.get("task_id") or (op.get("external_refs") or {}).get("task_id")
+    expected = controller_authority.operation_binding(op)
+    delegated = _delegated(ops, principal, target) if target.get("task_id") else False
+    # A consumed reconciliation token may only read its own committed operation again.
+    replay = (verb == "replay" and principal.actor == op["actor"]
+              and op["action"] == "task.command.reconcile"
+              and principal.actor.startswith(f"reconcile:{target.get('task_id')}:{target.get('command_id')}:"))
+    with controller_authority.use(expected if delegated or replay else controller_authority.binding(ops.db, principal),
+                                  ops.journal):
+        controller_authority.require_binding(expected)
+        if tid:
+            task_control.require_authority(ops.journal.get(tid))
+
+
 def admit_task(ops, principal, target, params, pre):
     tid = target.get("task_id")
     if not isinstance(tid, str) or not tid:
@@ -33,6 +69,11 @@ def admit_task(ops, principal, target, params, pre):
     if principal and principal.actor.startswith("reconcile:") and not principal.actor.startswith("reconcile:" + tid + ":"):
         raise OperationError("FORBIDDEN", "capability is bound to a different task", 403)
     task = ops.journal.get(tid)
+    if _delegated(ops, principal, target):
+        with controller_authority.use(task_control.authority(task), ops.journal):
+            task_control.require_authority(task)
+    else:
+        task_control.require_authority(task)
     version = pre.get("control_version")
     if version is not None and (type(version) is not int or version != task["control_version"]):
         raise OperationError("CONTROL_VERSION_CONFLICT", "task control_version changed", 409)
@@ -40,6 +81,7 @@ def admit_task(ops, principal, target, params, pre):
 
 
 def admit_submit(ops, principal, target, params, pre):
+    controller_authority.require()
     for key in ("host", "workspace"):
         if not isinstance(target.get(key), str) or not target[key].strip():
             raise OperationError("INVALID_TARGET", key + " is required", 422)
@@ -49,10 +91,10 @@ def admit_submit(ops, principal, target, params, pre):
             or not isinstance(params.get("original_words"), str) or not params["original_words"].strip()
             or len(params["original_words"]) > 19_000):
         raise OperationError("INVALID_PARAMS", "project and original_words are required", 422)
-    if params.get("continuation"):
-        ops.journal.get(params.get("parent_task_id"))
+    if params.get("parent_task_id") is not None:
         task = admit_task(ops, principal, {"task_id": params["parent_task_id"]}, params, pre)
-        return task_control.admission_binding(task)
+        if params.get("continuation"):
+            return task_control.admission_binding(task)
 
 
 def admit_control(ops, principal, target, params, pre):
@@ -98,8 +140,10 @@ def admit_send(ops, principal, target, params, pre):
         raise OperationError("INVALID_PARAMS", "Goose task, text and step_id are required", 422)
     if not task.get("session_id"):
         raise OperationError("TASK_STATE_BLOCKED", "task has no current BAT session", 409)
-    return api_actions._admit_session(ops, principal, {"host": task["host"], "session_id": task["session_id"]},
-                                      params, pre)
+    with controller_authority.use(task_control.authority(task), ops.journal):
+        result = api_actions._admit_session(ops, principal, {"host": task["host"], "session_id": task["session_id"]},
+                                           params, pre)
+    return {**(result or {}), "controller_authority": task_control.authority(task)}
 
 
 def admit_scoped(ops, principal, target, params, pre, *, session=False):
