@@ -121,10 +121,11 @@ class ApiV1:
         managed_repairs.install(daemon.ops)
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
-        from . import pm_discussions, pm_run_operations, pm_workspace
+        from . import pm_discussions, pm_plan_operations, pm_run_operations, pm_workspace
         pm_workspace.install(daemon.ops)
         pm_discussions.install(daemon.ops)
         pm_run_operations.install(daemon.ops)
+        pm_plan_operations.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -149,6 +150,10 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs", self.pm_runs, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs/(?P<run_id>pmr_[0-9a-f]{32})", self.pm_run, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/capabilities", self.pm_capabilities, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/head", self.pm_plan_head, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/accepted", self.pm_plan_accepted, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans/(?P<revision_id>pmrev_[0-9a-f]{32})", self.pm_plan, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})", self.pm_thread, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})/context", self.pm_context, "observe"),
             ("POST", r"/api/v1/artifacts", self.create_artifact, "manage"),
@@ -490,7 +495,10 @@ class ApiV1:
         from .pm_reads import FIELDS, read
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
-        for key in {"limit", "max_chars", "before_message", "before_input"} & params.keys():
+        integer_fields = {"limit", "max_chars", "before_message", "before_input"}
+        if method == "pm_plans_list":
+            integer_fields.add("after")
+        for key in integer_fields & params.keys():
             value = params[key]
             if not re.fullmatch(r"[0-9]{1,9}", value):
                 raise OperationError("INVALID_PARAMS", f"{key} must be a positive integer", 422)
@@ -523,6 +531,18 @@ class ApiV1:
 
     async def pm_capabilities(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_capabilities_get", query, workspace_id=workspace_id)
+
+    async def pm_plans(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_plans_list", query, workspace_id=workspace_id)
+
+    async def pm_plan(self, principal, query, workspace_id, revision_id, **_):
+        return self._pm_read(principal, "pm_plan_get", query, workspace_id=workspace_id, revision_id=revision_id)
+
+    async def pm_plan_accepted(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_plan_accepted_get", query, workspace_id=workspace_id)
+
+    async def pm_plan_head(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_plan_head_get", query, workspace_id=workspace_id)
 
     async def capabilities(self, principal, **_):
         fleet = self.daemon.fleet
@@ -568,7 +588,8 @@ class ApiV1:
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
                                                     "runtime_reason": "external_tool_policy_unverified",
-                                                    "plan_adoption": False, "dispatch": False},
+                                                    "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
+                                                    "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},

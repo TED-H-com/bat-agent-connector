@@ -89,6 +89,9 @@ async def pm(world):
                     ctx.params.get("run_id", record["run_id"]), "context",
                     ctx.params.get("payload", {"thread_id": thread_id, "known": "Evidence", "assumptions": ["Candidate"]}),
                     check=check)
+                if "revision" in ctx.params:
+                    result["revision"] = await pm_worktree.commit_revision(ctx, plan, ctx.params["revision"],
+                        expected_parent=ctx.params.get("expected_parent", plan["source_sha"]), check=check)
                 pm_runs.complete_preparation(ops.journal, record["run_id"], record["generation"],
                                              worktree_binding=plan, snapshot=result["snapshot"])
             else:

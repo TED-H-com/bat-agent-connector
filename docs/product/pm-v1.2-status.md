@@ -48,8 +48,17 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 工具的契約，因此自動 Idea／Planning 執行仍不可用，明示 `external_tool_policy_unverified`。
 這個限制與使用者自行處理的真人實機驗收分開。W09 與 #88 尚未全部完成。
 
-正式計畫修訂與 Git／journal 採用另追蹤 [#91](https://github.com/teddashh/bat-agent-connector/issues/91)。
-本批驗證、合併、安裝與實測狀態仍以 PR 的實際證據為準。
+第四批追蹤 [#91](https://github.com/teddashh/bat-agent-connector/issues/91)：專業計畫以固定來源、
+八個管理領域、需求與接受條件保存不可變版本，未決事項仍維持未決。Planning 期間可明確
+修訂選定來源；這不回寫較早的草稿、規格或已採用計畫。
+
+正式採用經 PM 自有 writer 與 Git 保存精確文件，查實 commit 後才更新 journal 的接受指標。
+文件版次、範圍版次、採用理由與 Git 證據分開記錄；只改 Markdown 而無法判斷範圍影響時，
+保留 unknown，不假稱只是成果回填。Git 已保存但採用未完成，仍保留先前正式版本。
+Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與採用操作，API／MCP 使用相同契約。
+
+第一、二批已合併於 #86、#90。第三批在 [#92](https://github.com/teddashh/bat-agent-connector/pull/92)
+驗證；第四批仍在開發分支整合。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
 
 下表的「本批」是這次的實作範圍；測試／審查以 PR 證據為準。未完成部分保留在原編號下，
 不以新增一張畫面或資料表當作完整 PM 能力完成。
@@ -58,12 +67,12 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 | --- | --- | --- | --- |
 | W01 | P0 | Workspace identity 與 scope migration | 本批：workspace identity／membership；待舊專案明確綁定與部署遷移 |
 | W02 | P0 | 全入口 controller policy | 第二批：既有執行入口、最後 frame、背景恢復與清理已接入原 controller／incarnation；驗證見 #87 的實作 PR |
-| W03 | P0 | Operation request key 與查回 | 本批重用 PM operation key／receipt；Git 採用與外部效果仍待驗證 |
+| W03 | P0 | Operation request key 與查回 | 已接入 PM 原 request key、Git／journal 查回與取消；部分 Git transaction 保留原 writer，驗證以各批 PR 為準 |
 | W04 | P0 | BAT capability adapter | 第三批：唯讀選項、native replay／completion 與能力缺口；自動 PM 執行仍缺工具限制契約 |
 | W05 | P0 | Evidence IDs 與 replay 去重 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W06 | P0 | Session worktree work 關聯 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W07 | P0 | PM worktree bootstrap | 第三批：設定綁定、固定 commit、自有 worktree、不可覆寫草稿及原操作查回；計畫 commit／採用由 W08 接續 |
-| W08 | P0 | Plan revision 與採用流程 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W07 | P0 | PM worktree bootstrap | 第三、四批：設定綁定、固定來源、自有 worktree、不可覆寫草稿與計畫 commit；不夾帶程式或其他 index 修改 |
+| W08 | P0 | Plan revision 與採用流程 | 第四批：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；取消／撤權／回覆遺失整合驗證中 |
 | W09 | P1 | PM runner 與 adapter selection | 第三批：writer／context／reply provenance 基礎與手動脈絡準備；可自動執行的 adapter、工具限制與切換待完成 |
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | 第三批：固定討論脈絡、來源／版本／缺口；AI 參與及跨交付 evidence 關聯待做 |
 | W11 | P1 | Plan diff 與影響分析 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -89,7 +98,7 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 | W31 | P0 | Idea thread 與明確轉 Planning | 本批：持久 Idea 與指定輸入轉 Planning 草稿 |
 | W32 | P0 | PhaseProfile 與 command policy | 本批：九種 profile 契約；Idea／Planning 可用，runtime 限制待接 adapter |
 | W33 | P0 | InputRecord 與循序資訊取得 | 本批：來源與確認者、假設／未知分離、context-first 契約；研究 runner 待做 |
-| W34 | P0 | Thread plan change Sprint batch 狀態 | 本批：thread 與 draft 獨立；accepted scope／Sprint／batch 待做 |
+| W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿修訂、文件與 accepted scope 分開；Sprint／batch 與工程 work package 待做 |
 | W35 | P1 | 架構與 SDD 工程工作包 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W36 | P1 | OpenSpec read adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -111,8 +120,8 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 
 ## 後續順序
 
-1. 完成第二批驗證，接入 BAT capability wrapper、工作／證據關聯、PM 自有 worktree 與 BAT runner。
-2. 接入 Git／journal 可恢復計畫採用、固定規格版本、工程工作包與就緒判斷。
+1. 完成目前 Git／journal 採用整合；接入具備已查證工具限制的 PM 分析 adapter 與原生回覆證據。
+2. 工作／證據關聯、固定規格版本、工程工作包與就緒判斷。
 3. 完整五視圖、Sprint／Review／Retro、決策與偏差，沿用現有 Orchestrator 交付並回填。
 4. 發布基準、維護政策與有界排程、Maintenance Review、原子暫停／關閉與明確重開。
 5. 依里程碑加入 AHP／CLI、文件／簡報／SVG 與安裝版自動驗證。

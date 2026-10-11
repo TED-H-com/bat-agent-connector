@@ -1,4 +1,6 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
+import {planRevisions} from './pm-plans.js';
+import {pmWorktreeChoice} from './pm-worktree-choice.js';
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -134,10 +136,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const heading = h('header', {class: 'pm-heading'}, h('div', {}, title, subtitle), refresh);
   const content = h('div', {class: 'pm-content'}), body = h('section', {class: 'pm-main'}, heading, status, content);
   main.append(h('div', {class: 'pm-shell'}, h('aside', {}, nav), body));
-  let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null,
+  let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '';
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null;
   const noteCache = new Map();
+  const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
+  const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
+    && (threadData.thread.mode === 'idea' || Boolean(planningRevisionForm));
+  const updateSourceControls = () => {
+    for (const checkbox of facts?.querySelectorAll('input[type=checkbox]') || [])
+      checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
+  };
   const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (!forms[i].box.isConnected) forms.splice(i, 1); else forms[i].update();}};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
@@ -172,12 +181,21 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         extra: h('div', {}, labelled('pm_note_content', text), h('p', {class: 'muted'}, t('pm_note_help')))});
       const column = h('section', {class: 'pm-discussion'},
         h('div', {class: 'pm-thread-heading'}, threadTitle, mode), h('p', {class: 'muted'}, t('pm_manual')), earlier, notes, coverage, noteForm.box);
+      if (caps()?.features?.pm_workspaces?.plan_drafting) {
+        revisions = planRevisions({h, t, api, alive, workspaceId, threadId, thread: () => threadData,
+          form, input, labelled, permitted, refresh: load, errorBox});
+        column.append(revisions.box);
+      }
       if (caps()?.features?.pm_workspaces?.context_packages) {
         const purpose = input('pm_package_purpose', {multiline: true, max: 4000});
-        const prepare = form({action: 'pm.run.prepare', target, fields: {purpose},
-          params: values => ({purpose: values.purpose}), preconditions, permitted: write,
+        if (caps()?.features?.pm_workspaces?.plan_drafting) worktreeChoice = pmWorktreeChoice({h, t, api, alive, input, labelled,
+          capability: () => pmCapabilities, scopes: () => caps()?.scopes || [], editable: () => write() && caps()?.scopes?.includes('manage'), errorBox});
+        const prepare = form({action: 'pm.run.prepare', target, fields: {purpose, ...worktreeChoice?.fields},
+          params: values => ({purpose: values.purpose, ...worktreeChoice?.params(values)}), preconditions, permitted: write,
+          onStateChange: () => worktreeChoice?.update(),
           label: 'pm_prepare_package', onSaved: () => load(),
-          extra: h('div', {}, labelled('pm_package_purpose', purpose), h('p', {class: 'muted'}, t('pm_package_help')))});
+          extra: h('div', {}, labelled('pm_package_purpose', purpose), worktreeChoice?.box || '', h('p', {class: 'muted'}, t('pm_package_help')))});
+        worktreeChoice?.attach(prepare);
         packages = h('div', {'data-pm-packages': ''});
         column.append(h('details', {class: 'pm-package-preparation'}, h('summary', {}, t('pm_package_prepare_title')), prepare.box),
           h('section', {class: 'pm-packages'}, h('h3', {}, t('pm_packages')), packages));
@@ -212,12 +230,25 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         onStateChange: () => {
           const section = planForm?.box.closest('[data-pm-plan]');
           if (section) section.hidden = (threadData.thread.mode !== 'idea' && !planForm.locked()) || !threadData.capabilities?.decide;
-          for (const checkbox of facts.querySelectorAll('input[type=checkbox]')) checkbox.disabled = Boolean(planForm?.locked()) || !decide() || threadData.thread.mode !== 'idea';},
+          updateSourceControls();},
         extra: h('div', {}, selected, labelled('pm_plan_rationale', rationale), h('p', {class: 'muted'}, t('pm_plan_help')))});
+      if (caps()?.actions?.some(action => action.action === 'pm.thread.plan.revise')) {
+        const selected = h('input', {type: 'hidden'}); selected.value = JSON.stringify(data.draft?.selected_inputs?.map(item => item.input_id) || []);
+        selected.dataset.pmDefault = '[]';
+        const draftId = h('input', {type: 'hidden'}); draftId.value = data.draft?.draft_id || '';
+        const rationale = input('pm_planning_revision_rationale', {multiline: true, max: 4000});
+        planningRevisionForm = form({action: 'pm.thread.plan.revise', target, fields: {selected, draftId, rationale},
+          params: values => ({selected_input_ids: JSON.parse(values.selected || '[]'), rationale: values.rationale}),
+          preconditions: () => ({expected_version: threadData.thread.version, expected_draft_id: planningRevisionForm.values().draftId}),
+          permitted: () => decide() && threadData.thread.mode === 'planning', recoverPermitted: decide,
+          label: 'pm_planning_revision_save', onSaved: () => load(), onStateChange: updateSourceControls,
+          extra: h('div', {}, selected, draftId, labelled('pm_planning_revision_rationale', rationale), h('p', {class: 'muted'}, t('pm_planning_revision_help')))});
+      }
       const inspector = h('aside', {class: 'pm-inspector', 'aria-label': t('pm_inputs')},
         h('h2', {}, t('pm_inputs')), h('p', {class: 'muted'}, t('pm_inputs_help')), permissions, facts,
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
-        draft, h('section', {'data-pm-plan': ''}, h('h2', {}, t('pm_direction')), planForm.box));
+        draft, h('section', {'data-pm-plan': ''}, h('h2', {}, t('pm_direction')), planForm.box),
+        planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '');
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
     }
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
@@ -230,6 +261,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     earlier.hidden = !historyCursor; earlier.disabled = false;
     coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t('pm_partial') : '';
     permissions.textContent = !data.capabilities?.write ? t('pm_readonly') : !data.capabilities?.decide ? t('pm_owner_decides') : '';
+    if (planningRevisionForm && data.draft && !planningRevisionForm.values().draftId && !planningRevisionForm.locked()) {
+      planningRevisionForm.set('draftId', data.draft.draft_id);
+      planningRevisionForm.set('selected', JSON.stringify(data.draft.selected_inputs.map(item => item.input_id)));
+    }
     const oldSource = sourceSelect.value, oldSlot = slotSelect.value;
     // Preserve saved values even if the current bounded read no longer contains their source.
     for (const message of data.messages || []) if (![...sourceSelect.options].some(option => option.value === 'message:' + message.message_id))
@@ -244,13 +279,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const signature = JSON.stringify([data.inputs, data.capabilities, thread.mode]);
     if (signature !== factSignature) {
     factSignature = signature;
-    const selection = new Set(JSON.parse(planForm.values().selected || '[]'));
+    const sourceForm = selectedSourcesForm();
+    const selection = new Set(JSON.parse(sourceForm.values().selected || '[]'));
     const rows = (data.inputs || []).map(item => {
       const checkbox = h('input', {type: 'checkbox', 'aria-label': t('pm_select_input', {value: item.value}), checked: selection.has(item.input_id),
-        disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== 'idea', onchange: event => {
-          const selected = new Set(JSON.parse(planForm.values().selected || '[]'));
+        disabled: sourceForm.locked() || !canSelectSources(), onchange: event => {
+          const selected = new Set(JSON.parse(sourceForm.values().selected || '[]'));
           if (event.target.checked) selected.add(item.input_id); else selected.delete(item.input_id);
-          planForm.set('selected', JSON.stringify([...selected]));
+          sourceForm.set('selected', JSON.stringify([...selected]));
         }});
       const row = h('article', {class: 'pm-fact', 'data-input-id': item.input_id},
         h('div', {class: 'pm-fact-heading'}, checkbox, h('strong', {}, t('pm_slot_' + item.slot) === 'pm_slot_' + item.slot ? item.slot : t('pm_slot_' + item.slot)),
@@ -270,15 +306,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     });
     for (const id of selection) if (!(data.inputs || []).some(item => item.input_id === id)) {
       const checkbox = h('input', {type: 'checkbox', checked: true, 'aria-label': t('pm_missing_selection'),
-        disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== 'idea', onchange: event => {
+        disabled: sourceForm.locked() || !canSelectSources(), onchange: event => {
           if (event.target.checked) return;
-          const selected = new Set(JSON.parse(planForm.values().selected || '[]')); selected.delete(id);
-          planForm.set('selected', JSON.stringify([...selected])); row.remove();
+          const selected = new Set(JSON.parse(sourceForm.values().selected || '[]')); selected.delete(id);
+          sourceForm.set('selected', JSON.stringify([...selected])); row.remove();
         }});
       const old = data.input_history?.find(item => item.input_id === id);
       const row = h('article', {class: 'pm-fact', 'data-pm-missing-selection': id},
         h('label', {class: 'pm-fact-heading'}, checkbox, t('pm_missing_selection')),
-        h('p', {class: 'muted'}, t('pm_missing_selection_help')), old ? h('p', {}, old.value) : null);
+        h('p', {class: 'muted'}, t('pm_missing_selection_help')), old ? h('p', {}, old.value) : '');
       rows.push(row);
     }
     facts.replaceChildren(...rows);
@@ -291,10 +327,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         h('h3', {}, t('pm_selected')), h('ul', {}, ...selected.map(item => h('li', {}, item.value))),
         h('h3', {}, t('pm_candidates')), h('ul', {}, ...candidates.map(item => h('li', {}, item.value))),
         h('h3', {}, t('pm_open_planning')), h('ul', {}, ...(data.draft.unknowns || []).map(item => h('li', {}, t('pm_slot_' + item.slot)))),
-        data.draft.candidates_truncated ? h('p', {class: 'muted'}, t('pm_partial')) : null,
-        h('p', {class: 'muted'}, t('pm_draft_help')));
+        data.draft.candidates_truncated ? h('p', {class: 'muted'}, t('pm_partial')) : '',
+        h('p', {class: 'muted'}, t(caps()?.features?.pm_workspaces?.plan_drafting ? 'pm_planning_source_help' : 'pm_draft_help')));
     }
     planForm.box.closest('[data-pm-plan]').hidden = (thread.mode !== 'idea' && !planForm.locked()) || !data.capabilities?.decide;
+    if (planningRevisionForm) planningRevisionForm.box.closest('[data-pm-planning-revision]').hidden =
+      (thread.mode !== 'planning' && !planningRevisionForm.locked()) || !data.capabilities?.decide;
     updateForms();
   }
   function renderPackages(page, append = false) {
@@ -361,13 +399,19 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
-      let detail = null, threadList = null, data = null, runs = null;
+      let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
       if (workspaceId) {
-        [detail, threadList, data, runs] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
+        [detail, threadList, data, runs, plans, accepted, workspaceCaps] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
           api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
           threadId ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
           threadId && caps()?.features?.pm_workspaces?.context_packages
-            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null)]);
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
+          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
+          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
+          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
           const next = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads?after=${encodeURIComponent(threadList.next_cursor)}`); alive();
@@ -376,7 +420,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (ticket !== sequence) return;
       if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t('pm_scope_mismatch'));
-      workspace = detail?.workspace || null; loaded = true; status.replaceChildren();
+      workspace = detail?.workspace || null; pmCapabilities = workspaceCaps; loaded = true; status.replaceChildren();
       title.textContent = workspace?.name || t('pm_title');
       workspaceList.replaceChildren(...(list.workspaces || []).map(item => h('div', {class: 'pm-workspace-row'},
         h('a', {href: `#/pm/${encodeURIComponent(item.workspace_id)}`, 'aria-current': item.workspace_id === workspaceId ? 'page' : null}, item.name),
@@ -403,6 +447,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         if (runs.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
         renderPackages(runs);
       }
+      if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
+      worktreeChoice?.update();
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {loaded = false; updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
@@ -411,7 +457,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;

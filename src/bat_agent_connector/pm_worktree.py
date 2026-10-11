@@ -110,13 +110,16 @@ def _host_source() -> str:
     # Reuse the audited Git runner's sanitized environment, markers and inode locks.
     shared = (resources.files(__package__) / "repository_sync_host.py").read_text()
     shared = shared.split('\nif __name__ == "__main__":', 1)[0]
-    return shared + "\n" + (resources.files(__package__) / "pm_worktree_host.py").read_text()
+    drafts = (resources.files(__package__) / "pm_worktree_host.py").read_text().split('\nif __name__ == "__main__":', 1)[0]
+    return shared + "\n" + drafts + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
 
 
-async def _host_call(ctx, plan, phase, *, check, snapshot=None):
-    request = {**plan, "phase": phase, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
+async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
+    request = {**plan, "phase": phase, "active_operation_id": ctx.operation_id, **{key: plan["config"][key] for key in ("managed_root", "remote_url")}}
     if snapshot is not None:
         request["snapshot"] = snapshot
+    if revision is not None:
+        request["revision"] = revision
     arg = base64.b64encode(zlib.compress(json.dumps(request).encode(), level=9)).decode()
     script = "python3 -c " + shlex.quote(_host_source()) + " " + shlex.quote(arg)
     if len(script.encode()) > 120_000:
@@ -167,9 +170,12 @@ async def ensure(ctx, plan: dict, *, check) -> dict:
     result = await ctx.step("pm.worktree.prepare", prepare,
                             request={"worktree_path": plan["worktree_path"], "creation_operation_id": plan["creation_operation_id"]},
                             reconcile=read_carrier)
-    if await read_carrier() != result:
+    current = await read_carrier()
+    if not current or any(current[key] != result[key] for key in ("clone_path", "worktree_path", "branch")):
         raise NeedsAttention("PM_WORKTREE_CHANGED", "The original PM carrier cannot be verified")
-    return result
+    # A verified PM-only commit may advance the branch after this bootstrap
+    # receipt; the host validates the complete own-commit chain separately.
+    return current
 
 
 def snapshot_document(plan: dict, run_id: str, kind: str, payload: dict, *, operation_id: str) -> dict:
@@ -201,3 +207,8 @@ async def write_snapshot(ctx, plan: dict, run_id: str, kind: str, payload: dict,
     return await ctx.step("pm.snapshot." + kind,
         lambda: _host_call(ctx, plan, "pm-snapshot", check=check, snapshot=snapshot),
         request={key: value for key, value in snapshot.items() if key != "content"}, reconcile=read)
+
+
+async def commit_revision(ctx, plan, revision_files, *, expected_parent, check):
+    from .pm_revision_git import commit_revision as commit
+    return await commit(ctx, plan, revision_files, expected_parent=expected_parent, check=check)

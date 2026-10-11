@@ -127,6 +127,24 @@ Every action below requires `manage` plus the membership/decision rules above.
 | `pm.input.record` | T | `slot`, `value`, `status`, `source_ref`; optional `applicable_revision`, `supersedes_input_id` | Thread |
 | `pm.input.confirm` | T | `input_id`, `rationale` | Thread |
 | `pm.thread.plan` | T | `selected_input_ids` (1–50 current distinct IDs), `rationale`, optional `title` | Thread |
+| `pm.thread.plan.revise` | T | `selected_input_ids` (1–50 current distinct IDs), `rationale`, optional `title` | Thread, plus exact `expected_draft_id` |
+
+In Planning, an owner/administrator can explicitly revise the selected source set
+with `pm.thread.plan.revise`. Both the current thread version and current draft ID
+must match at admission and at the journal transaction. Each revision gets a new
+`draft_id` and records `previous_draft_id`, rationale, author, original operation ID
+and the exact source versions. The original `pm_planning_drafts` rows stay intact;
+the additive immutable `pm_planning_draft_revisions` table stores subsequent
+selections. The thread points to its latest selection, and unselected current
+inputs remain candidates. Omitting `title` preserves the previous draft title.
+
+Selected sources retain their original status and attribution. A corrected or
+confirmed input must be selected by its new current ID; older selections and
+existing plan documents retain their historical sources. Revising the selection
+does not alter any accepted plan or scope, create a plan document automatically,
+or authorize execution. A later `pm.plan.draft` uses the newly selected sources.
+Profile version 2 adds this explicit Planning command and describes adoption via
+the workspace service; frozen run profiles and contexts are never rewritten.
 
 Workspace names allow 120 characters; repository bindings allow 20 explicit strings
 of up to 300 characters each. Workspace action results use `{workspace: {...}}`.
