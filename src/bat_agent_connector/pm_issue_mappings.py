@@ -24,6 +24,7 @@ REVISION = re.compile(r"pmir_[0-9a-f]{32}")
 MAX_REVISIONS = 256
 MAX_READ_BYTES = 2_000_000
 MAX_PAGES = 20
+MAX_PREFLIGHTS = 64
 EXTERNAL_STEP = "pm.issue.publish.external"
 RECORD_STEP = "pm.issue.record"
 
@@ -388,6 +389,14 @@ async def _run(ctx):
         if gh is None:
             raise Wait("waiting_external", "Original GitHub publication needs its configured connection", 30)
         if not existing:
+            previous = db.execute("SELECT name,status FROM operation_steps WHERE operation_id=? AND name LIKE 'pm.issue.preflight.%' ORDER BY seq DESC LIMIT 1",
+                                  (ctx.operation_id,)).fetchone()
+            number = int(previous["name"].rsplit(".", 1)[1]) if previous else 0
+            if previous is None or previous["status"] == "succeeded":
+                number += 1
+            if number > MAX_PREFLIGHTS:
+                raise _bad("PM_ISSUE_PREFLIGHT_LIMIT", "The original publication requires review after repeated interrupted preflights")
+
             async def preflight():
                 try:
                     _current(ctx, principal)
@@ -402,7 +411,9 @@ async def _run(ctx):
             async def reread(_):
                 return RERUN  # Pure bounded reads; restart still passes the epoch gate.
 
-            await ctx.step("pm.issue.preflight", preflight, reconcile=reread,
+            # A successful read from a previous worker attempt cannot authorize
+            # an as-yet-unsent POST against a now-transferred/replaced repository.
+            await ctx.step(f"pm.issue.preflight.{number}", preflight, reconcile=reread,
                 request={"intent_digest": ctx.admission_binding["issue_intent_digest"]})
             _current(ctx, principal)
 
