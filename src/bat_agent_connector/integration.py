@@ -299,6 +299,8 @@ echo "gitver $1.$2"
         runner = self.ops.context["git_runner"]
         lock = _area_locks.setdefault((self.host, self.path), asyncio.Lock())
         async with lock:
+            from .controller_authority import require
+            require()
             if long:
                 out = await runner.run(self.host, script, timeout_s=self.repo.integrate.fetch_timeout_s)
             else:
@@ -1598,6 +1600,7 @@ async def _run_handoff(ctx: OpContext) -> dict:
     ctx.set_refs(apply_operation_id=op["operation_id"], seq=seq, host=host, worktree_path=wt, branch=branch)
 
     async def prepare() -> dict:
+        ctx.require_controller()
         return {"lines": await area.run(repair_script(area, r12, pv["head_ref"], wt, branch, prev, src["pin"]))}
 
     async def rerun(_request: dict) -> dict:

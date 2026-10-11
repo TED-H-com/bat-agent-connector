@@ -211,6 +211,7 @@ async def resolve(ctx):
 
 
 def guard(ctx, plan):
+    ctx.require_controller()
     ctx.check_cancel()
     project_context(ctx.service, ctx.target, ctx.params, ctx.preconditions, operation_id=ctx.operation_id)
     if digest(config_snapshot(ctx.service, ctx.target)) != plan["config_digest"]:
@@ -252,6 +253,9 @@ async def host_call(ctx, plan, phase):
         if phase == "fetch":
             await published(ctx.service, plan["config"]["repository"], plan["source_ref"],
                             expected_id=plan["repository_id"], expected_sha=plan["source_sha"])
+        ctx.require_controller()
+    if not phase.startswith("read."):
+        ctx.require_controller()
     token = checkpoints._LOCKED_CHECK.set(None if phase.startswith("read.") else check)
     try:
         result = json.loads(await runner.run(ctx.target["host"], "python3 -c " + shlex.quote(source) + " " + shlex.quote(arg),

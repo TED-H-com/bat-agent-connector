@@ -693,6 +693,7 @@ async def _run_continue(ctx: OpContext) -> dict:
     async def prepare() -> dict:
         lock = _clone_locks.setdefault((host, dest), asyncio.Lock())
         async with lock:
+            ctx.require_controller()
             out = await runner.run(host, prepare_script(cp["repo_root"], dest, worktree, branch, cp["commit_sha"],
                                                         f"{dest}.batc-tmp-{suffix}", same_clone=same_clone))
         lines = out.splitlines()
@@ -755,6 +756,8 @@ async def _run_continue(ctx: OpContext) -> dict:
 
 def _admit_revalidate(ops, principal, target, params, pre):
     parent = ops.get(target["operation_id"])
+    from . import controller_authority
+    controller_authority.require_binding(controller_authority.operation_binding(parent))
     if parent["action"] != "checkpoint.continue" or parent["status"] != "needs_attention" or parent["error_code"] not in {"SOURCE_MOVED", "SOURCE_UNAVAILABLE"}:
         raise OperationError("NOT_RESUMABLE", "only a source-blocked continuation can be confirmed", 409)
     if not SHA.fullmatch(str(params.get("observed_source_head_sha", ""))):
