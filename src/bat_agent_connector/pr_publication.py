@@ -53,6 +53,10 @@ def _object(value):
     return value if isinstance(value, dict) else {}
 
 
+def _observed_sha(value):
+    return value if isinstance(value, str) and integration.SHA.fullmatch(value) else None
+
+
 def schema(journal):
     with journal.tx():
         journal.db.execute("""CREATE TABLE IF NOT EXISTS pr_creation_receipts (
@@ -371,8 +375,8 @@ def _preserve(ctx, payload):
     intent = _intent(ctx.op)
     # Only the original POST 201 enters this function. An otherwise malformed
     # response remains unresolved; no candidate GET can call this function.
-    if (not isinstance(payload, dict) or type(payload.get("id")) is not int or payload["id"] <= 0
-            or type(payload.get("number")) is not int or payload["number"] <= 0
+    if (not isinstance(payload, dict) or type(payload.get("id")) is not int or not 0 < payload["id"] < 2**63
+            or type(payload.get("number")) is not int or not 0 < payload["number"] < 2**63
             or not isinstance(payload.get("node_id"), str) or not 1 <= len(payload["node_id"]) <= 256):
         raise GitHubAmbiguous("Original PR creation response lacks a native identity")
     head, base = _object(payload.get("head")), _object(payload.get("base"))
@@ -392,8 +396,8 @@ def _preserve(ctx, payload):
         "branch_ref": host.branch(ctx.operation_id), "intent_digest": _digest(intent),
         "native_pr_id": payload["id"], "native_pr_node_id": payload["node_id"], "pull_number": payload["number"],
         "http_status": 201, "response_digest": _digest(payload), "target_verified": verified,
-        "observed_head_sha": head.get("sha") if isinstance(head, dict) else None,
-        "observed_base_sha": base.get("sha") if isinstance(base, dict) else None,
+        "observed_head_sha": _observed_sha(head.get("sha")),
+        "observed_base_sha": _observed_sha(base.get("sha")),
         "candidate_tree": pinned.get("tree_hash"), "files_digest": _digest(pinned.get("files")),
         "files_complete": pinned.get("files_complete") is True, "quality_ref": intent.get("quality_ref"),
         "created_at": time.time(), "requirement_acceptance": "not_evaluated_by_publication"}
@@ -546,7 +550,10 @@ def require_creation_receipt(ops, principal, publication_operation_id, *, child_
 
 
 def list_creation_receipts(ops, principal, repair_parent_id, child_operation_id, *, after=0, limit=20):
-    if type(after) is not int or not 0 <= after < 2**63 or type(limit) is not int or not 1 <= limit <= 50:
+    if (type(after) is not int or not 0 <= after < 2**63 or type(limit) is not int or not 1 <= limit <= 50
+            or not isinstance(child_operation_id, str) or not integration.OP_ID.fullmatch(child_operation_id)
+            or repair_parent_id is not None and
+            (not isinstance(repair_parent_id, str) or not integration.OP_ID.fullmatch(repair_parent_id))):
         raise _bad("INVALID_PARAMS", "Use a valid publication cursor and limit from 1 through 50", 422)
     rows = ops.db.execute("SELECT sequence,operation_id FROM pr_creation_receipts WHERE repair_parent_id IS ? "
         "AND child_operation_id=? AND sequence>? ORDER BY sequence LIMIT ?",
