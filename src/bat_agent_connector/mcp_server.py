@@ -69,6 +69,7 @@ READ_TOOLS = [
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
+    "pm_brief_export_get",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
     "pm_kanban_get", "pm_kanban_card_get", "pm_meetings_list", "pm_meeting_get", "pm_meeting_history_list",
     "pm_sprint_artifacts_get",
@@ -630,6 +631,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read original raw and validated assessment with native provenance and current source access; no adoption."""
         return await pm_daemon("pm_follow_up_assessment_get", workspace_id=workspace_id, assessment_id=assessment_id)
 
+    async def pm_brief_export_get(workspace_id: str, snapshot_id: str, format: str = "markdown", locale: str = "en") -> dict[str, Any]:
+        """Render a fixed authorized Project Brief as passive markdown/html/svg in JSON; does not save or publish a file."""
+        return await pm_daemon("pm_brief_export_get", workspace_id=workspace_id, snapshot_id=snapshot_id, format=format, locale=locale)
+
     async def pm_follow_up_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read fixed Follow-up intake metadata with current membership and original source visibility."""
         return await pm_daemon("pm_follow_up_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -828,6 +833,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
+               pm_brief_export_get,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,
                pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,
                pm_sprint_artifacts_get, pm_sprint_artifact_revisions_list, pm_sprint_artifact_get, pm_sprints_list, pm_sprint_get, pm_sprint_history_list,

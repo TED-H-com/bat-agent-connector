@@ -187,6 +187,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})", self.pm_work_package, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-packages/(?P<package_id>pmwp_[0-9a-f]{32})/readiness", self.pm_work_package_readiness, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments", self.pm_follow_up_assessments, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})/brief-export", self.pm_brief_export, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-up-assessments/(?P<assessment_id>pmfa_[0-9a-f]{32})", self.pm_follow_up_assessment, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-ups", self.pm_follow_ups, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/follow-ups/latest", self.pm_follow_up_latest, "observe"),
@@ -409,6 +410,7 @@ class ApiV1:
                       self.pm_governance_records, self.pm_governance_record, self.pm_governance_history,
                       self.pm_follow_ups, self.pm_follow_up, self.pm_follow_up_latest,
                       self.pm_follow_up_assessments, self.pm_follow_up_assessment,
+                      self.pm_brief_export,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
@@ -732,6 +734,9 @@ class ApiV1:
     async def pm_snapshot_latest(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_snapshot_latest_get", query, workspace_id=workspace_id)
 
+    async def pm_brief_export(self, principal, query, workspace_id, snapshot_id, **_):
+        return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
+
     async def capabilities(self, principal, **_):
         fleet = self.daemon.fleet
         from . import worktree_merge_operations
@@ -786,6 +791,7 @@ class ApiV1:
                                                     "governance": "pm.governance.record" in self.daemon.ops.actions,
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
+                                                    "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 1},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     "kanban": True, "spec_sources": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
