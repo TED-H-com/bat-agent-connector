@@ -182,7 +182,16 @@ async def test_committed_baseline_recovers_parent_after_a_later_deployment(ready
     newer = 'd' * 40
     w['gh'].commits[newer] = {'sha': newer, 'parents': [{'sha': previous['identity']['source_sha']}]}
     w['gh'].branches['main'] = newer
-    await deployments.deployed(w['d'], w['gh'], key='later-independent-deployment', sha=newer)
+    # Drive only the new deployment. The general helper ticks every operation,
+    # which would recover this parent before the simulated restart boundary.
+    later = await deployments.start(w['d'], key='later-independent-deployment', sha=newer)
+    await ops._execute(later['operation_id'])
+    waiting = ops.get(later['operation_id'])
+    deployments.completed(w['gh'], waiting['external_refs']['deploy_run_id'], source=newer)
+    await ops._execute(later['operation_id'])
+    assert ops.get(later['operation_id'])['status'] == 'succeeded'
+    assert not ops.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND name='pm.repair.delivered'",
+                             (parent['operation_id'],)).fetchone()
     deployment.settle_stopped_local(ops, deployment_store.deployment(ops.db, operation_id=original['operation_id']), original)
     assert deployment_store.deployment(ops.db, operation_id=original['operation_id'])['state'] == 'superseded'
     await ops._execute(parent['operation_id'])

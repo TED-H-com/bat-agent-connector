@@ -63,7 +63,12 @@ async def test_deployment_baseline_completion_and_fixed_review_share_original_re
     assert w['parent']['status'] == 'succeeded', w['parent']
     assert w['parent']['result']['baseline_update']['status'] == 'updated'
     reader = await observe(w)
-    assert reader['status'] == 'succeeded', reader
+    assert reader['status'] == 'succeeded', {
+        'reason': reader['status_reason'], 'code': reader['error_code'], 'steps': reader['steps'],
+        'derived': [dict(row) for row in ops.db.execute('''SELECT o.action,o.status,o.status_reason,s.name,s.status AS step_status
+            FROM operations o JOIN pm_source_lineage l ON l.resource_type='operation' AND l.resource_id=o.operation_id
+            LEFT JOIN operation_steps s ON s.operation_id=o.operation_id AND s.status IN ('started','uncertain')
+            WHERE l.original_operation_id=?''', (w['parent']['operation_id'],))]}
     repair = view(w, w['parent'])
     after, new_refs = reports.build(ops, OWNER, w['workspace_id'], intent, period, period['end'])
     sample = after['repairs'][0]
