@@ -221,3 +221,66 @@ async def test_foreign_admin_cannot_mint_reconciliation_capability(journal):
             await TaskDaemon._call_bound(daemon, "work_reconcile_capability",
                                          {"task_id": task["task_id"], "command_id": "unused"})
     assert not journal.db.execute("SELECT 1 FROM capabilities").fetchone()
+
+
+@pytest.mark.parametrize("missing", ["guard_owner", "command_nonce"])
+def test_task_frame_without_original_creation_is_read_only(journal, monkeypatch, missing):
+    from bat_agent_connector import registry
+    from bat_agent_connector.errors import TaskControlRefused
+    task = submit(journal)
+    with ca.use(task_control.authority(task), journal):
+        adopt("lead", task_id=task["task_id"], role="lead")
+        journal.change(task["task_id"], "dispatching")
+        task = journal.change(task["task_id"], "accepted", fields={"session_id": "lead"})
+        prompt_hash = hashlib.sha256(b"fixed words").hexdigest()
+        command, _ = journal.command(task["task_id"], "send", "lead", {"prompt_sha256": prompt_hash}, "send")
+        if missing == "command_nonce":
+            payload = json.loads(command["payload"])
+            payload.pop("controller_incarnation")
+            journal.db.execute("UPDATE commands SET payload=? WHERE command_id=?", (json.dumps(payload), command["command_id"]))
+        with monkeypatch.context() as patch:
+            if missing == "guard_owner":
+                patch.setattr(registry, "get", lambda *_: None)
+            guard = task_control.FrameGuard(journal, task["task_id"], "h1", "lead", task["control_version"],
+                                            command_id=command["command_id"], prompt_sha256=prompt_hash)
+        with pytest.raises(TaskControlRefused, match="CONTROLLER_BINDING_UNPROVEN"):
+            guard.check()
+
+
+@pytest.mark.parametrize("case", ["legacy_task", "foreign_entry", "replaced_entry", "missing_start"])
+async def test_goose_never_launches_without_original_session(journal, monkeypatch, case):
+    from bat_agent_connector import registry
+    task_caller = None if case == "legacy_task" else ALICE
+    entry_caller = BOB if case == "foreign_entry" else ALICE
+    task = submit(journal, task_caller, engine="goose")
+    journal.change(task["task_id"], "dispatching")
+    journal.change(task["task_id"], "accepted", fields={"session_id": "lead"})
+    with ca.use(ca.binding(journal.db, entry_caller), journal):
+        adopt("lead", task_id=task["task_id"], role="lead")
+    if case != "missing_start":
+        nonce = "f" * 32 if case == "replaced_entry" else registry.get("h1", "lead")["controller_incarnation"]
+        command, _ = journal.command(task["task_id"], "start_lead", "lead", {}, "original-start")
+        journal.db.execute("UPDATE commands SET payload=? WHERE command_id=?", (
+            json.dumps({"controller_incarnation": nonce}), command["command_id"]))
+        journal.command_status(command["command_id"], "settled")
+    original_commands = journal.commands(task["task_id"])
+    monkeypatch.setattr(journal, "owner_valid", lambda: True, raising=False)
+    async def no_launch(*_args, **_kwargs):
+        pytest.fail("unproven or foreign task must not start a model")
+    daemon = SimpleNamespace(journal=journal, goose=SimpleNamespace(config=SimpleNamespace(enabled=True), run_task=no_launch))
+    daemon._tick_task_bound = lambda tid: TaskDaemon._tick_task_bound(daemon, tid)
+    with ca.use(ca.binding(journal.db, BOB), journal):
+        await TaskDaemon._tick_task(daemon, task["task_id"])
+    assert journal.commands(task["task_id"]) == original_commands
+    assert not journal.db.execute("SELECT 1 FROM capabilities").fetchone()
+    assert registry.get("h1", "lead")["controller_authority"]["actor"] == entry_caller.actor
+
+
+async def test_in_process_task_submit_requires_explicit_authenticated_caller(journal):
+    from bat_agent_connector.task_daemon import LegacyTaskError
+    daemon = SimpleNamespace(journal=journal)
+    with ca.use(ca.binding(journal.db, BOB), journal):
+        with pytest.raises(LegacyTaskError, match="authenticated task caller"):
+            await TaskDaemon._task_operation(daemon, "work_submit", {
+                "host": "h1", "workspace": "w", "project": "p", "original_words": "cannot borrow ambient admin"})
+    assert not journal.db.execute("SELECT 1 FROM tasks").fetchone()
