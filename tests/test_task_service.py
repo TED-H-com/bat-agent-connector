@@ -2453,7 +2453,8 @@ async def test_bat_warm_reuse_claims_only_clean_completed_service_session(task_c
     with pytest.raises(TaskIdentityMismatch, match="ownership changed"):
         registry.claim_warm("h1", old_sid, previous_task_id=previous["task_id"],
                             task_id="another-task", workspace_id=entry["workspace_id"],
-                            cwd=entry["cwd"], branch=entry["branch"])
+                            cwd=entry["cwd"], branch=entry["branch"],
+                            expected_incarnation=entry["controller_incarnation"])
     journal.close()
     await fleet.close()
 

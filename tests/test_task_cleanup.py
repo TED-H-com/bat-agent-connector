@@ -223,7 +223,8 @@ async def test_warm_claim_and_cleanup_reservation_contend(daemon, mock):
     entry = registry.get("h1", sid)
     with pytest.raises(ResourceReadOnly, match="CLEANUP_IN_PROGRESS"):
         registry.claim_warm("h1", sid, previous_task_id=tid, task_id="successor", workspace_id=entry["workspace_id"],
-                            cwd=entry["cwd"], branch=entry["branch"])
+                            cwd=entry["cwd"], branch=entry["branch"],
+                            expected_incarnation=entry["controller_incarnation"])
     assert registry.get("h1", sid)["task_id"] == tid
 
 
