@@ -8,6 +8,7 @@ from bat_agent_connector import execution_sources, integration, registry, work_i
 from bat_agent_connector.operations import OperationError
 from tests import test_integration as existing
 from tests import test_session_start_operations as starts
+from tests.conftest import controller_scope
 from tests.test_checkpoints import git
 from tests.test_work_items import PERSON, act, project
 from tests.test_work_items import item as work_item
@@ -89,8 +90,10 @@ async def test_task_command_result_and_project_binding(world):
     cp = await world.checkpoint()
     oid, sha, _ = await world.agent_result(cp)
     sid = world.d.ops.get(oid)['result']['session_id']
-    task = world.d.journal.submit(project='project-task', host='h1', workspace='demo-project', original_words='Task result',
-                                  engine='goose', idempotency_key='delivery-task')
+    with controller_scope(world.d.journal, existing.OPERATOR):
+        task = world.d.journal.submit(project='project-task', host='h1', workspace='demo-project', original_words='Task result',
+                                      engine='goose', idempotency_key='delivery-task')
+    assert task['controller_authority'] == registry.get('h1', sid)['controller_authority']
     tid = task['task_id']
     world.d.journal.change(tid, 'dispatching', fields={'session_id': sid})
     world.d.journal.change(tid, 'accepted')
