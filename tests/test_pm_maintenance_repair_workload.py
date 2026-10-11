@@ -48,6 +48,10 @@ async def completed(observed, mock, monkeypatch):
     mock.ws_doc['terminals'] = []
     w['d'].inventory.settings.activity_every = 100
     w['d'].inventory._runs['h1'] = 1
+    # The original publication stub returns a minimal POST receipt on /pulls.
+    # Use the provider's real bounded GET for this later no-open-PR snapshot.
+    client = w['d'].ops.context['github']
+    monkeypatch.setattr(client, 'bounded_get', type(client).bounded_get.__get__(client))
     await refresh(w)
     return w
 
@@ -55,7 +59,7 @@ async def completed(observed, mock, monkeypatch):
 async def refresh(w):
     await w['d'].inventory.refresh_host('h1')
     observed = await execute(w['d'].ops, shared_request(w, github.ACTION), who=OWNER)
-    assert observed['result']['coverage_status'] == 'complete', observed
+    assert observed['result']['coverage_status'] == 'complete', json.dumps(github.get_observation(w['d'].ops, OWNER, w['workspace_id'], observed['result']['observation_id']), indent=2)
 
 
 async def capture(w):
