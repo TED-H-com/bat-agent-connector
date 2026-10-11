@@ -1365,7 +1365,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .split('/')
                 .nth(5)
                 .is_some_and(|id| id.starts_with("pmt_"))
-                && !path.ends_with("/context") && !path.ends_with("/context-bundle");
+                && !path.ends_with("/context")
+                && !path.ends_with("/context-bundle");
             let valid = match key.as_ref() {
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
@@ -3357,7 +3358,10 @@ mod tests {
             format!("/pr-publications/op_{}?refresh=true", "5".repeat(32)),
             "/pr-publications".into(),
             "/execution-verifications".into(),
-            format!("/executions/op_{}/verification-config?refresh=true", "5".repeat(32)),
+            format!(
+                "/executions/op_{}/verification-config?refresh=true",
+                "5".repeat(32)
+            ),
             format!("/execution-verifications/op_{}?run=true", "5".repeat(32)),
             format!("/maintenance-repairs/{repair}?start=true"),
             "/work/wi_44444444444444444444/quality?candidate=latest".into(),

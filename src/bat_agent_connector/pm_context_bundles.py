@@ -35,7 +35,7 @@ def _ref(value):
 def _selected(db, principal, workspace_id, ref=None, *, current=False):
     if not principal.allows('observe'):
         raise _error('Accepted context requires observe scope', 'FORBIDDEN', 403)
-    pm_workspace.require_member(db, principal, workspace_id)
+    workspace = pm_workspace.require_member(db, principal, workspace_id)
     head = pm_plans.head(db, workspace_id)
     ref = _ref(ref) if ref is not None else None
     rid = ref['revision_id'] if ref else head['accepted_revision_id']
@@ -58,7 +58,9 @@ def _selected(db, principal, workspace_id, ref=None, *, current=False):
         'AND revision_id=?', (decision['commit_operation_id'], workspace_id, rid)).fetchone()
     receipt = json.loads(receipt_row[0]) if receipt_row else None
     carrier = pm_runs.workspace_worktree(db, workspace_id)
-    if (not receipt or not carrier or 'source_operation_id' in receipt
+    if (not receipt or not carrier
+            or carrier['target']['repository'].lower() not in {repo.lower() for repo in workspace['repositories']}
+            or 'source_operation_id' in receipt
             or receipt.get('operation_id') != decision['commit_operation_id']
             or receipt.get('document_digest') != files['document_digest']
             or receipt.get('file_digests') != files['file_digests']
@@ -70,7 +72,7 @@ def _selected(db, principal, workspace_id, ref=None, *, current=False):
         'adoption_operation_id': adopted['operation_id'], 'git_receipt_digest': pm_runs._digest(receipt)}
     if ref is not None and selected != ref:
         raise _error('The original adopted document or Git receipt differs')
-    sources = sorted(set(pm_plans.source_operation_ids(db, workspace_id, rid)) | {
+    sources = sorted(set(pm_plans.source_operation_ids(db, workspace_id, rid, include_adoption=False)) | {
         revision['operation_id'], adopted['operation_id'], receipt['operation_id'], carrier['creation_operation_id']})
     pm_access.require_operation_sources(db, principal, sources)
     binding = {'ref': selected, 'source_operation_ids': sources,
