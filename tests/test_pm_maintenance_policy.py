@@ -114,8 +114,8 @@ async def test_cas_original_receipt_and_manage_only_replay_survive_new_head_and_
     await execute(ops, request(ops, wid))
     await decide(ops, wid)
     count = len(ops.context["github"].calls)
-    replay, existing = ops.create(Principal(OWNER.actor, frozenset({"manage"})), **first)
-    assert existing and replay["operation_id"] == done["operation_id"]
+    replay, created = ops.create(Principal(OWNER.actor, frozenset({"manage"})), **first)
+    assert not created and replay["operation_id"] == done["operation_id"]
     assert replay["result"] == done["result"]
     old = policies.fixed_record(ops, OWNER, wid, done["result"]["policy_id"])
     assert old["version"] == 1
