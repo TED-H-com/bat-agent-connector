@@ -6,7 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import api_auth, cli, controller_authority, registry
+from bat_agent_connector import (
+    api_auth,
+    cli,
+    controller_authority,
+    platform_files,
+    registry,
+    resource_policy,
+    service,
+)
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.mcp_server import build_server
 from bat_agent_connector.operations import OperationError
@@ -157,8 +165,87 @@ async def test_replacement_after_admission_cannot_receive_original_send(daemon, 
     assert len(api.write_frames(mock)) == before
 
 
+@pytest.mark.parametrize("phase", ["resolution", "live_check", "transport_connect"])
+@pytest.mark.parametrize("action,params,channel", [
+    ("session.send", {"text": "original target only"}, "claude:send-message"),
+    ("session.answer", {"answers": ["yes"], "tool_use_id": "question-1"}, "claude:resolve-ask-user"),
+    ("session.interrupt", {"mode": "soft"}, "claude:interrupt-turn"),
+    ("session.send", {"text": "resume original target only"}, "claude:client-resume"),
+    ("session.permissions", {"mode": "default"}, "claude:set-permission-mode"),
+])
+async def test_admitted_incarnation_survives_async_reads_and_connect(
+        daemon, mock, monkeypatch, phase, action, params, channel):
+    sid, _ = await start(daemon, mock)
+    original_row = registry.get("h1", sid)
+    if channel == "claude:client-resume":
+        mock.metas[sid] = None
+    if action == "session.answer":
+        mock.states[sid] = {"pendingAskUser": {"toolUseId": "question-1", "questions": [{"question": "Continue?"}]}}
+    pending, _ = daemon.ops.create(OWNER, action=action, target={"host": "h1", "session_id": sid},
+                                   params=params, idempotency_key="fixed-incarnation")
+    before = len(api.write_frames(mock))
+    changed = False
+
+    def replace_incarnation():
+        nonlocal changed
+        if changed:
+            return
+        document = json.loads(registry.registry_path().read_text())
+        row = next(row for row in document["sessions"] if row["session_id"] == sid)
+        assert row == original_row
+        row["controller_incarnation"] = "f" * 32
+        assert row["controller_incarnation"] != original_row["controller_incarnation"]
+        platform_files.atomic_write(registry.registry_path(), json.dumps(document).encode())
+        changed = True
+
+    if phase == "resolution":
+        resolve = service._resolve_session
+
+        async def resolve_then_replace(*args, **kwargs):
+            result = await resolve(*args, **kwargs)
+            replace_incarnation()
+            return result
+
+        monkeypatch.setattr(service, "_resolve_session", resolve_then_replace)
+    elif phase == "live_check":
+        classify_live = resource_policy.classify_live
+
+        async def check_then_replace(*args, **kwargs):
+            result = await classify_live(*args, **kwargs)
+            replace_incarnation()
+            return result
+
+        monkeypatch.setattr(resource_policy, "classify_live", check_then_replace)
+    else:
+        client = daemon.fleet.client("h1")
+        invoke_checked, connect = client._invoke_checked, client.connect
+        effect_connect = False
+
+        async def invoke_with_connect_race(canonical, *args, **kwargs):
+            nonlocal effect_connect
+            effect_connect = canonical == channel
+            try:
+                return await invoke_checked(canonical, *args, **kwargs)
+            finally:
+                effect_connect = False
+
+        async def connect_then_replace():
+            await connect()
+            if effect_connect:
+                replace_incarnation()
+
+        monkeypatch.setattr(client, "_invoke_checked", invoke_with_connect_race)
+        monkeypatch.setattr(client, "connect", connect_then_replace)
+
+    await settle_operations(daemon.ops)
+    done = daemon.ops.get(pending["operation_id"])
+    assert changed, done
+    assert done["error_code"] == "CONTROLLER_INCARNATION_CHANGED", done
+    assert len(api.write_frames(mock)) == before
+    assert registry.get("h1", sid)["controller_authority"] == original_row["controller_authority"]
+
+
 async def test_legacy_lost_reply_can_reconcile_without_new_authority(daemon, mock, monkeypatch):
-    from bat_agent_connector import service
     sid, _ = await start(daemon, mock)
     mock.echo_sends = True
     original = service.session_send

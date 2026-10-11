@@ -1007,6 +1007,7 @@ async def session_send(
     _exact_session_id: bool = False,
     _before_frame: Callable[[], Awaitable[None]] | None = None,
     _operation_context=None,
+    _controller_incarnation: str | None = None,
 ) -> dict:
     from . import orchestration_operations
     from .operations import OpContext
@@ -1031,7 +1032,8 @@ async def session_send(
         sid = t["id"]
         if _exact_session_id and sid != session_id:
             raise TaskControlRefused("TASK_BINDING_MISMATCH", "the operation's session identity no longer resolves exactly")
-        grant = await resource_policy.authorize_session(fleet, host, "session.send", t)
+        grant = await resource_policy.authorize_session(fleet, host, "session.send", t,
+                                                        expected_incarnation=_controller_incarnation)
         successor = next((e for e in registry.list_entries(host) if e.get("failover_of") == sid
                           and e.get("status") in ("starting", "active")
                           and e.get("handoff_status") == "sent"), None)
@@ -1225,6 +1227,7 @@ async def session_interrupt(
     _task_guard: task_control.FrameGuard | None = None, control_version: int | None = None,
     operation_id: str | None = None,
     _exact_session_id: bool = False,
+    _controller_incarnation: str | None = None,
 ) -> dict:
     _guard(fleet, host, confirm)
     if mode not in ("soft", "hard"):
@@ -1236,7 +1239,8 @@ async def session_interrupt(
         sid = t["id"]
         if _exact_session_id and sid != session_id:
             raise TaskControlRefused("TASK_BINDING_MISMATCH", "the operation's session identity no longer resolves exactly")
-        grant = await resource_policy.authorize_session(fleet, host, "session.interrupt", t)
+        grant = await resource_policy.authorize_session(fleet, host, "session.interrupt", t,
+                                                        expected_incarnation=_controller_incarnation)
         kind = agent_kind(t.get("agentPreset"))
         audit.check_rate(host, sid + "#interrupt")
         channel = "claude:interrupt-turn" if (mode == "soft" and kind == "claude") else "claude:abort-session"
@@ -1294,6 +1298,7 @@ async def session_answer(
     operation_id: str | None = None,
     _exact_session_id: bool = False,
     _operation_context=None,
+    _controller_incarnation: str | None = None,
 ) -> dict:
     from . import bulk_approval
     from .operations import AmbiguousOutcome, OpContext, StepFailed
@@ -1316,7 +1321,8 @@ async def session_answer(
         sid = t["id"]
         if _exact_session_id and sid != session_id:
             raise TaskControlRefused("TASK_BINDING_MISMATCH", "the operation's session identity no longer resolves exactly")
-        grant = await resource_policy.authorize_session(fleet, host, "session.answer", t)
+        grant = await resource_policy.authorize_session(fleet, host, "session.answer", t,
+                                                        expected_incarnation=_controller_incarnation)
         kind = agent_kind(t.get("agentPreset"))
         if bulk and kind != bulk_approval.check_child(_operation_context)["agent_kind"]:
             raise TaskControlRefused("BULK_BINDING_CHANGED", "reviewed agent kind changed")
