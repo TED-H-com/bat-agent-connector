@@ -13,7 +13,7 @@ from pathlib import Path
 from bat_agent_connector import api_auth, platform_files, registry
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.task_daemon import TaskDaemon
-from tests.conftest import adopt, make_config
+from tests.conftest import adopt, controller_scope, make_config
 from tests.mockbat import TOKEN, MockBat
 from tests.test_lifecycle import _add_wt_claude
 
@@ -33,15 +33,17 @@ async def main():
         await mock.start()
         mock.handlers['git:log'] = lambda params: [{'hash': 'a' * 40}]
         mock.states[RELAY]['isStreaming'] = mock.metas[RELAY]['isStreaming'] = False
-        adopt(RELAY, agent_preset='codex-agent', workspace_id='ws-1')
-        _add_wt_claude(mock)
-        manual_before = copy.deepcopy(mock.metas['sess-claude-0001'])
-        tabs_before = copy.deepcopy(mock.ws_doc)
         config = make_config(mock, writes=True, orchestrate=True, managed_roots=['/srv'], orchestrate_max_sessions=16,
                              safety={'write_min_interval_s': 0})
         daemon = TaskDaemon(config, root / 'journal.db')
-        await daemon.inventory.refresh_host('h1')
         token = api_auth.issue(daemon.journal.db, 'orchestration-browser', ['observe', 'start', 'operate'])
+        principal = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token)
+        with controller_scope(daemon.journal, principal):
+            adopt(RELAY, agent_preset='codex-agent', workspace_id='ws-1')
+            _add_wt_claude(mock)
+        manual_before = copy.deepcopy(mock.metas['sess-claude-0001'])
+        tabs_before = copy.deepcopy(mock.ws_doc)
+        await daemon.inventory.refresh_host('h1')
         server = await asyncio.start_server(daemon._handle, '127.0.0.1', 0)
         worker = asyncio.create_task(daemon.ops.loop(0.05))
         print(json.dumps({'port': server.sockets[0].getsockname()[1], 'token': token, 'relay': RELAY, 'source': SOURCE}), flush=True)
