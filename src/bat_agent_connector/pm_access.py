@@ -106,6 +106,10 @@ def event_visible(db, principal, event):
         from .pm_meetings import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event['kind'] in {'pm.sprint.close', 'pm.sprint.cancel', 'pm.evidence.capture'}:
+        from .pm_quality_projections import operation_visible
+        operation_id = event.get('body', {}).get('operation_id')
+        return bool(operation_id) and operation_visible(db, principal, {'operation_id': operation_id})
     if event["resource_type"] == "pm_snapshot" or event["kind"].startswith("pm.snapshot."):
         # A maintenance report emits the ordinary Snapshot event in the same
         # transaction. Its metadata inherits the original preparing operation.

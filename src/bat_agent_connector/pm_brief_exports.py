@@ -45,6 +45,10 @@ _TEXT = {
         "merge": "Merge verified at commit {commit}", "deployment": "Recorded deployment {status}; current environment not assessed",
         "integration": "Integration {status}; PR state remains unknown", "claim": "Work state recorded as {status}; quality unassessed",
         "attention": "Recorded {kind} state: {status}", "missing_capture": "No saved evidence capture is selected for this work",
+        "quality": "Original acceptance: {acceptance}; Definition of Done: {dod}",
+        "quality_count": "Qualified original requirements: {qualified} / {total}",
+        "quality_fixed": "These attributed assessments were explicitly selected at capture time. Later conclusions and current applicability are not substituted.",
+        "work_state": "Work state recorded as {status}",
     },
     "zh-TW": {
         "brief": "專案摘要", "historical": "歷史快照 · 固定來源選取",
@@ -69,6 +73,10 @@ _TEXT = {
         "merge": "已查證合併至 commit {commit}", "deployment": "已記錄部署 {status}；目前環境尚未評估",
         "integration": "整合狀態 {status}；PR 狀態仍未知", "claim": "工作狀態記錄為 {status}；品質尚未評估",
         "attention": "已記錄 {kind} 狀態：{status}", "missing_capture": "這份工作尚未選取已保存的證據擷取紀錄",
+        "quality": "原始驗收條件：{acceptance}；完成定義：{dod}",
+        "quality_count": "符合驗收與完成定義的原始需求：{qualified} / {total}",
+        "quality_fixed": "這些具責任歸屬的評估由整理證據時明確選取；不會替換成後來的結論，也不代表已重查目前適用性。",
+        "work_state": "工作狀態記錄為 {status}",
     },
 }
 _STATUSES = {
@@ -76,11 +84,13 @@ _STATUSES = {
            "agent_assumption": "Agent assumption", "unresolved": "Unresolved", "conflicting": "Conflicting",
            "not_applicable": "Recorded not applicable", "unassessed": "Unassessed", "unknown": "Unknown",
            "quality_unassessed": "Quality unassessed", "partial_source_states": "Partial saved source states",
+           "fixed_quality_assessments": "Explicit original quality assessments", "qualified": "Qualified", "not_qualified": "Not qualified",
            "accepted_sources": "Accepted sources", "recorded_sources": "Recorded sources", "unavailable": "Unavailable"},
     "zh-TW": {"user_confirmed": "使用者已確認", "repo_evidence": "有來源歸屬的 Repo 聲明",
               "agent_assumption": "Agent 假設", "unresolved": "尚未決定", "conflicting": "存在衝突",
               "not_applicable": "已記錄不適用", "unassessed": "尚未評估", "unknown": "未知",
               "quality_unassessed": "品質尚未評估", "partial_source_states": "部分已保存來源狀態",
+              "fixed_quality_assessments": "明確選取的原始品質評估", "qualified": "符合品質條件", "not_qualified": "尚未符合品質條件",
               "accepted_sources": "已採用的來源", "recorded_sources": "已記錄的來源", "unavailable": "無可用資料",
               "passed": "通過", "failed": "失敗", "merged": "已合併", "verified": "已查證",
               "unverified": "未查證", "done": "回報完成", "accepted": "內容獲准", "waiting": "等待中",
@@ -142,13 +152,18 @@ def _source(snapshot, source):
     return result
 
 
-def _item_text(item, source, text, locale):
+def _item_text(item, source, text, locale, *, quality=False):
     kind, details = item["kind"], item.get("details", {})
     value = _status(item["status"], locale)
     if kind == "observed_verification":
         return text["verification"].format(status=value, commit=details["candidate_commit"])
     if kind == "pr_merge":
         return text["merge"].format(commit=details["merged_sha"])
+    if kind == 'quality_assessment':
+        labels = {'accepted': '符合', 'rejected': '不符合', 'unassessed': '尚未評估', 'not_defined': '尚未定義'} if locale == 'zh-TW' else {}
+        return text['quality'].format(**{key: labels.get(details[key], details[key]) for key in ('acceptance', 'dod')})
+    if kind == 'work_claim' and quality:
+        return text['work_state'].format(status=value)
     if kind in {"deployment", "integration_delivery", "work_claim"}:
         return text[{"deployment": "deployment", "integration_delivery": "integration", "work_claim": "claim"}[kind]].format(status=value)
     if kind == "recorded_attention_state":
@@ -173,6 +188,10 @@ def _blocks(snapshot, locale):
     for section in SECTIONS:
         view = snapshot["brief"][section]
         blocks.extend([("heading", text[section]), ("note", _status(view["status"], locale)), ("note", text[section + "_note"])])
+        if view.get('quality'):
+            summary = view['quality']
+            blocks.extend([('body', text['quality_count'].format(qualified=summary['qualified_requirements'], total=summary['total_requirements'])),
+                ('note', text['quality_fixed']), ('source', _json(summary))])
         if not view["items"]:
             blocks.append(("body", text["empty"]))
         for item in view["items"]:
@@ -182,7 +201,7 @@ def _blocks(snapshot, locale):
                 sources.append((identifiers[source_key], _source(snapshot, item["source"])))
             identifier = identifiers[source_key]
             source = next(value for ref, value in sources if ref == identifier)
-            blocks.extend([("body", _item_text(item, source, text, locale)),
+            blocks.extend([("body", _item_text(item, source, text, locale, quality=bool(view.get('quality')))),
                            ("note", f"{text['status']}: {_status(item['status'], locale)} · {text['source']}: {identifier}")])
     if snapshot.get("maintenance"):
         from .pm_maintenance_review_exports import blocks as maintenance_blocks
@@ -191,7 +210,7 @@ def _blocks(snapshot, locale):
     identity = {key: snapshot[key] for key in ("snapshot_id", "workspace_id", "server_id", "workspace_version", "sequence", "as_of",
                 "journal_cursor", "template_version", "snapshot_digest", "view_digest", "created_by", "operation_id")}
     identity["baseline"] = {key: baseline.get(key) for key in ("status", "plan_head_version", "document_revision", "scope_revision", "document_digest")}
-    identity.update(renderer_version=RENDERER_VERSION if snapshot.get("maintenance") else 1, visibility=snapshot["visibility"])
+    identity.update(renderer_version=_renderer_version(snapshot), visibility=snapshot["visibility"])
     blocks.append(("source", _json(identity)))
     if snapshot["candidate_document"]:
         blocks.extend([("subheading", text["candidate"]), ("source", _json(snapshot["candidate_document"]))])
@@ -310,6 +329,10 @@ def _svg(blocks, locale, snapshot_id):
     return "\n".join([*nodes, '</svg>']) + "\n", len(pages)
 
 
+def _renderer_version(snapshot):
+    return 3 if snapshot['brief']['delivery'].get('quality') else RENDERER_VERSION if snapshot.get('maintenance') else 1
+
+
 def render_brief(ops, principal, workspace_id, snapshot_id, *, format="markdown", locale="en"):
     """Read an exact authorized snapshot and return a complete literal export.
 
@@ -330,7 +353,7 @@ def render_brief(ops, principal, workspace_id, snapshot_id, *, format="markdown"
     raw = content.encode("utf-8")
     result = {"version": 1, "workspace_id": workspace_id, "snapshot_id": snapshot_id,
         "snapshot_digest": snapshot["snapshot_digest"], "view_digest": snapshot["view_digest"],
-        "template_version": snapshot["template_version"], "renderer_version": RENDERER_VERSION if snapshot.get("maintenance") else 1,
+        "template_version": snapshot["template_version"], "renderer_version": _renderer_version(snapshot),
         "locale": locale, "format": format, "media_type": FORMATS[format], "content": content,
         "byte_length": len(raw), "output_digest": hashlib.sha256(raw).hexdigest(), "page_count": pages,
         "coverage": {"snapshot": snapshot["coverage"], "visibility": snapshot["visibility"],

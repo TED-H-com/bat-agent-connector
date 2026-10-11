@@ -1,5 +1,6 @@
 // Central Sprint management, with fixed references and the shared durable operation forms.
-export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
+import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
+export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps,qualitySelection=null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let model = null, signature = '', selectedId = '', serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
   let forms = [], titles = new Map();
@@ -76,7 +77,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       row('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
         h('dt', {}, t('pm_sprint_developers')), h('dd', {}, def.developers.join(', ')), h('dt', {}, t('pm_sprint_capacity')), h('dd', {}, def.capacity_note))),
       row('pm_sprint_work', workRows(data.selected_items || [])),
-      row('pm_sprint_dod_heading', h('div', {}, note('pm_sprint_quality'), h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
+      row('pm_sprint_dod_heading', h('div', {}, note(data.quality==='fixed_original_assessments'?'pq_fixed':'pm_sprint_quality'), h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
         fold('pm_sprint_fixed', h('div', {}, h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
           h('p', {}, source(def.product_goal_revision_id)), h('p', {}, source(def.dod_revision_id)), h('p', {}, source(def.backlog_revision_id)))))),
       note('pm_sprint_no_execution')));
@@ -87,7 +88,8 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     const endingItems = items => h('div', {class: 'pm-evidence-rows'}, ...items.map(item =>
       h('article', {class: 'pm-fact', 'data-pm-sprint-ended-work': item.work_item_id},
         h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
-        h('p', {class: 'pm-note-text'}, t('pm_sprint_unassessed'), ' · ', t('pm_sprint_reconsider')),
+        item.quality_assessment ? qualityFact({h,t,fact:item.quality_assessment}) : h('p', {class: 'pm-note-text'}, t('pm_sprint_unassessed')),
+        h('p', {class: 'pm-note-text'}, t(item.counts_as_done ? 'pq_increment' : 'pm_sprint_reconsider')),
         h('p', {class: 'pm-note-text'}, item.reason),
         fold('pm_sprint_versions', h('div', {}, source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
           h('p', {}, (item.requirement_ids || []).join(', ')))))));
@@ -325,12 +327,20 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     const goalBox = fold('pm_sprint_revise_goal', goalEditor.box, goalEditor.locked()); goalBox.hidden = sprint.status !== 'planned' && !goalEditor.locked(); holder.append(goalBox);
     for (const action of ['start', 'close', 'cancel']) {
       const reasonField = rationale();
+      const refs = hidden({}), picks = qualitySelection && action !== 'start' ? detail.selected_items.map(item => ({item,
+        picker:fixedQualityPicker({h,t,api,alive,workspaceId,workItemId:item.work_item_id,readSelection:qualitySelection,
+          field:refs,multiple:true,constraints:{binding_id:item.binding_id,dod_revision_id:def.dod_revision_id},errorBox})})) : [];
       const eligible = () => action === 'start' ? sprint.status === 'planned' && detail.selected_items.length > 0 && !detail.timebox_elapsed && Date.now() >= Date.parse(def.starts_at)
         : action === 'close' ? sprint.status === 'active' && detail.timebox_elapsed : ['planned', 'active'].includes(sprint.status);
-      const editor = localForm({action: `pm.sprint.${action}`, target, fields: {rationale: reasonField}, params: values => values, preconditions,
+      const editor = localForm({action: `pm.sprint.${action}`, target, fields: {rationale: reasonField,...(picks.length?{quality_refs:refs}:{})},
+        params: values => ({rationale:values.rationale,...(values.quality_refs && Object.keys(JSON.parse(values.quality_refs)).length
+          ? {quality_refs:JSON.parse(values.quality_refs)} : {})}), preconditions,
         permitted: () => currentOwner() && eligible(), label: 'pm_sprint_' + action,
+        onStateChange:()=>picks.forEach(({picker})=>picker.update()),
         extra: h('div', {class: 'pm-fields'}, note(!currentOwner() ? 'pm_sprint_owner_only' : action === 'close' ? 'pm_sprint_close_help'
-          : action === 'cancel' ? 'pm_sprint_cancel_help' : 'pm_sprint_future'), labelled('pm_sprint_reason', reasonField))});
+          : action === 'cancel' ? 'pm_sprint_cancel_help' : 'pm_sprint_future'), labelled('pm_sprint_reason', reasonField),
+          ...(picks.length ? [refs,...picks.map(({item,picker})=>h('div',{class:'pm-fact'},h('p',{},title(item)),picker.element))] : []))});
+      picks.forEach(({picker})=>picker.attach(editor));
       const section = fold('pm_sprint_' + action, editor.box, editor.locked());
       section.hidden = (action === 'start' ? sprint.status !== 'planned' : action === 'close' ? sprint.status !== 'active'
         : !['planned', 'active'].includes(sprint.status)) && !editor.locked(); holder.append(section);

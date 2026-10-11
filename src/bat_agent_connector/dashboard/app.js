@@ -4471,8 +4471,96 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	};
 }
 //#endregion
+//#region src/pm-quality-projections.js
+function qualityFact({ h, t, fact, current = false }) {
+	if (!fact) return "";
+	const label = (value) => t("pq_" + ([
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	].includes(value) ? value : "unassessed"));
+	const reference = fact.reference || fact.selected_assessment?.reference;
+	return h("div", {
+		"data-pm-quality-fact": "",
+		class: "pm-note-text"
+	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
+}
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
+	let editor = null, pending = false;
+	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
+	const read = () => {
+		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
+		return multiple ? value[workItemId] : value;
+	};
+	function write(value) {
+		if (!editor || editor.locked()) return;
+		const values = multiple ? JSON.parse(field.value || "{}") : null;
+		if (multiple) {
+			if (value) values[workItemId] = value;
+			else delete values[workItemId];
+		}
+		field.value = JSON.stringify(multiple ? values : value);
+		editor.changed();
+		update();
+	}
+	const use = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: async () => {
+			if (!editor || editor.locked() || pending) return;
+			const selected = readSelection(workItemId);
+			if (!selected) {
+				status.replaceChildren(h("p", {}, t("pq_choose_help")));
+				return;
+			}
+			pending = true;
+			update();
+			status.replaceChildren();
+			try {
+				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
+				alive();
+				if (!element.isConnected || editor.locked()) return;
+				const row = data.review, context = row?.context, assessment = row?.assessment;
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+					"operation_id",
+					"version",
+					"document_digest"
+				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
+				write(selected);
+			} catch (error) {
+				if (element.isConnected) status.replaceChildren(errorBox(error));
+			} finally {
+				pending = false;
+				update();
+			}
+		}
+	}, t("pq_include"));
+	const clear = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => write(null)
+	}, t("pq_clear"));
+	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
+	function update() {
+		const reference = read();
+		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
+		use.disabled = !editor || editor.locked() || pending;
+		clear.disabled = !editor || editor.locked() || pending || !reference;
+	}
+	update();
+	return {
+		element,
+		update,
+		attach: (value) => {
+			editor = value;
+			update();
+		}
+	};
+}
+//#endregion
 //#region src/pm-sprints.js
-function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, qualitySelection = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let model = null, signature = "", selectedId = "", serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
 	let forms = [], titles = new Map();
@@ -4608,7 +4696,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		}, def.starts_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC")), " → ", h("time", {
 			datetime: def.ends_at,
 			title: def.ends_at
-		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), row("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note("pm_sprint_quality"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id)))))), note("pm_sprint_no_execution")));
+		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), row("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_quality"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id)))))), note("pm_sprint_no_execution")));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -4619,7 +4707,11 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		const endingItems = (items) => h("div", { class: "pm-evidence-rows" }, ...items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-ended-work": item.work_item_id
-		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), h("p", { class: "pm-note-text" }, t("pm_sprint_unassessed"), " · ", t("pm_sprint_reconsider")), h("p", { class: "pm-note-text" }, item.reason), fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))));
+		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.quality_assessment ? qualityFact({
+			h,
+			t,
+			fact: item.quality_assessment
+		}) : h("p", { class: "pm-note-text" }, t("pm_sprint_unassessed")), h("p", { class: "pm-note-text" }, t(item.counts_as_done ? "pq_increment" : "pm_sprint_reconsider")), h("p", { class: "pm-note-text" }, item.reason), fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))));
 		function renderClosure() {
 			if (!terminal) return;
 			closure.replaceChildren(h("h3", {}, t("pm_sprint_closure")));
@@ -5055,17 +5147,44 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			"cancel"
 		]) {
 			const reasonField = rationale();
+			const refs = hidden({}), picks = qualitySelection && action !== "start" ? detail.selected_items.map((item) => ({
+				item,
+				picker: fixedQualityPicker({
+					h,
+					t,
+					api,
+					alive,
+					workspaceId,
+					workItemId: item.work_item_id,
+					readSelection: qualitySelection,
+					field: refs,
+					multiple: true,
+					constraints: {
+						binding_id: item.binding_id,
+						dod_revision_id: def.dod_revision_id
+					},
+					errorBox
+				})
+			})) : [];
 			const eligible = () => action === "start" ? sprint.status === "planned" && detail.selected_items.length > 0 && !detail.timebox_elapsed && Date.now() >= Date.parse(def.starts_at) : action === "close" ? sprint.status === "active" && detail.timebox_elapsed : ["planned", "active"].includes(sprint.status);
 			const editor = localForm({
 				action: `pm.sprint.${action}`,
 				target,
-				fields: { rationale: reasonField },
-				params: (values) => values,
+				fields: {
+					rationale: reasonField,
+					...picks.length ? { quality_refs: refs } : {}
+				},
+				params: (values) => ({
+					rationale: values.rationale,
+					...values.quality_refs && Object.keys(JSON.parse(values.quality_refs)).length ? { quality_refs: JSON.parse(values.quality_refs) } : {}
+				}),
 				preconditions,
 				permitted: () => currentOwner() && eligible(),
 				label: "pm_sprint_" + action,
-				extra: h("div", { class: "pm-fields" }, note(!currentOwner() ? "pm_sprint_owner_only" : action === "close" ? "pm_sprint_close_help" : action === "cancel" ? "pm_sprint_cancel_help" : "pm_sprint_future"), labelled("pm_sprint_reason", reasonField))
+				onStateChange: () => picks.forEach(({ picker }) => picker.update()),
+				extra: h("div", { class: "pm-fields" }, note(!currentOwner() ? "pm_sprint_owner_only" : action === "close" ? "pm_sprint_close_help" : action === "cancel" ? "pm_sprint_cancel_help" : "pm_sprint_future"), labelled("pm_sprint_reason", reasonField), ...picks.length ? [refs, ...picks.map(({ item, picker }) => h("div", { class: "pm-fact" }, h("p", {}, title(item)), picker.element))] : [])
 			});
+			picks.forEach(({ picker }) => picker.attach(editor));
 			const section = fold("pm_sprint_" + action, editor.box, editor.locked());
 			section.hidden = (action === "start" ? sprint.status !== "planned" : action === "close" ? sprint.status !== "active" : !["planned", "active"].includes(sprint.status)) && !editor.locked();
 			holder.append(section);
@@ -5332,7 +5451,12 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		const execution = card.execution || {}, flow = card.flow || {};
 		const states = execution.tasks?.length ? execution.tasks.map((task) => task.state) : execution.attempts?.length ? execution.attempts.map((attempt) => attempt.status) : execution.operations?.length ? execution.operations.map((operation) => operation.status) : execution.sessions?.length ? execution.sessions.map((session) => session.runtime_status) : [];
 		const summary = [...new Set(states.map((value) => state(value)))].join(" · ");
-		const node = h("div", {}, h("div", { class: "pm-kanban-overview" }, h("div", { class: "pm-kanban-work" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")))), ...notices(execution.coverage));
+		const node = h("div", {}, h("div", { class: "pm-kanban-overview" }, h("div", { class: "pm-kanban-work" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), card.quality?.selected_assessment ? qualityFact({
+			h,
+			t,
+			fact: card.quality,
+			current: true
+		}) : note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")))), ...notices(execution.coverage));
 		if (flow.history !== "available_central_events") node.append(note("pm_kanban_history_unknown"));
 		node.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt), " · ", t(card.latest_capture ? "pm_kanban_capture_time" : "pm_kanban_no_capture"), card.latest_capture ? ": " : "", card.latest_capture ? stamp(card.latest_capture.captured_at) : ""));
 		return node;
@@ -7188,8 +7312,17 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			};
 			const values = h("div", { class: "pm-brief-values" });
 			values.append(h("p", { class: "muted" }, readable("pm_brief_status_", section.status)));
+			if (section.quality) values.append(h("p", {}, h("strong", {}, t("pq_count", {
+				qualified: section.quality.qualified_requirements,
+				total: section.quality.total_requirements
+			}))), h("p", { class: "muted" }, t("pq_coverage")));
 			for (const item of section.items || []) {
-				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.text), details);
+				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.text), details);
+				if (item.kind === "quality_assessment") details.append(qualityFact({
+					h,
+					t,
+					fact: item.details
+				}));
 				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
 				if (source.kind === "plan_input") details.append(h("p", { class: "muted" }, t("pm_brief_plan_source")), h("code", {}, source.revision_id), h("p", {}, source.source_ref?.ref || source.source_ref?.message_id || ""));
 				else if (source.kind === "plan_adoption") details.append(h("p", { class: "muted" }, t("pm_brief_decision_source")), h("code", {}, source.revision_id));
@@ -10031,7 +10164,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 //#region src/pm-evidence.js
 var flatten = (rows) => (rows || []).flatMap((row) => [row, ...flatten(row.children)]);
 var projectSelections = new Map();
-function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
+function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, qualitySelection = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const selectionKey = namespace ? JSON.stringify([namespace, workspaceId]) : null;
 	let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = projectSelections.get(selectionKey) || "", active = null;
@@ -10243,19 +10376,38 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			detail.append(h("p", { class: "muted" }, t(binding.plan_revision_id ? "pm_evidence_fixed_plan" : "pm_evidence_no_plan")));
 			if (binding.plan_revision_id) detail.append(h("code", {}, binding.plan_revision_id), h("p", {}, (binding.requirement_ids || []).join(", ")));
 			const holder = h("div");
+			const selectedQuality = h("input", {
+				type: "hidden",
+				value: "null"
+			});
+			const picker = qualitySelection ? fixedQualityPicker({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				workItemId: item.work_item_id,
+				readSelection: qualitySelection,
+				field: selectedQuality,
+				constraints: { binding_id: binding.binding_id },
+				errorBox
+			}) : null;
 			const capture = track(form({
 				action: "pm.evidence.capture",
 				target: {
 					workspace_id: workspaceId,
 					work_item_id: item.work_item_id
 				},
-				fields: {},
-				params: () => ({}),
+				fields: picker ? { quality_ref: selectedQuality } : {},
+				params: (values) => values.quality_ref && JSON.parse(values.quality_ref) ? { quality_ref: JSON.parse(values.quality_ref) } : {},
 				preconditions: () => ({ expected_binding_id: binding.binding_id }),
 				permitted: () => can(false),
 				label: "pm_evidence_capture",
-				onSaved: () => loadEvidence(item, holder)
+				onSaved: () => loadEvidence(item, holder),
+				onStateChange: () => picker?.update(),
+				extra: picker ? h("div", {}, selectedQuality, picker.element) : void 0
 			}));
+			picker?.attach(capture);
 			detail.append(capture.box, holder);
 			try {
 				await loadEvidence(item, holder);
@@ -16243,6 +16395,56 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-quality-projection-strings.js
+var qualityProjectionStrings = {
+	en: {
+		pq_acceptance: "Original acceptance",
+		pq_dod: "Definition of Done",
+		pq_accepted: "Accepted",
+		pq_rejected: "Rejected",
+		pq_unassessed: "Unassessed",
+		pq_not_defined: "Not defined",
+		pq_qualified: "Qualified result",
+		pq_not_qualified: "Not yet qualified",
+		pq_fixed: "Fixed original assessment; current applicability is separate.",
+		pq_original: "Original assessment and candidate",
+		pq_include: "Include chosen assessment",
+		pq_clear: "Clear assessment selection",
+		pq_none: "No assessment selected",
+		pq_choose_help: "Choose an original assessment in Quality review, then include it here.",
+		pq_changed: "This exact assessment no longer qualifies for the selected work and commitments. Review its original sources.",
+		pq_count: "Qualified original requirements: {qualified} / {total}",
+		pq_coverage: "Each original requirement is counted once. Unreviewed work remains unassessed.",
+		pq_increment: "Qualified Increment",
+		pq_recorded_by: "Assessed by {actor}",
+		pm_brief_status_fixed_quality_assessments: "Explicit original quality assessments",
+		pm_evidence_kind_quality_assessment: "Original quality assessment"
+	},
+	"zh-TW": {
+		pq_acceptance: "原始驗收條件",
+		pq_dod: "完成定義",
+		pq_accepted: "符合",
+		pq_rejected: "不符合",
+		pq_unassessed: "尚未評估",
+		pq_not_defined: "尚未定義",
+		pq_qualified: "符合品質條件的成果",
+		pq_not_qualified: "尚未符合品質條件",
+		pq_fixed: "固定的原始評估；目前是否適用另行判斷。",
+		pq_original: "原始評估與候選提交",
+		pq_include: "納入已選評估",
+		pq_clear: "清除評估選取",
+		pq_none: "尚未選取評估",
+		pq_choose_help: "先在品質審查選取原始評估，再於此處納入。",
+		pq_changed: "這筆固定評估已不適用於所選工作與承諾，請重新核對原始來源。",
+		pq_count: "符合驗收與完成定義的原始需求：{qualified} / {total}",
+		pq_coverage: "每個原始需求只計入一次；尚未審查的工作仍標示未評估。",
+		pq_increment: "符合品質條件的 Increment",
+		pq_recorded_by: "評估者：{actor}",
+		pm_brief_status_fixed_quality_assessments: "明確選取的原始品質評估",
+		pm_evidence_kind_quality_assessment: "原始品質評估"
+	}
+};
+//#endregion
 //#region src/pm-work-deliveries-strings.js
 var workDeliveryStrings = {
 	en: {
@@ -19755,6 +19957,7 @@ var pmStrings = {
 var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
+		...qualityProjectionStrings["zh-TW"],
 		...pmReleaseBaselineStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
 		...workDeliveryStrings["zh-TW"],
@@ -21215,6 +21418,7 @@ var STRINGS = {
 	},
 	en: {
 		...pmStrings.en,
+		...qualityProjectionStrings.en,
 		...pmReleaseBaselineStrings.en,
 		...pmPackageHandoffStrings.en,
 		...workDeliveryStrings.en,

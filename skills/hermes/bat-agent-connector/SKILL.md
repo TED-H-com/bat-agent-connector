@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "8be1b99b02abe8fa688dc8ac10d9bd75738dde473271bef377c72acabd03e893"
+  canonical_sha256: "06606d5f76452b96bb2358f93f969f00836b3ebaa616fd16999d234e67c4cd5e"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -583,6 +583,15 @@ observation may contribute to a later explicit workload capture. Neither action
 authorizes maintenance, repairs, publication, merge or deployment.
 
 ### Fixed maintenance repairs and accountable quality reviews
+
+Quality-aware evidence capture may explicitly include `params.quality_ref`;
+Sprint close/cancel may include `params.quality_refs` keyed by selected WorkItem.
+Each exact selector is `{review_id,operation_id,version,document_digest,candidate_commit}`
+from the original assessment. Recheck applicability before selecting; never replace
+it with a newer assessment on a conflict. Current Kanban distinguishes quality from
+management approval. Closed Sprint and snapshot/Brief/export results preserve their
+original selected assessment and label current applicability as not evaluated.
+Original source withdrawal still applies to every projection and operation receipt.
 
 Read `pm_maintenance_repairs_list`, `pm_maintenance_repair_current_get` and
 `pm_maintenance_repair_get` with observe. A repair requires the exact adopted

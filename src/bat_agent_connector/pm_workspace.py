@@ -176,6 +176,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.meeting.'):
         from .pm_meetings import operation_visible as meeting_operation_visible
         return meeting_operation_visible(db, principal, op)
+    if op['action'] in {'pm.sprint.close', 'pm.sprint.cancel', 'pm.evidence.capture'}:
+        from .pm_quality_projections import operation_visible as quality_selection_visible
+        return quality_selection_visible(db, principal, op)
     return True
 
 

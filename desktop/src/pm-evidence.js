@@ -1,9 +1,10 @@
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
+import {fixedQualityPicker} from './pm-quality-projections.js';
 const flatten = rows => (rows || []).flatMap(row => [row, ...flatten(row.children)]);
 // Retain only explicit selection IDs across a same-principal access revalidation.
 // The catalog, associations and evidence are always read again before displaying them.
 const projectSelections = new Map();
-export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox}) {
+export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, qualitySelection=null}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const selectionKey = namespace ? JSON.stringify([namespace, workspaceId]) : null;
   let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = projectSelections.get(selectionKey) || '', active = null;
@@ -137,9 +138,15 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       if (binding.plan_revision_id) detail.append(h('code', {}, binding.plan_revision_id),
         h('p', {}, (binding.requirement_ids || []).join(', ')));
       const holder = h('div');
+      const selectedQuality = h('input', {type: 'hidden', value: 'null'});
+      const picker = qualitySelection ? fixedQualityPicker({h,t,api,alive,workspaceId,workItemId:item.work_item_id,
+        readSelection:qualitySelection,field:selectedQuality,constraints:{binding_id:binding.binding_id},errorBox}) : null;
       const capture = track(form({action: 'pm.evidence.capture', target: {workspace_id: workspaceId, work_item_id: item.work_item_id},
-        fields: {}, params: () => ({}), preconditions: () => ({expected_binding_id: binding.binding_id}),
-        permitted: () => can(false), label: 'pm_evidence_capture', onSaved: () => loadEvidence(item, holder)}));
+        fields: picker ? {quality_ref:selectedQuality} : {}, params: values => values.quality_ref && JSON.parse(values.quality_ref)
+          ? {quality_ref:JSON.parse(values.quality_ref)} : {}, preconditions: () => ({expected_binding_id: binding.binding_id}),
+        permitted: () => can(false), label: 'pm_evidence_capture', onSaved: () => loadEvidence(item, holder),
+        onStateChange:()=>picker?.update(),extra:picker ? h('div',{},selectedQuality,picker.element) : undefined}));
+      picker?.attach(capture);
       detail.append(capture.box, holder);
       try {await loadEvidence(item, holder);} catch (error) {if (holder.isConnected) holder.replaceChildren(errorBox(error));}
     }); return row;

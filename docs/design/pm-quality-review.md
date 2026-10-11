@@ -195,6 +195,37 @@ Root integration points:
 
 ## Required offline acceptance evidence
 
+### Explicit selection in shared current and frozen views
+
+`pm.evidence.capture` accepts an optional `quality_ref`; Sprint close/cancel
+accepts optional `quality_refs`, keyed only by their originally selected WorkItem
+IDs. Each selector contains exactly `review_id`, assessment `operation_id`,
+`version`, `document_digest`, and `candidate_commit`. Omission preserves the
+existing unassessed result and request shape. Admission and the final record
+transaction validate the exact original assessment, current applicability, binding,
+adopted scope and the Sprint's original DoD. A newer assessment causes a conflict;
+it never replaces the chosen receipt silently.
+
+Evidence saves an immutable `quality_assessment` fact, deduplicated by its original
+assessment operation. Explicit facts must fit whole within the evidence budget.
+The current Kanban reevaluates that selected original for current applicability;
+management approval remains separate. Sprint close freezes its original selected
+fact and only qualified items count as Done. Later revocation or reassessment
+does not rewrite that close. Full original source withdrawal hides the affected
+record, operation and events even when the closure lies beyond a history page.
+
+Snapshots freeze the same selected facts. Each original requirement counts once;
+all selected contributions and complete evidence coverage are required before it
+can count as qualified. Missing contributions stay unassessed. Dashboard, Brief,
+Markdown, HTML and SVG share these counts and original snapshot digest. They label
+the result as an original assessment, with current applicability not evaluated.
+Export-time source filtering removes inaccessible facts and recomputes their
+projection without changing the saved snapshot or reading a provider.
+
+Shared forms explicitly include the chosen original assessment after rereading
+its identity and applicability. The existing durable request then preserves that
+selector through recovery. They do not automatically choose a latest review.
+
 Use real fixed package/handoff disk Git fixtures and existing fake transports.
 Positive tests must demonstrate successful original verification plus complete
 responsible review producing separate accepted requirements and DoD. Negative

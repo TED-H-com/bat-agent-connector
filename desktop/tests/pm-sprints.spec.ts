@@ -23,7 +23,8 @@ async function boot(page:Page,locale='en') {
   await page.evaluate(async locale=>{
     const {workspaceSprints}=await import('/__sprint_src/pm-sprints.js'),{durableForm}=await import('/__sprint_src/pm-workspace.js');
     const {pmSprintStrings}=await import('/__sprint_src/pm-sprint-strings.js'),{pmStrings}=await import('/__sprint_src/pm-strings.js');
-    const strings={...pmStrings[locale],...pmSprintStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[name,value])=>text.replaceAll('{'+name+'}',String(value)),strings[key]||key);
+    const {qualityProjectionStrings}=await import('/__sprint_src/pm-quality-projection-strings.js');
+    const strings={...pmStrings[locale],...pmSprintStrings[locale],...qualityProjectionStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[name,value])=>text.replaceAll('{'+name+'}',String(value)),strings[key]||key);
     const h=(tag:string,attrs:any={},...children:any[])=>{const el=document.createElement(tag);for(const [key,value]of Object.entries(attrs||{})){
       if(value===null||value===undefined||value===false)continue;if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));
     }for(const child of children.flat()){if(child===null||child===undefined||child===false)continue;el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};
@@ -36,7 +37,7 @@ async function boot(page:Page,locale='en') {
     const form=(options:any)=>durableForm({h,t,api,caps,guard:alive,namespace:'sprint-ui.'+config.caps.actor,errorBox,...options});
     const ui=workspaceSprints({h,t,api,alive,workspaceId:config.workspace.workspace_id,workspace:()=>config.workspace,caps,
       permitted:(decide:boolean)=>config.caps.scopes.includes('manage')&&(decide?config.workspace.membership.role==='owner':['owner','contributor'].includes(config.workspace.membership.role)),
-      form,input,labelled,errorBox});document.getElementById('mount')!.append(ui.box);
+      form,input,labelled,errorBox,qualitySelection:config.qualitySelection?()=>config.qualitySelection:null});document.getElementById('mount')!.append(ui.box);
     win.refreshSprint=async()=>{config=await win.sprintFixtureConfig();await ui.refresh();};await ui.refresh();
   },locale);
   await expect(page.locator('[data-pm-sprints]')).toBeVisible();
@@ -292,4 +293,35 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`closu
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_SPRINT_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
   await closure.scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/sprint-closure-${locale}-${width}.png`,fullPage:true});
+});
+
+function qualityFixture() {
+  const f=fixture(),ref={review_id:'pmqr_'+'4'.repeat(32),operation_id:'op_'+'5'.repeat(32),version:2,
+    document_digest:'a'.repeat(64),candidate_commit:'b'.repeat(40)};
+  f.state.sprints[0].status='active';f.state.elapsed=true;f.state.qualitySelection=ref;
+  f.state.qualityReview={review_id:ref.review_id,qualified:true,assessment:ref,context:{
+    work_ref:{work_item_id:f.bindings[0].work_item_id,binding_id:f.bindings[0].binding_id},
+    native_result:{candidate_commit:ref.candidate_commit},dod_ref:{revision_id:f.state.artifacts.dod.revision_id}}};
+  return {f,ref};
+}
+for(const locale of ['en','zh-TW'])test(`Sprint close freezes explicit original assessment selection ${locale}`,async({page})=>{
+  const {f,ref}=qualityFixture();await mount(page,f,locale);await openAction(page,'pm.sprint.close');const editor=action(page,'pm.sprint.close');
+  await editor.getByRole('button',{name:locale==='en'?'Include chosen assessment':'納入已選評估',exact:true}).click();
+  await expect(editor.locator('[data-pm-quality-picker]')).toContainText(ref.candidate_commit);
+  await editor.getByLabel(locale==='en'?'Reason for this decision':'這項決定的理由',{exact:true}).fill('Retain this exact original review');
+  await editor.locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.quality_refs).toEqual({[f.bindings[0].work_item_id]:ref});
+  expect(f.state.writes[0].body.params.rationale).toBe('Retain this exact original review');
+  expect(f.state.writes[0].body.params).not.toHaveProperty('_baseline');
+});
+for(const mismatch of ['assessment','dod','candidate','work','withdrawal'])test(`Sprint selection refuses changed original quality ${mismatch}`,async({page})=>{
+  const {f,ref}=qualityFixture();await mount(page,f);await openAction(page,'pm.sprint.close');const editor=action(page,'pm.sprint.close');
+  if(mismatch==='assessment')f.state.qualityReview.assessment={...ref,version:3};
+  if(mismatch==='dod')f.state.qualityReview.context.dod_ref.revision_id='pmdod_'+'9'.repeat(32);
+  if(mismatch==='candidate')f.state.qualityReview.context.native_result.candidate_commit='c'.repeat(40);
+  if(mismatch==='work')f.state.qualityReview.context.work_ref.work_item_id=f.bindings[1].work_item_id;
+  if(mismatch==='withdrawal')f.state.failRead='revoked';
+  await editor.getByRole('button',{name:'Include chosen assessment',exact:true}).click();
+  await expect(editor.locator('[data-pm-quality-picker]')).toContainText(mismatch==='withdrawal'?'Workspace access removed':'no longer qualifies');
+  await expect(editor.locator('[data-pm-quality-picker]')).toContainText('No assessment selected');expect(f.state.writes).toHaveLength(0);
 });

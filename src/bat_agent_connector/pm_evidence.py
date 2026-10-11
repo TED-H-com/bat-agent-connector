@@ -171,11 +171,14 @@ def _check(ops, principal, action, target, params, pre):
                 raise _bad("PM_PROJECT_BINDING_REQUIRED", "Explicitly bind this work's project first", 409)
             _requirements(ops, principal, workspace["workspace_id"], params)
         else:
-            _only(params, ())
+            _only(params, ('quality_ref',))
             if not binding:
                 raise _bad("PM_WORK_BINDING_REQUIRED", "Explicitly associate this work first", 409)
             if binding["project_id"] != item["project_id"]:
                 raise _bad("PM_WORK_BINDING_CHANGED", "The work moved to another project; explicitly reassociate it", 409)
+            if 'quality_ref' in params:
+                from .pm_quality_projections import for_capture
+                for_capture(ops, principal, workspace['workspace_id'], binding, params['quality_ref'])
     if action != "pm.evidence.capture":
         pm_workspace._text(params.get("rationale"), "rationale", 4000)
     return workspace, item, binding
@@ -200,6 +203,10 @@ def _requirements(ops, principal, workspace_id, params):
 
 def _authorize_existing(ops, principal, op, control):
     _member(ops, principal, op["target"]["workspace_id"], write=True, decide=op["action"] != "pm.evidence.capture")
+    if op['action'] == 'pm.evidence.capture':
+        from .pm_quality_projections import operation_visible
+        if not operation_visible(ops.db, principal, op):
+            raise _bad('NOT_FOUND', 'Original selected quality sources are unavailable', 404)
 
 
 def _admitter(action):
@@ -535,6 +542,12 @@ def _capture(ctx, principal, item, binding, now):
     ops, wid = ctx.service, ctx.target["workspace_id"]
     cursor, server = ops.journal.api_head(), pm_workspace.server_id(ops.db)
     collector = _Collector(ops, principal, wid, cursor)
+    if 'quality_ref' in ctx.params:
+        from .pm_quality_projections import for_capture
+        quality = for_capture(ops, principal, wid, binding, ctx.params['quality_ref'])
+        collector.add('quality_assessment', quality['reference']['operation_id'], quality['assessed_at'], quality)
+        if not collector.facts:
+            raise _bad('PM_QUALITY_LIMIT', 'The whole original quality fact exceeds the evidence byte budget', 413)
     collector.collect(item)
     ids = []
     for (kind, source_id, digest), fact in collector.facts.items():
@@ -588,6 +601,14 @@ def list_work(ops, principal, workspace_id, *, project_id=None, after=0, limit=5
 
 
 def _visible(ops, principal, row):
+    if row['source_kind'] == 'quality_assessment':
+        from .pm_quality_projections import access
+        try:
+            access(ops, principal, row['workspace_id'], json.loads(row['document'])['facts'])
+        except OperationError as exc:
+            if exc.status not in (403, 404):
+                raise
+            return False
     if not all(_read_operation(ops, principal, row["workspace_id"], operation_id) is not None
                for operation_id in json.loads(row["access_operations"])):
         return False
@@ -616,6 +637,8 @@ def _evidence(row, *, detail):
         result["document"] = document
     else:
         result["assessment"] = _fields(document["facts"], ("status", "state", "verification", "deployment", "delivery", "merge_verified"))
+        if row['source_kind'] == 'quality_assessment':
+            result['assessment'] = _fields(document['facts'], ('acceptance', 'dod', 'qualified', 'current_applicability', 'semantics'))
     return result
 
 
