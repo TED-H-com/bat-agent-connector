@@ -93,7 +93,7 @@ def operation_visible(db, principal, operation):
             return False
         op = OperationService._decode(row)
         pm_workspace.require_member(db, principal, op["target"]["workspace_id"])
-        binding = (op["external_refs"].get("admission_binding") or {}).get("follow_up_analysis")
+        binding = ((op.get("external_refs") or {}).get("admission_binding") or {}).get("follow_up_analysis")
         if not isinstance(binding, dict):
             return False
         intake = pm_follow_up._row(db, op["target"]["workspace_id"], binding["intake_id"])

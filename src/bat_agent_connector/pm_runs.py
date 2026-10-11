@@ -498,6 +498,8 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
         if value is not None:
             pm_discussions._text(value, label, 300)
     with journal.tx():
+        if get(journal.db, run_id)["context"].get("output_destination") == "follow_up_assessment":
+            raise _error("Follow-up output cannot enter ordinary discussion history", "PM_OUTPUT_DESTINATION_REFUSED")
         saved = journal.db.execute("""SELECT p.*,m.content FROM pm_assistant_provenance p
             JOIN pm_messages m USING(message_id) WHERE p.run_id=?""", (run_id,)).fetchone()
         if saved:
