@@ -570,6 +570,13 @@ async def _record_evidence(ctx):
 class _Reader:
     def __init__(self, db):
         self.db = db
+        self.journal = self
+
+    def tx(self):
+        # Source package readers use the journal transaction interface. Reuse
+        # the outer visibility read snapshot without constructing a service or
+        # installing schema from a public read.
+        return snapshots._snapshot(self.db)
 
     def get(self, operation_id, **kwargs):
         return _op(self, operation_id)
