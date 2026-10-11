@@ -61,10 +61,15 @@ class FakeRuntime:
         if self.settings.get("missing_exit"):
             return
         unknown = self.settings.get("exit_unknown", False)
-        await self.life("process_exit_unknown" if unknown else "process_exited", process=self.identity,
-            exit_code=None if unknown else 0, signal=None,
-            termination="sigkill_unconfirmed" if unknown else "stdin_closed", sent=bool(self.sends),
-            native_event_count=len(self.rows), stderr_bytes=0, process_death_confirmed=not unknown)
+        try:
+            await self.life("process_exit_unknown" if unknown else "process_exited", process=self.identity,
+                exit_code=None if unknown else 0, signal=None,
+                termination="sigkill_unconfirmed" if unknown else "stdin_closed", sent=bool(self.sends),
+                native_event_count=len(self.rows), stderr_bytes=0, process_death_confirmed=not unknown)
+        except BaseException:
+            # Production close retains its private spool after a failed receipt
+            # callback and returns; exit must then be proven by the operation.
+            self.exit_callback_failed = True
 
     async def preflight(self):
         cap = {"contract": pm_native_runtime.CONTRACT, "adapter": pm_native_journal.ADAPTER,
@@ -502,3 +507,59 @@ async def test_local_journal_receipt_failure_replays_transaction_without_duplica
     recovered = await retry(ops, op)
     assert recovered["status"] == "succeeded" and len(instances) == 1 and instances[0].sends == 1
     assert len(read(ops, target)["messages"]) == 1 and not writer(ops, target)
+
+
+@pytest.mark.parametrize("committed", [False, True])
+async def test_exit_receipt_callback_failure_preserves_original_process_recovery(world, monkeypatch, committed):
+    ops, _, instances = world
+    target = await prepared(ops)
+    original_record = pm_native_journal.record
+    lost = False
+    def lose_exit(journal, run_id, generation, value):
+        nonlocal lost
+        if value['kind'] == 'process_exited' and not lost:
+            lost = True
+            if committed:
+                original_record(journal, run_id, generation, value)
+            raise OSError('exit receipt callback unavailable')
+        return original_record(journal, run_id, generation, value)
+    monkeypatch.setattr(pm_native_journal, 'record', lose_exit)
+    op = await finish(ops, request(ops, target))
+    assert instances[0].closed and instances[0].exit_callback_failed and instances[0].sends == 1
+    if committed:
+        # A lost callback ACK cannot invalidate the actual immutable exit fact.
+        assert op['status'] == 'succeeded' and not writer(ops, target), op
+    else:
+        assert op['status'] == 'uncertain' and writer(ops, target), op
+        assert read(ops, target)['messages'] == []
+        assert pm_native_journal.assessment(ops.db, run(ops, op)['run_id'])['complete']
+        ops.context['pm_native_process_inspector'] = lambda identity: {
+            'state': 'dead', 'process': identity, 'proof': 'original_pid_absent', 'observed_at': 2.0}
+        op = await retry(ops, op)
+        assert op['status'] == 'succeeded' and not writer(ops, target), op
+    assert len(instances) == 1 and len(read(ops, target)['messages']) == 1
+    assert read(ops, target)['messages'][0]['provenance']['native_turn_id'] == TURN
+
+
+async def test_post_insert_import_failure_rolls_back_message_provenance_and_writer_release(world, monkeypatch):
+    ops, _, instances = world
+    target = await prepared(ops)
+    original_event = ops.journal.api_event
+    lost = False
+    def fail_event(kind, resource_id, name, *args, **kwargs):
+        nonlocal lost
+        if name == 'pm.run.imported' and not lost:
+            lost = True
+            assert ops.db.execute('SELECT COUNT(*) FROM pm_assistant_provenance').fetchone()[0] == 1
+            assert writer(ops, target) is None
+            raise sqlite3.OperationalError('receipt unavailable after assistant insert')
+        return original_event(kind, resource_id, name, *args, **kwargs)
+    monkeypatch.setattr(ops.journal, 'api_event', fail_event)
+    op = await finish(ops, request(ops, target))
+    assert op['status'] == 'uncertain' and writer(ops, target), op
+    assert read(ops, target)['messages'] == []
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_assistant_provenance').fetchone()[0] == 0
+    assert pm_native_journal.assessment(ops.db, run(ops, op)['run_id'])['complete']
+    recovered = await retry(ops, op)
+    assert recovered['status'] == 'succeeded' and not writer(ops, target)
+    assert len(instances) == 1 and instances[0].sends == 1 and len(read(ops, target)['messages']) == 1
