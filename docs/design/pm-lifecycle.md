@@ -26,9 +26,32 @@ original operation may still be running or awaiting read-back. A finished stop
 is not evidence that all requirements are Done, that another controller's work
 stopped, or that an external repository was archived.
 
-`maintain` is deliberately unavailable: this slice has no ReleaseBaseline or
-adopted maintenance policy. Choosing it returns `PM_MAINTENANCE_UNAVAILABLE`.
-Release remains an independent delivery fact; no release success is invented.
+`maintain` requires an original ReleaseBaseline, the current enabled
+`maintain_when_idle` policy, and a complete fresh workload snapshot with the
+configured overlapping stable idle observations. Existing `set_stage` and
+`reopen` accept optional `maintenance_ref` only for this stage. The reference is
+exactly `{policy_id, policy_version, baseline_id, snapshot_id, snapshot_digest}`;
+IDs/digests are bounded typed identities and the version is a positive integer.
+Missing prerequisites return `PM_MAINTENANCE_UNAVAILABLE`; stale, changed or
+incomplete evidence cannot admit a transition. Release remains independent.
+
+A completed server check can admit one durable registered `set_stage` child from
+Development. Its original adopted policy authorizes that action. The immutable
+existing check-child relation freezes the full envelope and workload identity;
+the final lifecycle transaction reconstructs that relation and rechecks the
+original controller's live credential, original check deadline, current policy,
+source visibility, workload facts and lifecycle CAS. The parent may already be
+finished; that does not extend authority or deadlines. Replay of an applied
+original decision returns its receipt without admitting new work. The ordinary
+operation worker executes this child; there is no new scheduler or writer.
+Idea and Planning do not automatically transition. Maintenance's own repair does
+not force a stage change. Fresh human or unknown activity remains in workload and
+capacity observations without killing sessions or rewriting the lifecycle.
+
+An explicit `reopen` to Maintain requires a new snapshot from the stopped epoch
+and the same current baseline/policy/idle checks. Only this explicit action may
+cross the stopped boundary; old queued children cannot do so. Maintain stage
+changes preserve the execution epoch; explicit reopen increments it normally.
 
 All lifecycle decisions require `manage` and an actual current `owner` membership.
 An administrator without that membership cannot silently decide product direction.
@@ -50,7 +73,7 @@ not a second decision or an extra `observe` scope.
 
 Every action targets exactly `{workspace_id}` and requires
 `{expected_lifecycle_revision: <nonnegative integer>}`. Reasons contain 1–4000
-UTF-8 characters. Active stage choices are the three listed above. `set_stage`
+UTF-8 characters. Active stage choices are the three listed above plus evidence-qualified Maintain. `set_stage`
 cannot reopen a stopped workspace. Closed workspaces require `reopen`; pausing
 can become closure with an explicit close decision. Revision conflicts refuse
 fresh decisions. Caller params and preconditions are never enriched or rewritten.
@@ -74,7 +97,7 @@ plus current membership:
 
 - `get_lifecycle(...)`: `lifecycle` head and projected status; optional current
   `transition`; `transition_visibility_filtered`; `blocked_actions`,
-  `record_actions`, `available_stages`, unavailable `maintenance`, and
+  `record_actions`, `available_stages`, current evidence-qualified `maintenance`, and
   `inflight_summary`.
 - `list_transitions(..., after=0, limit=20)`: whole metadata records under
   `transitions`, `next_cursor`, and `visibility_filtered`.
@@ -185,8 +208,8 @@ later extended with a new external step, that step still has to pass lifecycle.
 ## Closure/reopen snapshots and source visibility
 
 Each decision records current local workspace version, accepted-plan head,
-journal position and explicit coverage. ReleaseBaseline and maintenance policy
-remain null until implemented. The snapshot says external observation was not
+journal position and explicit coverage. Ordinary stage decisions leave release/policy snapshot fields unassessed. A
+Maintain decision additionally retains its exact `maintenance` reference. The snapshot says external observation was not
 requested, delivery is unassessed, unfinished work is unchanged, and automatic
 resumption is false. Reopen refreshes these local heads; it does not call remote
 services, dispatch work, or claim fresh release/health verification.
@@ -213,3 +236,14 @@ This slice does not archive GitHub repos, close external issues/PRs, delete
 worktrees, revoke Fleet access, stop production, or signal another controller's
 session. Maintenance schedules and new GitHub delivery paths must integrate the
 same barrier when they are implemented; they are not claimed complete here.
+
+
+Maintain transition operations, detail/history and events require all original
+policy/baseline/workload sources. Current reads use one WAL snapshot across the
+head and these sources. If a Maintain transition's source is withdrawn, its
+metadata and transition ID are omitted while the safe stage/revision/epoch stay
+readable; explicit hidden-transition inflight reads return not found. A newer
+policy or observation does not rewrite the original historical source references.
+The shared EN/zh-TW stage editor fixes the selected evidence in its durable draft;
+a changed observation requires explicit review, while unknown submissions keep
+their original operation key and reference after refresh/reopen.

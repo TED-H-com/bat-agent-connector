@@ -10,7 +10,7 @@ import re
 import time
 
 from . import pm_lifecycle_gates as gates
-from . import pm_workspace
+from . import pm_release_baselines, pm_workspace
 from .operations import TERMINAL, ActionDef, OperationError
 
 STAGES = ('idea', 'planning', 'development')
@@ -224,6 +224,7 @@ def _transition_visible(db, principal, row):
     return operation_visible(db, principal, {'operation_id': row['operation_id']})
 
 
+@pm_release_baselines._snapshot_read
 def get_lifecycle(ops, principal, workspace_id):
     _member(ops, principal, workspace_id)
     current = gates.head(ops.db, workspace_id)
@@ -232,6 +233,8 @@ def get_lifecycle(ops, principal, workspace_id):
     shown = transition is None or _transition_visible(ops.db, principal, transition)
     from . import pm_maintenance_lifecycle
     maintenance = pm_maintenance_lifecycle.availability(ops, principal, workspace_id)
+    if not shown and transition['to_stage'] == 'maintain':
+        current = {**current, 'transition_id': None}
     return _bounded({'workspace_id': workspace_id, 'lifecycle': {**current, 'status': _status(ops.db, current)},
             'transition': _metadata(transition) if transition is not None and shown else None,
             'transition_visibility_filtered': not shown,
@@ -253,6 +256,7 @@ def _bounded(result):
     return result
 
 
+@pm_release_baselines._snapshot_read
 def list_transitions(ops, principal, workspace_id, *, after=0, limit=20):
     _member(ops, principal, workspace_id)
     _page(after, limit)
@@ -276,6 +280,7 @@ def list_transitions(ops, principal, workspace_id, *, after=0, limit=20):
     return _bounded(result)
 
 
+@pm_release_baselines._snapshot_read
 def get_transition(ops, principal, workspace_id, transition_id):
     _member(ops, principal, workspace_id)
     row = _transition(ops.db, workspace_id, transition_id)
@@ -285,12 +290,17 @@ def get_transition(ops, principal, workspace_id, transition_id):
                      'inflight_summary': _summary(ops, principal, transition_id)})
 
 
+@pm_release_baselines._snapshot_read
 def list_inflight(ops, principal, workspace_id, *, transition_id=None, after=0, limit=20):
     _member(ops, principal, workspace_id)
     _page(after, limit)
     tid = gates.head(ops.db, workspace_id)['transition_id'] if transition_id is None else transition_id
     if tid is not None:
-        _transition(ops.db, workspace_id, tid)
+        transition = _transition(ops.db, workspace_id, tid)
+        if transition['to_stage'] == 'maintain' and not _transition_visible(ops.db, principal, transition):
+            if transition_id is not None:
+                raise _bad('NOT_FOUND', 'Lifecycle transition not found', 404)
+            return {'workspace_id': workspace_id, 'transition_id': None, 'inflight': [], 'next_cursor': None, 'visibility_filtered': True}
     rows = ops.db.execute('SELECT * FROM pm_lifecycle_inflight WHERE transition_id=? AND sequence>? ORDER BY sequence LIMIT ?',
                           (tid, after, limit + 1)).fetchall()
     result = {'workspace_id': workspace_id, 'transition_id': tid, 'inflight': [], 'next_cursor': None, 'visibility_filtered': False}
@@ -430,6 +440,8 @@ async def _run(ctx):
         ctx.check_cancel()
         principal = pm_workspace.admitted_principal(ctx)
         current, stage = _check(ops, principal, ctx.op['action'], ctx.target, ctx.params, ctx.preconditions)
+        from . import pm_maintenance_lifecycle
+        pm_maintenance_lifecycle.require_automatic_parent(ops, ctx.op)
         wid, now = current['workspace_id'], time.time()
         tid = 'pmlt_' + ctx.operation_id[3:]
         action = ctx.op['action']

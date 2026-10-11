@@ -65,7 +65,7 @@ async def test_final_stage_frame_rechecks_stop_sources_and_actual_work(ops, monk
     if change == 'pause':
         await decide(ops, wid, 'pause')
     elif change == 'source':
-        remove_repo(ops)
+        await remove_repo(ops, data['project_id'])
     else:
         checktests.githubtests.worktests.inventory(ops, sessions=[{'streaming': True}])
     await ops._execute(op['operation_id'])
@@ -89,7 +89,7 @@ async def test_original_history_source_withdrawal_and_explicit_reopen(ops, monke
     reopened = await decide(ops, wid, 'reopen', params={'stage': 'maintain', 'maintenance_ref': updated})
     assert reopened['result']['stage'] == 'maintain'
     assert not ops.create(OWNER, **env)[1]
-    remove_repo(ops)
+    await remove_repo(ops, data['project_id'])
     assert not life.operation_visible(ops.db, READER, op)
     with pytest.raises(OperationError):
         life.get_transition(ops, READER, wid, 'pmlt_'+op['operation_id'][3:])
@@ -104,3 +104,45 @@ async def test_idea_never_automatically_enters_maintain(ops, monkeypatch):
     with pytest.raises(OperationError, match='PM_LIFECYCLE_TRANSITION_INVALID'):
         ops.create(OWNER, **request(ops, wid, 'set_stage', params={'stage': 'maintain', 'maintenance_ref': ref}, key=uuid.uuid4().hex))
     assert gates.head(ops.db, wid)['stage'] == 'idea'
+
+
+@pytest.mark.parametrize('change', ['credential', 'deadline'])
+async def test_automatic_queued_transition_rechecks_original_authority_and_deadline(ops, monkeypatch, change):
+    data = await ready(ops, monkeypatch)
+    wid = data['workspace_id']
+    parent = ops.create(OWNER, **checktests.request(ops, data))[0]
+    # Settle only the original observer and snapshot, leaving the stage child queued.
+    await ops._execute(parent['operation_id'])
+    github = checktests.checks._child(ops, parent['operation_id'], 'github')
+    await ops._execute(github['operation_id'])
+    await ops._execute(parent['operation_id'])
+    captured = checktests.checks._child(ops, parent['operation_id'], 'workload')
+    await ops._execute(captured['operation_id'])
+    await ops._execute(parent['operation_id'])
+    row = ops.db.execute("SELECT operation_id FROM pm_maintenance_check_children WHERE parent_id=? AND slot='lifecycle'", (parent['operation_id'],)).fetchone()
+    assert row is not None
+    if change == 'credential':
+        ops.db.execute('UPDATE api_principals SET revoked_at=1 WHERE actor=?', (OWNER.actor,))
+    else:
+        ops.context['check_test_clock'][0] += 121
+    await ops._execute(row[0])
+    failed = ops.get(row[0])
+    assert failed['status'] == 'failed', failed
+    assert failed['error_code'] == ('PM_MAINTENANCE_AUTHORITY_UNAVAILABLE' if change == 'credential' else 'PM_MAINTENANCE_DEADLINE')
+    assert gates.head(ops.db, wid)['stage'] == 'development'
+
+
+async def test_maintenance_reference_types_and_hidden_events_are_not_laundered(ops, monkeypatch):
+    from bat_agent_connector import pm_access
+    data = await ready(ops, monkeypatch)
+    wid = data['workspace_id']
+    ref = await fixed(ops, data)
+    with pytest.raises(OperationError, match='INVALID_PARAMS'):
+        ops.create(OWNER, **request(ops, wid, 'set_stage', params={'stage': 'maintain', 'maintenance_ref': {**ref, 'policy_version': True}}))
+    done = await decide(ops, wid, 'set_stage', params={'stage': 'maintain', 'maintenance_ref': ref})
+    event = {'resource_type': 'pm_lifecycle', 'resource_id': wid, 'kind': 'pm.lifecycle.set_stage', 'body': {'operation_id': done['operation_id']}}
+    assert pm_access.event_visible(ops.db, READER, event)
+    await remove_repo(ops, data['project_id'])
+    assert not pm_access.event_visible(ops.db, READER, event)
+    assert life.get_lifecycle(ops, READER, wid)['lifecycle']['transition_id'] is None
+    assert life.list_inflight(ops, READER, wid)['transition_id'] is None
