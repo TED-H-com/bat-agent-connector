@@ -164,6 +164,7 @@ async def test_full_object_and_list_pagination_fixed_heads_and_nonterminal_actio
     ('repository', 'provider_repository_changed'), ('check', 'provider_head_changed'),
     ('count', 'provider_count_incomplete'), ('duplicate', 'provider_duplicate_row'),
     ('filter_limit', 'provider_search_limit'), ('unknown_state', 'provider_status_unproven'),
+    ('context', 'provider_status_context_unproven'),
 ])
 async def test_races_and_incomplete_provider_data_are_never_complete(ops, monkeypatch, variant, reason):
     data = await prepared(ops, monkeypatch)
@@ -182,6 +183,8 @@ async def test_races_and_incomplete_provider_data_are_never_complete(ops, monkey
         gh.total_override = 1000
     elif variant == 'unknown_state':
         gh.suites[0]['status'] = 'novel_status'
+    elif variant == 'context':
+        gh.statuses[0]['context'] = None
     else:
         async def change(path, query):
             count = sum(p.endswith('/pulls') for p, _ in gh.reads)
@@ -385,3 +388,16 @@ async def test_complete_empty_profile_can_pass_existing_stability_and_final_work
         result = workload.evaluate_for_maintenance(ops, OWNER, data['workspace_id'], doc['snapshot_id'], current, now=NOW + 60)
     assert result['eligible'] is True and result['reasons'] == []
     assert result['automatic_maintenance_authorized'] is False
+
+
+async def test_clock_reversal_between_original_page_receipts_is_incomplete(ops, monkeypatch):
+    data = await prepared(ops, monkeypatch)
+    gh = ops.context['github']
+    async def shift(path, query):
+        at = NOW + 2 if len(gh.reads) == 1 else NOW + 1
+        monkeypatch.setattr(provider, 'time', SimpleNamespace(time=lambda: at, monotonic=lambda: NOW))
+    gh.mutate = shift
+    _, doc = await observe(ops, data)
+    assert doc['evidence']['status'] == 'incomplete'
+    assert doc['evidence']['reason'] == 'observation_clock_changed'
+    assert len(gh.reads) == 2
