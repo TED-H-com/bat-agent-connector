@@ -32,6 +32,16 @@ erase the prior context or release unknown writers. The bounded discussion
 context reports omitted content; it does not claim every accepted document was
 loaded. Adapter selection across tools and native coding are separate contracts.
 
+After the immutable import, a local idempotent registry retirement releases only
+that original runtime incarnation from the host session cap. It uses the saved
+dedicated-process death proof and never sends a stop or another input. A crash
+between import and retirement recovers the same local receipt. The existing PM
+worktree and historical session row remain intact. Both successor reservation
+and final transport checks require the original completed run, death proof,
+controller, incarnation, same carrier creation/configuration and current writer.
+A retired label alone, an unknown exit, a foreign session or a reused path grants
+no sharing authority. Sequential completed turns work with a host cap of one.
+
 The BAT prerequisite is the additive `codex-pm-linux-v1` contract on top of
 audited upstream `b7419892fbc9946799b64cca24c2ec8c7fa15c42`, with pinned Codex
 `0.160.0` / `a956835d020762cb2b570053af06f643a11c0ecc`. This contract requires a

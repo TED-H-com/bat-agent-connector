@@ -7,8 +7,15 @@ from dataclasses import replace
 
 import pytest
 
+from bat_agent_connector import (
+    controller_authority,
+    pm_lifecycle_gates,
+    pm_runs,
+    pm_workspace,
+    registry,
+    repository_sync,
+)
 from bat_agent_connector import pm_bat_operations as bat
-from bat_agent_connector import pm_lifecycle_gates, pm_runs, pm_workspace, registry, repository_sync
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.operations import OperationError
@@ -133,6 +140,8 @@ async def test_unknown_original_death_blocks_second_writer_after_restart(continu
     w['settings']['missing_exit'] = True
     first = await analyze(w, 'unknown-first')
     assert first['status'] == 'uncertain', first
+    original = pm_runs.get_by_operation(w['d'].ops.db, first['operation_id'])
+    assert registry.get('h1', original['session_binding']['session_id'])['status'] == 'active'
     await restart(w)
     blocked = await analyze(w, 'blocked-next')
     assert blocked['status'] == 'failed' and blocked['error_code'] == 'PM_WRITER_BUSY', blocked
@@ -147,6 +156,75 @@ async def test_unknown_original_death_blocks_second_writer_after_restart(continu
     completed = await analyze(w, 'fresh-after-original-reconciled')
     assert completed['status'] == 'succeeded', completed
     assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 2
+
+
+@pytest.mark.parametrize('changed', ['controller', 'incarnation', 'workspace', 'creation_marker', 'retired_without_proof'])
+async def test_successor_never_adopts_changed_carrier_or_foreign_original(continuation, mock, changed):
+    w = continuation
+    first = await analyze(w, 'original-before-change')
+    assert first['status'] == 'succeeded', json.dumps(first, indent=2)
+    original = pm_runs.get_by_operation(w['d'].ops.db, first['operation_id'])
+    sid = original['session_binding']['session_id']
+    if changed == 'creation_marker':
+        git(w['binding']['clone_path'], 'config', '--local', 'batc.pm-creation-operation', 'op_' + '0' * 32)
+    else:
+        path = registry.registry_path()
+        document = json.loads(path.read_text())
+        row = next(row for row in document['sessions'] if row['session_id'] == sid)
+        if changed == 'controller':
+            row['controller_authority'] = controller_authority.binding(w['d'].ops.db,
+                Principal('another-controller', frozenset({'observe', 'manage', 'start'})))
+        elif changed == 'incarnation':
+            row['controller_incarnation'] = '0' * 32
+        elif changed == 'workspace':
+            row['controller_authority']['pm_workspace_id'] = 'ws_' + '0' * 32
+        else:
+            row['start_operation_id'] = 'op_' + '0' * 32
+        path.write_text(json.dumps(document))
+    await restart(w)
+    second = await analyze(w, 'refused-after-change')
+    assert second['status'] != 'succeeded', json.dumps(second, indent=2)
+    assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 1
+
+
+@pytest.mark.parametrize('failure', ['crash', 'registry_cas'])
+async def test_completed_import_recovers_original_local_retirement_without_new_input(continuation, mock, monkeypatch, failure):
+    w = continuation
+    retire = bat._retire_completed
+    crashed = False
+    def crash(ctx, run):
+        nonlocal crashed
+        if not crashed:
+            crashed = True
+            from bat_agent_connector.operations import Uncertain
+            raise Uncertain('pm.bat.retire', 'fixture crash after import before local retirement')
+        return retire(ctx, run)
+    if failure == 'crash':
+        monkeypatch.setattr(bat, '_retire_completed', crash)
+    else:
+        original_retire = registry.retire
+        def changed_once(*args, **kwargs):
+            nonlocal crashed
+            if not crashed:
+                crashed = True
+                return {'capacity_released': False, 'capacity_reason': 'generation_changed'}
+            return original_retire(*args, **kwargs)
+        monkeypatch.setattr(registry, 'retire', changed_once)
+    first = await analyze(w, 'original-retirement-crash')
+    assert first['status'] == 'uncertain', first
+    original = pm_runs.get_by_operation(w['d'].ops.db, first['operation_id'])
+    assert original['state'] == 'completed'
+    sid = original['session_binding']['session_id']
+    assert registry.get('h1', sid)['status'] == 'active'
+    await restart(w)
+    ops = w['d'].ops
+    ops.db.execute('UPDATE operations SET next_run_at=0 WHERE operation_id=?', (first['operation_id'],))
+    await settle_operations(ops)
+    assert ops.get(first['operation_id'])['status'] == 'succeeded'
+    assert registry.get('h1', sid)['status'] == 'stopped'
+    assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 1
+    successor = await analyze(w, 'after-retirement-recovery')
+    assert successor['status'] == 'succeeded', json.dumps(successor, indent=2)
 
 
 @pytest.mark.parametrize('changed', ['source', 'pause', 'membership'])
