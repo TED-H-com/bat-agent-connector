@@ -23,6 +23,10 @@ def exact(value, fields):
 def text(value, label, maximum=4000):
     if not isinstance(value, str) or not value.strip() or len(value) > maximum:
         raise bad(label + ' must be bounded nonempty text')
+    try:
+        value.encode('utf-8')
+    except UnicodeEncodeError as exc:
+        raise bad(label + ' must be valid UTF-8 text') from exc
     return value
 
 
@@ -35,8 +39,8 @@ def key(ref):
         exact(ref, ('kind', 'criterion_id'))
     else:
         raise bad('Select an original acceptance or DoD criterion')
-    if any(not isinstance(value, str) or not value or len(value) > 200 for value in ref.values()):
-        raise bad('Invalid original criterion identity')
+    for value in ref.values():
+        text(value, 'Original criterion identity', 200)
     return verification.digest(ref)
 
 

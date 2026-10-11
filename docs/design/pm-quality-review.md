@@ -93,7 +93,9 @@ proof statuses are not trusted fields.
 `pm.quality.review.revoke` uses the same target/version precondition and a reason.
 The responsible reviewer or a current workspace owner may append revocation.
 Revocation prevents future use, preserves every previous conclusion and original
-receipt, and never kills sessions or rewrites a historical snapshot.
+receipt, and never kills sessions or rewrites a historical snapshot. Read projections
+include the exact `revocation` record, with attributed original reason and receipt,
+alongside the preserved assessment; before withdrawal this field is null.
 
 All matrices, histories and responses are bounded whole UTF-8 JSON documents.
 A review has at most 200 criteria and 32 immutable assessments, plus one reserved
