@@ -228,7 +228,7 @@ async def _analyze_once(ctx, *, prepare=None, import_reply=None):
             if result.get("runtime_error"):
                 raise OperationError(result["runtime_error"], "The native PM analysis stopped without an imported reply", 409)
             completed = ctx.effect("pm.native.import", lambda: (import_reply or pm_native_journal.import_reply)(
-                ctx.service.journal, run["run_id"], run["generation"]))
+                ctx.service.journal, run["run_id"], run["generation"]), lifecycle_bookkeeping=True)
             return _result(completed)
         except (Cancelled, OperationError, ResourceReadOnly, StepFailed) as error:
             proof = pm_native_journal.death_proof(ctx.service.db, run["run_id"])

@@ -197,7 +197,8 @@ class OpContext:
         self.service._merge_refs(self.operation_id, refs)
 
     def effect(self, name: str, fn: Callable[[], dict], *, request: dict | None = None,
-               refs: dict | Callable[[dict], dict] | None = None, receipt_only: bool = False) -> dict:
+               refs: dict | Callable[[dict], dict] | None = None, receipt_only: bool = False,
+               lifecycle_bookkeeping: bool = False) -> dict:
         """Commit a local task effect and its receipt in one journal transaction.
 
         A started receipt without a result proves the effect transaction rolled back. Replaying the
@@ -205,6 +206,8 @@ class OpContext:
         the receipt; replay repairs their missing values without running the effect again.
         receipt_only permits bookkeeping after cancellation only when the caller has already
         proven every external effect; it must never authorize a new external action.
+        lifecycle_bookkeeping allows proven original-result import after a workspace stop
+        without bypassing the ordinary cancellation or current source/authority checks.
         """
         row = self.service.db.execute("SELECT * FROM operation_steps WHERE operation_id=? AND name=?",
                                       (self.operation_id, name)).fetchone()
@@ -216,8 +219,11 @@ class OpContext:
         if not receipt_only:
             self.check_cancel()
         if row is None:
-            self.service._step_start(self.operation_id, name, request or {})
+            self.service._step_start(self.operation_id, name, request or {}, local=True,
+                                     bookkeeping=receipt_only or lifecycle_bookkeeping)
         with self.service.journal.tx():
+            from .pm_lifecycle_gates import require_local
+            require_local(self.service.db, self.operation_id, bookkeeping=receipt_only or lifecycle_bookkeeping)
             result = fn()
             self.service._step_done(self.operation_id, name, result or {})
             self._effect_refs(result or {}, refs)
@@ -271,11 +277,17 @@ class OpContext:
                 self.service._step_status(self.operation_id, name, "failed",
                                           error={"code": "CANCELLED", "message": "proven not sent; cancelled"})
                 raise
-            self.service._step_restart(self.operation_id, name, request or {})
+            try:
+                self.service._step_restart(self.operation_id, name, request or {}, bookkeeping=receipt_only)
+            except OperationError as exc:
+                if exc.code in {'PM_LIFECYCLE_STOPPED', 'PM_LIFECYCLE_EPOCH_CHANGED'}:
+                    self.service._step_status(self.operation_id, name, 'failed',
+                        error={'code': exc.code, 'message': 'Proven not sent; lifecycle blocks a new attempt'})
+                raise
         else:
             if not receipt_only:
                 self.check_cancel()
-            self.service._step_start(self.operation_id, name, request or {})
+            self.service._step_start(self.operation_id, name, request or {}, bookkeeping=receipt_only)
         try:
             response = await fn()
         except NeedsAttention:
@@ -421,16 +433,20 @@ class OperationService:
         self.journal.api_event("operation", operation_id, kind, operation_summary(self.db, operation_id, data), actor=row["actor"] if row else None,
                                context={"entry_point": "daemon", "observer": "operation-service"})
 
-    def _step_start(self, operation_id: str, name: str, request: dict) -> None:
+    def _step_start(self, operation_id: str, name: str, request: dict, *, local=False, bookkeeping=False) -> None:
         with self.journal.tx():
+            from .pm_lifecycle_gates import admit_step
+            admit_step(self.db, operation_id, name, local=local, bookkeeping=bookkeeping)
             seq = self.db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM operation_steps WHERE operation_id=?",
                                   (operation_id,)).fetchone()[0]
             self.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,started_at)
                 VALUES(?,?,?,?,?,?)""", (operation_id, seq, name, "started", _canonical(request), time.time()))
             self._observation_event(operation_id, "operation.step.started", {"step": name, "step_seq": seq, "request": request})
 
-    def _step_restart(self, operation_id: str, name: str, request: dict) -> None:
+    def _step_restart(self, operation_id: str, name: str, request: dict, *, bookkeeping=False) -> None:
         with self.journal.tx():
+            from .pm_lifecycle_gates import admit_step
+            admit_step(self.db, operation_id, name, bookkeeping=bookkeeping, restart=True)
             self.db.execute("""UPDATE operation_steps SET status='started',request=?,response=NULL,error=NULL,
                 started_at=?,finished_at=NULL WHERE operation_id=? AND name=?""",
                             (_canonical(request), time.time(), operation_id, name))
@@ -564,6 +580,8 @@ class OperationService:
                             (operation_id, principal.actor, entry[:20], key, request_hash, action,
                              _canonical(target), _canonical(params), _canonical(preconditions), "accepted", now,
                              now, _canonical(refs) if refs else None))
+            from .pm_lifecycle_gates import admit_operation
+            admit_operation(self.db, operation_id, action, target, binding)
             self.journal.api_event("operation", operation_id, "operation.accepted",
                                    {"action": action, "target": target, "entry": entry}, actor=principal.actor)
         self.kick()
