@@ -195,6 +195,9 @@ def check_grant(grant: WriteGrant | None, host: str, channel: str, params: dict 
         for other in registry.list_entries(host):
             if other.get("session_id") != grant.session_id and carrier in {
                     other.get("worktree_path"), None if registry.is_pending_worktree_source(other) else other.get("cwd")}:
+                from .pm_bat_operations import permits_completed_carrier
+                if permits_completed_carrier(host, row, other):
+                    continue
                 controller_authority.require_entry(other)
     from .failover_operations import check_writer
     check_writer(host, grant.session_id, channel, workdir=grant.workdir)

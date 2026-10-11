@@ -116,10 +116,13 @@ def _retire_completed(ctx, run):
                 expected={k: row.get(k) for k in ('controller_authority', 'controller_incarnation',
                     'start_operation_id', 'task_id', 'status', 'cwd', 'worktree_path', 'branch')})
         if not result['capacity_released']:
-            raise OperationError('PM_BAT_RETIREMENT_UNPROVEN', 'The original PM runtime capacity remains held', 409)
+            raise Uncertain('pm.bat.retire', 'The imported reply is saved; original runtime capacity remains held')
         return result
     with controller_authority.use(run['execution_authority'], ctx.service.journal):
-        return ctx.effect('pm.bat.retire', retire, lifecycle_bookkeeping=True)
+        try:
+            return ctx.effect('pm.bat.retire', retire, lifecycle_bookkeeping=True)
+        except (OperationError, ResourceReadOnly) as exc:
+            raise Uncertain('pm.bat.retire', 'Current original identity/source access is required for local retirement') from exc
 
 
 def capabilities(ops, principal, workspace):
@@ -416,7 +419,7 @@ async def _analyze(ctx):
         return pm_native_operations._result(run)
     if run["state"] in {"aborted", "failed"}:
         raise OperationError("PM_BAT_STOPPED", "This original PM run ended without an imported reply", 409)
-    with controller_authority.use(authority, ctx.service.journal):
+    with controller_authority.use(authority, ctx.service.journal), _registry_scope(ctx, run):
         try:
             # The ordinary executor retains separate carrier/start/confirmation
             # receipts and never restarts a start with an uncertain outcome.
@@ -448,6 +451,8 @@ async def _analyze(ctx):
             _retire_completed(ctx, completed)
             return pm_native_operations._result(completed)
         except Uncertain:
+            if pm_runs.get(ctx.service.db, run['run_id'])['state'] == 'completed':
+                raise  # A local retirement cannot replace or abort the original imported answer.
             proof = await _abort_evidence(ctx, run)
             if proof:
                 # A lost send ACK may already have a successful original native
@@ -460,6 +465,8 @@ async def _analyze(ctx):
         except (BatError, OSError, asyncio.TimeoutError, pm_runtime.RuntimeEvidenceError) as exc:
             raise Uncertain("pm.bat.observe", "Original BAT observations are unavailable; retain the writer") from exc
         except (Cancelled, OperationError, ResourceReadOnly, StepFailed) as exc:
+            if pm_runs.get(ctx.service.db, run['run_id'])['state'] == 'completed':
+                raise
             # An unconfirmed exit is not a failed/no-effect run. Leave the writer
             # and original operation available for read-only reconciliation.
             if run.get("session_binding"):

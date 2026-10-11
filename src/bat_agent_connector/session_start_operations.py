@@ -259,7 +259,8 @@ async def run(ctx):
         # every proven carrier: creation ownership alone does not authorize
         # deleting later commits, uncommitted files or another client's workspace.
         sid, host = str(uuid.uuid5(NAMESPACE, ctx.operation_id)), ctx.target['host']
-        reservation, carrier = _receipt(ctx, 'session.reserve'), _receipt(ctx, 'worktree.create')
+        reservation = _receipt(ctx, 'session.reserve')
+        carrier = _receipt(ctx, 'worktree.create') or _receipt(ctx, 'pm.carrier.bind')
         row = registry.get(host, sid) or {}
         unresolved = ctx.service.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND status IN ('started','uncertain') "
             "AND name IN ('worktree.create','session.start','workspace.register','send')", (ctx.operation_id,)).fetchone()
