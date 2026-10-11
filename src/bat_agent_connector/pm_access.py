@@ -11,6 +11,47 @@ import json
 from .operations import OperationError
 
 
+def operation_source_visible(db, principal, operation_id):
+    """Original derived-source access, without upgrading ordinary source claims."""
+    from . import pm_source_lineage
+    if not isinstance(operation_id, str):
+        return False
+    if not pm_source_lineage.visible(db, principal, "operation", operation_id):
+        return False
+    row = db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
+    if row and row[0] in {"pm.conversation.propose", "pm.conversation.adopt"}:
+        from .pm_conversation_proposals import operation_visible
+        return operation_visible(db, principal, {"operation_id": operation_id})
+    return True
+
+
+def require_operation_sources(db, principal, operation_ids):
+    if any(not operation_source_visible(db, principal, identity) for identity in set(operation_ids)):
+        raise OperationError("PM_SOURCE_UNAVAILABLE", "Original PM sources are unavailable", 404)
+
+
+def inherit_operation_sources(db, operation_id, source_operation_ids):
+    """Freeze proven roots atomically with a derived record, never parse prose."""
+    from . import pm_source_lineage
+    if not db.in_transaction:
+        raise OperationError("PM_SOURCE_TRANSACTION_REQUIRED", "Freeze original sources inside the record transaction", 409)
+    if not pm_source_lineage.installed(db):
+        return
+    roots = pm_source_lineage.roots(db, "operation", operation_id)
+    for identity in set(source_operation_ids):
+        if identity == operation_id:
+            continue
+        roots.update(pm_source_lineage.roots(db, "operation", identity))
+        row = db.execute("SELECT action FROM operations WHERE operation_id=?", (identity,)).fetchone()
+        if row and row[0] in {"pm.conversation.propose", "pm.conversation.adopt"}:
+            roots.add(identity)
+        if len(roots) > pm_source_lineage.MAX_ROOTS:
+            raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources for one PM record", 409)
+    for original in roots:
+        db.execute("INSERT OR IGNORE INTO pm_source_lineage VALUES(?,?,?,?)",
+            ("operation", operation_id, original, operation_id))
+
+
 def visible(db, principal, operation):
     from .pm_source_lineage import visible as source_visible
     if not source_visible(db, principal, "operation", operation.get("operation_id")):
@@ -121,7 +162,7 @@ def event_visible(db, principal, event):
             row = db.execute('''SELECT o.operation_id,o.action,o.actor,o.target,o.result
                 FROM pm_document_snapshots s JOIN operations o ON o.operation_id=s.operation_id
                 WHERE s.snapshot_id=?''', (event.get('body', {}).get('snapshot_id'),)).fetchone()
-            if row and row['action'] == 'pm.maintenance_review.prepare':
+            if row:
                 return visible(db, principal, {**dict(row), 'target': json.loads(row['target']),
                     'result': json.loads(row['result']) if row['result'] else None})
     if event["resource_type"].startswith("pm_") or event["kind"].startswith("pm."):

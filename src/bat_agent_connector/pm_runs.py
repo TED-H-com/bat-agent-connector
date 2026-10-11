@@ -173,6 +173,9 @@ def _read_bound(value):
 
 def source_visible(db, principal, run):
     """Follow-up derives access from its original admission, including raw output."""
+    from .pm_access import operation_source_visible
+    if not operation_source_visible(db, principal, run["operation_id"]):
+        return False
     row = db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
     if run['context'].get('version') == 2 and 'context_bundle' in run['context']:
         from .pm_context_bundles import operation_visible
@@ -185,6 +188,43 @@ def source_visible(db, principal, run):
         from .pm_spec_materialization import source_visible as spec_visible
         return spec_visible(db, principal, {"operation_id": run["operation_id"]})
     return True
+
+
+def message_source_visible(db, principal, row):
+    """Imported prose retains the original run's access, not just membership."""
+    from .pm_access import operation_source_visible
+    if not operation_source_visible(db, principal, row["operation_id"]):
+        return False
+    installed = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_assistant_provenance'").fetchone()
+    provenance = db.execute("SELECT run_id FROM pm_assistant_provenance WHERE message_id=?", (row["message_id"],)).fetchone() if installed else None
+    if provenance is None:
+        return True
+    run = get(db, provenance["run_id"])
+    return (run["operation_id"] == row["operation_id"] and run["thread_id"] == row["thread_id"]
+            and source_visible(db, principal, run))
+
+
+def _context_source_operations(db, context):
+    """Only central identifiers from the frozen projection, never text claims."""
+    result = set(context.get("source_operation_ids", []))
+    rows = [*context.get("messages", []), *context.get("inputs", [])]
+    for values in context.get("inputs_by_status", {}).values():
+        rows.extend(values)
+    result.update(row["operation_id"] for row in rows if row.get("operation_id"))
+    coverage = context.get("coverage", {})
+    for table, field, identities in (
+        ("pm_inputs", "input_id", [*context.get("selected_input_ids", []), *coverage.get("omitted_input_ids", [])]),
+        ("pm_messages", "message_id", coverage.get("omitted_message_ids", [])),
+    ):
+        for identity in identities:
+            row = db.execute(f"SELECT operation_id FROM {table} WHERE thread_id=? AND {field}=?",  # noqa: S608 - fixed tables/columns
+                             (context["thread_id"], identity)).fetchone()
+            if row:
+                result.add(row["operation_id"])
+    if context.get("draft_id"):
+        thread = {"workspace_id": context["workspace_id"], "thread_id": context["thread_id"], "draft_id": context["draft_id"]}
+        result.add(pm_discussions._draft_row(db, thread)["operation_id"])
+    return sorted(result)
 
 
 def _summary(run):
@@ -262,6 +302,10 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
                     or context.get("thread_version") != expected_version or context.get("coverage", {}).get("max_chars") != max_chars):
                 raise _error("A fixed context requires its original Follow-up admission", "PM_CONTEXT_REFUSED")
         context["purpose"] = purpose
+        from .pm_access import inherit_operation_sources, require_operation_sources
+        sources = _context_source_operations(ops.db, context)
+        require_operation_sources(ops.db, principal, sources)
+        inherit_operation_sources(ops.db, operation_id, sources)
         # Keep the profile, sources, omitted coverage, and exact words, not a mutable pointer.
         digest = _digest(context)
         run_id = "pmr_" + uuid.uuid5(uuid.UUID(pm_workspace.server_id(ops.db)), operation_id).hex
