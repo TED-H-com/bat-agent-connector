@@ -1,6 +1,7 @@
 import {expect,type Page} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
+import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
 
 export const workspaceId='ws_'+'1'.repeat(32),sprintId='pms_'+'2'.repeat(32),snapshotId='pmsnap_'+'3'.repeat(32);
 const actions=['create','context.revise','note','draft','complete','follow_up.record'].map(key=>'pm.meeting.'+key);
@@ -97,6 +98,7 @@ export async function mount(page:Page,f:ReturnType<typeof meetingFixture>,locale
     if(file==='pm-workspace.js')source=source.replace('function durableForm(', 'export function durableForm(');
     await route.fulfill({contentType:'text/javascript',body:source});
   });
+  await unavailableBriefTransport(page,'__meeting_src');
   await page.route('**/__meeting_harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><div class="pm-shell"><aside><h2>PM workspace</h2><p>Membership service</p></aside><main class="pm-main" id="mount"></main></div>'}));
   await page.goto('/__meeting_harness');await boot(page,locale);
 }

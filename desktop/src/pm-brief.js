@@ -1,7 +1,8 @@
 // All five Brief sections render one immutable snapshot, filtered for current source access.
-export function projectBrief({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox}) {
+import {briefExport} from './pm-brief-export.js';
+export function projectBrief({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, canRead=()=>true}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let head = null, snapshot = null, signature = '', serial = 0;
+  let head = null, snapshot = null, signature = '', serial = 0, selectedSnapshotId = null;
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const view = h('div', {class: 'pm-brief-view'}), history = h('div'), status = h('div', {role: 'status'});
   const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
@@ -13,14 +14,20 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   const box = h('section', {class: 'pm-brief', 'data-pm-brief': ''}, h('header', {class: 'pm-heading'},
     h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), create.box),
     status, view, h('details', {}, h('summary', {}, t('pm_brief_history')), history));
+  const exports=caps?.()?.features?.pm_workspaces?.brief_export
+    ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
+  if(exports)box.insertBefore(exports.element,box.lastChild);
+  function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();}
+  function unavailable(error){withdraw();status.replaceChildren(errorBox(error));}
   const stamp = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const readable = (prefix, value) => {const key = prefix + value, text = t(key); return text === key ? String(value) : text;};
   function render(data) {
     snapshot = check(data).snapshot;
-    view.replaceChildren();
-    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); return;}
+    view.replaceChildren();status.replaceChildren();
+    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); exports?.update();return;}
     if (snapshot.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
+    selectedSnapshotId=snapshot.snapshot_id;
     view.append(h('p', {class: 'pm-brief-date'}, h('strong', {}, snapshot.title || workspace().name), ' · ',
       t('pm_brief_as_of', {time: stamp(snapshot.as_of)})), h('p', {class: 'muted'}, t('pm_brief_fixed')));
     const sections = h('div', {class: 'pm-brief-sections'});
@@ -59,33 +66,35 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       h('pre', {class: 'pm-brief-proof'}, JSON.stringify({coverage:snapshot.coverage,visibility:snapshot.visibility,
         journal_cursor:snapshot.journal_cursor,snapshot_digest:snapshot.snapshot_digest,view_digest:snapshot.view_digest},null,2)));
     view.append(trace);
+    exports?.update();
   }
   function renderHistory(page, append = false) {
     if (!append) history.replaceChildren();
     for (const entry of page.snapshots || []) history.append(h('button', {type:'button',class:'secondary',onclick:async()=>{
-      const ticket=++serial;
+      selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();
       try {const data=await api('GET',`${endpoint}/snapshots/${entry.snapshot_id}`);alive();if(ticket===serial)render(data);}
-      catch(error){status.replaceChildren(errorBox(error));}
+      catch(error){if(ticket===serial)unavailable(error);}
     }}, `${entry.title || t('pm_brief_title')} · ${stamp(entry.as_of)}`));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
       const more=h('button',{type:'button',class:'secondary',onclick:async()=>{
         more.disabled=true;
         try {const next=check(await api('GET',`${endpoint}/snapshots?after=${page.next_cursor}&limit=20`));alive();
           if(!more.isConnected)return;more.remove();renderHistory(next,true);
-        }catch(error){if(more.isConnected){more.after(errorBox(error));more.disabled=false;}}
+        }catch(error){if(more.isConnected)unavailable(error);}
       }},t('pm_brief_more'));history.append(more);
     }
   }
   async function refresh(selectedId = null) {
-    const ticket=++serial;head=null;
+    const selected=selectedId||selectedSnapshotId||'latest';if(selectedId)selectedSnapshotId=selectedId;
+    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();exports?.update();
     try {
-      const [latest, listing, current]=await Promise.all([api('GET',`${endpoint}/snapshots/${selectedId || snapshot?.snapshot_id || 'latest'}`),
+      const [latest, listing, current]=await Promise.all([api('GET',`${endpoint}/snapshots/${selected}`),
         api('GET',`${endpoint}/snapshots?limit=20`),api('GET',`${endpoint}/plans/head`)]);alive();if(ticket!==serial)return;
       check(latest);check(listing);if(current.head.workspace_id!==workspaceId)throw Error(t('pm_scope_mismatch'));
       head=current.head;status.replaceChildren();
       const next=JSON.stringify([latest,listing]);if(signature!==next){signature=next;render(latest);renderHistory(listing);}
       create.update();
-    }catch(error){if(ticket===serial){head=null;create.update();status.replaceChildren(errorBox(error));}}
+    }catch(error){if(ticket===serial)unavailable(error);}
   }
-  return {box,refresh};
+  return {box,refresh,withdraw};
 }

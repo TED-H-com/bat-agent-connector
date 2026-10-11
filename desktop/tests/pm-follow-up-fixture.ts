@@ -1,6 +1,7 @@
 import {expect,type Page} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
+import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
 
 export const workspaceId='ws_'+'1'.repeat(32), snapshotId='pmsnap_'+'2'.repeat(32), threadId='pmt_'+'3'.repeat(32);
 export const planId='pmrev_'+'4'.repeat(32), governanceId='pmgrev_'+'5'.repeat(32), recordId='pmgov_'+'6'.repeat(32);
@@ -100,6 +101,7 @@ export async function mount(page:Page,f:ReturnType<typeof fixture>,{locale='en',
     if(file==='pm-workspace.js')body=body.replace('function durableForm(','export function durableForm(');
     await route.fulfill({contentType:file.endsWith('.css')?'text/css':'text/javascript',body});
   });
+  await unavailableBriefTransport(page,'__follow_up_src');
   await page.route('**/__follow_up_harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><link rel="stylesheet" href="/__follow_up_src/pm-follow-up.css"><div class="pm-shell"><aside><h2>PM workspace</h2><p>Membership service</p></aside><main class="pm-main" id="mount"><section class="panel"><h1>Membership service</h1><p>Goal · A returning member can access their account.</p></section></main></div>'}));
   await page.goto('/__follow_up_harness');
   await page.evaluate(async({locale,workspaceId,pageSize})=>{

@@ -4707,11 +4707,287 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		refresh
 	};
 }
+var init_tslib_es6 = __esmMin((() => {}));
+async function invoke(cmd, args = {}, options) {
+	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
+}
+function isTauri() {
+	return !!(globalThis || window).isTauri;
+}
+var init_core = __esmMin((() => {
+	init_tslib_es6();
+}));
+//#endregion
+//#region src/transport/index.ts
+async function restoreBrowserSession() {
+	if (nativeDesktop) return false;
+	const response = await fetch("/api/v1/browser-session", {
+		credentials: "same-origin",
+		mode: "same-origin",
+		cache: "no-store",
+		redirect: "error"
+	});
+	if (!response.ok) return false;
+	const data = await response.json();
+	if (typeof data.csrf !== "string" || data.csrf.length < 32) return false;
+	browserCsrf = data.csrf;
+	return true;
+}
+function browserAuthHeaders(token) {
+	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
+	if (!browserCsrf) throw new Error("Browser session needs to be restored");
+	return { "X-Batc-CSRF": browserCsrf };
+}
+function forgetBrowserSession() {
+	if (!browserCsrf) return;
+	const headers = {
+		...browserAuthHeaders(browserSessionToken),
+		"Content-Type": "application/json"
+	};
+	browserCsrf = null;
+	return fetch("/api/v1/browser-session/logout", {
+		method: "POST",
+		credentials: "same-origin",
+		mode: "same-origin",
+		redirect: "error",
+		headers,
+		body: "{}"
+	});
+}
+async function nativeStatus() {
+	const status = await invoke("native_status");
+	nativeFileSupport = status.file_transfers === true;
+	nativeBriefExportSupport = status.brief_exports === true;
+	return status;
+}
+async function connectorRequest(method, path, body, key, browserToken) {
+	if (nativeDesktop) return invoke("connector_request", { input: {
+		method,
+		path,
+		body: body ?? null,
+		idempotency_key: key ?? null
+	} });
+	const headers = browserAuthHeaders(browserToken);
+	if (body !== void 0) headers["Content-Type"] = "application/json";
+	if (key) headers["Idempotency-Key"] = key;
+	const res = await fetch(`/api/v1${path}`, {
+		method,
+		headers,
+		credentials: "same-origin",
+		redirect: "error",
+		body: body === void 0 ? void 0 : JSON.stringify(body)
+	});
+	return {
+		status: res.status,
+		data: await res.json().catch(() => ({}))
+	};
+}
+async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
+	if (nativeDesktop) {
+		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
+		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
+	}
+	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
+		method: "POST",
+		redirect: "error",
+		credentials: "same-origin",
+		headers: {
+			...browserAuthHeaders(browserToken),
+			"Content-Type": "application/octet-stream"
+		},
+		body: bytes
+	});
+	return {
+		status: res.status,
+		data: await res.json().catch(() => ({}))
+	};
+}
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var init_transport = __esmMin((() => {
+	init_core();
+	nativeDesktop = isTauri();
+	nativeFileSupport = false;
+	nativeBriefExportSupport = false;
+	browserSessionToken = "managed-browser-session";
+	browserCsrf = null;
+	nativeFilesStatus = () => invoke("native_files_status");
+	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
+	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
+	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
+		draftId,
+		enabled
+	});
+	nativeFilesControl = (transferId, action) => invoke("native_files_control", {
+		transferId,
+		action
+	});
+	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
+	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
+	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
+	nativeConnect = () => invoke("connector_connect");
+	managedControl = (input) => invoke("managed_control", { input });
+	nativeDisconnect = () => invoke("connector_disconnect");
+	nativeEnroll = () => invoke("connector_enroll", { locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US" });
+	nativeReloadConfiguration = () => invoke("connector_reload_configuration");
+	nativeSetupConfiguration = (config) => invoke("connector_setup_configuration", {
+		config,
+		locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
+	});
+	nativeForgetCredential = () => invoke("connector_forget_credential");
+	openExternal = (url) => invoke("open_external", { url });
+	fleetAvailability = () => invoke("fleet_availability");
+	fleetBootstrap = (input) => invoke("fleet_bootstrap", { input });
+	tailscaleControl = (input) => invoke("tailscale_control", { input });
+	fleetControl = (input) => invoke("fleet_control", { input });
+	fleetRequest = (input) => invoke("fleet_request", { input });
+	updateRequest = (input) => invoke("desktop_update", { input });
+}));
+//#endregion
+//#region src/pm-brief-export.js
+init_transport();
+function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, onUnavailable, errorBox }) {
+	const actor = caps()?.actor, formats = {
+		markdown: ["md", "text/markdown; charset=utf-8"],
+		html: ["html", "text/html; charset=utf-8"],
+		svg: ["svg", "image/svg+xml; charset=utf-8"]
+	};
+	let busy = false, selection = "", pendingReceipt = null;
+	const format = h("select", { "aria-label": t("pm_export_format") }, ...Object.keys(formats).map((key) => h("option", { value: key }, key === "markdown" ? "Markdown" : key.toUpperCase())));
+	const locale = h("select", { "aria-label": t("pm_export_language") }, h("option", { value: "en" }, "English"), h("option", { value: "zh-TW" }, "繁體中文"));
+	locale.value = navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+	const status = h("div", { role: "status" }), note = h("p", { class: "muted" }, t("pm_export_help"));
+	const button = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void save()
+	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
+	const element = h("details", { "data-pm-brief-export": "" }, h("summary", {}, t("pm_export_title")), note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status);
+	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
+	const identity = () => JSON.stringify([
+		snapshot()?.snapshot_id,
+		snapshot()?.snapshot_digest,
+		snapshot()?.view_digest
+	]);
+	function update() {
+		const next = identity();
+		if (selection !== next) {
+			selection = next;
+			status.replaceChildren();
+		}
+		element.hidden = !snapshot();
+		button.disabled = busy || !allowed();
+		format.disabled = locale.disabled = busy;
+		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
+		if (pendingReceipt && caps()?.actor === actor) {
+			if (pendingReceipt.error) {
+				status.replaceChildren(errorBox(pendingReceipt.error));
+				return;
+			}
+			const value = pendingReceipt.receipt;
+			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? `${t("pm_export_saved")}: ${value.display_name}` : t("pm_export_prior_saved")));
+		}
+	}
+	function live(expected) {
+		alive();
+		if (caps()?.actor !== actor || !allowed() || identity() !== expected) throw Object.assign(Error(t("pm_export_changed")), { code: "PM_EXPORT_VIEW_CHANGED" });
+	}
+	async function save() {
+		if (busy || !allowed()) return;
+		busy = true;
+		pendingReceipt = null;
+		update();
+		const expected = identity(), source = snapshot(), kind = format.value, language = locale.value;
+		let nativeSaveStarted = false;
+		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
+		try {
+			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
+			live(expected);
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== 1 || report.coverage?.projection !== "project_brief_only" || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			const bytes = new TextEncoder().encode(report.content);
+			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
+			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
+			live(expected);
+			if (digest !== report.output_digest) throw Error(t("pm_export_changed"));
+			if (nativeDesktop) {
+				nativeSaveStarted = true;
+				const receipt = await nativeBriefSave({
+					workspace_id: workspaceId,
+					snapshot_id: source.snapshot_id,
+					format: kind,
+					locale: language,
+					expected_view_digest: report.view_digest,
+					expected_output_digest: report.output_digest
+				});
+				alive();
+				if (caps()?.actor !== actor) return;
+				if (receipt !== null && (receipt?.stage !== "saved" || receipt.workspace_id !== workspaceId || receipt.snapshot_id !== source.snapshot_id || receipt.format !== kind || receipt.locale !== language || receipt.view_digest !== report.view_digest || receipt.output_digest !== digest || receipt.byte_length !== bytes.length || typeof receipt.display_name !== "string")) throw Error(t("pm_export_changed"));
+				pendingReceipt = {
+					expected,
+					receipt
+				};
+				update();
+			} else {
+				const url = URL.createObjectURL(new Blob([bytes], { type: report.media_type }));
+				try {
+					const link = document.createElement("a");
+					link.href = url;
+					link.download = `pm-brief-${source.snapshot_id}-${language}.${formats[kind][0]}`;
+					link.click();
+				} finally {
+					setTimeout(() => URL.revokeObjectURL(url), 1e3);
+				}
+				status.replaceChildren(h("p", { class: "muted" }, t("pm_export_requested")));
+			}
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (caps()?.actor !== actor) return;
+			const code = String(error?.code || error?.message || error);
+			const key = Object.entries({
+				BRIEF_EXPORT_CHANGED: "pm_export_changed",
+				BRIEF_EXPORT_UNAVAILABLE: "pm_export_unavailable",
+				BRIEF_EXPORT_SAVE_INTERRUPTED: "pm_export_interrupted",
+				DESTINATION_EXISTS: "pm_export_exists",
+				DESTINATION_UNAVAILABLE: "pm_export_destination"
+			}).find(([prefix]) => code.includes(prefix))?.[1];
+			const rendered = key ? Error(t(key)) : error;
+			if (nativeSaveStarted && [
+				"pm_export_exists",
+				"pm_export_destination",
+				"pm_export_interrupted"
+			].includes(key)) {
+				pendingReceipt = {
+					expected,
+					error: rendered
+				};
+				update();
+				return;
+			}
+			if (identity() !== expected) return;
+			onUnavailable(rendered);
+			status.replaceChildren(errorBox(rendered));
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	format.addEventListener("change", update);
+	locale.addEventListener("change", update);
+	update();
+	return {
+		element,
+		update
+	};
+}
 //#endregion
 //#region src/pm-brief.js
-function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
+function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, canRead = () => true }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let head = null, snapshot = null, signature = "", serial = 0;
+	let head = null, snapshot = null, signature = "", serial = 0, selectedSnapshotId = null;
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
 		required: false
@@ -4735,6 +5011,33 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		class: "pm-brief",
 		"data-pm-brief": ""
 	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_brief_title")), h("p", { class: "muted" }, t("pm_brief_intro"))), create.box), status, view, h("details", {}, h("summary", {}, t("pm_brief_history")), history));
+	const exports = caps?.()?.features?.pm_workspaces?.brief_export ? briefExport({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		snapshot: () => snapshot,
+		readable: canRead,
+		onUnavailable: (error) => unavailable(error),
+		errorBox
+	}) : null;
+	if (exports) box.insertBefore(exports.element, box.lastChild);
+	function withdraw() {
+		++serial;
+		head = null;
+		snapshot = null;
+		signature = "";
+		view.replaceChildren();
+		history.replaceChildren();
+		create.update();
+		exports?.update();
+	}
+	function unavailable(error) {
+		withdraw();
+		status.replaceChildren(errorBox(error));
+	}
 	const stamp = (value) => typeof value === "number" ? new Date(value * 1e3).toLocaleString() : t("pm_evidence_time_unknown");
 	const check = (data) => {
 		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
@@ -4747,11 +5050,14 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	function render(data) {
 		snapshot = check(data).snapshot;
 		view.replaceChildren();
+		status.replaceChildren();
 		if (!snapshot) {
 			view.append(h("p", { class: "muted" }, t("pm_brief_empty")));
+			exports?.update();
 			return;
 		}
 		if (snapshot.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		selectedSnapshotId = snapshot.snapshot_id;
 		view.append(h("p", { class: "pm-brief-date" }, h("strong", {}, snapshot.title || workspace().name), " · ", t("pm_brief_as_of", { time: stamp(snapshot.as_of) })), h("p", { class: "muted" }, t("pm_brief_fixed")));
 		const sections = h("div", { class: "pm-brief-sections" });
 		for (const name of [
@@ -4798,6 +5104,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			view_digest: snapshot.view_digest
 		}, null, 2)));
 		view.append(trace);
+		exports?.update();
 	}
 	function renderHistory(page, append = false) {
 		if (!append) history.replaceChildren();
@@ -4805,13 +5112,18 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			type: "button",
 			class: "secondary",
 			onclick: async () => {
+				selectedSnapshotId = entry.snapshot_id;
 				const ticket = ++serial;
+				snapshot = null;
+				signature = "";
+				view.replaceChildren();
+				exports?.update();
 				try {
 					const data = await api("GET", `${endpoint}/snapshots/${entry.snapshot_id}`);
 					alive();
 					if (ticket === serial) render(data);
 				} catch (error) {
-					status.replaceChildren(errorBox(error));
+					if (ticket === serial) unavailable(error);
 				}
 			}
 		}, `${entry.title || t("pm_brief_title")} · ${stamp(entry.as_of)}`));
@@ -4828,10 +5140,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 						more.remove();
 						renderHistory(next, true);
 					} catch (error) {
-						if (more.isConnected) {
-							more.after(errorBox(error));
-							more.disabled = false;
-						}
+						if (more.isConnected) unavailable(error);
 					}
 				}
 			}, t("pm_brief_more"));
@@ -4839,11 +5148,18 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		}
 	}
 	async function refresh(selectedId = null) {
+		const selected = selectedId || selectedSnapshotId || "latest";
+		if (selectedId) selectedSnapshotId = selectedId;
 		const ticket = ++serial;
 		head = null;
+		snapshot = null;
+		signature = "";
+		view.replaceChildren();
+		history.replaceChildren();
+		exports?.update();
 		try {
 			const [latest, listing, current] = await Promise.all([
-				api("GET", `${endpoint}/snapshots/${selectedId || snapshot?.snapshot_id || "latest"}`),
+				api("GET", `${endpoint}/snapshots/${selected}`),
 				api("GET", `${endpoint}/snapshots?limit=20`),
 				api("GET", `${endpoint}/plans/head`)
 			]);
@@ -4862,16 +5178,13 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 			}
 			create.update();
 		} catch (error) {
-			if (ticket === serial) {
-				head = null;
-				create.update();
-				status.replaceChildren(errorBox(error));
-			}
+			if (ticket === serial) unavailable(error);
 		}
 	}
 	return {
 		box,
-		refresh
+		refresh,
+		withdraw
 	};
 }
 //#endregion
@@ -6361,7 +6674,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		form,
 		input,
 		labelled,
-		errorBox
+		errorBox,
+		caps,
+		canRead: () => loaded && Boolean(workspace)
 	}) : null;
 	if (brief && !threadId) body.insertBefore(brief.box, content);
 	const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap ? workspaceRoadmap({
@@ -6975,6 +7290,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
 				loaded = false;
+				brief?.withdraw();
 				updateForms();
 				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
 			}
@@ -7095,6 +7411,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				loaded = false;
 				workspace = null;
 				threadData = null;
+				brief?.withdraw();
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
 				for (const section of sourceSections()) section.hidden = true;
@@ -7936,142 +8253,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		}
 	};
 }
-var init_tslib_es6 = __esmMin((() => {}));
-async function invoke(cmd, args = {}, options) {
-	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
-}
-function isTauri() {
-	return !!(globalThis || window).isTauri;
-}
-var init_core = __esmMin((() => {
-	init_tslib_es6();
-}));
-//#endregion
-//#region src/transport/index.ts
-async function restoreBrowserSession() {
-	if (nativeDesktop) return false;
-	const response = await fetch("/api/v1/browser-session", {
-		credentials: "same-origin",
-		mode: "same-origin",
-		cache: "no-store",
-		redirect: "error"
-	});
-	if (!response.ok) return false;
-	const data = await response.json();
-	if (typeof data.csrf !== "string" || data.csrf.length < 32) return false;
-	browserCsrf = data.csrf;
-	return true;
-}
-function browserAuthHeaders(token) {
-	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
-	if (!browserCsrf) throw new Error("Browser session needs to be restored");
-	return { "X-Batc-CSRF": browserCsrf };
-}
-function forgetBrowserSession() {
-	if (!browserCsrf) return;
-	const headers = {
-		...browserAuthHeaders(browserSessionToken),
-		"Content-Type": "application/json"
-	};
-	browserCsrf = null;
-	return fetch("/api/v1/browser-session/logout", {
-		method: "POST",
-		credentials: "same-origin",
-		mode: "same-origin",
-		redirect: "error",
-		headers,
-		body: "{}"
-	});
-}
-async function nativeStatus() {
-	const status = await invoke("native_status");
-	nativeFileSupport = status.file_transfers === true;
-	return status;
-}
-async function connectorRequest(method, path, body, key, browserToken) {
-	if (nativeDesktop) return invoke("connector_request", { input: {
-		method,
-		path,
-		body: body ?? null,
-		idempotency_key: key ?? null
-	} });
-	const headers = browserAuthHeaders(browserToken);
-	if (body !== void 0) headers["Content-Type"] = "application/json";
-	if (key) headers["Idempotency-Key"] = key;
-	const res = await fetch(`/api/v1${path}`, {
-		method,
-		headers,
-		credentials: "same-origin",
-		redirect: "error",
-		body: body === void 0 ? void 0 : JSON.stringify(body)
-	});
-	return {
-		status: res.status,
-		data: await res.json().catch(() => ({}))
-	};
-}
-async function connectorUploadArtifact(operationId, bytes, browserToken) {
-	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
-	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
-		method: "POST",
-		redirect: "error",
-		credentials: "same-origin",
-		headers: {
-			...browserAuthHeaders(browserToken),
-			"Content-Type": "application/octet-stream"
-		},
-		body: bytes
-	});
-	return {
-		status: res.status,
-		data: await res.json().catch(() => ({}))
-	};
-}
-var nativeDesktop, nativeFileSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
-var init_transport = __esmMin((() => {
-	init_core();
-	nativeDesktop = isTauri();
-	nativeFileSupport = false;
-	browserSessionToken = "managed-browser-session";
-	browserCsrf = null;
-	nativeFilesStatus = () => invoke("native_files_status");
-	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
-	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
-	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
-		draftId,
-		enabled
-	});
-	nativeFilesControl = (transferId, action) => invoke("native_files_control", {
-		transferId,
-		action
-	});
-	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
-	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
-	nativeConnect = () => invoke("connector_connect");
-	managedControl = (input) => invoke("managed_control", { input });
-	nativeDisconnect = () => invoke("connector_disconnect");
-	nativeEnroll = () => invoke("connector_enroll", { locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US" });
-	nativeReloadConfiguration = () => invoke("connector_reload_configuration");
-	nativeSetupConfiguration = (config) => invoke("connector_setup_configuration", {
-		config,
-		locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
-	});
-	nativeForgetCredential = () => invoke("connector_forget_credential");
-	openExternal = (url) => invoke("open_external", { url });
-	fleetAvailability = () => invoke("fleet_availability");
-	fleetBootstrap = (input) => invoke("fleet_bootstrap", { input });
-	tailscaleControl = (input) => invoke("tailscale_control", { input });
-	fleetControl = (input) => invoke("fleet_control", { input });
-	fleetRequest = (input) => invoke("fleet_request", { input });
-	updateRequest = (input) => invoke("desktop_update", { input });
-}));
-//#endregion
-//#region src/workspace-layout.js
-init_transport();
 var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
 var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
 var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
@@ -8810,6 +8991,9 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		update
 	};
 }
+//#endregion
+//#region src/transport/artifact-content.ts
+init_transport();
 async function readArtifactContent(reference, size, token, signal) {
 	if (nativeDesktop || !/^art_[0-9a-f]{32}$/.test(reference.artifact_id) || !Number.isSafeInteger(reference.revision) || reference.revision < 1 || !/^[0-9a-f]{64}$/.test(reference.digest) || !Number.isSafeInteger(size) || size < 0 || size > 16777216) throw new Error("Artifact content exceeds the supported bound or has an invalid reference");
 	const response = await fetch(`/api/v1/artifacts/${reference.artifact_id}/revisions/${reference.revision}/content`, {
@@ -11590,6 +11774,48 @@ var followUpAnalysisStrings = {
 	}
 };
 //#endregion
+//#region src/pm-brief-export-strings.js
+var briefExportStrings = {
+	en: {
+		pm_export_title: "Download this Project Brief",
+		pm_export_help: "Use this selected snapshot for a report or visual. Its source time and unassessed areas remain visible.",
+		pm_export_format: "File format",
+		pm_export_language: "Report language",
+		pm_export_save: "Save report…",
+		pm_export_download: "Download report",
+		pm_export_changed: "The report or its readable sources changed. Refresh the Brief before downloading.",
+		pm_export_reading: "Checking this snapshot and report…",
+		pm_export_native_unavailable: "This desktop version does not support saving Brief reports. Use the browser dashboard or an updated client.",
+		pm_export_cancelled: "Save cancelled.",
+		pm_export_saved: "Saved",
+		pm_export_requested: "Download requested for the selected snapshot.",
+		pm_export_prior_saved: "The earlier report save finished. Check the destination selected for that report.",
+		pm_export_unavailable: "The report is no longer available to this connection. Refresh the Brief.",
+		pm_export_interrupted: "The save could not be confirmed. Check the selected destination before trying again.",
+		pm_export_exists: "The selected file already exists. Choose a new filename.",
+		pm_export_destination: "The selected destination is unavailable. Choose another location."
+	},
+	"zh-TW": {
+		pm_export_title: "下載這份專案摘要",
+		pm_export_help: "將選定快照製成報告或圖表，保留來源時間與尚未評估的部分。",
+		pm_export_format: "檔案格式",
+		pm_export_language: "報告語言",
+		pm_export_save: "儲存報告…",
+		pm_export_download: "下載報告",
+		pm_export_changed: "報告或可讀來源已變更，請重新整理專案總覽再下載。",
+		pm_export_reading: "核對這份快照與報告…",
+		pm_export_native_unavailable: "這個桌面版本尚未支援儲存專案摘要，請使用網頁 Dashboard 或更新後的 client。",
+		pm_export_cancelled: "已取消儲存。",
+		pm_export_saved: "已儲存",
+		pm_export_requested: "已要求下載選定快照的報告。",
+		pm_export_prior_saved: "先前報告的儲存已完成，請查看當時選定的目的地。",
+		pm_export_unavailable: "目前連線已無法取得這份報告，請重新整理專案總覽。",
+		pm_export_interrupted: "尚無法確認儲存結果，重試前請先檢查選定的目的地。",
+		pm_export_exists: "選定的檔案已存在，請改用新的檔名。",
+		pm_export_destination: "目前無法使用選定位置，請選擇其他目的地。"
+	}
+};
+//#endregion
 //#region src/pm-work-packages-strings.js
 var workPackageStrings = {
 	en: {
@@ -12440,6 +12666,7 @@ var pmStrings = {
 		...specSourceStrings.en,
 		...pmFollowUpStrings.en,
 		...followUpAnalysisStrings.en,
+		...briefExportStrings.en,
 		...workPackageStrings.en,
 		pm_roadmap_historical_work: "Previously selected work association",
 		pm_roadmap_missing_dependency: "Removed milestone dependency",
@@ -12764,6 +12991,7 @@ var pmStrings = {
 		...specSourceStrings["zh-TW"],
 		...pmFollowUpStrings["zh-TW"],
 		...followUpAnalysisStrings["zh-TW"],
+		...briefExportStrings["zh-TW"],
 		...workPackageStrings["zh-TW"],
 		pm_roadmap_historical_work: "先前選定的工作關聯",
 		pm_roadmap_missing_dependency: "已移除里程碑的依賴",

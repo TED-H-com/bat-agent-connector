@@ -1,6 +1,7 @@
 import {test, expect, type Page} from '@playwright/test';
 import {readFile, mkdir} from 'node:fs/promises';
 import path from 'node:path';
+import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
 
 import {fixture,workspaceId,planId} from './pm-sprint-fixture.ts';
 const action=(page:Page,name:string)=>page.locator(`[data-pm-action="${name}"]`);
@@ -13,6 +14,7 @@ async function mount(page:Page,f:ReturnType<typeof fixture>,locale='en') {
     if(file==='pm-workspace.js')source=source.replace('function durableForm(', 'export function durableForm(');
     await route.fulfill({contentType:'text/javascript',body:source});
   });
+  await unavailableBriefTransport(page,'__sprint_src');
   await page.route('**/__sprint_harness',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><div class="pm-shell"><aside><h2>PM workspace</h2><p>Membership service</p></aside><main class="pm-main" id="mount"></main></div>'}));
   await page.goto('/__sprint_harness');
   await boot(page,locale);

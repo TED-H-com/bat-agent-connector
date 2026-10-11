@@ -12,7 +12,7 @@ const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.p
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
 await mkdir(scratch, {recursive:true});
 const temporary = await mkdtemp(resolve(scratch, 'pm-central-run-'));
-let child, browser, output, stopped, spawnError;
+let child, browser, output, stopped, spawnError, failureDetails=async()=>({});
 async function bounded(promise, milliseconds, message) {
   let timer;
   try {return await Promise.race([promise, new Promise((_, reject) => {timer = setTimeout(() => reject(Error(message)), milliseconds);})]);}
@@ -43,6 +43,13 @@ try {
   const fixture = await next();
   browser = await chromium.launch();
   const origin = `http://127.0.0.1:${fixture.port}`, page = await browser.newPage({locale: 'en-US'}), errors = [];
+  const requests=[];
+  page.on('response',response=>{const url=new URL(response.url());if(url.pathname.startsWith('/api/v1/')){
+    requests.push({method:response.request().method(),path:url.pathname,status:response.status()});if(requests.length>30)requests.shift();
+  }});
+  failureDetails=async()=>({requests,errors,forms:await page.locator('[data-pm-action]').evaluateAll(forms=>forms.map(form=>({
+    action:form.getAttribute('data-pm-action'),status:form.querySelector('[role=status]')?.textContent,
+    disabled:form.querySelector('button[type=submit]')?.disabled}))),status:await page.locator('.pm-status').allTextContents()});
   page.on('pageerror', error => errors.push(error.message));
   // Test this checkout's exact generated frontend even when the backend is supplied by an integration worktree.
   for (const file of ['app.js', 'app.css']) await page.route(`**/dashboard/${file}`, route =>
@@ -215,6 +222,22 @@ try {
   assert.equal(brief.snapshot.candidate_document.revision_id,updatedPlans.head.latest_revision_id);
   assert.equal(brief.snapshot.work[0].capture.capture_id,captured.capture.capture_id);
   assert.equal(brief.snapshot.brief.deviations.status,'unassessed');
+  const exports = page.locator('[data-pm-brief-export]');
+  await exports.locator('summary').click();
+  await exports.getByLabel('Report language',{exact:true}).selectOption('en');
+  for (const format of ['markdown','html','svg']) {
+    await exports.getByLabel('File format',{exact:true}).selectOption(format);
+    const exportResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith(`/${brief.snapshot.snapshot_id}/brief-export`));
+    const fileResponse=page.waitForEvent('download');
+    await exports.getByRole('button',{name:'Download report',exact:true}).click();
+    const response=await exportResponse;assert.equal(response.status(),200);
+    const report=await response.json(), file=await fileResponse, bytes=await readFile(await file.path());
+    assert.equal(report.snapshot_id,brief.snapshot.snapshot_id);assert.equal(report.format,format);
+    assert.equal(report.snapshot_digest,brief.snapshot.snapshot_digest);assert.equal(report.view_digest,brief.snapshot.view_digest);
+    assert.equal(bytes.toString('utf8'),report.content);assert.equal(bytes.length,report.byte_length);
+    assert.equal(Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex'),report.output_digest);
+    assert.equal(report.review_completed,false);assert.equal(report.execution_authorized,false);assert.equal(report.published,false);
+  }
   await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(comparison.getByLabel('From version',{exact:true})).toHaveValue(plans.revisions[0].revision_id);
   await expect(comparison.getByLabel('To version',{exact:true})).toHaveValue(updatedPlans.head.latest_revision_id);
@@ -230,7 +253,10 @@ try {
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence and five-section Brief; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads; zero hosts or tasks.');
+} catch(error) {
+  console.error('Synthetic PM fixture state:',await failureDetails().catch(()=>({unavailable:true})));
+  throw error;
 } finally {
   try {await browser?.close();}
   finally {
