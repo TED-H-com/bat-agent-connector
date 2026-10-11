@@ -112,6 +112,13 @@ async def repair_ready(fixed, monkeypatch):
     w, ops = fixed, fixed['d'].ops
     shared_hooks(monkeypatch)
     repairs.install(ops)
+    restart = ops._step_restart
+    def restart_guard(oid, name, selected, *, bookkeeping=False):
+        with ops.journal.tx():
+            if not bookkeeping:
+                repairs.admit_restart(ops, oid, name, selected)
+            return restart(oid, name, selected, bookkeeping=bookkeeping)
+    monkeypatch.setattr(ops, '_step_restart', restart_guard)
     clock = [time.time()]
     w['clock'] = clock
     for module in (repairs, evidence, policy, workload, github, checks, github_sources):
