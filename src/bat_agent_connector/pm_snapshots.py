@@ -70,8 +70,10 @@ def _check(ops, principal, target, params, pre):
     workspace = _member(ops, principal, target.get("workspace_id"), write=True)
     if set(target) != {"workspace_id"}:
         raise _bad("INVALID_TARGET", "Select exactly one workspace")
-    if set(params) - {"title"}:
-        raise _bad("INVALID_PARAMS", "Snapshot facts come from the central journal; only a title may be supplied")
+    if set(params) - {"title", "include_management_views"}:
+        raise _bad("INVALID_PARAMS", "Snapshot facts come from the central journal; select a title and optional fixed management views")
+    if "include_management_views" in params and type(params["include_management_views"]) is not bool:
+        raise _bad("INVALID_PARAMS", "include_management_views must be a boolean")
     if "title" in params:
         pm_workspace._text(params["title"], "title", 200)
     if (set(pre) != {"expected_plan_version"} or type(pre["expected_plan_version"]) is not int
@@ -369,6 +371,9 @@ async def _run(ctx):
         principal = pm_workspace.admitted_principal(ctx)
         workspace, current = _check(ops, principal, ctx.target, ctx.params, ctx.preconditions)
         document = _build(ctx, principal, workspace, current)
+        if ctx.params.get("include_management_views"):
+            from . import pm_snapshot_views
+            pm_snapshot_views.capture(ops, principal, document)
         return _insert(ctx, workspace, document)
 
 
@@ -392,6 +397,10 @@ def _out(ops, principal, row):
         if source["fact_digest"] == evidence["fact_digest"]:
             visible.append(evidence)
     filtered = len(visible) != len(document["evidence"])
+    if "management_views" in document:
+        from . import pm_snapshot_views
+        document["management_views"], view_filtered = pm_snapshot_views.filter_views(ops, principal, document["workspace_id"], document["management_views"])
+        filtered |= view_filtered
     document["evidence"] = visible
     visible_ids = {item["evidence_id"] for item in visible}
     for item in document["work"]:

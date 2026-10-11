@@ -41,13 +41,20 @@ def snapshot_refs(document, snapshot_digest):
     """Flatten snapshot authority; comparisons never recurse through live heads."""
     return unique([ref('snapshot_identity', document['snapshot_id'], snapshot_digest),
         *[ref('evidence', item['evidence_id'], item['fact_digest']) for item in document['evidence']],
-        *((document.get('maintenance') or {}).get('access_refs') or [])])
+        *((document.get('maintenance') or {}).get('access_refs') or []),
+        *[source for view in document.get('management_views', {}).get('views', {}).values()
+          for record in view['records'] for source in record['access_refs']]])
 
 
 def access(ops, principal, wid, references):
     """Authorize exact original identities without substituting current source data."""
     for source in references:
-        kind, ident, expected = source['kind'], source['id'], source['digest']
+        kind = source['kind']
+        if kind in {'operation', 'task', 'command', 'session', 'quality_assessment'}:
+            from . import pm_snapshot_views
+            pm_snapshot_views.access(ops, principal, wid, [source])
+            continue
+        ident, expected = source['id'], source['digest']
         if kind == 'policy':
             actual = policies.fixed_record(ops, principal, wid, ident)['document_digest']
         elif kind == 'baseline':
