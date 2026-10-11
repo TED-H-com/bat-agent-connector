@@ -94,18 +94,20 @@ async def test_replica_projection_keeps_last_copy_when_original_is_unavailable(d
 
 @pytest.mark.parametrize("failure", ["missing", "corrupt", "unchanged"])
 async def test_cleanup_resume_rechecks_original_before_removing_accepted_replica(daemon, mock, monkeypatch, failure):
-    from bat_agent_connector import cleanup
+    from bat_agent_connector import api_auth, cleanup
     from bat_agent_connector.operations import OperationError
     from tests.operation_helpers import settle_operations
-    from tests.test_cleanup import CLEANER, apply
+    from tests.test_artifacts import PERSON
+    from tests.test_cleanup import apply
 
     ref, continuation_op, item = await setup_replica(daemon)
+    cleaner = api_auth.Principal(PERSON.actor, frozenset({"observe", "cleanup"}))
     sid = continuation_op["result"]["session_id"]
     mock.metas[sid]["isStreaming"] = False
     for terminal in mock.ws_doc["terminals"]:
         if mock.metas.get(terminal["id"]) is None:
             mock.metas[terminal["id"]] = {"cwd": terminal["cwd"], "isStreaming": False}
-    doc = await cleanup.preview(daemon.ops, CLEANER, {
+    doc = await cleanup.preview(daemon.ops, cleaner, {
         "kind": "checkpoint", "checkpoint_id": continuation_op["target"]["checkpoint_id"]})
     assert doc["ready"], doc
     accepted = next(row for row in doc["items"] if row["kind"] == "worktree")
@@ -120,7 +122,7 @@ async def test_cleanup_resume_rechecks_original_before_removing_accepted_replica
         return await original_call(ops, host, request, *args, **kwargs)
 
     monkeypatch.setattr(cleanup, "_host_call", hold_remove)
-    paused = await apply(daemon, doc)
+    paused = await apply(daemon, doc, cleaner)
     assert paused["status"] == "needs_attention", paused
     assert remove_attempts
     assert daemon.journal.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? "
@@ -133,7 +135,7 @@ async def test_cleanup_resume_rechecks_original_before_removing_accepted_replica
             original.write_bytes(b"corrupt original")
     monkeypatch.setattr(cleanup, "_host_call", original_call)
     try:
-        daemon.ops.resume(CLEANER, paused["operation_id"])
+        daemon.ops.resume(cleaner, paused["operation_id"])
         await settle_operations(daemon.ops)
         resumed = daemon.ops.get(paused["operation_id"])
         if failure == "unchanged":
