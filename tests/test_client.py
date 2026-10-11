@@ -8,7 +8,7 @@ import json
 import pytest
 
 from bat_agent_connector import channels, registry
-from bat_agent_connector.client import BatClient
+from bat_agent_connector.client import BatClient, _wait_with_timeout
 from bat_agent_connector.config import device_id
 from bat_agent_connector.errors import (
     AuthError,
@@ -72,6 +72,50 @@ async def test_auth_v2_and_ping(mock):
     auth = mock.auth_frames[0]
     assert auth["protocols"] == ["bat-remote/v2"]
     assert auth["clientInfo"]["deviceId"] == "dev-test"
+
+
+async def test_reply_and_cancellation_in_same_loop_turn_preserve_cancellation(mock):
+    client = client_for(mock)
+    loop = asyncio.get_running_loop()
+    client._reader = loop.create_future()
+
+    class ReplySocket:
+        async def send(self, encoded):
+            frame = json.loads(encoded)
+            reply = client._pending[frame["id"]]
+            caller = asyncio.current_task()
+
+            def complete_and_cancel():
+                reply.set_result({"type": "invoke-result", "result": {"isStreaming": True}})
+                caller.cancel()
+
+            loop.call_soon(complete_and_cancel)
+
+    client._ws = ReplySocket()
+    request = asyncio.create_task(client._roundtrip(
+        {"id": "cancel-race", "type": "invoke", "channel": "claude:get-session-meta"}, 30))
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await request
+        assert not client._pending
+    finally:
+        client._reader.cancel()
+        client._reader = client._ws = None
+
+
+async def test_transport_deadline_cancels_and_joins_its_owned_wait():
+    entered, released = asyncio.Event(), asyncio.Event()
+
+    async def wait():
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            released.set()
+
+    with pytest.raises(asyncio.TimeoutError):
+        await _wait_with_timeout(wait(), .01)
+    assert entered.is_set() and released.is_set()
 
 
 async def test_transport_guard_runs_after_awaited_connect_before_send_frame(mock, client_send_grant):
