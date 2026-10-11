@@ -152,7 +152,8 @@ def test_warm_reuse_rechecks_controller_before_task_transfer(identities):
         registry.update("h1", "warm", status="active")
     before = registry.registry_path().read_bytes()
     params = {"previous_task_id": "before", "task_id": "after", "workspace_id": "bat-workspace",
-              "cwd": entry["cwd"], "branch": entry["branch"]}
+              "cwd": entry["cwd"], "branch": entry["branch"],
+              "expected_incarnation": registry.get("h1", "warm")["controller_incarnation"]}
     with authority.use(second, journal), pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
         registry.claim_warm("h1", "warm", **params)
     assert registry.registry_path().read_bytes() == before
@@ -160,6 +161,31 @@ def test_warm_reuse_rechecks_controller_before_task_transfer(identities):
         registry.claim_warm("h1", "warm", **params)
     assert registry.get("h1", "warm")["task_id"] == "after"
     assert registry.get("h1", "warm")["controller_authority"] == first
+
+
+@pytest.mark.parametrize("missing_proof", [False, True])
+def test_warm_reuse_cannot_claim_replacement_with_matching_task_fields(identities, monkeypatch, missing_proof):
+    journal, first, _second = identities
+    entry = {"session_id": "warm", "task_id": "before", "role": "lead", "workspace_id": "bat-workspace",
+             "cwd": "/srv/managed/work", "worktree_path": "/srv/managed/work", "branch": "bat/task"}
+    with authority.use(first, journal):
+        registry.reserve("h1", entry, 8)
+        registry.update("h1", "warm", status="active")
+        inspected = registry.get("h1", "warm")
+    replacement = {**inspected, "controller_incarnation": "0" * 32}
+    assert replacement["controller_incarnation"] != inspected["controller_incarnation"]
+    platform_files.atomic_write(registry.registry_path(), json.dumps({"sessions": [replacement]}).encode())
+    before = registry.registry_path().read_bytes()
+
+    # The decision must use the flock-protected row, never a second unlocked lookup.
+    monkeypatch.setattr(registry, "get", lambda *_args: inspected)
+    expected = None if missing_proof else inspected["controller_incarnation"]
+    code = "CONTROLLER_OWNER_UNPROVEN" if missing_proof else "CONTROLLER_INCARNATION_CHANGED"
+    with authority.use(first, journal), pytest.raises(ResourceReadOnly, match=code):
+        registry.claim_warm("h1", "warm", previous_task_id="before", task_id="after",
+                            workspace_id="bat-workspace", cwd=entry["cwd"], branch=entry["branch"],
+                            expected_incarnation=expected)
+    assert registry.registry_path().read_bytes() == before
 
 
 async def test_pm_scope_checks_current_membership_without_workspace_adoption(tmp_path):

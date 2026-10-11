@@ -163,7 +163,7 @@ def test_b01_warm_claim_keeps_creation_markers_and_identity(marker, controller_c
     before = registry.get("h1", "root")
     intent = registry_worktree_intent([before], "h1", "root")
     registry.claim_warm("h1", "root", previous_task_id="old", task_id="new", workspace_id="ws",
-                        cwd="/srv/wt", branch=before["branch"])
+                        cwd="/srv/wt", branch=before["branch"], expected_incarnation=before["controller_incarnation"])
     after = registry.get("h1", "root")
     assert after["task_id"] == "new" and after["warm_from_task_id"] == "old"
     for key in ("worktree_made_by", "checkpoint_id", "integration_operation_id", "branch", "created_at", "worktree_path"):

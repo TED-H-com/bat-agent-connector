@@ -621,9 +621,9 @@ def retire(host: str, session_id: str, status: str, *, created_at, actor: str, r
 
 
 def claim_warm(host: str, session_id: str, *, previous_task_id: str, task_id: str,
-               workspace_id: str, cwd: str, branch: str) -> None:
-    """Transfer one completed task's lead session under the registry flock."""
-    from .errors import TaskIdentityMismatch
+               workspace_id: str, cwd: str, branch: str, expected_incarnation: str) -> None:
+    """Transfer the exact lead incarnation inspected before asynchronous host reads."""
+    from .errors import ResourceReadOnly, TaskIdentityMismatch
 
     p = registry_path()
     with _locked(p):
@@ -640,7 +640,9 @@ def claim_warm(host: str, session_id: str, *, previous_task_id: str, task_id: st
                        and e.get("status") in {"active", "starting"} for e in items)):
             raise TaskIdentityMismatch("warm session ownership changed before claim")
         from . import controller_authority
-        controller_authority.require_entry(matches[0])
+        if expected_incarnation is None:
+            raise ResourceReadOnly("CONTROLLER_OWNER_UNPROVEN", "Warm reuse requires original incarnation evidence")
+        controller_authority.require_entry(matches[0], expected_incarnation=expected_incarnation)
         matches[0].update(task_id=task_id, title="task " + task_id[:8],
                           warm_from_task_id=previous_task_id, updated_at=time.time())
         _write(p, items)

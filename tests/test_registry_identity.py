@@ -127,7 +127,8 @@ def test_a10_registry_duplicate_identity_fails_loudly_without_changes(reader):
             registry.ensure_existing("h1", row)
         else:
             registry.claim_warm("h1", "duplicate-id", previous_task_id="before", task_id="after",
-                                workspace_id="ws-1", cwd="/srv/demo", branch="fixture-branch")
+                                workspace_id="ws-1", cwd="/srv/demo", branch="fixture-branch",
+                                expected_incarnation="0" * 32)
     assert path.read_bytes() == before
 
 
@@ -172,7 +173,8 @@ async def test_a10_start_failover_recovery_and_warm_claim_preserve_unique_rows(f
         registry.update("h1", successor, task_id="previous-task", role="lead")
         row = registry.get("h1", successor)
         registry.claim_warm("h1", successor, previous_task_id="previous-task", task_id="next-task",
-                            workspace_id=row["workspace_id"], cwd=row["cwd"], branch=row["branch"])
+                            workspace_id=row["workspace_id"], cwd=row["cwd"], branch=row["branch"],
+                            expected_incarnation=row["controller_incarnation"])
         assert len(unique_rows()) == 2 and registry.get("h1", successor)["task_id"] == "next-task"
     finally:
         await fleet.close()
