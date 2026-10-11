@@ -4432,10 +4432,19 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		return data;
 	};
 	const can = (decide) => loaded && permitted(decide);
+	const forms = new Set();
+	const track = (value) => {
+		forms.add(value);
+		return value;
+	};
+	function updateForms() {
+		for (const value of forms) if (!value.box.isConnected) forms.delete(value);
+		else value.update();
+	}
 	function bindingForm(action, target, preconditions, label, extraParams = {}, alreadyBound = false) {
 		const rationale = input("pm_evidence_rationale", { max: 4e3 });
 		let result;
-		result = form({
+		result = track(form({
 			action,
 			target: {
 				workspace_id: workspaceId,
@@ -4455,7 +4464,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				if (result) result.box.hidden = alreadyBound && !result.locked();
 			},
 			extra: labelled("pm_evidence_rationale", rationale)
-		});
+		}));
 		result.update();
 		return result;
 	}
@@ -4561,7 +4570,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 							choices.append(h("label", {}, checkbox, requirement.text));
 						}
 					};
-					bind = form({
+					bind = track(form({
 						action: "pm.work.bind",
 						target: {
 							workspace_id: workspaceId,
@@ -4586,7 +4595,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 						onSaved: () => refresh(),
 						onStateChange: showRequirements,
 						extra: h("div", {}, labelled("pm_evidence_rationale", rationale), labelled("pm_evidence_plan_choice", planId), selectedIds, choices)
-					});
+					}));
 					planId.addEventListener("change", () => {
 						if (bind.locked()) return;
 						selectedIds.value = "[]";
@@ -4603,7 +4612,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			detail.append(h("p", { class: "muted" }, t(binding.plan_revision_id ? "pm_evidence_fixed_plan" : "pm_evidence_no_plan")));
 			if (binding.plan_revision_id) detail.append(h("code", {}, binding.plan_revision_id), h("p", {}, (binding.requirement_ids || []).join(", ")));
 			const holder = h("div");
-			const capture = form({
+			const capture = track(form({
 				action: "pm.evidence.capture",
 				target: {
 					workspace_id: workspaceId,
@@ -4615,7 +4624,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				permitted: () => can(false),
 				label: "pm_evidence_capture",
 				onSaved: () => loadEvidence(item, holder)
-			});
+			}));
 			detail.append(capture.box, holder);
 			try {
 				await loadEvidence(item, holder);
@@ -4628,6 +4637,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 	async function loadProject() {
 		const ticket = ++generation;
 		loaded = false;
+		updateForms();
 		status.replaceChildren();
 		if (!selected) {
 			rows.replaceChildren();
@@ -4645,7 +4655,10 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				workBindings
 			]);
 			loaded = true;
-			if (active?.signature === signature) return;
+			if (active?.signature === signature) {
+				updateForms();
+				return;
+			}
 			active = { signature };
 			rows.replaceChildren();
 			const bound = bindings.some((row) => row.project_id === selected);
@@ -4677,6 +4690,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 	async function refresh() {
 		const ticket = ++generation;
 		loaded = false;
+		updateForms();
 		try {
 			const [catalog, associated, work] = await Promise.all([
 				api("GET", "/projects"),
@@ -5509,6 +5523,7 @@ var threadDisclosureSelectors = [
 	"[data-pm-note-only]",
 	"[data-pm-prepare-context]"
 ];
+var receiptSubscribers = new Map();
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
 function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
@@ -5561,6 +5576,20 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		input.addEventListener("change", changed);
 	}
 	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
+	const receiveReceipt = () => {
+		if (disposed || damaged || !saved.intent) return;
+		try {
+			guard();
+			const stored = JSON.parse(localStorage.getItem(storage));
+			if (stored?.intent?.key !== saved.intent.key || !same$3(stored.intent.request, saved.intent.request) || !/^op_[0-9a-f]{32}$/.test(stored.intent.operation_id) || saved.intent.operation_id && saved.intent.operation_id !== stored.intent.operation_id) return;
+			saved.intent.operation_id = stored.intent.operation_id;
+			receiptPolling = true;
+			update();
+		} catch {}
+	};
+	const subscribers = receiptSubscribers.get(storage) || new Set();
+	subscribers.add(receiveReceipt);
+	receiptSubscribers.set(storage, subscribers);
 	const terminal = () => ["failed", "cancelled"].includes(operation?.status);
 	const reset = h("button", {
 		type: "button",
@@ -5653,21 +5682,32 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				firstAttempt = true;
 			}
 			update();
-			const intent = saved.intent;
+			const intent = saved.intent, actor = caps()?.actor;
 			persist();
-			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
+			let collected = false;
+			const collectReceipt = (data) => {
+				if (collected) return;
+				const op = data.operation;
+				if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== actor || op.idempotency_key !== intent.key || !same$3({
+					action: op.action,
+					target: op.target,
+					params: op.params,
+					preconditions: op.preconditions
+				}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+				const stored = JSON.parse(localStorage.getItem(storage));
+				if (stored?.intent?.key === intent.key && same$3(stored.intent.request, intent.request)) {
+					if (stored.intent.operation_id && stored.intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
+					stored.intent.operation_id = op.operation_id;
+					localStorage.setItem(storage, JSON.stringify(stored));
+					for (const notify of receiptSubscribers.get(storage) || []) notify();
+				}
+				collected = true;
+			};
+			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`, void 0, void 0, collectReceipt) : await api("POST", "/operations?wait=3", intent.request, intent.key, collectReceipt);
+			collectReceipt(data);
 			guard();
-			if (disposed || !allowed()) {
-				receiptPolling = false;
-				return;
-			}
+			if (disposed || !allowed()) return;
 			const op = data.operation;
-			if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key || !same$3({
-				action: op.action,
-				target: op.target,
-				params: op.params,
-				preconditions: op.preconditions
-			}, intent.request) || intent.operation_id && intent.operation_id !== op.operation_id) throw Error(t("pm_receipt_mismatch"));
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
@@ -5685,6 +5725,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
 			receiptPolling = false;
+			if (disposed) return;
+			try {
+				guard();
+			} catch {
+				return;
+			}
 			if (!retired(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
@@ -5712,6 +5758,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			disposed = true;
 			receiptPolling = false;
 			stopTimer();
+			subscribers.delete(receiveReceipt);
+			if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
 		},
 		set: (name, value) => {
 			if (!busy && !saved.intent && !damaged) {
@@ -20890,11 +20938,12 @@ var ApiError = class extends Error {
 		this.code = code;
 	}
 };
-async function api(method, path, body, key) {
+async function api(method, path, body, key, collectReceipt) {
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
 	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
 	const epoch = state.epoch;
 	const { status, data } = await connectorRequest(method, path, body, key, state.token);
+	if (status >= 200 && status < 300) collectReceipt?.(data);
 	if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
 	if (status < 200 || status >= 300) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
