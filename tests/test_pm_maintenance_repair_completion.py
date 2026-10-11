@@ -35,14 +35,19 @@ from tests.test_pm_maintenance_repair_runtime import (  # noqa: F401
 from tests.test_pm_maintenance_repair_runtime import (
     observe,
 )
+from tests.test_pm_maintenance_repair_runtime import (
+    original_native_agent as original_native_agent_fixture,
+)
 from tests.test_pm_release_baselines import remove_repo
 
 ready_chain = ready_chain_fixture
 native_replay = native_replay_fixture
+original_native_agent = original_native_agent_fixture
 
 
 async def test_deployment_baseline_completion_and_fixed_review_share_original_receipts(ready_chain, native_replay, monkeypatch, mock):
     w, ops = ready_chain, ready_chain['d'].ops
+    assert runtime.origin(ops, w['parent'])['confinement']['evidence']['agent'] == 'codex'
     monkeypatch.setattr(runtime, 'time', SimpleNamespace(time=lambda: w['clock'][0]))
     native_replay['reason'] = 'completed'
     parent = await finish_deployment(w)
