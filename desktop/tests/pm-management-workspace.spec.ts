@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
-import {pmFixture,workspaceId} from './pm-fixture.ts';
+import {pmFixture,workspaceId,pmRoute} from './pm-fixture.ts';
 import {fixture as sprintFixture,actions,pid} from './pm-sprint-fixture.ts';
 import {fixture as kanbanFixture,workId} from './pm-kanban-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
@@ -15,9 +15,10 @@ function fixture(){
   Object.assign(context,{sprint_version:current.version,sprint_status:current.status,sprint_definition:structuredClone(current.definition),
     sprint_goal:structuredClone(current.goal),selected_items:structuredClone(current.selected),artifacts:structuredClone(sprint.state.artifacts)});
   delete context.artifacts.workspace_id;
-  let eventType='pm_workspace',accessVersion=0,failBootstrap=false;
+  let eventType='pm_workspace',accessVersion=0,failBootstrap=false,bootstrapReads=0;
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),path=url.pathname;
+    if(path==='/bootstrap')bootstrapReads++;
     if(path==='/bootstrap'&&failBootstrap)return {status:503,data:{error:{code:'UNAVAILABLE',message:'Bootstrap unavailable'}}};
     if(path==='/events'&&!url.searchParams.get('checkpoint')?.startsWith(`pm-access-${accessVersion}-`))return {status:409,data:{error:{code:'EVENT_CURSOR_RESET',reason:'access_changed',preserve_drafts:true}}};
     if(path==='/bootstrap'||path==='/capabilities'){
@@ -36,10 +37,19 @@ function fixture(){
     if(path===prefix&&!base.state.failRead){const result=await base.dispatch(input);result.data.workspace.members=[{actor:'reader',role:'owner'},{actor:'developer',role:'contributor'}];return result;}
     return base.dispatch(input);
   };
-  return{base,sprint,kanban,meetings,dispatch,publish:(kind:string)=>{eventType=kind;base.state.cursor++;},changeAccess:()=>accessVersion++,bootstrapFailure:(value:boolean)=>{failBootstrap=value;}};
+  return{base,sprint,kanban,meetings,dispatch,publish:(kind:string)=>{eventType=kind;base.state.cursor++;},changeAccess:()=>accessVersion++,bootstrapFailure:(value:boolean)=>{failBootstrap=value;},bootstrapReads:()=>bootstrapReads};
 }
 const route=`/dashboard/#/pm/${workspaceId}`;
 for(const native of [false,true])test.describe(native?'native management workspace':'web management workspace',()=>{
+  test('access revalidation keeps an open discussion input usable without exposing old facts',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const fold=page.locator('[data-pm-add-input]');await fold.locator('summary').click();
+    const statement=fold.getByLabel('Statement or question',{exact:true});await statement.fill('Keep an unsubmitted research question');
+    const before=f.bootstrapReads();f.changeAccess();
+    await expect.poll(f.bootstrapReads,{timeout:10000}).toBeGreaterThan(before);
+    await expect(statement).toBeVisible();await expect(statement).toBeEnabled();
+    await expect(statement).toHaveValue('Keep an unsubmitted research question');expect(f.base.state.writes).toHaveLength(0);
+  });
   test('work and Sprint remain on one page with no repeated delivery count',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(page.locator('[data-pm-kanban]')).toHaveCount(1);await expect(page.locator('[data-pm-sprints]')).toHaveCount(1);await expect(page.locator('[data-pm-meetings]')).toHaveCount(1);
