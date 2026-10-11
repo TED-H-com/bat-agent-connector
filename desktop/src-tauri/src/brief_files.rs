@@ -456,7 +456,10 @@ mod tests {
     impl Drop for Peer {
         fn drop(&mut self) {
             if let Some(worker) = self.thread.take() {
-                worker.join().unwrap();
+                let result = worker.join();
+                if !thread::panicking() {
+                    result.expect("Brief fixture peer failed");
+                }
             }
         }
     }
@@ -487,6 +490,9 @@ mod tests {
                         Err(error) => panic!("{error}"),
                     }
                 };
+                // Accepted sockets inherit nonblocking mode on Windows. Only
+                // accept is polled; the bounded HTTP read below is blocking.
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(3)))
                     .unwrap();
