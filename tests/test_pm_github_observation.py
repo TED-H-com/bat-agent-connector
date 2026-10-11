@@ -401,3 +401,25 @@ async def test_clock_reversal_between_original_page_receipts_is_incomplete(ops, 
     assert doc['evidence']['status'] == 'incomplete'
     assert doc['evidence']['reason'] == 'observation_clock_changed'
     assert len(gh.reads) == 2
+
+
+@pytest.mark.parametrize('kind', ['github', 'workload'])
+async def test_final_null_cursor_boundary_returns_fitting_whole_prefix(ops, monkeypatch, kind):
+    data = await prepared(ops, monkeypatch)
+    if kind == 'github':
+        await observe(ops, data)
+        await observe(ops, data)
+        module, listing, field = observation, observation.list_observations, 'observations'
+    else:
+        await worktests.capture(ops, data)
+        await worktests.capture(ops, data)
+        module, listing, field = workload, workload.list_snapshots, 'snapshots'
+    complete = listing(ops, OWNER, data['workspace_id'])
+    assert complete['next_cursor'] is None and len(complete[field]) == 2
+    maximum = module._size(complete) - 2
+    monkeypatch.setattr(module, 'MAX_READ_BYTES', maximum)
+    prefix = listing(ops, OWNER, data['workspace_id'])
+    assert len(prefix[field]) == 1 and prefix['next_cursor'] is not None
+    assert module._size(prefix) <= maximum
+    final = listing(ops, OWNER, data['workspace_id'], after=prefix['next_cursor'])
+    assert len(final[field]) == 1 and final['next_cursor'] is None
