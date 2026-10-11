@@ -521,9 +521,9 @@ available while Paused or Closed and does not restart work.
 
 Capture reads saved central evidence only. It does not refresh providers, certify
 DoD, resolve uncertain effects, release worktrees, control another session or
-authorize automatic maintenance. The repository-wide GitHub coverage gap stays
-unknown unless a separately adopted, explicitly bounded observation profile is
-satisfied. No caller field can assert idle, completeness, freshness or controller
+authorize automatic maintenance. Repository-wide policies retain an unknown
+GitHub coverage gap. Only a separately adopted exact profile may use its matching
+provider evidence. No caller field can assert idle, completeness, freshness or controller
 authority. A completed observation is evidence to review, not a dispatch request.
 
 ### Observe the adopted GitHub workload profile
