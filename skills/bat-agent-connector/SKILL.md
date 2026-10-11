@@ -561,6 +561,26 @@ authorizes maintenance, repairs, publication, merge or deployment.
 
 ### Fixed maintenance repairs and accountable quality reviews
 
+For a standalone owned PM engineering execution, first read
+`pm_execution_verification_configuration` with its exact workspace and original
+`execution_operation_id`. `pm.execution.verify` needs observe/operate and the
+original controller; it fixes candidate/tree, configured `command_digest` and
+`handoff_contract_digest`. It runs only the administrator's registered argv and
+does not create a Task or session. Read `pm_execution_verification_get` for the
+original outcome. Its `observed_runner_v1` reference is exactly
+`{verification_operation_id,candidate_commit,tree_hash}`. An unknown original
+process is never retried as a fresh verification. Passing verification is separate
+from responsible requirement acceptance and Definition of Done review.
+
+`github.pr.publish` creates one private publication operation from an original owned
+PM handoff. It needs observe/manage/integrate and current source/controller authority.
+Select exact candidate/base identities and explicitly reviewed public title/body;
+an optional original quality assessment is rechecked before a new effect. Its new
+branch uses an empty-ref lease. Only the original HTTP 201 native PR receipt proves
+creation ownership; a matching branch or later GET does not. After an uncertain
+push/POST, retain the original operation/key and use `pm_pr_publication_get` to
+read its receipt and recovery state. Never submit a second PR to repair uncertainty.
+
 Quality-aware evidence capture may explicitly include `params.quality_ref`;
 Sprint close/cancel may include `params.quality_refs` keyed by selected WorkItem.
 Each exact selector is `{review_id,operation_id,version,document_digest,candidate_commit}`

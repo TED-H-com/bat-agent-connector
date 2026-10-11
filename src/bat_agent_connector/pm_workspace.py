@@ -140,6 +140,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.quality.review.'):
         from .pm_quality_reviews import operation_visible as quality_visible
         return quality_visible(db, principal, op)
+    if op['action'] == 'pm.execution.verify':
+        from .pm_execution_verification import operation_visible as verification_visible
+        return verification_visible(db, principal, op)
     if op['action'].startswith('pm.work_batch.'):
         from .pm_work_batches import operation_visible as batch_visible
         return batch_visible(db, principal, op)

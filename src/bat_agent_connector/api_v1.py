@@ -124,6 +124,7 @@ class ApiV1:
         from . import (
             pm_discussions,
             pm_evidence,
+            pm_execution_verification,
             pm_follow_up,
             pm_follow_up_analysis,
             pm_github_observation,
@@ -176,6 +177,7 @@ class ApiV1:
         pm_maintenance_review.install(daemon.ops)
         pm_maintenance_repairs.install(daemon.ops)
         pm_quality_reviews.install(daemon.ops)
+        pm_execution_verification.install(daemon.ops)
         from . import pr_publication
         pr_publication.install(daemon.ops)
         from .session_observation import SessionObservation
@@ -246,6 +248,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs", self.pm_maintenance_repairs, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs/current", self.pm_maintenance_repair_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-repairs/(?P<repair_id>pmrp_[0-9a-f]{32})", self.pm_maintenance_repair, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/executions/(?P<execution_operation_id>op_[0-9a-f]{32})/verification-config", self.pm_execution_verification_configuration, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/execution-verifications/(?P<verification_operation_id>op_[0-9a-f]{32})", self.pm_execution_verification_get, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/pr-publications/(?P<publication_operation_id>op_[0-9a-f]{32})", self.pm_pr_publication, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews", self.pm_quality_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/quality-reviews/(?P<review_id>pmqr_[0-9a-f]{32})", self.pm_quality_review, "observe"),
@@ -487,6 +491,7 @@ class ApiV1:
                       self.pm_brief_export, self.pm_work_deliveries,
                       self.pm_lifecycle, self.pm_lifecycle_transitions, self.pm_lifecycle_transition, self.pm_lifecycle_inflight,
                       self.pm_issue_mappings, self.pm_issue_mapping,
+                      self.pm_execution_verification_configuration, self.pm_execution_verification_get,
                       self.pm_maintenance_repairs, self.pm_maintenance_repair_current, self.pm_maintenance_repair, self.pm_quality_reviews, self.pm_quality_review, self.pm_work_quality, self.pm_pr_publication,
                       self.pm_work_batches, self.pm_work_batch, self.pm_maintenance_findings_current,
                       self.pm_spec_materializations, self.pm_spec_materialization,
@@ -808,6 +813,18 @@ class ApiV1:
     async def pm_maintenance_repair(self, principal, query, workspace_id, repair_id, **_):
         return self._pm_read(principal, "pm_maintenance_repair_get", query, workspace_id=workspace_id, repair_id=repair_id)
 
+    async def pm_execution_verification_configuration(self, principal, query, workspace_id, execution_operation_id, **_):
+        from .pm_execution_reads import read
+        self._exact_query(query, set())
+        return 200, await read(self.daemon.ops, principal, 'pm_execution_verification_configuration',
+            {'workspace_id': workspace_id, 'execution_operation_id': execution_operation_id})
+
+    async def pm_execution_verification_get(self, principal, query, workspace_id, verification_operation_id, **_):
+        from .pm_execution_reads import read
+        self._exact_query(query, set())
+        return 200, await read(self.daemon.ops, principal, 'pm_execution_verification_get',
+            {'workspace_id': workspace_id, 'verification_operation_id': verification_operation_id})
+
     async def pm_pr_publication(self, principal, query, workspace_id, publication_operation_id, **_):
         return self._pm_read(principal, 'pm_pr_publication_get', query, workspace_id=workspace_id, publication_operation_id=publication_operation_id)
 
@@ -977,6 +994,7 @@ class ApiV1:
         from . import pm_github_observation, pm_lifecycle
         fleet = self.daemon.fleet
         from . import (
+            pm_execution_verification,
             pm_maintenance_checks,
             pm_maintenance_policy,
             pm_maintenance_repairs,
@@ -993,6 +1011,7 @@ class ApiV1:
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
+                               and (a.name != pm_execution_verification.ACTION or all(principal.allows(s) for s in pm_execution_verification.REQUIRED))
                                and (a.name != pr_publication.ACTION or all(principal.allows(s) for s in pr_publication.REQUIRED))
                                and (a.name != "pm.maintenance.repair" or principal.allows("observe") and principal.allows("manage"))
                                and (a.name not in {"pm.maintenance.repair.evidence.record", *pm_quality_reviews.ACTIONS} or principal.allows("observe"))
@@ -1050,6 +1069,7 @@ class ApiV1:
                                                     "maintenance_checks": pm_maintenance_checks.capabilities(self.daemon.ops),
                                                     "maintenance_review": pm_maintenance_review.capabilities(),
                                                     "maintenance_repairs": pm_maintenance_repairs.capabilities(self.daemon.ops),
+                                                    "execution_verification": pm_execution_verification.capabilities(),
                                                     "quality_reviews": pm_quality_reviews.capabilities(),
                                                     "pr_publication": pr_publication.capabilities(),
                                                     "engineering_delivery": {"contract": "pm-engineering-delivery/v1", "read_only": True},

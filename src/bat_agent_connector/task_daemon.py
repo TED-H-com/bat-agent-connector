@@ -80,6 +80,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
            "pm_governance_list": "observe", "pm_governance_get": "observe", "pm_governance_history_list": "observe",
            "pm_work_deliveries_list": "observe",
+           "pm_execution_verification_configuration": "observe", "pm_execution_verification_get": "observe",
            "pm_maintenance_repairs_list": "observe", "pm_maintenance_repair_current_get": "observe", "pm_maintenance_repair_get": "observe", "pm_quality_reviews_list": "observe", "pm_quality_review_get": "observe", "pm_work_quality_get": "observe", "pm_pr_publication_get": "observe",
            "pm_work_batches_list": "observe", "pm_work_batch_get": "observe", "pm_maintenance_findings_current_get": "observe",
            "pm_spec_materializations_list": "observe", "pm_spec_materialization_get": "observe",
@@ -315,6 +316,9 @@ class TaskDaemon:
             return await read(self.ops, principal, method, params)
         if method in {"pm_spec_sources_get", "pm_spec_source_capabilities_get"}:
             from .pm_spec_reads import read
+            return await read(self.ops, principal, method, params)
+        if method in {"pm_execution_verification_configuration", "pm_execution_verification_get"}:
+            from .pm_execution_reads import read
             return await read(self.ops, principal, method, params)
         if method.startswith("pm_"):
             from .pm_reads import read
