@@ -174,3 +174,34 @@ async def test_mcp_selected_package_is_assigned_by_the_existing_command(fixed, m
         assert op["operation_id"] in replay and mock.channels().count("claude:send-message") == 1
     finally:
         await fleet.close()
+
+
+@pytest.mark.parametrize("action", ["session.read", "session.position"])
+async def test_paused_reading_records_keep_source_policy_and_replay_identity(dispatched, action):
+    from bat_agent_connector import pm_lifecycle_gates, session_reading
+    from tests.test_pm_lifecycle import decide
+    w, d = dispatched, dispatched["d"]
+    target = {"host": "h1", "session_id": w["sid"]}
+    messages = [{"id": "fixed-output", "role": "assistant", "text": "Original selected work"}]
+    doc = session_reading.observe(d.journal, w["person"], {**target, "messages": messages,
+        "_reading_index": session_reading.index_messages(messages, complete=True)})
+    message = doc["messages"][0]
+    receipt = {"message_id": message["id"], "revision": message["reading"]["revision"]}
+    await decide(d.ops, w["workspace_id"], who=OWNER)
+    envelope = {"action": action, "target": target, "params": {"messages": [receipt]} if action == "session.read" else {**receipt, "offset": 25},
+        "preconditions": {} if action == "session.read" else {"expected_version": 0}, "idempotency_key": "paused-observation"}
+    op, _ = d.ops.create(w["person"], **envelope)
+    await settle_operations(d.ops)
+    done = d.ops.get(op["operation_id"])
+    assert done["status"] == "succeeded", done
+    assert pm_lifecycle_gates.operation_binding(d.ops.db, op["operation_id"])["kind"] == "record"
+    replay, created = d.ops.create(w["person"], **envelope)
+    assert not created and replay["operation_id"] == op["operation_id"]
+    # The record exception never permits starting an external step.
+    with pytest.raises(OperationError) as caught:
+        d.ops._step_start(op["operation_id"], "unexpected.external", {})
+    assert caught.value.code == "PM_LIFECYCLE_STOPPED"
+    revoke(w)
+    with pytest.raises(OperationError) as caught:
+        d.ops.create(w["person"], **envelope)
+    assert caught.value.code == "NOT_FOUND"

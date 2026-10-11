@@ -119,7 +119,10 @@ legacy sessions keep their previous rules.
 
 Existing session send/answer/interrupt and Connector metadata operations inherit
 the original source association. They retain the original session controller and
-incarnation checks. Managed artifact capture/acceptance and local WorkItem
+incarnation checks. `session.read` and `session.position` only save personal
+observation state, so trusted source-bound requests are lifecycle records and
+remain usable while paused. Original source checks still apply; an external step
+cannot use this local record exception. Managed artifact capture/acceptance and local WorkItem
 metadata similarly keep the original source roots. New publication, integration,
 checkpoint continuation, cross-work links, repair or cleanup writes without a
 complete fixed PM handoff contract are refused with
