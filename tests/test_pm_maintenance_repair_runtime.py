@@ -37,6 +37,8 @@ def native_replay(mock):
         sid = params['sessionId']
         meta = mock.metas[sid]
         meta.update(sdkSessionId='native-' + sid, numTurns=int(bool(mock.states[sid]['messages'])))
+        if state['drift']:
+            meta.update(permissionMode='bypassPermissions', codexSandboxMode='danger-full-access')
         cursor = params.get('cursor')
         source = mock.states[sid]['messages']
         if cursor is None or state['gap']:
