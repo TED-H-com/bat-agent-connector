@@ -165,7 +165,7 @@ async def _run(ctx):
             from . import pm_maintenance_findings
             refs = pm_maintenance_findings.attach_work(ctx.service, principal, ctx.target['workspace_id'], evidence['maintenance_sources'])
             additions['finding_work_sources'] = refs
-            if any(source['status'] == 'incomplete' for source in evidence['maintenance_sources'].values()):
+            if evidence['status'] == 'complete' and any(source['status'] == 'incomplete' for source in evidence['maintenance_sources'].values()):
                 evidence.update(status='incomplete', reason='configured_source_incomplete')
         document = {'schema_version': 1, 'observation_id': oid, 'workspace_id': ctx.target['workspace_id'],
             'profile': provider.PROFILE, 'scope': intent['scope'], 'as_of': start['started_at'], 'finished_at': now,
