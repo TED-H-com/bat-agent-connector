@@ -201,8 +201,10 @@ async def test_a05_legacy_keys_remain_actor_scoped(daemon, mock):
     adopt(SID)
     first = await legacy(daemon, idempotency_key="shared")
     principal = api_auth.Principal("other", frozenset({"operate"}))
+    mock.metas["sess-codex-0002"]["cwd"] = "/srv/other"
+    next(t for t in mock.ws_doc["terminals"] if t["id"] == "sess-codex-0002")["cwd"] = "/srv/other"
     with controller_scope(daemon.journal, principal):
-        adopt("sess-codex-0002", agent_preset="codex-agent")
+        adopt("sess-codex-0002", agent_preset="codex-agent", cwd="/srv/other")
     other = await daemon.call_api("session_interrupt", arguments(session_id="sess-codex-0002", idempotency_key="shared"),
                                   principal)
     assert first["operation_id"] != other["operation_id"] and len(api.write_frames(mock)) == 2

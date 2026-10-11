@@ -486,7 +486,7 @@ class Inventory:
                       project_id: list[str] | str | None = None, work_item_id: str | None = None,
                       execution_id: str | None = None, provider: str | None = None, has_tab: bool | None = None,
                       loaded: bool | None = None, streaming: bool | None = None, lifecycle: str | None = None,
-                      stale: bool | None = None, relation_scope: str = "history") -> dict:
+                      stale: bool | None = None, relation_scope: str = "history", principal=None) -> dict:
         """Keyset-paged inventory. Page 1 returns ``as_of`` (the event cursor at read time); follow
         /api/v1/events?after=as_of for changes instead of re-listing."""
         if order not in {"activity", "id"}:
@@ -507,6 +507,9 @@ class Inventory:
                    "work_item_id": work_item_id, "execution_id": execution_id, "provider": provider,
                    "has_tab": has_tab, "loaded": loaded, "streaming": streaming, "lifecycle": lifecycle,
                    "stale": stale, "relation_scope": relation_scope}
+        if principal is not None:
+            from .controller_authority import binding
+            filters["controller_id"] = binding(self.db, principal)["controller_id"]
         fhash = hashlib.sha256(json.dumps(filters, sort_keys=True).encode()).hexdigest()[:16]
         key, as_of = None, None
         if cursor is not None:
@@ -518,7 +521,7 @@ class Inventory:
         configured = list(self.config.hosts) or [""]  # rows of hosts removed from the config are not listed
         sql = f"SELECT * FROM sessions_observed WHERE host IN ({','.join('?' * len(configured))})"  # noqa: S608
         args = list(configured)
-        for column, value in (("host", host), ("provenance", provenance), ("api_access", api_access)):
+        for column, value in (("host", host), ("provenance", provenance), ("api_access", api_access if principal is None else None)):
             if value:
                 sql, args = sql + f" AND {column}=?", [*args, value]  # fixed identifiers only
         if attention is not None:
@@ -547,6 +550,9 @@ class Inventory:
         membership = self._memberships(relation_scope) if projects or work_item_id else {}
         for r in rows:
             item = self.get_session(r["host"], r["session_id"], now) if r.get("journal_only") else self._session_out(r, hosts, now)
+            if principal is not None:
+                from .session_reading import access
+                item = access(self.journal, principal, item)
             rid = item["resource_id"]
             wi_refs = membership.get(rid, [])
             relations = [rel for rel in item["relations"] if relation_scope == "history" or rel["status"] != "closed"]

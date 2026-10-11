@@ -485,8 +485,13 @@ async def test_legacy_control_key_namespace_keeps_original_actor(daemon, mock, k
     results = []
     for actor, sid in (("one", SID), ("two", "sess-codex-0002")):
         principal = api_auth.Principal(actor, frozenset({"operate"}))
+        cwd = "/srv/other" if actor == "two" else "/srv/demo"
+        mock.metas[sid]["cwd"] = cwd
+        mock.metas[sid]["isStreaming"] = False
+        mock.states[sid]["isStreaming"] = False
+        next(t for t in mock.ws_doc["terminals"] if t["id"] == sid)["cwd"] = cwd
         with controller_scope(daemon.journal, principal):
-            adopt(sid, agent_preset="codex-agent" if actor == "two" else "claude-code")
+            adopt(sid, agent_preset="codex-agent" if actor == "two" else "claude-code", cwd=cwd)
         pending(mock, sid=sid)
         out = await daemon.call_api("session_" + kind, request(kind, session_id=sid, idempotency_key="shared-key"), principal)
         assert daemon.ops.get(out["operation_id"])["actor"] == actor

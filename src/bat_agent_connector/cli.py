@@ -195,6 +195,10 @@ def _parse_answers(items: list[str] | None):
 
 
 async def _run(args) -> Any:
+    if args.cmd == "policy" and os.environ.get("BATC_API_TOKEN"):
+        from .task_daemon import request
+        return await asyncio.to_thread(request, "session_policy", host=args.host, session_id=args.session,
+                                       _auth_token=os.environ["BATC_API_TOKEN"], entry="cli"), r_policy
     if args.cmd in {"read", "wait"}:
         from .session_observation import client_request
         params = {"host": args.host, "session_id": args.session, "after": args.after}

@@ -550,6 +550,8 @@ class ApiV1:
                                      "reasons": ([] if self._can_continue(name) else ["HOST_CLEANUP_UNAVAILABLE"])}
                                      for name in fleet.config.hosts]},
                       "features": {"dashboard_sync": {"version": 1, "bootstrap": "/api/v1/bootstrap", "checkpoint_replay": True},
+                                  "controller_isolation": {"version": 1, "identity": "server_actor",
+                                      "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "plan_adoption": False, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
@@ -623,7 +625,8 @@ class ApiV1:
         return 200, {"sync": sync, "capabilities": capabilities,
                      "snapshot": {"hosts": self.daemon.inventory.hosts_document(),
                          "sessions": decorate(self.daemon.journal, principal,
-                             self.daemon.inventory.list_sessions(order="id", include_gone=True, limit=50)),
+                             self.daemon.inventory.list_sessions(order="id", include_gone=True, limit=50,
+                                                                principal=principal)),
                          "projects": work_items.projects_list(db, include_archived=True),
                          "work_items": work_items.work_items_list(db, include_archived=True, limit=50,
                              principal_id=sync["principal_id"]),
@@ -679,6 +682,7 @@ class ApiV1:
     async def sessions(self, query, principal, **_):
         from .session_reading import decorate
         return 200, decorate(self.daemon.journal, principal, self.daemon.inventory.list_sessions(
+            principal=principal,
             host=self._q(query, "host"), provenance=self._q(query, "provenance"),
             api_access=self._q(query, "access"), attention=self._bool(query, "attention"),
             include_gone=bool(self._bool(query, "include_gone")), order=self._q(query, "order", "activity"),
