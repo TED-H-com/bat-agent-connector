@@ -140,21 +140,19 @@ def list_runs(ops, principal, workspace_id, *, thread_id=None, limit=50, after=N
         cursor = after
         for row in rows[:limit]:
             run = get(ops.db, row[0])
-            result["coverage"]["scanned"] += 1
-            if source_visible(ops.db, principal, run):
-                result["runs"].append(_summary(run))
-                result["next_cursor"] = row[0]  # Budget the possible continuation, too.
-                try:
-                    _read_bound(result)
-                except OperationError:
-                    result["runs"].pop()
-                    result["coverage"]["scanned"] -= 1
-                    if cursor == after:
-                        raise
-                    result["next_cursor"] = cursor
-                    return _read_bound(result)
-            else:
-                result["coverage"]["visibility_filtered"] = True
+            visible = source_visible(ops.db, principal, run)
+            candidate = {**result, "runs": result["runs"] + ([_summary(run)] if visible else []),
+                "next_cursor": row[0],  # Budget continuation and filtered-row metadata too.
+                "coverage": {"visibility_filtered": result["coverage"]["visibility_filtered"] or not visible,
+                             "scanned": result["coverage"]["scanned"] + 1}}
+            try:
+                _read_bound(candidate)
+            except OperationError:
+                if cursor == after:
+                    raise
+                result["next_cursor"] = cursor
+                return _read_bound(result)
+            result = candidate
             cursor = row[0]
         result["next_cursor"] = cursor if len(rows) > limit else None
         return _read_bound(result)
