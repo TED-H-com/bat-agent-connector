@@ -121,6 +121,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'].startswith('pm.meeting.'):
+        from .pm_meetings import operation_visible as meeting_operation_visible
+        return meeting_operation_visible(db, principal, op)
     return True
 
 
