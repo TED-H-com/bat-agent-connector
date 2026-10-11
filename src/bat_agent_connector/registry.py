@@ -172,10 +172,13 @@ def claim_unsent(host: str, session_id: str) -> str:
     with _locked(p):
         items = _read(p)
         from . import controller_authority
-        controller_authority.require()
         entry = next((e for e in items if e.get("host") == host and e.get("session_id") == session_id), {})
-        if entry:
-            controller_authority.require_entry(entry)
+        # A sent/settled record needs no start claim: permit read-back even when
+        # legacy authority is absent. Only new or positively unsent effects need authority.
+        if not entry or (entry.get("status") in {"failed", "starting"} and entry.get("start_sent") is False):
+            controller_authority.require()
+            if entry:
+                controller_authority.require_entry(entry)
         _cleanup_guard(host, {**entry, "session_id": session_id})
         return _claim_unsent_locked(p, items, host, session_id)
 
