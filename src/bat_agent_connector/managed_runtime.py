@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import __version__, api_auth, dashboard_sync
+from . import __version__, api_auth, dashboard_sync, platform_files
 from .platform_files import (
     atomic_write,
     ensure_private_directory,
@@ -327,6 +327,33 @@ async def serve(raw):
             daemon.release_owner()
 
 
+def _failure_location(error):
+    # A package may fail before a service.log exists. Retain enough bounded
+    # location evidence to diagnose that failure without publishing filenames,
+    # source lines, locals or arbitrary exception/provider text on native IPC.
+    phases = {function.__code__: name for name, function in (
+        ("root", _root), ("launcher_lock", _locked.__wrapped__),
+        ("prepare", _prepare), ("manifest", _manifest), ("service_lease", _running),
+        ("spawn", _spawn), ("endpoint", _endpoint), ("verify", _verify),
+        ("ensure", ensure), ("serve", serve), ("stop", stop),
+    )}
+    storage = {function.__code__: name for name, function in (
+        ("directory", platform_files.ensure_private_directory),
+        ("open", platform_files.open_private_file), ("read", platform_files.read_private),
+        ("write", platform_files.atomic_write), ("lock", platform_files.lock),
+    )}
+    result = {"phase": "unknown", "storage": "none"}
+    frame = error.__traceback__
+    while frame is not None:
+        code = frame.tb_frame.f_code
+        if code in phases:
+            result["phase"] = phases[code]
+        if code in storage:
+            result["storage"] = storage[code]
+        frame = frame.tb_next
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description="Managed desktop central runtime")
     parser.add_argument("command", choices=("ensure", "serve", "browser", "stop"))
@@ -346,7 +373,8 @@ def main():
     except Exception as error:  # no secrets, paths or arbitrary provider output on the native protocol
         failure = {"protocol": PROTOCOL, "error": "MANAGED_RUNTIME_UNAVAILABLE",
                    "message": type(error).__name__ + ": managed installation needs recovery",
-                   "errno": getattr(error, "errno", None), "winerror": getattr(error, "winerror", None)}
+                   "errno": getattr(error, "errno", None), "winerror": getattr(error, "winerror", None),
+                   "location": _failure_location(error)}
         print(json.dumps(failure), file=sys.stderr if args.command == "serve" else sys.stdout, flush=True)
         raise SystemExit(1) from None
 

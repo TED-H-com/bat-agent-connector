@@ -71,6 +71,10 @@ READ_TOOLS = [
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
+    "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
+    "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
+    "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
+    "pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get",
     "pm_release_baselines_list", "pm_release_baseline_current_get", "pm_release_baseline_get",
     "pm_release_baseline_sources_list", "pm_release_baseline_releases_list",
     "pm_release_baseline_deployments_list", "pm_release_baseline_preview",
@@ -650,6 +654,58 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
             project_binding_id=project_binding_id, repository=repository, kind=kind, release_id=release_id,
             deployment_id=deployment_id, maintenance_branch=maintenance_branch)
 
+    async def pm_maintenance_checks_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read bounded check history with original policy, child receipts and current source access."""
+        return await pm_daemon("pm_maintenance_checks_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_maintenance_check_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read the latest original maintenance check without scheduling another one."""
+        return await pm_daemon("pm_maintenance_check_current_get", workspace_id=workspace_id)
+
+    async def pm_maintenance_check_get(workspace_id: str, run_id: str) -> dict[str, Any]:
+        """Read one fixed check and its original child receipts, preserving unknown results."""
+        return await pm_daemon("pm_maintenance_check_get", workspace_id=workspace_id, run_id=run_id)
+
+    async def pm_maintenance_schedule_get(workspace_id: str) -> dict[str, Any]:
+        """Read due time, policy limits and current blockers; this never starts work."""
+        return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
+
+    async def pm_github_observations_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read saved GitHub observation history, preserving original policy, repository and source access."""
+        return await pm_daemon("pm_github_observations_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_github_observation_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read the latest saved bounded provider observation without issuing a network refresh."""
+        return await pm_daemon("pm_github_observation_current_get", workspace_id=workspace_id)
+
+    async def pm_github_observation_get(workspace_id: str, observation_id: str) -> dict[str, Any]:
+        """Read one fixed GitHub observation; its exact profile does not enumerate unrelated third-party CI."""
+        return await pm_daemon("pm_github_observation_get", workspace_id=workspace_id, observation_id=observation_id)
+
+    async def pm_workload_snapshots_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read immutable workload observations under original policy, baseline and source visibility."""
+        return await pm_daemon("pm_workload_snapshots_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_workload_snapshot_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read the latest bounded observation without refreshing sources or authorizing maintenance."""
+        return await pm_daemon("pm_workload_snapshot_current_get", workspace_id=workspace_id)
+
+    async def pm_workload_snapshot_get(workspace_id: str, snapshot_id: str) -> dict[str, Any]:
+        """Read one fixed workload snapshot; unknown coverage never proves idle or completed work."""
+        return await pm_daemon("pm_workload_snapshot_get", workspace_id=workspace_id, snapshot_id=snapshot_id)
+
+    async def pm_maintenance_policies_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read fixed maintenance policy history under current membership and all original source permissions."""
+        return await pm_daemon("pm_maintenance_policies_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_maintenance_policy_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read the adopted policy; adoption alone does not start maintenance or establish idle coverage."""
+        return await pm_daemon("pm_maintenance_policy_current_get", workspace_id=workspace_id)
+
+    async def pm_maintenance_policy_get(workspace_id: str, policy_id: str) -> dict[str, Any]:
+        """Read one immutable policy with its fixed release, paths, budgets and delivery ceiling."""
+        return await pm_daemon("pm_maintenance_policy_get", workspace_id=workspace_id, policy_id=policy_id)
+
     async def pm_release_baselines_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read immutable primary release baseline history with current original source visibility."""
         return await pm_daemon("pm_release_baselines_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -901,6 +957,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 
+               pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
+               pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
+               pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
+               pm_maintenance_policies_list, pm_maintenance_policy_current_get, pm_maintenance_policy_get,
                pm_release_baselines_list, pm_release_baseline_current_get, pm_release_baseline_get,
                pm_release_baseline_sources_list, pm_release_baseline_releases_list,
                pm_release_baseline_deployments_list, pm_release_baseline_preview,

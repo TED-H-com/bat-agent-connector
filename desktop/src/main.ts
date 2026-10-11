@@ -1,4 +1,6 @@
+import "./pm-maintenance-checks.css";
 import "./app.css";
+import "./pm-maintenance-policy.css";
 import "./pm-release-baselines.css";
 import "./pm-kanban.css";
 import "./pm-follow-up.css";

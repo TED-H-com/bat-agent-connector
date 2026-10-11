@@ -11,8 +11,11 @@ results or errors.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import http.client
 import json
+import threading
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import quote, urlencode, urlsplit
@@ -26,6 +29,16 @@ from .redact import redact
 
 class GitHubAmbiguous(AmbiguousOutcome):
     pass
+
+
+class GitHubReadLimit(Exception):
+    """A bounded read cannot establish a complete provider response."""
+
+
+class _NoReadRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Repository moves require a newly adopted binding, never token forwarding.
+        return None
 
 
 def _rate_limited(headers, payload) -> bool:
@@ -44,6 +57,94 @@ class GitHubClient:
         # A loopback test server must not go through the egress proxy; real GitHub uses the environment's proxy.
         handlers = [urllib.request.ProxyHandler({})] if host in {"127.0.0.1", "localhost"} else []
         self._opener = urllib.request.build_opener(*handlers)
+        self._read_opener = urllib.request.build_opener(*handlers, _NoReadRedirect())
+        self._bounded_read_slot = threading.BoundedSemaphore(1)
+
+    def _bounded_get(self, path, query, max_bytes, timeout_s):
+        """Opt-in GET with byte/time bounds and metadata for object AND list pages.
+
+        Existing delivery callers retain their response contract. This read path
+        resolves current credentials without falling back to an earlier token.
+        """
+        if (not isinstance(path, str) or not path.startswith('/repos/') or '?' in path or '#' in path
+                or type(max_bytes) is not int or not 1 <= max_bytes <= 2_000_000
+                or type(timeout_s) not in (int, float) or not 0 < timeout_s <= 120):
+            raise ValueError('Invalid bounded GitHub read')
+        token = self._fixed_token if self._fixed_token is not None else self.cfg.token()
+        url = self.cfg.api_url + path + ('?' + urlencode(query) if query else '')
+        req = urllib.request.Request(url, method='GET', headers={  # noqa: S310 - trusted configured API
+            'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': self.cfg.api_version,
+            'Authorization': 'Bearer ' + token, 'User-Agent': f'bat-agent-connector/{__version__}'})
+        deadline = time.monotonic() + timeout_s
+        try:
+            try:
+                response = self._read_opener.open(req, timeout=min(self.cfg.timeout_s, timeout_s))  # noqa: S310
+            except urllib.error.HTTPError as exc:
+                response = exc
+            with response:
+                status, chunks, size = response.code, [], 0
+                link = response.headers.get('Link', '')
+                if len(link.encode()) > 16_384:
+                    raise GitHubReadLimit('GitHub pagination header exceeds the byte limit')
+                while True:
+                    if time.monotonic() >= deadline:
+                        raise GitHubReadLimit('GitHub read exceeded its time limit')
+                    sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+                    if sock is not None:
+                        sock.settimeout(min(self.cfg.timeout_s, max(0.001, deadline - time.monotonic())))
+                    # read1 returns available bytes: a slow stream cannot extend
+                    # the read indefinitely by sending one byte per socket timeout.
+                    read = getattr(response, 'read1', response.read)
+                    chunk = read(min(65_536, max_bytes + 1 - size))
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise GitHubReadLimit('GitHub response exceeds the byte limit')
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                if time.monotonic() >= deadline:
+                    raise GitHubReadLimit('GitHub read exceeded its time limit')
+                raw = b''.join(chunks)
+                length = response.headers.get('Content-Length')
+                if length is not None and (not length.isdigit() or int(length) != len(raw)):
+                    raise GitHubReadLimit('GitHub response body is incomplete')
+                payload = json.loads(raw) if raw else None
+                if status == 429 or status >= 500 or status == 403 and _rate_limited(response.headers, payload):
+                    raise GitHubAmbiguous('GitHub bounded read is temporarily unavailable')
+                return {'status': status, 'payload': payload, 'metadata': {'link': link,
+                    'bytes': len(raw), 'body_sha256': hashlib.sha256(raw).hexdigest(), 'authenticated': True}}
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, ValueError):
+            raise GitHubAmbiguous('GitHub bounded read did not establish a complete JSON response') from None
+
+    async def bounded_get(self, path, *, query=None, max_bytes=512_000, timeout_s=30):
+        # DNS and response headers precede the body deadline loop. Bound caller
+        # completion too; at most ONE timed-out read worker may survive per client.
+        # Late bytes can never become the response of a subsequent observation.
+        if type(timeout_s) not in (int, float) or not 0 < timeout_s <= 120:
+            raise ValueError('Invalid bounded GitHub read timeout')
+        if not self._bounded_read_slot.acquire(blocking=False):
+            raise GitHubReadLimit('An earlier bounded GitHub read is still finishing')
+        abandoned = threading.Event()
+
+        def read():
+            try:
+                if abandoned.is_set():
+                    raise GitHubReadLimit('GitHub read was abandoned before starting')
+                return self._bounded_get(path, query, max_bytes, timeout_s)
+            finally:
+                self._bounded_read_slot.release()
+
+        task = asyncio.create_task(asyncio.to_thread(read))
+        # Retrieve a late exception after the caller has already timed out.
+        task.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout_s)
+        except asyncio.TimeoutError:
+            abandoned.set()
+            raise GitHubReadLimit('GitHub read exceeded its total time limit') from None
+        except asyncio.CancelledError:
+            abandoned.set()
+            raise
 
     def _request(self, method: str, path: str, body: dict | None = None, query: dict | None = None) -> tuple[int, dict]:
         url = self.cfg.api_url + path + (("?" + urlencode({k: v for k, v in query.items() if v is not None}))

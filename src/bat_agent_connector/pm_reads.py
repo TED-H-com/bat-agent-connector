@@ -5,6 +5,16 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_maintenance_checks_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_check_current_get": ("workspace_id",),
+    "pm_maintenance_check_get": ("workspace_id", "run_id"),
+    "pm_maintenance_schedule_get": ("workspace_id",),
+    "pm_github_observations_list": ("workspace_id", "after", "limit"),
+    "pm_github_observation_current_get": ("workspace_id",),
+    "pm_github_observation_get": ("workspace_id", "observation_id"),
+    "pm_workload_snapshots_list": ("workspace_id", "after", "limit"),
+    "pm_workload_snapshot_current_get": ("workspace_id",),
+    "pm_workload_snapshot_get": ("workspace_id", "snapshot_id"),
     "pm_lifecycle_get": ("workspace_id",),
     "pm_lifecycle_transitions_list": ("workspace_id", "after", "limit"),
     "pm_lifecycle_transition_get": ("workspace_id", "transition_id"),
@@ -12,6 +22,9 @@ FIELDS = {
     "pm_issue_mappings_list": ("workspace_id", "after", "limit"),
     "pm_issue_mapping_get": ("workspace_id", "mapping_id"),
 
+    "pm_maintenance_policies_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_policy_current_get": ("workspace_id",),
+    "pm_maintenance_policy_get": ("workspace_id", "policy_id"),
     "pm_release_baselines_list": ("workspace_id", "after", "limit"),
     "pm_release_baseline_current_get": ("workspace_id",),
     "pm_release_baseline_get": ("workspace_id", "baseline_id"),
@@ -90,6 +103,39 @@ def read(ops, principal, method, params):
         return pm_issue_mappings.list_mappings(ops, principal, workspace_id,
                                                after=params.get("after", 0), limit=params.get("limit", 50))
 
+    if method in {"pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get"}:
+        from . import pm_maintenance_checks as checks
+        if method == "pm_maintenance_check_current_get":
+            return checks.current_run(ops, principal, workspace_id)
+        if method == "pm_maintenance_check_get":
+            return checks.get_run(ops, principal, workspace_id, params.get("run_id"))
+        if method == "pm_maintenance_schedule_get":
+            return checks.schedule_status(ops, principal, workspace_id)
+        return checks.list_runs(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get"}:
+        from . import pm_github_observation
+        if method == "pm_github_observation_current_get":
+            return pm_github_observation.current_observation(ops, principal, workspace_id)
+        if method == "pm_github_observation_get":
+            return pm_github_observation.get_observation(ops, principal, workspace_id, params.get("observation_id"))
+        return pm_github_observation.list_observations(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get"}:
+        from . import pm_workload
+        if method == "pm_workload_snapshot_current_get":
+            return pm_workload.current_snapshot(ops, principal, workspace_id)
+        if method == "pm_workload_snapshot_get":
+            return pm_workload.get_snapshot(ops, principal, workspace_id, params.get("snapshot_id"))
+        return pm_workload.list_snapshots(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get"}:
+        from . import pm_maintenance_policy
+        if method == "pm_maintenance_policy_current_get":
+            return pm_maintenance_policy.current_policy(ops, principal, workspace_id)
+        if method == "pm_maintenance_policy_get":
+            return pm_maintenance_policy.get_policy(ops, principal, workspace_id, params.get("policy_id"))
+        return pm_maintenance_policy.list_policies(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
     if method in {"pm_release_baselines_list", "pm_release_baseline_current_get", "pm_release_baseline_get"}:
         from . import pm_release_baselines
         if method == "pm_release_baseline_current_get":
