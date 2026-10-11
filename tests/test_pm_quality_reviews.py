@@ -453,4 +453,5 @@ async def test_unpaired_unicode_is_refused_before_original_quality_admission(rev
             envelope.update(action=quality.REVOKE, params={'reason': '\ud800'})
     with pytest.raises(OperationError) as invalid:
         ops.create(who, **envelope)
-    assert invalid.value.code == 'PM_QUALITY_INVALID' and invalid.value.status == 422
+    # Central JSON validation runs before the action-specific admission hook.
+    assert invalid.value.code == 'INVALID_REQUEST' and invalid.value.status == 422
