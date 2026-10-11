@@ -324,7 +324,7 @@ def rev_transaction(req, *, write):
     if not write:
         # No branch/index effect can be replayed without these exact old/own
         # resource facts; the mutation path checks them again under its gate.
-        return {"receipt": None, "resume_safe": True}
+        return {"receipt": None, "resume_safe": True, "effect_started": existing is not None}
     print(json.dumps({"locked": True}), flush=True)
     if json.loads(sys.stdin.readline() or "{}").get("proceed") is not True:
         raise ValueError("REPOSITORY_GATE_REQUIRED")

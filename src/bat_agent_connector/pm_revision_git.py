@@ -6,7 +6,8 @@ import json
 import re
 
 from . import pm_worktree, repository_sync
-from .operations import RERUN, OperationError
+from .errors import ResourceReadOnly
+from .operations import RERUN, Cancelled, OperationError, StepFailed, Uncertain
 
 _REVISION = re.compile(r"pmrev_[0-9a-f]{32}")
 
@@ -44,9 +45,19 @@ async def commit_revision(ctx, plan, revision_files, *, expected_parent, check):
         value = await pm_worktree._host_call(ctx, plan, "read.pm-revision", check=check, revision=fixed)
         if value.get("receipt"):
             return value["receipt"]
-        # This is a proven original deterministic Git transaction, never a new
-        # start/send. Host checks original parent/index and all scoped bytes.
-        return RERUN if value.get("resume_safe") else None
+        if not value.get("resume_safe"):
+            return None
+        if value.get("effect_started") is False:
+            return RERUN  # Original host intent is absent: no effect to preserve.
+        if value.get("effect_started") is not True:
+            return None
+        # A partial original transaction is not a zero-effect retry. Continue
+        # only its exact deterministic intent under the original writer and
+        # current gates, leaving the original step unresolved if stopped.
+        try:
+            return await pm_worktree._host_call(ctx, plan, "pm-revision", check=check, revision=fixed)
+        except (Cancelled, OperationError, StepFailed, ResourceReadOnly):
+            raise Uncertain("pm.revision.commit", "The original partial Git transaction still needs reconciliation") from None
     return await ctx.step("pm.revision.commit",
         lambda: pm_worktree._host_call(ctx, plan, "pm-revision", check=check, revision=fixed),
         request={key: value for key, value in fixed.items() if key != "files"}, reconcile=reconcile)

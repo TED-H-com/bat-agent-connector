@@ -49,6 +49,8 @@ plan pointer is separate. The expected parent comes from the latest verified PM
 Git receipt, including a Git commit that has not yet been adopted; the first
 parent is the original source SHA. A source branch moving does not rebase the PM
 worktree or rewrite that selection.
+The receipt order follows durable journal insertion order, so a wall-clock
+correction cannot select an older parent.
 
 The helper constructs Git blob/tree/commit bytes deterministically without using
 the worktree's staging index. Only those two immutable revision files enter the
@@ -73,6 +75,13 @@ A lost final reply returns the same commit receipt without another commit. An
 unexpected branch, staged change, hidden index flag, code edit or document conflict
 requires attention and is never reset to make recovery pass. Another operation
 cannot take over a pending revision transaction.
+Only a read-back proving that no original host intent exists permits a
+zero-effect retry. A partial transaction retains its original unresolved step;
+continuation requires the current writer, requester authority and cancellation
+gate. Cancelling or revoking authority during a partial transaction preserves
+that writer and requires reconciliation. A fully completed transaction can still
+be read back and recorded after cancellation or authority loss, without making
+another commit or adopting its plan.
 
 A verified Git receipt is a delivery fact. The PM plan service separately checks
 current decision authority and the accepted-plan comparison before changing the
