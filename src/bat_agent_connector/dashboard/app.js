@@ -6239,6 +6239,224 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	};
 }
 //#endregion
+//#region src/pm-maintenance-observations.js
+function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, profile = "github_open_prs_and_actions_v1";
+	let epoch = 0, ready = false, policy = null, baseline = null, lifecycle = null;
+	const editors = [], status = h("div", { role: "status" }), facts = h("div", { class: "pm-observation-facts" }), context = h("p", { class: "muted" });
+	const canWrite = () => permitted(false) && caps()?.scopes?.includes("manage");
+	const canRecover = () => Boolean(workspace()?.membership) && caps()?.scopes?.includes("manage");
+	const githubAvailable = () => caps()?.features?.pm_github_observation?.profiles?.includes(profile);
+	const current = () => ready && policy && baseline && lifecycle;
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("pmo_invalid"));
+		return value;
+	};
+	const valid = (ticket) => {
+		try {
+			alive();
+			return ticket === epoch;
+		} catch {
+			return false;
+		}
+	};
+	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), String(value));
+	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("pmo_unknown_time");
+	const reasonGroups = {
+		source_limit: ["source_row_limit", "source_reference_limit"],
+		source_access: [
+			"source_not_visible",
+			"linked_task_unavailable",
+			"sprint_source_unavailable",
+			"linked_operation_unavailable"
+		],
+		source_age: ["source_time_unproven", "source_expired"],
+		pending_work: [
+			"task_waiting",
+			"task_committed",
+			"work_waiting",
+			"work_committed",
+			"coding_active",
+			"session_waiting"
+		],
+		verification: [
+			"task_failed_unresolved",
+			"task_not_verified",
+			"work_done_claim_unverified",
+			"started_attempt_result_unverified",
+			"session_end_unproven"
+		],
+		uncertain: [
+			"command_waiting_or_unknown",
+			"operation_unknown",
+			"operation_committed",
+			"deployment_waiting_or_unknown"
+		],
+		sprint: ["sprint_commitment"],
+		adapter: [
+			"bat_scope_unconfigured",
+			"adapter_scope_changed",
+			"adapter_disconnected",
+			"adapter_not_observed",
+			"adapter_coverage_incomplete",
+			"linked_session_not_covered",
+			"session_workspace_unproven",
+			"session_profile_unproven",
+			"session_state_unknown"
+		],
+		github_gap: [
+			"github_repository_coverage_unavailable",
+			"linked_pr_current_state_unproven",
+			"github_observation_missing",
+			"github_observation_context_changed",
+			"github_observation_incomplete"
+		],
+		github_prs: ["github_open_pull_requests"],
+		github_actions: ["github_nonterminal_actions"]
+	};
+	const reasonText = (reason) => t("pmo_reason_" + (Object.keys(reasonGroups).find((key) => reasonGroups[key].includes(reason.code)) || "unknown"));
+	const editorsBox = h("div", { class: "pm-observation-actions" });
+	function update() {
+		for (const editor of editors) editor.update();
+	}
+	const request = async (...args) => {
+		const ticket = epoch;
+		try {
+			return await api(...args);
+		} catch (error) {
+			if (valid(ticket) && [
+				401,
+				403,
+				404
+			].includes(error.status)) failure(error);
+			throw error;
+		}
+	};
+	for (const [action, label, description] of [[
+		"pm.github.observe",
+		"pmo_observe",
+		"pmo_observe_help"
+	], [
+		"pm.workload.capture",
+		"pmo_capture",
+		"pmo_capture_help"
+	]]) {
+		if (action === "pm.github.observe" && !githubAvailable()) continue;
+		const editor = form({
+			action,
+			target: { workspace_id: workspaceId },
+			fields: {},
+			api: request,
+			params: () => ({ policy_id: policy.policy_id }),
+			preconditions: () => ({
+				expected_policy_version: policy.revision,
+				expected_baseline_id: baseline.baseline_id,
+				expected_lifecycle_revision: lifecycle.revision
+			}),
+			permitted: () => Boolean(current() && canWrite() && (action !== "pm.github.observe" || policy.document.scope.github_scope === profile)),
+			recoverPermitted: canRecover,
+			label,
+			extra: h("p", { class: "muted" }, t(description)),
+			onSaved: () => refresh()
+		});
+		editor.box.querySelector("button[type=submit]").className = "secondary";
+		editors.push(editor);
+		editorsBox.append(editor.box);
+	}
+	const element = h("div", { "data-pm-maintenance-observations": "" }, h("header", { class: "pm-heading" }, h("h3", {}, t("pmo_title")), h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pmo_refresh"))), status, h("p", { class: "muted" }, t("pmo_intro")), facts, context, editorsBox);
+	function record(value, kind) {
+		const key = kind === "github" ? "observation" : "snapshot", row = check(value)[key];
+		if (typeof value.visibility_filtered !== "boolean" || value.visibility_filtered && row !== null) throw Error(t("pmo_invalid"));
+		const box = h("section", { "data-observation-kind": kind }, h("h4", {}, t(kind === "github" ? "pmo_github" : "pmo_workload")));
+		if (!row) {
+			box.append(h("p", { class: "muted" }, t(value.visibility_filtered ? "pmo_hidden" : "pmo_empty")));
+			return box;
+		}
+		const doc = row.document, id = kind === "github" ? "observation_id" : "snapshot_id", prefix = kind === "github" ? "pmgh_" : "pmwl_";
+		if (row.workspace_id !== workspaceId || doc?.workspace_id !== workspaceId || doc[id] !== row[id] || !new RegExp(`^${prefix}[0-9a-f]{32}$`).test(row[id]) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !Number.isFinite(doc.as_of) || !Number.isFinite(doc.expires_at)) throw Error(t("pmo_invalid"));
+		box.append(line("pmo_as_of", stamp(doc.as_of)), line("pmo_expiry", stamp(doc.expires_at)));
+		if (Date.now() / 1e3 >= doc.expires_at || Date.now() / 1e3 < doc.as_of) box.append(h("p", { class: "muted" }, t("pmo_expired")));
+		if (current() && (row.policy_id !== policy.policy_id || row.baseline_id !== baseline.baseline_id)) box.append(h("p", { class: "muted" }, t("pmo_old_context")));
+		if (kind === "github") {
+			const evidence = doc.evidence;
+			if (doc.profile !== profile || !["complete", "incomplete"].includes(evidence?.status) || ![evidence.observed_open_pulls, evidence.observed_nonterminal_actions].every((n) => Number.isSafeInteger(n) && n >= 0)) throw Error(t("pmo_invalid"));
+			box.append(line("pmo_coverage", t(`pmo_${evidence.status}`)), line("pmo_open_prs", evidence.observed_open_pulls), line("pmo_actions", evidence.observed_nonterminal_actions), h("p", { class: "muted" }, t("pmo_profile_scope")));
+			if (evidence.status === "incomplete") box.append(h("p", {}, t("pmo_partial_counts")));
+		} else {
+			if (![
+				"development",
+				"unknown",
+				"idle_candidate"
+			].includes(doc.classification) || !Array.isArray(doc.source_coverage) || !Array.isArray(doc.blocking_reasons) || typeof doc.stability?.satisfied !== "boolean") throw Error(t("pmo_invalid"));
+			box.append(line("pmo_classification", t(`pmo_${doc.classification}`)), line("pmo_stability", t(doc.stability.satisfied ? "pmo_stable" : "pmo_not_stable")));
+			const coverage = h("ul");
+			for (const source of doc.source_coverage) {
+				const label = [
+					"central_project",
+					"github",
+					"bat"
+				].includes(source.kind) ? `pmo_source_${source.kind}` : "pmo_source_other";
+				coverage.append(h("li", {}, `${t(label)}: ${t(source.status === "complete" ? "pmo_complete" : "pmo_incomplete")}`));
+			}
+			box.append(coverage, line("pmo_blockers", doc.blocking_reasons.length), h("p", { class: "muted" }, t("pmo_capture_limits")));
+			if (doc.blocking_reasons.length) box.append(h("details", {}, h("summary", {}, t("pmo_blocker_details")), h("ul", {}, ...doc.blocking_reasons.map((reason) => h("li", {}, reasonText(reason))))));
+		}
+		box.append(h("details", {}, h("summary", {}, t("pmo_proof")), h("p", { class: "mono" }, row[id]), h("p", { class: "mono" }, row.document_digest), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
+		return box;
+	}
+	function withdraw() {
+		epoch++;
+		ready = false;
+		policy = null;
+		baseline = null;
+		lifecycle = null;
+		facts.replaceChildren();
+		context.replaceChildren();
+		status.replaceChildren();
+		update();
+	}
+	function failure(error) {
+		withdraw();
+		status.append(h("p", { class: "muted" }, t("pmo_unavailable")), errorBox(error));
+	}
+	async function refresh() {
+		withdraw();
+		const ticket = epoch;
+		try {
+			const paths = [
+				"maintenance-policies/current",
+				"release-baselines/current",
+				"lifecycle",
+				"workload-snapshots/current",
+				...githubAvailable() ? ["github-observations/current"] : []
+			];
+			const values = await Promise.all(paths.map((path) => api("GET", `${base}/${path}`)));
+			if (!valid(ticket)) return;
+			const [p, b, l, w, g] = values.map(check);
+			if (typeof p.visibility_filtered !== "boolean" || typeof b.visibility_filtered !== "boolean" || !Number.isSafeInteger(l.lifecycle?.revision) || !Number.isSafeInteger(p.head?.revision) || !Number.isSafeInteger(b.head?.version) || p.policy && (p.policy.workspace_id !== workspaceId || p.policy.document?.workspace_id !== workspaceId || p.policy.policy_id !== p.head.policy_id || p.policy.revision !== p.head.revision) || b.baseline && (b.baseline.workspace_id !== workspaceId || b.baseline.baseline_id !== b.head.baseline_id || b.baseline.version !== b.head.version) || p.visibility_filtered && p.policy !== null || b.visibility_filtered && b.baseline !== null) throw Error(t("pmo_invalid"));
+			policy = p.visibility_filtered ? null : p.policy;
+			baseline = b.visibility_filtered ? null : b.baseline;
+			lifecycle = l.lifecycle;
+			ready = true;
+			const rows = [...g ? [record(g, "github")] : [], record(w, "workload")];
+			facts.replaceChildren(...rows);
+			context.textContent = current() ? `${t("pmo_request_context")}: ${t("pmp_revision")} ${policy.revision} · ${baseline.document.release_version.value}` : t("pmo_context_missing");
+			update();
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-maintenance-policy.js
 function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.maintenance_policy.adopt";
@@ -6479,6 +6697,18 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
 	});
 	const permission = h("p", { class: "muted" }, t("pmp_owner"));
+	const observations = caps()?.features?.pm_workspaces?.workload?.version === 1 ? maintenanceObservations({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace,
+		caps,
+		permitted,
+		form,
+		errorBox
+	}) : null;
 	const element = h("section", {
 		class: "pm-brief pm-maintenance-policy",
 		"data-pm-maintenance-policy": ""
@@ -6486,7 +6716,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t("pmp_runtime")), historyDetails, permission, editorDetails);
+	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t("pmp_runtime")), historyDetails, permission, editorDetails, ...observations ? [observations.element] : []);
 	function controls() {
 		editorDetails.hidden = !owner() && !(editor.locked() && recover());
 		permission.hidden = owner();
@@ -6666,6 +6896,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		return h("article", { "data-maintenance-policy": row.policy_id }, h("h3", {}, isCurrent ? t("pmp_current") : `${t("pmp_revision")} ${row.revision}`), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
 	}
 	function withdraw() {
+		observations?.withdraw();
 		epoch++;
 		ready = false;
 		current = null;
@@ -6741,6 +6972,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			}
 			controls();
 			if (historyDetails.open) await readHistory(false);
+			if (valid(ticket)) await observations?.refresh();
 		} catch (error) {
 			if (valid(ticket)) failure(error);
 		}
@@ -9604,7 +9836,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_lifecycle",
 			"pm_issue_mapping",
 			"pm_release_baseline",
-			"pm_maintenance_policy"
+			"pm_maintenance_policy",
+			"pm_workload",
+			"pm_github_observation"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -13359,6 +13593,122 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-maintenance-observation-strings.js
+var maintenanceObservationStrings = {
+	en: {
+		pmo_title: "Workload observations",
+		pmo_refresh: "Refresh saved observations",
+		pmo_intro: "Read the saved evidence and its coverage before deciding what to do next.",
+		pmo_observe: "Read GitHub workload",
+		pmo_observe_help: "Make one bounded, read-only check of the adopted GitHub scope. This does not start a repair.",
+		pmo_capture: "Capture saved workload",
+		pmo_capture_help: "Capture current central records, including saved GitHub evidence. This does not refresh BAT or GitHub.",
+		pmo_github: "GitHub evidence",
+		pmo_workload: "Central workload evidence",
+		pmo_hidden: "The latest evidence is outside your current source access.",
+		pmo_empty: "No saved observation. This source has not been checked.",
+		pmo_as_of: "Observation time",
+		pmo_expiry: "Evidence expires",
+		pmo_unknown_time: "Unknown time",
+		pmo_expired: "This observation is expired or its time cannot establish current freshness. Read new evidence before acting.",
+		pmo_old_context: "This record belongs to an earlier policy or release baseline.",
+		pmo_coverage: "Coverage at observation",
+		pmo_complete: "Complete within the selected scope",
+		pmo_incomplete: "Incomplete coverage",
+		pmo_open_prs: "Observed open pull requests",
+		pmo_actions: "Observed unfinished GitHub Actions",
+		pmo_profile_scope: "Covers open PR heads and GitHub Actions. It excludes Issues, dependency research, local unpublished work and unrelated third-party CI.",
+		pmo_partial_counts: "These counts are partial; zero does not establish that no work exists.",
+		pmo_classification: "Workload at capture",
+		pmo_development: "Work or commitments remain",
+		pmo_unknown: "Not enough evidence to determine workload",
+		pmo_idle_candidate: "Idle candidate within the observed scope",
+		pmo_stability: "Required stability window",
+		pmo_stable: "Established by these saved observations",
+		pmo_not_stable: "Not established",
+		pmo_source_central_project: "Central project",
+		pmo_source_github: "GitHub",
+		pmo_source_bat: "BAT workspace",
+		pmo_source_other: "Additional source",
+		pmo_blockers: "Recorded blockers or coverage gaps",
+		pmo_capture_limits: "Quality remains unassessed. A saved observation does not change the project stage or authorize execution.",
+		pmo_blocker_details: "Review blockers and coverage gaps",
+		pmo_reason_source_limit: "The source exceeds the bounded observation size.",
+		pmo_reason_source_access: "An original source is currently unavailable.",
+		pmo_reason_source_age: "A source observation is expired or its time is unproven.",
+		pmo_reason_pending_work: "A task, work item or coding session still has work pending.",
+		pmo_reason_verification: "A claimed result or ended session still lacks verified completion.",
+		pmo_reason_uncertain: "An operation, command or deployment is pending or has an uncertain result.",
+		pmo_reason_sprint: "A Sprint still contains an active commitment.",
+		pmo_reason_adapter: "BAT workspace or session coverage could not be established.",
+		pmo_reason_github_gap: "Current GitHub evidence does not establish the adopted scope.",
+		pmo_reason_github_prs: "Open pull requests remain.",
+		pmo_reason_github_actions: "GitHub Actions are still unfinished.",
+		pmo_reason_unknown: "This source requires further review before idle can be established.",
+		pmo_proof: "Original evidence and operation",
+		pmo_request_context: "New requests use",
+		pmo_context_missing: "Read a current policy, release baseline and lifecycle before creating evidence.",
+		pmo_unavailable: "Observation sources could not be verified. Previously displayed evidence has been removed.",
+		pmo_invalid: "Observation evidence does not match this workspace."
+	},
+	"zh-TW": {
+		pmo_title: "工作量觀察",
+		pmo_refresh: "重新讀取已存觀察",
+		pmo_intro: "先核對已保存的證據與涵蓋範圍，再決定下一步。",
+		pmo_observe: "讀取 GitHub 工作狀態",
+		pmo_observe_help: "依已採用範圍進行一次有上限的 GitHub 唯讀查核；不啟動修復。",
+		pmo_capture: "保存中央工作量快照",
+		pmo_capture_help: "保存目前中央紀錄與已存 GitHub 證據；不重新查詢 BAT 或 GitHub。",
+		pmo_github: "GitHub 證據",
+		pmo_workload: "中央工作量證據",
+		pmo_hidden: "最新證據的原始來源不在你目前的讀取權限內。",
+		pmo_empty: "尚無已存觀察；此來源尚未查核。",
+		pmo_as_of: "觀察時間",
+		pmo_expiry: "證據有效期限",
+		pmo_unknown_time: "時間未知",
+		pmo_expired: "這份觀察已過期，或其時間無法證明目前仍有效。採取行動前請取得新證據。",
+		pmo_old_context: "這份紀錄屬於較早的政策或發布基準。",
+		pmo_coverage: "觀察時的涵蓋程度",
+		pmo_complete: "在選定範圍內完整",
+		pmo_incomplete: "涵蓋不足",
+		pmo_open_prs: "已觀察到的開啟中 PR",
+		pmo_actions: "已觀察到的未結束 GitHub Actions",
+		pmo_profile_scope: "涵蓋開啟中 PR 的固定 head 與 GitHub Actions；不含 Issues、依賴研究、未發布的本地工作及其他第三方 CI。",
+		pmo_partial_counts: "這些數量只有部分涵蓋；零筆不代表沒有工作。",
+		pmo_classification: "保存當時的工作量",
+		pmo_development: "仍有工作或已承諾事項",
+		pmo_unknown: "證據不足，無法判定工作量",
+		pmo_idle_candidate: "在已觀察範圍內可列為閒置候選",
+		pmo_stability: "必要的穩定期間",
+		pmo_stable: "已由這些保存觀察證明",
+		pmo_not_stable: "尚未證明",
+		pmo_source_central_project: "中央專案",
+		pmo_source_github: "GitHub",
+		pmo_source_bat: "BAT 工作區",
+		pmo_source_other: "其他來源",
+		pmo_blockers: "已記錄的阻止原因或涵蓋缺口",
+		pmo_capture_limits: "品質仍未評估。保存觀察不會變更管理階段，也不構成執行授權。",
+		pmo_blocker_details: "檢視阻止原因與涵蓋缺口",
+		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
+		pmo_reason_source_access: "目前無法讀取某項原始來源。",
+		pmo_reason_source_age: "某項來源觀察已過期，或其時間尚未證實。",
+		pmo_reason_pending_work: "任務、工作項目或 coding session 仍有待處理工作。",
+		pmo_reason_verification: "已回報的成果或結束的 session 仍缺少完成驗證。",
+		pmo_reason_uncertain: "操作、命令或部署仍待處理，或結果不確定。",
+		pmo_reason_sprint: "Sprint 仍有生效中的承諾。",
+		pmo_reason_adapter: "尚無法證明 BAT 工作區或 session 的涵蓋程度。",
+		pmo_reason_github_gap: "目前 GitHub 證據不足以證明已採用的觀察範圍。",
+		pmo_reason_github_prs: "仍有開啟中的 PR。",
+		pmo_reason_github_actions: "仍有未結束的 GitHub Actions。",
+		pmo_reason_unknown: "此來源需要進一步核對，才能證明閒置。",
+		pmo_proof: "原始證據與操作",
+		pmo_request_context: "新請求使用",
+		pmo_context_missing: "請先讀取目前政策、發布基準與生命週期，才能建立證據。",
+		pmo_unavailable: "無法核對觀察來源；先前顯示的證據已移除。",
+		pmo_invalid: "觀察證據與目前工作空間不符。"
+	}
+};
+//#endregion
 //#region src/pm-maintenance-policy-strings.js
 var pmMaintenancePolicyStrings = {
 	en: {
@@ -16056,6 +16406,7 @@ var STRINGS = {
 		...pmReleaseBaselineStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
 		...pmMaintenancePolicyStrings["zh-TW"],
+		...maintenanceObservationStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -17509,6 +17860,7 @@ var STRINGS = {
 		...pmReleaseBaselineStrings.en,
 		...pmPackageHandoffStrings.en,
 		...pmMaintenancePolicyStrings.en,
+		...maintenanceObservationStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
