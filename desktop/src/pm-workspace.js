@@ -156,6 +156,11 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       } else status.replaceChildren(h('p', {class: 'muted'}, t(terminal() ? 'pm_terminal' : 'pm_pending')));
     } catch (error) {
       receiptPolling = false;
+      // Reporting a read/write error also affects the current event checkpoint.
+      // A detached request must not poison another view's successful refresh or
+      // change an original intent after a route/authority boundary has moved.
+      if (disposed) return;
+      try {guard();} catch {return;}
       if (!retired(error)) {
         // Explicit server pre-admission refusal is useful only for the first attempt.
         if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
