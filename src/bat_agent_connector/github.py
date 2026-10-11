@@ -59,6 +59,7 @@ class GitHubClient:
         self._opener = urllib.request.build_opener(*handlers)
         self._read_opener = urllib.request.build_opener(*handlers, _NoReadRedirect())
         self._bounded_read_slot = threading.BoundedSemaphore(1)
+        self._bounded_create_slot = threading.BoundedSemaphore(1)
 
     def _bounded_get(self, path, query, max_bytes, timeout_s):
         """Opt-in GET with byte/time bounds and metadata for object AND list pages.
@@ -213,6 +214,75 @@ class GitHubClient:
 
     async def repository(self, repository: str):
         return await self.call("GET", self._repo(repository))
+
+    def _create_pull(self, repository, body, timeout_s):
+        """One bounded POST; redirects and late/truncated answers prove nothing."""
+        token = self._fixed_token if self._fixed_token is not None else self.cfg.token()
+        req = urllib.request.Request(self.cfg.api_url + self._repo(repository) + '/pulls',  # noqa: S310
+            data=json.dumps(body).encode(), method='POST', headers={
+                'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': self.cfg.api_version,
+                'Authorization': 'Bearer ' + token, 'User-Agent': f'bat-agent-connector/{__version__}',
+                'Content-Type': 'application/json'})
+        deadline, chunks, size = time.monotonic() + timeout_s, [], 0
+        try:
+            try:
+                response = self._read_opener.open(req, timeout=min(self.cfg.timeout_s, timeout_s))  # noqa: S310
+            except urllib.error.HTTPError as exc:
+                response = exc
+            with response:
+                while True:
+                    if time.monotonic() >= deadline:
+                        raise GitHubAmbiguous('PR creation exceeded its time limit')
+                    sock = getattr(getattr(getattr(response, 'fp', None), 'raw', None), '_sock', None)
+                    if sock is not None:
+                        sock.settimeout(min(self.cfg.timeout_s, max(0.001, deadline - time.monotonic())))
+                    chunk = getattr(response, 'read1', response.read)(min(65_536, 256_001 - size))
+                    size += len(chunk)
+                    if size > 256_000:
+                        raise GitHubAmbiguous('PR creation response exceeds its byte limit')
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                raw = b''.join(chunks)
+                length = response.headers.get('Content-Length')
+                if (time.monotonic() >= deadline or length is not None and
+                        (not length.isdigit() or int(length) != len(raw))):
+                    raise GitHubAmbiguous('PR creation response is incomplete')
+                payload = json.loads(raw)
+                if response.code == 429 or response.code >= 500:
+                    raise GitHubAmbiguous('PR creation outcome is unavailable')
+                return response.code, payload
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, ValueError):
+            raise GitHubAmbiguous('PR creation did not establish a complete JSON response') from None
+
+    async def create_pull(self, repository, *, title, body, head, base, draft, timeout_s=30):
+        """No automatic retry. At most one abandoned POST worker per client."""
+        if type(timeout_s) not in (int, float) or not 0 < timeout_s <= 120:
+            raise ValueError('Invalid PR creation timeout')
+        if not self._bounded_create_slot.acquire(blocking=False):
+            raise GitHubAmbiguous('An earlier PR creation worker is still finishing')
+        abandoned = threading.Event()
+        payload = {'title': title, 'body': body, 'head': head, 'base': base,
+                   'draft': draft, 'maintainer_can_modify': False}
+
+        def send():
+            try:
+                if abandoned.is_set():
+                    raise GitHubAmbiguous('PR creation was abandoned before starting')
+                return self._create_pull(repository, payload, timeout_s)
+            finally:
+                self._bounded_create_slot.release()
+
+        task = asyncio.create_task(asyncio.to_thread(send))
+        task.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout_s)
+        except asyncio.TimeoutError:
+            abandoned.set()
+            raise GitHubAmbiguous('PR creation exceeded its total time limit') from None
+        except asyncio.CancelledError:
+            abandoned.set()
+            raise
 
     # Issue publication only creates objects; it never overwrites another
     # author's mutable title/body or treats an ETag GET as a PATCH precondition.
