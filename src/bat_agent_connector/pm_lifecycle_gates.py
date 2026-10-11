@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 
 from .operations import OperationError
 
-# Explicit local contributions/results remain possible while investment is stopped.
+# Explicit contributions/results and the registered bounded GitHub GET remain
+# possible while investment is stopped.
 # None of these actions launches a runtime, changes accepted product scope, or
 # selects new development work. Their existing scope/source/owner checks still run.
 RECORD_ACTIONS = frozenset({
     'pm.workspace.member.set', 'pm.message.append', 'pm.input.record',
-    'pm.evidence.capture', 'pm.snapshot.create', 'pm.roadmap.observe', 'pm.workload.capture',
+    'pm.evidence.capture', 'pm.snapshot.create', 'pm.roadmap.observe', 'pm.workload.capture', 'pm.github.observe',
     'pm.meeting.note', 'pm.meeting.complete', 'pm.meeting.follow_up.record',
     'pm.governance.adoption.link', 'pm.sprint.close', 'pm.sprint.cancel',
 })
@@ -107,16 +109,44 @@ def require_local(db, operation_id, *, bookkeeping=False):
         _require(head(db, binding['workspace_id']), binding['execution_epoch'])
 
 
+def _github_observation_step(db, operation_id, name, binding, current):
+    """Only the registered observer's fixed GET pages may run while stopped.
+
+    Neither a caller-selected step name nor another record action grants this
+    exception. The same original lifecycle revision and epoch must still hold;
+    a pause/reopen during traversal invalidates all remaining page requests.
+    """
+    if not re.fullmatch(r'pm\.github\.page\.[12]\.[0-9]{3}', name):
+        return False
+    row = db.execute('SELECT action,external_refs FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
+    if not row or row['action'] != 'pm.github.observe' or binding['kind'] != 'record':
+        return False
+    admitted = json.loads(row['external_refs'] or '{}').get('admission_binding') or {}
+    intent = admitted.get('github_observation_intent')
+    if not isinstance(intent, dict):
+        raise OperationError('PM_LIFECYCLE_BINDING_INVALID', 'Original observation lifecycle binding is unavailable', 409)
+    digest = hashlib.sha256(json.dumps(intent, ensure_ascii=False, sort_keys=True,
+        separators=(',', ':'), allow_nan=False).encode('utf-8')).hexdigest()
+    if digest != admitted.get('github_observation_intent_digest'):
+        raise OperationError('PM_LIFECYCLE_BINDING_INVALID', 'Original observation lifecycle binding changed', 409)
+    if (binding['execution_epoch'] != current['execution_epoch']
+            or intent.get('execution_epoch') != current['execution_epoch']
+            or intent.get('lifecycle_revision') != current['revision']):
+        raise OperationError('PM_LIFECYCLE_EPOCH_CHANGED', 'Explicitly request a new observation of the current lifecycle', 409)
+    return True
+
+
 def admit_step(db, operation_id, name, *, local=False, bookkeeping=False, restart=False):
     """An admitted external step may finish after stop; a proven-unsent retry may not."""
     binding = operation_binding(db, operation_id)
     if binding is None:
         return
-    # Even record/lifecycle actions may not smuggle a new external action through
-    # their exception. Today they have no external steps. Read-back bypasses here.
+    # Record/lifecycle actions cannot smuggle new external effects through their
+    # exception. Only the registered observer's bounded GET pages qualify.
     current = head(db, binding['workspace_id'])
     if not bookkeeping and (not local or binding['kind'] == 'investment'):
-        _require(current, binding['execution_epoch'])
+        if local or not _github_observation_step(db, operation_id, name, binding, current):
+            _require(current, binding['execution_epoch'])
     db.execute('''INSERT INTO pm_lifecycle_steps(operation_id,name,workspace_id,execution_epoch,kind,admitted_at)
         VALUES(?,?,?,?,?,?) ON CONFLICT(operation_id,name) DO UPDATE SET
         execution_epoch=excluded.execution_epoch,admitted_at=excluded.admitted_at''',
