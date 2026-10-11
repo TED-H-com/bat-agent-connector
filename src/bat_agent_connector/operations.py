@@ -613,6 +613,9 @@ class OperationService:
         if op["action"] == "session.approve_pending":
             from .bulk_approval import cancel
             return cancel(self, principal, op)
+        if op["action"] == "pm.run.prepare":
+            from .pm_run_operations import cancel
+            return cancel(self, principal, op)
         self.db.execute("UPDATE operations SET cancel_requested=1,updated_at=? WHERE operation_id=?",
                         (time.time(), operation_id))
         if not self._running(operation_id):

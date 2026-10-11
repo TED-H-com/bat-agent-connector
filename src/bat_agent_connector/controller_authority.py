@@ -142,6 +142,10 @@ def require_entry(row, *, expected_incarnation=None) -> dict:
     if not isinstance(row, dict):
         raise ResourceReadOnly("CONTROLLER_OWNER_UNPROVEN", "The resource has no controller creation evidence")
     require_binding(row.get("controller_authority"))
+    expected, actual = row.get("controller_authority"), require()
+    if (expected.get("pm_operation_id") is not None
+            and expected.get("pm_operation_id") != actual.get("pm_operation_id")):
+        raise ResourceReadOnly("PM_SESSION_RUN_CHANGED", "A PM session belongs to its original bounded run")
     incarnation = row.get("controller_incarnation")
     if not isinstance(incarnation, str) or not _INCARNATION.fullmatch(incarnation):
         raise ResourceReadOnly("CONTROLLER_OWNER_UNPROVEN", "The resource has no controller incarnation evidence")
