@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "de0692b2b1651594edadb19eba5a3308a4e29a47101f4739d9cba1855d3771ec"
+  canonical_sha256: "a59dae857bd7e9b959b96f2660e41d694b6baa2e1c7a2bf66ecbdbc74ad7be9e"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1469,4 +1469,6 @@ deployment receipts without refreshing providers or creating operations. Preserv
 requirement acceptance are distinct; delivery does not mark a requirement Done.
 
 For declared requirement prerequisites, select original qualified quality assessments explicitly. `pm_work_package_readiness_get` accepts optional `quality_refs` mapping prerequisite requirement IDs to `{condition, reference, execution_operation_id}`. Pass the same bounded identity map as `pm_requirement_quality_refs` on the reviewed `repository.continue` intent. The server freezes and rechecks the original assessment; passing tests alone do not accept a requirement, and revocation blocks new dependent work without deleting its history.
+
+For a configured dedicated BAT PM runtime, read `pm_capabilities_get.bat_analysis` and use the registered `pm.run.bat.analyze` action with the original discussion target, purpose and expected thread version. Prepare the fixed PM worktree binding first. Configuration eligibility does not prove runtime attestation or authentication. Preserve the original operation on an unknown reply; never replace it with another start/send. Assistant import requires original native completion and original dedicated-process death. Ordinary BAT sessions without the dedicated profile remain context-only observers.
 <!-- END CANONICAL WORKFLOW -->

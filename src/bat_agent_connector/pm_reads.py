@@ -335,7 +335,7 @@ def read(ops, principal, method, params):
         from . import pm_runs
         return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
     if method == "pm_capabilities_get":
-        from . import pm_native_capabilities, pm_runs, pm_runtime, pm_worktree
+        from . import pm_bat_operations, pm_native_capabilities, pm_runs, pm_runtime, pm_worktree
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
         repositories = {repository.lower() for repository in workspace["repositories"]}
         binding = pm_runs.workspace_worktree(ops.db, workspace_id)
@@ -365,6 +365,7 @@ def read(ops, principal, method, params):
                                        if binding else None),
                 "runtime": pm_runtime.capability_report(),
                 "native_analysis": native,
+                "bat_analysis": pm_bat_operations.capabilities(ops, principal, workspace),
                 "follow_up_analysis": follow_up,
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}

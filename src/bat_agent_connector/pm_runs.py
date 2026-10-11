@@ -528,6 +528,12 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
                 or assessment.get("actual_model") != model
                 or assessment.get("native_message_id") != native_message_id):
             raise _error("Assistant content or identity differs from native evidence", "PM_IMPORT_CONFLICT")
+        from . import pm_bat_runtime
+        if run["adapter"] == pm_bat_runtime.ADAPTER:
+            launch = next((item["data"] for item in run["receipts"]
+                           if item["phase"] == "prepare" and item["status"] == "prepared"), {})
+            pm_bat_runtime.require_completed(journal.db, run, assessment,
+                prompt_digest=launch.get("prompt_digest"), message_id="batc-pm-" + run["run_id"])
         message_id = "pmm_" + uuid.uuid5(uuid.UUID(pm_workspace.server_id(journal.db)), run_id + ":assistant").hex
         now = time.time()
         journal.db.execute("INSERT INTO pm_messages(message_id,workspace_id,thread_id,actor,content,created_at,operation_id) VALUES(?,?,?,?,?,?,?)",
@@ -568,12 +574,20 @@ def fail(journal, run_id, generation, reason, *, before_send=False):
             return run
         run = _active(journal.db, run_id, generation)
         if before_send:
+            from . import pm_bat_runtime
+            if run["adapter"] == pm_bat_runtime.ADAPTER and journal.db.execute(
+                    "SELECT 1 FROM operation_steps WHERE operation_id=? AND name='session.start'",
+                    (run["operation_id"],)).fetchone():
+                raise _error("BAT may have started; preserve the original writer", "PM_EFFECT_UNKNOWN")
             uncertain = any(r["phase"] in {"start", "send"} for r in run["receipts"])
             if uncertain:
                 raise _error("PM may have started or sent; preserve its writer", "PM_EFFECT_UNKNOWN")
             status = "failed"
             outcome = {"reason": reason, "effect": "not_started"}
         else:
+            from . import pm_bat_runtime
+            if run["adapter"] == pm_bat_runtime.ADAPTER and not pm_bat_runtime.death_proof(journal.db, run):
+                raise _error("Dedicated BAT process exit remains unproven", "PM_EFFECT_UNKNOWN")
             native, payload = _terminal(journal.db, run)
             if payload.get("reason") not in {"error", "aborted"}:
                 raise _error("PM failure needs a native error or abort", "PM_COMPLETION_UNPROVEN")
