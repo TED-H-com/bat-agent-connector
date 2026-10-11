@@ -65,6 +65,8 @@ READ_TOOLS = [
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
     "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
+    "pm_plan_compare",
+    "pm_roadmap_get", "pm_roadmap_revisions_list", "pm_roadmap_revision_get",
     "project_get",
     "work_items_list",
     "work_item_get", "artifacts_list", "artifact_get", "artifact_capture_preview", "artifact_managed_capture_preview", "approval_preview", "cleanup_preview", "cleanup_retained", "cleanup_tombstones",
@@ -584,6 +586,24 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
         return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_plan_compare(workspace_id: str, from_revision_id: str, to_revision_id: str,
+                              binding_ids: list[str] | None = None, journal_cursor: int | None = None) -> dict[str, Any]:
+        """Compare fixed plan revisions and selected work associations without changing work or scope."""
+        return await pm_daemon("pm_plan_compare", workspace_id=workspace_id, from_revision_id=from_revision_id,
+                               to_revision_id=to_revision_id, binding_ids=binding_ids or [], journal_cursor=journal_cursor)
+
+    async def pm_roadmap_get(workspace_id: str) -> dict[str, Any]:
+        """Read the fixed scheduling baseline, forecast and selected evidence separately."""
+        return await pm_daemon("pm_roadmap_get", workspace_id=workspace_id)
+
+    async def pm_roadmap_revisions_list(workspace_id: str, kind: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read immutable Roadmap history without refreshing evidence or changing dates."""
+        return await pm_daemon("pm_roadmap_revisions_list", workspace_id=workspace_id, kind=kind, after=after, limit=limit)
+
+    async def pm_roadmap_revision_get(workspace_id: str, revision_id: str) -> dict[str, Any]:
+        """Read one Roadmap revision, rechecking visibility of original source evidence."""
+        return await pm_daemon("pm_roadmap_revision_get", workspace_id=workspace_id, revision_id=revision_id)
+
     async def pm_snapshots_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Saved project Brief metadata. Each snapshot retains its original time, baseline and source versions."""
         return await pm_daemon("pm_snapshots_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -692,6 +712,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
                pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
+               pm_plan_compare,
+               pm_roadmap_get, pm_roadmap_revisions_list, pm_roadmap_revision_get,
                artifacts_list, artifact_get, artifact_capture_preview, artifact_managed_capture_preview, approval_preview, cleanup_preview, cleanup_retained, cleanup_tombstones):
         mcp.add_tool(_wrap(fn), name=fn.__name__, annotations=ro)
 

@@ -133,3 +133,16 @@ The complete response is limited to 2,000,000 UTF-8 bytes; an oversized comparis
 fails with `PM_DIFF_TOO_LARGE` rather than returning a truncated change list.
 This domain is a source for subsequent PM discussion and UI, not the complete
 W11 decision/follow-up workflow.
+
+## Shared client entry points
+
+HTTP GET `/api/v1/pm/workspaces/{workspace_id}/plan-comparison` and MCP/RPC
+`pm_plan_compare` invoke the same read. Both revision IDs are required; HTTP
+encodes optional binding IDs as one comma-separated query value and a fixed
+integer journal cursor. Unknown/duplicate query keys and unbounded lists fail.
+The Tauri central bridge permits only these exact paths and bounded parameters.
+
+Web and desktop show comparison below the plan versions in the same discussion.
+The reader explicitly selects endpoints and optional work associations. Rechecking
+preserves the original cursor; changing a selection clears the previous result.
+Plain text rendering preserves source content without interpreting embedded HTML.

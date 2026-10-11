@@ -141,6 +141,503 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-roadmap.js
+function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let current = null, accepted = null, planHead = null, workBindings = [], workTitles = {}, serial = 0, signature = "", baselineForm = null;
+	const status = h("div", { role: "status" }), view = h("div"), rows = h("div", { class: "pm-roadmap-editor" });
+	const hidden = () => h("input", { type: "hidden" });
+	const title = input("pm_roadmap_name", {
+		max: 200,
+		required: false
+	}), rationale = input("pm_roadmap_reason", {
+		max: 4e3,
+		multiline: true
+	});
+	const milestones = hidden(), version = hidden(), planVersion = hidden();
+	const pick = (row) => Object.fromEntries([
+		"milestone_id",
+		"title",
+		"plan_revision_id",
+		"requirement_ids",
+		"work_binding_ids",
+		"baseline_date",
+		"depends_on"
+	].map((key) => [key, row[key]]));
+	const drafts = () => JSON.parse(milestones.value || "[]");
+	const persist = (list) => {
+		milestones.value = JSON.stringify(list);
+		milestones.dispatchEvent(new Event("input"));
+	};
+	const textDate = (value) => value || t("pm_roadmap_unknown_date");
+	const can = () => Boolean(current && planHead) && permitted(true);
+	const lock = () => {
+		for (const field of rows.querySelectorAll("input,select,button")) field.disabled = milestones.disabled || field.dataset.pmIncompatible === "true";
+		add.disabled = milestones.disabled;
+	};
+	const add = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			if (milestones.disabled || !accepted) return;
+			const list = drafts();
+			if (list.length >= 100) return;
+			list.push({
+				milestone_id: "ms_" + crypto.randomUUID().replaceAll("-", "").slice(0, 16),
+				title: "",
+				plan_revision_id: accepted.revision_id,
+				requirement_ids: [],
+				work_binding_ids: [],
+				baseline_date: null,
+				depends_on: []
+			});
+			persist(list);
+			renderEditor();
+		}
+	}, t("pm_roadmap_add"));
+	baselineForm = form({
+		action: "pm.roadmap.baseline.set",
+		target: { workspace_id: workspaceId },
+		fields: {
+			title,
+			rationale,
+			milestones,
+			version,
+			planVersion
+		},
+		params: (values) => ({
+			...values.title.trim() ? { title: values.title.trim() } : {},
+			rationale: values.rationale,
+			milestones: JSON.parse(values.milestones || "[]")
+		}),
+		preconditions: () => ({
+			expected_roadmap_version: Number(version.value),
+			expected_plan_version: Number(planVersion.value)
+		}),
+		permitted: () => can() && Boolean(accepted) && Boolean(version.value),
+		recoverPermitted: () => permitted(true),
+		label: "pm_roadmap_save_baseline",
+		onStateChange: () => {
+			if (baselineForm && !baselineForm.locked() && !milestones.value && current && planHead) {
+				initializeEditor();
+				baselineForm.update();
+				return;
+			}
+			lock();
+		},
+		onSaved: async () => {
+			await refresh();
+			initializeEditor();
+		},
+		extra: h("div", {}, h("p", { class: "muted" }, t("pm_roadmap_baseline_help")), labelled("pm_roadmap_name", title), rows, add, labelled("pm_roadmap_reason", rationale), milestones, version, planVersion)
+	});
+	const editor = h("details", { "data-pm-roadmap-editor": "" }, h("summary", {}, t("pm_roadmap_edit")), baselineForm.box);
+	function initializeEditor() {
+		if (milestones.value) {
+			if (!rows.children.length && drafts().length) renderEditor();
+			return;
+		}
+		if (!current || !planHead || baselineForm.locked()) return;
+		baselineForm.set("milestones", JSON.stringify((current.baseline?.document.milestones || []).map(pick)));
+		baselineForm.set("version", String(current.head.version));
+		baselineForm.set("planVersion", String(planHead.version));
+		if (!title.value) baselineForm.set("title", current.baseline?.document.title || "");
+		renderEditor();
+	}
+	function renderEditor() {
+		rows.replaceChildren();
+		let list;
+		try {
+			list = drafts();
+			if (!Array.isArray(list)) throw Error();
+		} catch {
+			rows.append(h("p", { class: "error" }, t("pm_damaged")));
+			return;
+		}
+		const renderedBindings = workBindings.slice();
+		for (const row of list) {
+			const name = input("pm_roadmap_milestone", {
+				max: 200,
+				value: row.title
+			}), date = h("input", {
+				type: "date",
+				"aria-label": t("pm_roadmap_baseline_date"),
+				value: row.baseline_date || ""
+			});
+			const set = (key, value) => {
+				const latest = drafts();
+				const match = latest.find((item) => item.milestone_id === row.milestone_id);
+				if (match) {
+					match[key] = value;
+					persist(latest);
+				}
+			};
+			name.addEventListener("input", () => set("title", name.value));
+			date.addEventListener("change", () => set("baseline_date", date.value || null));
+			const work = h("div", { class: "pm-roadmap-choices" }), requirements = h("div", { class: "pm-roadmap-choices" }), dependencies = h("div", { class: "pm-roadmap-choices" });
+			if (row.plan_revision_id === accepted?.revision_id) for (const requirement of accepted.document.requirements || []) {
+				const check = h("input", {
+					type: "checkbox",
+					checked: row.requirement_ids.includes(requirement.id)
+				});
+				check.addEventListener("change", () => {
+					set("requirement_ids", check.checked ? [...new Set([...drafts().find((item) => item.milestone_id === row.milestone_id).requirement_ids, requirement.id])] : drafts().find((item) => item.milestone_id === row.milestone_id).requirement_ids.filter((id) => id !== requirement.id));
+					refreshWorkEligibility();
+				});
+				requirements.append(h("label", {}, check, " ", requirement.text || requirement.id));
+			}
+			else requirements.append(h("p", { class: "muted" }, t("pm_roadmap_historical_requirements")));
+			for (const binding of workBindings.filter((value) => value.plan_revision_id === row.plan_revision_id)) {
+				const selected = row.work_binding_ids.includes(binding.binding_id), compatible = !(binding.requirement_ids || []).length || (binding.requirement_ids || []).some((id) => row.requirement_ids.includes(id));
+				const check = h("input", {
+					type: "checkbox",
+					checked: selected,
+					"data-pm-work-binding": binding.binding_id,
+					"data-pm-incompatible": String(!compatible && !selected)
+				});
+				check.addEventListener("change", () => {
+					set("work_binding_ids", check.checked ? [...new Set([...drafts().find((item) => item.milestone_id === row.milestone_id).work_binding_ids, binding.binding_id])] : drafts().find((item) => item.milestone_id === row.milestone_id).work_binding_ids.filter((id) => id !== binding.binding_id));
+					refreshWorkEligibility();
+				});
+				work.append(h("label", {}, check, " ", workTitles[binding.work_item_id] || binding.work_item_id, compatible ? "" : h("small", { class: "muted" }, t("pm_roadmap_work_scope"))));
+			}
+			for (const id of row.work_binding_ids.filter((id) => !workBindings.some((binding) => binding.binding_id === id))) {
+				const check = h("input", {
+					type: "checkbox",
+					checked: true
+				});
+				check.addEventListener("change", () => {
+					const selected = drafts().find((item) => item.milestone_id === row.milestone_id).work_binding_ids;
+					set("work_binding_ids", check.checked ? [...new Set([...selected, id])] : selected.filter((value) => value !== id));
+				});
+				work.append(h("label", {}, check, " ", t("pm_roadmap_historical_work"), h("code", {}, id)));
+			}
+			for (const id of row.depends_on.filter((id) => !list.some((item) => item.milestone_id === id))) {
+				const check = h("input", {
+					type: "checkbox",
+					checked: true
+				});
+				check.addEventListener("change", () => {
+					const selected = drafts().find((item) => item.milestone_id === row.milestone_id).depends_on;
+					set("depends_on", check.checked ? [...new Set([...selected, id])] : selected.filter((value) => value !== id));
+				});
+				dependencies.append(h("label", {}, check, " ", t("pm_roadmap_missing_dependency"), h("code", {}, id)));
+			}
+			function refreshWorkEligibility() {
+				const selected = drafts().find((item) => item.milestone_id === row.milestone_id);
+				for (const check of work.querySelectorAll("[data-pm-work-binding]")) {
+					const binding = renderedBindings.find((item) => item.binding_id === check.dataset.pmWorkBinding);
+					const compatible = !(binding.requirement_ids || []).length || binding.requirement_ids.some((id) => selected.requirement_ids.includes(id));
+					check.dataset.pmIncompatible = String(!compatible && !selected.work_binding_ids.includes(binding.binding_id));
+				}
+				lock();
+			}
+			for (const other of list.filter((item) => item.milestone_id !== row.milestone_id)) {
+				const check = h("input", {
+					type: "checkbox",
+					checked: row.depends_on.includes(other.milestone_id)
+				});
+				check.addEventListener("change", () => set("depends_on", check.checked ? [...new Set([...drafts().find((item) => item.milestone_id === row.milestone_id).depends_on, other.milestone_id])] : drafts().find((item) => item.milestone_id === row.milestone_id).depends_on.filter((id) => id !== other.milestone_id)));
+				dependencies.append(h("label", {}, check, " ", other.title || t("pm_roadmap_untitled")));
+			}
+			const remove = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					if (milestones.disabled) return;
+					persist(drafts().filter((item) => item.milestone_id !== row.milestone_id));
+					renderEditor();
+				}
+			}, t("pm_roadmap_remove"));
+			rows.append(h("fieldset", { "data-pm-milestone-editor": row.milestone_id }, labelled("pm_roadmap_milestone", name), labelled("pm_roadmap_baseline_date", date), h("details", {}, h("summary", {}, t("pm_roadmap_work")), work), h("details", {}, h("summary", {}, t("pm_roadmap_requirements")), requirements), h("details", {}, h("summary", {}, t("pm_roadmap_dependencies")), dependencies), remove));
+		}
+		lock();
+	}
+	const resetEditor = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			if (baselineForm.locked() || !can()) return;
+			baselineForm.set("title", current.baseline?.document.title || "");
+			baselineForm.set("milestones", "");
+			initializeEditor();
+		}
+	}, t("pm_roadmap_use_current"));
+	editor.append(resetEditor);
+	const choice = h("select", {
+		"aria-label": t("pm_roadmap_milestone"),
+		required: true
+	}), forecastDate = h("input", {
+		type: "date",
+		"aria-label": t("pm_roadmap_forecast_date")
+	}), forecastReason = input("pm_roadmap_reason", {
+		max: 4e3,
+		multiline: true
+	});
+	const forecastBaseline = hidden(), forecastVersion = hidden();
+	let forecast;
+	forecast = form({
+		action: "pm.roadmap.forecast.set",
+		target: { workspace_id: workspaceId },
+		fields: {
+			milestone: choice,
+			date: forecastDate,
+			rationale: forecastReason,
+			baseline: forecastBaseline,
+			version: forecastVersion
+		},
+		params: (values) => ({
+			baseline_revision_id: values.baseline,
+			rationale: values.rationale,
+			updates: [{
+				milestone_id: values.milestone,
+				forecast_date: values.date || null
+			}]
+		}),
+		preconditions: () => ({ expected_roadmap_version: Number(forecastVersion.value) }),
+		permitted: () => can() && Boolean(current?.baseline),
+		recoverPermitted: () => permitted(true),
+		label: "pm_roadmap_save_forecast",
+		onStateChange: () => {
+			if (initializeAction(forecast, forecastBaseline)) forecast.update();
+		},
+		onSaved: () => refresh(),
+		extra: h("div", {}, h("p", { class: "muted" }, t("pm_roadmap_forecast_help")), labelled("pm_roadmap_milestone", choice), labelled("pm_roadmap_forecast_date", forecastDate), labelled("pm_roadmap_reason", forecastReason))
+	});
+	forecast.box.append(h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			if (!current?.baseline || forecast.locked()) return;
+			forecast.set("baseline", current.head.baseline_revision_id);
+			forecast.set("version", String(current.head.version));
+		}
+	}, t("pm_roadmap_use_current")));
+	const snapshot = h("select", {
+		"aria-label": t("pm_roadmap_snapshot"),
+		required: true
+	});
+	const observationBaseline = hidden(), observationVersion = hidden();
+	let observe;
+	observe = form({
+		action: "pm.roadmap.observe",
+		target: { workspace_id: workspaceId },
+		fields: {
+			snapshot,
+			baseline: observationBaseline,
+			version: observationVersion
+		},
+		params: (values) => ({
+			baseline_revision_id: values.baseline,
+			snapshot_id: values.snapshot
+		}),
+		preconditions: () => ({ expected_roadmap_version: Number(observationVersion.value) }),
+		permitted: () => Boolean(current?.baseline) && permitted(false),
+		recoverPermitted: () => permitted(false),
+		label: "pm_roadmap_save_observation",
+		onStateChange: () => {
+			if (initializeAction(observe, observationBaseline)) observe.update();
+		},
+		onSaved: () => refresh(),
+		extra: h("div", {}, h("p", { class: "muted" }, t("pm_roadmap_observation_help")), labelled("pm_roadmap_snapshot", snapshot))
+	});
+	snapshot.addEventListener("change", () => observe.update());
+	observe.box.append(h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			if (!current?.baseline || observe.locked()) return;
+			observe.set("baseline", current.head.baseline_revision_id);
+			observe.set("version", String(current.head.version));
+		}
+	}, t("pm_roadmap_use_current")));
+	const box = h("section", {
+		class: "pm-roadmap",
+		"data-pm-roadmap": ""
+	}, h("h2", {}, t("pm_roadmap_title")), h("p", { class: "muted" }, t("pm_roadmap_intro")), status, view, editor, h("details", {}, h("summary", {}, t("pm_roadmap_update_forecast")), forecast.box), h("details", {}, h("summary", {}, t("pm_roadmap_update_observation")), observe.box));
+	const historyBody = h("div"), history = h("details", { "data-pm-roadmap-history": "" }, h("summary", {}, t("pm_roadmap_history")), historyBody);
+	box.append(history);
+	let historyLoaded = false, historyBusy = false, historyVersion = null;
+	history.addEventListener("toggle", () => {
+		if (history.open && !historyLoaded) loadHistory();
+	});
+	async function loadHistory(after = 0) {
+		if (historyBusy) return false;
+		historyBusy = true;
+		const expectedVersion = current?.head.version;
+		try {
+			const page = await api("GET", `${endpoint}/roadmap/revisions?after=${after}&limit=20`);
+			alive();
+			if (page.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			if (!history.isConnected) return false;
+			if (!after) historyBody.replaceChildren();
+			historyLoaded = true;
+			historyVersion = expectedVersion;
+			for (const entry of page.revisions || []) {
+				const content = h("div"), detail = h("details", {}, h("summary", {}, t("pm_roadmap_kind_" + entry.kind), " · ", new Date(entry.created_at * 1e3).toLocaleString()), content);
+				let fetched = false;
+				detail.addEventListener("toggle", async () => {
+					if (!detail.open || fetched) return;
+					fetched = true;
+					try {
+						const value = await api("GET", `${endpoint}/roadmap/revisions/${entry.revision_id}`);
+						alive();
+						if (!detail.isConnected) return;
+						if (value.workspace_id !== workspaceId || value.revision.revision_id !== entry.revision_id) throw Error(t("pm_scope_mismatch"));
+						const doc = value.revision.document;
+						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
+					} catch (error) {
+						content.replaceChildren(errorBox(error));
+						fetched = false;
+					}
+				});
+				historyBody.append(detail);
+			}
+			if (page.next_cursor !== null && page.next_cursor !== void 0) {
+				const more = h("button", {
+					type: "button",
+					class: "secondary",
+					onclick: async () => {
+						more.disabled = true;
+						if (await loadHistory(page.next_cursor)) more.remove();
+						else more.disabled = false;
+					}
+				}, t("pm_roadmap_more_history"));
+				historyBody.append(more);
+			}
+			return true;
+		} catch (error) {
+			if (history.isConnected) historyBody.append(errorBox(error));
+			return false;
+		} finally {
+			historyBusy = false;
+			if (history.open && current && expectedVersion !== current.head.version) loadHistory();
+		}
+	}
+	function initializeAction(editor, baseField) {
+		if (current?.baseline && editor && !baseField.value && !editor.locked()) {
+			editor.set("baseline", current.head.baseline_revision_id);
+			editor.set("version", String(current.head.version));
+			return true;
+		}
+		return false;
+	}
+	function render() {
+		const base = current.baseline?.document;
+		if (!base) {
+			view.replaceChildren(h("p", { class: "muted" }, t("pm_roadmap_empty")));
+			return;
+		}
+		const table = h("table", { class: "pm-roadmap-table" }, h("thead", {}, h("tr", {}, ...[
+			"milestone",
+			"baseline_date",
+			"forecast_date",
+			"actual"
+		].map((name) => h("th", { scope: "col" }, t("pm_roadmap_" + name))))));
+		const body = h("tbody");
+		table.append(body);
+		for (const milestone of base.milestones) {
+			const predicted = current.forecast?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
+			const observed = current.observation?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
+			const dependencies = milestone.depends_on.map((id) => base.milestones.find((item) => item.milestone_id === id)?.title || id);
+			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+				plan_revision_id: milestone.plan_revision_id,
+				requirement_ids: milestone.requirement_ids,
+				work_binding_ids: milestone.work_binding_ids,
+				current_baseline_revision_id: current.head.baseline_revision_id,
+				current_forecast_revision_id: current.head.forecast_revision_id,
+				original_baseline_date: milestone.original_baseline_date,
+				first_baseline_revision_id: milestone.first_baseline_revision_id,
+				observation_context: current.observation ? Object.fromEntries([
+					"baseline_revision_id",
+					"forecast_revision_id",
+					"snapshot_id",
+					"snapshot_digest",
+					"as_of",
+					"journal_cursor"
+				].map((key) => [key, current.observation.document[key]])) : null,
+				observation: observed || null
+			}, null, 2)));
+			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation"), source)));
+		}
+		view.replaceChildren(h("p", {}, h("strong", {}, base.title), h("small", { class: "muted pm-source" }, base.rationale)), h("div", { class: "pm-roadmap-scroll" }, table));
+	}
+	function options(select, items) {
+		const selected = select.value;
+		select.replaceChildren(h("option", { value: "" }, t("pm_roadmap_choose")), ...items.map(([value, label]) => h("option", { value }, label)));
+		if (selected && !items.some(([value]) => value === selected)) select.append(h("option", { value: selected }, t("pm_roadmap_saved_choice")));
+		select.value = selected;
+	}
+	async function refresh() {
+		const ticket = ++serial;
+		historyLoaded = false;
+		historyVersion = null;
+		historyBody.replaceChildren();
+		try {
+			const [data, plan, snapshots, work] = await Promise.all([
+				api("GET", `${endpoint}/roadmap`),
+				api("GET", `${endpoint}/plans/accepted`),
+				api("GET", `${endpoint}/snapshots?limit=100`),
+				api("GET", `${endpoint}/work?limit=100`)
+			]);
+			alive();
+			if (ticket !== serial) return;
+			if (data.workspace_id !== workspaceId || plan.head.workspace_id !== workspaceId || snapshots.workspace_id !== workspaceId || work.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			current = data;
+			accepted = plan.plan;
+			planHead = plan.head;
+			workBindings = work.bindings || [];
+			status.replaceChildren();
+			for (const projectId of [...new Set(workBindings.map((binding) => binding.project_id))]) {
+				const items = await api("GET", `/work-items?project_id=${encodeURIComponent(projectId)}&limit=100`);
+				alive();
+				if (ticket !== serial) return;
+				for (const item of items.work_items || []) workTitles[item.work_item_id] = item.title;
+			}
+			if (work.next_cursor !== null && work.next_cursor !== void 0 || snapshots.next_cursor !== null && snapshots.next_cursor !== void 0) status.append(h("p", { class: "muted" }, t("pm_partial")));
+			for (const [editor, baseField] of [[forecast, forecastBaseline], [observe, observationBaseline]]) if (data.baseline && !baseField.value && !editor.locked()) {
+				editor.set("baseline", data.head.baseline_revision_id);
+				editor.set("version", String(data.head.version));
+			}
+			const next = JSON.stringify([
+				data,
+				plan,
+				snapshots,
+				work
+			]);
+			if (signature !== next) {
+				signature = next;
+				render();
+				options(choice, (data.baseline?.document.milestones || []).map((row) => [row.milestone_id, row.title]));
+				options(snapshot, (snapshots.snapshots || []).map((row) => [row.snapshot_id, row.title]));
+				initializeEditor();
+			}
+			baselineForm.update();
+			forecast.update();
+			observe.update();
+			if (historyVersion !== data.head.version) {
+				historyLoaded = false;
+				if (history.open) loadHistory();
+			}
+		} catch (error) {
+			if (ticket === serial) {
+				current = null;
+				view.replaceChildren();
+				historyBody.replaceChildren();
+				historyLoaded = false;
+				status.replaceChildren(errorBox(error));
+				baselineForm.update();
+				forecast.update();
+				observe.update();
+			}
+		}
+	}
+	return {
+		box,
+		refresh
+	};
+}
+//#endregion
 //#region src/pm-brief.js
 function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -605,6 +1102,400 @@ function workspaceEvidence({ h, t, api, alive, workspaceId, workspace, permitted
 	};
 }
 //#endregion
+//#region src/pm-plan-diff-strings.js
+var planDiffStrings = {
+	en: {
+		pm_diff_title: "Compare plan versions",
+		pm_diff_intro: "Read two fixed versions and review possible effects on selected work. Existing work and its original plan stay unchanged.",
+		pm_diff_from: "From version",
+		pm_diff_to: "To version",
+		pm_diff_choose: "Choose a version",
+		pm_diff_compare: "Compare versions",
+		pm_diff_recheck: "Recheck this comparison",
+		pm_diff_loading: "Reading the fixed comparison…",
+		pm_diff_empty: "Choose both versions to see their recorded differences.",
+		pm_diff_more_versions: "More plan versions",
+		pm_diff_bindings: "Select work associations (optional)",
+		pm_diff_binding_help: "Select exact saved associations to review their possible impact. No work is selected automatically.",
+		pm_diff_load_bindings: "Read work associations",
+		pm_diff_more_bindings: "More work associations",
+		pm_diff_no_bindings: "No saved work association is available on this page.",
+		pm_diff_refresh_bindings: "Refresh work associations",
+		pm_diff_binding_count: "{count} associations selected · maximum 100",
+		pm_diff_partial: "This is a partial list. Load more to inspect additional saved entries.",
+		pm_diff_bound: "Bound plan",
+		pm_diff_no_plan: "No plan associated",
+		pm_diff_requirements: "Requirements and acceptance",
+		pm_diff_added: "Added",
+		pm_diff_removed: "Removed",
+		pm_diff_changed: "Changed",
+		pm_diff_before: "Before",
+		pm_diff_after: "After",
+		pm_diff_no_requirements: "No requirement content change is recorded.",
+		pm_diff_order: "Requirement order or membership changed.",
+		pm_diff_acceptance: "Acceptance criteria",
+		pm_diff_no_acceptance: "No acceptance criteria recorded",
+		pm_diff_priority: "Proposed priority",
+		pm_diff_dependencies: "Requirement dependencies",
+		pm_diff_source: "Original source",
+		pm_diff_sources: "Source identities and recorded statuses",
+		pm_diff_domains: "Eight management domains",
+		pm_diff_domain_same: "No recorded change",
+		pm_diff_unknown: "Unknown / not assessed",
+		pm_diff_prose: "Title and Markdown",
+		pm_diff_prose_unknown: "The text changed. Its effect on scope has not been classified; this is not progress backfill or a scope decision.",
+		pm_diff_no_prose: "Title and Markdown are unchanged.",
+		pm_diff_old_title: "Previous title",
+		pm_diff_new_title: "Compared title",
+		pm_diff_impact: "Selected work to review",
+		pm_diff_no_impact_selection: "No work associations were selected. Other work has not been scanned.",
+		pm_diff_candidate: "Review candidate",
+		pm_diff_no_identified: "No change identified · semantic impact remains unassessed",
+		pm_diff_reason_associated_requirement_changed: "An associated requirement changed.",
+		pm_diff_reason_associated_requirement_dependency_changed: "An explicitly linked requirement dependency changed.",
+		pm_diff_reason_plan_context_changed_impact_unclassified: "Plan context changed; its effect needs review.",
+		pm_diff_reason_requirement_order_or_membership_changed: "Requirement ordering or membership changed.",
+		pm_diff_reason_association_coverage_insufficient: "This saved association cannot establish the effect of this comparison.",
+		pm_diff_open_work: "Open existing work",
+		pm_diff_work_unknown: "Title and work state were not saved in this association. No current state is substituted.",
+		pm_diff_work_version: "Saved work version: {version}",
+		pm_diff_evidence: "Fixed versions and comparison record",
+		pm_diff_cursor: "Journal cursor",
+		pm_diff_no_scope_decision: "These are recorded differences, not an adopted scope change or a verification result.",
+		pm_diff_fixed: "Rechecking uses the same versions, associations and journal cursor. Change a selection to start another comparison.",
+		pm_diff_failure: "The comparison could not be read. No work was changed.",
+		pm_diff_invalid: "The response does not match the selected comparison.",
+		pm_diff_selected_source: "Source input",
+		pm_diff_confirmed_by: "Confirmed by",
+		pm_diff_not_confirmed: "No confirmer recorded",
+		pm_diff_unclassified: "Unmapped source inputs",
+		pm_diff_reading: "Reading…",
+		pm_diff_missing_versions: "No saved plan versions are available yet.",
+		pm_diff_from_digest: "Original document digest",
+		pm_diff_to_digest: "Compared document digest",
+		pm_diff_comparison_digest: "Plan comparison digest",
+		pm_diff_context_digest: "Comparison and work context digest",
+		pm_diff_from_scope_digest: "Original structured scope digest",
+		pm_diff_to_scope_digest: "Compared structured scope digest",
+		pm_diff_scope_changed: "Structured scope data differs. Its effect still needs review.",
+		pm_diff_scope_same: "Structured scope data is unchanged. Text changes still require separate review.",
+		pm_diff_scope_unknown: "Structured scope comparison is unavailable."
+	},
+	"zh-TW": {
+		pm_diff_title: "比較計畫版本",
+		pm_diff_intro: "閱讀兩個固定版本，檢視選定工作可能受到的影響。既有工作與原計畫關聯保持不變。",
+		pm_diff_from: "原版本",
+		pm_diff_to: "比較版本",
+		pm_diff_choose: "選擇版本",
+		pm_diff_compare: "比較版本",
+		pm_diff_recheck: "重查這份比較",
+		pm_diff_loading: "正在讀取固定版本差異…",
+		pm_diff_empty: "選好兩個版本，即可查看已記錄的差異。",
+		pm_diff_more_versions: "更多計畫版本",
+		pm_diff_bindings: "選擇工作關聯（選填）",
+		pm_diff_binding_help: "明確選擇已保存的關聯，再檢視可能的影響。系統不會自動選取工作。",
+		pm_diff_load_bindings: "讀取工作關聯",
+		pm_diff_more_bindings: "更多工作關聯",
+		pm_diff_no_bindings: "這一頁沒有已保存的工作關聯。",
+		pm_diff_refresh_bindings: "重新整理工作關聯",
+		pm_diff_binding_count: "已選 {count} 個關聯 · 最多 100 個",
+		pm_diff_partial: "目前是部分清單，可載入更多已保存項目。",
+		pm_diff_bound: "關聯計畫",
+		pm_diff_no_plan: "尚未關聯計畫",
+		pm_diff_requirements: "需求與接受條件",
+		pm_diff_added: "新增",
+		pm_diff_removed: "移除",
+		pm_diff_changed: "變更",
+		pm_diff_before: "原內容",
+		pm_diff_after: "新內容",
+		pm_diff_no_requirements: "沒有已記錄的需求內容變更。",
+		pm_diff_order: "需求順序或成員已有變更。",
+		pm_diff_acceptance: "接受條件",
+		pm_diff_no_acceptance: "未記錄接受條件",
+		pm_diff_priority: "建議優先順序",
+		pm_diff_dependencies: "需求依賴",
+		pm_diff_source: "原始來源",
+		pm_diff_sources: "來源身分與記錄狀態",
+		pm_diff_domains: "八個管理領域",
+		pm_diff_domain_same: "沒有已記錄的變更",
+		pm_diff_unknown: "未知／尚未評估",
+		pm_diff_prose: "標題與 Markdown",
+		pm_diff_prose_unknown: "文字已有變更，對範圍的影響尚未分類；不會因此視為成果回填或範圍決策。",
+		pm_diff_no_prose: "標題與 Markdown 沒有變更。",
+		pm_diff_old_title: "原標題",
+		pm_diff_new_title: "比較標題",
+		pm_diff_impact: "選定的待檢視工作",
+		pm_diff_no_impact_selection: "尚未選取工作關聯，也未掃描其他工作。",
+		pm_diff_candidate: "建議檢視",
+		pm_diff_no_identified: "未識別出變更 · 實際影響仍待評估",
+		pm_diff_reason_associated_requirement_changed: "已關聯的需求發生變更。",
+		pm_diff_reason_associated_requirement_dependency_changed: "明確記錄的需求依賴發生變更。",
+		pm_diff_reason_plan_context_changed_impact_unclassified: "計畫脈絡改變，影響仍需檢視。",
+		pm_diff_reason_requirement_order_or_membership_changed: "需求順序或成員改變。",
+		pm_diff_reason_association_coverage_insufficient: "這份已保存的關聯不足以判斷本次變更的影響。",
+		pm_diff_open_work: "開啟既有工作",
+		pm_diff_work_unknown: "這份關聯未保存標題與工作狀態，不會以目前資料代替歷史。",
+		pm_diff_work_version: "當時工作版本：{version}",
+		pm_diff_evidence: "固定版本與比較紀錄",
+		pm_diff_cursor: "Journal 游標",
+		pm_diff_no_scope_decision: "這裡呈現已記錄的差異，尚未採用範圍變更，也不是驗證結果。",
+		pm_diff_fixed: "重查沿用同一組版本、關聯與 journal 游標；變更選擇才會開始另一份比較。",
+		pm_diff_failure: "無法讀取比較，工作沒有變更。",
+		pm_diff_invalid: "回應與選定的比較不一致。",
+		pm_diff_selected_source: "來源輸入",
+		pm_diff_confirmed_by: "確認者",
+		pm_diff_not_confirmed: "未記錄確認者",
+		pm_diff_unclassified: "尚未歸類的來源輸入",
+		pm_diff_reading: "讀取中…",
+		pm_diff_missing_versions: "目前還沒有已保存的計畫版本。",
+		pm_diff_from_digest: "原文件摘要",
+		pm_diff_to_digest: "比較文件摘要",
+		pm_diff_comparison_digest: "計畫差異摘要",
+		pm_diff_context_digest: "差異與工作脈絡摘要",
+		pm_diff_from_scope_digest: "原結構化範圍摘要",
+		pm_diff_to_scope_digest: "比較結構化範圍摘要",
+		pm_diff_scope_changed: "結構化範圍資料已有差異，實際影響仍需檢視。",
+		pm_diff_scope_same: "結構化範圍資料相同，文字變更仍需另外檢視。",
+		pm_diff_scope_unknown: "尚無結構化範圍比較結果。"
+	}
+};
+function planDiffText(t, key, values = {}) {
+	const supplied = t(key, values);
+	if (supplied !== key) return supplied;
+	return (planDiffStrings[(navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en"][key] || key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+}
+//#endregion
+//#region src/pm-plan-diff.js
+function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
+	const text = (key, values) => planDiffText(t, key, values), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const plans = new Map(), bindings = new Map(), selected = new Set();
+	let request = 0, busy = false, cursor = null, planAfter = null, bindingAfter = null, bindingLoaded = false, bindingBusy = false;
+	const from = h("select", { "aria-label": text("pm_diff_from") }), to = h("select", { "aria-label": text("pm_diff_to") });
+	const status = h("div", { role: "status" }), result = h("div", { "data-pm-diff-result": "" });
+	const bindingRows = h("div"), selection = h("p", { class: "muted" }), bindingStatus = h("div", { role: "status" });
+	const label = (key, control) => h("label", {}, text(key), control);
+	const button = h("button", {
+		type: "button",
+		class: "secondary",
+		disabled: true,
+		onclick: () => void read()
+	}, text("pm_diff_compare"));
+	const morePlans = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void loadPlans()
+	}, text("pm_diff_more_versions"));
+	const loadBindings = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refreshBindings(bindingAfter === null)
+	}, text("pm_diff_load_bindings"));
+	const workPicker = h("details", { "data-pm-diff-bindings": "" }, h("summary", {}, text("pm_diff_bindings")), h("p", { class: "muted" }, text("pm_diff_binding_help")), bindingStatus, bindingRows, selection, loadBindings);
+	const box = h("section", {
+		class: "pm-packages pm-plan-comparison",
+		"data-pm-plan-diff": ""
+	}, h("h3", {}, text("pm_diff_title")), h("p", { class: "muted" }, text("pm_diff_intro")), h("div", { class: "capture-fields" }, label("pm_diff_from", from), label("pm_diff_to", to)), morePlans, workPicker, h("div", { class: "actions" }, button), status, result);
+	const valid = (page) => {
+		if (page?.workspace_id !== workspaceId) throw Error(text("pm_diff_invalid"));
+		return page;
+	};
+	const raw = (value) => value === null || value === void 0 ? text("pm_diff_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value);
+	const detail = (heading, ...children) => h("details", {}, h("summary", {}, heading), ...children);
+	function controls() {
+		button.disabled = busy || !from.value || !to.value;
+		button.textContent = text(busy ? "pm_diff_reading" : cursor === null ? "pm_diff_compare" : "pm_diff_recheck");
+		selection.textContent = text("pm_diff_binding_count", { count: selected.size });
+		bindingRows.querySelectorAll("input").forEach((input) => {
+			input.disabled = selected.size >= 100 && !input.checked;
+		});
+	}
+	function changed() {
+		request++;
+		busy = false;
+		cursor = null;
+		result.replaceChildren();
+		status.replaceChildren();
+		controls();
+	}
+	from.addEventListener("change", changed);
+	to.addEventListener("change", changed);
+	workPicker.addEventListener("toggle", () => {
+		if (workPicker.open && !bindingLoaded) refreshBindings();
+	});
+	function options() {
+		for (const control of [from, to]) {
+			const old = control.value;
+			control.replaceChildren(h("option", { value: "" }, text("pm_diff_choose")), ...[...plans.values()].sort((a, b) => a.sequence - b.sequence).map((plan) => h("option", { value: plan.revision_id }, t("pm_revision_number", { number: plan.sequence }), " · ", plan.revision_id)));
+			if (plans.has(old)) control.value = old;
+		}
+		morePlans.hidden = planAfter === null;
+		if (!plans.size) status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_missing_versions")));
+		controls();
+	}
+	function update(page, workPage) {
+		valid(page);
+		for (const plan of page.revisions || []) plans.set(plan.revision_id, plan);
+		planAfter = page.next_cursor === null || page.next_cursor === void 0 ? null : Math.max(page.next_cursor, ...[...plans.values()].map((plan) => plan.sequence));
+		options();
+		if (workPage) showBindings(valid(workPage));
+	}
+	async function loadPlans() {
+		if (morePlans.disabled || planAfter === null) return;
+		morePlans.disabled = true;
+		try {
+			const page = await api("GET", `${endpoint}/plans?after=${encodeURIComponent(planAfter)}&limit=100`);
+			alive();
+			if (box.isConnected) update(page);
+		} catch (error) {
+			if (box.isConnected) status.replaceChildren(errorBox(error));
+		} finally {
+			morePlans.disabled = false;
+		}
+	}
+	function showBindings(page) {
+		bindingLoaded = true;
+		bindingAfter = page.next_cursor ?? null;
+		for (const value of page.bindings || []) bindings.set(value.binding_id, value);
+		bindingRows.replaceChildren(...[...bindings.values()].map((value) => {
+			const id = `pm-diff-${workspaceId}-${value.binding_id}`;
+			const input = h("input", {
+				id,
+				type: "checkbox",
+				checked: selected.has(value.binding_id),
+				"data-pm-diff-binding": value.binding_id,
+				onchange: () => {
+					if (input.checked) selected.add(value.binding_id);
+					else selected.delete(value.binding_id);
+					changed();
+				}
+			});
+			return h("div", { class: "pm-fact" }, h("div", { class: "pm-fact-heading" }, input, h("label", {
+				for: id,
+				class: "pm-source"
+			}, value.work_item_id)), h("p", { class: "muted pm-source" }, text("pm_diff_bound"), ": ", value.plan_revision_id || text("pm_diff_no_plan")), h("small", { class: "muted pm-source" }, value.binding_id));
+		}));
+		if (!bindings.size) bindingRows.append(h("p", { class: "muted" }, text("pm_diff_no_bindings")));
+		bindingStatus.replaceChildren(...bindingAfter !== null ? [h("p", { class: "muted" }, text("pm_diff_partial"))] : []);
+		loadBindings.hidden = false;
+		loadBindings.textContent = text(bindingAfter === null ? "pm_diff_refresh_bindings" : "pm_diff_more_bindings");
+		controls();
+	}
+	async function refreshBindings(reset = true) {
+		if (bindingBusy) return;
+		bindingBusy = true;
+		loadBindings.disabled = true;
+		try {
+			const after = reset ? null : bindingAfter;
+			const page = valid(await api("GET", `${endpoint}/work?limit=100${after === null ? "" : "&after=" + encodeURIComponent(after)}`));
+			alive();
+			if (box.isConnected) showBindings(page);
+		} catch (error) {
+			if (box.isConnected) {
+				bindingStatus.replaceChildren(errorBox(error));
+				loadBindings.hidden = false;
+			}
+		} finally {
+			bindingBusy = false;
+			loadBindings.disabled = false;
+		}
+	}
+	function source(input) {
+		return h("div", { class: "pm-fact pm-source" }, h("span", { class: "chip" }, t("pm_status_" + input.status)), h("p", { class: "pm-note-text" }, input.value), h("p", { class: "muted" }, text("pm_diff_selected_source"), ": ", input.input_id), h("p", { class: "muted" }, text("pm_diff_source"), ": ", raw(input.source_ref)), h("p", { class: "muted" }, input.confirmed_by ? text("pm_diff_confirmed_by") + ": " + input.confirmed_by : text("pm_diff_not_confirmed")));
+	}
+	function requirement(item) {
+		return h("div", { class: "pm-source" }, h("p", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_status_" + item.source_status), " · ", text("pm_diff_selected_source"), ": ", item.source_input_id), h("p", { class: "muted" }, text("pm_diff_priority"), ": ", raw(item.priority)), h("p", { class: "muted" }, text("pm_diff_dependencies"), ": ", raw(item.depends_on)), h("h4", {}, text("pm_diff_acceptance")), ...item.acceptance?.length ? item.acceptance.map((acceptance) => h("p", {}, acceptance.text, " · ", t("pm_status_" + acceptance.source_status), h("small", { class: "muted pm-source" }, " · " + acceptance.source_input_id))) : [h("p", { class: "muted" }, text("pm_diff_no_acceptance"))]);
+	}
+	function render(value) {
+		const changes = value.changes, req = changes.requirements, reqRows = [];
+		for (const kind of [
+			"added",
+			"removed",
+			"changed"
+		]) for (const item of req[kind] || []) reqRows.push(detail(text("pm_diff_" + kind) + " · " + item.id, ...kind === "changed" ? [
+			h("h4", {}, text("pm_diff_before")),
+			requirement(item.before),
+			h("h4", {}, text("pm_diff_after")),
+			requirement(item.after)
+		] : [requirement(item)]));
+		const sources = changes.sources, sourceRows = [];
+		for (const kind of [
+			"added",
+			"removed",
+			"changed",
+			"unchanged"
+		]) for (const item of sources[kind] || []) sourceRows.push(detail((kind === "unchanged" ? text("pm_diff_domain_same") : text("pm_diff_" + kind)) + " · " + item.input_id, ...kind === "changed" ? [
+			h("h4", {}, text("pm_diff_before")),
+			source(item.before),
+			h("h4", {}, text("pm_diff_after")),
+			source(item.after)
+		] : [source(item)]));
+		const domains = detail(text("pm_diff_domains"));
+		for (const [name, value] of Object.entries(changes.domains)) {
+			const row = detail(t("pm_slot_" + name) + " · " + text(value.changed ? "pm_diff_changed" : "pm_diff_domain_same"));
+			for (const side of ["before", "after"]) row.append(h("h4", {}, text("pm_diff_" + side)), ...value[side].statements?.length ? value[side].statements.map(source) : [h("p", { class: "muted" }, text("pm_diff_unknown"))]);
+			domains.append(row);
+		}
+		const prose = detail(text("pm_diff_prose"));
+		if (changes.title.changed) prose.append(h("p", {}, text("pm_diff_old_title"), ": ", changes.title.before), h("p", {}, text("pm_diff_new_title"), ": ", changes.title.after));
+		if (changes.markdown.changed || changes.title.changed) prose.append(h("p", { class: "muted" }, text("pm_diff_prose_unknown")));
+		else prose.append(h("p", { class: "muted" }, text("pm_diff_no_prose")));
+		if (changes.markdown.replacement) prose.append(h("h4", {}, text("pm_diff_removed")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.removed), h("h4", {}, text("pm_diff_added")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.added));
+		const work = h("div", {}, h("h4", {}, text("pm_diff_impact")));
+		if (!value.impact_candidates.length) work.append(h("p", { class: "muted" }, text("pm_diff_no_impact_selection")));
+		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
+		const fixed = detail(text("pm_diff_evidence"), h("p", { class: "pm-source" }, text("pm_diff_from"), ": ", value.from_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_to"), ": ", value.to_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_cursor"), ": ", value.context.journal_cursor), ...[
+			["pm_diff_from_digest", value.from_revision.document_digest],
+			["pm_diff_to_digest", value.to_revision.document_digest],
+			["pm_diff_from_scope_digest", value.from_revision.structured_scope_digest],
+			["pm_diff_to_scope_digest", value.to_revision.structured_scope_digest],
+			["pm_diff_comparison_digest", value.comparison_digest],
+			["pm_diff_context_digest", value.context_digest]
+		].map(([key, digest]) => h("p", { class: "pm-source" }, text(key), ": ", raw(digest))));
+		result.replaceChildren(h("p", { class: "muted" }, text("pm_diff_no_scope_decision")), h("p", { class: "muted" }, text(value.scope?.structured_digest_changed === true ? "pm_diff_scope_changed" : value.scope?.structured_digest_changed === false ? "pm_diff_scope_same" : "pm_diff_scope_unknown")), h("h4", {}, text("pm_diff_requirements")), ...reqRows.length ? reqRows : [h("p", { class: "muted" }, text("pm_diff_no_requirements"))], ...req.order_changed ? [h("p", { class: "muted" }, text("pm_diff_order"))] : [], domains, prose, detail(text("pm_diff_sources"), ...sourceRows, h("p", { class: "pm-source" }, text("pm_diff_unclassified"), ": ", raw(changes.unclassified_sources))), work, fixed);
+	}
+	async function read() {
+		if (busy || !from.value || !to.value) return;
+		busy = true;
+		const ticket = ++request, left = from.value, right = to.value, ids = [...selected].sort(), fixedCursor = cursor;
+		controls();
+		result.replaceChildren();
+		status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_loading")));
+		const query = new URLSearchParams({
+			from_revision_id: left,
+			to_revision_id: right
+		});
+		if (ids.length) query.set("binding_ids", ids.join(","));
+		if (fixedCursor !== null) query.set("journal_cursor", String(fixedCursor));
+		try {
+			const data = await api("GET", `${endpoint}/plan-comparison?${query}`);
+			alive();
+			if (!box.isConnected || ticket !== request) return;
+			const value = valid(data).comparison;
+			if (value?.from_revision?.revision_id !== left || value?.to_revision?.revision_id !== right || JSON.stringify(value.context?.binding_ids) !== JSON.stringify(ids) || !Array.isArray(value.impact_candidates) || value.impact_candidates.length !== ids.length || value.impact_candidates.some((candidate) => !ids.includes(candidate.binding?.binding_id) || candidate.binding?.workspace_id !== workspaceId) || new Set(value.impact_candidates.map((candidate) => candidate.binding.binding_id)).size !== ids.length || !Number.isSafeInteger(value.context?.journal_cursor) || value.context.journal_cursor < 0 || fixedCursor !== null && value.context.journal_cursor !== fixedCursor) throw Error(text("pm_diff_invalid"));
+			render(value);
+			cursor = value.context.journal_cursor;
+			status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_fixed")));
+		} catch (error) {
+			if (box.isConnected && ticket === request) {
+				result.replaceChildren();
+				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, text("pm_diff_failure")));
+			}
+		} finally {
+			if (ticket === request) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	options();
+	return {
+		box,
+		update,
+		refreshBindings
+	};
+}
+//#endregion
 //#region src/pm-plans.js
 function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
 	let head = null, capability = null, signature = "", busy = false;
@@ -654,6 +1545,15 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 		class: "pm-plans",
 		"data-pm-plans": ""
 	}, h("h3", {}, t("pm_plan_versions")), current, draftBox, rows);
+	const comparison = planComparison({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	});
+	box.append(comparison.box);
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
 	function revisionRow(summary) {
 		const detail = h("div"), item = h("details", { "data-pm-revision": summary.revision_id }, h("summary", {}, t("pm_revision_number", { number: summary.sequence }), summary.revision_id === head.accepted_revision_id ? " · " + t("pm_plan_accepted") : ""), detail);
@@ -771,6 +1671,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 			if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("pm_stale"));
 			head = page.head;
 			capability = capabilities;
+			comparison.update(page);
 			draftBox.hidden = thread().thread.mode !== "planning" && !editor.locked();
 			const nextSignature = JSON.stringify([
 				page,
@@ -1275,6 +2176,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (brief && !threadId) body.insertBefore(brief.box, content);
+	const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap ? workspaceRoadmap({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox
+	}) : null;
+	if (roadmap) body.insertBefore(roadmap.box, content);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
 	const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide && (threadData.thread.mode === "idea" || Boolean(planningRevisionForm));
@@ -1857,6 +2771,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			worktreeChoice?.update();
 			if (evidence) await evidence.refresh();
 			if (brief) await brief.refresh();
+			if (roadmap) await roadmap.refresh();
 			nativeAnalysis?.update(runs?.runs || []);
 			updateForms();
 		} catch (error) {
@@ -1881,7 +2796,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_run",
 			"pm_plan",
 			"pm_evidence",
-			"pm_snapshot"
+			"pm_snapshot",
+			"pm_roadmap"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -5746,6 +6662,48 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_roadmap_historical_work: "Previously selected work association",
+		pm_roadmap_missing_dependency: "Removed milestone dependency",
+		pm_roadmap_work_scope: "Select an overlapping requirement first",
+		pm_roadmap_history: "Schedule and result history",
+		pm_roadmap_more_history: "More history",
+		pm_roadmap_kind_baseline: "Scheduling baseline",
+		pm_roadmap_kind_forecast: "Forecast",
+		pm_roadmap_kind_observation: "Saved result observation",
+		pm_roadmap_title: "Scope and milestones",
+		pm_roadmap_intro: "Original commitments, explicit forecasts and saved results stay separate.",
+		pm_roadmap_name: "Roadmap name",
+		pm_roadmap_reason: "Reason for this change",
+		pm_roadmap_milestone: "Milestone",
+		pm_roadmap_baseline_date: "Baseline date",
+		pm_roadmap_forecast_date: "Forecast date",
+		pm_roadmap_actual: "Recorded results",
+		pm_roadmap_unknown_date: "Not specified",
+		pm_roadmap_add: "Add milestone",
+		pm_roadmap_remove: "Remove from this baseline",
+		pm_roadmap_save_baseline: "Adopt scheduling baseline",
+		pm_roadmap_edit: "Edit scheduling baseline",
+		pm_roadmap_baseline_help: "Select requirements from the accepted plan. A scheduling change preserves earlier dates and does not authorize execution.",
+		pm_roadmap_requirements: "Linked requirements",
+		pm_roadmap_dependencies: "Depends on milestones",
+		pm_roadmap_work: "Associated work",
+		pm_roadmap_historical_requirements: "Requirements remain linked to their earlier accepted plan.",
+		pm_roadmap_untitled: "Untitled milestone",
+		pm_roadmap_use_current: "Use the current baseline",
+		pm_roadmap_save_forecast: "Save forecast",
+		pm_roadmap_update_forecast: "Update a forecast",
+		pm_roadmap_forecast_help: "An updated forecast preserves the original date. Leave the date empty when it is unknown.",
+		pm_roadmap_snapshot: "Saved project snapshot",
+		pm_roadmap_save_observation: "Attach snapshot results",
+		pm_roadmap_update_observation: "Review saved results",
+		pm_roadmap_observation_help: "Use a fixed snapshot. Matching work and evidence do not by themselves satisfy the Definition of Done.",
+		pm_roadmap_quality_unknown: "Completion has not been assessed",
+		pm_roadmap_no_observation: "No result snapshot selected",
+		pm_roadmap_sources: "View linked sources",
+		pm_roadmap_after: "After: {items}",
+		pm_roadmap_empty: "No scheduling baseline has been adopted.",
+		pm_roadmap_choose: "Choose an item",
+		pm_roadmap_saved_choice: "Previously selected item",
 		pm_brief_title: "Project Brief",
 		pm_brief_intro: "Goals, delivery, blockers, deviations and decisions from the same saved sources.",
 		pm_brief_snapshot_title: "Snapshot title",
@@ -6020,6 +6978,48 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_roadmap_historical_work: "先前選定的工作關聯",
+		pm_roadmap_missing_dependency: "已移除里程碑的依賴",
+		pm_roadmap_work_scope: "請先選定有重疊的需求",
+		pm_roadmap_history: "排程與成果歷史",
+		pm_roadmap_more_history: "更多歷史",
+		pm_roadmap_kind_baseline: "里程碑基準",
+		pm_roadmap_kind_forecast: "預測",
+		pm_roadmap_kind_observation: "已保存成果觀察",
+		pm_roadmap_title: "範圍與里程碑",
+		pm_roadmap_intro: "原定承諾、目前預測與已保存成果分開呈現。",
+		pm_roadmap_name: "里程碑計畫名稱",
+		pm_roadmap_reason: "這次調整的理由",
+		pm_roadmap_milestone: "里程碑",
+		pm_roadmap_baseline_date: "原定日期",
+		pm_roadmap_forecast_date: "預測日期",
+		pm_roadmap_actual: "已記錄成果",
+		pm_roadmap_unknown_date: "尚未指定",
+		pm_roadmap_add: "新增里程碑",
+		pm_roadmap_remove: "從此版基準移除",
+		pm_roadmap_save_baseline: "採用里程碑基準",
+		pm_roadmap_edit: "編輯里程碑基準",
+		pm_roadmap_baseline_help: "從已採用計畫選擇需求。調整排程會保留較早日期，不會授權執行工作。",
+		pm_roadmap_requirements: "對應需求",
+		pm_roadmap_dependencies: "依賴里程碑",
+		pm_roadmap_work: "關聯工作",
+		pm_roadmap_historical_requirements: "需求保留與先前已採用計畫的關聯。",
+		pm_roadmap_untitled: "未命名里程碑",
+		pm_roadmap_use_current: "帶入目前基準",
+		pm_roadmap_save_forecast: "儲存預測",
+		pm_roadmap_update_forecast: "調整預測",
+		pm_roadmap_forecast_help: "調整預測會保留原定日期；尚無可靠日期時可留白。",
+		pm_roadmap_snapshot: "已保存的專案快照",
+		pm_roadmap_save_observation: "引用快照成果",
+		pm_roadmap_update_observation: "查核已保存成果",
+		pm_roadmap_observation_help: "引用固定快照。工作與證據關聯吻合，本身不代表已符合完成定義。",
+		pm_roadmap_quality_unknown: "尚未評估是否完成",
+		pm_roadmap_no_observation: "尚未選定成果快照",
+		pm_roadmap_sources: "查看關聯來源",
+		pm_roadmap_after: "依賴：{items}",
+		pm_roadmap_empty: "尚未採用里程碑基準。",
+		pm_roadmap_choose: "選擇項目",
+		pm_roadmap_saved_choice: "先前選定的項目",
 		pm_brief_title: "專案總覽",
 		pm_brief_intro: "以同一份已保存來源，整理目標、交付、阻塞、偏差與決策。",
 		pm_brief_snapshot_title: "快照名稱",

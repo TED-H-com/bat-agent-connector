@@ -126,6 +126,7 @@ class ApiV1:
             pm_evidence,
             pm_native_operations,
             pm_plan_operations,
+            pm_roadmap,
             pm_run_operations,
             pm_snapshots,
             pm_workspace,
@@ -137,6 +138,7 @@ class ApiV1:
         pm_plan_operations.install(daemon.ops)
         pm_evidence.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
+        pm_roadmap.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -163,6 +165,10 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/capabilities", self.pm_capabilities, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-comparison", self.pm_plan_comparison, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/roadmap", self.pm_roadmap, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/roadmap/revisions", self.pm_roadmap_revisions, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/roadmap/revisions/(?P<revision_id>pmr[bfo]_[0-9a-f]{32})", self.pm_roadmap_revision, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots", self.pm_snapshots, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/latest", self.pm_snapshot_latest, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/snapshots/(?P<snapshot_id>pmsnap_[0-9a-f]{32})", self.pm_snapshot, "observe"),
@@ -515,14 +521,16 @@ class ApiV1:
         from .pm_reads import FIELDS, read
         self._exact_query(query, set(FIELDS[method]) - set(ids))
         params = {key: values[0] for key, values in query.items()}
-        integer_fields = {"limit", "max_chars", "before_message", "before_input"}
-        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list"}:
+        integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor"}
+        if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list"}:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
             value = params[key]
             if not re.fullmatch(r"[0-9]{1,9}", value):
                 raise OperationError("INVALID_PARAMS", f"{key} must be a positive integer", 422)
             params[key] = int(value)
+        if method == "pm_plan_compare" and "binding_ids" in params:
+            params["binding_ids"] = params["binding_ids"].split(",") if params["binding_ids"] else []
         return 200, read(self.daemon.ops, principal, method, {**params, **ids})
 
     async def pm_workspaces(self, principal, query, **_):
@@ -582,6 +590,18 @@ class ApiV1:
     async def pm_capture_latest(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_capture_latest_get", query, workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_plan_comparison(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_plan_compare", query, workspace_id=workspace_id)
+
+    async def pm_roadmap(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_roadmap_get", query, workspace_id=workspace_id)
+
+    async def pm_roadmap_revisions(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_roadmap_revisions_list", query, workspace_id=workspace_id)
+
+    async def pm_roadmap_revision(self, principal, query, workspace_id, revision_id, **_):
+        return self._pm_read(principal, "pm_roadmap_revision_get", query, workspace_id=workspace_id, revision_id=revision_id)
+
     async def pm_snapshots(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_snapshots_list", query, workspace_id=workspace_id)
 
@@ -639,7 +659,8 @@ class ApiV1:
                                                     "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
                                                     "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions,
                                                     "work_evidence": "pm.evidence.capture" in self.daemon.ops.actions,
-                                                    "brief_snapshots": "pm.snapshot.create" in self.daemon.ops.actions, "dispatch": False},
+                                                    "brief_snapshots": "pm.snapshot.create" in self.daemon.ops.actions,
+                                                    "roadmap": "pm.roadmap.baseline.set" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},

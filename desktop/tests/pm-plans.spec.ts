@@ -116,7 +116,7 @@ for (const locale of ['en','zh-TW']) for (const width of [390,768,1440]) test(`p
   await page.locator('[data-pm-revision] > summary').click();
   await expect(page.locator('.pm-plan-document')).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await expect(page.locator('.pm-plans h3')).toHaveText(locale==='zh-TW'?'專案計畫':'Project plan');
+  await expect(page.locator('.pm-plans > h3')).toHaveText(locale==='zh-TW'?'專案計畫':'Project plan');
   expect(await page.locator('.pm-content').innerText()).not.toMatch(/\b(null|undefined)\b/);
   const out=process.env.BATC_PM_PLAN_SCREENSHOTS;
   if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/plan-${locale}-${width}.png`,fullPage:true});}

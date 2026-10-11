@@ -217,3 +217,19 @@ critical paths, DoD, delivery acceptance or forecast confidence. It does not
 render SVG or generate narrative reports. Those later consumers must use these
 same fixed baseline, forecast and evidence references rather than inventing a
 second source of PM truth.
+
+## Shared client entry points
+
+HTTP reads are `/api/v1/pm/workspaces/{workspace_id}/roadmap`,
+`/roadmap/revisions?kind=baseline|forecast|observation&after=0&limit=50`, and
+`/roadmap/revisions/{revision_id}`. MCP/RPC expose `pm_roadmap_get`,
+`pm_roadmap_revisions_list`, and `pm_roadmap_revision_get`. Every entry uses the
+same current-membership domain read; native route/query validation is bounded.
+
+The shared workspace home presents milestones, baseline dates, forecasts and
+recorded-result coverage together. Baseline editing, forecasts, saved observations
+and history expand in place. Unsaved drafts retain their original versions and
+exact association IDs across reloads. Old associations remain explicitly removable.
+A changed current baseline never replaces an uncertain request's saved body/key.
+Choosing the current baseline is explicit; saved historical results are reread
+under current source permissions. The UI does not mark milestones Done.
