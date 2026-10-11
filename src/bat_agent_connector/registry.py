@@ -171,7 +171,11 @@ def claim_unsent(host: str, session_id: str) -> str:
     p = registry_path()
     with _locked(p):
         items = _read(p)
+        from . import controller_authority
+        controller_authority.require()
         entry = next((e for e in items if e.get("host") == host and e.get("session_id") == session_id), {})
+        if entry:
+            controller_authority.require_entry(entry)
         _cleanup_guard(host, {**entry, "session_id": session_id})
         return _claim_unsent_locked(p, items, host, session_id)
 

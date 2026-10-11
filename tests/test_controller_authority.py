@@ -108,3 +108,151 @@ def test_no_legacy_adoption_or_ownership_rebinding(identities):
         with pytest.raises(ResourceReadOnly, match="CONTROLLER_IMMUTABLE"):
             registry.update("h1", "new", controller_authority=second)
         assert registry.get("h1", "new") == row
+
+
+def test_server_identity_cannot_be_transplanted(identities, tmp_path):
+    _journal, first, _second = identities
+    other = Journal(tmp_path / "other-server.db")
+    try:
+        with pytest.raises(ResourceReadOnly, match="CONTROLLER_SERVER_CHANGED"), authority.use(first, other):
+            pytest.fail("foreign server scope was entered")
+        with authority.use(authority.binding(other.db, Principal(first["actor"], frozenset(first["scopes"]))), other):
+            with pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+                authority.require_binding(first)
+    finally:
+        other.close()
+
+
+def test_recovery_restores_only_original_durable_evidence(identities):
+    journal, first, second = identities
+    with authority.use(first, journal):
+        registry.reserve("h1", {"session_id": "original", "cwd": "/srv/managed/one"}, 8)
+        original = registry.get("h1", "original")
+        platform_files.atomic_write(registry.registry_path(), b'{"sessions": []}')
+        missing_nonce = {k: v for k, v in original.items() if k != "controller_incarnation"}
+        with pytest.raises(ResourceReadOnly, match="CONTROLLER_OWNER_UNPROVEN"):
+            registry.ensure_existing("h1", missing_nonce)
+        assert registry.list_entries() == []
+    with authority.use(second, journal), pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+        registry.ensure_existing("h1", original)
+    with authority.use(first, journal):
+        registry.ensure_existing("h1", original)
+        recovered = registry.get("h1", "original")
+        assert recovered["controller_authority"] == original["controller_authority"]
+        assert recovered["controller_incarnation"] == original["controller_incarnation"]
+        assert recovered["status"] == "active"
+
+
+def test_warm_reuse_rechecks_controller_before_task_transfer(identities):
+    journal, first, second = identities
+    entry = {"session_id": "warm", "task_id": "before", "role": "lead", "workspace_id": "bat-workspace",
+             "cwd": "/srv/managed/work", "worktree_path": "/srv/managed/work", "branch": "bat/task"}
+    with authority.use(first, journal):
+        registry.reserve("h1", entry, 8)
+        registry.update("h1", "warm", status="active")
+    before = registry.registry_path().read_bytes()
+    params = {"previous_task_id": "before", "task_id": "after", "workspace_id": "bat-workspace",
+              "cwd": entry["cwd"], "branch": entry["branch"]}
+    with authority.use(second, journal), pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+        registry.claim_warm("h1", "warm", **params)
+    assert registry.registry_path().read_bytes() == before
+    with authority.use(first, journal):
+        registry.claim_warm("h1", "warm", **params)
+    assert registry.get("h1", "warm")["task_id"] == "after"
+    assert registry.get("h1", "warm")["controller_authority"] == first
+
+
+async def test_pm_scope_checks_current_membership_without_workspace_adoption(tmp_path):
+    from bat_agent_connector import pm_workspace
+    from bat_agent_connector.operations import OperationService
+    from tests.test_pm_workspace import OTHER, OWNER, create, member
+
+    journal = Journal(tmp_path / "pm.db")
+    ops = OperationService(journal)
+    pm_workspace.install(ops)
+    try:
+        workspace = await create(ops)
+        different = await create(ops)
+        bound = authority.binding(journal.db, OWNER, pm_workspace_id=workspace["workspace_id"])
+        unscoped = authority.binding(journal.db, OWNER)
+        with authority.use(bound, journal):
+            registry.reserve("h1", {"session_id": "pm-session"}, 8)
+        row = registry.get("h1", "pm-session")
+        with authority.use(unscoped, journal):
+            assert authority.require_entry(row) == row
+        with authority.use(unscoped), pytest.raises(ResourceReadOnly, match="CONTROLLER_WORKSPACE_UNAVAILABLE"):
+            authority.require_entry(row)
+        other_scope = authority.binding(journal.db, OWNER, pm_workspace_id=different["workspace_id"])
+        with authority.use(other_scope, journal), pytest.raises(ResourceReadOnly, match="CONTROLLER_WORKSPACE_CHANGED"):
+            authority.require_entry(row)
+        workspace = await member(ops, workspace, OTHER.actor, "owner")
+        await member(ops, workspace, OWNER.actor, None)
+        with authority.use(bound, journal), pytest.raises(ResourceReadOnly, match="CONTROLLER_MEMBERSHIP_CHANGED"):
+            authority.require_entry(row)
+        # Revocation neither relabels the original resource nor grants another owner its controller.
+        with authority.use(authority.binding(journal.db, OTHER), journal), pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+            authority.require_entry(row)
+        assert registry.get("h1", "pm-session")["controller_authority"] == bound
+    finally:
+        journal.close()
+
+
+async def test_policy_preserves_provenance_but_uses_current_caller(fleet_factory, mock, controller_context):
+    from tests.test_resource_policy import add_managed_wt, all_tiers
+
+    journal, owner = controller_context
+    sid = add_managed_wt(mock)
+    fleet = all_tiers(fleet_factory)
+    other = authority.binding(journal.db, Principal("other-controller", frozenset({"operate"}), admin=True))
+    try:
+        owned = await resource_policy.session_policy(fleet, "h1", sid)
+        assert owned["actions"]["session.send"]["allowed"]
+        with authority.use(other, journal):
+            foreign = await resource_policy.session_policy(fleet, "h1", sid)
+        assert foreign["provenance"] == owned["provenance"]
+        assert foreign["api_access"] == "read_only"
+        assert foreign["read_only_code"] == "FOREIGN_CONTROLLER"
+        assert foreign["actions"]["session.send"]["code"] == "FOREIGN_CONTROLLER"
+        with authority.use(None):
+            unknown_caller = await resource_policy.session_policy(fleet, "h1", sid)
+        assert unknown_caller["provenance"] == owned["provenance"]
+        assert unknown_caller["api_access"] == "read_only"
+        assert unknown_caller["read_only_code"] == "CONTROLLER_AUTHORITY_REQUIRED"
+        assert unknown_caller["actions"]["session.send"]["code"] == "CONTROLLER_AUTHORITY_REQUIRED"
+        assert registry.get("h1", sid)["controller_authority"] == owner
+    finally:
+        await fleet.close()
+
+
+async def test_direct_service_helper_cannot_send_without_bound_controller(fleet_factory, mock):
+    from bat_agent_connector import service
+    from tests.test_resource_policy import add_managed_wt, all_tiers, write_frames
+
+    sid = add_managed_wt(mock)
+    fleet = all_tiers(fleet_factory)
+    try:
+        with authority.use(None), pytest.raises(ResourceReadOnly, match="CONTROLLER_AUTHORITY_REQUIRED"):
+            await service.session_send(fleet, "h1", sid, "fixture", confirm=True)
+        assert write_frames(mock) == []
+    finally:
+        await fleet.close()
+
+
+def test_corrupt_actor_controller_pair_is_not_an_admitted_binding(identities):
+    journal, first, second = identities
+    corrupt = {**first, "actor": second["actor"]}
+    with pytest.raises(ResourceReadOnly, match="CONTROLLER_AUTHORITY_INVALID"), authority.use(corrupt, journal):
+        pytest.fail("corrupt identity was accepted")
+    assert not authority.same_controller(first, corrupt)
+
+
+def test_foreign_caller_cannot_preclaim_an_unsent_reservation(identities):
+    journal, first, second = identities
+    with authority.use(first, journal):
+        registry.reserve("h1", {"session_id": "unsent", "start_sent": False}, 8)
+    before = registry.registry_path().read_bytes()
+    with authority.use(second, journal), pytest.raises(ResourceReadOnly, match="FOREIGN_CONTROLLER"):
+        registry.claim_unsent("h1", "unsent")
+    with authority.use(None), pytest.raises(ResourceReadOnly, match="CONTROLLER_AUTHORITY_REQUIRED"):
+        registry.claim_unsent("h1", "unsent")
+    assert registry.registry_path().read_bytes() == before
