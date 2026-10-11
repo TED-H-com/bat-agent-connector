@@ -1153,7 +1153,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	const number = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!number(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Follow-up page size");
 	let serial = 0, selected = "", loaded = false, head = null, plan = null, metadata = [], next = null, sourceLoaded = false;
-	let sourcePages = {}, snapshot = null, thread = null, editor = null, reading = false, sourceSerial = 0, retired = false;
+	let sourcePages = {}, snapshot = null, thread = null, editor = null, reading = false, sourceSerial = 0, retired = false, verifiedRole = null;
 	const status = h("div", { role: "status" }), view = h("div"), sourceStatus = h("div", { role: "status" }), choices = h("div"), meetingChoices = h("div");
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
 	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_fu_unknown"));
@@ -1213,10 +1213,10 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	}
 	function renderNavigation() {
 		const entries = metadata.map((row) => [row.intake_id, `#${row.version} · ${row.created_by}`]);
+		updateOptions(previousChoice, entries, "pm_fu_no_comparison");
 		if (selected && !entries.some(([id]) => id === selected)) entries.push([selected, t("pm_fu_saved_selection") + " · " + selected]);
 		updateOptions(choose, entries, "pm_fu_latest");
 		choose.value = selected;
-		updateOptions(previousChoice, entries, "pm_fu_no_comparison");
 		more.hidden = next == null;
 		more.disabled = reading;
 	}
@@ -1264,6 +1264,17 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		}
 		const doc = row.document;
 		const summary = h("div", { class: "pm-fu-meta" }, h("strong", {}, t("pm_fu_version", { version: row.version })), h("span", {}, t("pm_fu_prepared_at"), ": ", date(row.created_at)), h("span", {}, t("pm_fu_snapshot_at"), ": ", date(doc.snapshot_ref.as_of)));
+		const gaps = [
+			"projects_truncated",
+			"work_truncated",
+			"evidence_truncated",
+			"bytes_truncated"
+		].filter((key) => doc.coverage?.snapshot?.[key] === true).map((key) => "pm_fu_" + key);
+		if (doc.coverage?.thread?.truncated) gaps.push("pm_fu_truncated");
+		const coverageWarning = gaps.length ? h("aside", {
+			class: "pm-fact",
+			"data-pm-fu-partial": ""
+		}, h("h3", {}, t("pm_fu_partial")), note("pm_fu_partial_help"), h("ul", {}, ...gaps.map((key) => h("li", {}, t(key))))) : "";
 		const agenda = h("section", { "data-pm-fu-agenda": "" }, h("h3", {}, t("pm_fu_agenda")));
 		if (!doc.agenda.length) agenda.append(note("pm_fu_no_agenda"));
 		else agenda.append(h("ol", {}, ...doc.agenda.map((item) => h("li", { class: "pm-fact" }, h("strong", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_fu_basis_" + item.ordering_basis)), fold("pm_fu_sources", sourceRefs(item.source_refs))))));
@@ -1283,15 +1294,15 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			"unchanged",
 			"no_longer_selected"
 		].map((kind) => h("div", {}, h("h4", {}, t("pm_fu_change_" + kind)), ...(doc.changes?.[kind] || []).map((identifier) => h("p", {}, code(identifier))), !doc.changes?.[kind]?.length ? note("pm_fu_none") : "")), doc.previous_intake_id ? code(doc.previous_intake_id) : note("pm_fu_no_comparison"));
-		const sources = fold("pm_fu_fixed_sources", h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"), doc.coverage?.thread?.truncated ? note("pm_fu_truncated") : "");
-		view.append(summary, note("pm_fu_preparation_only"), agenda, knowledge, issues, changes, sources);
+		const sources = fold("pm_fu_fixed_sources", h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"));
+		view.append(summary, note("pm_fu_preparation_only"), coverageWarning, agenda, knowledge, issues, changes, sources);
 	}
 	function stale() {
 		if (!baseline.value || head == null || plan == null) return false;
 		const value = JSON.parse(baseline.value);
 		return value.expected_version !== head || value.expected_plan_version !== plan || value.thread_id !== threadChoice.value || thread && value.expected_thread_version !== thread.version;
 	}
-	const can = () => loaded && !retired && actor === caps()?.actor && permitted(false);
+	const can = () => loaded && !retired && actor === caps()?.actor && permitted(false) && (verifiedRole === null || ["owner", "contributor"].includes(verifiedRole));
 	const ready = () => can() && sourceLoaded && snapshot?.snapshot_id === snapshotChoice.value && snapshot.baseline?.document && !snapshot.visibility?.filtered && (!threadChoice.value || thread?.thread_id === threadChoice.value) && baseline.value && !stale();
 	function bindVersions() {
 		if (!editor || editor.locked() || !can() || head == null || plan == null || threadChoice.value && !thread) return;
@@ -1618,6 +1629,18 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	editorFold.addEventListener("toggle", () => {
 		if (editorFold.open && loaded && !sourceLoaded) loadSources();
 	});
+	async function verifyWorkspace(ticket) {
+		const data = await api("GET", endpoint);
+		if (!current(ticket)) return false;
+		const member = data.workspace?.membership;
+		if (data.workspace?.workspace_id !== workspaceId || member?.actor !== actor || ![
+			"owner",
+			"contributor",
+			"reader"
+		].includes(member.role)) throw Error(t("pm_fu_scope_error"));
+		verifiedRole = member.role;
+		return true;
+	}
 	async function refresh() {
 		const ticket = ++serial;
 		++sourceSerial;
@@ -1636,27 +1659,40 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 				retired = true;
 				throw Error(t("pm_fu_actor_changed"));
 			}
-			const [latest, page, planData] = await Promise.all([
-				api("GET", `${endpoint}/follow-ups/latest`),
-				api("GET", `${endpoint}/follow-ups?after=0&limit=${pageSize}`),
-				api("GET", `${endpoint}/plans/head`)
+			const listPath = `${endpoint}/follow-ups?after=0&limit=${pageSize}`, planPath = `${endpoint}/plans/head`;
+			const detailPath = selected ? `${endpoint}/follow-ups/${encodeURIComponent(selected)}` : `${endpoint}/follow-ups/latest`;
+			let [page, planData, result] = await Promise.all([
+				api("GET", listPath),
+				api("GET", planPath),
+				api("GET", detailPath).then((value) => ({ value }), (error) => ({ error }))
 			]);
 			if (!current(ticket)) return;
-			check(latest);
+			const sourceUnavailable = result.error?.code === "PM_FOLLOW_UP_SOURCE_UNAVAILABLE";
+			if (result.error && !sourceUnavailable) throw result.error;
+			if (sourceUnavailable || verifiedRole !== null) {
+				if (!await verifyWorkspace(ticket)) return;
+				[page, planData] = await Promise.all([api("GET", listPath), api("GET", planPath)]);
+				if (!current(ticket)) return;
+			}
 			metadataPage(page, 0);
 			const planHead = planData.head;
-			if (planHead?.workspace_id !== workspaceId || !number(planHead.version) || !number(latest.head_version)) throw Error(t("pm_fu_scope_error"));
-			head = latest.head_version;
+			if (planHead?.workspace_id !== workspaceId || !number(planHead.version)) throw Error(t("pm_fu_scope_error"));
+			head = page.head_version;
 			plan = planHead.version;
 			metadata = page.intakes;
 			next = page.next_cursor;
-			const detail = selected ? check(await api("GET", `${endpoint}/follow-ups/${encodeURIComponent(selected)}`)) : latest;
-			if (!current(ticket)) return;
-			if (detail.intake) validIntake(detail.intake, selected || null);
-			else if (selected) throw Error(t("pm_fu_scope_error"));
+			const detail = result.value;
+			if (detail) {
+				check(detail);
+				if (!number(detail.head_version)) throw Error(t("pm_fu_scope_error"));
+				head = Math.max(head, detail.head_version);
+				if (detail.intake) validIntake(detail.intake, selected || null);
+				else if (selected) throw Error(t("pm_fu_scope_error"));
+			}
 			loaded = true;
 			status.replaceChildren();
-			render(detail.intake);
+			if (sourceUnavailable) view.replaceChildren(note(selected ? "pm_fu_selected_unavailable" : "pm_fu_latest_unavailable"), note("pm_fu_readable_history"));
+			else render(detail.intake);
 			renderNavigation();
 			editor.update();
 			if (editorFold.open) await loadSources();
@@ -1667,6 +1703,177 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	return {
 		element,
 		box: element,
+		refresh
+	};
+}
+//#endregion
+//#region src/pm-work-packages.js
+function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSize = 20 }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
+	const idPattern = /^pmwp_[0-9a-f]{32}$/, digestPattern = /^[0-9a-f]{64}$/;
+	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false;
+	const status = h("div", { role: "status" }), list = h("div"), facts = h("div", { "data-pm-wp-detail": "" });
+	const refreshButton = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("wp_refresh"));
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			pages++;
+			refresh();
+		}
+	}, t("wp_more"));
+	const element = h("section", {
+		class: "pm-packages",
+		"data-pm-work-packages": ""
+	}, h("div", { class: "actions" }, h("h3", {}, t("wp_title")), refreshButton), h("p", { class: "muted" }, t("wp_intro")), status, list, more, facts);
+	const valid = (ticket) => {
+		alive();
+		return element.isConnected && ticket === sequence;
+	};
+	const detail = (title, ...children) => h("details", {}, h("summary", {}, title), ...children);
+	const paragraph = (value) => h("p", { class: "pm-note-text" }, value);
+	const fact = (key, value) => h("p", { class: "pm-source" }, t(key), ": ", value ?? t("wp_unknown"));
+	const refs = (value) => value?.length ? fact("wp_source_refs", value.join(", ")) : null;
+	const labelled = (key, child) => h("section", {}, h("h4", {}, t(key)), child);
+	const checked = (data) => {
+		if (data?.version !== 1 || data.workspace_id !== workspaceId) throw Error(t("wp_invalid"));
+		return data;
+	};
+	function packageCheck(row) {
+		if (!idPattern.test(row?.package_id) || row.workspace_id !== workspaceId || !digestPattern.test(row.document_digest) || row.document?.package_id !== row.package_id || row.document?.workspace_id !== workspaceId || row.document?.work_item_id !== row.work_item_id || row.document?.execution_authorized !== false || row.document?.quality_assessment !== "unassessed" || typeof row.document?.title !== "string") throw Error(t("wp_invalid"));
+		return row;
+	}
+	function controls() {
+		refreshButton.disabled = busy;
+		more.disabled = busy;
+		more.hidden = cursor === null;
+	}
+	function renderList() {
+		list.replaceChildren(h("p", { class: "muted" }, t("wp_partial")), ...rows.map((row) => h("div", {
+			class: "pm-workspace-row",
+			"data-pm-wp-row": row.package_id
+		}, h("button", {
+			type: "button",
+			class: "secondary",
+			disabled: busy,
+			"aria-pressed": selected === row.package_id,
+			onclick: () => void select(row.package_id)
+		}, row.document.title + " · " + t("wp_preparation") + " " + row.sequence))));
+		if (!rows.length) list.append(h("p", { class: "muted" }, t("wp_empty")));
+	}
+	function render(row, readiness) {
+		const doc = row.document, context = doc.context;
+		const checks = h("ul", { "data-pm-wp-checks": "" }, ...readiness.checks.map((check) => {
+			const [kind, ...suffix] = check.check.split(":"), key = "wp_check_" + kind, label = t(key), help = t(key + "_help");
+			return h("li", {}, h("strong", {}, label === key ? check.check : label + (suffix.length ? " · " + suffix.join(":") : "")), " — ", t(check.status === "passed" ? "wp_passed" : "wp_attention"), check.assessment === "unknown" ? " · " + t("wp_unknown") : "", check.status !== "passed" && help !== key + "_help" ? paragraph(help) : check.status !== "passed" && check.detail ? paragraph(check.detail) : null, check.requirement_ids?.length ? fact("wp_dependencies", check.requirement_ids.join(", ")) : null);
+		}));
+		const requirements = h("div", {}, ...(doc.requirements || []).map((req) => detail(req.title || req.text || req.id, paragraph(req.text || req.description || req.title || req.id), fact("wp_requirement_state", t("wp_source_status_" + req.source_status)), h("ul", {}, ...(req.acceptance || []).map((item) => h("li", {}, paragraph(item.text), h("small", { class: "pm-source" }, item.source_input_id, " · ", t("wp_source_status_" + item.source_status))))))));
+		const tasks = h("ol", {}, ...(doc.tasks || []).map((task) => h("li", {}, paragraph(task.description), h("small", { class: "pm-source" }, task.key, " · ", task.requirement_ids.join(", ")), task.depends_on.length ? fact("wp_dependencies", task.depends_on.join(", ")) : null, refs(task.source_ids))));
+		const verification = h("div", {}, h("p", { class: "muted" }, t("wp_methods")), ...(doc.verification || []).map((item) => detail(item.key + " · " + item.requirement_id, paragraph(item.method), fact("wp_expected", item.expected_evidence), fact("wp_acceptance", item.acceptance_input_ids.join(", ")), refs(item.source_ids))));
+		const delivery = doc.delivery, deliveryNode = h("div", {}, paragraph(t("wp_" + delivery.goal) + " · " + delivery.repository + " · " + delivery.base_ref + (delivery.pull_number ? " · #" + delivery.pull_number : "")), ...[
+			"migration",
+			"rollout",
+			"rollback",
+			"observation"
+		].map((key) => detail(t("wp_" + key) + " · " + t(delivery[key].status === "unresolved" ? "wp_unresolved_status" : "wp_" + delivery[key].status), paragraph(delivery[key].text))));
+		const sources = detail(t("wp_sources"), fact("wp_package_id", row.package_id), fact("wp_digest", row.document_digest), fact("wp_created", Number.isFinite(row.created_at) ? new Date(row.created_at * 1e3).toISOString() : null), fact("wp_author", row.actor), fact("wp_plan", context.plan_ref.revision_id), fact("wp_scope", context.plan_ref.scope_revision), fact("wp_code", doc.code_source.repository + "@" + doc.code_source.source_sha), fact("wp_work", row.work_item_id), fact("wp_binding", context.work_ref?.binding_id), fact("wp_work_version", context.work_ref?.work_version), context.dod_ref ? fact("wp_dod_revision", context.dod_ref.revision_id) : null, context.dod_ref ? fact("wp_dod_digest", context.dod_ref.document_digest) : null, row.previous_package_id ? fact("wp_previous", row.previous_package_id) : null, h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wp_operation")), doc.evidence_refs?.length ? detail(t("wp_evidence"), ...doc.evidence_refs.map((ref) => h("p", { class: "pm-source" }, ref.evidence_id, " · ", ref.fact_digest))) : null, detail(t("wp_original"), ...(doc.sources?.documents || []).map((source) => detail(source.path, paragraph(source.content), h("p", { class: "pm-source" }, source.source_id, " · ", source.commit_sha, " · ", source.sha256)))));
+		facts.replaceChildren(h("h4", {}, doc.title), h("p", { "data-pm-wp-readiness": "" }, t(readiness.status === "ready" ? "wp_ready" : "wp_blocked")), h("p", { class: "muted" }, t("wp_boundary")), labelled("wp_checks", checks), h("p", { class: "muted" }, t("wp_coverage")), labelled("wp_requirements", requirements), detail(t("wp_design"), paragraph(doc.design.text), fact("wp_reason", doc.rationale), refs(doc.design.source_ids)), detail(t("wp_tasks"), tasks), detail(t("wp_verification"), verification), detail(t("wp_delivery"), deliveryNode), detail(t("wp_dod"), h("p", { class: "muted" }, t(doc.dod ? "wp_dod_note" : "wp_no_dod")), doc.dod ? h("ul", {}, ...(doc.dod.criteria || []).map((item) => h("li", {}, item.text))) : null), ...doc.unresolved.length ? [labelled("wp_unresolved", h("ul", {}, ...doc.unresolved.map((value) => h("li", {}, value))))] : [], sources);
+	}
+	async function readSelected(ticket) {
+		const id = selected;
+		if (!id) {
+			facts.replaceChildren(h("p", { class: "muted" }, t("wp_select")));
+			return;
+		}
+		const [data, readiness] = await Promise.all([api("GET", `${endpoint}/${encodeURIComponent(id)}`), api("GET", `${endpoint}/${encodeURIComponent(id)}/readiness`)]);
+		if (!valid(ticket) || id !== selected) return;
+		const row = packageCheck(checked(data).package);
+		checked(readiness);
+		if (row.package_id !== id || readiness.package_id !== id || readiness.document_digest !== row.document_digest || readiness.ready_for !== "engineering_handoff_review" || readiness.execution_authorized !== false || readiness.execution_available !== false || readiness.dispatch_readiness !== "not_implemented" || !["ready", "blocked"].includes(readiness.status) || !Array.isArray(readiness.checks)) throw Error(t("wp_invalid"));
+		render(row, readiness);
+	}
+	function failed(error, ticket) {
+		try {
+			if (!valid(ticket)) return;
+		} catch {
+			return;
+		}
+		rows = [];
+		cursor = null;
+		list.replaceChildren();
+		facts.replaceChildren();
+		status.replaceChildren(errorBox(error), paragraph(t("wp_unavailable")));
+	}
+	async function select(id) {
+		if (busy || !idPattern.test(id)) return;
+		selected = id;
+		const ticket = ++sequence;
+		busy = true;
+		facts.replaceChildren();
+		renderList();
+		controls();
+		status.replaceChildren(paragraph(t("wp_loading")));
+		try {
+			await readSelected(ticket);
+			if (valid(ticket)) status.replaceChildren();
+		} catch (error) {
+			failed(error, ticket);
+		} finally {
+			try {
+				if (valid(ticket)) {
+					busy = false;
+					renderList();
+					controls();
+				}
+			} catch {}
+		}
+	}
+	async function refresh() {
+		const ticket = ++sequence;
+		busy = true;
+		rows = [];
+		cursor = null;
+		list.replaceChildren();
+		facts.replaceChildren();
+		controls();
+		status.replaceChildren(paragraph(t("wp_loading")));
+		try {
+			let after = 0, next = null;
+			const loaded = [];
+			for (let page = 0; page < pages; page++) {
+				const data = checked(await api("GET", `${endpoint}?after=${after}&limit=${pageSize}`));
+				if (!valid(ticket)) return;
+				if (!Array.isArray(data.packages) || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t("wp_invalid"));
+				loaded.push(...data.packages.map(packageCheck));
+				next = data.next_cursor;
+				if (next === null) break;
+				after = next;
+			}
+			rows = loaded;
+			cursor = next;
+			renderList();
+			if (selected && !rows.some((row) => row.package_id === selected)) selected = null;
+			await readSelected(ticket);
+			if (valid(ticket)) status.replaceChildren();
+		} catch (error) {
+			failed(error, ticket);
+		} finally {
+			try {
+				if (valid(ticket)) {
+					busy = false;
+					renderList();
+					controls();
+				}
+			} catch {}
+		}
+	}
+	return {
+		element,
 		refresh
 	};
 }
@@ -5675,6 +5882,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps
 	}) : null;
 	if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
+	const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare ? workspaceWorkPackages({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	}) : null;
+	if (engineering) body.insertBefore(engineering.element, specifications?.element || content);
 	const sourceSections = () => [
 		content,
 		evidence?.box,
@@ -5685,7 +5901,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		meetings?.element,
 		governance?.element,
 		specifications?.element,
-		followUp?.element
+		followUp?.element,
+		engineering?.element
 	].filter(Boolean);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
@@ -6287,7 +6504,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				meetings,
 				governance,
 				specifications,
-				followUp
+				followUp,
+				engineering
 			]) {
 				if (section) await section.refresh();
 				alive();
@@ -6328,7 +6546,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_sprint",
 			"pm_meeting",
 			"pm_governance",
-			"pm_follow_up"
+			"pm_follow_up",
+			"pm_work_package"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -10437,6 +10656,9 @@ var pmFollowUpStrings = {
 		pm_fu_loading: "Reading fixed sources…",
 		pm_fu_empty: "No Follow-up preparation has been saved.",
 		pm_fu_version: "Preparation {version}",
+		pm_fu_latest_unavailable: "The latest preparation’s original sources are unavailable. Its facts are withheld.",
+		pm_fu_selected_unavailable: "This preparation’s original sources are unavailable. Its facts are withheld.",
+		pm_fu_readable_history: "Choose a readable preparation from history, or prepare a new one from accessible sources. No earlier preparation has replaced this selection.",
 		pm_fu_prepared_at: "Prepared at",
 		pm_fu_snapshot_at: "Evidence snapshot at",
 		pm_fu_unknown: "Unknown",
@@ -10480,6 +10702,12 @@ var pmFollowUpStrings = {
 		pm_fu_ref_plan_revision_id: "Plan revision",
 		pm_fu_coverage: "Only explicitly selected central records were read. Business priority and quality remain unassessed; cost is unknown.",
 		pm_fu_truncated: "The selected thread exceeds this intake’s input limit; its coverage is partial.",
+		pm_fu_partial: "Partial source coverage",
+		pm_fu_partial_help: "Some source records were omitted from this fixed preparation. The agenda does not assess those omitted records.",
+		pm_fu_projects_truncated: "The evidence snapshot includes only part of the linked projects.",
+		pm_fu_work_truncated: "The evidence snapshot includes only part of the linked work.",
+		pm_fu_evidence_truncated: "The evidence snapshot includes only part of the available evidence.",
+		pm_fu_bytes_truncated: "The evidence snapshot reached its document size limit.",
 		pm_fu_all_issues: "All recorded issues",
 		pm_fu_comparison: "Comparison with previous preparation",
 		pm_fu_comparison_help: "A source no longer selected in this preparation has not been declared resolved.",
@@ -10556,6 +10784,9 @@ var pmFollowUpStrings = {
 		pm_fu_loading: "正在讀取固定來源…",
 		pm_fu_empty: "尚未保存 Follow-up 討論準備。",
 		pm_fu_version: "第 {version} 份討論準備",
+		pm_fu_latest_unavailable: "最新討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
+		pm_fu_selected_unavailable: "這份討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
+		pm_fu_readable_history: "可從歷史選取仍能讀取的準備，或使用可讀來源建立新準備；目前沒有以舊準備取代所選內容。",
 		pm_fu_prepared_at: "準備時間",
 		pm_fu_snapshot_at: "證據快照時間",
 		pm_fu_unknown: "未知",
@@ -10599,6 +10830,12 @@ var pmFollowUpStrings = {
 		pm_fu_ref_plan_revision_id: "計畫版本",
 		pm_fu_coverage: "僅讀取明確選定的中央紀錄；業務優先序與品質尚未評估，成本仍未知。",
 		pm_fu_truncated: "所選討論超過本次資訊筆數上限，涵蓋範圍不完整。",
+		pm_fu_partial: "來源涵蓋不完整",
+		pm_fu_partial_help: "這份固定準備省略了部分來源紀錄；議程並未評估那些省略的紀錄。",
+		pm_fu_projects_truncated: "證據快照僅包含部分已關聯專案。",
+		pm_fu_work_truncated: "證據快照僅包含部分已關聯工作。",
+		pm_fu_evidence_truncated: "證據快照僅包含部分可用證據。",
+		pm_fu_bytes_truncated: "證據快照已達文件大小上限。",
 		pm_fu_all_issues: "所有已記錄問題",
 		pm_fu_comparison: "與前次討論準備比較",
 		pm_fu_comparison_help: "本次未再選取的來源，不代表問題已解決。",
@@ -10666,6 +10903,204 @@ var pmFollowUpStrings = {
 		pm_fu_state_failed: "失敗",
 		pm_fu_state_waiting: "等待中",
 		pm_fu_state_multiple_captured_states: "多筆歷史狀態；目前狀態尚未查核"
+	}
+};
+//#endregion
+//#region src/pm-work-packages-strings.js
+var workPackageStrings = {
+	en: {
+		wp_title: "Engineering work packages",
+		wp_intro: "Review the adopted requirements, implementation design and proposed verification together.",
+		wp_refresh: "Refresh work packages",
+		wp_empty: "No readable work packages on this page.",
+		wp_more: "Load more packages",
+		wp_partial: "This list covers only the loaded, currently readable packages.",
+		wp_select: "Select a package to review its fixed sources and current checks.",
+		wp_review: "Review package",
+		wp_loading: "Reading the fixed package and current review checks…",
+		wp_unavailable: "This package is no longer readable. Refresh the list to review another package.",
+		wp_invalid: "The response does not match the selected work package.",
+		wp_ready: "Ready for engineering review",
+		wp_blocked: "Engineering review needs attention",
+		wp_boundary: "These checks assess preparation. Execution, quality acceptance and delivery have not been authorized or verified.",
+		wp_checks: "Current preparation checks",
+		wp_passed: "Passed",
+		wp_attention: "Needs attention",
+		wp_unknown: "Unknown",
+		wp_requirements: "Adopted requirements and acceptance",
+		wp_design: "Engineering design",
+		wp_tasks: "Planned technical work",
+		wp_verification: "Proposed verification",
+		wp_methods: "Verification methods have not run.",
+		wp_delivery: "Intended delivery",
+		wp_unresolved: "Unresolved engineering questions",
+		wp_sources: "Fixed sources and versions",
+		wp_original: "Original source documents",
+		wp_code: "Published code commit",
+		wp_plan: "Adopted plan revision",
+		wp_scope: "Adopted scope revision",
+		wp_digest: "Package digest",
+		wp_work: "Connector work",
+		wp_previous: "Previous package",
+		wp_reason: "Preparation rationale",
+		wp_operation: "Original operation",
+		wp_dependencies: "Depends on",
+		wp_expected: "Expected evidence",
+		wp_acceptance: "Original acceptance references",
+		wp_dod: "Shared Definition of Done",
+		wp_dod_note: "Definition of Done is separate from item acceptance and has not been assessed.",
+		wp_no_dod: "No Definition of Done revision was selected.",
+		wp_described: "Described",
+		wp_not_applicable: "Not applicable, with rationale",
+		wp_unresolved_status: "Unresolved",
+		wp_migration: "Migration",
+		wp_rollout: "Rollout",
+		wp_rollback: "Rollback",
+		wp_observation: "Observation",
+		wp_reviewable_changes: "Reviewable changes",
+		wp_pull_request: "Pull request",
+		wp_integration_pr: "Existing integration PR",
+		wp_requirement_state: "Original information status",
+		wp_source_status_user_confirmed: "User confirmed",
+		wp_source_status_repo_evidence: "Repository evidence",
+		wp_source_status_agent_assumption: "Agent assumption",
+		wp_source_status_unresolved: "Unresolved",
+		wp_source_status_conflicting: "Conflicting",
+		wp_source_status_not_applicable: "Not applicable",
+		wp_check_scope: "Current adopted scope",
+		wp_check_work: "Current work and association",
+		wp_check_package_revision: "Latest prepared package for this work",
+		wp_check_code_configuration: "Configured code source",
+		wp_check_project_repository: "Project repository association",
+		wp_check_design: "Design or tailoring rationale",
+		wp_check_delivery_plan: "Delivery considerations",
+		wp_check_unresolved: "Outstanding engineering questions",
+		wp_check_spec_code_alignment: "Specification and code compatibility",
+		wp_check_task_coverage: "Technical work covers selected requirements",
+		wp_check_acceptance: "Proposed acceptance verification",
+		wp_check_source_status: "Confirmed requirement sources",
+		wp_check_dependency: "Requirement dependencies",
+		wp_coverage: "Current checks use local state. Remote heads, runtime, budget and delivery target have not been checked.",
+		wp_preparation: "Preparation",
+		wp_package_id: "Package ID",
+		wp_created: "Prepared at",
+		wp_author: "Prepared by",
+		wp_binding: "Original work association",
+		wp_work_version: "Original work version",
+		wp_dod_revision: "Definition of Done revision",
+		wp_dod_digest: "Definition of Done digest",
+		wp_check_scope_help: "A changed scope needs explicit replanning; this package retains its original plan.",
+		wp_check_work_help: "The current active work and association must match this fixed package.",
+		wp_check_package_revision_help: "A newer prepared package is a separate choice; it does not replace an existing attempt.",
+		wp_check_code_configuration_help: "The configured code source must still match. This check does not refresh its published head.",
+		wp_check_project_repository_help: "The work project must still name this repository.",
+		wp_check_design_help: "Describe the design or explain why it does not apply.",
+		wp_check_delivery_plan_help: "Migration, rollout, rollback and observation need descriptions or explicit rationales.",
+		wp_check_unresolved_help: "Unresolved engineering questions block handoff review.",
+		wp_check_spec_code_alignment_help: "Different specification and code commits need a compatibility assessment, which is not yet available.",
+		wp_check_task_coverage_help: "Every selected requirement needs technical work.",
+		wp_check_acceptance_help: "Each original acceptance condition needs a proposed method. These methods have not run.",
+		wp_check_source_status_help: "Plan adoption does not confirm an assumption, conflict or unresolved source statement.",
+		wp_check_dependency_help: "The listed dependency outcomes remain unassessed; work claims do not establish readiness.",
+		wp_evidence: "Selected evidence",
+		wp_source_refs: "Specification source references"
+	},
+	"zh-TW": {
+		wp_title: "工程工作包",
+		wp_intro: "一起檢視已採用需求、實作設計與預定驗證方式。",
+		wp_refresh: "重新整理工作包",
+		wp_empty: "這一頁沒有目前可讀的工程工作包。",
+		wp_more: "載入更多工作包",
+		wp_partial: "清單僅涵蓋已載入且目前可讀的工作包。",
+		wp_select: "選取工作包，查看固定來源與目前檢查結果。",
+		wp_review: "檢視工作包",
+		wp_loading: "正在讀取固定工作包與目前檢查…",
+		wp_unavailable: "這份工作包已無法讀取；重新整理清單可選取其他工作包。",
+		wp_invalid: "回覆與選定的工程工作包不符。",
+		wp_ready: "可進行工程交接審閱",
+		wp_blocked: "工程交接仍有待處理事項",
+		wp_boundary: "這些檢查評估準備情況；執行、品質驗收與交付仍未授權或驗證。",
+		wp_checks: "目前準備檢查",
+		wp_passed: "通過",
+		wp_attention: "待處理",
+		wp_unknown: "未知",
+		wp_requirements: "已採用需求與接受條件",
+		wp_design: "工程設計",
+		wp_tasks: "預定技術工作",
+		wp_verification: "預定驗證方式",
+		wp_methods: "這些驗證方法尚未執行。",
+		wp_delivery: "預定交付",
+		wp_unresolved: "未決工程問題",
+		wp_sources: "固定來源與版本",
+		wp_original: "原始規格文件",
+		wp_code: "已發布程式 commit",
+		wp_plan: "已採用計畫版本",
+		wp_scope: "已採用範圍版本",
+		wp_digest: "工作包摘要雜湊",
+		wp_work: "Connector 工作",
+		wp_previous: "前一份工作包",
+		wp_reason: "準備理由",
+		wp_operation: "原始操作",
+		wp_dependencies: "相依工作",
+		wp_expected: "預期證據",
+		wp_acceptance: "原始接受條件引用",
+		wp_dod: "共用品質完成定義",
+		wp_dod_note: "共用品質完成定義與個別需求的接受條件分開，尚未評估。",
+		wp_no_dod: "尚未選定共用品質完成定義版本。",
+		wp_described: "已有說明",
+		wp_not_applicable: "不適用，附理由",
+		wp_unresolved_status: "尚未決定",
+		wp_migration: "遷移",
+		wp_rollout: "上線",
+		wp_rollback: "回復",
+		wp_observation: "觀察",
+		wp_reviewable_changes: "可審閱修改",
+		wp_pull_request: "Pull request",
+		wp_integration_pr: "指定整合 PR",
+		wp_requirement_state: "原始資訊身分",
+		wp_source_status_user_confirmed: "使用者已確認",
+		wp_source_status_repo_evidence: "Repo 證據",
+		wp_source_status_agent_assumption: "Agent 假設",
+		wp_source_status_unresolved: "尚未決定",
+		wp_source_status_conflicting: "存在衝突",
+		wp_source_status_not_applicable: "不適用",
+		wp_check_scope: "目前已採用範圍",
+		wp_check_work: "目前工作與明確關聯",
+		wp_check_package_revision: "這份工作最新準備的工作包",
+		wp_check_code_configuration: "程式來源設定",
+		wp_check_project_repository: "專案 repository 關聯",
+		wp_check_design: "設計或裁適理由",
+		wp_check_delivery_plan: "交付考量",
+		wp_check_unresolved: "未決工程問題",
+		wp_check_spec_code_alignment: "規格與程式版本相容性",
+		wp_check_task_coverage: "技術工作涵蓋選定需求",
+		wp_check_acceptance: "接受條件的預定驗證",
+		wp_check_source_status: "需求來源已確認",
+		wp_check_dependency: "需求相依",
+		wp_coverage: "目前檢查使用本地狀態；尚未查證遠端 head、執行工具、預算與交付目標。",
+		wp_preparation: "準備紀錄",
+		wp_package_id: "工作包 ID",
+		wp_created: "準備時間",
+		wp_author: "準備者",
+		wp_binding: "原始工作關聯",
+		wp_work_version: "原始工作版本",
+		wp_dod_revision: "共用品質完成定義版本",
+		wp_dod_digest: "共用品質完成定義摘要",
+		wp_check_scope_help: "範圍改變需明確重新規劃；本工作包仍保留原計畫。",
+		wp_check_work_help: "目前有效工作與關聯須符合這份固定工作包。",
+		wp_check_package_revision_help: "較新工作包是另一個選擇，不會替換既有執行依據。",
+		wp_check_code_configuration_help: "程式來源設定須仍一致；此檢查不會重新讀取已發布 head。",
+		wp_check_project_repository_help: "工作所屬專案須仍關聯這個 repository。",
+		wp_check_design_help: "需有工程設計，或說明不適用的理由。",
+		wp_check_delivery_plan_help: "遷移、上線、回復與觀察需要說明或明確裁適理由。",
+		wp_check_unresolved_help: "未決工程問題會阻擋交接審閱。",
+		wp_check_spec_code_alignment_help: "規格與程式 commit 不同時，需要尚未提供的相容性評估。",
+		wp_check_task_coverage_help: "每個選定需求都需有對應技術工作。",
+		wp_check_acceptance_help: "每個原始接受條件都需有預定驗證方式；這些方法尚未執行。",
+		wp_check_source_status_help: "採用計畫不會把假設、衝突或未決來源變成已確認資訊。",
+		wp_check_dependency_help: "列出的相依成果尚未評估；工作回報不能證明已就緒。",
+		wp_evidence: "選定證據",
+		wp_source_refs: "規格來源引用"
 	}
 };
 //#endregion
@@ -11320,6 +11755,7 @@ var pmStrings = {
 		...pmGovernanceStrings.en,
 		...specSourceStrings.en,
 		...pmFollowUpStrings.en,
+		...workPackageStrings.en,
 		pm_roadmap_historical_work: "Previously selected work association",
 		pm_roadmap_missing_dependency: "Removed milestone dependency",
 		pm_roadmap_work_scope: "Select an overlapping requirement first",
@@ -11642,6 +12078,7 @@ var pmStrings = {
 		...pmGovernanceStrings["zh-TW"],
 		...specSourceStrings["zh-TW"],
 		...pmFollowUpStrings["zh-TW"],
+		...workPackageStrings["zh-TW"],
 		pm_roadmap_historical_work: "先前選定的工作關聯",
 		pm_roadmap_missing_dependency: "已移除里程碑的依賴",
 		pm_roadmap_work_scope: "請先選定有重疊的需求",

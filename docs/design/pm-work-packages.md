@@ -246,3 +246,19 @@ eligibility, map it into the new owned attempt's immutable execution specificati
 and reconcile the original start/send outcome. It must preserve separate spec/code
 commits, source policy and native output format; no second queue or session takeover
 is introduced here.
+
+## Shared review view
+
+The workspace's Web/Tauri page lists readable packages and follows forward
+cursors even through empty source-filtered pages. Selecting a package reads its
+fixed document and current local readiness, checks their shared ID/digest, and
+shows requirements, item acceptance, design, tasks, verification methods,
+delivery considerations and the separately selected Definition of Done.
+Source documents are literal text; code and specification commits remain distinct.
+
+Refresh removes old source text before current reads. Permission/source failures
+clear the previously quoted title and detail; leaving the page retires late
+responses. A later readable list allows an explicit new selection, without
+silently substituting a newer package for the original one. This view does not
+create a package, execute a shell command, dispatch, verify quality or deliver.
+Authorized agents prepare packages through the same registered operation.

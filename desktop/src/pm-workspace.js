@@ -2,6 +2,7 @@
 import {workspaceGovernance} from './pm-governance.js';
 import {specSources} from './pm-spec-sources.js';
 import {workspaceFollowUp} from './pm-follow-up.js';
+import {workspaceWorkPackages} from './pm-work-packages.js';
 import {workspaceSprints} from './pm-sprints.js';
 import {workspaceKanban} from './pm-kanban.js';
 import {workspaceMeetings} from './pm-meetings.js';
@@ -184,7 +185,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare
     ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps}) : null;
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
-  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element].filter(Boolean);
+  const engineering = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_package_prepare
+    ? workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox}) : null;
+  if(engineering)body.insertBefore(engineering.element,specifications?.element||content);
+  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -509,7 +513,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp]) {
+      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -528,7 +532,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_work_package'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;

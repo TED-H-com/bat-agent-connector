@@ -99,7 +99,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W32 | P0 | PhaseProfile 與 command policy | 本批：九種 profile 契約；Idea／Planning 可用，runtime 限制待接 adapter |
 | W33 | P0 | InputRecord 與循序資訊取得 | 開發分支：來源與確認者、假設／未知分離、固定八領域資訊與已確認回答的續接；語意缺口判斷、循序提問與研究 runner 待做 |
 | W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿修訂、文件與 accepted scope 分開；Sprint／batch 與工程 work package 待做 |
-| W35 | P1 | 架構與 SDD 工程工作包 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W35 | P1 | 架構與 SDD 工程工作包 | 開發分支：固定採用需求／接受條件、規格 bytes、獨立程式版本、設計／技術工作／驗證與交付安排，API／MCP 準備及 Web／Tauri 審閱；實際 coding handoff 待做 |
 | W36 | P1 | OpenSpec read adapter | 開發分支：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -224,3 +224,16 @@ API／MCP／Web／Tauri 共用原操作與版本檢查。來源撤權時，衍�
 
 這批完成討論前的資料整理，尚未接模型討論、語意根因／影響判讀、提醒或維護排程。
 既有成果回報仍未經品質驗收；準備議程不代表完成 Follow-up 會議或已採用變更。
+
+## 固定工程工作包
+
+既有 Connector 工作可透過共用操作準備不可變工程描述。需求與接受條件來自原先
+明確採用的計畫和工作關聯，規格原文由服務讀回並保存版本與摘要；程式的已發布 commit
+另行記錄。設計、技術工作、驗證方法及遷移／上線／回復／觀察安排保留裁適理由與未知。
+
+Web／Tauri 在工作區同頁審閱需求、工程安排、固定來源及目前準備檢查。
+「可進行工程交接審閱」只表示本地準備條件通過，尚未查證執行工具、預算、遠端目標或品質。
+API／MCP 可建立新版本，原工作、session、attempt、規格與先前工作包保持不變。
+來源撤權時，衍生內容、原操作與事件一致隱藏；不轉成普通 artifact 繞過來源權限。
+
+這批完成 W35 的固定描述與審閱基礎，W19／W38 的工作包交接、批次與實際派工仍待接入。

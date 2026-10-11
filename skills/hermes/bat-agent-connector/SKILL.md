@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "32cb2e9b2a390797f6c894f12dd367f7bf76edd7f5f778916e6749cf9f4dcb8c"
+  canonical_sha256: "93dbbf900db1514ae15b4fec9e355879156a4f639c5b951d7743c5dc8c7705ca"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -381,6 +381,40 @@ Original source access applies to intakes, operation history and events. Do not
 substitute a newer readable source for a withdrawn original or recover its text
 through another entry point. Semantic assessment and runtime discussion remain
 separate capabilities.
+
+### Prepare and review engineering work
+
+When `features.pm_workspaces.work_package_prepare` is available, use
+`pm_work_packages_list`, `pm_work_package_get` and
+`pm_work_package_readiness_get` to inspect the fixed engineering description.
+Follow every non-null cursor, including an empty source-filtered page. The
+Dashboard exposes these same review reads in the workspace.
+
+`pm.work_package.create` prepares an existing explicitly associated work item;
+it does not create or execute that work. Target `{workspace_id,work_item_id}`.
+Read its original adopted WorkBinding and current work fingerprint, selected
+requirement IDs, original acceptance InputRecords, current scope and prior package.
+Supply those exact preconditions, including a null predecessor for a first package.
+Keep the same operation key and envelope after a missing reply.
+
+Obtain `code_source` from the configured repository's published source preview.
+Optional OpenSpec source references must retain their original path, commit,
+source ID and byte digest. The code commit, specification commit and PM document
+commit are different identities; never substitute one for another. Provide a
+proportionate design, technical tasks, verification methods tied to the original
+acceptance IDs, and migration/rollout/rollback/observation plans or tailoring
+rationales. Unknowns can be saved and continue to block handoff review.
+
+The server checks the exact source bytes and adopted requirement provenance.
+An agent cannot invent confirmed acceptance text, override source status or turn
+archive/task checkboxes into verification. Shared Definition of Done remains
+separate from item acceptance. Revisions preserve predecessor and original sources.
+
+`ready` means only `ready_for: engineering_handoff_review`. Execution remains
+unavailable and unauthorized; runtime, budget, remote target and quality are not
+proved. Do not dispatch this description as a prompt or upload it as an ordinary
+artifact: those paths do not yet carry the PM source-visibility contract. Later
+handoff must use the shared command's explicit package integration.
 
 ## Concept
 
