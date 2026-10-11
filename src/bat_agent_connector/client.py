@@ -50,6 +50,25 @@ DEFAULT_MAX_FRAME = 48 * 1024 * 1024
 BUSY_TEXT = "Remote server is busy"
 
 
+async def _wait_with_timeout(awaitable, timeout):
+    """Keep caller cancellation even when a reply arrives in the same loop turn.
+
+    Python 3.10's wait_for can return an already completed child after the caller
+    was cancelled (CPython #86296). That can leave a disconnected observation
+    running for its full wait period. asyncio.wait preserves that cancellation.
+    """
+    future = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait({future}, timeout=timeout)
+        if not done:
+            raise asyncio.TimeoutError
+        return future.result()
+    finally:
+        if not future.done():
+            future.cancel()
+        await asyncio.gather(future, return_exceptions=True)
+
+
 def cert_fingerprint(der: bytes) -> str:
     return hashlib.sha256(der).hexdigest().upper()
 
@@ -93,7 +112,7 @@ class EventSubscription:
             if remaining is not None and remaining <= 0:
                 return None
             try:
-                await asyncio.wait_for(self._signal.wait(), remaining)
+                await _wait_with_timeout(self._signal.wait(), remaining)
             except asyncio.TimeoutError:
                 return None
         return self.queue.popleft()
@@ -217,7 +236,7 @@ class BatClient:
             deadline = time.monotonic() + self._connect_timeout
             reply = None
             while time.monotonic() < deadline:
-                raw = await asyncio.wait_for(ws.recv(), max(0.1, deadline - time.monotonic()))
+                raw = await _wait_with_timeout(ws.recv(), max(0.1, deadline - time.monotonic()))
                 obj = self._decode(raw)
                 if obj and obj.get("type") == "auth-result":
                     reply = obj
@@ -308,7 +327,7 @@ class BatClient:
                 await ws.close()
         if self._reader is not None:
             with contextlib.suppress(Exception, asyncio.CancelledError):
-                await asyncio.wait_for(self._reader, 3)
+                await _wait_with_timeout(self._reader, 3)
             self._reader = None
 
     async def __aenter__(self) -> BatClient:
@@ -332,7 +351,7 @@ class BatClient:
             if on_transport:
                 on_transport()  # No await between this durable fence and handing the frame to websocket send.
             await self._ws.send(encoded)
-            return await asyncio.wait_for(fut, timeout)
+            return await _wait_with_timeout(fut, timeout)
         except asyncio.TimeoutError:
             raise InvokeTimeout(
                 f"{self.host.name}: {frame.get('channel', frame['type'])} timed out after {timeout:.0f}s"
