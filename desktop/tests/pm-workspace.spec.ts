@@ -29,6 +29,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await expect(note.getByLabel('Add a discussion note',{exact:true})).toHaveValue('');
     await page.reload();await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
     await expect(page.getByText('Discussion notes · no AI participant is connected',{exact:true})).toBeVisible();
+    await expect(page.locator('.pm-note time').first()).toHaveAttribute('datetime','2026-10-11T12:00:00.000Z');
     expect(f.state.writes.map(input=>input.body.action)).toEqual(['pm.message.append']);
     expect(await page.locator('.pm-notes script').count()).toBe(0);
   });
@@ -123,11 +124,15 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   test('owner confirmation and event refresh preserve an in-progress note',async({page})=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
     const field=note.getByLabel('Add a discussion note',{exact:true});await field.fill('An unfinished comparison');
+    await page.locator(`[data-input-id="${inputB}"] input[type=checkbox]`).check();
     await page.locator(`[data-input-id="${inputB}"] summary`).click();const confirm=action(page,'pm.input.confirm');
     await confirm.getByLabel('Why this statement is confirmed',{exact:true}).fill('Reviewed with the responsible person');
     await confirm.getByRole('button',{name:'Confirm statement',exact:true}).click();
-    await expect(page.locator(`[data-input-id="${inputB}"]`)).toContainText('User confirmed');
-    await field.focus();f.state.messages.push({message_id:'pmm_'+'7'.repeat(32),sequence:2,actor:'teammate',content:'Another saved contribution',created_at:'2026-10-11T12:01:00Z'});f.state.cursor++;
+    await expect(page.locator('[data-input-id="pmi_'+ 'c'.repeat(32)+'"]')).toContainText('User confirmed');
+    await expect(page.locator('[data-pm-missing-selection]')).toBeVisible();
+    await page.getByRole('checkbox',{name:'Selected input outside this view',exact:true}).click();
+    await expect(page.locator('[data-pm-missing-selection]')).toHaveCount(0);
+    await field.focus();f.state.messages.push({message_id:'pmm_'+'7'.repeat(32),sequence:2,actor:'teammate',content:'Another saved contribution',created_at:Date.parse('2026-10-11T12:01:00Z')/1000});f.state.cursor++;
     await expect(page.locator('.pm-notes')).toContainText('Another saved contribution');await expect(field).toHaveValue('An unfinished comparison');await expect(field).toBeFocused();
     expect(f.state.writes.map(input=>input.body.action)).toEqual(['pm.input.confirm']);
   });
@@ -154,7 +159,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     const dispatch=async(input:any)=>{const result=await f.dispatch(input);if(input.path===pmPath&&hold){hold=false;held=true;await gate;}return result;};
     await mountConversation(page,native,dispatch);await page.goto(pmRoute);await expect(page.locator('.pm-notes')).toContainText('Visitors should find');
     hold=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect.poll(()=>held).toBe(true);
-    f.state.messages.push({message_id:'pmm_'+'9'.repeat(32),sequence:2,actor:'teammate',content:'Newer than the pending read',created_at:'2026-10-11T12:02:00Z'});f.state.cursor++;
+    f.state.messages.push({message_id:'pmm_'+'9'.repeat(32),sequence:2,actor:'teammate',content:'Newer than the pending read',created_at:Date.parse('2026-10-11T12:02:00Z')/1000});f.state.cursor++;
     try{await expect(page.locator('.pm-notes')).toContainText('Newer than the pending read');}finally{release();}
     await expect(page.locator('.pm-notes')).toContainText('Newer than the pending read');expect(f.state.writes).toHaveLength(0);
   });
