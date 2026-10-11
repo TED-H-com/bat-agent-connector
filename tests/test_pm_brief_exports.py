@@ -235,7 +235,7 @@ async def test_output_limits_measure_complete_utf8_content_and_response_without_
 
 
 def test_svg_paginates_long_unicode_and_unbroken_identifiers_without_losing_text(monkeypatch):
-    original = ("長文字與身分識別" * 80) + ("abc123" * 180) + " 👩‍💻 保留結尾"
+    original = ("長文字與身分識別" * 80) + ("abc123" * 600) + " 👩‍💻 保留結尾"
     blocks = [("title", "長文件"), ("body", original)]
     content, pages = exports._svg(blocks, "zh-TW", "pmsnap_" + "1" * 32)
     assert pages > 1
