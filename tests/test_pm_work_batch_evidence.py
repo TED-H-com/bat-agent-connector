@@ -78,3 +78,18 @@ async def test_github_result_does_not_infer_native_identity_or_unreported_checks
         ops._merge_refs(ref['integration_operation_id'], {'admission_binding': binding})
     condition = {'kind': 'fixed_revision_verification', 'profile': 'github_reported_checks_v1'}
     assert evidence.evaluate(ops, OWNER, wid, child, condition, ref)['status'] == 'blocked'
+
+
+@pytest.mark.parametrize('profile,value', [
+    ('observed_runner_v1', {'verification_id': True, 'candidate_commit': 'a' * 40, 'tree_hash': 'b' * 40}),
+    ('observed_runner_v1', {'verification_id': 1, 'candidate_commit': int('1' * 40), 'tree_hash': 'b' * 40}),
+    ('github_reported_checks_v1', {'observation_id': [], 'document_digest': 'd' * 64, 'integration_operation_id': [], 'source_seq': 2**63, 'candidate_commit': 'a' * 40}),
+])
+async def test_invalid_native_evidence_reference_is_refused_before_sql_lookup(ops, profile, value):
+    child = await source_operation(ops, action='repository.continue')
+    condition = {'kind': 'fixed_revision_verification', 'profile': profile}
+    if profile == 'observed_runner_v1':
+        condition['command_digest'] = evidence.digest('pytest')
+    with pytest.raises(OperationError) as invalid:
+        evidence.evaluate(ops, OWNER, 'ws_' + 'f' * 32, child, condition, value)
+    assert invalid.value.code == 'PM_BATCH_EVIDENCE_INVALID' and invalid.value.status == 422

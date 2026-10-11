@@ -26,7 +26,7 @@ def condition(value):
             or not isinstance(value.get('profile'), str) or value['profile'] not in PROFILES):
         raise bad('Use an explicit registered fixed revision verification condition')
     fields = {'kind', 'profile'} | ({'command_digest'} if value['profile'] == 'observed_runner_v1' else set())
-    if set(value) != fields or ('command_digest' in fields and not DIGEST.fullmatch(str(value['command_digest']))):
+    if set(value) != fields or ('command_digest' in fields and (not isinstance(value['command_digest'], str) or not DIGEST.fullmatch(value['command_digest']))):
         raise bad('The selected verification profile has invalid fields')
     return value
 
@@ -60,7 +60,7 @@ def require_sources(ops, principal, wid, proof):
 def _runner(ops, principal, wid, child, selected, ref):
     if not isinstance(ref, dict) or set(ref) != {'verification_id', 'candidate_commit', 'tree_hash'}:
         raise bad('Select an exact observed verification and full candidate commit/tree')
-    if type(ref['verification_id']) is not int or not 0 < ref['verification_id'] < 2**63 or any(not SHA.fullmatch(str(ref[k])) for k in ('candidate_commit', 'tree_hash')):
+    if type(ref['verification_id']) is not int or not 0 < ref['verification_id'] < 2**63 or any(not isinstance(ref[k], str) or not SHA.fullmatch(ref[k]) for k in ('candidate_commit', 'tree_hash')):
         raise bad('Invalid observed verifier identity')
     row = ops.db.execute('SELECT * FROM observed_verifications WHERE verification_id=?', (ref['verification_id'],)).fetchone()
     if row is None:
@@ -92,9 +92,12 @@ def _runner(ops, principal, wid, child, selected, ref):
 
 def _github(ops, principal, wid, child, ref):
     fields = {'observation_id', 'document_digest', 'integration_operation_id', 'source_seq', 'candidate_commit'}
-    if not isinstance(ref, dict) or set(ref) != fields or type(ref.get('source_seq')) is not int or ref['source_seq'] < 1:
+    if not isinstance(ref, dict) or set(ref) != fields or type(ref.get('source_seq')) is not int or not 0 < ref['source_seq'] < 2**63:
         raise bad('Select one exact integration source receipt and immutable GitHub observation')
-    if not SHA.fullmatch(str(ref['candidate_commit'])) or not DIGEST.fullmatch(str(ref['document_digest'])):
+    if (not isinstance(ref['candidate_commit'], str) or not SHA.fullmatch(ref['candidate_commit'])
+            or not isinstance(ref['document_digest'], str) or not DIGEST.fullmatch(ref['document_digest'])
+            or not isinstance(ref['integration_operation_id'], str) or not re.fullmatch('op_[0-9a-f]{32}', ref['integration_operation_id'])
+            or not isinstance(ref['observation_id'], str) or not pm_github_observation.OBSERVATION.fullmatch(ref['observation_id'])):
         raise bad('Invalid fixed revision or observation digest')
     row = ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (ref['integration_operation_id'],)).fetchone()
     from .operations import OperationService
