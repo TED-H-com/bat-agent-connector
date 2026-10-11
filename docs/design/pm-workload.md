@@ -157,3 +157,14 @@ The present missing repository-wide coverage necessarily refuses this gate.
 This slice does not certify an entire workspace's Definition of Done, create a
 new completion state, drop attempts, stop foreign sessions, or replay queues when
 the workspace reopens.
+
+## Explicit GitHub profile extension
+
+W47 now produces immutable bounded evidence for a newly adopted
+`github_open_prs_and_actions_v1` scope. W45 consumes the newest matching original
+receipt, checks freshness and source visibility, and treats open PRs or
+nonterminal Actions as development. Complete empty evidence can satisfy that
+precise profile, allowing an idle candidate only when all other sources agree.
+Earlier `github_scope=repository` policies retain the coverage gap described
+above. This does not claim full repository or third-party CI coverage; see
+[the exact profile and receipt contract](pm-github-observation.md).

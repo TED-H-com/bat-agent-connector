@@ -338,7 +338,7 @@ def evaluate_for_maintenance(ops, principal, workspace_id, snapshot_id, policy, 
         reasons.append('automatic_maintenance_policy_not_adopted')
     if not document['as_of'] <= at < document['expires_at']:
         reasons.append('observation_expired_or_clock_changed')
-    facts = sources.Collector(ops, principal, workspace_id, current, at).collect()
+    facts = sources.Collector(ops, principal, workspace_id, _intent(current, lifecycle), at).collect()
     if facts['source_digest'] != document['source_digest']:
         reasons.append('source_changed')
     if facts['classification'] != 'idle_candidate' or document['classification'] != 'idle_candidate':
