@@ -418,18 +418,22 @@ async def _run(ctx):
         return await _post(ctx)  # Also settle the original outer sent step.
     if ctx.service.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND name=?", (ctx.operation_id, POST)).fetchone():
         return await _post(ctx)  # Original sent POST recovery does not require live write authority.
-    repo = ctx.service.context["github_config"].repos.get(intent["repository"].lower())
-    if repo is None or repo.integrate is None or repo.integrate.remote_url != intent["config"]["remote_url"]:
-        raise GitHubAmbiguous("The original Git publication binding is unavailable")
-    area = integration.Area(ctx.service, repo, intent["host"])
-    if area.path != intent["config"]["area"]:
-        raise GitHubAmbiguous("The original managed publication area changed")
     digest = _digest(intent)
+
+    def original_area():
+        repo = ctx.service.context["github_config"].repos.get(intent["repository"].lower())
+        if repo is None or repo.integrate is None or repo.integrate.remote_url != intent["config"]["remote_url"]:
+            raise GitHubAmbiguous("The original Git publication binding is unavailable")
+        area = integration.Area(ctx.service, repo, intent["host"])
+        if area.path != intent["config"]["area"]:
+            raise GitHubAmbiguous("The original managed publication area changed")
+        return area
 
     async def prepare():
         await _preflight(ctx, head=False)
+        area = original_area()
         lines = await host.run(area, host.prepare(area, ctx.operation_id, intent, digest), guard=lambda: _guard(ctx),
-            timeout=lambda: _timeout(ctx, area.repo.integrate.fetch_timeout_s))
+            timeout=lambda: _timeout(ctx, min(120, area.repo.integrate.fetch_timeout_s)))
         if "source_ready " + intent["candidate_sha"] not in lines:
             raise _bad("PR_SOURCE_CHANGED", "The exact current owned result could not be pinned")
         prepared = [line.split() for line in lines if line.startswith("prepared ")]
@@ -454,13 +458,15 @@ async def _run(ctx):
 
     async def push():
         await _preflight(ctx, head=False)
+        area = original_area()
         lines = await host.run(area, host.push(area, ctx.operation_id, intent, digest), guard=lambda: _guard(ctx, publication=True),
-            timeout=lambda: _timeout(ctx, area.repo.integrate.fetch_timeout_s))
+            timeout=lambda: _timeout(ctx, min(120, area.repo.integrate.fetch_timeout_s)))
         if f"created {digest} {intent['candidate_sha']} {host.branch(ctx.operation_id)}" not in lines:
             raise GitHubAmbiguous("The original create-only branch receipt is unavailable")
         return {"created": True, "branch_ref": host.branch(ctx.operation_id), "candidate_sha": intent["candidate_sha"]}
 
     async def pushed(_):
+        area = original_area()
         lines = await host.run(area, host.readback(area, ctx.operation_id, digest))
         if (f"created {digest} {intent['candidate_sha']} {host.branch(ctx.operation_id)}" in lines
                 and "seen " + intent["candidate_sha"] in lines):
@@ -500,9 +506,9 @@ async def _post(ctx):
             path = ctx.service.context["github"]._repo(intent["repository"]) + "/pulls"
             candidates = await _get(ctx, path, {"state": "all", "head": intent["repository"].split("/")[0] + ":" +
                 host.branch(ctx.operation_id), "base": intent["base_ref"], "per_page": 20, "page": 1}, new=False)
-            count = len(candidates) if isinstance(candidates, list) else None
+            count = min(len(candidates), 20) if isinstance(candidates, list) else None
             ctx.set_refs(pr_publication_recovery={"status": "unresolved_original_201_missing", "candidates_observed": count,
-                "candidate_limit": 20, "ownership_established": False, "post_resend_allowed": False})
+                "candidate_limit": 20, "search_complete": False, "ownership_established": False, "post_resend_allowed": False})
         except (GitHubAmbiguous, GitHubReadLimit):
             pass
         return None
