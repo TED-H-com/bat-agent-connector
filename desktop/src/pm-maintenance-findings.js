@@ -1,5 +1,16 @@
 const kinds=['issues','dependabot_pull_requests','dependabot_alerts'];
 const states=['disabled','missing','complete','incomplete','stale','context_changed','stopped'];
+export function findingPolicyView({h,t,config}){
+  if(!config)return null;
+  const line=(key,value)=>h('p',{class:'pm-note-text'},h('strong',{},t(key)+': '),String(value));
+  const deps=config.dependencies;
+  return h('section',{'data-finding-policy':''},h('h4',{},t('pmf_configure')),
+    line('pmf_issues_enable',t(config.issues?'pmf_on':'pmf_off')),
+    config.issues?line('pmf_labels',config.issues.labels_all.length?config.issues.labels_all.join(' · '):t('pmf_all_issues')):null,
+    line('pmf_deps_enable',t(deps?'pmf_on':'pmf_off')),
+    ...(deps?[line('pmf_manifests',deps.manifests.join(' · ')),line('pmf_branch',deps.base_branch),line('pmf_bot',deps.dependabot_actor_id),
+      line('pmf_alerts_enable',t(deps.alerts?'pmf_on':'pmf_off')),line('pmf_pulls_enable',t(deps.pull_requests?'pmf_on':'pmf_off'))]:[]));
+}
 export function findingPolicyControls({h,t,input,labelled,available}){
   const toggle=key=>h('select',{'aria-label':t(key)},h('option',{value:'false'},t('pmf_off')),h('option',{value:'true'},t('pmf_on')));
   const fields={finding_configured:h('input',{type:'hidden'}),finding_issues:toggle('pmf_issues_enable'),

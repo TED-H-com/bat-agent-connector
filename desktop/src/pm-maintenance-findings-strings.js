@@ -1,5 +1,5 @@
 export const maintenanceFindingStrings={
-  en:{pmf_configure:'Configure Issue and dependency sources',pmf_configure_help:'Choose exact filters for saved observations. Empty Issue labels explicitly include all open Issues. Existing policies keep these sources off until selected.',
+  en:{pmf_all_issues:'All open Issues',pmf_configure:'Configure Issue and dependency sources',pmf_configure_help:'Choose exact filters for saved observations. Empty Issue labels explicitly include all open Issues. Existing policies keep these sources off until selected.',
     pmf_off:'Not configured',pmf_on:'Include this source',pmf_issues_enable:'Observe matching Issues',pmf_labels:'Required Issue labels (one per line)',
     pmf_deps_enable:'Observe dependency sources',pmf_manifests:'Exact dependency manifest paths (one per line)',pmf_branch:'Adopted maintenance branch',pmf_bot:'Dependabot native Bot ID',
     pmf_alerts_enable:'Read Dependabot alerts',pmf_pulls_enable:'Read matching Dependabot pull requests',
@@ -13,7 +13,7 @@ export const maintenanceFindingStrings={
     pmf_empty:'No matching entries were returned by this configured endpoint. This is not a complete dependency scan.',pmf_applicability:'Whether this affects the released version remains unproven.',
     pmf_existing_pr:'Existing pull request',pmf_existing_work:'Existing work',pmf_original:'Original finding observation',pmf_package:'Package',pmf_ecosystem:'Ecosystem',pmf_manifest_path:'Manifest',
     pmf_severity:'Reported severity',pmf_vulnerable_version_range:'Reported vulnerable range',pmf_first_patched_version:'First patched version'},
-  'zh-TW':{pmf_configure:'設定 Issue 與依賴來源',pmf_configure_help:'明確選定保存觀察的條件。Issue 標籤留白代表選取所有開啟的 Issue；舊政策不會自動啟用這些來源。',
+  'zh-TW':{pmf_all_issues:'所有開啟的 Issue',pmf_configure:'設定 Issue 與依賴來源',pmf_configure_help:'明確選定保存觀察的條件。Issue 標籤留白代表選取所有開啟的 Issue；舊政策不會自動啟用這些來源。',
     pmf_off:'尚未設定',pmf_on:'納入此來源',pmf_issues_enable:'觀察符合條件的 Issue',pmf_labels:'必須同時符合的 Issue 標籤（每行一個）',
     pmf_deps_enable:'觀察依賴來源',pmf_manifests:'依賴清單的精確路徑（每行一個）',pmf_branch:'已採用的維護分支',pmf_bot:'Dependabot 原生 Bot ID',
     pmf_alerts_enable:'讀取 Dependabot 警示',pmf_pulls_enable:'讀取符合條件的 Dependabot PR',

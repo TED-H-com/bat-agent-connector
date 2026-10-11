@@ -21,6 +21,15 @@ function fixture(){
   };return {base,policy,state,dispatch};
 }
 for(const native of [false,true])test.describe(native?'native configured findings':'web configured findings',()=>{
+  test('a reader can inspect exact adopted finding filters without an edit form',async({page})=>{
+    const f=fixture();f.base.base.state.role='reader';
+    f.policy.document.policy.observation.maintenance_sources={issues:{labels_all:[]},dependencies:{manifests:['package.json'],base_branch:'support/1.x',dependabot_actor_id:900,alerts:true,pull_requests:false}};
+    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    await page.locator('[data-maintenance-current] details>summary').first().click();
+    const read=page.locator('[data-maintenance-current] [data-finding-policy]');await expect(read).toBeVisible();
+    await expect(read).toContainText('All open Issues');await expect(read).toContainText('package.json');await expect(read).toContainText('support/1.x');await expect(read).toContainText('900');
+    await expect(page.locator('[data-maintenance-editor]')).toBeHidden();expect(f.base.state.writes).toHaveLength(0);
+  });
   test('dependency observation fixes manifest, native bot and verified branch without enabling repairs',async({page})=>{
     const f=fixture(),branch='support/1.x';
     f.base.release.state.baselines[0].document.proof.maintenance_branch={status:'verified_at_observation',ref:'refs/heads/'+branch};

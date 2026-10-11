@@ -1,4 +1,4 @@
-import {findingPolicyControls} from './pm-maintenance-findings.js';
+import {findingPolicyControls,findingPolicyView} from './pm-maintenance-findings.js';
 import {maintenanceChecks} from './pm-maintenance-checks.js';
 import {maintenanceObservations} from './pm-maintenance-observations.js';
 // One durable decision; selecting sources never runs monitoring or repair work.
@@ -152,6 +152,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       line('pmp_cost',p.limits.cost_microusd===null?t('pmp_cost_none'):String(p.limits.cost_microusd/1000000)),line('pmp_reason',doc.rationale),line('pmp_author',row.actor),line('pmp_recorded',stamp(row.created_at)),
       line('pmp_original_baseline',row.baseline_id),line('pmp_lifecycle',doc.lifecycle_revision),line('pmp_revision',row.revision),
       h('p',{class:'mono'},row.document_digest),h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation')));
+    const findingPolicy=findingPolicyView({h,t,config:p.observation.maintenance_sources});if(findingPolicy)details.append(findingPolicy);
     return h('article',{'data-maintenance-policy':row.policy_id},h('h3',{},isCurrent?t('pmp_current'):`${t('pmp_revision')} ${row.revision}`),
       h('p',{},h('strong',{},`${t('pmp_revision')} ${row.revision}`),' · ',s.repository,' · ',s.channel),
       h('p',{},t(p.enabled?'pmp_permitted':'pmp_disabled'),' · ',t(`pmp_${p.delivery.maximum}`)),

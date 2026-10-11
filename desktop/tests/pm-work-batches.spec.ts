@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
 import {batchFixture,mountBatch,bootBatch,panel,start,proof,handoff,workspaceId,START,RECORD} from './pm-work-batches-fixture.ts';
 const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();
@@ -6,6 +7,16 @@ const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Rev
 const add=async(page:any)=>{await review(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);};
 const fill=async(page:any)=>{await start(page).getByLabel('Reason for this request',{exact:true}).fill('Run the selected bounded work');const value=new Date(Date.now()+3600000);value.setMinutes(value.getMinutes()-value.getTimezoneOffset());await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(value.toISOString().slice(0,16));};
 const evidence=async(page:any,f:any)=>{await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Delivered integration receipt',{exact:true}).selectOption(f.state.deliveries[0].operation_id+':1');await proof(page).getByLabel('Saved GitHub observation',{exact:true}).selectOption(f.state.observations[0].observation_id);await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Match the original delivered revision');};
+
+for(const native of [false,true])test(`mounted ${native?'native':'browser'} workspace selects and starts one fixed batch`,async({page})=>{
+  const f=batchFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);
+  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
+  await handoff(page).locator('details>summary').first().click();await add(page);await fill(page);await start(page).locator('button[type=submit]').click();
+  await expect(panel(page).getByRole('heading',{name:'Original batch and result evidence',exact:true})).toBeVisible();
+  expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.action).toBe(START);expect(f.base.state.writes).toHaveLength(0);
+  f.state.historyDeny=true;f.base.fixture.base.state.cursor++;
+  await expect(panel(page).getByRole('heading',{name:'Original batch and result evidence',exact:true})).toHaveCount(0);
+});
 
 test('explicit selection freezes the reviewed existing handoff and bounded request',async({page})=>{
   const f=batchFixture();await mountBatch(page,f);await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(0);

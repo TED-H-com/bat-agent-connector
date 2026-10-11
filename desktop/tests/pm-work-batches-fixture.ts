@@ -24,8 +24,8 @@ export function batchFixture(){
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),pathname=url.pathname;
     if(input.method==='GET')state.reads.push(input.path);
-    if(pathname==='/capabilities'){const response=await base.dispatch(input);response.data.features.pm_workspaces.work_batches=state.enabled?{version:1,actions:[START,RECORD],profiles:[condition.profile,'observed_runner_v1'],max_entries:16}:null;
-      response.data.actions.push({action:START,allowed:true},{action:RECORD,allowed:true});return response;}
+    if(pathname==='/capabilities'||pathname==='/bootstrap'){const response=await base.dispatch(input),caps=pathname==='/bootstrap'?response.data.capabilities:response.data;caps.features.pm_workspaces.work_batches=state.enabled?{version:1,actions:[START,RECORD],profiles:[condition.profile,'observed_runner_v1'],max_entries:16}:null;
+      caps.actions.push({action:START,allowed:true},{action:RECORD,allowed:true});return response;}
     if(pathname===`/pm/workspaces/${workspaceId}`){const response=await base.dispatch(input);response.data.workspace.version=state.version;return response;}
     if(pathname===`/pm/workspaces/${workspaceId}/lifecycle`){const response=await base.dispatch(input);response.data.lifecycle.revision=state.revision;if(base.fixture.state.stage!=='development')response.data.blocked_actions.push(START);return response;}
     if(pathname.startsWith(`/pm/workspaces/${workspaceId}/work-batches`)){
