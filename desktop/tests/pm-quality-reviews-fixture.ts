@@ -7,7 +7,7 @@ export const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record'
 export const panel=(page:Page)=>page.locator('[data-pm-quality-reviews]'),editor=(page:Page,action=CREATE)=>panel(page).locator(`[data-pm-action="${action}"]`);
 const condition={kind:'fixed_revision_verification',profile:'observed_runner_v1',command_digest:'b'.repeat(64)};
 export function qualityFixture(){
-  const package_ref={workspace_id:workspaceId,package_id:packageId,document_digest:'c'.repeat(64)},plan_ref={revision_id:'pmrev_'+'9'.repeat(32),scope_revision:3},work_ref={work_item_id:workId,binding_id:'pmwb_'+'5'.repeat(32)};
+  const package_ref={workspace_id:workspaceId,package_id:packageId,document_digest:'c'.repeat(64)},plan_ref={revision_id:'pmrev_'+'9'.repeat(32),document_digest:'9'.repeat(64),scope_revision:'pmscope_'+'9'.repeat(32)},work_ref={work_item_id:workId,binding_id:'pmwb_'+'5'.repeat(32)};
   const criteria=[{criterion:{kind:'acceptance',requirement_id:'recovery',input_id:'in_'+'6'.repeat(32)},text:'Private recovery criterion: preserve original owner',original_confirmed:true,condition},
     {criterion:{kind:'dod',criterion_id:'tests'},text:'Private completion criterion: verify the fixed result',original_confirmed:true,condition}];
   const pkg={...package_ref,work_item_id:workId,document:{title:'Restore original ownership',work_item_id:workId,context:{plan_ref,work_ref,dod_ref:{revision_id:dodId}},requirements:[{id:'recovery',acceptance:[{text:criteria[0].text,source_input_id:criteria[0].criterion.input_id}]}]}};
