@@ -65,6 +65,11 @@ def access(ops, principal, wid, references):
                 raise bad('Original check is unavailable')
             checks._access(ops, principal, ops.get(row['operation_id'], steps=False))
             actual = row['context_digest'] if source.get('basis') == 'admission_context' else row['document_digest']
+        elif kind == 'maintenance_repair':
+            from . import pm_maintenance_repairs as repairs
+            row = repairs._row(ops, wid, ident)
+            repairs._full_access(ops, principal, ops.get(row['operation_id'], steps=False))
+            actual = row['context_digest']
         elif kind == 'evidence':
             actual = pm_evidence.get_evidence(ops, principal, wid, ident)['evidence']['fact_digest']
         elif kind == 'snapshot_identity':
@@ -83,9 +88,16 @@ def _period_rows(ops, principal, wid, table, ident, start, end, reader, projecti
         return [], [], {'available': False, 'truncated': False, 'visibility_filtered': False}
     clock = 'COALESCE(finished_at,created_at)' if table == 'pm_maintenance_check_runs' else 'created_at'
     # Table/column choices are fixed internal constants, never user input.
-    query = (f'SELECT {ident},sequence FROM {table} WHERE workspace_id=? AND {clock}>=? AND {clock}<? '  # noqa: S608
-        'ORDER BY sequence LIMIT ?')
-    rows = ops.db.execute(query, (wid, start, end, MAX_ROWS + 1)).fetchall()
+    if table == 'pm_maintenance_repairs':
+        # Carry unfinished original work into the review even when it began in
+        # an earlier week. This is a fixed point observation, not a new attempt.
+        query = ('SELECT repair_id,sequence FROM pm_maintenance_repairs WHERE workspace_id=? '
+            'AND created_at<? AND (finished_at IS NULL OR finished_at>=?) ORDER BY sequence LIMIT ?')
+        rows = ops.db.execute(query, (wid, end, start, MAX_ROWS + 1)).fetchall()
+    else:
+        query = (f'SELECT {ident},sequence FROM {table} WHERE workspace_id=? AND {clock}>=? AND {clock}<? '  # noqa: S608
+            'ORDER BY sequence LIMIT ?')
+        rows = ops.db.execute(query, (wid, start, end, MAX_ROWS + 1)).fetchall()
     values, refs = [], []
     coverage = {'available': True, 'truncated': len(rows) > MAX_ROWS, 'visibility_filtered': False}
     used = 0
@@ -148,6 +160,27 @@ def _check_projection(response, ops):
         'children': final['children'] if final else [], 'cost_coverage': final['cost_coverage'] if final else {
             'provider_billing': 'unmeasured', 'charged_microusd': None},
         'repair_started': False}, source
+
+
+def _repair_projection(response):
+    row = response['repair']
+    source = ref('maintenance_repair', row['repair_id'], row['context_digest'], basis='admission_context')
+    children = []
+    for slot in ('child', 'publication_child', 'delivery_child', 'runtime_observer'):
+        child = row.get(slot)
+        if isinstance(child, dict):
+            children.append({'slot': slot, **{key: child.get(key) for key in
+                ('operation_id', 'action', 'status', 'error_code')}})
+    return {'source_id': key(source), 'repair_id': row['repair_id'], 'operation_id': row['operation_id'],
+        'work_item_id': row['work_item_id'], 'started_at': row['created_at'], 'finished_at': row['finished_at'],
+        'scope_digest': baselines.sources.digest(row['context']['check']['workload']['scope']),
+        'finding_id': row['finding_id'], 'outcome': row.get('outcome'), 'operation_status': row['operation_status'],
+        'capacity_held': row['capacity_held'], 'repair_fixed': row['repair_fixed'],
+        'release_status': row['release_status'], 'cost_coverage': row['cost_coverage'],
+        'retries_used': row['retries_used'], 'children': children,
+        'progress': row['progress'], 'runtime_completion': row.get('runtime_completion'),
+        'required_ci_selection': row.get('required_ci_selection'), 'composed_delivery': row.get('composed_delivery'),
+        'observation_basis': 'saved_repair_point', 'later_changes_included': False}, source
 
 
 def _state(values, coverage, now, *, enabled, supported=True):
@@ -261,10 +294,13 @@ def build(ops, principal, wid, intent, period, now, previous=None):
         start, end, workload.get_snapshot, _workload_projection)
     runs, run_refs, run_coverage = _period_rows(ops, principal, wid, 'pm_maintenance_check_runs', 'run_id',
         start, end, checks.get_run, lambda value: _check_projection(value, ops))
+    from . import pm_maintenance_repairs as repairs
+    repair_rows, repair_refs, repair_coverage = _period_rows(ops, principal, wid, 'pm_maintenance_repairs', 'repair_id',
+        start, end, repairs.get_repair, _repair_projection)
     # Other scopes are visible historical context but cannot answer this policy's report.
     scope_digest = baselines.sources.digest(intent['scope'])
     for values, references, coverage in ((observations, gh_refs, gh_coverage), (workloads, wl_refs, wl_coverage),
-                                         (runs, run_refs, run_coverage)):
+                                         (runs, run_refs, run_coverage), (repair_rows, repair_refs, repair_coverage)):
         selected = [i for i, value in enumerate(values) if value['scope_digest'] == scope_digest]
         coverage['other_scope_records'] = len(selected) != len(values)
         refs.extend(references[i] for i in selected)
@@ -276,6 +312,8 @@ def build(ops, principal, wid, intent, period, now, previous=None):
         observation_mode='point_samples', period_continuity='unproven', whole_period_no_events_proven=False)
     wl_coverage.update(status=_state(workloads, wl_coverage, now, enabled=enabled), samples=len(workloads))
     run_coverage.update(status=_state(runs, run_coverage, now, enabled=enabled), samples=len(runs))
+    repair_coverage.update(status=_state(repair_rows, repair_coverage, now, enabled=enabled), samples=len(repair_rows),
+        observation_mode='saved_repair_points', includes_unfinished_previous_periods=True)
     current = next((item for item in reversed(observations) if item['coverage_status'] == 'complete'), None)
     # Do not let an older complete point hide the newest failed observation.
     if observations and observations[-1]['coverage_status'] != 'complete':
@@ -299,10 +337,10 @@ def build(ops, principal, wid, intent, period, now, previous=None):
             'scope': intent['scope'], 'allowed_paths': adopted['allowed_paths'], 'delivery': adopted['delivery'],
             'schedule': adopted['schedule'], 'limits': adopted['limits']},
         'lifecycle': {'revision': intent['lifecycle_revision'], 'execution_epoch': intent['execution_epoch']},
-        'coverage': {'github': gh_coverage, 'workload': wl_coverage, 'checks': run_coverage,
+        'coverage': {'github': gh_coverage, 'workload': wl_coverage, 'checks': run_coverage, 'repairs': repair_coverage,
             'issues': 'not_observed', 'dependencies': 'not_observed', 'research': 'not_performed',
             'quality': 'unassessed', 'model_analysis': 'not_requested', 'network_refresh': False},
-        'observations': observations, 'workloads': workloads, 'checks': runs,
+        'observations': observations, 'workloads': workloads, 'checks': runs, 'repairs': repair_rows,
         'changes': {**_changes(earlier, current_facts), 'scope_changed': bool(previous
             and previous['report']['policy']['scope'] != intent['scope'])},
         'comparison_facts': current_facts,
@@ -316,6 +354,11 @@ def build(ops, principal, wid, intent, period, now, previous=None):
         'next_check': {'status': 'schedule_intent_only', 'execution_time': None},
         'decisions': [], 'improvement_candidates': [], 'meeting_completed': False,
         'automatic_maintenance_authorized': False, 'scope_adopted': False}
+    report['effort']['repair_counts'] = {'selected': len(repair_rows),
+        'capacity_held': sum(row['capacity_held'] for row in repair_rows),
+        'runtime_completed': sum(row['runtime_completion'] is not None for row in repair_rows),
+        'delivery_outcomes': {outcome: sum(row['outcome'] == outcome for row in repair_rows)
+            for outcome in ('published_for_review', 'merged', 'deployed')}}
     finding_report = _finding_report(intent, observations, gh_coverage, now, enabled, previous)
     required_coverage = [gh_coverage, wl_coverage]
     if finding_report:

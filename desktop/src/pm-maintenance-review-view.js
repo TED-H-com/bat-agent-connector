@@ -39,7 +39,7 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   if(report.schedule)overview.append(fold('pmrv_schedule',line('pmc_due',stamp(report.schedule.scheduled_at)),
     line('pmrv_missed_weeks',report.schedule.coalesced_windows),text(t('pmrv_missed_help'))));
   const sources=h('section',{},h('h4',{},t('pmrv_coverage')));
-  for(const kind of ['github','workload','checks','issues','dependencies','research','quality','model_analysis']){
+  for(const kind of ['github','workload','checks',...(coverage.repairs?['repairs']:[]),'issues','dependencies','research','quality','model_analysis']){
     const value=coverage[kind],state=typeof value==='string'?value:value.status;
     sources.append(line(`pmrv_source_${kind}`,label('pmrv_coverage',state)));
     if(Number.isSafeInteger(value.samples))sources.append(h('p',{class:'muted pm-review-count'},`${t('pmrv_sample_count')}: ${value.samples}`));
@@ -87,6 +87,16 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     line('pmrv_workload_classification',label('pmrv_workload',row.classification)),fold('pmrv_proof',sourceProof([row.source_id]))));
   for(const row of report.checks||[])samples.append(h('article',{class:'pm-fact'},line('pmrv_check_outcome',label('pmrv_check',row.outcome)),
     line('pmrv_recorded',stamp(row.started_at)),fold('pmrv_proof',sourceProof([row.source_id]))));
+  for(const row of report.repairs||[]){
+    if(typeof row.capacity_held!=='boolean'||row.observation_basis!=='saved_repair_point'||row.later_changes_included!==false)throw Error(t('pmrv_invalid'));
+    const result=['published_for_review','merged','deployed'].includes(row.outcome)?label('pmrv_repair',row.outcome):t('pmrv_repair_pending');
+    samples.append(h('article',{class:'pm-fact','data-review-repair':row.repair_id},
+      line('pmrv_repair_outcome',result),text(t('pmrv_repair_limit')),
+      text(t(row.capacity_held?'pmrv_repair_capacity_held':'pmrv_repair_capacity_released')),
+      text(t(row.runtime_completion?'pmrv_repair_runtime_completed':'pmrv_repair_runtime_unproven')),
+      line('pmrv_recorded',stamp(row.started_at)),
+      fold('pmrv_proof',sourceProof([row.source_id]),op(row.operation_id),...(row.children||[]).map(child=>op(child.operation_id)))));
+  }
   if(!samples.children.length)samples.append(text(t('pmrv_none')));
   overview.append(fold('pmrv_source_samples',samples),fold('pmrv_next_focus_report',list((report.next_observation_focus||[]).map(value=>
     ['review_source_coverage','verify_reported_results'].includes(value)?label('pmrv_focus',value):value))));
