@@ -131,6 +131,8 @@ def progress(ops, parent):
     child = repairs._child(ops, parent)
     from . import pm_maintenance_repair_publication as publication
     published = publication.child(ops, parent)
+    from . import pm_maintenance_repair_delivery as composed
+    delivered = composed.child(ops, parent)
     row = repairs._record_for(ops, parent)
     reason = 'PM_REPAIR_EXECUTION_PENDING'
     if child and child['status'] in {'failed', 'cancelled', 'needs_attention'}:
@@ -140,6 +142,8 @@ def progress(ops, parent):
                   else 'PM_REPAIR_VERIFICATION_REQUIRED')
     if published:
         reason = 'PM_REPAIR_PUBLICATION_' + published['status'].upper()
+    if delivered:
+        reason = 'PM_REPAIR_DELIVERY_' + delivered['status'].upper()
     if time.time() >= row['deadline_at']:
         reason = 'PM_REPAIR_DEADLINE'
     if row['finished_at'] is not None:
@@ -158,6 +162,7 @@ def progress(ops, parent):
         'outcome': (parent.get('result') or {}).get('outcome'),
         'acceptance': [doc['evidence'] for doc in docs if doc['evidence']['kind'] == 'acceptance'],
         'delivery_receipts': delivery, 'blocked_reason': reason, 'new_investment_blocked_reason': investment_blocked,
+        'composed_delivery': pm_delivery_lineage._facts(ops, delivered) if delivered else None,
         'required_ci': 'unproven',
         'required_ci_receipts': [doc['evidence'] for doc in docs if doc['evidence']['kind'] == 'required_ci'],
         'release_publication': 'not_inferred'}

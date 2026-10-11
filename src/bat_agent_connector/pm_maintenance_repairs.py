@@ -530,6 +530,7 @@ def get_repair(ops, principal, workspace_id, repair_id):
             'operation_status': parent['status'], 'child': ({key: child[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if child else None),
             'publication_child': ({key: published[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if published else None),
             'delivery_child': ({key: delivered[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if delivered else None),
+            **delivery.projection(ops, parent),
             'evidence': proofs, 'capacity_held': row['finished_at'] is None,
             'outcome': (parent.get('result') or {}).get('outcome'),
             'repair_fixed': False, 'release_status': 'not_inferred', 'cost_coverage': 'model_provider_unmeasured',

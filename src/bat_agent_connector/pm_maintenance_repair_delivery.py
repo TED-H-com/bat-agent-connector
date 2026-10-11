@@ -99,6 +99,21 @@ def private_child(ops, operation):
     return row['role'] == 'delivery'
 
 
+def require_native_target(ctx, pr):
+    """Recovery retains original native identity without new investment authority."""
+    if not private_child(ctx.service, ctx.op):
+        return
+    from . import pm_maintenance_repair_publication as publication
+    parent = repairs._operation(ctx.service, ctx.op['external_refs'][LINK])
+    receipt = publication.published_receipt(ctx.service, parent)
+    head, base = pr.get('head') or {}, pr.get('base') or {}
+    if (pr.get('id') != receipt['native_pr_id'] or pr.get('node_id') != receipt['native_pr_node_id']
+            or pr.get('number') != receipt['pull_number'] or head.get('sha') != receipt['candidate_sha']
+            or base.get('ref') != receipt['base_ref'] or (base.get('repo') or {}).get('id') != receipt['repository_id']
+            or (head.get('repo') or {}).get('id') != receipt['repository_id']):
+        raise NeedsAttention('PM_REPAIR_DELIVERY_TARGET_CHANGED', 'Original native PR identity is unavailable for recovery')
+
+
 @contextmanager
 def selecting(ops, parent, reference):
     token = _SELECTING.set((id(ops.db), parent['operation_id'], reference))
@@ -115,11 +130,23 @@ def selected(ops, parent):
 
 def require_sources(ops, principal, parent):
     from . import pm_maintenance_repair_publication as publication
+    for row in _rows(ops, parent, 'observation'):
+        op = _child(ops, parent, row)
+        if not observations.operation_visible(ops.db, principal, op):
+            raise OperationError('NOT_FOUND', 'Original repair observation sources unavailable', 404)
     for row in _rows(ops, parent, 'delivery'):
         _child(ops, parent, row)
         reference = json.loads(row['required_ci'])
         if reference is not None:
             required_ci.historical(ops, principal, parent, publication.published_receipt(ops, parent), reference)
+
+
+def projection(ops, parent):
+    rows = _rows(ops, parent)
+    observed = [_child(ops, parent, row) for row in rows if row['role'] == 'observation']
+    selected = [json.loads(row['required_ci']) for row in rows if row['role'] == 'delivery']
+    return {'observation_children': [{key: op[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')}
+        for op in observed], 'required_ci_selection': selected[0] if selected else None}
 
 
 def _selection(ops, principal, parent, receipt):
@@ -279,6 +306,10 @@ async def bounded_run(ctx, run):
     """Bound the existing engine; cancellation leaves original steps unresolved."""
     if not private_child(ctx.service, ctx.op):
         return await run()
+    selected = ctx.admission_binding['pm_delivery']
+    if (ctx.service.context['github_config'].api_url != selected['provider_origin']
+            or ctx.service.context['github'].cfg.api_url != selected['provider_origin']):
+        raise NeedsAttention('PM_REPAIR_DELIVERY_TARGET_CHANGED', 'Restore the original provider for bounded receipt recovery')
     pending = delivery._sent_write(ctx)
     timeout = 20 if pending else child_timeout(ctx.service, ctx.op, 30)
     token = _HTTP_BUDGET.set(ctx)
