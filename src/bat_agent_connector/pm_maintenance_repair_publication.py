@@ -79,12 +79,53 @@ def require_child(ops, op):
     return repairs._guard(ops, parent, scopes=repairs.REQUIRED | {'integrate'})
 
 
+def published_receipt(ops, parent):
+    """Private original receipt validation; public callers still gate all sources."""
+    from . import pr_publication
+    original = child(ops, parent)
+    if original is None:
+        return None
+    receipt = pr_publication._raw_receipt(ops, original['operation_id'])
+    if receipt is None:
+        return None
+    source = repairs._child(ops, parent)
+    if (receipt.get('target_verified') is not True or receipt.get('http_status') != 201
+            or receipt.get('repair_parent_id') != parent['operation_id']
+            or receipt.get('child_operation_id') != source['operation_id']
+            or receipt.get('child_request_digest') != pr_publication._child_digest(source)
+            or receipt.get('candidate_sha') != original['params']['candidate_sha']
+            or receipt.get('repository_id') != original['preconditions']['repository_id']):
+        raise evidence._bad('The original owned publication receipt is unproven', 'PM_REPAIR_OWNED_PR_UNPROVEN')
+    return receipt
+
+
+def finish_for_review(ctx):
+    """The policy publication goal is distinct from runtime capacity settlement."""
+    def finish():
+        parent = repairs._operation(ctx.service, ctx.operation_id)
+        original = child(ctx.service, parent)
+        receipt = published_receipt(ctx.service, parent)
+        if (evidence.policies_for(ctx.service, parent)['delivery']['maximum'] != 'pull_request'
+                or original is None or original['status'] != 'succeeded'
+                or repairs.checks._unsettled(ctx.service, original) or receipt is None):
+            raise evidence._bad('The original publication is not yet settled', 'PM_REPAIR_PUBLICATION_UNSETTLED')
+        # repository.continue success acknowledges session start. Neither it nor
+        # an interrupt ACK proves the runtime stopped; keep the reservation.
+        return {'repair_id': 'pmrp_' + ctx.operation_id[3:], 'outcome': 'published_for_review',
+            'publication_operation_id': original['operation_id'], 'native_pr_id': receipt['native_pr_id'],
+            'pull_number': receipt['pull_number'], 'creation_receipt_digest': repairs.checks._digest(receipt),
+            'repair_fixed': False, 'release_publication': 'not_inferred', 'capacity_held': True,
+            'capacity_reason': 'PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN'}
+    return ctx.effect('pm.repair.published_for_review', finish, receipt_only=True)
+
+
 def advance(ctx):
     parent = repairs._operation(ctx.service, ctx.operation_id)
     original = child(ctx.service, parent)
     if original:
-        # Success of this engine is an actual original creation receipt, but
-        # completion/merge/deploy are still separate evidence and policy gates.
+        if (evidence.policies_for(ctx.service, parent)['delivery']['maximum'] == 'pull_request'
+                and original['status'] == 'succeeded' and not repairs.checks._unsettled(ctx.service, original)):
+            return finish_for_review(ctx)
         raise Wait('waiting_external', 'Original PR publication ' + original['status'] + '; awaiting delivery receipts', 15)
     try:
         principal = repairs._guard(ctx.service, parent, scopes=repairs.REQUIRED | {'integrate'})
