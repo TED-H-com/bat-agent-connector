@@ -1111,6 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1207,6 +1208,10 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         }
         validate_managed_capture_preview(input.body.as_ref())?;
     }
+    let pm = path.starts_with("/pm/");
+    if pm && input.idempotency_key.is_some() {
+        return Err("PM reads accept no operation key".into());
+    }
     let cleanup = path.starts_with("/cleanup-");
     let repair_evidence = path.ends_with("/repair-evidence");
     let instructions = path.ends_with("/instructions");
@@ -1223,6 +1228,48 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
         if key.chars().chain(value.chars()).any(char::is_control) {
             return Err("Control characters in central query are refused".into());
+        }
+        if pm {
+            let thread_list = path.ends_with("/threads");
+            let thread_detail = path
+                .split('/')
+                .nth(5)
+                .is_some_and(|id| id.starts_with("pmt_"))
+                && !path.ends_with("/context");
+            let valid = match key.as_ref() {
+                "limit" if thread_list || thread_detail => {
+                    !value.is_empty()
+                        && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
+                }
+                "after" if thread_list => {
+                    value.len() == 36
+                        && value.starts_with("pmt_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "before_message" | "before_input" if thread_detail => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<i64>().is_ok_and(|n| n > 0)
+                }
+                "max_chars" if path.ends_with("/context") => {
+                    !value.is_empty()
+                        && value.len() <= 5
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value
+                            .parse::<u32>()
+                            .is_ok_and(|n| (2000..=64000).contains(&n))
+                }
+                _ => false,
+            };
+            if !valid || !query_keys.insert(key.to_string()) {
+                return Err("Invalid PM read query".into());
+            }
+            continue;
         }
         if repair_evidence {
             let valid = match key.as_ref() {
@@ -1676,6 +1723,45 @@ mod tests {
         input.body = None;
         input.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn pm_reads_are_exact_scoped_and_bounded() {
+        let workspace = "/pm/workspaces/ws_00000000000000000000000000000000";
+        let thread = format!("{workspace}/threads/pmt_11111111111111111111111111111111");
+        for path in [
+            "/pm/profiles".into(),
+            "/pm/workspaces".into(),
+            workspace.into(),
+            format!("{workspace}/threads?limit=100&after=pmt_11111111111111111111111111111111"),
+            thread.clone(),
+            format!("{thread}?limit=1&before_message=3&before_input=2"),
+            format!("{thread}/context?max_chars=64000"),
+        ] {
+            assert!(validate_request(&get(&path)).is_ok(), "{path}");
+        }
+        for path in [
+            "/pm/workspaces/ws_other".into(),
+            "/pm/profiles?limit=1".into(),
+            format!("{workspace}?limit=1"),
+            format!("{workspace}/threads?limit=101"),
+            format!("{workspace}/threads?limit=1&limit=2"),
+            format!("{workspace}/threads?after=wrong"),
+            format!("{thread}?before_message=0"),
+            format!("{thread}?before_message=9999999999999999999"),
+            format!("{thread}?before_input=-1"),
+            format!("{thread}?actor=other"),
+            format!("{thread}/context?max_chars=1999"),
+            format!("{thread}/context?max_chars=64001"),
+            format!("{thread}/context?limit=1"),
+            format!("{thread}/adopt"),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        let mut keyed = get(workspace);
+        keyed.idempotency_key = Some("unexpected".into());
+        assert!(validate_request(&keyed).is_err());
+        assert!(validate_request(&request("POST", &thread)).is_err());
     }
 
     fn request(method: &str, path: &str) -> ConnectorRequest {
