@@ -463,7 +463,7 @@ async def _run(ctx):
             'repair_verified': False, 'capacity_held': True}, receipt_only=True)
     if child['status'] == 'succeeded':
         from . import pm_maintenance_repair_publication as publication
-        publication.advance(ctx)
+        return publication.advance(ctx)
     # A succeeded repository.continue is only a start receipt. Evidence recording
     # and the parent do not manufacture coding, verification or publication success.
     raise Wait('waiting_external', 'Awaiting original fixed verification and delivery receipts', 15)
@@ -513,6 +513,7 @@ def get_repair(ops, principal, workspace_id, repair_id):
             'operation_status': parent['status'], 'child': ({key: child[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if child else None),
             'publication_child': ({key: published[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if published else None),
             'evidence': proofs, 'capacity_held': row['finished_at'] is None,
+            'outcome': (parent.get('result') or {}).get('outcome'),
             'repair_fixed': False, 'release_status': 'not_inferred', 'cost_coverage': 'model_provider_unmeasured',
             'progress': evidence.progress(ops, parent),
             'retries_used': ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repair_retries WHERE parent_id=?', (parent['operation_id'],)).fetchone()[0]}})

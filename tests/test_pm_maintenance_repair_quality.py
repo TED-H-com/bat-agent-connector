@@ -210,10 +210,39 @@ async def test_parent_composes_only_one_original_publication_and_native_201(publ
     assert receipt['native_pr_id'] == 801
     assert child['params']['public_body'] == 'Fixes #50'
     assert child['params']['public_title'] == 'Maintenance repair for #50'
+    assert child['params']['draft'] is True
+    assert w['parent']['status'] == 'succeeded'
+    assert w['parent']['result']['outcome'] == 'published_for_review'
+    assert w['parent']['result']['capacity_held'] and not w['parent']['result']['repair_fixed']
+    assert w['parent']['result']['release_publication'] == 'not_inferred'
+    saved = view(w, w['parent'])
+    assert saved['outcome'] == saved['progress']['outcome'] == 'published_for_review'
+    assert saved['capacity_held'] and saved['finished_at'] is None
+    assert saved['progress']['blocked_reason'] == 'PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN'
     await advance(w, w['parent'], rounds=4)
     assert len(w['posts']) == 1 and ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repair_publications').fetchone()[0] == 1
     assert view(w, w['parent'])['publication_child']['operation_id'] == child['operation_id']
     assert snapshot(w['human']) == human
+
+
+async def test_completed_publication_survives_stop_without_inventing_runtime_death(publishing):
+    from bat_agent_connector import pm_maintenance_repair_publication as composed
+    from tests.test_pm_lifecycle import decide
+    w, ops = publishing, publishing['d'].ops
+    # Admit and finish only the original publication, then stop the workspace
+    # before the parent records that already achieved policy outcome.
+    await ops._execute(w['parent']['operation_id'])
+    child = composed.child(ops, w['parent'])
+    await ops._execute(child['operation_id'])
+    assert ops.get(child['operation_id'])['status'] == 'succeeded'
+    await decide(ops, w['workspace_id'], who=OWNER)
+    ops.db.execute('UPDATE api_principals SET revoked_at=0 WHERE actor=?', (OWNER.actor,))
+    w['parent'] = await advance(w, w['parent'])
+    assert w['parent']['status'] == 'succeeded', w['parent']
+    assert w['parent']['result']['outcome'] == 'published_for_review'
+    repairs.reconcile(ops)
+    assert view(w, w['parent'])['capacity_held']
+    assert len(w['posts']) == 1
 
 
 async def test_unknown_original_publication_holds_capacity_and_never_reposts(publishing):
@@ -225,7 +254,8 @@ async def test_unknown_original_publication_holds_capacity_and_never_reposts(pub
     assert child is not None and child['status'] in {'uncertain', 'needs_attention'}, child
     await advance(w, w['parent'], rounds=5)
     assert len(w['posts']) == 1
-    assert view(w, w['parent'])['capacity_held']
+    saved = view(w, w['parent'])
+    assert saved['capacity_held'] and saved['outcome'] is None
     assert ops.db.execute('SELECT COUNT(*) FROM pr_creation_receipts').fetchone()[0] == 0
 
 
