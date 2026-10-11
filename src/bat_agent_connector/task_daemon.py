@@ -253,6 +253,13 @@ class TaskDaemon:
 
     async def call_api(self, method: str, params: dict, principal: api_auth.Principal,
                        *, _observation_transport: dict | None = None) -> dict:
+        from . import controller_authority
+        with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal):
+            return await self._call_api_bound(method, params, principal,
+                                               _observation_transport=_observation_transport)
+
+    async def _call_api_bound(self, method: str, params: dict, principal: api_auth.Principal,
+                             *, _observation_transport: dict | None = None) -> dict:
         """/rpc doors into OperationService and the inventory for MCP and CLI (same rules as /api/v1)."""
         scope = API_RPC[method]
         if scope != "?" and not principal.allows(scope):
@@ -420,6 +427,14 @@ class TaskDaemon:
 
     async def call(self, method: str, params: dict, *, auth_token: str | None = None,
                    principal: api_auth.Principal | None = None, _ctx: OpContext | None = None) -> dict:
+        if principal is not None and _ctx is None:
+            from . import controller_authority
+            with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal):
+                return await self._call_bound(method, params, auth_token=auth_token, principal=principal)
+        return await self._call_bound(method, params, auth_token=auth_token, principal=principal, _ctx=_ctx)
+
+    async def _call_bound(self, method: str, params: dict, *, auth_token: str | None = None,
+                          principal: api_auth.Principal | None = None, _ctx: OpContext | None = None) -> dict:
         if method in task_actions.METHODS and _ctx is None:
             return await self._task_operation(method, params, auth_token=auth_token, principal=principal)
         if method == "api_token_issue":
@@ -541,6 +556,7 @@ class TaskDaemon:
                     "goose": "enabled" if self.goose.config.enabled else "disabled"}
         task_id = params["task_id"]
         if method == "work_reconcile_capability":
+            task_control.require_authority(self.journal.get(task_id))
             key = params.get("idempotency_key")
             token = None
             if key is not None:
@@ -903,6 +919,14 @@ class TaskDaemon:
             await asyncio.sleep(2)
 
     async def _tick_task(self, task_id: str):
+        from . import controller_authority
+        # Queued asyncio work can inherit an unrelated API caller's context.
+        # Only the durable task admission owns its background execution.
+        task = self.journal.get(task_id)
+        with controller_authority.use(task_control.authority(task), self.journal):
+            return await self._tick_task_bound(task_id)
+
+    async def _tick_task_bound(self, task_id: str):
         verifying = False
         version = None
         try:
@@ -927,6 +951,7 @@ class TaskDaemon:
                 return
             if task["paused"] or task["state"] in {"needs_ted", "human_owned", "failed", "done"}:
                 return
+            task_control.require_authority(task)
             if any(c["kind"] == "goose_run" for c in self.journal.commands(task_id)):
                 return
             entry = registry.get(task["host"], task["session_id"])

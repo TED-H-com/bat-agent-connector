@@ -12,7 +12,14 @@ import weakref
 from typing import Protocol
 
 from . import registry, task_control
-from .errors import BatError, TaskControlRefused, TaskDispatchCancelled, TaskIdentityMismatch, WriteRefused
+from .errors import (
+    BatError,
+    ResourceReadOnly,
+    TaskControlRefused,
+    TaskDispatchCancelled,
+    TaskIdentityMismatch,
+    WriteRefused,
+)
 from .model_router import MinimalReviewGate, ModelRouter
 from .operations import AMBIGUOUS, AmbiguousOutcome, StepFailed, _error_code
 from .relay import parse_status
@@ -189,7 +196,7 @@ class TaskCoordinator:
             if action == "permissions":
                 from .session_permissions import _check_owner
                 _check_owner(context, self.adapter.fleet, host, sid)
-            if context.admission_binding and context.admission_binding["task_id"] != task_id:
+            if context.admission_binding and context.admission_binding.get("task_id") not in {None, task_id}:
                 raise TaskControlRefused("TASK_BINDING_MISMATCH", "session task owner changed since admission")
             params = {**params, "control_version": context.effective_preconditions.get("control_version")}
         # The original permissions command may continue only its missing frame intents.
@@ -341,6 +348,7 @@ class TaskCoordinator:
         return (other[0], "review_other_family") if other else (order[0], "review_same_family_only")
 
     async def pause(self, task_id: str, *, abort_current: bool = False) -> dict:
+        task_control.require_authority(self.journal.get(task_id))
         task = self.journal.pause(task_id, abort_current=abort_current)
         if abort_current and task["session_id"]:
             async with self._lock(task["host"], task["session_id"]):
@@ -348,10 +356,16 @@ class TaskCoordinator:
         return self.journal.get(task_id)
 
     async def tick(self, task_id: str) -> dict:
+        from . import controller_authority
+        task = self.journal.get(task_id)
+        with controller_authority.use(task_control.authority(task), self.journal):
+            return await self._tick_bound(task_id)
+
+    async def _tick_bound(self, task_id: str) -> dict:
         async with self._task_locks.setdefault(task_id, asyncio.Lock()):
             try:
                 return await self._tick(task_id)
-            except TaskControlRefused as exc:
+            except (TaskControlRefused, ResourceReadOnly) as exc:
                 # Control cancellation is not a failed verifier or an unknown BAT outcome.
                 logging.info("Task %s tick cancelled by %s", task_id[:8], exc.code)
                 return self.journal.get(task_id)
@@ -403,6 +417,7 @@ class TaskCoordinator:
                     return self.journal.change(task_id, "verifying" if task.get("reviewer_session_id")
                                                else "accepted", event="session_presence_restored")
             return task
+        task_control.require_authority(task)
         rejected = next((c for c in reversed(cmds) if c["kind"] == "send"
                          and c["session_id"] == task.get("session_id")), None)
         if rejected and rejected["status"] == "rejected":
@@ -428,6 +443,7 @@ class TaskCoordinator:
         return task
 
     async def _start(self, task: dict, *, role: str) -> dict:
+        task_control.require_authority(task)
         stage = "review" if role == "reviewer" else "planning"
         agent, reason = self._pick_agent(role, task, await self._available_agents(task))
         await self._route(task, f"{stage}:start:{task.get('review_commit') or 'lead'}:"
@@ -600,6 +616,7 @@ class TaskCoordinator:
                     return self.journal.change(task["task_id"], "uncertain")
             if task["paused"]:
                 return paused_result(task)
+            task_control.require_authority(task)
             send_type = "review" if purpose.startswith("reviewer:") else "implementation"
             # Record the agent that really receives this prompt (the session's branch).
             agent = next((b["provider"] for b in reversed(task["branches"]) if b["session_id"] == sid), None)
@@ -966,6 +983,7 @@ class TaskCoordinator:
             return False
 
     async def _failover(self, task: dict) -> dict:
+        task_control.require_authority(task)
         successor = str(uuid.uuid4())
         cmd, handoff = self.journal.reserve_failover(task["task_id"], task["session_id"], successor)
         if self.journal.get(task["task_id"])["paused"]:
@@ -1047,6 +1065,7 @@ class TaskCoordinator:
         return task, True
 
     async def _verify_and_review(self, task: dict) -> dict:
+        task_control.require_authority(task)
         lead_read = await self.adapter.read(task, task["session_id"], task["turn_marker"])
         self._check_control(task)
         if lead_read.get("streaming") is True or lead_read.get("pending"):
