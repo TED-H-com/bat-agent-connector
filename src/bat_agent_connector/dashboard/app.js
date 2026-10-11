@@ -1529,10 +1529,19 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		return data;
 	};
 	const can = (decide) => loaded && permitted(decide);
+	const forms = new Set();
+	const track = (value) => {
+		forms.add(value);
+		return value;
+	};
+	function updateForms() {
+		for (const value of forms) if (!value.box.isConnected) forms.delete(value);
+		else value.update();
+	}
 	function bindingForm(action, target, preconditions, label, extraParams = {}, alreadyBound = false) {
 		const rationale = input("pm_evidence_rationale", { max: 4e3 });
 		let result;
-		result = form({
+		result = track(form({
 			action,
 			target: {
 				workspace_id: workspaceId,
@@ -1552,7 +1561,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				if (result) result.box.hidden = alreadyBound && !result.locked();
 			},
 			extra: labelled("pm_evidence_rationale", rationale)
-		});
+		}));
 		result.update();
 		return result;
 	}
@@ -1658,7 +1667,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 							choices.append(h("label", {}, checkbox, requirement.text));
 						}
 					};
-					bind = form({
+					bind = track(form({
 						action: "pm.work.bind",
 						target: {
 							workspace_id: workspaceId,
@@ -1683,7 +1692,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 						onSaved: () => refresh(),
 						onStateChange: showRequirements,
 						extra: h("div", {}, labelled("pm_evidence_rationale", rationale), labelled("pm_evidence_plan_choice", planId), selectedIds, choices)
-					});
+					}));
 					planId.addEventListener("change", () => {
 						if (bind.locked()) return;
 						selectedIds.value = "[]";
@@ -1700,7 +1709,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			detail.append(h("p", { class: "muted" }, t(binding.plan_revision_id ? "pm_evidence_fixed_plan" : "pm_evidence_no_plan")));
 			if (binding.plan_revision_id) detail.append(h("code", {}, binding.plan_revision_id), h("p", {}, (binding.requirement_ids || []).join(", ")));
 			const holder = h("div");
-			const capture = form({
+			const capture = track(form({
 				action: "pm.evidence.capture",
 				target: {
 					workspace_id: workspaceId,
@@ -1712,7 +1721,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				permitted: () => can(false),
 				label: "pm_evidence_capture",
 				onSaved: () => loadEvidence(item, holder)
-			});
+			}));
 			detail.append(capture.box, holder);
 			try {
 				await loadEvidence(item, holder);
@@ -1725,6 +1734,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 	async function loadProject() {
 		const ticket = ++generation;
 		loaded = false;
+		updateForms();
 		status.replaceChildren();
 		if (!selected) {
 			rows.replaceChildren();
@@ -1742,7 +1752,10 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				workBindings
 			]);
 			loaded = true;
-			if (active?.signature === signature) return;
+			if (active?.signature === signature) {
+				updateForms();
+				return;
+			}
 			active = { signature };
 			rows.replaceChildren();
 			const bound = bindings.some((row) => row.project_id === selected);
@@ -1774,6 +1787,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 	async function refresh() {
 		const ticket = ++generation;
 		loaded = false;
+		updateForms();
 		try {
 			const [catalog, associated, work] = await Promise.all([
 				api("GET", "/projects"),
