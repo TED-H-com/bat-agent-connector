@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from . import (
     controller_authority,
@@ -24,6 +27,99 @@ from .errors import BatError, ResourceReadOnly
 from .operations import RERUN, ActionDef, AmbiguousOutcome, Cancelled, OperationError, StepFailed, Uncertain
 
 ACTION = "pm.run.bat.analyze"
+_registry_context = ContextVar('pm_bat_registry_context', default=None)
+
+
+@contextmanager
+def _registry_scope(ctx, run):
+    token = _registry_context.set((ctx, run, asyncio.current_task()))
+    try:
+        yield
+    finally:
+        _registry_context.reset(token)
+
+
+def _registry_owner():
+    value = _registry_context.get()
+    return value[:2] if value and value[2] is asyncio.current_task() else (None, None)
+
+
+def _completed_row(ctx, run, host, row):
+    """No path, retired flag or PM actor name can substitute for original proof."""
+    binding = run.get('session_binding') or {}
+    reservation = _saved_step(ctx, run['operation_id'], 'session.reserve') or {}
+    return (run['adapter'] == runtime.ADAPTER and run['state'] == 'completed'
+        and binding.get('host') == host and binding.get('session_id') == row.get('session_id')
+        and binding.get('incarnation') == row.get('controller_incarnation')
+        and row.get('controller_authority') == run['execution_authority']
+        and row.get('start_operation_id') == run['operation_id']
+        and row.get('created_at') == reservation.get('created_at')
+        and not row.get('task_id') and runtime.death_proof(ctx.service.db, run) is not None)
+
+
+def _saved_step(ctx, operation_id, name):
+    row = ctx.service.db.execute('SELECT response FROM operation_steps WHERE operation_id=? AND name=? '
+        "AND status='succeeded'", (operation_id, name)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def permits_completed_retirement(host, row, operation_id):
+    """Private, synchronous registry CAS guard after immutable assistant import."""
+    ctx, run = _registry_owner()
+    if ctx is None or operation_id != ctx.operation_id or not _completed_row(ctx, run, host, row):
+        return False
+    if controller_authority.require() != run['execution_authority']:
+        return False
+    pm_runs.require_requester(ctx.service.db, run)
+    return _binding(ctx.service, run['workspace_id']) == ctx.admission_binding['pm_bat_binding']
+
+
+def permits_completed_carrier(host, entry, row):
+    """Only a new trusted PM run may reuse its proven predecessor's carrier."""
+    ctx, run = _registry_owner()
+    if ctx is None or entry.get('start_operation_id') != ctx.operation_id:
+        return False
+    _check(ctx, run, sending=True)
+    old = pm_runs.get_by_operation(ctx.service.db, row.get('start_operation_id'))
+    if (not old or old['workspace_id'] != run['workspace_id'] or not _completed_row(ctx, old, host, row)
+            or not controller_authority.same_controller(old['execution_authority'], run['execution_authority'])
+            or row.get('status') != 'stopped'
+            or (row.get('retirement') or {}).get('operation_id') != old['operation_id']):
+        return False
+    principal = pm_workspace.admitted_principal(ctx)
+    if not pm_runs.source_visible(ctx.service.db, principal, old):
+        return False
+    previous = ctx.service.get(old['operation_id'])
+    old_binding = previous['external_refs'].get('admission_binding', {}).get('pm_bat_binding')
+    binding = ctx.admission_binding['pm_bat_binding']
+    if old_binding != binding:
+        return False
+    original = _saved_step(ctx, old['operation_id'], 'source.resolve')
+    fixed = original.get('pm_carrier') if isinstance(original, dict) else None
+    if not fixed:
+        return False
+    expected = _carrier_source(_StartContext(ctx, run))
+    return (all(fixed.get(k) == v for k, v in expected.items() if k != 'head')
+        and entry.get('cwd') == row.get('cwd') == row.get('worktree_path') == expected['worktree_path']
+        and row.get('branch') == expected['branch'])
+
+
+def _retire_completed(ctx, run):
+    binding = run['session_binding']
+    def retire():
+        row = registry.get(binding['host'], binding['session_id']) or {}
+        with _registry_scope(ctx, run):
+            result = registry.retire(binding['host'], binding['session_id'], 'stopped',
+                created_at=row.get('created_at'), actor=run['execution_authority']['actor'],
+                reason='Original dedicated PM process death and assistant import are proven',
+                operation_id=ctx.operation_id, controller_incarnation=binding['incarnation'],
+                expected={k: row.get(k) for k in ('controller_authority', 'controller_incarnation',
+                    'start_operation_id', 'task_id', 'status', 'cwd', 'worktree_path', 'branch')})
+        if not result['capacity_released']:
+            raise OperationError('PM_BAT_RETIREMENT_UNPROVEN', 'The original PM runtime capacity remains held', 409)
+        return result
+    with controller_authority.use(run['execution_authority'], ctx.service.journal):
+        return ctx.effect('pm.bat.retire', retire, lifecycle_bookkeeping=True)
 
 
 def capabilities(ops, principal, workspace):
@@ -316,6 +412,7 @@ async def _analyze(ctx):
     run = pm_runs.get(ctx.service.db, saved["run_id"])
     ctx.set_refs(run_id=run["run_id"], workspace_id=run["workspace_id"])
     if run["state"] == "completed":
+        _retire_completed(ctx, run)
         return pm_native_operations._result(run)
     if run["state"] in {"aborted", "failed"}:
         raise OperationError("PM_BAT_STOPPED", "This original PM run ended without an imported reply", 409)
@@ -324,7 +421,8 @@ async def _analyze(ctx):
             # The ordinary executor retains separate carrier/start/confirmation
             # receipts and never restarts a start with an uncertain outcome.
             view = _StartContext(ctx, run)
-            carrier = await starts.run(view)
+            with _registry_scope(ctx, run):
+                carrier = await starts.run(view)
             plan = starts._receipt(view, "source.resolve")
             row = registry.get(plan["host"], plan["session_id"])
             proof = runtime.observations(ctx.service.db, run["run_id"])[0]
@@ -347,6 +445,7 @@ async def _analyze(ctx):
                 run["run_id"], run["generation"], content=value["content"], native_turn_id=value["native_turn_id"],
                 sdk_session_id=value["sdk_session_id"], model=value["actual_model"], native_message_id=value["native_message_id"]),
                 lifecycle_bookkeeping=True)
+            _retire_completed(ctx, completed)
             return pm_native_operations._result(completed)
         except Uncertain:
             proof = await _abort_evidence(ctx, run)

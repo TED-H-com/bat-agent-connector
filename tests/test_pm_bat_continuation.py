@@ -48,7 +48,9 @@ async def continuation(world, bat_world, mock, monkeypatch):  # noqa: F811
     monkeypatch.setattr(bat, 'start_carrier', ORIGINAL_CARRIER)
     mock.handlers.pop('git:log', None)
     w['raw']['hosts']['h1']['shared_clone_worktrees'] = False
-    w['d'].fleet.config.hosts['h1'] = replace(w['d'].fleet.config.host('h1'), shared_clone_worktrees=False)
+    w['raw']['hosts']['h1']['orchestrate_max_sessions'] = 1
+    w['d'].fleet.config.hosts['h1'] = replace(w['d'].fleet.config.host('h1'),
+        shared_clone_worktrees=False, orchestrate_max_sessions=1)
     w['runner'] = Runner()
     ops.context['git_runner'] = w['runner']
     created = await run(ops, 'pm.workspace.create', params={'name': 'Durable PM', 'repositories': ['o/r']})
@@ -96,6 +98,8 @@ async def test_completed_disk_context_continues_in_new_owned_bat_session(continu
     original = copy.deepcopy(pm_runs.get_by_operation(w['d'].ops.db, first['operation_id']))
     old_sid = original['session_binding']['session_id']
     old_registry = copy.deepcopy(registry.get('h1', old_sid))
+    assert old_registry['status'] == 'stopped'
+    assert old_registry['retirement']['operation_id'] == first['operation_id']
     old_proof = copy.deepcopy(w['proofs'][old_sid])
     await restart(w)
     await act(w['d'].ops, w['target'], 'pm.message.append', {'content': 'Discuss recovery without adding referral scope.'})
