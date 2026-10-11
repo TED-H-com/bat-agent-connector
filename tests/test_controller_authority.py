@@ -256,3 +256,13 @@ def test_foreign_caller_cannot_preclaim_an_unsent_reservation(identities):
     with authority.use(None), pytest.raises(ResourceReadOnly, match="CONTROLLER_AUTHORITY_REQUIRED"):
         registry.claim_unsent("h1", "unsent")
     assert registry.registry_path().read_bytes() == before
+
+
+@pytest.mark.parametrize("status,sent", [("starting", True), ("uncertain", True), ("failed", None), ("active", True)])
+def test_sent_or_settled_legacy_readback_needs_no_new_start_claim(status, sent):
+    row = {"host": "h1", "session_id": "legacy", "status": status, "start_sent": sent}
+    platform_files.atomic_write(registry.registry_path(), json.dumps({"sessions": [row]}).encode())
+    before = registry.registry_path().read_bytes()
+    with authority.use(None):
+        assert registry.claim_unsent("h1", "legacy") == "not_unsent"
+    assert registry.registry_path().read_bytes() == before
