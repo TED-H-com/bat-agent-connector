@@ -90,11 +90,16 @@ def validate_policy(policy, baseline):
         if delivery["maximum"] == "report" or maintenance.get("status") != "verified_at_observation":
             raise _bad("Automated repairs need a verified maintenance branch and at least a pull-request ceiling")
     observation = policy["observation"]
-    if not isinstance(observation, dict) or set(observation) not in (
-            {'max_age_seconds', 'stable_for_seconds'}, {'max_age_seconds', 'stable_for_seconds', 'github_profile'}):
+    if (not isinstance(observation, dict) or not {'max_age_seconds', 'stable_for_seconds'} <= set(observation)
+            or set(observation) - {'max_age_seconds', 'stable_for_seconds', 'github_profile', 'maintenance_sources'}):
         raise _bad('Use the exact observation fields and an optional supported GitHub profile')
     if 'github_profile' in observation and observation['github_profile'] != GITHUB_PROFILE:
         raise _bad('Select the supported explicit GitHub observation profile')
+    if 'maintenance_sources' in observation:
+        if observation.get('github_profile') != GITHUB_PROFILE:
+            raise _bad('Configured maintenance sources require the explicit GitHub profile')
+        from . import pm_maintenance_findings
+        pm_maintenance_findings.validate(observation['maintenance_sources'], policy, baseline)
     _integer(observation["max_age_seconds"], 1, 86400, "Observation age")
     _integer(observation["stable_for_seconds"], 0, 604800, "Stable observation period")
     schedule = policy["schedule"]
@@ -332,7 +337,9 @@ def fixed_record(ops, principal, workspace_id, policy_id):
                 "adopted_baseline_id": record["baseline_id"], "baseline_digest": doc["baseline_digest"],
                 "document_digest": record["document_digest"], "scope": doc["scope"], "controller": doc["controller"],
                 "policy": doc["policy"], "observation": {"max_age_seconds": observation["max_age_seconds"],
-                                                         "stability_seconds": observation["stable_for_seconds"]}}
+                                                         "stability_seconds": observation["stable_for_seconds"],
+                                                         **({"maintenance_sources": observation["maintenance_sources"]}
+                                                            if "maintenance_sources" in observation else {})}}
 
 
 def active_record(ops, principal, workspace_id):

@@ -127,6 +127,7 @@ class Traversal:
         self.root = '/repos/' + self.scope['repository']
         self.pages, self.rows, self.bytes, self.receipts = 0, 0, 0, []
         self.open_pulls, self.nonterminal_actions = False, False
+        self.finding_partial = None
         self.last_received = started
         self.deadline = time.monotonic() + max(0, MAX_SECONDS - (time.time() - started))
 
@@ -160,12 +161,13 @@ class Traversal:
                         or not re.fullmatch('[0-9a-f]{64}', meta['body_sha256'])):
                     raise Incomplete('provider_metadata_unproven')
                 if status != 200:
-                    raise Incomplete('provider_read_unavailable')
+                    raise Incomplete('provider_permission_or_feature_unavailable' if status in (403, 404) else 'provider_read_unavailable')
                 payload = answer['payload']
                 total = None
-                if kind == 'repository':
+                from . import pm_maintenance_findings as findings
+                if kind == 'repository' or kind in findings.OBJECT_KINDS:
                     items = [payload]
-                elif kind in ('pulls', 'statuses'):
+                elif kind in ('pulls', 'statuses', *findings.LIST_KINDS):
                     items = payload
                 else:
                     field = {'suites': 'check_suites', 'checks': 'check_runs', 'actions': 'workflow_runs'}[kind]
@@ -176,14 +178,16 @@ class Traversal:
                         raise Incomplete('provider_row_limit')
                     if kind == 'actions' and total >= 1000:
                         raise Incomplete('provider_search_limit')
-                if not isinstance(items, list) or len(items) > (1 if kind == 'repository' else 100):
+                if not isinstance(items, list) or len(items) > (1 if kind == 'repository' or kind in findings.OBJECT_KINDS else 100):
                     raise Incomplete('provider_page_shape_unproven')
                 if self.rows + len(items) > MAX_ROWS:
                     raise Incomplete('observation_row_limit')
-                following = next_page(meta.get('link', ''), self.gh.cfg.api_url, path, query) if query else None
-                if kind in ('pulls', 'statuses') and len(items) == 100 and following is None:
+                pager = findings.cursor_next if kind == 'finding_alerts' else next_page
+                following = pager(meta.get('link', ''), self.gh.cfg.api_url, path, query) if query else None
+                if kind in ('pulls', 'statuses', *findings.LIST_KINDS) and len(items) == 100 and following is None:
                     raise Incomplete('pagination_full_page_without_continuation')
-                projected = [project(item, kind, self.scope, sha) for item in items]
+                projected = [findings.project(item, kind, self.scope) if kind.startswith('finding_')
+                             else project(item, kind, self.scope, sha) for item in items]
                 return {'request_digest': digest(request), 'status': 200, 'received_at': time.time(),
                     'body_sha256': meta['body_sha256'], 'bytes': meta['bytes'], 'rows': projected,
                     'total_count': total, 'next_page': following}
@@ -229,9 +233,12 @@ class Traversal:
         return receipt
 
     async def pages_for(self, traversal, path, kind, sha=None, **filters):
-        page, rows, seen, total = 1, [], set(), None
+        page, rows, seen, total, cursors = 1, [], set(), None, set()
         while True:
-            receipt = await self.read(traversal, path, {'per_page': 100, 'page': page, **filters}, kind, sha)
+            query = {'per_page': 100, **filters, **(page if isinstance(page, dict) else {'page': page})}
+            if kind == 'finding_alerts' and page == 1:
+                query.pop('page', None)
+            receipt = await self.read(traversal, path, query, kind, sha)
             if total is not None and total != receipt['total_count']:
                 raise Incomplete('provider_count_changed')
             total = receipt['total_count']
@@ -247,6 +254,10 @@ class Traversal:
                 return sorted(rows, key=lambda row: row['id'])
             if not receipt['rows']:
                 raise Incomplete('pagination_empty_page')
+            marker = digest(following)
+            if marker in cursors:
+                raise Incomplete('pagination_cycle')
+            cursors.add(marker)
             page = following
 
     async def traverse(self, number):
@@ -271,8 +282,12 @@ class Traversal:
             actions.extend(values)
         if len({run['id'] for run in actions}) != len(actions):
             raise Incomplete('provider_action_changed_during_traversal')
+        from . import pm_maintenance_findings as findings
+        configured = {}
+        if findings.configuration(self.intent) is not None:
+            configured['maintenance_sources'] = await findings.traverse(self, number)
         await self.read(number, self.root, {}, 'repository')
-        return {'pulls': pulls, 'heads': heads, 'actions': sorted(actions, key=lambda row: row['id'])}
+        return {'pulls': pulls, 'heads': heads, 'actions': sorted(actions, key=lambda row: row['id']), **configured}
 
     async def collect(self):
         first, second, reason = None, None, None
@@ -285,9 +300,17 @@ class Traversal:
                 raise Incomplete('observation_time_limit')
         except Incomplete as exc:
             reason = exc.code
-        return {'status': 'incomplete' if reason else 'complete', 'reason': reason,
+        from . import pm_maintenance_findings as findings
+        configured = {}
+        if findings.configuration(self.intent) is not None:
+            configured['maintenance_sources'] = findings.finalize(self, first, second, reason)
+            if not reason and any(source['status'] == 'incomplete' for source in configured['maintenance_sources'].values()):
+                reason = 'configured_source_incomplete'
+        return {'status': 'incomplete' if reason else 'complete', 'reason': reason, **configured,
             'traversals_completed': int(first is not None) + int(second is not None),
             'facts': second if second is not None else first, 'receipt_refs': self.receipts,
-            'pages': self.pages, 'rows': self.rows, 'bytes': self.bytes, 'outside_scope': OUTSIDE_SCOPE,
+            'pages': self.pages, 'rows': self.rows, 'bytes': self.bytes,
+            'outside_scope': (['issues_outside_configured_labels', *[v for v in OUTSIDE_SCOPE if v != 'issues']]
+                              if (findings.configuration(self.intent) or {}).get('issues') is not None else OUTSIDE_SCOPE),
             'observed_open_pulls': self.open_pulls, 'observed_nonterminal_actions': self.nonterminal_actions,
             'read_only': True, 'atomic_provider_snapshot': False}
