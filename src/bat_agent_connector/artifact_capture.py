@@ -142,10 +142,13 @@ async def preview(ops, principal, request):
 async def preview_source(ops, principal, source, path, *, source_reader=None):
     """Sign only a centrally resolved source; callers supply a fixed read-only resolver."""
     identity = _principal(ops, principal)
+    from .pm_source_lineage import require_document
+    require_document(ops.db, principal, source)
     try:
         evidence, _ = await _read(ops, source, path, "preview", source_reader=source_reader)
     except AmbiguousOutcome:
         raise OperationError("SOURCE_UNAVAILABLE", "source read did not complete; preview again", 409) from None
+    require_document(ops.db, principal, source)
     document = {"source": source, "relative_path": path, "evidence": evidence}
     fingerprint = artifacts.manifest_digest(document)
     now = time.time()
@@ -244,6 +247,8 @@ async def _run(ctx, *, source_reader=None, proof_kind="manual_capture"):
     async def receive():
         evidence, data = await _read(ctx.service, document["source"], document["relative_path"],
                                      "capture", document["evidence"], source_reader=source_reader)
+        from .pm_source_lineage import require_new_effect
+        require_new_effect(ctx.service, ctx.operation_id)
         try:
             ctx.check_cancel()
         except Cancelled:

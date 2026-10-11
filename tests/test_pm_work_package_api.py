@@ -60,7 +60,12 @@ async def test_fixed_package_http_rpc_mcp_parity_without_read_effects(served, mo
             if method == 'pm_work_package_readiness_get':
                 assert expected['status'] == 'ready' and expected['ready_for'] == 'engineering_handoff_review'
                 assert not expected['execution_authorized'] and not expected['execution_available']
-                assert expected['dispatch_readiness'] == 'not_implemented' and expected['coverage']['quality'] == 'unassessed'
+                assert expected['dispatch_readiness'] == 'separate_fixed_handoff_admission'
+                assert expected['coverage']['quality'] == 'unassessed'
+                assert expected['handoff'] == {
+                    'action': 'repository.continue', 'contract': 'pm-engineering-handoff/v1',
+                    'code_basis_required': True, 'compatibility': 'unverified',
+                    'source_materialization': 'bounded_full_prompt'}
         assert d.ops.db.total_changes == before and len(w['runner'].phases) == calls
         assert not write_frames(mock)
     finally:

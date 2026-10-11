@@ -193,6 +193,8 @@ class SessionObservation:
                     invalid("after must be a recorded turn marker or timestamp")
 
         def authorize():
+            from .pm_source_lineage import require_session
+            require_session(self.daemon.journal.db, principal, host, params["session_id"])
             if check_authorization is not None and not check_authorization():
                 raise OperationError("FORBIDDEN", "observation credential expired, changed or was revoked", 403)
 
@@ -228,6 +230,8 @@ class SessionObservation:
                 authorize()  # Including the last read, before returning any body.
                 if work in done:
                     result = await work
+                    from .pm_source_lineage import require_document
+                    require_document(self.daemon.journal.db, principal, result)
                     if method == "session_read":
                         from .session_reading import observe
                         result = observe(self.daemon.journal, principal, result, generation=read_generation)

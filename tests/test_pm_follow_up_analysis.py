@@ -249,8 +249,11 @@ async def test_original_source_withdrawal_hides_pending_completed_runs_operation
         read(ops, first, READER)
     with pytest.raises(OperationError, match="PM_RUN_NOT_FOUND"):
         pm_runs.read(ops, READER, data["wid"], saved["run_id"])
-    with pytest.raises(OperationError, match="SOURCE_UNAVAILABLE"):
+    # Replay hides the original operation before domain diagnostics can reveal
+    # which private source was withdrawn; direct domain reads retain their code.
+    with pytest.raises(OperationError, match="NOT_FOUND") as replay_error:
         ops.create(OWNER, **original)
+    assert replay_error.value.status == 404
     for listing, entries in ((analysis.list_assessments, "assessments"), (pm_runs.list_runs, "runs")):
         page = listing(ops, READER, data["wid"], limit=1)
         assert page[entries] == [] and page["next_cursor"] and page["coverage"]["visibility_filtered"]

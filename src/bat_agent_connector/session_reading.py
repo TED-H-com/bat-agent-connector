@@ -228,7 +228,7 @@ def _admit_position(ops, principal, target, params, pre):
 
 def _authorize_existing(ops, principal, op, _verb):
     saved = (op.get("external_refs") or {}).get("admission_binding") or {}
-    if {k: v for k, v in saved.items() if k != "controller_authority"} != dashboard_sync.identity(ops.journal, principal):
+    if {k: v for k, v in saved.items() if k not in {"controller_authority", "pm_lineage", "pm_source_roots"}} != dashboard_sync.identity(ops.journal, principal):
         raise OperationError("FORBIDDEN", "reading belongs to the original effective principal", 403)
 
 

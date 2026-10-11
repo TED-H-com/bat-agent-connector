@@ -12,6 +12,14 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   const hidden=()=>h('input',{type:'hidden'});
   const stageName=value=>t('pm_lifecycle_'+(value||'unclassified'));
   const canAction=(action,readParams)=>{
+    // Only this selected workspace's explicit PM package lineage uses its lifecycle.
+    // The server independently binds and validates original lineage at admission.
+    if(action==='repository.continue'&&typeof readParams==='function'){
+      try{const params=readParams();if(Object.hasOwn(params,'pm_package_ref')){
+        return params.pm_package_ref?.workspace_id===workspaceId&&ready&&Boolean(current)
+          &&!['paused','closed'].includes(current.lifecycle.stage)&&!['pausing','closing'].includes(current.lifecycle.status);
+      }}catch{return false;}
+    }
     if(!Array.isArray(feature.gated_actions))return false;
     if(!feature.gated_actions.includes(action))return true;
     if(!ready||!current)return false;

@@ -175,8 +175,10 @@ async def test_withdrawn_source_hides_all_shared_governance_surfaces(served, mon
             assert 'PRIVATE DERIVED GOVERNANCE QUOTE' not in result
             assert op['operation_id'] not in result
         assert 'NOT_FOUND' in await call(server, 'operation_get', {'operation_id': op['operation_id']})
-        with pytest.raises(OperationError, match='PM_GOVERNANCE_SOURCE_UNAVAILABLE'):
+        # Replaying a hidden operation must not disclose its private source type.
+        with pytest.raises(OperationError, match='NOT_FOUND') as replay_error:
             d.ops.create(CONTRIBUTOR, **request)
+        assert replay_error.value.status == 404
         assert d.ops.get(op['operation_id'])['result']['record_id'] == rid
     finally:
         await fleet.close()

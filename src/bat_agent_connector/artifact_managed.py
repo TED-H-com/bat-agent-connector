@@ -208,10 +208,14 @@ async def preview(ops, principal, request):
         raise OperationError("INVALID_PARAMS", "use the managed capture source fields only", 422)
     if not {"host", "session_id", "relative_path"} <= set(request):
         raise OperationError("INVALID_PARAMS", "host, session_id and relative_path are required", 422)
+    from .pm_source_lineage import require_document, require_session
+    require_document(ops.db, principal, request)
+    require_session(ops.db, principal, request["host"], request["session_id"])
     selector = _selector(request)
     path = capture._path(request["relative_path"])
     artifacts.safe_name(path.rsplit("/", 1)[-1])
     resolved = await source(ops, request["host"], request["session_id"], selector)
+    require_document(ops.db, principal, resolved)
     return await capture.preview_source(ops, principal, resolved, path, source_reader=reader(selector))
 
 

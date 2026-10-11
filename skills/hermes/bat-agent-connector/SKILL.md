@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "8b4ba8947c491d158758cf3c6fd20a141b152a6c6fff9aa482c5a88f2267cc4f"
+  canonical_sha256: "f5298324a1d235fa55de245e7b1bee966941f86f69cd3b7ff20b2372264f297d"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -570,11 +570,18 @@ An agent cannot invent confirmed acceptance text, override source status or turn
 archive/task checkboxes into verification. Shared Definition of Done remains
 separate from item acceptance. Revisions preserve predecessor and original sources.
 
-`ready` means only `ready_for: engineering_handoff_review`. Execution remains
-unavailable and unauthorized; runtime, budget, remote target and quality are not
-proved. Do not dispatch this description as a prompt or upload it as an ordinary
-artifact: those paths do not yet carry the PM source-visibility contract. Later
-handoff must use the shared command's explicit package integration.
+`ready` means only `ready_for: engineering_handoff_review`; the read does not
+authorize execution or prove runtime, budget, remote target or quality. To explicitly
+execute a selected package, use the existing `repository.continue` operation (or
+`work_continue_from_repository`) with the exact linked project/work preconditions,
+`pm_package_ref: {workspace_id, package_id, document_digest}` and
+`pm_code_basis: {mode: "implement_fixed_spec_from_selected_base", rationale}`.
+This decision selects an implementation base without claiming spec/code compatibility.
+The server attaches the entire fixed package to that operation's first prompt, rejects
+oversized contracts, and preserves original source access on derived resources. Use
+the original key to recover; never copy the package into an ordinary artifact or an
+unrelated start to bypass source checks. Current source and scope checks apply before
+unsent frames. Original sent effects are reconciled without restarting a session.
 
 ## Concept
 
