@@ -162,7 +162,11 @@ reservation, but every BAT write frame must find the actual reserved row with th
 same controller and incarnation. Existing session grants pin that incarnation too.
 Shared worktrees, replacements, failover predecessors and warm session reuse must
 belong to the same controller; an ended session does not transfer ownership of its
-carrier. Registry projections cannot replace the original authority fields.
+carrier. Registry projections and same-ID unsent retries cannot replace the original
+authority fields or drop their PM workspace scope. A durable fresh-worktree start
+may read a foreign source folder to create its own separate carrier; this read does
+not claim that source or permit a session start in it. The actual resulting carrier
+still passes the controller checks before later frames.
 
 Recovery may restore a missing registry row only from original durable controller
 and incarnation evidence, together with the existing session/task identity checks.
