@@ -1,5 +1,7 @@
 // Saved discussion preparation. Model execution and adopted scope remain separate.
-export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,pageSize=20}) {
+import {followUpAssessments} from './pm-follow-up-analysis.js';
+import {followUpAnalysisRequest} from './pm-follow-up-request.js';
+export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace,pageSize=20}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`, actor=caps()?.actor;
   const domains=['governance','scope','schedule','finance','stakeholders','resources','risk','quality'];
   const number=value=>Number.isSafeInteger(value)&&value>=0;
@@ -21,6 +23,11 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const hidden=value=>h('input',{type:'hidden',value});
   const governance=hidden('[]'),meetings=hidden('[]'),baseline=hidden('');
   const fields={snapshot:snapshotChoice,thread:threadChoice,previous:previousChoice,governance,meetings,_baseline:baseline};
+  const onAccessFailure=error=>{if([401,403].includes(error.status)||['PM_FOLLOW_UP_SOURCE_UNAVAILABLE','FORBIDDEN','NOT_FOUND'].includes(error.code))unavailable(error);};
+  const assessments=caps()?.features?.pm_workspaces?.follow_up_analysis
+    ?followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onAccessFailure,pageSize}):null;
+  const analysis=assessments?followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,
+    permitted:()=>can(),errorBox,onAccessFailure,onSaved:result=>assessments.showResult(result)}):null;
   const json=field=>JSON.parse(field.value||'[]');
   function sourceRefs(refs=[]) {
     return h('ul',{class:'pm-fu-refs'},...refs.map(ref=>h('li',{},...Object.entries(ref).filter(([key,value])=>(key==='id'||key.endsWith('_id')||key.endsWith('_digest'))&&typeof value==='string')
@@ -49,6 +56,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     for(const node of [snapshotChoice,threadChoice,previousChoice])updateOptions(node,[],node===snapshotChoice?'pm_fu_select_snapshot':'pm_fu_none');
   }
   function unavailable(error) {
+    assessments?.clear();
+    analysis?.clear();
     ++serial;++sourceSerial;loaded=false;reading=false;head=null;plan=null;metadata=[];next=null;
     view.replaceChildren();choose.replaceChildren();more.hidden=true;clearSources();editor?.update();editorFold.hidden=true;
     if(retired){editor?.box.remove();}
@@ -96,7 +105,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
         value.result_event_id?code(value.result_event_id):'',h('span',{class:'muted'},t('pm_fu_original_snapshot')),code(value.original_snapshot_ref.snapshot_id),
         value.result?h('span',{},t('pm_fu_result_snapshot'),code(value.result.document.snapshot_ref.snapshot_id)):'')),
       note('pm_fu_coverage'));
-    view.append(summary,note('pm_fu_preparation_only'),coverageWarning,agenda,knowledge,issues,changes,sources);
+    view.append(summary,note(assessments?'pm_fa_preparation_basis':'pm_fu_preparation_only'),coverageWarning,agenda,knowledge,issues,changes,sources);
+    if(assessments){view.insertBefore(assessments.element,knowledge);view.insertBefore(analysis.element,knowledge);void assessments.load(row);void analysis.load(row);}
   }
   function stale() {
     if(!baseline.value||head==null||plan==null)return false;
@@ -250,6 +260,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     verifiedRole=member.role;return true;
   }
   async function refresh() {
+    assessments?.clear();
+    analysis?.clear();
     const ticket=++serial;++sourceSerial;loaded=false;reading=false;view.replaceChildren();metadata=[];next=null;choose.replaceChildren();more.hidden=true;clearSources();editor.update();
     status.replaceChildren(note('pm_fu_loading'));
     try{
