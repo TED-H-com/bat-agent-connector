@@ -310,13 +310,14 @@ def _input_out(row):
 
 
 def _capabilities(ops, workspace, principal):
-    from . import pm_native_capabilities
+    from . import pm_bat_operations, pm_native_capabilities
 
     role = workspace["membership"]["role"]
     return {"write": principal.allows("manage") and (principal.admin or role in {"owner", "contributor"}),
             "decide": principal.allows("manage") and (principal.admin or role == "owner"),
             "runtime": False, "runtime_adapter": "bat", "runtime_legacy": True,
             "native_analysis": pm_native_capabilities.read(ops, principal, workspace),
+            "bat_analysis": pm_bat_operations.capabilities(ops, principal, workspace),
             "adopt": False, "dispatch": False}
 
 

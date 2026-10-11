@@ -154,6 +154,8 @@ class ApiV1:
         pm_discussions.install(daemon.ops)
         pm_run_operations.install(daemon.ops)
         pm_native_operations.install(daemon.ops)
+        from . import pm_bat_operations
+        pm_bat_operations.install(daemon.ops)
         pm_plan_operations.install(daemon.ops)
         pm_evidence.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
@@ -1065,6 +1067,7 @@ class ApiV1:
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
+                                                    "bat_analysis": "pm.run.bat.analyze" in self.daemon.ops.actions,
                                                     "runtime_reason": "external_tool_policy_unverified",
                                                     "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
                                                     "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions,

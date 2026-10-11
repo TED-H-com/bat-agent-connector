@@ -121,20 +121,24 @@ async def _plan(ctx, client):
     from .orchestration_operations import child_plan
     parent_plan = child_plan(ctx)
     role = (parent_plan or {}).get('role')
+    from .pm_bat_operations import start_profile
+    pm_profile = start_profile(ctx)
     if role not in (None, 'planner') or role == 'planner' and agent != 'codex':
         raise StepFailed('START_BINDING_CHANGED', 'invalid internal planner creation binding')
-    permissions, scope, record = await confinement.start_decision(fleet, host, agent, planner=role == 'planner')
+    permissions, scope, record = await confinement.start_decision(fleet, host, agent, planner=role == 'planner' or pm_profile is not None)
     return {'host': host, 'session_id': sid, 'workspace_id': workspace['id'], 'workspace_name': workspace.get('name'),
             'folder': folder, 'origin_root': root, 'source_branch': branch, 'base_commit': await _head(client.invoke, folder),
             'agent': agent, 'preset': PRESETS[(agent, use)], 'use_worktree': use,
             'model': p.get('model') or (hc.codex_model if agent == 'codex' else None), 'title': p.get('title'),
             'permission_policy': hc.default_permission_mode, 'permission_options': permissions, 'write_scope': scope,
             'confinement': record, 'isolation': grant.isolation, 'register_tab': hc.orchestrate_register_tabs,
-            'profile_id': hc.profile_id, 'role': role}
+            'profile_id': hc.profile_id, 'role': role, **({'pm_runtime_profile': pm_profile} if pm_profile else {})}
 
 
 def _guard(ctx, plan, *, reserved=True):
     ctx.require_controller()
+    from .pm_bat_operations import guard_start
+    guard_start(ctx, plan)
     from .orchestration_operations import check_child
     check_child(ctx, start_plan=plan)
     ctx.check_cancel()
@@ -352,6 +356,8 @@ async def _run(ctx):
             options['model'] = plan['model']
         if plan['use_worktree']:
             options.update(useWorktree=True, worktreePath=carrier['cwd'], worktreeBranch=carrier['branch'])
+        if plan.get('pm_runtime_profile'):
+            options.update(plan['pm_runtime_profile'])
         def verify_started(meta):
             fatal = (ctx.service.get(ctx.operation_id).get('external_refs') or {}).get('start_mismatch')
             if fatal:
@@ -360,6 +366,8 @@ async def _run(ctx):
                 confinement.guard_start_record(registry.get(host, sid) or {})
                 confinement.guard_start_cwd({'cwd': carrier['cwd']}, meta)
                 confinement.ensure_confirmed(plan['confinement'], meta, allow_unknown=plan['write_scope'] != 'confined')
+                from .pm_bat_operations import confirm_start
+                confirm_start(ctx, plan, meta)
             except confinement.ConfinementRefused as exc:
                 if exc.code in confinement.START_IDENTITY_MISMATCH_CODES or confinement.verify(plan['confinement'], meta)['status'] == 'mismatch':
                     ctx.set_refs(start_mismatch=exc.code)

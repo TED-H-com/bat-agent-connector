@@ -191,6 +191,12 @@ def visible_roots(db, principal, original_ids):
             from .pm_maintenance_repairs import source_visible as repair_visible
             if not repair_visible(db, principal, operation):
                 return False
+        elif operation["action"] == "pm.run.bat.analyze":
+            from .pm_workspace import require_member
+            try:
+                require_member(db, principal, operation["target"]["workspace_id"])
+            except OperationError:
+                return False
         elif not source_visible(db, principal, operation):
             return False
     return True
@@ -258,6 +264,10 @@ def bind_operation(db, operation_id, target, params, binding):
         return
     original_ids = binding.get("pm_source_roots", [])
     resources = [("operation", operation_id)]
+    if binding.get("pm_bat_binding") is not None:
+        from .session_start_operations import NAMESPACE
+        original_ids = [operation_id, *original_ids]
+        resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
     if binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None:
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
