@@ -9,11 +9,28 @@ select another host or claim an existing human session.
 
 The operation reserves the existing PM writer generation and workspace PM
 controller. A trusted internal context reuses the ordinary durable standalone
-start executor, including resource policy, new carrier, original creation ID,
+start executor, including resource policy, the original PM carrier creation ID,
 incarnation, confinement, final-frame guards and sent-effect reconciliation.
 Public `session.start` cannot choose this internal profile. The runtime receives
 only frozen context and runs in its private empty directory. The Connector
 continues to own PM documents, discussion imports and scope decisions.
+
+The logical carrier is the already-proven PM clone/worktree, not a new worktree
+under the human workspace. A private PM-only start binding freezes its original
+creation operation, configuration, marker, clone/worktree paths, branch and exact
+append-only Git tip. The original BAT workspace ID and folder remain separately
+bound. Every new BAT frame checks the current workspace metadata and the original
+host carrier evidence; arbitrary same-path folders or Git descendants are refused.
+The start engine records only a read/bind receipt for that existing carrier and
+never calls `worktree:create` for this path. Ordinary session starts are unchanged.
+The native process still uses its isolated empty cwd, not the logical PM checkout.
+
+After a completed original run and confirmed process death, a new explicit
+analysis operation may use the next writer generation, same durable discussion
+and PM files, and a new own BAT session/native thread. Service restart does not
+erase the prior context or release unknown writers. The bounded discussion
+context reports omitted content; it does not claim every accepted document was
+loaded. Adapter selection across tools and native coding are separate contracts.
 
 The BAT prerequisite is the additive `codex-pm-linux-v1` contract on top of
 audited upstream `b7419892fbc9946799b64cca24c2ec8c7fa15c42`, with pinned Codex

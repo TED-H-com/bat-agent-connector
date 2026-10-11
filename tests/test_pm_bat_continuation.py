@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -13,7 +14,7 @@ from bat_agent_connector.config import parse_config
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests.operation_helpers import settle_operations
-from tests.test_checkpoints import snapshot
+from tests.test_checkpoints import git, snapshot
 from tests.test_pm_bat_operations import OWNER, bat_world  # noqa: F401
 from tests.test_pm_discussions import act, read
 from tests.test_pm_worktree import Runner
@@ -22,6 +23,7 @@ from tests.test_repository_sync import world as repository_world
 
 world = repository_world
 ORIGINAL_BINDING = bat._binding
+ORIGINAL_CARRIER = bat.start_carrier
 WRITER = Principal('continuing-pm-user', frozenset({'observe', 'manage', 'start'}))
 
 
@@ -43,7 +45,10 @@ async def continuation(world, bat_world, mock, monkeypatch):  # noqa: F811
     # Use the production PM binding and a real PM Git carrier; only native
     # provider responses remain fake. No fixture-only writer/action is installed.
     monkeypatch.setattr(bat, '_binding', ORIGINAL_BINDING)
+    monkeypatch.setattr(bat, 'start_carrier', ORIGINAL_CARRIER)
     mock.handlers.pop('git:log', None)
+    w['raw']['hosts']['h1']['shared_clone_worktrees'] = False
+    w['d'].fleet.config.hosts['h1'] = replace(w['d'].fleet.config.host('h1'), shared_clone_worktrees=False)
     w['runner'] = Runner()
     ops.context['git_runner'] = w['runner']
     created = await run(ops, 'pm.workspace.create', params={'name': 'Durable PM', 'repositories': ['o/r']})
@@ -109,6 +114,9 @@ async def test_completed_disk_context_continues_in_new_owned_bat_session(continu
     assert registry.get('h1', old_sid) == old_registry and w['proofs'][old_sid] == old_proof
     assert pm_runs.workspace_worktree(w['d'].ops.db, w['target']['workspace_id']) == w['binding']
     assert snapshot(w['human']) == human
+    assert 'worktree:create' not in mock.channels()
+    assert all(item['params']['options']['cwd'] == w['binding']['worktree_path']
+        for item in mock.invokes if item['channel'] == 'claude:start-session')
     assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 2
     for value in w['proofs'].values():
         assert value['pmRuntime']['attestation']['environmentAccess'] is False
@@ -163,3 +171,27 @@ async def test_new_session_requires_current_original_source_lifecycle_and_member
     else:
         assert result['status'] == 'failed', json.dumps(result, indent=2)
     assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 1
+
+
+@pytest.mark.parametrize('change', ['head', 'workspace_folder'])
+async def test_final_start_frame_rechecks_original_pm_carrier(continuation, mock, monkeypatch, change):
+    w = continuation
+    client = w['d'].fleet.client('h1')
+    original = client.invoke
+    altered = False
+    async def race(channel, *args, **kwargs):
+        nonlocal altered
+        if channel == 'claude:start-session' and not altered:
+            altered = True
+            if change == 'head':
+                git(w['binding']['worktree_path'], '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid',
+                    'commit', '--allow-empty', '-qm', 'Unrelated carrier change')
+            else:
+                mock.ws_doc['workspaces'][0]['folderPath'] += '-rebound'
+        return await original(channel, *args, **kwargs)
+    monkeypatch.setattr(client, 'invoke', race)
+    out = await analyze(w, 'final-frame-race')
+    assert altered and out['status'] != 'succeeded', out
+    assert 'claude:start-session' not in mock.channels()
+    assert 'claude:send-message' not in mock.channels()
+    assert 'worktree:create' not in mock.channels()

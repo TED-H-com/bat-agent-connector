@@ -110,6 +110,12 @@ async def _plan(ctx, client):
         raise StepFailed('START_WORKSPACE_UNPROVEN', 'workspace must resolve to one exact identity')
     workspace = matches[0]
     folder = workspace.get('folderPath')
+    from .pm_bat_operations import start_carrier
+    pm_carrier = await start_carrier(ctx)
+    if pm_carrier is not None:
+        if folder != pm_carrier['workspace_folder']:
+            raise StepFailed('PM_BAT_BINDING_CHANGED', 'The original workspace folder changed')
+        folder = pm_carrier['worktree_path']
     root = await client.invoke('git:getRoot', {'cwd': folder}) if isinstance(folder, str) else None
     branch = await client.invoke('git:branch', {'cwd': folder}) if root else None
     if not isinstance(branch, str) or not branch.strip():
@@ -132,7 +138,8 @@ async def _plan(ctx, client):
             'model': p.get('model') or (hc.codex_model if agent == 'codex' else None), 'title': p.get('title'),
             'permission_policy': hc.default_permission_mode, 'permission_options': permissions, 'write_scope': scope,
             'confinement': record, 'isolation': grant.isolation, 'register_tab': hc.orchestrate_register_tabs,
-            'profile_id': hc.profile_id, 'role': role, **({'pm_runtime_profile': pm_profile} if pm_profile else {})}
+            'profile_id': hc.profile_id, 'role': role, **({'pm_runtime_profile': pm_profile} if pm_profile else {}),
+            **({'pm_carrier': pm_carrier, 'workspace_folder': pm_carrier['workspace_folder']} if pm_carrier else {})}
 
 
 def _guard(ctx, plan, *, reserved=True):
@@ -167,8 +174,11 @@ async def _identity(ctx, plan, read, *, cwd=None, branch=None):
     _guard(ctx, plan)
     raw = await read('workspace:load', {'profileId': plan['profile_id']})
     matches = [w for w in _doc(raw)['workspaces'] if isinstance(w, dict) and w.get('id') == plan['workspace_id']]
-    if len(matches) != 1 or matches[0].get('folderPath') != plan['folder']:
+    if len(matches) != 1 or matches[0].get('folderPath') != plan.get('workspace_folder', plan['folder']):
         raise StepFailed('START_BINDING_CHANGED', 'the fixed workspace folder changed')
+    if 'pm_carrier' in plan:
+        from .pm_bat_operations import guard_carrier
+        await guard_carrier(ctx, plan)
     source_root = await read('git:getRoot', {'cwd': plan['folder']})
     if resource_policy.norm(source_root) != resource_policy.norm(plan['origin_root']):
         raise StepFailed('START_BINDING_CHANGED', 'fixed workspace repository root changed')
@@ -183,9 +193,10 @@ async def _identity(ctx, plan, read, *, cwd=None, branch=None):
         grant = resource_policy.authorize_new_session(hc, plan['session_id'], folder=plan['folder'],
             use_worktree=True, git_roots={resource_policy.norm(plan['folder']): plan['origin_root']})
         resource_policy.check_new_worktree(grant, hc, plan['folder'], cwd, plan['origin_root'])
-        tracked = await read('worktree:status', {'sessionId': plan['session_id']})
-        if not isinstance(tracked, dict) or tracked.get('worktreePath') != cwd or tracked.get('branchName') != branch:
-            raise StepFailed('START_BINDING_CHANGED', 'BAT worktree binding changed')
+        if 'pm_carrier' not in plan:
+            tracked = await read('worktree:status', {'sessionId': plan['session_id']})
+            if not isinstance(tracked, dict) or tracked.get('worktreePath') != cwd or tracked.get('branchName') != branch:
+                raise StepFailed('START_BINDING_CHANGED', 'BAT worktree binding changed')
     else:
         if resource_policy.norm(root) != resource_policy.norm(plan['origin_root']):
             raise StepFailed('START_BINDING_CHANGED', 'source Git root changed')
@@ -303,7 +314,7 @@ async def _run(ctx):
                 'origin_cwd': plan['folder'], 'origin_root': plan['origin_root'], 'cwd': plan['folder'],
                 'model': plan['model'], 'title': plan['title'], 'isolation': plan['isolation'],
                 'start_sent': False, 'start_operation_id': ctx.operation_id, 'role': plan.get('role'),
-                'creates_worktree': plan['use_worktree'],
+                'creates_worktree': plan['use_worktree'] and 'pm_carrier' not in plan,
                 'confinement': plan['confinement'], 'write_scope': plan['write_scope'],
                 **registry_permission_fields(plan['permission_options'])}, hc.orchestrate_max_sessions)
             return {'session_id': sid, 'created_at': registry.get(host, sid)['created_at']}
@@ -318,7 +329,18 @@ async def _run(ctx):
             registry.claim_unsent(host, sid)
         await ctx.step('session.reserve', reserve, request={'session_id': sid}, reconcile=reserved)
         carrier = {'cwd': plan['folder'], 'worktree_path': None, 'branch': None, 'source_branch': plan['source_branch']}
-        if plan['use_worktree']:
+        if plan.get('pm_carrier'):
+            async def bind_carrier():
+                from .pm_bat_operations import guard_carrier
+                await guard_carrier(ctx, plan)
+                return {'cwd': plan['folder'], 'worktree_path': plan['folder'],
+                    'branch': plan['source_branch'], 'source_branch': plan['source_branch']}
+            carrier = await ctx.step('pm.carrier.bind', bind_carrier,
+                request=plan['pm_carrier'], reconcile=reread)
+            async def record_pm_carrier():
+                return project({k: carrier[k] for k in ('cwd', 'worktree_path', 'branch')})
+            await ctx.step('carrier.record', record_pm_carrier, reconcile=reread)
+        elif plan['use_worktree']:
             async def create():
                 grant = creation_grant()
                 async def frame():
