@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import sys
 import uuid
 
@@ -10,6 +11,7 @@ import pytest
 from bat_agent_connector import pm_quality_reviews, pm_sprints
 from bat_agent_connector import pm_requirement_acceptance as acceptance
 from bat_agent_connector import pm_work_batch_evidence as evidence
+from bat_agent_connector import pm_work_batches as batches
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_execution_verification as producer
@@ -119,7 +121,7 @@ async def test_identity_substitution_is_refused(qualified, change):
     elif change == 'plan_digest':
         selected['plan_ref']['document_digest'] = 'e' * 64
     elif change == 'scope':
-        selected['plan_ref']['scope_revision'] += 1
+        selected['plan_ref']['scope_revision'] = 'pmscope_' + 'e' * 32
     elif change == 'other_child':
         child['operation_id'] = 'op_' + 'e' * 32
     elif change == 'candidate':
@@ -171,3 +173,66 @@ async def test_semantic_batch_waits_for_exact_qualified_result_and_preserves_ind
     stored = ops.db.execute('SELECT request FROM pm_work_batch_children WHERE operation_id=?', (rows['second']['operation_id'],)).fetchone()[0]
     assert ref['operation_id'] in stored and '_acceptance' in stored
     assert len(bat_writes(mock)) > 0
+
+
+async def test_reference_limit_counts_exact_whole_public_wire_spacing(qualified, monkeypatch):
+    w, ops = qualified, qualified['d'].ops
+    package, refs = dependent(w)
+    size = len(json.dumps(refs, ensure_ascii=False).encode())
+    assert len(json.dumps(refs, ensure_ascii=False, separators=(',', ':')).encode()) < size
+    monkeypatch.setattr(acceptance, 'MAX_REFERENCE_BYTES', size)
+    assert acceptance.require_dependencies(ops, OWNER, package, refs) == list(refs)
+    monkeypatch.setattr(acceptance, 'MAX_REFERENCE_BYTES', size - 1)
+    for check in (acceptance.require_dependencies, acceptance.access_dependencies):
+        with pytest.raises(OperationError) as exc:
+            check(ops, OWNER, package, refs)
+        assert exc.value.code == 'PM_REQUIREMENT_ACCEPTANCE_LIMIT' and exc.value.status == 413
+
+
+@pytest.mark.parametrize('value', [{'x': '\ud800'}, {'x': float('nan')}, {'x': object()}])
+def test_invalid_reference_json_fails_before_source_lookup(value):
+    package = {'document': {'requirements': [{'depends_on': ['x']}]}}
+    with pytest.raises(OperationError) as exc:
+        acceptance.require_dependencies(None, None, package, value)
+    assert exc.value.code == 'PM_REQUIREMENT_ACCEPTANCE_INVALID'
+
+
+async def test_later_explicit_assessment_cannot_replace_childs_frozen_prerequisite(batch_ready, mock):
+    w, ops = batch_ready, batch_ready['d'].ops
+    downstream = await batch.extra(w, 'Original semantic dependent')
+    condition = acceptance.freeze_condition(w['package'], [row['id'] for row in w['package']['document']['requirements']])
+    first = await batch.selected(w, 'first')
+    first['result_condition'] = condition
+    parent = ops.create(OWNER, **batch.envelope(w, [first, await batch.selected(downstream, 'second', [{'entry_key': 'first', 'condition': condition}])]))[0]
+    await ops._execute(parent['operation_id'])
+    first_id = batch.view(w, parent)['entries'][0]['operation_id']
+    await ops._execute(first_id)
+    await configure_batch_child(w, ops.get(first_id))
+    review, _, original_ref = await qualify(w)
+    proof = ops.create(OWNER, **batch.proof_request(w, parent, original_ref, condition=condition))[0]
+    await ops._execute(proof['operation_id'])
+    assert ops.get(proof['operation_id'])['status'] == 'succeeded'
+    ops.db.execute('UPDATE operations SET next_run_at=0 WHERE operation_id=?', (parent['operation_id'],))
+    await ops._execute(parent['operation_id'])
+    child_id = batch.view(w, parent)['entries'][1]['operation_id']
+    child = ops.get(child_id)
+    assert child['status'] == 'accepted' and batches.require_child(ops, child)
+    before = list(bat_writes(mock))
+    # Append another reasoned complete assessment, then explicitly record it in
+    # the parent. The already reserved child must keep its original assessment.
+    changed = ops.create(reviews.REVIEWER, **reviews.assessment(w, review))[0]
+    await ops._execute(changed['operation_id'])
+    current = reviews.read(w, review)
+    later_ref = {key: current['assessment'][key] for key in ('operation_id', 'version', 'document_digest')}
+    later_ref.update(review_id=review['review_id'], candidate_commit=w['candidate'])
+    later = ops.create(OWNER, **batch.proof_request(w, parent, later_ref, condition=condition, version=2))[0]
+    await ops._execute(later['operation_id'])
+    assert ops.get(later['operation_id'])['status'] == 'succeeded'
+    with pytest.raises(OperationError, match='PM_BATCH_DEPENDENCY_EVIDENCE_UNAVAILABLE'):
+        batches.require_child(ops, ops.get(child_id))
+    await ops._execute(child_id)
+    failed = ops.get(child_id)
+    assert failed['status'] == 'failed' and failed['error_code'] == 'PM_BATCH_DEPENDENCY_EVIDENCE_UNAVAILABLE', failed
+    assert bat_writes(mock) == before
+    stored = json.loads(ops.db.execute('SELECT request FROM pm_work_batch_children WHERE operation_id=?', (child_id,)).fetchone()[0])
+    assert stored['_acceptance']['first']['reference'] == original_ref

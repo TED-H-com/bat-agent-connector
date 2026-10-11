@@ -34,7 +34,7 @@ def condition(value):
     if (not isinstance(plan, dict) or set(plan) != set(PLAN_FIELDS)
             or not isinstance(plan['revision_id'], str) or not re.fullmatch('pmrev_[0-9a-f]{32}', plan['revision_id'])
             or not isinstance(plan['document_digest'], str) or not evidence.DIGEST.fullmatch(plan['document_digest'])
-            or type(plan['scope_revision']) is not int or not 0 <= plan['scope_revision'] < 2**63):
+            or not isinstance(plan['scope_revision'], str) or not re.fullmatch('pmscope_[0-9a-f]{32}', plan['scope_revision'])):
         raise bad('Retain the exact original adopted plan and scope')
     rows, seen, count = value['requirements'], set(), 0
     if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_REQUIREMENTS:
@@ -146,7 +146,7 @@ def _dependencies(ops, principal, downstream_package, references, *, current):
         return []
     try:
         size = len(json.dumps(references, ensure_ascii=False, allow_nan=False).encode('utf-8'))
-    except (TypeError, ValueError, UnicodeError) as exc:
+    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
         raise bad('Prerequisite references must be bounded JSON identities') from exc
     if size > MAX_REFERENCE_BYTES:
         raise OperationError('PM_REQUIREMENT_ACCEPTANCE_LIMIT', 'Original prerequisite references exceed 16 KiB', 413)
