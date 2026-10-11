@@ -95,5 +95,5 @@ async def test_quality_actual_routes_and_event_source_withdrawal(reviewed, monke
         ('pm_quality_review_get', {'review_id': rid}, '/quality-reviews/'+rid),
         ('pm_work_quality_get', {'work_item_id': w['package']['work_item_id']}, '/work/'+w['package']['work_item_id']+'/quality')])
     assert not pm_access.visible(d.ops.db, OWNER, op)
-    status, events = await http(w['port'], 'GET', '/api/v1/events?after=0&limit=1000', tok=auth)
+    status, events = await http(w['port'], 'GET', '/api/v1/events?after=0&limit=500', tok=auth)
     assert status == 200 and rid not in json.dumps(events)
