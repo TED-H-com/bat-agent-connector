@@ -182,7 +182,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (evidence) body.append(evidence.box);
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
-    ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
+    ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, content);
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
@@ -479,7 +479,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t('pm_scope_mismatch'));
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
-      if (!retired(error) && ticket === sequence) {loaded = false; updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
+      if (!retired(error) && ticket === sequence) {loaded = false; brief?.withdraw();updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}}
   }
   async function load() {
@@ -546,6 +546,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
+        brief?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));

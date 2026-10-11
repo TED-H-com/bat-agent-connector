@@ -596,7 +596,13 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 @media(max-width:600px){.pm-brief .pm-heading{display:block}.pm-brief-row{grid-template-columns:5rem minmax(0,1fr);gap:.5rem}.pm-brief .pm-heading form{max-width:none}}
 
 .pm-inspector .pm-brief .pm-heading {display:block;}
-.pm-inspector .pm-brief-row {grid-template-columns:3.5rem minmax(0,1fr); gap:.5rem;}
+.pm-inspector .pm-brief-row {grid-template-columns:minmax(0,1fr); gap:4px;}
+.pm-export-fields {display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
+.pm-export-fields label {min-width:0;flex:1 1 100px;}
+.pm-export-fields select {display:block;max-width:100%;width:100%;}
+[data-pm-brief-export] {padding:8px 0;}
+[data-pm-brief-export] summary {cursor:pointer;min-height:28px;}
+@media(max-width:640px){[data-pm-brief-export] :is(summary,select,button){min-height:44px}[data-pm-brief-export] select{font-size:16px}}
 .pm-inspector .pm-brief .pm-heading p {margin-bottom:.5rem;}
 .pm-inspector .pm-brief-date {font-size:.85rem;}
 
