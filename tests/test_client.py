@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from bat_agent_connector import channels
+from bat_agent_connector import channels, registry
 from bat_agent_connector.client import BatClient
 from bat_agent_connector.config import device_id
 from bat_agent_connector.errors import (
@@ -19,10 +19,19 @@ from bat_agent_connector.errors import (
     TaskDispatchCancelled,
 )
 from bat_agent_connector.resource_policy import BY_ACTION, WriteGrant
-from tests.conftest import make_config
+from tests.conftest import adopt, make_config
 from tests.mockbat import TOKEN
 
 SEND = BY_ACTION["session.send"].channels
+
+
+@pytest.fixture
+def client_send_grant(controller_context):
+    adopt("sess-claude-0001")
+    entry = registry.get("h1", "sess-claude-0001")
+    return WriteGrant("h1", "session.send", "sess-claude-0001", SEND,
+                      controller_authority=entry["controller_authority"],
+                      controller_incarnation=entry["controller_incarnation"])
 
 
 @pytest.mark.parametrize('method', ['invoke', 'guard_read'])
@@ -65,7 +74,7 @@ async def test_auth_v2_and_ping(mock):
     assert auth["clientInfo"]["deviceId"] == "dev-test"
 
 
-async def test_transport_guard_runs_after_awaited_connect_before_send_frame(mock):
+async def test_transport_guard_runs_after_awaited_connect_before_send_frame(mock, client_send_grant):
     c = client_for(mock, writes=True)
     original_connect = c.connect
     entered, release = asyncio.Event(), asyncio.Event()
@@ -85,7 +94,7 @@ async def test_transport_guard_runs_after_awaited_connect_before_send_frame(mock
         send = asyncio.create_task(c.invoke("claude:send-message",
                                             {"sessionId": "sess-claude-0001", "prompt": "test"},
                                             before_send=guard,
-                                            grant=WriteGrant("h1", "session.send", "sess-claude-0001", SEND)))
+                                            grant=client_send_grant))
         await asyncio.wait_for(entered.wait(), 2)
         allowed = False
         release.set()
@@ -167,11 +176,11 @@ async def test_orchestrate_channels_need_orchestrate_tier(mock, channel):
     assert mock.invokes == []
 
 
-async def test_write_allowed_when_enabled(mock):
+async def test_write_allowed_when_enabled(mock, client_send_grant):
     async with client_for(mock, writes=True) as c:
         r = await c.invoke(
             "agent:send-message", {"sessionId": "sess-claude-0001", "prompt": "hi", "clientMessageId": "m1"},
-            grant=WriteGrant("h1", "session.send", "sess-claude-0001", SEND),
+            grant=client_send_grant,
         )
     assert r["accepted"] is True
     assert mock.channels() == ["claude:send-message"]  # alias folded
