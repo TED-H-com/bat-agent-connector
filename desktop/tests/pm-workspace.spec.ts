@@ -4,6 +4,31 @@ import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture,pmRoute,pmPath,workspaceId,threadId,inputA,inputB} from './pm-fixture.ts';
 const action=(page:any,name:string)=>page.locator(`[data-pm-action="${name}"]`);
 for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
+  test('context preparation keeps original sources and recovers the original request',async({page})=>{
+    const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await page.getByText('Prepare discussion context',{exact:true}).click();
+    const prepare=action(page,'pm.run.prepare');
+    await prepare.getByLabel('What should this discussion help decide?',{exact:true}).fill('Compare the first visit with a guided tour');
+    f.state.lost=true;await prepare.getByRole('button',{name:'Save context package',exact:true}).click();
+    await expect(prepare).toContainText('Reply unavailable');
+    f.state.messages[0].content='A later note does not change the saved context.';
+    await page.reload();await page.getByText('Prepare discussion context',{exact:true}).click();
+    await prepare.getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect(prepare.getByLabel('What should this discussion help decide?',{exact:true})).toHaveValue('');
+    await page.locator('[data-pm-run] summary').click();
+    await expect(page.locator('[data-pm-run]')).toContainText('Visitors should find their first useful action');
+    await expect(page.locator('[data-pm-run]')).toContainText('Unverified assumption');
+    await expect(page.locator('[data-pm-run]')).not.toContainText('A later note');
+    expect(f.state.runs).toHaveLength(1);expect(f.state.messages).toHaveLength(1);
+    expect(f.state.writes.map(input=>input.body.action)).toEqual(['pm.run.prepare','pm.run.prepare']);
+    expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
+    expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
+  });
+  test('older centrals do not expose context preparation',async({page})=>{
+    const f=pmFixture();f.state.packages=false;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await expect(page.getByText('Prepare discussion context',{exact:true})).toHaveCount(0);
+    expect(f.state.writes).toHaveLength(0);
+  });
   test('workspace and Idea creation use explicit central records',async({page})=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm');
     await page.getByText('New workspace',{exact:true}).click();

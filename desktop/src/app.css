@@ -538,6 +538,11 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-source, .pm-receipt, .pm-status { overflow-wrap: anywhere; }
 .pm-receipt { font-size: 13px; margin-top: 8px; }
 .pm-draft:empty { display: none; }
+.pm-package-preparation, .pm-packages { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+.pm-package-preparation summary, .pm-packages summary { cursor: pointer; padding-block: 6px; overflow-wrap: anywhere; }
+.pm-packages h3 { font-size: 16px; margin-block: 0 8px; }
+.pm-packages h4 { font-size: 14px; margin-block: 12px 4px; }
+.pm-packages p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .pm-draft ul { padding-left: 20px; overflow-wrap: anywhere; }
 .pm-start { max-width: 600px; }
 .pm-empty { padding: 24px 0; max-width: 560px; color: var(--muted); }

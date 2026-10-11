@@ -193,5 +193,44 @@ Owner 可確認資訊，並明確選取方向產生該討論的第一份 Plannin
 查回操作；資料不完整時依游標補讀，不把有限上下文當成完整歷史。
 
 目前畫面保存討論筆記，沒有連接 AI 參與者；不會自行研究 repo 或產生回覆。
-外部 agent 可使用相同的 MCP 與已授權 operations 讀寫資料。自有 PM runner 的接入
-仍依完整 v1.2 計畫另行開發。
+外部 agent 可使用相同的 MCP 與已授權 operations 讀寫資料。
+
+## Fixed discussion packages and PM worktree preparation
+
+`pm.run.prepare` freezes one Idea/Planning discussion using target
+`{workspace_id, thread_id}`, params `{purpose, max_chars?}` and the current thread
+`expected_version`. It requires `manage` and contributor/owner membership.
+The durable package retains the exact profile, purpose, message/input IDs, source
+statuses, included/omitted coverage and context digest. Later notes do not rewrite
+it. Preparing a package does not append an assistant message or change thread mode.
+
+Optional `repository_binding` contains the existing repository preview's
+`repository`, `host`, BAT `workspace_id`, `source_ref`, `source_sha`, `repository_id`
+and `binding_digest`. This additionally requires `start`, a repository listed in
+the PM workspace, and an independently configured server binding. Before any host
+effect, the original operation records the PM-owned controller, workspace writer
+generation and fixed worktree binding. See [PM worktrees](pm-worktrees.md).
+Without this selection, preparation saves a journal-only context package.
+
+The writer is shared by all discussions and clients of the workspace; it does not
+expire merely because a process or network is quiet. Local completion releases the
+writer as `prepared_manual`. Unknown external effects retain the original operation
+and its recovery path. The internal PM actor is distinct from the requesting member;
+an actor name alone cannot acquire the writer. New effects recheck the original
+requester's membership and current generation.
+
+| HTTP GET (under `/api/v1/pm/workspaces/{workspace_id}`) | MCP / RPC | Result |
+| --- | --- | --- |
+| `/runs?thread_id=…&limit=20&after=…` | `pm_runs_list` | Bounded summaries and `next_cursor` |
+| `/runs/{run_id}` | `pm_run_get` | Original fixed context and receipts |
+| `/capabilities` | `pm_capabilities_get` | Configured worktree destinations and runtime evidence limits |
+
+All package reads require `observe` and current workspace membership. The shared
+operation/event filters apply to preparation as well. Web and Tauri show saved
+context beside the discussion and reuse the original key after a lost reply.
+
+The current BAT adapter reports `external_tool_policy_unverified`: filesystem
+read-only options do not restrict externally configured MCP tools. It therefore
+offers context preparation without automatic Idea/Planning execution. Internal
+native-event import and replay checks are implemented for the bounded runner;
+they do not advertise a usable autonomous adapter. See [runtime evidence](pm-runtime.md).

@@ -325,6 +325,8 @@ def _draft(db, thread):
 
 
 def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_message=None, before_input=None):
+    from .pm_runs import message_out
+
     workspace = _read(ops, principal, workspace_id)
     _limit(limit)
     for cursor in (before_message, before_input):
@@ -340,7 +342,7 @@ def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_mess
             AND NOT EXISTS(SELECT 1 FROM pm_inputs n WHERE n.supersedes_input_id=i.input_id)
             ORDER BY sequence DESC LIMIT 101""", (thread_id,)).fetchall()
         return {"version": 1, "thread": thread, "profile": pm_profiles.get(thread["mode"]),
-            "messages": [dict(row) for row in reversed(messages[:limit])], "inputs": [_input_out(row) for row in inputs[:100]],
+            "messages": [message_out(ops.db, row) for row in reversed(messages[:limit])], "inputs": [_input_out(row) for row in inputs[:100]],
             "input_history": [_input_out(row) for row in history[:limit]], "draft": _draft(ops.db, thread),
             "next_message_cursor": messages[limit - 1]["sequence"] if len(messages) > limit else None,
             "next_input_cursor": history[limit - 1]["sequence"] if len(history) > limit else None,

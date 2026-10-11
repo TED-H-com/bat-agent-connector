@@ -12,10 +12,10 @@ export function pmFixture() {
     messages:[{message_id:'pmm_'+'3'.repeat(32),sequence:1,actor:'reader',content:'Visitors should find their first useful action without switching between pages.',created_at:stamp}],
     inputs:[{input_id:inputA,slot:'problem',value:'Keep the first useful action visible',status:'user_confirmed',source_ref:{kind:'message',message_id:'pmm_'+'3'.repeat(32)},recorded_by:'reader',confirmed_by:'reader',observed_at:stamp,evidence_verification:'central_message'},
       {input_id:inputB,slot:'alternatives',value:'Offer a guided tour as another option',status:'agent_assumption',source_ref:{kind:'statement',ref:'Idea from the discussion'},recorded_by:'reader',confirmed_by:null,observed_at:stamp,evidence_verification:'unverified_claim'}] as any[],
-    draft:null as any, writes:[] as any[], ops:new Map<string,any>()};
-  const actions=['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.confirm','pm.thread.plan'];
+    draft:null as any, runs:[] as any[], packages:true, writes:[] as any[], ops:new Map<string,any>()};
+  const actions=['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.confirm','pm.thread.plan','pm.run.prepare'];
   const caps=()=>({actor:state.actor,scopes:state.manage?['observe','manage']:['observe'],api_version:1,contract_version:'2026-10-08',hosts:[],
-    actions:actions.map(action=>({action,allowed:state.manage})),features:state.available?{pm_workspaces:{version:1,executable_modes:['idea','planning'],runner:false,plan_adoption:false,dispatch:false}}:{}});
+    actions:actions.map(action=>({action,allowed:state.manage})),features:state.available?{pm_workspaces:{version:1,executable_modes:['idea','planning'],context_packages:state.packages,runner:false,plan_adoption:false,dispatch:false}}:{}});
   const workspace=(w:any)=>({...w,membership:{actor:state.actor,role:state.role,controller_id:'ctr_'+'4'.repeat(32)}});
   const detail=()=>({version:1,thread:{...state.thread},profile:{profile_id:'pm.'+state.thread.mode,version:1,mode:state.thread.mode,
     input_slots:(state.thread.mode==='idea'?['problem','stakeholders','alternatives','unknowns']:['value','scope','schedule','finance','stakeholders','resources','risk','quality']).map(key=>({key,domain:key,purpose:key}))},
@@ -32,6 +32,8 @@ export function pmFixture() {
       if(path==='/pm/workspaces')return {status:200,data:{workspaces:state.workspaces.map(workspace)}};
       if(path.endsWith('/threads'))return {status:200,data:{version:1,workspace_id:workspaceId,threads:[state.thread],next_cursor:null,runtime:{available:false,reason:'manual_discussion_only'}}};
       if(path===pmPath)return {status:200,data:detail()};
+      if(path.endsWith('/runs'))return {status:200,data:{workspace_id:workspaceId,runs:state.runs.map(({context,...rest})=>rest),next_cursor:null}};
+      if(path.includes('/runs/'))return {status:200,data:{run:state.runs.find(run=>path.endsWith(run.run_id))}};
       return {status:200,data:{workspace:workspace(state.workspaces.find(w=>path.endsWith(w.workspace_id)))}};
     }
     if(input.method==='GET'&&path.startsWith('/operations/'))return {status:200,data:{operation:[...state.ops.values()].find(op=>path.endsWith(op.operation_id))}};
@@ -52,8 +54,15 @@ export function pmFixture() {
           state.draft={draft_id:state.thread.draft_id,status:'draft',title:state.thread.title,rationale:params.rationale,
             selected_inputs:state.inputs.filter(item=>params.selected_input_ids.includes(item.input_id)),candidate_inputs:state.inputs.filter(item=>!params.selected_input_ids.includes(item.input_id)),
             unknowns:[{slot:'finance',domain:'finance',status:'unresolved'}],execution_authorized:false,scope_revision:null};
+        }else if(action==='pm.run.prepare'){
+          const context={thread_version:state.thread.version,messages:structuredClone(state.messages),inputs_by_status:{},coverage:{}};
+          for(const row of state.inputs){const grouped=context.inputs_by_status as any;(grouped[row.status]||=[]).push(structuredClone(row));}
+          const run={run_id:'pmr_'+String(state.runs.length+1).padStart(32,'0'),workspace_id:workspaceId,thread_id:threadId,
+            purpose:params.purpose,created_at:stamp,state:'prepared_manual',context,
+            operation_id:'op_'+String(state.ops.size+1).padStart(32,'0')};
+          state.runs.push(run);result={run_id:run.run_id,workspace_id:workspaceId,thread_id:threadId,state:run.state,runtime_started:false};
         }else throw Error('Unexpected PM action '+action);
-        state.thread.version++;
+        if(action!=='pm.run.prepare')state.thread.version++;
         op={...input.body,actor:state.actor,idempotency_key:input.idempotency_key,operation_id:'op_'+String(state.ops.size+1).padStart(32,'0'),status:'succeeded',result};
         state.ops.set(input.idempotency_key,op);
       }

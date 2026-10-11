@@ -1111,7 +1111,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1231,19 +1231,34 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
         }
         if pm {
             let thread_list = path.ends_with("/threads");
+            let run_list = path.ends_with("/runs");
             let thread_detail = path
                 .split('/')
                 .nth(5)
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
-                "limit" if thread_list || thread_detail => {
+                "limit" if thread_list || thread_detail || run_list => {
                     !value.is_empty()
                         && value.len() <= 3
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
                 "after" if thread_list => {
+                    value.len() == 36
+                        && value.starts_with("pmt_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "after" if run_list => {
+                    value.len() == 36
+                        && value.starts_with("pmr_")
+                        && value[4..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "thread_id" if run_list => {
                     value.len() == 36
                         && value.starts_with("pmt_")
                         && value[4..]
@@ -1737,6 +1752,9 @@ mod tests {
             thread.clone(),
             format!("{thread}?limit=1&before_message=3&before_input=2"),
             format!("{thread}/context?max_chars=64000"),
+            format!("{workspace}/capabilities"),
+            format!("{workspace}/runs?limit=100&after=pmr_22222222222222222222222222222222&thread_id=pmt_11111111111111111111111111111111"),
+            format!("{workspace}/runs/pmr_22222222222222222222222222222222"),
         ] {
             assert!(validate_request(&get(&path)).is_ok(), "{path}");
         }
@@ -1755,6 +1773,14 @@ mod tests {
             format!("{thread}/context?max_chars=64001"),
             format!("{thread}/context?limit=1"),
             format!("{thread}/adopt"),
+            format!("{workspace}/capabilities?limit=1"),
+            format!("{workspace}/runs?limit=101"),
+            format!("{workspace}/runs?after=pmt_11111111111111111111111111111111"),
+            format!("{workspace}/runs?thread_id=other"),
+            format!("{workspace}/runs?limit=1&limit=2"),
+            format!("{workspace}/runs?actor=other"),
+            format!("{workspace}/runs/pmr_22222222222222222222222222222222?limit=1"),
+            format!("{workspace}/runs/pmr_22222222222222222222222222222222/start"),
         ] {
             assert!(validate_request(&get(&path)).is_err(), "{path}");
         }
