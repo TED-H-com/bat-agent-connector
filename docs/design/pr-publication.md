@@ -72,7 +72,10 @@ public title/body, generated head, selected base and draft flag;
 `maintainer_can_modify` is false. Redirects are refused. The caller deadline is
 30 seconds and the response body limit is 256,000 bytes; at most one abandoned
 POST worker per client can remain outstanding. Late data is not reused by another
-operation. Each provider GET is limited to 20 seconds and 256,000 bytes.
+operation. Each provider GET is limited to 20 seconds and 256,000 bytes. Each Git
+host frame is capped at the smaller of 120 seconds and the configured integration
+timeout. A repair's remaining absolute deadline additionally bounds every new
+GET, host frame and POST; original receipt recovery is separate from investment.
 
 Only a complete original HTTP 201 response can produce a native creation receipt.
 Its native repository/PR ID/node ID/number, provider origin, exact source child,

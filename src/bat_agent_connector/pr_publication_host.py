@@ -101,7 +101,7 @@ async def run(area, script, *, guard=None, timeout=None):
             guard()
             from .pm_source_lineage import require_frame
             require_frame()
-        limit = area.repo.integrate.fetch_timeout_s if timeout is None else timeout()
+        limit = min(120, area.repo.integrate.fetch_timeout_s) if timeout is None else timeout()
         output = await area.ops.context["git_runner"].run(area.host, script, timeout_s=limit)
     lines = output.splitlines()
     for line in lines:
