@@ -525,7 +525,7 @@ def current_review(ops, principal, workspace_id, *, history_limit=20):
         return {'workspace_id': workspace_id, 'review': None, 'revision': 0, 'visibility_filtered': False}
     try:
         return _bounded({**get_review(ops, principal, workspace_id, current['review_id'], history_limit=history_limit),
-            'revision': current['revision'], 'visibility_filtered': False})
+            'revision': current['revision']})
     except OperationError as exc:
         if exc.status not in (403, 404):
             raise
