@@ -280,7 +280,7 @@ def capability_report(*, bat_version=None, runtime=None, meta=None, replay=None,
             "external_tools": {"status": "unverified", "reason": "external_tool_policy_unverified"},
             "native_completion": {"status": "replay_available" if replay_supported else "unverified",
                                   "retention_seconds": 600, "durable": False},
-            "headless": {"status": "session_observed" if isinstance(meta, dict) else "unverified"},
+            "headless": {"status": "unverified", "session_observed": isinstance(meta, dict)},
             "write_files": False, "automatic_pm_turn": False,
             "fallback": "observer_context_only", "blocked_reason": "external_tool_policy_unverified"}
 
