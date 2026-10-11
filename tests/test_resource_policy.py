@@ -429,12 +429,11 @@ async def test_a_tab_worktree_the_record_lacks_is_a_binding_mismatch(fleet_facto
     await f.close()
 
 
-async def test_shared_clone_setting_is_applied_before_any_ssh_git(tmp_path, fleet_factory, monkeypatch):
+async def test_shared_clone_setting_is_applied_before_any_ssh_git(controller_context, fleet_factory, monkeypatch):
     from bat_agent_connector import task_bat
-    from bat_agent_connector.task_journal import Journal
     from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 
-    journal = Journal(tmp_path / "tasks.sqlite3")
+    journal, _ = controller_context
     task = journal.submit(project="p", host="h1", workspace="demo-project", original_words="x",
                           base_branch="main", idempotency_key="k1")
     adapter = task_bat.BatTaskAdapter(fleet_factory(writes=True, orchestrate=True, shared_clone_worktrees=False),
@@ -449,7 +448,6 @@ async def test_shared_clone_setting_is_applied_before_any_ssh_git(tmp_path, flee
     with pytest.raises(ResourceReadOnly, match="shared_clone_worktrees"):
         await adapter._ensure_external_worktree(task)
     assert scripts == []
-    journal.close()
 
 
 async def test_a_managed_root_that_resolves_into_a_human_checkout_is_refused(fleet_factory, mock):

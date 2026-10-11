@@ -8,7 +8,6 @@ import pytest
 from bat_agent_connector import confinement, orchestrate, registry, task_bat
 from bat_agent_connector.errors import ConnectionLost, InvokeError, WriteRefused
 from bat_agent_connector.task_core import TaskCoordinator
-from bat_agent_connector.task_journal import Journal
 from tests.test_confinement import MANAGED
 
 
@@ -163,9 +162,9 @@ async def test_a10_successful_rollback_reply_needs_carrier_absence_readback(
 
 
 async def test_a10_task_lead_recover_start_recreates_a_confirmed_rollback_under_same_id(
-        fleet_factory, mock, tmp_path, monkeypatch):
+        fleet_factory, mock, controller_context, monkeypatch):
     fleet = fleet_factory(writes=True, orchestrate=True, safety={'write_min_interval_s': 0}, **MANAGED)
-    journal = Journal(tmp_path / 'task.db')
+    journal, _ = controller_context
     task = journal.submit(project='p', host='h1', workspace='demo-project', original_words='fixture task',
                           idempotency_key='rollback-task')
     adapter = task_bat.BatTaskAdapter(fleet, journal=journal)
@@ -202,4 +201,3 @@ async def test_a10_task_lead_recover_start_recreates_a_confirmed_rollback_under_
         assert len(creates) == 2
     finally:
         await fleet.close()
-        journal.close()
