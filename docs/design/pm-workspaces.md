@@ -178,7 +178,17 @@ Git-backed PM worktrees, a PM runner, baseline adoption and dispatch remain late
 
 ## 使用方式
 
+使用包含本批功能的 Connector 與共用前端，登入後從主導覽的「PM 討論」進入。
+入口依後端宣告的 capability 顯示；舊版服務不會因更新前端而自動取得 PM 功能。
+建立與編輯需要 `observe`、`manage` scope，既有 workspace 另依上述 membership 判斷。
+
 先建立明確的 PM workspace，再新增 Idea 討論，保存原話、來源與尚未確認的假設。
 Owner 可確認資訊，並明確選取方向產生該討論的第一份 Planning 草稿；未選內容仍保留。
+確認資訊會建立新版本。若先前勾選的是舊版本，畫面會保留提示，讓使用者明確取消
+舊選取並檢視新版本；不會悄悄把草稿來源換掉。
 這份草稿沒有採用計畫或派工的效力，也不會接管原本的 session。中斷後先用原 key
 查回操作；資料不完整時依游標補讀，不把有限上下文當成完整歷史。
+
+目前畫面保存討論筆記，沒有連接 AI 參與者；不會自行研究 repo 或產生回覆。
+外部 agent 可使用相同的 MCP 與已授權 operations 讀寫資料。自有 PM runner 的接入
+仍依完整 v1.2 計畫另行開發。
