@@ -179,7 +179,7 @@ async def test_parent_composes_only_one_original_publication_and_native_201(publ
     human = snapshot(w['human'])
     w['parent'] = await advance(w, w['parent'], rounds=5)
     child = composed.child(ops, w['parent'])
-    assert child is not None, w['parent']
+    assert child is not None, {key: w['parent'].get(key) for key in ('status', 'error_code', 'error_message', 'result', 'reason')}
     assert child['status'] == 'succeeded', child
     receipt = pr_publication.require_creation_receipt(ops, OWNER, child['operation_id'],
         child_operation_id=w['child']['operation_id'], provider_origin=ops.context['github'].cfg.api_url,

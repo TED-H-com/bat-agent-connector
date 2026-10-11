@@ -139,7 +139,9 @@ def admission(ops, principal, action, target, params, originals):
         selected["repository_id"] = code["repository_id"]
     if not assignment or not selected.get("repository_id"):
         raise OperationError("PM_DELIVERY_SOURCE_UNPROVEN", "Delivery requires an original fixed engineering assignment", 409)
-    return {"contract": CONTRACT, **selected}
+    from . import pm_maintenance_repair_evidence
+    return pm_maintenance_repair_evidence.delivery_binding(ops, principal, action, target, params,
+        {"contract": CONTRACT, **selected}, originals)
 
 
 def bind(db, operation_id, selected, *, revision=None, relation="selected_target"):

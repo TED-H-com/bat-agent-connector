@@ -162,27 +162,38 @@ async def traverse(reader, number, pulls):
     return {'profile': PROFILE, 'status': 'complete', 'branches': branches, 'pulls': results}
 
 
-def require(ops, principal, parent, receipt):
-    import time
 
+def historical(ops, principal, parent, receipt, reference):
     from . import pm_github_observation as observations
     from . import pm_maintenance_repairs as repairs
     from .operations import OperationError
-    intent, wid = repairs._intent(parent), parent['target']['workspace_id']
-    latest = ops.db.execute('SELECT observation_id FROM pm_github_observations WHERE workspace_id=? ORDER BY sequence DESC LIMIT 1', (wid,)).fetchone()
-    if latest is None:
-        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'No current required-CI observation exists', 409)
-    row = observations._record(ops.db, wid, latest[0])
-    observations._access(ops, principal, wid, row)
+    if (not isinstance(reference, dict) or set(reference) != {'observation_id', 'document_digest', 'native_pr_id'}
+            or type(reference['native_pr_id']) is not int or reference['native_pr_id'] != receipt['native_pr_id']):
+        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'Select the exact original observation and native PR', 409)
+    row = observations._record(ops.db, parent['target']['workspace_id'], reference['observation_id'])
+    observations._access(ops, principal, parent['target']['workspace_id'], row)
     document = row['document']
     proof = (document['evidence'].get('facts') or {}).get('required_ci') or {}
-    expected = intent['check']['workload']
-    if (row['source_binding'] != expected or document['evidence']['status'] != 'complete'
-            or not document['as_of'] <= time.time() < document['expires_at'] or proof.get('profile') != PROFILE
+    expected = repairs._intent(parent)['check']['workload']
+    if (row['document_digest'] != reference['document_digest'] or row['source_binding'] != expected
+            or document['evidence']['status'] != 'complete' or proof.get('profile') != PROFILE
             or proof.get('status') != 'complete' or document['evidence']['traversals_completed'] != 2):
-        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'Current complete exact policy required-CI coverage is unavailable', 409)
+        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'The original exact policy required-CI coverage is unavailable', 409)
     matches = [value for value in proof['pulls'] if all(value.get(key) == receipt[key] for key in ('native_pr_id', 'pull_number', 'base_ref', 'base_sha'))
         and value['head_sha'] == receipt['candidate_sha']]
-    if len(matches) != 1 or matches[0]['status'] != 'passed':
-        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'The exact original PR head has no passing required-CI proof', 409)
-    return {'observation_id': row['observation_id'], 'document_digest': row['document_digest'], 'proof': matches[0]}
+    if len(matches) != 1:
+        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'The observation does not describe this exact original PR', 409)
+    return {'reference': reference, 'operation_id': row['operation_id'], 'proof': matches[0],
+        'as_of': document['as_of'], 'expires_at': document['expires_at']}
+
+
+def require(ops, principal, parent, receipt, reference):
+    from . import pm_maintenance_repairs as repairs
+    from .operations import OperationError
+    result = historical(ops, principal, parent, receipt, reference)
+    latest = ops.db.execute('SELECT observation_id FROM pm_github_observations WHERE workspace_id=? ORDER BY sequence DESC LIMIT 1',
+        (parent['target']['workspace_id'],)).fetchone()
+    if (latest is None or latest[0] != reference['observation_id'] or result['proof']['status'] != 'passed'
+            or not result['as_of'] <= repairs.time.time() < result['expires_at']):
+        raise OperationError('PM_REPAIR_REQUIRED_CI_UNPROVEN', 'The selected original required-CI proof is no longer newest, fresh and passing', 409)
+    return result
