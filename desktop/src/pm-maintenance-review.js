@@ -78,6 +78,14 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     };
     const widget={element:fold(key,h('div',{},text('pmrv_source_help'),holder)),sync};widgets.push(widget);return widget;
   }
+  function sourceSelect(key,entries,initial=''){
+    const node=select(key,entries(),initial);let signature='';
+    const sync=()=>{const choices=ready?entries():[],value=node.value,next=JSON.stringify(choices);
+      if(signature!==next){signature=next;node.replaceChildren(...choices.map(([id,label])=>h('option',{value:id},label)));
+        if(value&&!choices.some(([id])=>id===value))node.append(h('option',{value},t('pmrv_source_missing')+' · '+value));node.value=value;}
+    };
+    widgets.push({sync});return node;
+  }
   function sourceChoices(field,getEditor){return choices(field,getEditor,()=>sourceRows().map(row=>({id:row.source_id,label:sourceLabel(row)})),'pmrv_source_refs');}
   function collection(field,getEditor,definitions,key,limit=10){
     const holder=h('div'),rows=h('div'),add=h('button',{type:'button',class:'secondary'},t('pmrv_'+key));let controls=[];
@@ -151,9 +159,9 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     assignments.mount();const completeBox=fold('pmrv_complete',completeEditor.box,completeEditor.locked());completeBox.hidden=detail.review.status==='completed'&&!completeEditor.locked();holder.append(completeBox);
     // Always mount original action targets for lost completion/result receipt recovery.
     const allowedAssignments=()=>model?.detail?.completion?.document.follow_ups?.filter(item=>owner()||item.owner_actor===caps()?.actor)||[];
-    const assigned=select('pmrv_select_followup',allowedAssignments().map(item=>[item.id,`${item.text} · ${item.owner_actor}`]),allowedAssignments()[0]?.id||''),
+    const assigned=sourceSelect('pmrv_select_followup',()=>allowedAssignments().map(item=>[item.id,`${item.text} · ${item.owner_actor}`]),allowedAssignments()[0]?.id||''),
       reported=select('pmrv_followup_status',['open','blocked','reported_done'].map(value=>[value,t('pmrv_followup_'+value)]),'open'),result=input('pmrv_result',{multiline:true,max:8000}),followReason=reason(),
-      snapshot=select('pmrv_result_snapshot',[['',t('pmrv_same_snapshot')],...model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${date(row.as_of)}`])]);
+      snapshot=sourceSelect('pmrv_result_snapshot',()=>[['',t('pmrv_same_snapshot')],...(model?.snapshots||[]).map(row=>[row.snapshot_id,`${row.title} · ${date(row.as_of)}`])]);
     const followEditor=localForm({action:prefix+'follow_up.record',target:target(),fields:{follow_up_id:assigned,status:reported,result,rationale:followReason,snapshot_id:snapshot},preconditions:pre,
       context:()=>model?.detail?.review.completion_id??null,permitted:()=>can()&&model?.detail?.review.status==='completed'&&allowedAssignments().some(item=>item.id===assigned.value)
         ,valid:()=>!snapshot.value||model.snapshots.some(row=>row.snapshot_id===snapshot.value),label:'pmrv_save_followup',
@@ -167,7 +175,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   function prepareEditor(){
     const title=input('pmrv_report_title',{max:200}),start=input('pmrv_start',{value:localTime(Date.now()-7*86400000)}),end=input('pmrv_end',{value:localTime(Date.now())});
     start.type=end.type='datetime-local';start.dataset.pmDefault=start.value;end.dataset.pmDefault=end.value;
-    const previous=select('pmrv_previous',[['',t('pmrv_no_previous')],...model.reviews.map(row=>[row.review_id,`${row.title} · ${date(row.created_at)}`])]);
+    const previous=sourceSelect('pmrv_previous',()=>[['',t('pmrv_no_previous')],...(model?.reviews||[]).map(row=>[row.review_id,`${row.title} · ${date(row.created_at)}`])]);
     const p=()=>({expected_plan_version:model.plan.head.version,expected_review_revision:model.current.revision,
       expected_policy_id:model.policy?.policy_id??null,expected_policy_version:model.policy?.revision??null,
       expected_baseline_id:model.baseline?.baseline_id??null,expected_lifecycle_revision:model.lifecycle.revision});

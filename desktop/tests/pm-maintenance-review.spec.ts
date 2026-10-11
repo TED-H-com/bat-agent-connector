@@ -1,3 +1,5 @@
+import {mountConversation} from './conversation-fixture.ts';
+import {pmFixture} from './pm-fixture.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {action,boot,mount,openAction,reason,reviewFixture,wid,pid,bid} from './pm-maintenance-review-fixture.ts';
@@ -156,4 +158,29 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`maint
   const f=reviewFixture();await page.setViewportSize({width,height:900});await mount(page,f,locale);await openAction(page,'note');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(await page.locator('[data-pm-maintenance-review]').innerText()).not.toMatch(/pmrv_[a-z_]+/);
   const output=process.env.BATC_PM_REVIEW_SCREENSHOTS||info.outputPath('screenshots');await mkdir(output,{recursive:true});await page.screenshot({path:`${output}/review-${locale}-${width}.png`,fullPage:true});
+});
+
+for(const native of [false,true])test(native?'native shared workspace maintenance Review':'web shared workspace maintenance Review',async({page})=>{
+  const f=reviewFixture(),base=pmFixture();f.state.actor='reader';
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    if(path.startsWith('/operations/')||input.body?.action?.startsWith('pm.maintenance_review.')
+      ||path.startsWith('/pm/workspaces/'+wid+'/maintenance-reviews')
+      ||['/maintenance-policies/current','/release-baselines/current','/maintenance-schedule','/lifecycle','/plans/head','/snapshots'].some(suffix=>path==='/pm/workspaces/'+wid+suffix))return f.dispatch(input);
+    const response=await base.dispatch(input),config=f.config();
+    if(path==='/bootstrap'||path==='/capabilities'){
+      const caps=path==='/bootstrap'?response.data.capabilities:response.data;caps.actions.push(...config.caps.actions);
+      caps.features.pm_workspaces.maintenance_review={version:1};caps.features.pm_workspaces.maintenance_checks={version:1,weekly_review_execution:true};
+    }
+    if(path==='/pm/workspaces/'+wid)Object.assign(response.data.workspace,config.workspace);
+    if(path==='/events')for(const event of response.data.events)event.resource_type='pm_maintenance_review';
+    return response;
+  };
+  await mountConversation(page,native,dispatch);await page.goto('/dashboard/#/pm/'+wid);
+  const box=page.locator('[data-pm-maintenance-review]');await expect(box).toContainText('Membership service maintenance');
+  await saveNote(page);await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.action).toBe('pm.maintenance_review.note');await expect(box).toContainText('Keep this actual discussion');
+  f.state.failRead=true;base.state.cursor++;
+  await expect(box).toContainText('This Review or one of its original sources is unavailable.');await expect(box.locator('[data-review-report]')).toHaveCount(0);
+  await expect(box).not.toContainText('Membership service maintenance');
 });

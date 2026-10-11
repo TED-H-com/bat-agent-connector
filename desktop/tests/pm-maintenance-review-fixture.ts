@@ -34,7 +34,7 @@ export function reviewFixture(){
   const config=()=>({caps:{actor:state.actor,scopes:['observe',...(state.manage?['manage']:[])],actions:actions.map(action=>({action,allowed:state.manage})),
       features:{pm_workspaces:{maintenance_review:{version:1},maintenance_checks:{version:1,weekly_review_execution:true},brief_export:{formats:['markdown','html','svg'],locales:['en','zh-TW']}}}},
     workspace:{workspace_id:wid,version:3,membership:{actor:state.actor,role:state.role},members:[{actor:'owner',role:state.actor==='owner'?state.role:'owner'},
-      {actor:'developer',role:state.actor==='developer'?state.role:'contributor'},{actor:'reader',role:'reader'}]}});
+      {actor:'developer',role:state.actor==='developer'?state.role:'contributor'},{actor:'reader',role:state.actor==='reader'?state.role:'reader'}]}});
   const response=(data:any,status=200)=>({data,status});
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),pathname=url.pathname,base='/pm/workspaces/'+wid;

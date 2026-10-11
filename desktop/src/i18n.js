@@ -1,3 +1,4 @@
+import {maintenanceReviewStrings} from './pm-maintenance-review-strings.js';
 import {maintenanceCheckStrings} from './pm-maintenance-checks-strings.js';
 import {maintenanceObservationStrings} from './pm-maintenance-observation-strings.js';
 import {pmMaintenancePolicyStrings} from './pm-maintenance-policy-strings.js';
@@ -13,6 +14,7 @@ const STRINGS = {
     ...pmPackageHandoffStrings["zh-TW"],
     ...pmMaintenancePolicyStrings["zh-TW"],
     ...maintenanceCheckStrings["zh-TW"],
+    ...maintenanceReviewStrings["zh-TW"],
     ...maintenanceObservationStrings["zh-TW"],
     managed_recovery_title: "本機背景服務尚未就緒", managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
     ...instructionReceiptStrings['zh-TW'],
@@ -892,6 +894,7 @@ const STRINGS = {
     ...pmPackageHandoffStrings.en,
     ...pmMaintenancePolicyStrings.en,
     ...maintenanceCheckStrings.en,
+    ...maintenanceReviewStrings.en,
     ...maintenanceObservationStrings.en,
     managed_recovery_title: "Local background service is not ready", managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
     ...instructionReceiptStrings['en-US'],
