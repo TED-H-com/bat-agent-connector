@@ -279,8 +279,12 @@ class TaskDaemon:
                        *, _observation_transport: dict | None = None) -> dict:
         from . import controller_authority
         with controller_authority.use(controller_authority.binding(self.journal.db, principal), self.journal):
-            return await self._call_api_bound(method, params, principal,
-                                               _observation_transport=_observation_transport)
+            from .pm_source_lineage import read_request, read_response
+            if API_RPC.get(method) == "observe":
+                read_request(self.journal.db, principal, params)
+            result = await self._call_api_bound(method, params, principal,
+                                                _observation_transport=_observation_transport)
+            return read_response(self.journal.db, principal, result)
 
     async def _call_api_bound(self, method: str, params: dict, principal: api_auth.Principal,
                              *, _observation_transport: dict | None = None) -> dict:
@@ -431,9 +435,9 @@ class TaskDaemon:
             return integration.integrations_list(self.ops, str(params.get("repository")),
                                                  int(params.get("pull_number") or 0), int(params.get("limit") or 20))
         if method == "artifacts_list":
-            return artifacts.list_artifacts(self.journal.db, limit=int(params.get("limit", 50)), cursor=params.get("cursor"))
+            return artifacts.list_artifacts(self.journal.db, limit=int(params.get("limit", 50)), cursor=params.get("cursor"), principal=principal)
         if method == "artifact_get":
-            return {"artifact": artifacts.get(self.journal.db, str(params.get("artifact_id")), int(params.get("revision", 0)))}
+            return {"artifact": artifacts.get(self.journal.db, str(params.get("artifact_id")), int(params.get("revision", 0)), principal=principal)}
         if method == "artifact_managed_capture_preview":
             return {"preview": await artifact_managed.preview(self.ops, principal, params)}
         if method == "artifact_capture_preview":

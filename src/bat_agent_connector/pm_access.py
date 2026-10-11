@@ -12,6 +12,9 @@ from .operations import OperationError
 
 
 def visible(db, principal, operation):
+    from .pm_source_lineage import visible as source_visible
+    if not source_visible(db, principal, "operation", operation.get("operation_id")):
+        return False
     if not operation.get("action", "").startswith("pm."):
         return True
     from .pm_workspace import operation_visible
@@ -24,6 +27,9 @@ def require_visible(db, principal, operation):
 
 
 def event_visible(db, principal, event):
+    from .pm_source_lineage import document_roots, visible_roots
+    if not visible_roots(db, principal, document_roots(db, event)):
+        return False
     if event["resource_type"] == "operation":
         row = db.execute("SELECT operation_id,actor,action,target,result FROM operations WHERE operation_id=?",
                          (event["resource_id"],)).fetchone()

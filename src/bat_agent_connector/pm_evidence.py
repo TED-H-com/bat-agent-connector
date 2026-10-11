@@ -247,6 +247,8 @@ async def _run(ctx):
 def _read_operation(ops, principal, workspace_id, operation_id):
     """Use original read policy; observing another controller never grants its control."""
     try:
+        from .pm_source_lineage import require
+        require(ops.db, principal, "operation", operation_id)
         op = ops.get(operation_id, steps=False, principal=principal)
         authority = controller_authority.operation_binding(op)
         if authority and authority["server_id"] != pm_workspace.server_id(ops.db):
@@ -298,6 +300,9 @@ def _command_visible(ops, principal, workspace_id, command_id):
 
 
 def _session_visible(ops, principal, workspace_id, ref):
+    from .pm_source_lineage import visible
+    if not visible(ops.db, principal, "session", ref):
+        return False
     if not ops.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_run_state'").fetchone():
         return True
     host, _, sid = ref.partition("/")

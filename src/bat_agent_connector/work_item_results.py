@@ -104,6 +104,8 @@ def read(ops, principal, work_item_id, *, limit=50, after=None):
         raise OperationError("FORBIDDEN", "result sources need observe", 403)
     if not isinstance(work_item_id, str) or not work_items.WORK_ITEM_ID.fullmatch(work_item_id):
         raise OperationError("WORK_ITEM_NOT_FOUND", "no such work item", 404)
+    from .pm_source_lineage import read_response, require
+    require(ops.db, principal, "work_item", work_item_id)
     if type(limit) is not int or not 1 <= limit <= 100:
         raise OperationError("INVALID_PARAMS", "limit must be 1-100", 422)
     if after is not None and (not isinstance(after, str) or not work_items.WORK_ITEM_ID.fullmatch(after)):
@@ -112,9 +114,9 @@ def read(ops, principal, work_item_id, *, limit=50, after=None):
     children = ops.db.execute("""SELECT work_item_id FROM work_items WHERE parent_id=? AND project_id=?
         AND archived_at IS NULL AND (? IS NULL OR work_item_id>?) ORDER BY work_item_id LIMIT ?""",
         (work_item_id, item["project_id"], after, after, limit + 1)).fetchall()
-    return {"version": 1, "source": "central_journal", "read_at": time.time(), "item": item,
+    return read_response(ops.db, principal, {"version": 1, "source": "central_journal", "read_at": time.time(), "item": item,
             "parent": _brief(ops.db, item["parent_id"]) if item["parent_id"] else None,
             "derived_from": _brief(ops.db, item["derived_from"]) if item["derived_from"] else None,
             "children": [_summary(ops, row[0]) for row in children[:limit]],
             "children_next_cursor": children[limit - 1][0] if len(children) > limit else None,
-            "completion_rule": "existing_work_item_completion"}
+            "completion_rule": "existing_work_item_completion"})

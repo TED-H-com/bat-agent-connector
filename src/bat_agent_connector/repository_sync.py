@@ -15,7 +15,8 @@ from .operations import RERUN, ActionDef, AmbiguousOutcome, NeedsAttention, Oper
 
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
-FIELDS = {"source_ref", "source_sha", "agent", "prompt", "title", "model", "artifacts", "project_id", "work_item_id"}
+FIELDS = {"source_ref", "source_sha", "agent", "prompt", "title", "model", "artifacts", "project_id", "work_item_id",
+          "pm_package_ref", "pm_code_basis"}
 
 
 def project_context(ops, target, params, pre, *, operation_id=None):
@@ -51,12 +52,16 @@ def project_context(ops, target, params, pre, *, operation_id=None):
 
 
 def install(ops):
+    from .pm_source_lineage import schema
+    schema(ops.journal)
     if "repository.continue" not in ops.actions:
         ops.register(ActionDef("repository.continue", "start", "Start from a published version", run, admit,
                                ("repository", "host", "workspace_id"), authorize_existing=_authorize_existing))
 
 
 def _authorize_existing(ops, principal, op, control):
+    from .pm_access import require_visible
+    require_visible(ops.db, principal, op)
     if op["params"].get("work_item_id") and not principal.allows("manage"):
         raise OperationError("FORBIDDEN", "dispatch linked work needs manage", 403)
 
@@ -123,6 +128,13 @@ def admit(ops, principal, target, params, pre):
     refs = artifacts.normalize_refs(ops.db, params.get("artifacts", []), ops.context["artifact_store"].settings)
     if len(checkpoints._input_instructions(ops.db, params["prompt"], refs)) > service.MAX_PROMPT_CHARS - 100:
         raise OperationError("INVALID_PARAMS", "instructions and input manifest exceed the prompt limit", 422)
+    from . import pm_package_handoff
+    binding = pm_package_handoff.admit(ops, principal, target, params, pre)
+    if binding:
+        text = pm_package_handoff.prompt(params["prompt"], binding["pm_handoff"]["contract"])
+        if len(checkpoints._input_instructions(ops.db, text, refs)) > service.MAX_PROMPT_CHARS - 100:
+            raise OperationError("PM_HANDOFF_TOO_LARGE", "The complete engineering contract and input manifest exceed the prompt limit", 413)
+    return binding
 
 
 async def gh_read(call):
@@ -193,6 +205,8 @@ def receipt(ctx, name):
 
 
 async def resolve(ctx):
+    from .pm_package_handoff import guard as pm_guard
+    pm_guard(ctx)
     project_context(ctx.service, ctx.target, ctx.params, ctx.preconditions, operation_id=ctx.operation_id)
     selected = await source_preview(ctx.service, {**ctx.target, "source_ref": ctx.params["source_ref"]})
     if selected["source_sha"] != ctx.params["source_sha"]:
@@ -211,6 +225,8 @@ async def resolve(ctx):
 
 
 def guard(ctx, plan):
+    from .pm_package_handoff import guard as pm_guard
+    pm_guard(ctx)
     ctx.require_controller()
     ctx.check_cancel()
     project_context(ctx.service, ctx.target, ctx.params, ctx.preconditions, operation_id=ctx.operation_id)
@@ -330,13 +346,18 @@ async def run(ctx):
     result = await checkpoints.start_in_worktree(ctx, host=ctx.target["host"], workspace=ctx.target["workspace_id"],
         agent=ctx.params.get("agent", "claude"), worktree=plan["worktree_path"], branch=plan["branch"], head=plan["source_sha"],
         title=ctx.params.get("title") or "Published " + plan["source_sha"][:12], model=ctx.params.get("model"),
-        text=marker + "\n" + checkpoints._input_instructions(ctx.service.db, ctx.params["prompt"], refs),
+        text=marker + "\n" + checkpoints._input_instructions(ctx.service.db, _execution_prompt(ctx), refs),
         marker=marker, registry_fields={}, creation_fields=fields,
         frame_check=input_frame, final_check=lambda: guard(ctx, plan))
     return {**result, "host": ctx.target["host"], "workspace_id": ctx.target["workspace_id"],
             "repository": plan["config"]["repository"], "repository_id": plan["repository_id"],
             "source_ref": plan["source_ref"], "source_sha": plan["source_sha"], "worktree_path": plan["worktree_path"],
             "branch": plan["branch"], "binding_digest": plan["binding_digest"]}
+
+
+def _execution_prompt(ctx):
+    from .pm_package_handoff import execution_prompt
+    return execution_prompt(ctx)
 
 
 def carriers(ops, operations):

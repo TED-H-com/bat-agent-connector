@@ -83,6 +83,8 @@ def read(ops, principal, host, session_id, *, limit=30, cursor=None):
         raise OperationError("UNKNOWN_HOST", "host is not configured", 404)
     if not _text(session_id, 256):
         raise OperationError("INVALID_PARAMS", "an exact session ID is required", 422)
+    from .pm_source_lineage import require_session
+    require_session(ops.db, principal, host, session_id)
     if type(limit) is not int or not 1 <= limit <= 100:
         raise OperationError("INVALID_PARAMS", "limit must be 1-100", 422)
     before = _cursor(cursor, host, session_id) if cursor is not None else None
