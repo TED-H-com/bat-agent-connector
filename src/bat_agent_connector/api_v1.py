@@ -185,6 +185,10 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban", self.pm_kanban, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/kanban/(?P<work_item_id>wi_[0-9a-f]{20})", self.pm_kanban_card, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/governance", self.pm_governance_records, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources", self.pm_release_baseline_sources, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines", self.pm_release_baselines, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/current", self.pm_release_baseline_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baselines/(?P<baseline_id>pmrb_[0-9a-f]{32})", self.pm_release_baseline, "observe"),
@@ -418,6 +422,8 @@ class ApiV1:
                       self.pm_brief_export,
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
+                      self.pm_release_baseline_sources, self.pm_release_baseline_releases,
+                      self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
@@ -664,6 +670,28 @@ class ApiV1:
 
     async def pm_governance_records(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_governance_list", query, workspace_id=workspace_id)
+
+    async def _pm_release_source_read(self, principal, method, query, workspace_id):
+        from .pm_release_previews import FIELDS, read
+        self._exact_query(query, FIELDS[method] - {"workspace_id"})
+        params = {key: values[0] for key, values in query.items()}
+        for key in {"after", "limit", "page", "release_id"} & params.keys():
+            if not re.fullmatch(r"[0-9]{1,19}" if key == "release_id" else r"[0-9]{1,9}", params[key]):
+                raise OperationError("INVALID_PARAMS", f"{key} must be a bounded integer", 422)
+            params[key] = int(params[key])
+        return 200, await read(self.daemon.ops, principal, method, {**params, "workspace_id": workspace_id})
+
+    async def pm_release_baseline_sources(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_sources_list", query, workspace_id)
+
+    async def pm_release_baseline_releases(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_releases_list", query, workspace_id)
+
+    async def pm_release_baseline_deployments(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_deployments_list", query, workspace_id)
+
+    async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
+        return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
 
     async def pm_release_baselines(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_release_baselines_list", query, workspace_id=workspace_id)

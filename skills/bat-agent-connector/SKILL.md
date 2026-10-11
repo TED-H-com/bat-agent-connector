@@ -419,6 +419,19 @@ channel, full commit and receipt; a newer main branch or successful CI is not
 verification of the maintained release. Follow non-null history cursors even
 when a source-filtered page is empty.
 
+`pm_release_baseline_sources_list` reads local bound project/repository choices.
+On an explicit source-discovery request, `pm_release_baseline_releases_list`
+reads one bounded GitHub page; `pm_release_baseline_deployments_list` reads local
+verified receipt choices. Do not scan external releases just because a workspace
+was opened. Follow `next_page` / `next_cursor`, including filtered empty pages.
+Choose a returned source and call `pm_release_baseline_preview` explicitly; it
+resolves native repository/release IDs, commit, channel and optional short branch
+name. The returned registration envelope needs the owner's actual rationale
+and optional known limitations. Do not ask the user to type native IDs or SHAs,
+and do not change the preview's fixed source fields. Changed branch/source needs
+a new preview. A preview is a read, not authority; registration rechecks the
+original fixed publication and CAS.
+
 An explicit current workspace owner can use `pm.release_baseline.register` with
 target `{workspace_id,repository}`. Select an existing `pm.project.bind` association
 whose project includes this configured repository. Supply `project_binding_id`,

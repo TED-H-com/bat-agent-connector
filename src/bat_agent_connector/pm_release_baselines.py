@@ -86,7 +86,8 @@ def install(ops):
 def capabilities():
     return {"version": 1, "sources": ["github_release", "deployment"],
             "github_release_channels": ["stable", "prerelease"], "package_registry": "unsupported",
-            "primary_baselines_per_workspace": 1, "automatic_maintenance": False}
+            "primary_baselines_per_workspace": 1, "automatic_maintenance": False,
+            "source_choices": True, "source_preview": True, "external_discovery": "explicit_read_only_request"}
 
 
 def _member(ops, principal, wid, *, decide=False):

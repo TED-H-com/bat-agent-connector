@@ -213,6 +213,53 @@ The Tauri bridge permits only these exact GET paths/queries, without an operatio
 key. Global `features.pm_workspaces.release_baselines` exposes `capabilities()`;
 visibility does not grant selection or network access.
 
+## Explicit source choices and preview
+
+Users choose published sources; they do not type GitHub numeric IDs or full commit
+hashes. The following read entries require `observe` and current source access:
+
+| HTTP GET under the workspace | RPC / MCP | Query |
+| --- | --- | --- |
+| `/release-baseline-sources` | `pm_release_baseline_sources_list` | `after`, `limit` |
+| `/release-baseline-sources/github-releases` | `pm_release_baseline_releases_list` | `project_binding_id`, `repository`, `page`, `limit` |
+| `/release-baseline-sources/deployments` | `pm_release_baseline_deployments_list` | `project_binding_id`, `repository`, `after`, `limit` |
+| `/release-baseline-preview` | `pm_release_baseline_preview` | `project_binding_id`, `repository`, `kind`, exactly one matching source ID, optional `maintenance_branch` |
+
+The source catalog is local. It returns `bindings` with sequence, immutable project
+binding ID, project ID/name and explicitly configured repository names. Deployment
+choices are also local, with original receipt IDs, repository ID, actual environment
+channel, fixed commit and commit-typed version. Unverified or inaccessible rows are
+filtered while preserving the original insertion cursor. Neither read contacts BAT,
+GitHub, an adapter or a model.
+
+GitHub discovery is a separate explicit request, not something opening a workspace
+starts. It reads the repository identity, one `releases` page, and the identity
+again. Pages allow 1–20 records, use page numbers 1–10,000, never follow returned
+provider URLs, and expose only published metadata (ID, tag, actual channel and
+publication time). Drafts/malformed rows are omitted. A full page has `next_page`
+even if every row is omitted; at the explicit page bound, coverage says
+`page_bound_reached=true`. An empty final page is normal. Body text, URLs and assets
+are not copied into the choices. Each network read rechecks original authorization
+and binding both before and after the GET. All source reads retain the 2 MB limit.
+
+Preview resolves one fixed native source, derives repository ID/full commit/actual
+channel, verifies an optional short branch name, and includes the current baseline
+CAS. It returns the original proof (including `selection`), a `registration`
+operation envelope, `requires_input:["rationale"]` and
+`maintenance_authorized=false`. Its parameters have empty rationale, empty known
+limitations and the fixed original source fields. The UI asks for the actual owner
+direction, keeps those fixed fields, and then uses normal operation submission.
+Changing source or branch invalidates the old preview. Leaving the branch absent
+means unconfigured; do not include an empty query or `refs/heads/` prefix.
+
+Preview does not save a receipt, create an operation/PM run, take a writer, start
+maintenance, or authorize a later action. A reader may inspect it; selection still
+requires the actual owner. Registration does not accept a caller-supplied proof or
+preview authority token: it performs its original full fixed-source verification
+and CAS. A moved tag after preview is rejected against that original SHA. The
+current head and all prior source policies are rechecked during preview so it
+cannot replace a hidden baseline with a convenient newly visible source.
+
 ## Verification mapping
 
 The focused tests use the existing operation journal and a mock GET provider for
