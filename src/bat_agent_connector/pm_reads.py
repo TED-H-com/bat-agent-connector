@@ -5,6 +5,10 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_lifecycle_get": ("workspace_id",),
+    "pm_lifecycle_transitions_list": ("workspace_id", "after", "limit"),
+    "pm_lifecycle_transition_get": ("workspace_id", "transition_id"),
+    "pm_lifecycle_inflight_list": ("workspace_id", "transition_id", "after", "limit"),
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
     "pm_work_package_readiness_get": ("workspace_id", "package_id"),
@@ -63,6 +67,16 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list"}:
+        from . import pm_lifecycle
+        if method == "pm_lifecycle_get":
+            return pm_lifecycle.get_lifecycle(ops, principal, workspace_id)
+        if method == "pm_lifecycle_transition_get":
+            return pm_lifecycle.get_transition(ops, principal, workspace_id, params.get("transition_id"))
+        page = {"after": params.get("after", 0), "limit": params.get("limit", 20)}
+        if method == "pm_lifecycle_transitions_list":
+            return pm_lifecycle.list_transitions(ops, principal, workspace_id, **page)
+        return pm_lifecycle.list_inflight(ops, principal, workspace_id, transition_id=params.get("transition_id"), **page)
     if method == "pm_brief_export_get":
         from .pm_brief_exports import render_brief
         return render_brief(ops, principal, workspace_id, params.get("snapshot_id"),
