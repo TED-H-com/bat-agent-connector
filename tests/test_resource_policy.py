@@ -147,7 +147,7 @@ async def test_bulk_and_relay_paths_skip_bat_sessions(fleet_factory, mock):
 async def test_mcp_tools_refuse_bat_sessions(mock, served, monkeypatch):
     d, port = served
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
-    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "policy-test", "operate", "start"))
+    monkeypatch.setenv("BATC_API_TOKEN", api.token(d, "policy-test", "observe", "operate", "start"))
     server, fleet = build_server(make_config(mock, writes=True, orchestrate=True))
     for tool, args in (("session_send", {"text": "hi", "confirm": True}),
                        ("session_interrupt", {"confirm": True, "mode": "hard"}),
