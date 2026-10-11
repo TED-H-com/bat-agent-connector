@@ -1,9 +1,12 @@
 """Publication uses real disk Git and original PM assignments, never live providers."""
 from __future__ import annotations
 
+import asyncio
 import copy
+import json
 import sqlite3
 import uuid
+from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
@@ -14,6 +17,7 @@ from bat_agent_connector import pr_publication_host as host
 from bat_agent_connector.github import GitHubAmbiguous
 from bat_agent_connector.operations import OperationError
 from tests.test_checkpoints import git, snapshot
+from tests.test_integration import commit
 from tests.test_pm_delivery_lineage import (  # noqa: F401
     DELIVERER,
     fixed,
@@ -25,6 +29,7 @@ from tests.test_pm_delivery_lineage import (  # noqa: F401
 from tests.test_pm_delivery_lineage import (
     delivery_ready as delivery_ready_fixture,
 )
+from tests.test_pm_lifecycle import decide
 from tests.test_pm_package_handoff import revoke
 
 delivery_ready = delivery_ready_fixture
@@ -151,13 +156,19 @@ async def test_post_receipt_survives_crash_before_outer_step_completion(pub, mon
     def finish(oid, name, response, **kwargs):
         if name == publication.POST and not lost:
             lost.append(True)
-            raise OSError("Process lost outer POST completion")
+            raise asyncio.CancelledError("Process lost outer POST completion")
         return original(oid, name, response, **kwargs)
     monkeypatch.setattr(ops, "_step_done", finish)
-    done = await settle(w, create(w))
+    op = create(w)
+    with pytest.raises(asyncio.CancelledError):
+        await ops._execute(op["operation_id"])
+    assert ops.get(op["operation_id"])["status"] == "running"
+    done = await settle(w, op)
     assert done["status"] == "succeeded", done
     assert len(w["posts"]) == 1
     assert publication._raw_receipt(ops, done["operation_id"])["native_pr_id"] == 801
+    assert ops.db.execute("SELECT status FROM operation_steps WHERE operation_id=? AND name=?",
+        (done["operation_id"], publication.POST)).fetchone()[0] == "succeeded"
 
 
 async def test_raced_201_keeps_native_identity_but_refuses_owned_target_proof(pub):
@@ -208,3 +219,56 @@ def test_caller_cannot_supply_owned_branch_or_repair_parent(pub):
         request["params"][key] = value
         with pytest.raises(OperationError, match="INVALID_PARAMS"):
             create(w, request)
+
+
+async def test_matching_remote_without_original_push_receipt_remains_unresolved(pub):
+    w = pub
+    op = create(w)
+    area = op["external_refs"]["admission_binding"]["pm_pr_publication"]["config"]["area"]
+    w["runner"].after["publication-push"] = lambda: (Path(area) / "repo.git" / ("batc-pr-create-" + op["operation_id"])).unlink()
+    w["runner"].lose_after.add("publication-push")
+    done = await settle(w, op)
+    assert done["status"] in {"uncertain", "needs_attention"}, done
+    assert git(w["remote"], "rev-parse", "refs/heads/" + host.branch(op["operation_id"])) == w["result_sha"]
+    assert w["runner"].ran["publication-push"] == 1 and w["posts"] == []
+
+
+async def test_withdrawal_after_branch_creation_stops_new_post(pub):
+    w = pub
+    w["runner"].after["publication-push"] = lambda: revoke(w)
+    done = await settle(w, create(w))
+    assert done["status"] == "failed", done
+    assert w["runner"].ran["publication-push"] == 1 and w["posts"] == []
+
+
+async def test_receipt_remains_readable_after_workspace_pause(pub):
+    w, ops = pub, pub["d"].ops
+    done = await settle(w, create(w))
+    assert done["status"] == "succeeded", done
+    await decide(ops, w["workspace_id"])
+    assert publication.get_publication(ops, DELIVERER, done["operation_id"])["creation_receipt"]["native_pr_id"] == 801
+    with pytest.raises(OperationError, match="PM_LIFECYCLE_STOPPED"):
+        create(w)
+
+
+async def test_complete_paths_preserve_control_characters_and_both_rename_sides(pub):
+    w, ops = pub, pub["d"].ops
+    wt = w["original"]["result"]["worktree_path"]
+    w["result_sha"] = commit(wt, "line\nbreak.txt", "explicit path\n", "Add quoted filename")
+    git(wt, "mv", "implementation.txt", "renamed.txt")
+    git(wt, "commit", "-qm", "Rename implementation")
+    w["result_sha"] = git(wt, "rev-parse", "HEAD")
+    done = await settle(w, create(w))
+    assert done["status"] == "succeeded", done
+    pinned = json.loads(ops.db.execute("SELECT response FROM operation_steps WHERE operation_id=? "
+        "AND name='pr.publication.prepare'", (done["operation_id"],)).fetchone()[0])
+    assert pinned["files_complete"] and "line\nbreak.txt" in pinned["files"] and "renamed.txt" in pinned["files"]
+
+
+async def test_source_tip_movement_refuses_publication_of_stale_candidate(pub):
+    w = pub
+    op = create(w)
+    commit(w["original"]["result"]["worktree_path"], "newer.txt", "later unselected work\n", "Advance source")
+    done = await settle(w, op)
+    assert done["status"] == "failed" and done["error_code"] == "PR_SOURCE_MOVED", done
+    assert w["runner"].ran["publication-push"] == 0 and w["posts"] == []
