@@ -196,3 +196,28 @@ the actual JSON separators and escaping, not character count or compact stored
 JSON. Admission to storage reserves maximal integer widths. Oversized selections
 fail atomically, with no partially truncated agenda or intake. Bounded thread
 selection retains coverage and original IDs rather than claiming complete knowledge.
+
+## Shared service entry points
+
+The service advertises `features.pm_workspaces.follow_up_prepare` when the
+`pm.follow_up.prepare` action is registered. This is fixed agenda preparation;
+the Follow-up PhaseProfile remains unavailable as a discussion runtime mode.
+
+| HTTP GET within `/pm/workspaces/{workspace_id}` | RPC / MCP read |
+| --- | --- |
+| `/follow-ups?after=0&limit=50` | `pm_follow_up_list(workspace_id, after=0, limit=50)` |
+| `/follow-ups/latest` | `pm_follow_up_latest_get(workspace_id)` |
+| `/follow-ups/{intake_id}` | `pm_follow_up_get(workspace_id, intake_id)` |
+
+Every entry requires observe and current membership. Only the list accepts
+`after` and `limit`; empty, repeated and unknown query parameters are rejected.
+The native bridge accepts these same bounded read routes. Preparation goes
+through the existing central operations endpoint and original idempotency key.
+There is no separate Follow-up queue or native execution path.
+
+Shared operation reads/lists and events delegate to the domain's original
+admission hooks, including admitted operations without a completed intake.
+Withdrawal of a selected governance or meeting source therefore withholds the
+derived intake and original operation through HTTP, RPC, MCP and event feeds.
+Internal effect receipts are retained for recovery; public replay remains
+subject to current membership and those original source references.
