@@ -70,6 +70,8 @@ def schema(journal):
 
 def install(ops):
     schema(ops.journal)
+    from . import pm_maintenance_repair_runtime as runtime
+    runtime.install(ops)
     from . import pm_maintenance_repair_evidence as evidence
     for action, run, admit, targets in ((ACTION, _run, _admit, ('workspace_id',)),
             (RECORD, evidence.run, evidence.admit, ('workspace_id', 'repair_id'))):
@@ -449,6 +451,12 @@ def reconcile(ops):
             op = _operation(ops, row['operation_id'])
             if _never_started(ops, op):
                 _finish_without_start(OpContext(ops, op))
+            else:
+                from . import pm_maintenance_repair_runtime as runtime
+                try:
+                    runtime.ensure_observer(ops, op)
+                except OperationError:
+                    pass  # Read authority/source recovery never frees unknown capacity.
         ops.db.execute('UPDATE pm_maintenance_repair_cursor SET run_sequence=? WHERE singleton=1',
                        (rows[31]['sequence'] if len(rows) > 32 else 0,))
 
@@ -525,12 +533,13 @@ def get_repair(ops, principal, workspace_id, repair_id):
         published = publication.child(ops, parent)
         from . import pm_maintenance_repair_delivery as delivery
         delivered = delivery.child(ops, parent)
+        from . import pm_maintenance_repair_runtime as runtime
         proofs = [json.loads(r[0]) for r in ops.db.execute('SELECT document FROM pm_maintenance_repair_evidence WHERE parent_id=? ORDER BY sequence LIMIT 64', (parent['operation_id'],))]
         return _bounded({'workspace_id': workspace_id, 'repair': {**row,
             'operation_status': parent['status'], 'child': ({key: child[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if child else None),
             'publication_child': ({key: published[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if published else None),
             'delivery_child': ({key: delivered[key] for key in ('operation_id', 'action', 'status', 'result', 'error_code')} if delivered else None),
-            **delivery.projection(ops, parent),
+            **delivery.projection(ops, parent), **runtime.projection(ops, principal, parent),
             'evidence': proofs, 'capacity_held': row['finished_at'] is None,
             'outcome': (parent.get('result') or {}).get('outcome'),
             'repair_fixed': False, 'release_status': 'not_inferred', 'cost_coverage': 'model_provider_unmeasured',
