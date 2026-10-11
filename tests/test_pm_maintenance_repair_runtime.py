@@ -119,7 +119,7 @@ async def test_actual_original_cursor_native_completion_and_quality_release(obse
 
 
 @pytest.mark.parametrize('failure', ['idle', 'abort', 'gap', 'input', 'drift', 'incarnation'])
-async def test_idle_abort_gap_later_input_or_changed_identity_never_release(observed, native_replay, failure):
+async def test_idle_abort_gap_later_input_or_changed_identity_never_release(observed, native_replay, failure, monkeypatch):
     w, ops = observed, observed['d'].ops
     if failure == 'idle':
         native_replay['reason'] = None
@@ -132,7 +132,12 @@ async def test_idle_abort_gap_later_input_or_changed_identity_never_release(obse
     elif failure == 'drift':
         native_replay['drift'] = True
     else:
-        registry.update('h1', w['child']['result']['session_id'], controller_incarnation='f' * 32)
+        original_get = registry.get
+        sid = w['child']['result']['session_id']
+        def foreign(host, selected):
+            value = original_get(host, selected)
+            return {**value, 'controller_incarnation': 'f' * 32} if host == 'h1' and selected == sid else value
+        monkeypatch.setattr(registry, 'get', foreign)
     reader = await observe(w)
     assert reader['status'] != 'succeeded', reader
     assert view(w, w['parent'])['capacity_held']
