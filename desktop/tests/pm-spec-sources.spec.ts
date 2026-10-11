@@ -6,6 +6,11 @@ import {pmFixture,pmRoute} from './pm-fixture.ts';
 
 const box=(page:any)=>page.locator('[data-pm-spec-sources]'),result=(page:any)=>box(page).locator('[data-pm-spec-result]');
 const shots=process.env.PM_SPEC_SCREENSHOTS;
+async function selectPaths(page:any, value:string){
+  const selection=box(page).locator('[data-pm-spec-selection]');
+  if(!await selection.evaluate((node:HTMLDetailsElement)=>node.open))await selection.locator('summary').click();
+  await selection.getByLabel('Exact artifact paths (optional)',{exact:true}).fill(value);
+}
 test('existing PM page before mounting specification sources',async({page})=>{
   const f=pmFixture();await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
   await expect(page.getByRole('heading',{name:'Project discussions',exact:true})).toBeVisible();
@@ -31,7 +36,7 @@ for(const native of [false,true])test.describe(native?'native specification read
     await expect(result(page).locator('.pm-plan-document').first()).toBeVisible();
     await expect(result(page)).toContainText('<script>window.fixtureUnsafe=true</script>');expect(f.state.reads).toHaveLength(1);
     expect(f.state.writes).toHaveLength(0);await expect(result(page).locator('script,img,input[type=checkbox]')).toHaveCount(0);
-    await box(page).getByLabel('Exact artifact paths (optional)',{exact:true}).fill(sourcePath);await expect(result(page)).toBeEmpty();
+    await selectPaths(page,sourcePath);await expect(result(page)).toBeEmpty();
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();await expect(result(page)).toContainText('Main specification');
     expect(new URL(f.state.reads[1],'http://fixture').searchParams.get('paths')).toBe(sourcePath);
   });
@@ -47,18 +52,18 @@ for(const native of [false,true])test.describe(native?'native specification read
   test('late source response is discarded after selection or authority changes',async({page})=>{
     const f=fixture();let release!:()=>void;f.state.delay=new Promise<void>(resolve=>release=resolve);await mount(page,f,native);
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();await expect.poll(()=>f.state.reads.length).toBe(1);
-    await box(page).getByLabel('Exact artifact paths (optional)').fill(sourcePath);release();
+    await selectPaths(page,sourcePath);release();
     await expect(box(page).getByRole('button',{name:'Read fixed sources',exact:true})).toBeEnabled();await expect(result(page)).toBeEmpty();
     f.state.delay=new Promise<void>(resolve=>release=resolve);await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();
     await expect.poll(()=>f.state.reads.length).toBe(2);f.state.denied=true;await page.evaluate(()=>(window as any).refreshSpec());release();
     await expect(result(page)).toBeEmpty();await expect(box(page)).not.toContainText(commit);
   });
   test('mismatched fixed response is rejected and duplicate selection never reaches Git',async({page})=>{
-    const f=fixture();await mount(page,f,native);await box(page).getByLabel('Exact artifact paths (optional)').fill(sourcePath+'\n'+sourcePath);
+    const f=fixture();await mount(page,f,native);await selectPaths(page,sourcePath+'\n'+sourcePath);
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();await expect(box(page)).toContainText('100 distinct');expect(f.state.reads).toHaveLength(0);
-    await box(page).getByLabel('Exact artifact paths (optional)').fill(Array.from({length:60},(_,i)=>`openspec/specs/c${i}${'member'.repeat(10)}/spec.md`).join('\n'));
+    await selectPaths(page,Array.from({length:60},(_,i)=>`openspec/specs/c${i}${'member'.repeat(10)}/spec.md`).join('\n'));
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();await expect(box(page)).toContainText('Select fewer or shorter paths');expect(f.state.reads).toHaveLength(0);
-    await box(page).getByLabel('Exact artifact paths (optional)').fill('');f.state.bad=true;await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();
+    await selectPaths(page,'');f.state.bad=true;await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();
     await expect(box(page)).toContainText('The response does not match');await expect(result(page)).toBeEmpty();
   });
 });

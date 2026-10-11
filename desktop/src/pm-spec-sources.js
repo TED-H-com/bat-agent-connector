@@ -8,7 +8,7 @@ export function specSources({h, t, api, alive, workspaceId, errorBox}) {
   const paths = h('textarea', {rows: 3, maxlength: 80099, 'aria-label': text('spec_paths')});
   const readButton = h('button', {type: 'button', class: 'secondary', disabled: true, onclick: () => void read()}, text('spec_read'));
   const checkButton = h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, text('spec_refresh'));
-  const controlsBox = h('div', {hidden: true}, h('label', {}, text('spec_paths'), paths),
+  const controlsBox = h('details', {hidden: true, 'data-pm-spec-selection': ''}, h('summary', {}, text('spec_paths')), h('label', {}, text('spec_paths'), paths),
     h('p', {class: 'muted'}, text('spec_paths_help')));
   const element = h('section', {class: 'pm-packages', 'data-pm-spec-sources': ''}, h('h3', {}, text('spec_title')),
     h('p', {class: 'muted'}, text('spec_intro')), facts, h('p', {class: 'muted'}, text('spec_limit')),
