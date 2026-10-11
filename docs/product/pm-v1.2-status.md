@@ -72,11 +72,11 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W05 | P0 | Evidence IDs 與 replay 去重 | #95 已合併：固定來源／digest／journal cursor、快照與重播去重；DoD 尚未評估，不把收集證據算成驗收 |
 | W06 | P0 | Session worktree work 關聯 | #95 已合併：原 project／work 明確綁定、固定已採用 plan／需求引用、既有來源關聯；不轉移 session 控制權 |
 | W07 | P0 | PM worktree bootstrap | 第三、四批：設定綁定、固定來源、自有 worktree、不可覆寫草稿與計畫 commit；不夾帶程式或其他 index 修改 |
-| W08 | P0 | Plan revision 與採用流程 | 第四批：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；取消／撤權／回覆遺失整合驗證中 |
-| W09 | P1 | PM runner 與 adapter selection | 第三批：writer／context／reply provenance 基礎與手動脈絡準備；可自動執行的 adapter、工具限制與切換待完成 |
-| W10 | P1 | 一位 PM 討論與 evidence snapshot | 第三批：固定討論脈絡、來源／版本／缺口；AI 參與及跨交付 evidence 關聯待做 |
+| W08 | P0 | Plan revision 與採用流程 | #93 已合併：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；不是執行授權 |
+| W09 | P1 | PM runner 與 adapter selection | #92／#97 已合併：共用 writer、原生回覆與 Linux 單次分析；BAT 工具限制、其他 adapter 與切換待完成 |
+| W10 | P1 | 一位 PM 討論與 evidence snapshot | #95／#96／#97 已合併：固定工作證據快照與 Idea／Planning 原生分析；完整 Follow-up／會議引導與品質判斷待做 |
 | W11 | P1 | Plan diff 與影響分析 | 開發分支：固定版本／來源／接受條件比較、明確工作關聯的影響候選；語意判讀與採用變更流程仍待做 |
-| W12 | P1 | Project Brief | 開發分支：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
+| W12 | P1 | Project Brief | #96 已合併：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
 | W13 | P1 | Roadmap 與 scope | 開發分支：固定採用需求、里程碑／依賴、原定／預測／實際證據與歷史；Git materialization、里程碑品質驗收仍待做 |
 | W14 | P1 | Kanban | 開發分支：原工作與執行紀錄的唯讀工作看板、逐頁 WIP／時間來源／attempts；相依、分派、WIP 政策與就緒判斷待做 |
 | W15 | P1 | Sprint artifacts 與時間 | 開發分支：Product Goal／有序 Backlog／DoD、固定 Sprint Goal／角色／期間、選入工作與關閉歷史；品質驗收與完整事件待做 |
@@ -98,12 +98,12 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W31 | P0 | Idea thread 與明確轉 Planning | 本批：持久 Idea 與指定輸入轉 Planning 草稿 |
 | W32 | P0 | PhaseProfile 與 command policy | 本批：九種 profile 契約；Idea／Planning 可用，runtime 限制待接 adapter |
 | W33 | P0 | InputRecord 與循序資訊取得 | 開發分支：來源與確認者、假設／未知分離、固定八領域資訊與已確認回答的續接；語意缺口判斷、循序提問與研究 runner 待做 |
-| W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿修訂、文件與 accepted scope 分開；Sprint／batch 與工程 work package 待做 |
+| W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿、文件與 accepted scope 分開；開發分支加入 Sprint、治理與工程 work package；batch／實際交接待做 |
 | W35 | P1 | 架構與 SDD 工程工作包 | 開發分支：固定採用需求／接受條件、規格 bytes、獨立程式版本、設計／技術工作／驗證與交付安排，API／MCP 準備及 Web／Tauri 審閱；實際 coding handoff 待做 |
 | W36 | P1 | OpenSpec read adapter | 開發分支：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W38 | P1 | 有界批次與工作包交接 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W39 | P1 | DocumentSnapshot 與五視圖 SVG | 開發分支：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
+| W39 | P1 | DocumentSnapshot 與五視圖 SVG | #96 已合併：同一交易的不可變專案快照、權限過濾與摘要 digest；五視圖 SVG 待做 |
 | W40 | P1 | 專案文件與簡報 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W41 | P1 | Actor 決策責任與 follow-up | 開發分支：指定決策者、改善責任、固定治理／會議結果與最多三項 Follow-up 議程、明確前次比較；語意效果判斷與自動討論待做 |
 | W42 | P1 | Idea 到 Review 真實驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
