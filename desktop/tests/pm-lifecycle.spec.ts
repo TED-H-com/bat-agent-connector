@@ -107,6 +107,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     await expect(editor.getByRole('button',{name:'Close this management workspace',exact:true})).toBeDisabled();
     await expect(editor.getByLabel('Reason and retained context')).toHaveValue('Preserve this closure rationale.');
     await editor.getByRole('button',{name:'Review current activity state'}).click();await editor.getByRole('button',{name:'Close this management workspace',exact:true}).click();
+    await expect.poll(()=>f.state.writes.length).toBe(1);
     expect(f.state.writes[0].body.preconditions.expected_lifecycle_revision).toBe(1);
     expect(f.state.writes.some(call=>call.body.action.includes('archive'))).toBe(false);
   });
