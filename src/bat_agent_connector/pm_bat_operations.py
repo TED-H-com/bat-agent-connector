@@ -112,14 +112,61 @@ def start_profile(ctx):
         "pmTimeoutMs": ctx.parent.params.get("timeout_s", 300) * 1000}
 
 
+def _carrier_source(ctx):
+    from . import pm_plans
+    if not isinstance(ctx, _StartContext):
+        return None
+    ctx.require_controller()
+    binding = ctx.parent.admission_binding['pm_bat_binding']
+    latest = pm_plans.latest_git_receipt(ctx.service.db, ctx.run['workspace_id'])
+    return {'creation_operation_id': binding['creation_operation_id'],
+        'binding_digest': pm_runs._digest(binding), 'config_digest': binding['config_digest'],
+        'clone_path': binding['clone_path'], 'worktree_path': binding['worktree_path'],
+        'branch': binding['branch'], 'head': latest['commit_sha'] if latest else binding['source_sha'],
+        'workspace_folder': binding['workspace']['folder']}
+
+
+async def start_carrier(ctx):
+    """Read the already-created PM carrier; never infer ownership from its path."""
+    from . import pm_worktree
+    fixed = _carrier_source(ctx)
+    if fixed is None:
+        return None
+    async def check():
+        ctx.require_controller()
+    remaining = ctx.run['created_at'] + ctx.parent.params.get('timeout_s', 300) - time.time()
+    observed = await asyncio.wait_for(pm_worktree._host_call(ctx.parent,
+        ctx.parent.admission_binding['pm_bat_binding'], 'read.pm-carrier', check=check),
+        timeout=min(15, max(0.001, remaining)))
+    carrier = observed.get('carrier')
+    if (not isinstance(carrier, dict) or any(carrier.get(key) != fixed[key]
+            for key in ('clone_path', 'worktree_path', 'branch', 'head'))):
+        raise StepFailed('PM_BAT_CARRIER_CHANGED', 'The original PM carrier creation and Git tip are unproven')
+    ctx.require_controller()
+    return fixed
+
+
+async def guard_carrier(ctx, plan):
+    if 'pm_carrier' not in plan:
+        return
+    if await start_carrier(ctx) != plan['pm_carrier']:
+        raise StepFailed('PM_BAT_CARRIER_CHANGED', 'The frozen PM carrier changed before the next native frame')
+
+
 def guard_start(ctx, plan):
     profile = plan.get("pm_runtime_profile")
-    if profile is None and not isinstance(ctx, _StartContext):
+    if profile is None and not isinstance(ctx, _StartContext) and 'pm_carrier' not in plan:
         return
     if (not isinstance(ctx, _StartContext) or profile != start_profile(ctx)
             or plan["workspace_id"] != ctx.target["workspace"]
             or plan["permission_options"] != pm_runtime.readonly_start_options()):
         raise StepFailed("PM_BAT_BINDING_CHANGED", "The original dedicated PM start profile changed")
+    if 'pm_carrier' in plan:
+        fixed = _carrier_source(ctx)
+        if (plan['pm_carrier'] != fixed or plan['folder'] != fixed['worktree_path']
+                or plan['origin_root'] != fixed['worktree_path'] or plan['source_branch'] != fixed['branch']
+                or plan['base_commit'] != fixed['head'] or plan['workspace_folder'] != fixed['workspace_folder']):
+            raise StepFailed('PM_BAT_CARRIER_CHANGED', 'The original owned PM carrier binding changed')
 
 
 def confirm_start(ctx, plan, meta):

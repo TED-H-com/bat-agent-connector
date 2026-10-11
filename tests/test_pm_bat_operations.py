@@ -41,6 +41,9 @@ def bat_world(daemon, mock, monkeypatch):
     # PM worktree creation/configuration is independently covered by its real
     # Git integration suite. This fixture exercises the original BAT start path.
     monkeypatch.setattr(bat, "_binding", lambda ops, wid: copy.deepcopy(selection))
+    async def no_carrier(_):
+        return None
+    monkeypatch.setattr(bat, 'start_carrier', no_carrier)
     mock.handlers["git:log"] = lambda p: [{"hash": "a" * 40}]
     original = mock.dispatch
     def dispatch(channel, params):
