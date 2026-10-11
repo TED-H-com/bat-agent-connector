@@ -111,7 +111,8 @@ def _host_source() -> str:
     shared = (resources.files(__package__) / "repository_sync_host.py").read_text()
     shared = shared.split('\nif __name__ == "__main__":', 1)[0]
     drafts = (resources.files(__package__) / "pm_worktree_host.py").read_text().split('\nif __name__ == "__main__":', 1)[0]
-    return shared + "\n" + drafts + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
+    paths = (resources.files(__package__) / "pm_revision_paths.py").read_text()
+    return shared + "\n" + drafts + "\n" + paths + "\n" + (resources.files(__package__) / "pm_revision_host.py").read_text()
 
 
 async def _host_call(ctx, plan, phase, *, check, snapshot=None, revision=None):
