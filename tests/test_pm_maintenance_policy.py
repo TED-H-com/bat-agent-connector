@@ -11,6 +11,7 @@ import pytest
 from bat_agent_connector import pm_access, pm_lifecycle_gates, pm_workspace
 from bat_agent_connector import pm_maintenance_policy as policies
 from bat_agent_connector.api_auth import Principal
+from bat_agent_connector.config import GitHubConfig, GitHubRepo
 from bat_agent_connector.operations import OpContext, OperationError
 from tests.test_pm_evidence import CONTRIBUTOR, OWNER, READER
 from tests.test_pm_lifecycle import decide
@@ -173,6 +174,21 @@ async def test_verified_same_scope_release_can_advance_without_re_adopting_polic
     with pytest.raises(OperationError, match="PM_MAINTENANCE_SCOPE_CHANGED"):
         policies.active_record(ops, OWNER, wid)
     assert policies.fixed_record(ops, OWNER, wid, after["policy_id"]) == before
+
+
+async def test_same_repository_number_on_another_provider_cannot_inherit_policy(ops):
+    wid, target, binding, _ = await prepared(ops)
+    done = await execute(ops, request(ops, wid))
+    fixed = policies.fixed_record(ops, OWNER, wid, done["result"]["policy_id"])
+    cfg = GitHubConfig(api_url="https://another.example/api/v3", repos={"example/product": GitHubRepo("example/product")})
+    ops.context["github_config"] = cfg
+    ops.context["github"].cfg = cfg
+    # Same repo number, tag, commit and branch on a separate provider do not
+    # represent the originally adopted repository authority.
+    await execute(ops, baseline_request(ops, target, binding, branch="support/1.x"))
+    with pytest.raises(OperationError, match="PM_MAINTENANCE_SCOPE_CHANGED"):
+        policies.active_record(ops, OWNER, wid)
+    assert policies.fixed_record(ops, OWNER, wid, done["result"]["policy_id"]) == fixed
 
 
 async def test_original_source_withdrawal_hides_records_pending_operations_and_events(ops):
