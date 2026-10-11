@@ -638,6 +638,15 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
   .pm-maintenance-policy .pm-fields { grid-template-columns: minmax(0,1fr); }
   .pm-maintenance-policy .pm-policy-choices label { min-height: 44px; }
 }
+
+[data-pm-maintenance-observations] { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; }
+[data-pm-maintenance-observations] h4 { font-size: 14px; margin: 8px 0; }
+[data-pm-maintenance-observations] p { margin: 8px 0; }
+.pm-observation-facts, .pm-observation-actions { display: grid; gap: 16px; }
+.pm-observation-facts section { min-width: 0; }
+@media (min-width: 1000px) {
+  .pm-observation-facts, .pm-observation-actions { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
 [data-pm-release-baselines] {overflow-wrap:anywhere;}
 [data-pm-release-baselines] article {padding:.65rem 0; border-top:1px solid var(--line);}
 [data-pm-release-baselines] article h3 {font-size:.95rem; margin:.25rem 0;}

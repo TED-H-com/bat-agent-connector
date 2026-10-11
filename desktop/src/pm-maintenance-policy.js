@@ -1,3 +1,4 @@
+import {maintenanceObservations} from './pm-maintenance-observations.js';
 // One durable decision; selecting sources never runs monitoring or repair work.
 export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,action='pm.maintenance_policy.adopt';
@@ -86,9 +87,11 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const historyDetails=h('details',{},h('summary',{},t('pmp_history')),history);
   historyDetails.addEventListener('toggle',()=>{if(historyDetails.open&&!historyLoaded&&ready)void readHistory(false);});
   const permission=h('p',{class:'muted'},t('pmp_owner'));
+  const observations=caps()?.features?.pm_workspaces?.workload?.version===1
+    ?maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
   const element=h('section',{class:'pm-brief pm-maintenance-policy','data-pm-maintenance-policy':''},h('header',{class:'pm-heading'},
     h('div',{},h('h2',{},t('pmp_title')),h('p',{class:'muted'},t('pmp_intro'))),h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmp_refresh'))),
-    status,view,h('p',{class:'muted'},t('pmp_runtime')),historyDetails,permission,editorDetails);
+    status,view,h('p',{class:'muted'},t('pmp_runtime')),historyDetails,permission,editorDetails,...(observations?[observations.element]:[]));
   function controls(){editorDetails.hidden=!owner()&&!(editor.locked()&&recover());permission.hidden=owner();editor.update();}
   function initialize(){
     const p=current.policy?.document?.policy||{enabled:false,after_release_policy:'manual',sources:['issues','pull_requests'],allowed_work_kinds:[],allowed_paths:['.'],
@@ -147,7 +150,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       h('p',{class:'muted'},p.allowed_work_kinds.length?names(p.allowed_work_kinds):t('pmp_observation')),
       line('pmp_github_profile',t(s.github_scope===githubProfile?'pmp_profile_github':'pmp_profile_legacy')),details);
   }
-  function withdraw(){epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();controls();}
+  function withdraw(){observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();controls();}
   function failure(error){withdraw();status.replaceChildren(h('p',{class:'muted'},t('pmp_unavailable')),errorBox(error));}
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
@@ -181,7 +184,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
           h('details',{},h('summary',{},t('pmp_versions')),line('pmp_revision',p.head.revision),line('pmp_lifecycle',l.lifecycle.revision),
             line('pmp_original_baseline',row.baseline_id),h('p',{class:'mono'},row.document_digest)));
       }
-      controls();if(historyDetails.open)await readHistory(false);
+      controls();if(historyDetails.open)await readHistory(false);if(valid(ticket))await observations?.refresh();
     }catch(error){if(valid(ticket))failure(error);}
   }
   controls();return {element,refresh,withdraw};
