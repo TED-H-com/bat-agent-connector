@@ -50,7 +50,8 @@ async def test_fixed_spec_read_parity_routes_and_original_source_withdrawal(fixe
         assert (await http(w['port'], 'GET', root, tok=token(d, 'outsider', 'observe')))[0] == 404
         manage = token(d, OWNER.actor, 'manage')
         assert (await http(w['port'], 'GET', root, tok=manage))[0] == 403
-        caps = (await http(w['port'], 'GET', '/api/v1/capabilities', tok=manage))[1]
+        status, caps = await http(w['port'], 'GET', '/api/v1/capabilities', tok=token(d, OWNER.actor, 'observe', 'manage'))
+        assert status == 200, caps
         assert caps['features']['pm_workspaces']['spec_materialization']['action'] == 'pm.spec.materialize'
         assert not next(a for a in caps['actions'] if a['action']=='pm.spec.materialize')['allowed']
         project_id = w['package']['document']['context']['work_ref']['project_id']
