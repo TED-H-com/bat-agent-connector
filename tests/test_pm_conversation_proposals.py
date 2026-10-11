@@ -1,0 +1,174 @@
+"""One real owned-Git plan adoption from a bounded mocked native conversation."""
+from __future__ import annotations
+
+import copy
+import json
+import uuid
+
+import pytest
+
+from bat_agent_connector import api_auth, pm_native_journal, pm_plans, pm_runs
+from bat_agent_connector import pm_conversation_format as format_
+from bat_agent_connector import pm_conversation_proposals as proposals
+from bat_agent_connector.operations import OperationError
+from tests import test_pm_native_operations as native
+from tests import test_pm_plan_operations as plans
+from tests.operation_helpers import settle_operations
+from tests.test_checkpoints import git
+from tests.test_pm_native_runtime import protocol
+
+world = plans.world
+pm = plans.pm
+ready = plans.ready
+OWNER = plans.OWNER
+
+
+def envelope(ref):
+    values = [("login", "scope", "付費會員可使用 Email 登入", "proposal"),
+        ("login_test", "quality", "正確密碼能登入，錯誤密碼不能登入", "proposal"),
+        ("recovery", "scope", "會員可使用忘記密碼功能", "proposal"),
+        ("recovery_test", "quality", "重設連結只能使用一次，舊密碼隨即失效", "proposal"),
+        ("referral", "scope", "推薦碼不在第一版", "excluded")]
+    return {"version": 1, "title": "會員登入與密碼重設", "summary": "兩項需求與驗收條件；推薦碼排除。",
+        "candidates": [{"key": key, "domain": domain, "text": text, "kind": kind, "source_refs": [ref]}
+            for key, domain, text, kind in values],
+        "requirements": [{"id": "member.login", "source_key": "login", "acceptance_keys": ["login_test"], "priority": "must", "depends_on": []},
+            {"id": "member.recovery", "source_key": "recovery", "acceptance_keys": ["recovery_test"], "priority": "must", "depends_on": ["member.login"]}],
+        "removed_requirement_ids": [], "questions": []}
+
+
+@pytest.fixture
+async def proposal_world(ready, monkeypatch):
+    w, ops = ready, ready["d"].ops
+    proposals.install(ops)
+    version = ops.db.execute("PRAGMA user_version").fetchone()[0]
+    proposals.install(ops)
+    assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
+    api_auth.issue(ops.db, OWNER.actor, list(OWNER.scopes))
+    message = await plans.act(w, "pm.message.append", {"content": "會員用 Email 登入與忘記密碼。第一版不要推薦碼。請整理成計畫。"})
+    settings, instances = {"raw_reply": json.dumps(envelope("message." + message["message_id"]), ensure_ascii=False)}, []
+    def reply_protocol(prompt, client_id):
+        events = protocol(prompt, client_id)
+        events[2]["params"]["item"]["text"] = settings["raw_reply"]
+        events[-1]["params"]["turn"]["items"][-1]["text"] = settings["raw_reply"]
+        return events
+    monkeypatch.setattr(native, "protocol", reply_protocol)
+    ops.context["pm_native_runtime_factory"] = lambda *args, **kwargs: native.FakeRuntime(*args, **kwargs, settings=settings, instances=instances)
+    ops.context["pm_native_process_inspector"] = lambda identity: {"state": "unknown", "process": identity, "proof": "identity_unavailable", "observed_at": 1.0}
+    w.update(settings=settings, instances=instances, message=message)
+    yield w
+    assert all(task.done() for task in ops._active.values())
+
+
+def propose_request(w):
+    head = pm_plans.head(w["d"].ops.db, w["workspace_id"])
+    return {"action": proposals.ACTION, "target": plans.target(w), "params": {"purpose": "整理這次討論成為可審閱的計畫更新"},
+        "preconditions": {"expected_version": plans.version(w), "expected_plan_version": head["version"],
+            "expected_accepted_revision_id": head["accepted_revision_id"]}, "idempotency_key": uuid.uuid4().hex}
+
+
+async def proposed(w):
+    ops = w["d"].ops
+    op = ops.create(OWNER, **propose_request(w))[0]
+    await settle_operations(ops)
+    done = ops.get(op["operation_id"])
+    assert done["status"] == "succeeded", done
+    return proposals.get_proposal(ops, OWNER, w["workspace_id"], done["result"]["outcome"]["proposal_id"])["proposal"]
+
+
+def adoption_request(w, proposal):
+    document, context = proposal["document"], proposal["context"]
+    return {"action": proposals.ADOPT, "target": plans.target(w), "params": {"proposal_id": proposal["proposal_id"],
+        "rationale": "採用登入與忘記密碼，推薦碼留在第一版之外。", "review": {"title": document["title"],
+            "rows": [{"key": row["key"], "text": row["text"], "include": row["kind"] != "excluded",
+                "status": "not_applicable" if row["kind"] == "excluded" else "user_confirmed"} for row in document["candidates"]],
+            "requirements": copy.deepcopy(document["requirements"]), "removed_requirement_ids": document["removed_requirement_ids"]}},
+        "preconditions": {"expected_version": context["thread_version"], "expected_plan_version": context["plan_head"]["version"],
+            "expected_accepted_revision_id": context["plan_head"]["accepted_revision_id"], "expected_proposal_digest": proposal["document_digest"]},
+        "idempotency_key": uuid.uuid4().hex}
+
+
+async def complete(w, op):
+    ops = w["d"].ops
+    for _ in range(30):
+        ops.db.execute("UPDATE operations SET next_run_at=0 WHERE status IN ('waiting_external','waiting_checks')")
+        await settle_operations(ops)
+        done = ops.get(op["operation_id"])
+        if done["status"] in {"succeeded", "failed", "cancelled", "needs_attention", "uncertain"}:
+            return done
+    pytest.fail("Original review did not settle")
+
+
+async def test_conversation_one_review_adopts_actual_requirements_without_referral(proposal_world):
+    w, ops = proposal_world, proposal_world["d"].ops
+    before = git(w["plan"]["worktree_path"], "rev-parse", "HEAD")
+    proposal = await proposed(w)
+    assert proposal["validation"]["status"] == "format_valid"
+    assert pm_plans.head(ops.db, w["workspace_id"])["accepted_revision_id"] is None
+    request = adoption_request(w, proposal)
+    request["params"]["review"]["rows"][0]["text"] += "，停用帳號不可登入"
+    op = ops.create(OWNER, **request)[0]
+    done = await complete(w, op)
+    assert done["status"] == "succeeded", done
+    accepted = pm_plans.accepted_plan(ops, OWNER, w["workspace_id"])["plan"]
+    requirements = accepted["document"]["requirements"]
+    assert [row["id"] for row in requirements] == ["member.login", "member.recovery"]
+    assert requirements[1]["depends_on"] == ["member.login"]
+    assert all(row["confirmed_by"] == OWNER.actor for row in accepted["document"]["selected_inputs"])
+    assert "推薦碼" not in accepted["document"]["markdown"]
+    assert git(w["plan"]["worktree_path"], "rev-parse", "HEAD") == done["result"]["commit_sha"] != before
+    assert ops.create(OWNER, **request)[0]["operation_id"] == op["operation_id"]
+    assert len(w["instances"]) == 1 and w["instances"][0].sends == 1
+    assert ops.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_conversation_children WHERE parent_id=?", (op["operation_id"],)).fetchone()[0] == 8
+    next_context = ops.create(OWNER, **propose_request(w))[0]["external_refs"]["admission_binding"]["conversation_proposal"]["context"]
+    excluded = next(row for row in next_context["inputs"] if row.get("review_disposition", {}).get("candidate_key") == "referral")
+    assert excluded["review_disposition"]["included"] is False
+    assert excluded["review_disposition"]["original_kind"] == "excluded"
+
+
+@pytest.mark.parametrize("change", ["invented_source", "duplicate_key", "execution_field"])
+async def test_invalid_model_output_preserves_raw_and_never_adopts(proposal_world, change):
+    w = proposal_world
+    raw = w["settings"]["raw_reply"]
+    doc = json.loads(raw)
+    if change == "invented_source":
+        doc["candidates"][0]["source_refs"] = ["message.foreign"]
+    elif change == "execution_field":
+        doc["execute"] = "launch someone else's session"
+    raw = json.dumps(doc, ensure_ascii=False)
+    if change == "duplicate_key":
+        raw = raw.replace('"version": 1', '"version": 1, "version": 1')
+    w["settings"]["raw_reply"] = raw
+    proposal = await proposed(w)
+    assert proposal["raw_reply"] == raw and proposal["document"] is None
+    assert proposal["validation"]["status"] == "needs_review"
+    assert pm_plans.head(w["d"].ops.db, w["workspace_id"])["accepted_revision_id"] is None
+    run = pm_runs.get(w["d"].ops.db, proposal["run_id"])
+    with pytest.raises(OperationError, match="PM_OUTPUT_DESTINATION_REFUSED"):
+        pm_native_journal.import_reply(w["d"].ops.journal, run["run_id"], run["generation"])
+
+
+async def test_conflicting_discussion_and_revoked_owner_stop_new_children(proposal_world):
+    w, ops = proposal_world, proposal_world["d"].ops
+    proposal = await proposed(w)
+    request = adoption_request(w, proposal)
+    op = ops.create(OWNER, **request)[0]
+    api_auth.revoke(ops.db, OWNER.actor)
+    done = await complete(w, op)
+    assert done["status"] == "failed" and done["error_code"] == "PM_CONVERSATION_AUTHORITY_UNAVAILABLE", done
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_conversation_children").fetchone()[0] == 0
+    await plans.act(w, "pm.message.append", {"content": "先暫停，登入範圍有新的決定。"})
+    request["idempotency_key"] = uuid.uuid4().hex
+    with pytest.raises(OperationError, match="VERSION_CONFLICT"):
+        ops.create(OWNER, **request)
+
+
+def test_removed_commitments_require_explicit_original_ids_and_cycles_are_rejected():
+    doc = envelope("message.original")
+    raw = json.dumps(doc)
+    assert format_.validate(raw, {"message.original"}, ["member.old"])[1]["status"] == "needs_review"
+    doc["removed_requirement_ids"] = ["member.old"]
+    assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "format_valid"
+    doc["requirements"][0]["depends_on"] = ["member.recovery"]
+    assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "needs_review"
