@@ -33,11 +33,11 @@ export function intake(n:number) {
 export function fixture() {
   const state:any={rows:[intake(1),intake(2),intake(3)],head:3,plan:2,threadVersion:5,actor:'project-owner',role:'owner',manage:true,
     reads:[],writes:[],ops:new Map(),failRead:null,failMore:null,failSource:null,wrongScope:false,wrongDetail:false,nonAdvancing:false,
-    lost:false,holdPath:null,held:[],empty:false,moreResults:true};
+    lost:false,holdPath:null,held:[],empty:false,moreResults:true,hiddenIntakes:new Set(),failWorkspace:null,failIntake:null,wrongWorkspaceActor:false};
   const caps=()=>({actor:state.actor,role:state.role,scopes:state.manage?['observe','manage']:['observe'],actions:[{action:'pm.follow_up.prepare',allowed:state.manage}]});
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),p=url.pathname,base=`/pm/workspaces/${workspaceId}`,after=Number(url.searchParams.get('after')||0),limit=Number(url.searchParams.get('limit')||20);
-    const error=(status:number,message:string)=>({status,data:{error:{code:status===403?'FORBIDDEN':'UNAVAILABLE',message}}});
+    const error=(status:number,message:string,code=status===403?'FORBIDDEN':'UNAVAILABLE')=>({status,data:{error:{code,message}}});
     if(input.method==='POST'){
       state.writes.push(structuredClone(input));let op=state.ops.get(input.key);
       if(!op){
@@ -53,16 +53,23 @@ export function fixture() {
     if(state.failRead)return error(state.failRead,'Workspace sources unavailable');
     if(state.failMore&&p.endsWith('/follow-ups')&&after>0)return error(state.failMore,'History read unavailable');
     if(state.failSource&&p.includes(state.failSource))return error(403,'Selected source access withdrawn');
+    if(p===base&&state.failWorkspace)return error(state.failWorkspace,'Current workspace membership unavailable');
+    if(p.startsWith(base+'/follow-ups/')){
+      if(state.failIntake)return error(state.failIntake,'Preparation read failed');
+      const id=p.endsWith('/latest')?state.rows.at(-1)?.intake_id:p.split('/').at(-1);
+      if(state.hiddenIntakes.has(id))return error(404,'Original preparation source withdrawn','PM_FOLLOW_UP_SOURCE_UNAVAILABLE');
+    }
     let data:any;
     const rows=state.empty?[]:state.rows;
     if(p===base+'/follow-ups'){
       const selected=rows.filter((row:any)=>row.sequence>after).slice(0,limit),more=rows.some((row:any)=>row.sequence>(selected.at(-1)?.sequence??after));
-      data={version:1,workspace_id:workspaceId,head_version:state.head,intakes:selected.map(({document,...metadata}:any)=>metadata),
-        next_cursor:more?state.nonAdvancing?after:selected.at(-1).sequence:null,coverage:{}};
+      data={version:1,workspace_id:workspaceId,head_version:state.head,intakes:selected.filter((row:any)=>!state.hiddenIntakes.has(row.intake_id)).map(({document,...metadata}:any)=>metadata),
+        next_cursor:more?state.nonAdvancing?after:selected.at(-1).sequence:null,coverage:{visibility_filtered:selected.some((row:any)=>state.hiddenIntakes.has(row.intake_id))}};
     }else if(p===base+'/follow-ups/latest')data={version:1,workspace_id:workspaceId,head_version:state.head,intake:rows.at(-1)||null};
     else if(p.startsWith(base+'/follow-ups/'))data={version:1,workspace_id:workspaceId,head_version:state.head,
       intake:rows.find((row:any)=>row.intake_id===p.split('/').at(-1))};
     else if(p===base+'/plans/head')data={version:1,head:{workspace_id:workspaceId,version:state.plan}};
+    else if(p===base)data={version:1,workspace:{workspace_id:workspaceId,membership:{actor:state.wrongWorkspaceActor?'someone-else':state.actor,role:state.workspaceRole||state.role}}};
     else if(p===base+'/snapshots')data={workspace_id:workspaceId,snapshots:[{workspace_id:workspaceId,snapshot_id:snapshotId,title:'Adopted membership evidence',sequence:1}],next_cursor:null};
     else if(p===base+'/snapshots/'+snapshotId)data={workspace_id:workspaceId,snapshot:{workspace_id:workspaceId,snapshot_id:snapshotId,baseline:{document:{title:'Accepted plan'}},visibility:{filtered:false}}};
     else if(p===base+'/threads')data={workspace_id:workspaceId,threads:[{workspace_id:workspaceId,thread_id:threadId,title:'Pricing discussion',mode:'planning',version:state.threadVersion}],next_cursor:null};
