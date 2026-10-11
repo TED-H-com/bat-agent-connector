@@ -104,7 +104,7 @@ async def test_public_operation_cannot_enable_task_compatibility_mode(served, ke
 async def test_submit_still_requires_its_original_explicit_key_and_task_scope(daemon):
     with pytest.raises(OperationError, match="IDEMPOTENCY_KEY_REQUIRED"):
         await daemon.call("work_submit", {"host": "h1", "workspace": "demo-project", "project": "p",
-                                          "original_words": "fixed"})
+                                          "original_words": "fixed"}, principal=tasks.OWNER)
     with pytest.raises(OperationError, match="FORBIDDEN"):
         await daemon.call("work_pause", {"task_id": "unresolved"},
                           principal=api_auth.Principal("reader", frozenset({"observe"})))
