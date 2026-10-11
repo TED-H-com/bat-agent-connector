@@ -132,3 +132,31 @@ timer, native scheduler, direct SQL action bypass or expanded external MCP scope
 is introduced. Historical operations/events/derived read models follow the same
 full source chain. Whole records and page cursors are bounded, newest hidden
 records never fall back to older visible results.
+
+## Accountable quality and original PR publication
+
+A repair owner records `kind=quality` with exact immutable
+`{review_id, operation_id, version, document_digest}`. Historical reads preserve
+that original assessment. New publication requires that same assessment still be
+current and qualified for every original acceptance and DoD criterion, the exact
+package, child, binding, scope, native repository and candidate. The rule's fixed
+observed-runner condition must independently prove the same candidate tree.
+A work_item.approve fact remains a work approval, never code review.
+
+The parent composes one `github.pr.publish` operation after explicit quality
+selection and current original policy/owner/integrate authority. Its whole request,
+key, controller, original child and quality reference are immutable in one journal
+transaction with admission. The private relation is required before preparation
+and every later unsent frame. Public title/body are service-generated Issue-number
+text only (`Maintenance repair for #N`, `Fixes #N`); draft is true. Package text,
+private prompts and PM prose are never copied into the public payload.
+
+The publication engine supplies server-measured candidate/tree/base and the entire
+bounded diff. Its no-renames traversal contains both old and new rename paths.
+Both rule and policy paths, original base release, quality and delivery ceiling
+are checked before branch publication and before original POST. Only the original
+native 201 receipt can establish ownership; uncertainty retains the original child
+and reservation. A matching PR number, branch, marker or later lineage association
+cannot replace that receipt. Successful publication is a PR creation fact, not
+merge, deployment, release or automatic requirement acceptance. Updates of the
+fixed repair candidate are currently unsupported.
