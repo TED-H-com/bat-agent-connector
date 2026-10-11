@@ -100,7 +100,7 @@ def operation_visible(db, principal, operation):
         return (binding["intake_id"] == op["params"]["intake_id"]
             and binding["intake_digest"] == intake["document_digest"] == op["preconditions"]["expected_intake_digest"]
             and binding["access_refs"] == intake["document"]["access_refs"]
-            and pm_follow_up._visible(db, principal, op["target"]["workspace_id"], binding["access_refs"]))
+            and pm_follow_up._visible(db, principal, op["target"]["workspace_id"], pm_follow_up._original_access(db, intake)))
     except (OperationError, KeyError, TypeError, ValueError):
         return False
 
