@@ -41,6 +41,14 @@ def _admit_session(ops: OperationService, principal: Principal, target: dict, pa
     if verdict["api_access"] != "managed":
         raise OperationError(verdict.get("read_only_code", "READ_ONLY"),
                              f"session {sid[:8]} is {verdict['provenance']} and read-only through the API", 403)
+    from . import controller_authority
+    from .errors import ResourceReadOnly
+    try:
+        owner = controller_authority.require_entry(registry.get(host, sid))
+    except ResourceReadOnly as exc:
+        raise OperationError(exc.code, str(exc), 403) from None
+    controller_binding = {"session_controller": {
+        "host": host, "session_id": sid, "controller_incarnation": owner["controller_incarnation"]}}
     task_id = task_control.owner_task(fleet, host, sid)
     if task_id:
         coordinator = ops.context.get("coordinator")
@@ -51,7 +59,20 @@ def _admit_session(ops: OperationService, principal: Principal, target: dict, pa
                                       action, pre.get("control_version"), command_id=_command_id)
         except TaskControlRefused as exc:
             raise OperationError(exc.code, str(exc), 409) from None
-        return task_control.admission_binding(task, session=True)
+        return {**controller_binding, **task_control.admission_binding(task, session=True)}
+    return controller_binding
+
+
+def check_controller_binding(ctx, target):
+    """An admitted session ID must still name the same creation incarnation."""
+    from . import controller_authority
+    expected = (ctx.admission_binding or {}).get("session_controller")
+    if (not expected or expected.get("host") != target.get("host")
+            or expected.get("session_id") != target.get("session_id")):
+        raise OperationError("CONTROLLER_BINDING_UNPROVEN", "the operation has no fixed session creation authority", 403)
+    ctx.require_controller()
+    controller_authority.require_entry(registry.get(target["host"], target["session_id"]),
+                                      expected_incarnation=expected["controller_incarnation"])
 
 
 def _admit_send(ops: OperationService, principal: Principal, target: dict, params: dict, pre: dict) -> dict | None:
@@ -92,6 +113,7 @@ async def _send(ctx: OpContext) -> dict:
 
     async def send() -> dict:
         task_control.check_binding(ctx)
+        check_controller_binding(ctx, target)
         from .orchestration_operations import linked
         ctx.relay_send_transported = False
         try:
@@ -168,6 +190,7 @@ async def _answer(ctx: OpContext) -> dict:
     async def answer() -> dict:
         from .bulk_approval import linked
         task_control.check_binding(ctx)
+        check_controller_binding(ctx, target)
         ctx.bulk_answer_transported = False
         try:
             return await service.session_answer(fleet, host, sid, confirm=True, answers=p.get("answers"),
@@ -220,6 +243,7 @@ async def _interrupt(ctx: OpContext) -> dict:
 
     async def interrupt() -> dict:
         task_control.check_binding(ctx)
+        check_controller_binding(ctx, target)
         r = await service.session_interrupt(fleet, host, sid, ctx.params.get("mode", "soft"), confirm=True,
                                             control_version=ctx.effective_preconditions.get("control_version"),
                                             operation_id=ctx.operation_id, _exact_session_id=True)
@@ -293,7 +317,9 @@ async def legacy_session_control(ops: OperationService, principal: Principal, me
             raise OperationError("TIER_DISABLED", f"the write tier is off for host {host}", 403)
         client = fleet.client(host)
         terminal, _ = await service._resolve_session(client, intent["target"]["session_id"])
-        await resource_policy.authorize_session(fleet, host, action, terminal)
+        from . import controller_authority
+        with controller_authority.use(controller_authority.binding(ops.db, principal), ops.journal):
+            await resource_policy.authorize_session(fleet, host, action, terminal)
         resolved_params = None
         if action == "session.answer" and "tool_use_id" not in params:
             sid = terminal["id"]

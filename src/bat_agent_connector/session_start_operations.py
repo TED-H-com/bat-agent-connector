@@ -134,6 +134,7 @@ async def _plan(ctx, client):
 
 
 def _guard(ctx, plan, *, reserved=True):
+    ctx.require_controller()
     from .orchestration_operations import check_child
     check_child(ctx, start_plan=plan)
     ctx.check_cancel()

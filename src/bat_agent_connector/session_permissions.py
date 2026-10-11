@@ -13,7 +13,8 @@ from .safety import Audit
 
 PLAN = "permissions.plan"
 BINDING_FIELDS = ("created_at", "agent_preset", "task_id", "role", "cwd", "worktree_path", "write_scope",
-                  "execution_options", "permission_mode_claude", "agent_params", "permission_operation_id", "status")
+                  "execution_options", "permission_mode_claude", "agent_params", "permission_operation_id", "status",
+                  "controller_authority", "controller_incarnation")
 
 
 class PermissionsRefused(WriteRefused):
@@ -185,7 +186,7 @@ def _command(ctx, plan):
     refs = ctx.service._row(ctx.operation_id)["external_refs"] or {}
     cid = refs.get("command_id")
     if not cid:
-        if ctx.admission_binding:
+        if (ctx.admission_binding or {}).get("task_id"):
             raise NeedsAttention("TASK_COMMAND_MISSING", "permission operation lacks its original command receipt")
         return None
     command = ctx.service.journal.command_get(cid)
@@ -237,7 +238,7 @@ async def run(ctx):
 
 async def _run(ctx):
     from . import lifecycle
-    from .api_actions import _bound_inputs
+    from .api_actions import _bound_inputs, check_controller_binding
     task_control.replay_command_refs(ctx)
     plan = saved_plan(ctx)
     if plan:
@@ -257,6 +258,7 @@ async def _run(ctx):
         # The fixed plan is committed before any setter intent; no plan proves no setter was dispatched.
         recover_unsent_command(ctx, {"session_id": target["session_id"], "mode": params["mode"], "calls": []})
     task_control.check_binding(ctx)
+    check_controller_binding(ctx, target)
     _check_owner(ctx, ctx.service.context["fleet"], target["host"], target["session_id"])
     await lifecycle.session_set_permissions(ctx.service.context["fleet"], target["host"], target["session_id"],
         params["mode"], confirm=True, control_version=ctx.effective_preconditions.get("control_version"),
