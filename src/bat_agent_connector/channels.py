@@ -28,6 +28,8 @@ READ_CHANNELS = frozenset(
         "workspace:load",
         "claude:get-session-meta",
         "claude:get-session-state",
+        # Bounded read-only replay, BAT b7419892; see docs/design/pm-runtime.md.
+        "claude:sync-session",
         "claude:load-archived",
         "claude:list-sessions",
         "claude:is-resting",
@@ -126,6 +128,7 @@ NEVER_EXPOSED_EXAMPLES = frozenset(
 # send/resume; send-message resolves once the turn is *accepted*.
 TIMEOUTS = {
     "claude:get-session-state": 60.0,
+    "claude:sync-session": 60.0,
     "claude:load-archived": 30.0,
     "runtime:get-status": 30.0,
     "claude:client-resume": 300.0,
