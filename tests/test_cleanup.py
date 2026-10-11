@@ -37,8 +37,8 @@ def known_live_terminals(mock):
         if mock.metas.get(terminal["id"]) is None:
             mock.metas[terminal["id"]] = {"cwd": terminal["cwd"], "isStreaming": False}
 
-CLEANER = api_auth.Principal("cleaner", frozenset({"observe", "cleanup"}))
-DISCARDER = api_auth.Principal("person", frozenset({"observe", "cleanup", "cleanup_discard"}))
+CLEANER = api_auth.Principal("operator-dashboard", frozenset({"observe", "cleanup"}))
+DISCARDER = api_auth.Principal("operator-dashboard", frozenset({"observe", "cleanup", "cleanup_discard"}))
 
 
 async def setup_work(d, mock, **checkpoint_params):
@@ -82,7 +82,7 @@ async def test_e01_preview_is_pure_and_signed_plan_cannot_be_changed(daemon, moc
         daemon.ops.create(CLEANER, **req)
     req = cleanup.apply_request(doc, "actor")
     with pytest.raises(OperationError, match="PREVIEW_MISMATCH"):
-        daemon.ops.create(DISCARDER, **req)
+        daemon.ops.create(api_auth.Principal("other-cleaner", DISCARDER.scopes), **req)
     req = cleanup.apply_request(doc, "tamper")
     req["params"]["preview_token"] += "broken"
     with pytest.raises(OperationError, match="PREVIEW_TOKEN_INVALID"):

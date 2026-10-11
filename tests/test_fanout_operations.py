@@ -13,7 +13,7 @@ from tests.conftest import adopt
 from tests.operation_helpers import settle_operations
 
 daemon, served = api.daemon, api.served
-P = api_auth.Principal('fanout-caller', frozenset({'observe', 'start', 'operate'}))
+P = api_auth.Principal('operator-dashboard', frozenset({'observe', 'start', 'operate'}))
 SID = api.MANUAL
 ITEMS = [{'index': 1, 'title': 'one', 'prompt': '  unchanged\nfirst  ', 'area': 'one.py'},
          {'index': 2, 'title': 'two', 'prompt': 'second', 'area': 'two.py'}]

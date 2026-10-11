@@ -24,7 +24,7 @@ from tests.conftest import adopt
 from tests.operation_helpers import settle_operations
 
 daemon, served = api.daemon, api.served
-P = api_auth.Principal('merge-caller', frozenset({'observe', 'integrate'}))
+P = api_auth.Principal('operator-dashboard', frozenset({'observe', 'integrate'}))
 SID = 'merge-managed-0001'
 
 
@@ -197,7 +197,7 @@ async def test_positive_managed_idle_and_all_consumers_required(daemon, mock, ca
     elif change == 'neighbor':
         mock.ws_doc['terminals'].append({'id': 'manual-neighbor', 'cwd': str(origin), 'agentPreset': 'claude-code'})
     else:
-        other, _ = daemon.ops.create(api_auth.Principal('other', frozenset({'operate'})), action='session.send',
+        other, _ = daemon.ops.create(api_auth.Principal(P.actor, frozenset({'operate'})), action='session.send',
                                     target={'host': 'h1', 'session_id': SID}, params={'text': 'pending'}, idempotency_key='pending')
         daemon.ops.db.execute("UPDATE operations SET status='uncertain',next_run_at=99999999999 WHERE operation_id=?", (other['operation_id'],))
     out = await create(daemon)
