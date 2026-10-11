@@ -261,8 +261,8 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 //#endregion
 //#region src/pm-spec-materialization.js
 var id = /^pmsp_[0-9a-f]{32}$/;
-var digest$8 = /^[0-9a-f]{64}$/;
-var sha$4 = /^[0-9a-f]{40}$/;
+var digest$9 = /^[0-9a-f]{64}$/;
+var sha$5 = /^[0-9a-f]{40}$/;
 var artifactRef = (row) => Object.fromEntries([
 	"artifact_id",
 	"revision",
@@ -272,9 +272,9 @@ function checkSpecMaterialization(value, workspaceId, selected, { full = false, 
 	const fail = () => {
 		throw Error("PM_SPEC_RESPONSE_MISMATCH");
 	}, row = value;
-	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$8.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
+	if (!row || row.workspace_id !== workspaceId || row.package_id !== selected.package_id || !id.test(row.materialization_id) || !digest$9.test(row.document_digest) || !/^op_[0-9a-f]{32}$/.test(row.operation_id) || !/^art_[0-9a-f]{32}$/.test(row.artifact_ref?.artifact_id) || !Number.isSafeInteger(row.artifact_ref.revision) || row.artifact_ref.revision < 1 || row.artifact_ref.digest !== row.document_digest) fail();
 	const receipt = row.git_receipt;
-	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$4.test(receipt.commit_sha) || !sha$4.test(receipt.tree_sha) || !digest$8.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$8.test(value))) fail();
+	if (receipt?.status !== "verified" || receipt.workspace_id !== workspaceId || receipt.revision_id !== row.materialization_id || receipt.package_id !== row.package_id || receipt.operation_id !== row.operation_id || receipt.artifact_kind !== "pm-spec" || !sha$5.test(receipt.commit_sha) || !sha$5.test(receipt.tree_sha) || !digest$9.test(receipt.document_digest) || !receipt.file_digests || typeof receipt.file_digests !== "object" || !Object.keys(receipt.file_digests).length || Object.values(receipt.file_digests).some((value) => !digest$9.test(value))) fail();
 	if (original && (JSON.stringify(fixedSpecSelection(row, workspaceId)) !== JSON.stringify(fixedSpecSelection(original, workspaceId)) || row.operation_id !== original.operation_id || receipt.commit_sha !== original.git_receipt.commit_sha || receipt.document_digest !== original.git_receipt.document_digest)) fail();
 	if (full) {
 		const doc = row.document, ref = doc?.package_ref;
@@ -478,7 +478,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 		withdraw();
 		if (!row) return;
 		try {
-			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$8.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
+			if (row.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(row.package_id) || !digest$9.test(row.document_digest) || row.document?.workspace_id !== workspaceId || row.document.package_id !== row.package_id || !/^pmscope_[0-9a-f]{32}$/.test(row.document.context?.plan_ref?.scope_revision)) throw Error(t("psm_invalid"));
 			selected = row;
 			bind(row);
 			await refresh();
@@ -496,17 +496,17 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 }
 //#endregion
 //#region src/pm-work-batches.js
-var START = "pm.work_batch.start";
-var RECORD$1 = "pm.work_batch.evidence.record";
+var START$1 = "pm.work_batch.start";
+var RECORD$2 = "pm.work_batch.evidence.record";
 var profile = {
 	kind: "fixed_revision_verification",
 	profile: "github_reported_checks_v1"
 };
-var same$5 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var same$6 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone$1 = (value) => structuredClone(value);
-var sha$3 = /^[0-9a-f]{40}$/;
-var digest$7 = /^[0-9a-f]{64}$/;
-var op = /^op_[0-9a-f]{32}$/;
+var sha$4 = /^[0-9a-f]{40}$/;
+var digest$8 = /^[0-9a-f]{64}$/;
+var op$1 = /^op_[0-9a-f]{32}$/;
 function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, reviewedHandoff = () => null }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, navigation = `batc.pm.batch-selection.${namespace}.${workspaceId}`;
 	let selected = "";
@@ -573,7 +573,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		open: true
 	}, h("summary", {}, t("pmb_draft")), text("pmb_selection_help"), add, stale, rebase, startView), labelled("pmb_history", history), facts, proofView);
 	const cap = () => caps()?.features?.pm_workspaces?.work_batches;
-	const supported = () => cap()?.version === 1 && cap()?.actions?.includes(START) && cap()?.profiles?.includes(profile.profile);
+	const supported = () => cap()?.version === 1 && cap()?.actions?.includes(START$1) && cap()?.profiles?.includes(profile.profile);
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -583,7 +583,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		}
 	};
 	const writer = () => ready && permitted(false) && ["owner", "contributor"].includes(workspace()?.membership?.role) && caps()?.scopes?.includes("manage");
-	const starter = () => writer() && caps()?.scopes?.includes("start") && !context?.lifecycle.blocked_actions.includes(START);
+	const starter = () => writer() && caps()?.scopes?.includes("start") && !context?.lifecycle.blocked_actions.includes(START$1);
 	const currentPre = () => ({
 		expected_workspace_version: context.workspace.version,
 		expected_lifecycle_revision: context.lifecycle.lifecycle.revision
@@ -596,7 +596,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			return [];
 		}
 	};
-	const draftStale = () => ready && !same$5(JSON.parse(baseline.value), currentPre());
+	const draftStale = () => ready && !same$6(JSON.parse(baseline.value), currentPre());
 	const condition = (entry) => entry.result_condition || profile;
 	const error = () => Error(t("pmb_invalid"));
 	const choose = (key, rows) => h("select", { "aria-label": t(key) }, h("option", { value: "" }, t("pmb_choose")), ...rows.map(([value, label]) => h("option", { value }, label)));
@@ -612,7 +612,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				if (!row) throw error();
 				visiting.add(key);
 				for (const edge of row.depends_on) {
-					if (!same$5(edge.condition, condition(rows.find((other) => other.key === edge.entry_key) || {}))) throw error();
+					if (!same$6(edge.condition, condition(rows.find((other) => other.key === edge.entry_key) || {}))) throw error();
 					visit(edge.entry_key);
 				}
 				visiting.delete(key);
@@ -740,7 +740,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				const value = await api("GET", `${base}/spec-materializations/${encodeURIComponent(p.pm_spec_ref.materialization_id)}`);
 				if (!valid(ticket)) return false;
 				if (value?.workspace_id !== workspaceId) throw error();
-				if (!same$5(fixedSpecSelection(checkSpecMaterialization(value.materialization, workspaceId, pkg, { full: true }), workspaceId), {
+				if (!same$6(fixedSpecSelection(checkSpecMaterialization(value.materialization, workspaceId, pkg, { full: true }), workspaceId), {
 					pm_spec_ref: p.pm_spec_ref,
 					artifacts: p.artifacts
 				})) throw error();
@@ -835,16 +835,16 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		}
 	}
 	const guardedStart = async (...args) => {
-		if (args[0] === "POST" && args[2]?.action === START && firstSubmission) {
+		if (args[0] === "POST" && args[2]?.action === START$1 && firstSubmission) {
 			firstSubmission = false;
 			const ticket = serial;
 			try {
 				const latest = await readContext();
 				if (!valid(ticket)) throw error();
-				if (!same$5({
+				if (!same$6({
 					expected_workspace_version: latest.workspace.version,
 					expected_lifecycle_revision: latest.lifecycle.lifecycle.revision
-				}, args[2].preconditions) || latest.lifecycle.blocked_actions.includes(START)) {
+				}, args[2].preconditions) || latest.lifecycle.blocked_actions.includes(START$1)) {
 					context = latest;
 					throw Object.assign(Error(t("pmb_stale")), { code: "VERSION_CONFLICT" });
 				}
@@ -863,7 +863,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	start = form({
 		namespace: `${namespace}.work-batch`,
 		api: guardedStart,
-		action: START,
+		action: START$1,
 		target: { workspace_id: workspaceId },
 		fields: {
 			entries,
@@ -931,8 +931,8 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		refresh();
 	});
 	function checkBatch(value) {
-		if (value?.workspace_id !== workspaceId || !/^pmbt_[0-9a-f]{32}$/.test(value.batch_id) || !op.test(value.operation_id) || !Number.isSafeInteger(value.version) || value.version < 0 || !Array.isArray(value.entries) || value.entries.length > 16 || value.requirement_acceptance !== "not_evaluated" || value.model_provider_cost !== "unmeasured") throw error();
-		for (const entry of value.entries) if (!/^[a-z][a-z0-9_]{0,47}$/.test(entry.key) || !sha$3.test(entry.source_sha) || !Array.isArray(entry.depends_on) || !Array.isArray(entry.verification_evidence) || entry.operation_id && !op.test(entry.operation_id)) throw error();
+		if (value?.workspace_id !== workspaceId || !/^pmbt_[0-9a-f]{32}$/.test(value.batch_id) || !op$1.test(value.operation_id) || !Number.isSafeInteger(value.version) || value.version < 0 || !Array.isArray(value.entries) || value.entries.length > 16 || value.requirement_acceptance !== "not_evaluated" || value.model_provider_cost !== "unmeasured") throw error();
+		for (const entry of value.entries) if (!/^[a-z][a-z0-9_]{0,47}$/.test(entry.key) || !sha$4.test(entry.source_sha) || !Array.isArray(entry.depends_on) || !Array.isArray(entry.verification_evidence) || entry.operation_id && !op$1.test(entry.operation_id)) throw error();
 		return value;
 	}
 	function proofFacts(proof) {
@@ -944,7 +944,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			source_seq: "pmb_source_seq",
 			verification_id: "pmb_verification_id",
 			tree_hash: "pmb_result_tree"
-		}).filter(([key]) => ref[key] !== void 0).map(([key, label]) => line(label, ref[key])), ref.integration_operation_id && op.test(ref.integration_operation_id) ? h("a", { href: `#/op/${ref.integration_operation_id}` }, t("pmb_delivery")) : null, proof.condition?.command_digest ? line("pmb_command_digest", proof.condition.command_digest) : null);
+		}).filter(([key]) => ref[key] !== void 0).map(([key, label]) => line(label, ref[key])), ref.integration_operation_id && op$1.test(ref.integration_operation_id) ? h("a", { href: `#/op/${ref.integration_operation_id}` }, t("pmb_delivery")) : null, proof.condition?.command_digest ? line("pmb_command_digest", proof.condition.command_digest) : null);
 	}
 	function renderBatch() {
 		if (!batch) {
@@ -987,7 +987,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		if (!valid(ticket) || !data) return;
 		observations = data.rows;
 		evidenceFiltered = data.filtered;
-		for (const row of observations) if (!/^pmgh_[0-9a-f]{32}$/.test(row.observation_id) || !digest$7.test(row.document_digest) || row.workspace_id !== workspaceId) throw error();
+		for (const row of observations) if (!/^pmgh_[0-9a-f]{32}$/.test(row.observation_id) || !digest$8.test(row.document_digest) || row.workspace_id !== workspaceId) throw error();
 		const deliveries = [];
 		for (const entry of entries) {
 			const data = await pages(`${base}/work/${encodeURIComponent(entry.work_item_id)}/deliveries`, "deliveries", "next_after", "source_visibility_filtered", (data) => {
@@ -995,8 +995,8 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			});
 			if (!valid(ticket) || !data) return;
 			evidenceFiltered ||= data.filtered;
-			for (const delivery of data.rows) if (delivery.action === "integration.apply" && op.test(delivery.operation_id)) {
-				for (const source of delivery.integration?.sources || []) if (source.source_kind === "execution" && source.source_id === entry.operation_id && source.status === "delivered" && sha$3.test(source.delivered_sha) && Number.isSafeInteger(source.seq) && source.seq >= 0) deliveries.push({
+			for (const delivery of data.rows) if (delivery.action === "integration.apply" && op$1.test(delivery.operation_id)) {
+				for (const source of delivery.integration?.sources || []) if (source.source_kind === "execution" && source.source_id === entry.operation_id && source.status === "delivered" && sha$4.test(source.delivered_sha) && Number.isSafeInteger(source.seq) && source.seq >= 0) deliveries.push({
 					entry_key: entry.key,
 					operation_id: delivery.operation_id,
 					seq: source.seq,
@@ -1035,7 +1035,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			proof = form({
 				namespace: `${namespace}.work-batch-evidence`,
 				api: request,
-				action: RECORD$1,
+				action: RECORD$2,
 				target: {
 					workspace_id: workspaceId,
 					batch_id: batch.batch_id
@@ -5324,8 +5324,8 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 //#endregion
 //#region src/pm-execution-verification.js
 var ACTION = "pm.execution.verify";
-var sha$2 = /^[0-9a-f]{40}$/;
-var digest$6 = /^[0-9a-f]{64}$/;
+var sha$3 = /^[0-9a-f]{40}$/;
+var digest$7 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
 function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspace, caps, form, labelled, errorBox, namespace, onSaved, onConfiguration = () => {}, onUnavailable = () => {} }) {
 	let sources = [], selected = "", generation = 0, ready = false, configuration = null, editor = null;
@@ -5375,7 +5375,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
-			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$6.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$6.test(value.command_digest) || value.candidate_commit !== null && !sha$2.test(value.candidate_commit) || value.tree_hash !== null && !sha$2.test(value.tree_hash)) throw Error(t("pmq_invalid"));
+			if (value.workspace_id !== workspaceId || value.execution_operation_id !== selected || value.profile !== "observed_runner_v1" || !digest$7.test(value.handoff_contract_digest) || typeof value.available !== "boolean" || value.available && !digest$7.test(value.command_digest) || value.candidate_commit !== null && !sha$3.test(value.candidate_commit) || value.tree_hash !== null && !sha$3.test(value.tree_hash)) throw Error(t("pmq_invalid"));
 			configuration = value;
 			ready = true;
 			status.replaceChildren();
@@ -5395,7 +5395,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				value: value[key] || ""
 			})]));
 			const matches = () => configuration && Object.entries(fields).every(([key, field]) => field.value === configuration[key]);
-			const admissible = () => writer() && configuration?.available && sha$2.test(configuration.candidate_commit) && sha$2.test(configuration.tree_hash) && matches();
+			const admissible = () => writer() && configuration?.available && sha$3.test(configuration.candidate_commit) && sha$3.test(configuration.tree_hash) && matches();
 			const rebase = h("button", {
 				type: "button",
 				class: "secondary",
@@ -5475,13 +5475,13 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 //#endregion
 //#region src/pm-quality-reviews.js
 var CREATE = "pm.quality.review.create";
-var RECORD = "pm.quality.review.record";
+var RECORD$1 = "pm.quality.review.record";
 var REVOKE = "pm.quality.review.revoke";
-var sha$1 = /^[0-9a-f]{40}$/;
-var digest$5 = /^[0-9a-f]{64}$/;
+var sha$2 = /^[0-9a-f]{40}$/;
+var digest$6 = /^[0-9a-f]{64}$/;
 var operation = /^op_[0-9a-f]{32}$/;
 var reviewId = /^pmqr_[0-9a-f]{32}$/;
-var same$4 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var same$5 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var clone = (value) => structuredClone(value);
 var github = {
 	kind: "fixed_revision_verification",
@@ -5608,14 +5608,14 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		throw Error(t("pmq_history_bound"));
 	}
 	function checkReview(row) {
-		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$5.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$1.test(row.context?.native_result?.candidate_commit) || !operation.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation.test(row.assessment.operation_id) || !digest$5.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
+		if (row?.workspace_id !== workspaceId || row.work_item_id !== workId || !reviewId.test(row.review_id) || !operation.test(row.operation_id) || !Number.isSafeInteger(row.version) || row.version < 1 || !digest$6.test(row.context_digest) || !Array.isArray(row.context?.criteria) || !Array.isArray(row.history) || !Array.isArray(row.applicability_reasons) || typeof row.qualified !== "boolean" || !sha$2.test(row.context?.native_result?.candidate_commit) || !operation.test(row.context?.execution_operation_id) || !row.original_outcome || row.assessment && (!operation.test(row.assessment.operation_id) || !digest$6.test(row.assessment.document_digest) || !Number.isSafeInteger(row.assessment.version) || !Array.isArray(row.assessment.document?.criteria)) || row.qualified && !row.assessment) throw error();
 		return row;
 	}
 	function packageFor(id) {
 		return model?.packages.find((row) => row.package_id === id);
 	}
 	function children(pkg) {
-		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$4(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
+		return (model?.operations || []).filter((op) => op.action === "repository.continue" && op.status === "succeeded" && op.params?.work_item_id === workId && same$5(op.external_refs?.admission_binding?.pm_handoff?.contract?.package_ref, {
 			workspace_id: workspaceId,
 			package_id: pkg?.package_id,
 			document_digest: pkg?.document_digest
@@ -5692,9 +5692,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					return [];
 				}
 			};
-			const permittedCreate = () => owner() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$1.test(candidate.value) && reviewer.value && chosenCriteria().length > 0 && same$4(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
+			const permittedCreate = () => owner() && packageFor(pkg.value) && children(packageFor(pkg.value)).some((row) => row.operation_id === child.value) && sha$2.test(candidate.value) && reviewer.value && chosenCriteria().length > 0 && same$5(rows().map((row) => row.criterion), chosenCriteria().map((row) => row.criterion)) && rows().every((row) => {
 				try {
-					return same$4(row.condition, policy(row.choice));
+					return same$5(row.condition, policy(row.choice));
 				} catch {
 					return false;
 				}
@@ -5718,18 +5718,18 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 					matrix.replaceChildren();
 					const saved = rows();
 					for (const criterion of chosenCriteria()) {
-						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$4(row.criterion, criterion.criterion));
+						const field = choice("pmq_policy_profile"), old = saved.find((row) => same$5(row.criterion, criterion.criterion));
 						options(field, policyChoices());
 						field.value = old?.choice || "";
 						field.addEventListener("change", () => {
 							if (create.locked()) return;
-							const values = rows().filter((row) => !same$4(row.criterion, criterion.criterion));
+							const values = rows().filter((row) => !same$5(row.criterion, criterion.criterion));
 							if (field.value) values.push({
 								criterion: criterion.criterion,
 								condition: policy(field.value),
 								choice: field.value
 							});
-							const ordered = chosenCriteria().map((item) => values.find((row) => same$4(row.criterion, item.criterion)) || {
+							const ordered = chosenCriteria().map((item) => values.find((row) => same$5(row.criterion, item.criterion)) || {
 								criterion: item.criterion,
 								condition: null,
 								choice: ""
@@ -5842,13 +5842,13 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			row.original_outcome.qualified && !row.qualified ? text("pmq_original_qualified") : null,
 			h("details", {}, h("summary", {}, t("pmq_original_sources")), line("pmq_package", row.context.package_ref.package_id), line("pmq_digest", row.context.package_ref.document_digest), line("pmq_scope", row.context.plan_ref.scope_revision), line("pmq_binding", row.context.work_ref.binding_id), line("pmq_dod", row.context.dod_ref?.revision_id), h("a", { href: `#/op/${row.context.execution_operation_id}` }, t("pmq_execution")), h("p", { class: "pm-note-text" }, row.context.policy_rationale)),
 			...(row.context.criteria || []).map((item) => {
-				const saved = document?.criteria.find((value) => same$4(value.criterion, item.criterion));
+				const saved = document?.criteria.find((value) => same$5(value.criterion, item.criterion));
 				return h("details", {}, h("summary", {}, `${item.text} · ${t("pmq_" + (saved?.status || "unassessed"))}`), saved ? h("p", { class: "pm-note-text" }, saved.rationale) : null, saved?.verification ? line("pmq_verification", t("pmq_" + saved.verification.status)) : text("pmq_no_proof"));
 			}),
 			row.revocation ? h("div", {}, h("h4", {}, t("pmq_revoked")), h("p", { class: "pm-note-text" }, row.revocation.document.reason), line("pmq_by", row.revocation.actor)) : null,
 			h("details", {}, h("summary", {}, t("pmq_history_receipts")), ...row.history.map((item) => h("p", { class: "pm-source" }, `${item.version} · ${item.actor} · ${t("pmq_" + item.kind)} · `, h("a", { href: `#/op/${item.operation_id}` }, item.operation_id), h("span", {}, " · " + item.document_digest)))),
 			use,
-			chosen && same$4(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help")
+			chosen && same$5(chosen, reference(row)) ? text("pmq_selected") : text("pmq_selection_help")
 		].filter(Boolean));
 		buildAssessment(row);
 	}
@@ -5863,7 +5863,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		} : null;
 	}
 	function proofChoices(row, item) {
-		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$4(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
+		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$5(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
 	}
 	function buildAssessment(row) {
 		const key = row.review_id;
@@ -5911,7 +5911,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			record = form({
 				namespace: `${namespace}.quality.${workId}`,
 				api: request,
-				action: RECORD,
+				action: RECORD$1,
 				target: {
 					workspace_id: workspaceId,
 					review_id: row.review_id
@@ -6040,7 +6040,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const receipt = saved.verification;
 				if (saved.workspace_id !== workspaceId) throw error();
 				if (!receipt) continue;
-				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$5.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$1.test(receipt.reference.candidate_commit) || !sha$1.test(receipt.reference.tree_hash) || !digest$5.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
+				if (receipt.operation_id !== op.operation_id || receipt.workspace_id !== workspaceId || receipt.execution_operation_id !== op.target.execution_operation_id || !digest$6.test(receipt.receipt_digest) || receipt.reference?.verification_operation_id !== op.operation_id || !sha$2.test(receipt.reference.candidate_commit) || !sha$2.test(receipt.reference.tree_hash) || !digest$6.test(op.params?.command_digest) || receipt.profile !== "observed_runner_v1") throw error();
 				proofs.push({
 					key: op.operation_id,
 					label: `${t("pmq_runner")} · ${receipt.reference.candidate_commit.slice(0, 12)} · ${op.operation_id}`,
@@ -6057,7 +6057,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				const data = await request("GET", `${base}/evidence/${entry.evidence_id}`);
 				if (!valid(ticket)) return;
 				const e = data.evidence, f = e?.document?.facts;
-				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$1.test(f.candidate_commit) || !sha$1.test(f.tree_hash) || !digest$5.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
+				if (e?.workspace_id !== workspaceId || e.evidence_id !== entry.evidence_id || !f || !sha$2.test(f.candidate_commit) || !sha$2.test(f.tree_hash) || !digest$6.test(f.command_digest) || !Number.isSafeInteger(f.verification_id) || f.verification_id < 1) throw error();
 				proofs.push({
 					key: entry.evidence_id,
 					label: `${t("pmq_runner")} · #${f.verification_id} · ${f.candidate_commit.slice(0, 12)}`,
@@ -6074,9 +6074,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 				});
 			}
 			for (const delivery of deliveries) for (const source of delivery.integration?.sources || []) {
-				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$1.test(source.delivered_sha) || !operation.test(source.source_id)) continue;
+				if (source.source_kind !== "execution" || source.status !== "delivered" || !sha$2.test(source.delivered_sha) || !operation.test(source.source_id)) continue;
 				for (const observation of observations) {
-					if (!digest$5.test(observation.document_digest)) throw error();
+					if (!digest$6.test(observation.document_digest)) throw error();
 					proofs.push({
 						key: `${delivery.operation_id}:${source.seq}:${observation.observation_id}`,
 						source_operation_id: source.source_id,
@@ -6109,7 +6109,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && current()?.qualified && same$4(previous, reference(current()))) emit(previous);
+			if (previous && current()?.qualified && same$5(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -6143,7 +6143,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		onUnavailable: failure,
 		onConfiguration: (value) => {
 			if (model) {
-				model.configuration = value?.available && digest$5.test(value.command_digest) ? value : null;
+				model.configuration = value?.available && digest$6.test(value.command_digest) ? value : null;
 				matrixKey = "";
 				create?.sync();
 			}
@@ -9498,6 +9498,690 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	};
 }
 //#endregion
+//#region src/pm-maintenance-repairs.js
+var START = "pm.maintenance.repair";
+var RECORD = "pm.maintenance.repair.evidence.record";
+var same$4 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var op = /^op_[0-9a-f]{32}$/;
+var sha$1 = /^[0-9a-f]{40}$/;
+var digest$5 = /^[0-9a-f]{64}$/;
+function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, labelled, errorBox, namespace }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, key = `batc.pm.repair-selection.${namespace}.${workspaceId}`;
+	let epoch = 0, ready = false, policy = null, baseline = null, lifecycle = null, findings = null, repair = null, start = null, proof = null, firstStart = false, proofReady = false;
+	let filtered = false;
+	let selected = "";
+	try {
+		selected = localStorage.getItem(key) || "";
+	} catch {}
+	const editors = new Map(), choices = new Map(), status = h("div", { role: "status" }), facts = h("div"), budget = h("div"), startView = h("div"), proofView = h("div");
+	const hidden = () => h("input", { type: "hidden" }), startFields = {
+		selection: hidden(),
+		context: hidden()
+	};
+	const select = (label) => h("select", { "aria-label": t(label) }), finding = select("pmr_finding"), rule = select("pmr_rule"), history = select("pmr_history"), evidence = select("pmr_evidence");
+	const line = (label, value) => h("p", { class: "pm-source" }, h("strong", {}, t(label) + ": "), String(value ?? t("pmr_none"))), text = (label) => h("p", { class: "muted" }, t(label));
+	const state = (value) => t("pmr_status_" + ([
+		"accepted",
+		"queued",
+		"pending",
+		"running",
+		"succeeded",
+		"failed",
+		"cancelled",
+		"needs_attention",
+		"not_admitted",
+		"passed",
+		"blocked"
+	].includes(value) ? value : "unknown"));
+	const link = (id) => h("a", { href: `#/op/${encodeURIComponent(id)}` }, t("pm_operation"));
+	const valid = (ticket) => {
+		try {
+			alive();
+			return ticket === epoch;
+		} catch {
+			return false;
+		}
+	};
+	const invalid = () => Error(t("pmr_invalid"));
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw invalid();
+		return value;
+	};
+	const owner = () => permitted(true) && workspace()?.membership?.role === "owner" && ["observe", "manage"].every((s) => caps()?.scopes?.includes(s));
+	const recover = () => Boolean(workspace()?.membership) && caps()?.scopes?.includes("manage");
+	const cap = () => caps()?.features?.pm_workspaces?.maintenance_repairs;
+	const active = () => ready && owner() && policy?.actor === caps()?.actor && policy?.document.policy.enabled && ["development", "maintain"].includes(lifecycle?.stage) && ![
+		"pausing",
+		"closing",
+		"paused",
+		"closed"
+	].includes(lifecycle?.status);
+	const pre = () => policy && baseline && lifecycle ? {
+		expected_policy_version: policy.revision,
+		expected_baseline_id: baseline.baseline_id,
+		expected_lifecycle_revision: lifecycle.revision
+	} : null;
+	const parse = (field) => {
+		try {
+			return JSON.parse(field.value || "null");
+		} catch {
+			return null;
+		}
+	};
+	const rules = () => policy?.document.policy.repair_rules || [];
+	const issueRows = () => findings?.sources?.issues?.status === "complete" && !findings.visibility_filtered ? findings.sources.issues.findings : [];
+	const eligible = (row, item) => row && item && !row.existing_pull_request && !row.existing_work?.length && item.labels_all.every((label) => row.facts?.labels?.includes(label));
+	const startValid = () => {
+		const value = parse(startFields.selection);
+		return active() && caps()?.scopes?.includes("start") && cap()?.version === 1 && value && same$4(parse(startFields.context), pre()) && value.policy_id === policy.policy_id && same$4(value.finding_ref, {
+			...findings?.observation_ref,
+			finding_id: value.finding_ref.finding_id
+		}) && eligible(issueRows().find((row) => row.finding_id === value.finding_ref.finding_id), rules().find((row) => row.key === value.rule_key));
+	};
+	const stale = text("pmr_stale"), rebase = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => {
+			if (!ready || start.locked()) return;
+			start.set("context", JSON.stringify(pre()));
+			update();
+		}
+	}, t("pmr_rebase"));
+	const request = async (...args) => {
+		const ticket = epoch;
+		try {
+			if (args[0] === "POST" && args[2]?.action === START && firstStart) {
+				firstStart = false;
+				const [p, b, l, f] = (await Promise.all([
+					"maintenance-policies/current",
+					"release-baselines/current",
+					"lifecycle",
+					"maintenance-findings/current"
+				].map((path) => api("GET", `${base}/${path}`)))).map(check);
+				if (!valid(ticket)) throw Object.assign(Error(t("pmr_unavailable")), { admissionRefused: true });
+				const expected = {
+					expected_policy_version: p.policy?.revision,
+					expected_baseline_id: b.baseline?.baseline_id,
+					expected_lifecycle_revision: l.lifecycle?.revision
+				};
+				if (p.visibility_filtered || b.visibility_filtered || f.visibility_filtered || !same$4(expected, args[2].preconditions) || p.policy?.policy_id !== args[2].params.policy_id || !same$4(f.observation_ref, {
+					observation_id: args[2].params.finding_ref.observation_id,
+					document_digest: args[2].params.finding_ref.document_digest
+				}) || !["development", "maintain"].includes(l.lifecycle?.stage) || [
+					"pausing",
+					"closing",
+					"paused",
+					"closed"
+				].includes(l.lifecycle?.status)) throw Object.assign(Error(t("pmr_stale")), {
+					code: "VERSION_CONFLICT",
+					admissionRefused: true
+				});
+			}
+			return await api(...args);
+		} catch (error) {
+			if (valid(ticket) && [
+				401,
+				403,
+				404
+			].includes(error.status)) failure(error);
+			throw error;
+		}
+	};
+	function update() {
+		start?.update();
+		proof?.update();
+		finding.disabled = rule.disabled = !ready || !owner() || Boolean(start?.locked());
+		history.disabled = !ready;
+		evidence.disabled = !proofReady || !owner() || Boolean(proof?.locked());
+		stale.hidden = rebase.hidden = !ready || !start || start.locked() || !startFields.context.value || same$4(parse(startFields.context), pre());
+		rebase.disabled = !active();
+		startView.hidden = !ready && !start?.locked();
+		proofView.hidden = !ready && !proof?.locked();
+		if (proof && !proof.locked()) proof.box.querySelector("button[type=submit]").disabled = !proofValid();
+	}
+	start = form({
+		action: START,
+		target: { workspace_id: workspaceId },
+		fields: startFields,
+		api: request,
+		params: (values) => {
+			if (start?.locked()) firstStart = true;
+			return JSON.parse(values.selection);
+		},
+		preconditions: () => parse(startFields.context),
+		permitted: startValid,
+		recoverPermitted: recover,
+		label: "pmr_start",
+		extra: h("div", {}, h("div", { class: "pm-fields" }, labelled("pmr_finding", finding), labelled("pmr_rule", rule)), budget, stale, rebase),
+		onSaved: (result) => {
+			selected = result.repair_id;
+			try {
+				localStorage.setItem(key, selected);
+			} catch {}
+			return refresh();
+		}
+	});
+	startView.append(start.box);
+	function changed() {
+		if (!ready || start.locked()) return;
+		const row = issueRows().find((v) => v.finding_id === finding.value), item = rules().find((v) => v.key === rule.value);
+		start.set("selection", row && item ? JSON.stringify({
+			policy_id: policy.policy_id,
+			rule_key: item.key,
+			finding_ref: {
+				...findings.observation_ref,
+				finding_id: row.finding_id
+			}
+		}) : "");
+		if (!startFields.context.value) start.set("context", JSON.stringify(pre()));
+		update();
+	}
+	finding.addEventListener("change", changed);
+	rule.addEventListener("change", changed);
+	history.addEventListener("change", () => {
+		selected = history.value;
+		try {
+			localStorage.setItem(key, selected);
+		} catch {}
+		refresh();
+	});
+	evidence.addEventListener("change", () => {
+		if (!proof || proof.locked()) return;
+		proof.set("selection", evidence.value ? JSON.stringify(choices.get(evidence.value)?.selection) : "");
+		update();
+	});
+	const verifier = workspaceExecutionVerification({
+		h,
+		t,
+		api: request,
+		alive,
+		workspaceId,
+		workspace,
+		caps,
+		form,
+		labelled,
+		errorBox,
+		namespace: `${namespace}.repair`,
+		onSaved: () => refresh(),
+		onUnavailable: (error) => failure(error)
+	});
+	const element = h("section", {
+		class: "panel pm-maintenance-repairs",
+		"data-pm-maintenance-repairs": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmr_title")), text("pmr_intro")), h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pmr_refresh"))), status, startView, labelled("pmr_history", history), facts, verifier.element, proofView);
+	function options(field, rows, value = "") {
+		field.replaceChildren(h("option", { value: "" }, t("pmr_choose")), ...rows.map(([id, label]) => h("option", { value: id }, label)));
+		field.value = rows.some(([id]) => id === value) ? value : "";
+	}
+	async function pages(path, list, cursor, ticket) {
+		const result = [];
+		let after = 0;
+		for (let page = 0; page < 20; page++) {
+			const data = check(await api("GET", `${base}/${path}${path.includes("?") ? "&" : "?"}after=${after}&limit=50`));
+			if (!valid(ticket)) return null;
+			const next = data[cursor];
+			if (!Array.isArray(data[list]) || next !== null && (!Number.isSafeInteger(next) || next <= after)) throw invalid();
+			result.push(...data[list]);
+			if (data.source_visibility_filtered || data.visibility_filtered) filtered = true;
+			if (next === null) return result;
+			after = next;
+		}
+		throw Error(t("pmr_limit"));
+	}
+	async function verifierOperations(ticket) {
+		const result = [];
+		let before = null;
+		for (let page = 0; page < 20; page++) {
+			const data = await api("GET", `/operations?action=pm.execution.verify&limit=50${before === null ? "" : "&before=" + before}`);
+			if (!valid(ticket)) return null;
+			const next = data.next_before;
+			if (!Array.isArray(data.operations) || next !== null && (!Number.isSafeInteger(next) || next <= 0 || before !== null && next >= before)) throw invalid();
+			result.push(...data.operations);
+			if (next === null) return result;
+			before = next;
+		}
+		throw Error(t("pmr_limit"));
+	}
+	function validate(row) {
+		if (row?.workspace_id !== workspaceId || !/^pmrp_[0-9a-f]{32}$/.test(row.repair_id) || !op.test(row.operation_id) || !Number.isSafeInteger(row.version) || !row.context?.rule || !row.context.finding_ref || !Array.isArray(row.evidence)) throw invalid();
+		return row;
+	}
+	function render(row) {
+		const c = row.context, p = row.progress || {}, box = h("article", { "data-repair": row.repair_id }, h("h3", {}, `${t("pmr_issue")} #${c.finding.native.number}`), line("pmr_rule", c.rule.key), line("pmr_dispatch", state(row.child?.status || "not_admitted")), text(row.capacity_held ? "pmr_reserved" : "pmr_released"), line("pmr_verification", p.verification ? state(p.verification.status) : t("pmr_unproven")), line("pmr_quality", p.quality?.length ? t("pmr_recorded") : t("pmr_unproven")), line("pmr_publication", row.publication_child ? state(row.publication_child.status) : t("pmr_unproven")), line("pmr_ci", p.required_ci_receipts?.length ? t("pmr_recorded") : t("pmr_unproven")), text("pmr_not_fixed"));
+		if (row.child) box.append(h("p", {}, t("pmr_child"), " · ", link(row.child.operation_id)));
+		if (row.publication_child) {
+			box.append(h("p", {}, t("pmr_original_publication"), " · ", link(row.publication_child.operation_id)));
+			const receipt = row.publication_child.result?.creation_receipt;
+			if (receipt) box.append(line("pmr_native_pr", receipt.native_pr_id), line("pmr_candidate", receipt.candidate_sha));
+			if (row.publication_child.status === "needs_attention" || row.publication_child.error_code?.includes("UNKNOWN")) box.append(text("pmr_unknown"));
+		}
+		if (p.new_investment_blocked_reason || p.blocked_reason) box.append(h("p", { class: "muted" }, reason(p.new_investment_blocked_reason || p.blocked_reason)));
+		const detail = h("details", {}, h("summary", {}, t("pmr_original")), line("pmr_work", row.work_item_id), line("pmr_policy", row.policy_id), line("pmr_observation", c.finding_ref.observation_id), line("pmr_digest", c.finding_ref.document_digest), line("pmr_deadline", new Date(row.deadline_at * 1e3).toLocaleString()), line("pmr_retry", row.retries_used), text("pmr_cost"), link(row.operation_id));
+		for (const item of row.evidence) {
+			const proof = item.evidence;
+			detail.append(h("p", {}, t("pmr_kind_" + item.selection.kind), " · ", link(item.operation_id)));
+			for (const [name, value] of Object.entries(proof.reference || item.selection.reference || {})) detail.append(h("p", { class: "pm-source" }, name + ": " + value));
+		}
+		box.append(detail);
+		return box;
+	}
+	function reason(code) {
+		if (/UNKNOWN|UNSETTLED/.test(code)) return t("pmr_unknown");
+		if (/DEADLINE/.test(code)) return t("pmr_deadline_block");
+		if (/BUDGET|CAPACITY/.test(code)) return t("pmr_budget_block");
+		if (/QUALITY/.test(code)) return t("pmr_quality_needed");
+		if (/VERIFICATION/.test(code)) return t("pmr_verify_needed");
+		if (/STOP|PAUS|EPOCH|CHANGED/.test(code)) return t("pmr_stopped");
+		return t("pmr_gate");
+	}
+	function proofValid() {
+		return ready && proofReady && owner() && proof && repair && Number(proof.fields.version.value) === repair.version && [...choices.values()].some((choice) => same$4(choice.selection, parse(proof.fields.selection)));
+	}
+	async function loadProof(ticket) {
+		choices.clear();
+		proofReady = false;
+		if (!repair?.child) {
+			proofView.replaceChildren();
+			proof = null;
+			return;
+		}
+		const row = repair;
+		let editor = editors.get(row.repair_id);
+		if (!editor) {
+			const fields = {
+				selection: hidden(),
+				version: hidden()
+			}, use = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					if (ready && !editor.locked()) {
+						editor.set("version", String(repair.version));
+						update();
+					}
+				}
+			}, t("pmr_evidence_rebase"));
+			editor = form({
+				action: RECORD,
+				target: {
+					workspace_id: workspaceId,
+					repair_id: row.repair_id
+				},
+				fields,
+				api: request,
+				params: (v) => ({ evidence: JSON.parse(v.selection) }),
+				preconditions: () => ({ expected_repair_version: Number(fields.version.value) }),
+				permitted: proofValid,
+				recoverPermitted: recover,
+				label: "pmr_record",
+				extra: h("div", {}, text("pmr_evidence_help"), labelled("pmr_evidence", evidence), use),
+				onSaved: () => refresh()
+			});
+			editors.set(row.repair_id, editor);
+			editor.rebase = use;
+		}
+		proof = editor;
+		proofView.replaceChildren(editor.box);
+		if (!editor.fields.version.value && !editor.locked()) editor.set("version", String(row.version));
+		if (caps()?.features?.pm_workspaces?.execution_verification?.version === 1) {
+			const child = await api("GET", `/operations/${row.child.operation_id}`);
+			if (!valid(ticket)) return;
+			if (child.operation?.operation_id !== row.child.operation_id || child.operation.action !== "repository.continue") throw invalid();
+			await verifier.setSources(row.child.status === "succeeded" ? [child.operation] : []);
+			if (!valid(ticket)) return;
+			const operations = await verifierOperations(ticket);
+			if (!valid(ticket) || !operations) return;
+			for (const source of operations) {
+				if (source.action !== "pm.execution.verify" || source.target?.workspace_id !== workspaceId || source.target.execution_operation_id !== row.child.operation_id) continue;
+				if (!op.test(source.operation_id) || source.params?.command_digest !== row.context.rule.verification.command_digest) continue;
+				const data = check(await api("GET", `${base}/execution-verifications/${source.operation_id}`));
+				if (!valid(ticket)) return;
+				const receipt = data.verification;
+				if (!receipt) continue;
+				const ref = receipt.reference;
+				if (receipt.workspace_id !== workspaceId || receipt.operation_id !== source.operation_id || receipt.execution_operation_id !== row.child.operation_id || receipt.profile !== "observed_runner_v1" || !digest$5.test(receipt.receipt_digest) || ref?.verification_operation_id !== source.operation_id || !sha$1.test(ref.candidate_commit) || !sha$1.test(ref.tree_hash) || ref.candidate_commit !== source.params.candidate_commit || ref.tree_hash !== source.params.tree_hash) throw invalid();
+				choices.set("verification:" + source.operation_id, {
+					selection: {
+						kind: "verification",
+						reference: ref
+					},
+					label: `${t("pmr_kind_verification")} · ${state(receipt.status)} · ${ref.candidate_commit.slice(0, 12)}`
+				});
+			}
+		}
+		const quality = await pages(`work/${encodeURIComponent(row.work_item_id)}/quality`, "reviews", "next_cursor", ticket);
+		if (!valid(ticket) || !quality) return;
+		for (const item of quality) {
+			const assessment = item.assessment;
+			if (item.context?.execution_operation_id !== row.child.operation_id || item.qualified !== true || !assessment) continue;
+			const ref = {
+				review_id: item.review_id,
+				operation_id: assessment.operation_id,
+				version: assessment.version,
+				document_digest: assessment.document_digest
+			};
+			if (!/^pmqr_[0-9a-f]{32}$/.test(ref.review_id) || !op.test(ref.operation_id) || !digest$5.test(ref.document_digest) || !Number.isSafeInteger(ref.version)) throw invalid();
+			choices.set("quality:" + ref.operation_id, {
+				selection: {
+					kind: "quality",
+					reference: ref
+				},
+				label: `${t("pmr_kind_quality")} · ${ref.review_id} · ${t("pmr_revision")} ${ref.version}`
+			});
+		}
+		const receipt = row.publication_child?.result?.creation_receipt;
+		if (receipt?.target_verified === true && Number.isSafeInteger(receipt.native_pr_id)) {
+			const observations = await pages("github-observations", "observations", "next_cursor", ticket);
+			if (!valid(ticket) || !observations) return;
+			for (const item of observations) {
+				const ci = item.document?.evidence?.facts?.required_ci;
+				if (ci?.profile !== "github_required_status_checks_v1" || ci.status !== "complete" || !ci.pulls?.some((p) => p.native_pr_id === receipt.native_pr_id && p.head_sha === receipt.candidate_sha)) continue;
+				const ref = {
+					observation_id: item.observation_id,
+					document_digest: item.document_digest,
+					native_pr_id: receipt.native_pr_id
+				};
+				if (!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id) || !digest$5.test(ref.document_digest)) throw invalid();
+				choices.set("required_ci:" + ref.observation_id, {
+					selection: {
+						kind: "required_ci",
+						reference: ref
+					},
+					label: `${t("pmr_kind_required_ci")} · #${receipt.pull_number} · ${new Date(item.created_at * 1e3).toLocaleString()}`
+				});
+			}
+		}
+		if (!valid(ticket)) return;
+		if (filtered && !status.querySelector("[data-repair-filtered]")) {
+			const notice = text("pmr_filtered");
+			notice.dataset.repairFiltered = "";
+			status.append(notice);
+		}
+		proofReady = true;
+		const saved = parse(editor.fields.selection), value = [...choices].find(([, v]) => same$4(v.selection, saved))?.[0] || "";
+		options(evidence, [...choices].map(([id, value]) => [id, value.label]), value);
+		editor.rebase.hidden = Number(editor.fields.version.value) === row.version || editor.locked();
+		update();
+	}
+	function withdraw() {
+		epoch++;
+		verifier.withdraw();
+		verifier.element.hidden = true;
+		filtered = false;
+		ready = false;
+		policy = baseline = lifecycle = findings = repair = null;
+		proofReady = false;
+		choices.clear();
+		for (const field of [
+			finding,
+			rule,
+			history,
+			evidence
+		]) field.replaceChildren();
+		facts.replaceChildren();
+		budget.replaceChildren();
+		status.replaceChildren();
+		for (const editor of [start, ...editors.values()]) editor?.box.querySelector(".pm-receipt")?.replaceChildren();
+		update();
+	}
+	function failure(error) {
+		withdraw();
+		status.append(text("pmr_unavailable"), errorBox(error));
+	}
+	async function refresh() {
+		withdraw();
+		const ticket = epoch;
+		status.append(text("pmr_loading"));
+		try {
+			const [p, b, l, f] = (await Promise.all([
+				"maintenance-policies/current",
+				"release-baselines/current",
+				"lifecycle",
+				"maintenance-findings/current"
+			].map((path) => api("GET", `${base}/${path}`)))).map(check);
+			if (!valid(ticket)) return;
+			if (!Number.isSafeInteger(l.lifecycle?.revision) || p.policy && (p.policy.workspace_id !== workspaceId || p.policy.document?.workspace_id !== workspaceId || p.policy.revision !== p.head?.revision) || p.policy && (p.policy.policy_id !== p.head.policy_id || p.policy.document.policy_id !== p.policy.policy_id || p.policy.document.revision !== p.policy.revision) || b.baseline && (b.baseline.workspace_id !== workspaceId || b.baseline.document?.workspace_id !== workspaceId || b.baseline.baseline_id !== b.head?.baseline_id || b.baseline.version !== b.head.version || b.baseline.document.baseline_id !== b.baseline.baseline_id || b.baseline.document.version !== b.baseline.version) || p.visibility_filtered && p.policy || b.visibility_filtered && b.baseline || typeof f.visibility_filtered !== "boolean" || !f.sources?.issues || !Array.isArray(f.sources.issues.findings)) throw invalid();
+			policy = p.policy;
+			baseline = b.baseline;
+			lifecycle = l.lifecycle;
+			findings = f;
+			const rows = await pages("maintenance-repairs", "repairs", "next_after", ticket);
+			if (!valid(ticket) || !rows) return;
+			rows.forEach(validate);
+			status.replaceChildren();
+			if (filtered) {
+				const notice = text("pmr_filtered");
+				notice.dataset.repairFiltered = "";
+				status.append(notice);
+			}
+			ready = true;
+			const saved = parse(startFields.selection);
+			options(finding, issueRows().map((row) => [row.finding_id, `${t("pmr_issue")} #${row.native.number} · ${(row.facts.labels || []).join(" · ")}`]), saved?.finding_ref?.finding_id);
+			options(rule, rules().map((row) => [row.key, `${row.key} · ${t("pmp_" + row.work_kind)}`]), saved?.rule_key);
+			options(history, rows.map((row) => [row.repair_id, `${t("pmr_issue")} #${row.context.finding.native.number} · ${row.context.rule.key} · ${state(row.operation_status)}`]), selected);
+			if (selected) {
+				const data = check(await api("GET", `${base}/maintenance-repairs/${encodeURIComponent(selected)}`));
+				if (!valid(ticket)) return;
+				repair = validate(data.repair);
+				if (repair.repair_id !== selected) throw invalid();
+				facts.append(render(repair));
+				await loadProof(ticket);
+			} else {
+				proof = null;
+				proofView.replaceChildren();
+			}
+			if (!valid(ticket)) return;
+			const limits = policy?.document.policy.limits;
+			if (limits) budget.append(line("pmr_budget", `${limits.max_parallel} ${t("pmr_parallel")} · ${limits.period_runs} / ${limits.period_seconds}s · ${limits.run_seconds}s`), text("pmr_cost"));
+			if (!owner()) status.append(text("pmr_owner"));
+			else if (!active()) status.append(text("pmr_stopped"));
+			else if (!rules().length) status.append(text("pmr_no_rules"));
+			update();
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	update();
+	return {
+		element,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
+//#region src/pm-maintenance-repair-policy.js
+function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciAvailable, reviewedHandoff, baseline, editable, changed }) {
+	const hidden = () => h("input", { type: "hidden" }), fields = {
+		repair_rules: hidden(),
+		repair_rules_set: hidden(),
+		repair_key: input("pmr_rule_key", {
+			required: false,
+			max: 48
+		}),
+		repair_kind: h("select", { "aria-label": t("pmr_work_kind") }, ...[
+			"dependency_fix",
+			"bug_fix",
+			"documentation"
+		].map((value) => h("option", { value }, t("pmp_" + value)))),
+		repair_labels: input("pmr_rule_labels", {
+			multiline: true,
+			required: false,
+			max: 2020
+		}),
+		repair_paths: input("pmr_rule_paths", {
+			multiline: true,
+			required: false,
+			max: 51300
+		}),
+		repair_command: input("pmr_rule_command", {
+			required: false,
+			max: 4e3
+		}),
+		repair_ci: h("select", { "aria-label": t("pmr_ci_profile") }, h("option", { value: "" }, t("pmr_ci_unchanged")), h("option", { value: "github_required_status_checks_v1" }, t("pmr_ci_explicit")))
+	};
+	let visible = false, busy = false, epoch = 0;
+	const rows = h("div"), status = h("p", {
+		role: "status",
+		class: "muted"
+	});
+	const read = () => {
+		const value = fields.repair_rules.value ? JSON.parse(fields.repair_rules.value) : [];
+		if (!Array.isArray(value) || value.length > 16) throw Error(t("pmr_invalid"));
+		return value;
+	};
+	const selected = () => {
+		try {
+			return reviewedHandoff();
+		} catch {
+			return null;
+		}
+	};
+	const lines = (value) => value.split("\n").map((v) => v.trim()).filter(Boolean);
+	const add = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void addRule()
+	}, t("pmr_add_rule"));
+	const element = h("details", { "data-policy-group": "pmr_rules" }, h("summary", {}, t("pmr_rules")), h("p", { class: "muted" }, t("pmr_rules_help")), rows, h("div", { class: "pm-fields" }, labelled("pmr_rule_key", fields.repair_key), labelled("pmr_work_kind", fields.repair_kind)), labelled("pmr_rule_labels", fields.repair_labels), labelled("pmr_rule_paths", fields.repair_paths), labelled("pmr_rule_command", fields.repair_command), h("p", { class: "muted" }, t("pmr_command_help")), add, status, labelled("pmr_ci_profile", fields.repair_ci), h("p", { class: "muted" }, t("pmr_ci_help")));
+	async function addRule() {
+		if (!visible || !editable() || busy || !available()) return;
+		const source = selected(), release = baseline(), original = JSON.stringify(source), ticket = ++epoch;
+		try {
+			const rules = read(), key = fields.repair_key.value, labels = lines(fields.repair_labels.value), paths = lines(fields.repair_paths.value), kind = fields.repair_kind.value, command = fields.repair_command.value;
+			if (!source?.handoff || !release || source.handoff.params.pm_package_ref?.workspace_id !== release.workspace_id || source.handoff.params.source_sha !== release.document.commit_sha || source.handoff.params.source_ref !== release.document.proof.maintenance_branch.ref || source.handoff.preconditions.repository_id !== release.document.repository_id || rules.length >= 16 || !/^[a-z][a-z0-9_]{0,47}$/.test(key) || rules.some((r) => r.key === key || r.handoff.params.work_item_id === source.handoff.params.work_item_id) || !labels.length || labels.length > 20 || new Set(labels).size !== labels.length || labels.some((v) => v.length > 100 || /[\x00-\x1f]/.test(v)) || !paths.length || paths.length > 100 || new Set(paths).size !== paths.length || paths.some((v) => v.length > 512 || v !== "." && (/[\\:*?\[\]\x00-\x1f]/.test(v) || v.replace(/\/$/, "").split("/").some((p) => [
+				"",
+				".",
+				".."
+			].includes(p)))) || !command.trim() || /[\x00-\x1f]/.test(command)) throw Error(t("pmr_rule_invalid"));
+			busy = true;
+			update();
+			const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(command))), digest = [...new Uint8Array(bytes)].map((n) => n.toString(16).padStart(2, "0")).join("");
+			if (ticket !== epoch || !visible || !editable() || JSON.stringify(selected()) !== original || baseline()?.baseline_id !== release.baseline_id) throw Error(t("pmr_review_changed"));
+			rules.push({
+				key,
+				work_kind: kind,
+				labels_all: labels,
+				paths,
+				release: {
+					baseline_id: release.baseline_id,
+					baseline_digest: release.document_digest,
+					commit_sha: release.document.commit_sha,
+					release_version: structuredClone(release.document.release_version)
+				},
+				handoff: structuredClone(source.handoff),
+				verification: {
+					kind: "fixed_revision_verification",
+					profile: "observed_runner_v1",
+					command_digest: digest
+				}
+			});
+			fields.repair_rules.value = JSON.stringify(rules);
+			fields.repair_rules_set.value = "1";
+			status.textContent = t("pmr_rule_added");
+			changed();
+		} catch (error) {
+			if (ticket === epoch && visible) status.textContent = error.message;
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	function update(show = visible) {
+		visible = show;
+		rows.replaceChildren();
+		element.hidden = !available() && !fields.repair_rules_set.value && !fields.repair_ci.value;
+		add.disabled = !visible || !editable() || busy || !available() || !selected();
+		fields.repair_ci.disabled = !visible || !editable() || !ciAvailable();
+		if (!visible) {
+			epoch++;
+			status.textContent = "";
+			return;
+		}
+		for (const rule of read()) rows.append(h("article", { class: "pm-repair-rule" }, h("h4", {}, rule.key), h("p", {}, t("pmp_" + rule.work_kind), " · ", rule.labels_all.join(" · ")), h("p", { class: "pm-source" }, rule.paths.join(" · ")), h("details", {}, h("summary", {}, t("pmr_rule_original")), h("p", { class: "pm-source" }, rule.handoff.params.pm_package_ref.package_id), h("p", { class: "pm-source" }, rule.release.baseline_id), h("p", { class: "pm-source" }, rule.verification.command_digest)), h("button", {
+			type: "button",
+			class: "secondary",
+			disabled: !editable(),
+			onclick: () => {
+				if (!editable()) return;
+				fields.repair_rules.value = JSON.stringify(read().filter((r) => r.key !== rule.key));
+				fields.repair_rules_set.value = "1";
+				changed();
+				update();
+			}
+		}, t("pmr_remove_rule"))));
+	}
+	function initialize(policy) {
+		return {
+			repair_rules: JSON.stringify(policy.repair_rules || []),
+			repair_rules_set: Object.hasOwn(policy, "repair_rules") ? "1" : "",
+			repair_ci: policy.observation?.required_ci_profile || ""
+		};
+	}
+	function build(values) {
+		const result = {};
+		if (values.repair_rules_set) {
+			const rules = JSON.parse(values.repair_rules || "[]"), release = baseline(), paths = lines(values.paths), kinds = JSON.parse(values.works), labels = lines(values.finding_labels);
+			if (!Array.isArray(rules) || rules.length > 16 || rules.some((rule) => !kinds.includes(rule.work_kind) || values.finding_issues !== "true" || !labels.every((label) => rule.labels_all.includes(label)) || rule.paths.some((path) => !paths.some((root) => root === "." || root === path || root.endsWith("/") && path.startsWith(root))) || !release || rule.release.baseline_id !== release.baseline_id || rule.release.baseline_digest !== release.document_digest || rule.release.commit_sha !== release.document.commit_sha)) throw Error(t("pmr_rule_invalid"));
+			result.repair_rules = rules;
+		}
+		return result;
+	}
+	async function checkSources({ api, endpoint, workspaceId, valid }) {
+		const signature = fields.repair_rules.value, rules = read(), seen = new Set();
+		for (const rule of rules) {
+			const ref = rule.handoff?.params?.pm_package_ref, release = rule.release;
+			if (ref?.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(ref.package_id) || !/^[0-9a-f]{64}$/.test(ref.document_digest) || !/^pmrb_[0-9a-f]{32}$/.test(release?.baseline_id) || !/^[0-9a-f]{64}$/.test(release.baseline_digest)) throw Error(t("pmr_invalid"));
+			const reads = [[
+				"work-packages",
+				ref.package_id,
+				"package",
+				ref.document_digest
+			], [
+				"release-baselines",
+				release.baseline_id,
+				"baseline",
+				release.baseline_digest
+			]];
+			const spec = rule.handoff.params.pm_spec_ref;
+			if (spec) {
+				if (spec.workspace_id !== workspaceId || !/^pmsp_[0-9a-f]{32}$/.test(spec.materialization_id) || !/^[0-9a-f]{64}$/.test(spec.document_digest)) throw Error(t("pmr_invalid"));
+				reads.push([
+					"spec-materializations",
+					spec.materialization_id,
+					"materialization",
+					spec.document_digest
+				]);
+			}
+			for (const [path, id, key, digest] of reads) {
+				const cache = path + id + digest;
+				if (seen.has(cache)) continue;
+				seen.add(cache);
+				const value = await api("GET", `${endpoint}/${path}/${encodeURIComponent(id)}`);
+				if (!valid()) return;
+				const row = value[key];
+				if (value.workspace_id !== workspaceId || row?.workspace_id !== workspaceId || row[key === "package" ? "package_id" : key === "baseline" ? "baseline_id" : "materialization_id"] !== id || row.document_digest !== digest) throw Error(t("pmr_invalid"));
+			}
+		}
+		if (signature !== fields.repair_rules.value) throw Error(t("pmr_review_changed"));
+	}
+	return {
+		element,
+		fields,
+		initialize,
+		build,
+		update,
+		checkSources
+	};
+}
+function maintenanceRepairPolicyView({ h, t, policy }) {
+	if (!policy.repair_rules?.length && !policy.observation?.required_ci_profile) return null;
+	return h("section", {}, h("h4", {}, t("pmr_rules")), ...(policy.repair_rules || []).map((rule) => h("p", { class: "pm-source" }, rule.key, " · ", t("pmp_" + rule.work_kind), " · ", rule.labels_all.join(" · "))), policy.observation?.required_ci_profile ? h("p", {}, t("pmr_ci_explicit")) : null, h("p", { class: "muted" }, t("pmr_rules_help")));
+}
+//#endregion
 //#region src/pm-maintenance-checks.js
 function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, profile = "github_open_prs_and_actions_v1";
@@ -9953,7 +10637,7 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 }
 //#endregion
 //#region src/pm-maintenance-policy.js
-function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox }) {
+function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, reviewedHandoff = () => null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.maintenance_policy.adopt";
 	const sourceKinds = [
 		"issues",
@@ -9966,6 +10650,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		"bug_fix",
 		"documentation"
 	];
+	let repairSourcesReady = false;
 	let epoch = 0, ready = false, current = null, baseline = null, lifecycle = null, editor = null, syncing = false, historyLoaded = false, historyCursor = null, historyFiltered = false;
 	const view = h("div", { "data-maintenance-current": "" }), status = h("div", { role: "status" }), source = h("div", { "data-maintenance-source": "" }), history = h("div");
 	const check = (value) => {
@@ -10007,6 +10692,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		return field;
 	};
 	const fields = {
+		original_policy: hidden(),
 		initialized: hidden(),
 		context: hidden(),
 		enabled: select("pmp_enabled", [["false", "pmp_enabled_no"], ["true", "pmp_enabled_yes"]]),
@@ -10075,6 +10761,19 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		available: () => caps()?.features?.pm_github_observation?.maintenance_findings?.version === 1
 	});
 	Object.assign(fields, findingControls.fields);
+	const repairControls = maintenanceRepairPolicyControls({
+		h,
+		t,
+		input,
+		labelled,
+		reviewedHandoff,
+		baseline: () => baseline?.baseline,
+		available: () => caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1,
+		ciAvailable: () => caps()?.features?.pm_github_observation?.required_ci?.profiles?.includes("github_required_status_checks_v1") === true,
+		editable: () => ready && allowed() && !editor?.locked(),
+		changed: () => editor?.changed()
+	});
+	Object.assign(fields, repairControls.fields);
 	const selected = (field) => {
 		try {
 			const values = JSON.parse(field.value);
@@ -10118,12 +10817,14 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		hidden: true,
 		onclick: () => {
 			if (!ready || !allowed() || stopped() || editor.locked() || !context()) return;
+			if (!fields.original_policy.value) Object.entries(repairControls.initialize(current.policy?.document?.policy || {})).forEach(([key, value]) => editor.set(key, value));
+			editor.set("original_policy", JSON.stringify(current.policy?.document?.policy || {}));
 			editor.set("context", JSON.stringify(context()));
 			editor.update();
 		}
 	}, t("pmp_use_versions"));
 	const eligibility = h("p", { class: "muted" });
-	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), findingControls.element, group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
+	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), findingControls.element, repairControls.element, group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
 	function context() {
 		return ready && baseline?.baseline && !baseline.visibility_filtered && current && !current.visibility_filtered && lifecycle ? {
 			expected_policy_revision: current.head.revision,
@@ -10172,6 +10873,11 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		syncing = true;
 		try {
 			if (ready && allowed() && !editor.locked() && !fields.initialized.value && context()) initialize();
+			if (ready && matches() && !editor.locked() && !fields.original_policy.value) {
+				fields.original_policy.value = JSON.stringify(current.policy?.document?.policy || {});
+				Object.entries(repairControls.initialize(current.policy?.document?.policy || {})).forEach(([key, value]) => fields[key].value = value);
+				editor.changed();
+			}
 			baseUpdate();
 			const editing = ready && allowed() && !editor.locked();
 			for (const [key, field] of Object.entries(fields)) if (!["context", "initialized"].includes(key)) field.disabled = !editing;
@@ -10183,6 +10889,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			fields.profile.disabled = !editing || !profileAvailable();
 			envLabel.hidden = fields.delivery.value !== "deploy";
 			fields.environment.disabled = !editing || envLabel.hidden;
+			repairControls.update(ready && repairSourcesReady);
 			stale.hidden = editor.locked() || !ready || !fields.context.value || Boolean(matches());
 			useVersions.hidden = stale.hidden || !context();
 			useVersions.disabled = !editing || stopped();
@@ -10231,7 +10938,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t(maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
+	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? "pmr_policy_runtime" : maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
 	function controls() {
 		editorDetails.hidden = !owner() && !(editor.locked() && recover());
 		permission.hidden = owner();
@@ -10273,6 +10980,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			}
 		};
 		const values = {
+			original_policy: JSON.stringify(p),
 			initialized: "1",
 			context: JSON.stringify(context()),
 			enabled: String(p.enabled),
@@ -10300,7 +11008,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			retries: p.limits.retries,
 			rationale: ""
 		};
-		Object.assign(values, findingControls.initialize(p.observation));
+		Object.assign(values, findingControls.initialize(p.observation), repairControls.initialize(p));
 		for (const [key, value] of Object.entries(values)) fields[key].value = String(value);
 		editor.changed();
 	}
@@ -10357,29 +11065,43 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		if (profileAvailable() && v.profile !== githubProfile || v.profile && !profileAvailable()) throw Error(t("pmp_profile_required"));
 		const works = selection(v.works, workKinds, true);
 		if (works.length && (v.delivery === "report" || baseline?.baseline?.document?.proof?.maintenance_branch?.status !== "verified_at_observation")) throw Error(t("pmp_repair_invalid"));
+		const original = JSON.parse(v.original_policy || "{}");
+		const finding = findingControls.build(v, selection(v.sources, sourceKinds), v.profile, baseline?.baseline);
+		const merge = (old, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries({
+			...old,
+			...value
+		}).map(([key, item]) => [key, Object.hasOwn(value, key) ? merge(old?.[key], item) : item])) : value;
+		const findingPolicy = merge(original.observation?.maintenance_sources ? { maintenance_sources: original.observation.maintenance_sources } : {}, finding);
 		return {
+			...original,
+			...repairControls.build(v),
 			enabled: v.enabled === "true",
 			after_release_policy: v.after,
 			sources: selection(v.sources, sourceKinds),
 			allowed_work_kinds: works,
 			allowed_paths: paths,
 			delivery: {
+				...original.delivery,
 				maximum: v.delivery,
 				environment: v.delivery === "deploy" ? required(v.environment, 256) : null
 			},
 			observation: {
+				...original.observation,
+				...v.repair_ci ? { required_ci_profile: v.repair_ci } : {},
 				max_age_seconds: integer(v.age, 1, 86400),
 				stable_for_seconds: integer(v.stable, 0, 604800),
 				...v.profile ? { github_profile: v.profile } : {},
-				...findingControls.build(v, selection(v.sources, sourceKinds), v.profile, baseline?.baseline)
+				...findingPolicy
 			},
 			schedule: {
+				...original.schedule,
 				timezone: v.timezone,
 				check_interval_seconds: integer(v.interval, 60, 2678400),
 				review_weekday: integer(v.weekday, 0, 6),
 				review_local_time: v.time
 			},
 			limits: {
+				...original.limits,
 				max_parallel: integer(v.parallel, 1, 16),
 				run_seconds: integer(v.run, 1, 86400),
 				period_seconds: integer(v.period, 60, 2678400),
@@ -10388,6 +11110,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 				retries: integer(v.retries, 0, 10)
 			},
 			verification: {
+				...original.verification,
 				required_ci: v.ci === "true",
 				review_required: v.review === "true",
 				acceptance_evidence: list(v.acceptance, 40, 2e3)
@@ -10410,6 +11133,12 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			["period_runs", "period_runs"],
 			["retries", "retries"]
 		].map(([label, key]) => line(`pmp_${label}`, p.limits[key])), line("pmp_cost", p.limits.cost_microusd === null ? t("pmp_cost_none") : String(p.limits.cost_microusd / 1e6)), line("pmp_reason", doc.rationale), line("pmp_author", row.actor), line("pmp_recorded", stamp(row.created_at)), line("pmp_original_baseline", row.baseline_id), line("pmp_lifecycle", doc.lifecycle_revision), line("pmp_revision", row.revision), h("p", { class: "mono" }, row.document_digest), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation")));
+		const repairPolicy = maintenanceRepairPolicyView({
+			h,
+			t,
+			policy: p
+		});
+		if (repairPolicy) details.append(repairPolicy);
 		const findingPolicy = findingPolicyView({
 			h,
 			t,
@@ -10419,6 +11148,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		return h("article", { "data-maintenance-policy": row.policy_id }, h("h3", {}, isCurrent ? t("pmp_current") : `${t("pmp_revision")} ${row.revision}`), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
 	}
 	function withdraw() {
+		repairSourcesReady = false;
 		maintenanceRuns?.withdraw();
 		observations?.withdraw();
 		epoch++;
@@ -10495,6 +11225,17 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 				source.append(h("h3", {}, t("pmp_baseline")), h("p", {}, doc.release_version.value, " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, doc.proof.maintenance_branch.status === "verified_at_observation" ? `${t("pmp_branch")}: ${doc.proof.maintenance_branch.ref}` : t("pmp_no_branch")), h("details", {}, h("summary", {}, t("pmp_versions")), line("pmp_revision", p.head.revision), line("pmp_lifecycle", l.lifecycle.revision), line("pmp_original_baseline", row.baseline_id), h("p", { class: "mono" }, row.document_digest)));
 			}
 			controls();
+			if (!p.visibility_filtered && !b.visibility_filtered) {
+				await repairControls.checkSources({
+					api,
+					endpoint,
+					workspaceId,
+					valid: () => valid(ticket)
+				});
+				if (!valid(ticket)) return;
+				repairSourcesReady = true;
+				controls();
+			}
 			if (historyDetails.open) await readHistory(false);
 			if (valid(ticket)) await maintenanceRuns?.refresh();
 			if (valid(ticket)) await observations?.refresh();
@@ -10506,7 +11247,8 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	return {
 		element,
 		refresh,
-		withdraw
+		withdraw,
+		update: () => editor.update()
 	};
 }
 //#endregion
@@ -12544,6 +13286,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace
 	}) : null;
 	if (releaseBaselines) body.insertBefore(releaseBaselines.element, content);
+	let handoff = null;
 	const maintenancePolicy = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_policy?.version === 1 ? workspaceMaintenancePolicy({
 		h,
 		t,
@@ -12556,9 +13299,25 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		form,
 		input,
 		labelled,
-		errorBox
+		errorBox,
+		reviewedHandoff: () => handoff?.batchSelection()
 	}) : null;
 	if (maintenancePolicy) body.insertBefore(maintenancePolicy.element, content);
+	const maintenanceRepairs = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? workspaceMaintenanceRepairs({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		caps,
+		permitted,
+		form,
+		labelled,
+		errorBox,
+		namespace
+	}) : null;
+	if (maintenanceRepairs) body.insertBefore(maintenanceRepairs.element, content);
 	const maintenanceReview = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_review?.version === 1 ? workspaceMaintenanceReview({
 		h,
 		t,
@@ -12700,7 +13459,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			workBatches?.withdraw();
 		}
 	}) : null;
-	const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available ? workspacePackageHandoff({
+	handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available ? workspacePackageHandoff({
 		h,
 		t,
 		api,
@@ -12714,7 +13473,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		labelled,
 		errorBox,
 		namespace,
-		onReviewChange: () => workBatches?.update(),
+		onReviewChange: () => {
+			workBatches?.update();
+			maintenancePolicy?.update();
+		},
 		onSourceFailure: () => {
 			engineering?.withdraw();
 			materialization?.withdraw();
@@ -12792,6 +13554,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		brief?.box,
 		releaseBaselines?.element,
 		maintenancePolicy?.element,
+		maintenanceRepairs?.element,
 		maintenanceReview?.element,
 		qualityReviews?.element,
 		roadmap?.box,
@@ -13328,6 +14091,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		issues?.withdraw();
 		releaseBaselines?.withdraw();
 		maintenancePolicy?.withdraw();
+		maintenanceRepairs?.withdraw();
 		maintenanceReview?.withdraw();
 		qualityReviews?.withdraw();
 		qualitySelections.clear();
@@ -13418,6 +14182,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				brief,
 				releaseBaselines,
 				maintenancePolicy,
+				maintenanceRepairs,
 				maintenanceReview,
 				qualityReviews,
 				roadmap,
@@ -13456,6 +14221,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				issues?.withdraw();
 				releaseBaselines?.withdraw();
 				maintenancePolicy?.withdraw();
+				maintenanceRepairs?.withdraw();
 				maintenanceReview?.withdraw();
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
@@ -13497,7 +14263,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_maintenance_check",
 			"pm_maintenance_review",
 			"pm_quality_review",
-			"pm_execution_verification"
+			"pm_execution_verification",
+			"pm_maintenance_repair"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -13506,7 +14273,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
 		}
-		if ((deliveries || workBatches || qualityReviews) && [
+		if ((deliveries || workBatches || qualityReviews || maintenanceRepairs) && [
 			"operation",
 			"deployment",
 			"integration"
@@ -13515,11 +14282,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				await deliveries?.refresh();
 				await workBatches?.refresh();
 				await qualityReviews?.refresh();
+				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
 			});
 			return eventReads;
 		}
-		if (kanban && [
+		if ((kanban || qualityReviews || maintenanceRepairs) && [
 			"work_item",
 			"project",
 			"task",
@@ -13527,7 +14295,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"operation",
 			"session"
 		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());
+			eventReads = eventReads.catch(() => {}).then(async () => {
+				await qualityReviews?.refresh();
+				await maintenanceRepairs?.refresh();
+				await kanban?.refresh();
+			});
 			return eventReads;
 		}
 	});
@@ -17264,6 +18036,196 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		}
 	};
 }
+//#endregion
+//#region src/pm-maintenance-repairs-strings.js
+var pmMaintenanceRepairsStrings = {
+	en: {
+		pmr_policy_runtime: "Adopted rules permit only their fixed sources and limits. Verification, acceptance and delivery still require original evidence.",
+		pmr_status_accepted: "Accepted request",
+		pmr_status_queued: "Queued",
+		pmr_status_pending: "Pending",
+		pmr_status_running: "Running",
+		pmr_status_succeeded: "Operation completed",
+		pmr_status_failed: "Failed",
+		pmr_status_cancelled: "Cancelled",
+		pmr_status_needs_attention: "Needs reconciliation",
+		pmr_status_not_admitted: "Not started",
+		pmr_status_passed: "Passed",
+		pmr_status_blocked: "Blocked",
+		pmr_status_unknown: "Unknown",
+		pmr_title: "Maintenance repairs",
+		pmr_intro: "Review one observed Issue against an adopted rule and its fixed implementation handoff.",
+		pmr_refresh: "Refresh repairs",
+		pmr_loading: "Reading original repair sources…",
+		pmr_unavailable: "Original repair sources are unavailable. Saved requests remain available for receipt recovery.",
+		pmr_invalid: "The repair response does not match its original workspace or source versions.",
+		pmr_limit: "This source collection exceeds the bounded selector. Narrow the source workflow before continuing.",
+		pmr_choose: "Choose an original record",
+		pmr_finding: "Observed Issue",
+		pmr_rule: "Adopted repair rule",
+		pmr_history: "Saved repair",
+		pmr_issue: "Issue",
+		pmr_start: "Start selected repair",
+		pmr_none: "None",
+		pmr_stale: "The policy, release, observation or stage changed. This draft still uses its original versions.",
+		pmr_rebase: "Use these reviewed repair versions",
+		pmr_owner: "A current owner with management access must select repair work and evidence.",
+		pmr_stopped: "New repair investment is stopped or unavailable. Original requests and evidence remain readable with current source access.",
+		pmr_no_rules: "Adopt a repair rule with an existing reviewed handoff before starting a repair.",
+		pmr_budget: "Adopted resource limits",
+		pmr_parallel: "parallel",
+		pmr_cost: "Model and provider charges are unmeasured. These limits do not prove a hard cost ceiling.",
+		pmr_reserved: "This repair still holds its capacity reservation.",
+		pmr_released: "This repair no longer holds a capacity reservation.",
+		pmr_dispatch: "Implementation dispatch",
+		pmr_verification: "Fixed revision verification",
+		pmr_quality: "Acceptance and review assessment",
+		pmr_publication: "PR publication",
+		pmr_ci: "Required native CI",
+		pmr_unproven: "Not proven",
+		pmr_recorded: "Original evidence recorded",
+		pmr_not_fixed: "Execution, checks or a PR alone do not prove the repair is accepted or released. Release publication is recorded separately.",
+		pmr_child: "Original implementation operation",
+		pmr_original_publication: "Original PR publication operation",
+		pmr_native_pr: "Native PR identity",
+		pmr_candidate: "Fixed candidate commit",
+		pmr_unknown: "The sent effect is unresolved. Check the original operation; do not send another publication request.",
+		pmr_original: "Original sources and recorded evidence",
+		pmr_work: "Work item",
+		pmr_policy: "Original policy",
+		pmr_observation: "Original observation",
+		pmr_digest: "Original document digest",
+		pmr_deadline: "Investment deadline",
+		pmr_retry: "Retries used",
+		pmr_deadline_block: "The original investment deadline has passed. Existing receipts can still be read.",
+		pmr_budget_block: "The adopted run or concurrency budget currently blocks new work.",
+		pmr_quality_needed: "Select an original qualified acceptance and review assessment.",
+		pmr_verify_needed: "Record the configured verification of this exact owned implementation result.",
+		pmr_gate: "The central has not permitted the next step. Read the original operation for details.",
+		pmr_evidence: "Original result evidence",
+		pmr_evidence_help: "Choose an exact saved result for this implementation. Recording evidence does not replace it with a newer result or approve a release.",
+		pmr_record: "Record selected evidence",
+		pmr_evidence_rebase: "Use current repair evidence revision",
+		pmr_revision: "Revision",
+		pmr_kind_verification: "Observed verification",
+		pmr_kind_quality: "Qualified assessment",
+		pmr_kind_required_ci: "Required native checks",
+		pmr_kind_acceptance: "Acceptance decision",
+		pmr_kind_delivery: "Delivery receipt",
+		pmr_filtered: "Some original sources are outside current access. The visible records are only a partial history.",
+		pmr_rules: "Repair rules and required checks",
+		pmr_rules_help: "Each rule uses an existing work item and an explicitly reviewed handoff. It cannot invent a work item, broaden allowed paths or silently follow a newer package.",
+		pmr_rule_key: "Stable repair rule key",
+		pmr_work_kind: "Repair work kind",
+		pmr_rule_labels: "Repair Issue labels (one per line)",
+		pmr_rule_paths: "Narrow repair paths (one per line)",
+		pmr_rule_command: "Configured verification command",
+		pmr_command_help: "Enter the exact configured command text you reviewed. The saved rule fixes its digest; it does not configure a new command on the host.",
+		pmr_add_rule: "Add reviewed handoff as a rule",
+		pmr_remove_rule: "Remove this rule",
+		pmr_rule_original: "Fixed handoff and release references",
+		pmr_rule_invalid: "Use a unique lowercase rule key, required labels, exact relative paths, an existing reviewed handoff and a verification command.",
+		pmr_review_changed: "The reviewed handoff or release changed. Review it again before adding this rule.",
+		pmr_rule_added: "The original handoff was added to this policy draft. Adopt the policy to authorize the rule.",
+		pmr_ci_profile: "Native required-check observation",
+		pmr_ci_unchanged: "Keep the original policy selection",
+		pmr_ci_explicit: "Observe applied GitHub required status checks",
+		pmr_ci_help: "Select this explicitly to observe the native required set for a fixed PR head. Empty or unavailable requirements do not pass; merge and deployment still enforce current gates."
+	},
+	"zh-TW": {
+		pmr_policy_runtime: "已採用的規則僅允許固定來源與額度內的工作。驗證、驗收與交付仍須原始證據。",
+		pmr_status_accepted: "請求已受理",
+		pmr_status_queued: "排隊中",
+		pmr_status_pending: "待處理",
+		pmr_status_running: "執行中",
+		pmr_status_succeeded: "操作已完成",
+		pmr_status_failed: "失敗",
+		pmr_status_cancelled: "已取消",
+		pmr_status_needs_attention: "待核對原始效果",
+		pmr_status_not_admitted: "尚未啟動",
+		pmr_status_passed: "通過",
+		pmr_status_blocked: "受阻",
+		pmr_status_unknown: "未知",
+		pmr_title: "維護修復",
+		pmr_intro: "依已採用的規則與固定實作交接，審閱一筆觀察到的 Issue。",
+		pmr_refresh: "重新讀取修復",
+		pmr_loading: "正在讀取原始修復來源…",
+		pmr_unavailable: "原始修復來源目前無法讀取。已保存的請求仍保留，可查回原始收據。",
+		pmr_invalid: "修復回應與原始專案或來源版本不符。",
+		pmr_limit: "來源集合超出選擇器上限，請先縮小來源工作範圍。",
+		pmr_choose: "選擇原始紀錄",
+		pmr_finding: "觀察到的 Issue",
+		pmr_rule: "已採用的修復規則",
+		pmr_history: "已保存的修復",
+		pmr_issue: "Issue",
+		pmr_start: "啟動選定修復",
+		pmr_none: "無",
+		pmr_stale: "政策、發布基準、觀察或階段已變更。草稿仍使用原始版本。",
+		pmr_rebase: "使用這次審閱的修復版本",
+		pmr_owner: "須由目前具管理權限的擁有者選定修復與證據。",
+		pmr_stopped: "目前已停止或無法新增修復投入。具來源權限時仍可讀取原始請求與證據。",
+		pmr_no_rules: "請先以既有且已審閱的交接內容採用修復規則。",
+		pmr_budget: "已採用的資源上限",
+		pmr_parallel: "同時工作",
+		pmr_cost: "模型與供應商費用尚未量測；這些上限不代表已確保費用不超支。",
+		pmr_reserved: "此修復仍保留工作容量。",
+		pmr_released: "此修復已釋放工作容量。",
+		pmr_dispatch: "實作派送",
+		pmr_verification: "固定版本驗證",
+		pmr_quality: "驗收與審查評估",
+		pmr_publication: "PR 發布",
+		pmr_ci: "原生必要 CI",
+		pmr_unproven: "尚未證實",
+		pmr_recorded: "已登記原始證據",
+		pmr_not_fixed: "執行、檢查或 PR 本身不代表修復已驗收或發布。發布結果須另行記錄。",
+		pmr_child: "原始實作操作",
+		pmr_original_publication: "原始 PR 發布操作",
+		pmr_native_pr: "原生 PR 識別",
+		pmr_candidate: "固定候選提交",
+		pmr_unknown: "已送出的外部效果尚未確認。請查回原始操作，不要另送發布請求。",
+		pmr_original: "原始來源與已登記證據",
+		pmr_work: "工作項目",
+		pmr_policy: "原始政策",
+		pmr_observation: "原始觀察",
+		pmr_digest: "原始文件摘要",
+		pmr_deadline: "投入截止時間",
+		pmr_retry: "已使用重試次數",
+		pmr_deadline_block: "原始投入期限已過，仍可讀取既有收據。",
+		pmr_budget_block: "已採用的執行或同時工作額度目前阻擋新增工作。",
+		pmr_quality_needed: "請選擇原始且合格的驗收與審查評估。",
+		pmr_verify_needed: "請登記此固定受管實作結果的設定驗證。",
+		pmr_gate: "中央尚未允許下一步，請查看原始操作的詳細紀錄。",
+		pmr_evidence: "原始結果證據",
+		pmr_evidence_help: "選擇此實作的確切已保存結果。登記證據不會改用較新結果，也不代表同意發布。",
+		pmr_record: "登記選定證據",
+		pmr_evidence_rebase: "使用目前的修復證據版本",
+		pmr_revision: "版本",
+		pmr_kind_verification: "已觀察驗證",
+		pmr_kind_quality: "合格評估",
+		pmr_kind_required_ci: "原生必要檢查",
+		pmr_kind_acceptance: "驗收決定",
+		pmr_kind_delivery: "交付收據",
+		pmr_filtered: "部分原始來源不在目前權限內，可見紀錄僅為部分歷史。",
+		pmr_rules: "修復規則與必要檢查",
+		pmr_rules_help: "每條規則使用既有工作項目與明確審閱的交接，不會建立新工作項目、擴大允許路徑或自動跟隨新版套件。",
+		pmr_rule_key: "穩定修復規則代號",
+		pmr_work_kind: "修復工種",
+		pmr_rule_labels: "修復 Issue 標籤（每行一個）",
+		pmr_rule_paths: "修復的較窄路徑（每行一個）",
+		pmr_rule_command: "已設定的驗證命令",
+		pmr_command_help: "輸入審閱過的已設定命令原文。規則保存其摘要，不會在主機新增命令設定。",
+		pmr_add_rule: "將已審閱交接加入規則",
+		pmr_remove_rule: "移除此規則",
+		pmr_rule_original: "固定交接與發布參照",
+		pmr_rule_invalid: "請使用唯一的小寫規則代號、必要標籤、確切相對路徑、已審閱交接及驗證命令。",
+		pmr_review_changed: "已審閱交接或發布基準已變更，請重新審閱後再加入規則。",
+		pmr_rule_added: "原始交接已加入政策草稿。採用政策後才會授權此規則。",
+		pmr_ci_profile: "原生必要檢查觀察",
+		pmr_ci_unchanged: "保留原政策選擇",
+		pmr_ci_explicit: "觀察 GitHub 實際套用的必要狀態檢查",
+		pmr_ci_help: "明確選定後才會觀察固定 PR head 的原生必要檢查。必要集合為空或無法取得時不會通過；合併與部署仍須通過目前關卡。"
+	}
+};
 //#endregion
 //#region src/pm-quality-reviews-strings.js
 var pmQualityReviewsStrings = {
@@ -21017,6 +21979,7 @@ var STRINGS = {
 		...pmStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
+		...pmMaintenanceRepairsStrings["zh-TW"],
 		...pmReleaseBaselineStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
 		...workDeliveryStrings["zh-TW"],
@@ -22479,6 +23442,7 @@ var STRINGS = {
 		...pmStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
+		...pmMaintenanceRepairsStrings.en,
 		...pmReleaseBaselineStrings.en,
 		...pmPackageHandoffStrings.en,
 		...workDeliveryStrings.en,
