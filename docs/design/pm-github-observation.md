@@ -102,3 +102,9 @@ Actions are development blockers. Complete empty evidence satisfies only this
 explicitly selected GitHub profile; BAT, tasks, Sprint, central operations and
 stability gates still apply. This is workload evidence, not automatic maintenance
 authorization or Definition of Done acceptance.
+
+The asynchronous caller deadline also covers DNS and response headers. One
+bounded read worker at most may remain outstanding per configured client after
+that deadline; its slot remains occupied until it exits. Later reads fail
+incomplete while it finishes, and its late response is discarded. This bounds
+worker accumulation when a provider or resolver stalls before returning headers.

@@ -337,3 +337,51 @@ async def test_history_respects_whole_record_utf8_byte_bound(ops, monkeypatch):
 def test_untrusted_pagination_cannot_change_provider_or_endpoint(link):
     with pytest.raises(provider.Incomplete):
         provider.next_page(link, 'https://api.github.com', '/repos/example/product/pulls', {'page': 1, 'per_page': 100})
+
+
+@pytest.mark.parametrize('action', ['pause', 'close'])
+async def test_explicit_observation_allowed_while_paused_or_closed(ops, monkeypatch, action):
+    data = await prepared(ops, monkeypatch)
+    await worktests.decide(ops, data['workspace_id'], action)
+    _, doc = await observe(ops, data)
+    assert doc['evidence']['status'] == 'complete'
+
+
+async def test_lifecycle_change_between_pages_stops_unsent_gets(ops, monkeypatch):
+    data = await prepared(ops, monkeypatch)
+    gh = ops.context['github']
+    async def pause(path, query):
+        await worktests.decide(ops, data['workspace_id'], 'pause')
+    gh.mutate = pause
+    result = await execute(ops, request(ops, data), success=False)
+    assert result['status'] == 'failed'
+    assert len(gh.reads) == 1
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_github_observations').fetchone()[0] == 0
+
+
+async def test_paused_observer_cannot_use_arbitrary_external_step(ops, monkeypatch):
+    data = await prepared(ops, monkeypatch)
+    await worktests.decide(ops, data['workspace_id'], 'pause')
+    op = ops.create(OWNER, **request(ops, data))[0]
+    calls = []
+    async def forbidden():
+        calls.append(True)
+        return {}
+    with pytest.raises(OperationError, match='stopped new investment'):
+        await OpContext(ops, op).step('pm.github.any_other_action', forbidden)
+    assert calls == []
+
+
+async def test_complete_empty_profile_can_pass_existing_stability_and_final_workload_gate(ops, monkeypatch):
+    data = await prepared(ops, monkeypatch)
+    await observe(ops, data)
+    worktests.inventory(ops)
+    await worktests.capture(ops, data)
+    monkeypatch.setattr(workload, 'time', SimpleNamespace(time=lambda: NOW + 60))
+    _, doc = await worktests.capture(ops, data)
+    assert doc['stability']['satisfied'] is True
+    current = workload._policy().active_record(ops, OWNER, data['workspace_id'])
+    with ops.journal.tx():
+        result = workload.evaluate_for_maintenance(ops, OWNER, data['workspace_id'], doc['snapshot_id'], current, now=NOW + 60)
+    assert result['eligible'] is True and result['reasons'] == []
+    assert result['automatic_maintenance_authorized'] is False
