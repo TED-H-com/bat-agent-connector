@@ -40,7 +40,7 @@ def validate(raw, *, session_id, context_digest):
             raise _bad()
         value = raw["pmRuntime"]
         attestation, process = value["attestation"], value["process"]
-        valid = (raw["sessionId"] == session_id and value["profile"] == PROFILE
+        valid = (raw["sessionId"] == session_id and value["sessionId"] == session_id and value["profile"] == PROFILE
             and type(value["profileVersion"]) is int and value["profileVersion"] == 1
             and value["clientContextDigest"] == context_digest and _hex(context_digest, 64)
             and value["codexVersion"] == CODEX_VERSION and value["codexSourceRevision"] == CODEX_SOURCE
@@ -68,7 +68,7 @@ def validate(raw, *, session_id, context_digest):
 
 def identity(value):
     return {key: copy.deepcopy(value[key]) for key in (
-        "profile", "profileVersion", "runtimeId", "clientContextDigest", "batVersion", "batSourceRevision",
+        "sessionId", "profile", "profileVersion", "runtimeId", "clientContextDigest", "batVersion", "batSourceRevision",
         "batBinaryDigest", "codexVersion", "codexSourceRevision", "codexBinaryDigest", "process", "threadId", "actualModel", "configDigest",
         "runtimeCwd", "attestation")}
 
@@ -180,6 +180,23 @@ def death_proof(db, run):
                 "host_rebooted", "pid_reused", "original_process_exited", "original_pid_absent"}:
             return {"runtime_id": value["runtimeId"], "process": value["process"], "observation": observed}
     return None
+
+
+def provenance(db, run):
+    """Compact references to the immutable original proof, never a new probe."""
+    rows = db.execute("SELECT sequence,document,document_digest FROM pm_bat_runtime_observations "
+                      "WHERE run_id=? ORDER BY sequence DESC LIMIT 1", (run["run_id"],)).fetchone()
+    if not rows:
+        return None
+    value = json.loads(rows["document"])
+    terminal = value.get("terminal") or {}
+    return {"adapter": ADAPTER, "profile": value["profile"], "profile_version": value["profileVersion"],
+        "session_id": value["sessionId"], "runtime_id": value["runtimeId"],
+        "observation_sequence": rows["sequence"], "observation_digest": rows["document_digest"],
+        "bat_source_revision": value["batSourceRevision"], "bat_binary_digest": value["batBinaryDigest"],
+        "codex_source_revision": value["codexSourceRevision"], "codex_binary_digest": value["codexBinaryDigest"],
+        "native_event_digest": terminal.get("eventDigest"), "native_message_id": terminal.get("nativeMessageId"),
+        "process_completion": death_proof(db, run)}
 
 
 def require_completed(db, run, assessment, *, prompt_digest, message_id):

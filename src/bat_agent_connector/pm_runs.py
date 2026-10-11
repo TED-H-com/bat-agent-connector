@@ -115,6 +115,9 @@ def read(ops, principal, workspace_id, run_id):
         run = get(ops.db, run_id)
         if run["workspace_id"] != workspace_id or not source_visible(ops.db, principal, run):
             raise _error("PM run not found", "PM_RUN_NOT_FOUND", 404)
+        from . import pm_bat_runtime
+        if run["adapter"] == pm_bat_runtime.ADAPTER:
+            run["bat_runtime_provenance"] = pm_bat_runtime.provenance(ops.db, run)
         _read_bound({"run": run})
         return run
 
@@ -518,20 +521,22 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
             raise _error("The native turn did not complete successfully", "PM_COMPLETION_UNPROVEN")
         if run["session_binding"].get("sdk_session_id") != sdk_session_id:
             raise _error("The reply differs from the originally observed native session", "PM_COMPLETION_UNPROVEN")
+        from . import pm_bat_runtime
         from .pm_runtime import assess_turn
+        bat_run = run["adapter"] == pm_bat_runtime.ADAPTER
+        launch = next((item["data"] for item in run["receipts"]
+                       if item["phase"] == "prepare" and item["status"] == "prepared"), {}) if bat_run else {}
         assessment = assess_turn(run["session_binding"]["session_id"], run["send_cursor"], events(journal.db, run_id),
                                  run["cursor"], expected_sdk_session_id=sdk_session_id,
-                                 gap=bool(run["gaps"]), has_more=run["has_more"], actual_model=run["session_binding"]["actual_model"])
+                                 gap=bool(run["gaps"]), has_more=run["has_more"], actual_model=run["session_binding"]["actual_model"],
+                                 expected_prompt_digest=launch.get("prompt_digest"))
         if (not assessment.get("complete") or assessment.get("content") != content
                 or assessment.get("native_turn_id") != native_turn_id
                 or assessment.get("sdk_session_id") != sdk_session_id
                 or assessment.get("actual_model") != model
                 or assessment.get("native_message_id") != native_message_id):
             raise _error("Assistant content or identity differs from native evidence", "PM_IMPORT_CONFLICT")
-        from . import pm_bat_runtime
-        if run["adapter"] == pm_bat_runtime.ADAPTER:
-            launch = next((item["data"] for item in run["receipts"]
-                           if item["phase"] == "prepare" and item["status"] == "prepared"), {})
+        if bat_run:
             pm_bat_runtime.require_completed(journal.db, run, assessment,
                 prompt_digest=launch.get("prompt_digest"), message_id="batc-pm-" + run["run_id"])
         message_id = "pmm_" + uuid.uuid5(uuid.UUID(pm_workspace.server_id(journal.db)), run_id + ":assistant").hex
@@ -546,6 +551,8 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
                 "input_ids": [item["input_id"] for group in run["context"]["inputs_by_status"].values() for item in group],
                 "message_ids": [item["message_id"] for item in run["context"]["messages"]],
                 "coverage": run["context"]["coverage"]}
+        if bat_run:
+            refs["bat_runtime"] = pm_bat_runtime.provenance(journal.db, run)
         journal.db.execute("INSERT INTO pm_assistant_provenance VALUES(?,?,?,?,?,?,?,?,?,?)",
                            (message_id, run_id, native_turn_id, native_message_id, sdk_session_id, model,
                             "complete", _json(refs), run["context_digest"], now))
