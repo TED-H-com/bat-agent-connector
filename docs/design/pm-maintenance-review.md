@@ -127,3 +127,64 @@ fixed period, original publication/policy, coverage gaps and comparison facts.
 Subsequent discussion/completion events do not change the historical export.
 The ordinary `pm.snapshot.created` event emitted by preparing a report also
 inherits the original preparing operation's source gate.
+
+## Weekly scheduling through the existing maintenance tick
+
+`pm_maintenance_review_schedule` has no timer or worker. W48's existing bounded
+rolling policy visit attempts one due weekly report before an interval check.
+This ordering prevents a policy with one parallel slot from permanently starving
+weekly reports. The scheduler admits the registered `prepare` action with its
+normal strict preconditions; it atomically stores a private immutable exact
+request/context binding and a weekly reservation in the same journal transaction.
+The report itself runs through the normal durable operation worker.
+
+Calendar windows use the adopted weekday, local time and IANA timezone. The
+first due instant is strictly after policy adoption. A fold selects the first
+occurrence; a nonexistent local minute advances to the first valid minute, with
+the adjustment saved. Weekly calculations are bounded and do not walk through
+missed weeks. Late service startup selects only the latest actual due week,
+reports the omitted-window count and never treats those weeks as checked.
+Duplicate and reversed-clock windows cannot create replacement reports.
+The report covers that latest half-open weekly period (or the period since
+adoption for its first week), so coalescing never silently expands past the
+31-day report bound. The latest prior review's pending/completed discussion
+context is carried explicitly; earlier meetings are never marked attended.
+
+Weekly reports reuse W48's original policy-controller authority: enabled explicit
+profile, current actual owner, original adopting actor and a current individual
+credential granting both scopes. Scheduled execution is allowed only in current
+Development or Maintain. Manual report availability while Paused/Closed does
+not grant automatic execution. The original scope, policy/baseline, lifecycle
+revision and execution epoch are rechecked with the current credential both
+before report construction and before insertion, under the original deadline.
+A report queued before pause/reopen or credential/source loss cannot publish.
+Existing completed local receipts still replay without reconstructing a report.
+
+The W48 capacity helper counts both check and weekly-report reservations.
+Unfinished reservations from old policies count against workspace concurrency;
+all reservations count against their original policy/period run budget even if
+failed or stopped. Reports release concurrency atomically with their saved
+Snapshot, or the existing tick reconciles a terminal operation with no uncertain
+external step. They never regain spent period budget or retry an original window.
+A record generation failure or deadline expiry leaves no partial Snapshot.
+
+`checks.schedule_status().schedule.weekly_review` reports `execution_available`
+only when the action and schedule schema are installed, along with next due time,
+original window/outcome, coalesced count, blocker and pending report identity.
+It never marks a discussion complete. `checks.capabilities(ops)` exposes the same
+registered availability; the no-argument compatibility call conservatively
+reports no weekly execution. Report `schedule` is null for manual preparation and
+contains the immutable window, deadline, calendar adjustment and missed-period
+coverage for a scheduled report. `tick()` exposes separate `weekly_scheduled`
+and `weekly_reconciled` counters while preserving the interval-check counters.
+
+A readable accumulated comparison chain can eventually exceed the explicit
+512-source bound. The scheduler preflights original source access and the same
+saved projection in a transaction. Only `PM_MAINTENANCE_REVIEW_SOURCE_LIMIT`
+permits a bounded reset: that admission rolls back, and an independent
+current-period report is admitted without any prior review ID/title/prose/digest
+in its public envelope. Its `previous_context` states
+`{status: omitted_source_limit, comparison_available: false}` and its changes are
+unavailable. Existing history is untouched, current-period sources remain fully
+gated, and this is never described as no change or resolution. Source withdrawal,
+corruption and other errors do not permit this fallback.
