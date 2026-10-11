@@ -1,0 +1,40 @@
+.pm-kanban { margin-top: 16px; min-width: 0; }
+.pm-kanban .pm-heading { margin-bottom: 8px; }
+.pm-kanban .pm-heading h2 { margin: 0 0 4px; }
+.pm-kanban p { margin: 4px 0; }
+.pm-kanban .pm-kanban-note { font-size: 14px; color: var(--muted); }
+.pm-kanban .pm-kanban-summary { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 8px 0; }
+.pm-kanban .pm-kanban-summary strong { font-size: 14px; }
+.pm-kanban .pm-kanban-list { margin: 8px 0; }
+.pm-kanban .pm-kanban-card { border-top: 1px solid var(--line); padding: 14px 0; min-width: 0; }
+.pm-kanban .pm-kanban-overview { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px 16px; }
+.pm-kanban .pm-kanban-overview h3 { font-size: 16px; margin: 0 0 4px; }
+.pm-kanban a { color: var(--accent); overflow-wrap: anywhere; }
+.pm-kanban .pm-kanban-metric { font-size: 14px; overflow-wrap: anywhere; }
+.pm-kanban .pm-kanban-metric > strong { display: block; }
+.pm-kanban .pm-kanban-card details { margin-top: 8px; }
+.pm-kanban summary { cursor: pointer; min-height: 28px; display: list-item; font-size: 14px; color: var(--accent); }
+.pm-kanban summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pm-kanban .pm-kanban-detail { padding: 8px 0; }
+.pm-kanban .pm-kanban-detail h4 { font-size: 14px; margin: 8px 0; }
+.pm-kanban .pm-kanban-detail dl { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr); gap: 4px 16px; font-size: 14px; }
+.pm-kanban .pm-kanban-detail dd { margin: 0; }
+.pm-kanban .pm-kanban-detail ul { padding-left: 20px; margin: 8px 0; }
+.pm-kanban .pm-kanban-detail li { padding: 4px 0; font-size: 14px; }
+.pm-kanban .pm-kanban-detail :is(dd, dt, li, code, time) { overflow-wrap: anywhere; }
+.pm-kanban .pm-kanban-detail code { display: block; }
+.pm-kanban .pm-kanban-notice { color: var(--text); font-size: 14px; }
+.pm-kanban .pm-kanban-footer { padding-top: 8px; }
+@media (max-width: 800px) {
+  .pm-kanban .pm-kanban-overview { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .pm-kanban .pm-kanban-work { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .pm-kanban .pm-heading { display: block; }
+  .pm-kanban .pm-heading > button { margin-bottom: 8px; }
+  .pm-kanban summary, .pm-kanban button, .pm-kanban h3 a { min-height: 44px; }
+  .pm-kanban summary { padding: 8px 0; }
+  .pm-kanban h3 a { display: flex; align-items: center; }
+  .pm-kanban .pm-kanban-detail dl { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .pm-kanban .pm-kanban-detail dd { margin-bottom: 8px; }
+}
