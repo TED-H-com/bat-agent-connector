@@ -1,6 +1,7 @@
 export const pmStrings = {
   en: {
     pm_earlier_notes: 'Load earlier notes', pm_more_threads: 'Load more discussions',
+    pm_missing_selection: 'Selected input outside this view', pm_missing_selection_help: 'This selection may have been revised or omitted from this page. Uncheck it to review and choose a current input; it will not be replaced automatically.',
     pm_title: 'Project discussions', pm_nav: 'PM', pm_workspaces: 'PM workspaces', pm_new_workspace: 'New workspace',
     pm_workspace_name: 'Workspace name', pm_create_workspace: 'Create workspace', pm_repositories_optional: 'Repositories (optional)',
     pm_repositories: 'Repositories, separated by commas', pm_repository_help: 'Use owner/repository names. These references do not select a BAT host or grant execution access.',
@@ -44,6 +45,7 @@ export const pmStrings = {
   },
   'zh-TW': {
     pm_earlier_notes: '載入較早筆記', pm_more_threads: '載入更多討論',
+    pm_missing_selection: '此頁未列出的已選紀錄', pm_missing_selection_help: '這筆選取可能已有修訂，或未列入此頁。可取消勾選，再檢視並選擇目前的紀錄；系統不會自動替換。',
     pm_title: '專案討論', pm_nav: 'PM 討論', pm_workspaces: 'PM 工作區', pm_new_workspace: '新增工作區',
     pm_workspace_name: '工作區名稱', pm_create_workspace: '建立工作區', pm_repositories_optional: '儲存庫（選填）',
     pm_repositories: '儲存庫（以逗號分隔）', pm_repository_help: '填入 owner/repository。這些參照不會選定 BAT 主機，也不會取得執行權限。',

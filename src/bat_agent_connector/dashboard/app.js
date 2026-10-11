@@ -399,8 +399,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		for (let i = forms.length - 1; i >= 0; i--) if (!forms[i].box.isConnected) forms.splice(i, 1);
 		else forms[i].update();
 	};
+	const timestamp = (value) => typeof value === "number" ? value * 1e3 : value;
 	const time = (value) => {
-		const date = new Date(value);
+		const date = new Date(timestamp(value));
 		return Number.isNaN(date.valueOf()) ? String(value || "") : date.toLocaleString();
 	};
 	const sourceText = (item) => {
@@ -573,7 +574,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		notes.replaceChildren(...(data.messages || []).map((message) => h("article", {
 			class: "pm-note",
 			"data-note-id": message.message_id
-		}, h("div", { class: "pm-note-stamp" }, h("strong", {}, message.actor), h("time", { datetime: message.created_at }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content))));
+		}, h("div", { class: "pm-note-stamp" }, h("strong", {}, message.actor), h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content))));
 		if (!data.messages?.length) notes.append(h("p", { class: "muted pm-empty" }, t("pm_no_notes")));
 		notes.scrollTop = bottom ? notes.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
@@ -642,6 +643,27 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				}
 				return row;
 			});
+			for (const id of selection) if (!(data.inputs || []).some((item) => item.input_id === id)) {
+				const checkbox = h("input", {
+					type: "checkbox",
+					checked: true,
+					"aria-label": t("pm_missing_selection"),
+					disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== "idea",
+					onchange: (event) => {
+						if (event.target.checked) return;
+						const selected = new Set(JSON.parse(planForm.values().selected || "[]"));
+						selected.delete(id);
+						planForm.set("selected", JSON.stringify([...selected]));
+						row.remove();
+					}
+				});
+				const old = data.input_history?.find((item) => item.input_id === id);
+				const row = h("article", {
+					class: "pm-fact",
+					"data-pm-missing-selection": id
+				}, h("label", { class: "pm-fact-heading" }, checkbox, t("pm_missing_selection")), h("p", { class: "muted" }, t("pm_missing_selection_help")), old ? h("p", {}, old.value) : null);
+				rows.push(row);
+			}
 			facts.replaceChildren(...rows);
 			if (!rows.length) facts.append(h("p", { class: "muted" }, t("pm_no_inputs")));
 		}
@@ -4639,6 +4661,8 @@ var pmStrings = {
 	en: {
 		pm_earlier_notes: "Load earlier notes",
 		pm_more_threads: "Load more discussions",
+		pm_missing_selection: "Selected input outside this view",
+		pm_missing_selection_help: "This selection may have been revised or omitted from this page. Uncheck it to review and choose a current input; it will not be replaced automatically.",
 		pm_title: "Project discussions",
 		pm_nav: "PM",
 		pm_workspaces: "PM workspaces",
@@ -4738,6 +4762,8 @@ var pmStrings = {
 	"zh-TW": {
 		pm_earlier_notes: "載入較早筆記",
 		pm_more_threads: "載入更多討論",
+		pm_missing_selection: "此頁未列出的已選紀錄",
+		pm_missing_selection_help: "這筆選取可能已有修訂，或未列入此頁。可取消勾選，再檢視並選擇目前的紀錄；系統不會自動替換。",
 		pm_title: "專案討論",
 		pm_nav: "PM 討論",
 		pm_workspaces: "PM 工作區",

@@ -2,7 +2,7 @@ import {conversationFixture} from './conversation-fixture.ts';
 export const workspaceId='ws_'+'1'.repeat(32), threadId='pmt_'+'2'.repeat(32), inputA='pmi_'+'a'.repeat(32), inputB='pmi_'+'b'.repeat(32);
 export const pmPath=`/pm/workspaces/${workspaceId}/threads/${threadId}`;
 export const pmRoute=`/dashboard/#/pm/${workspaceId}/${threadId}`;
-const stamp='2026-10-11T12:00:00Z';
+const stamp=Date.parse('2026-10-11T12:00:00Z') / 1000;
 export function pmFixture() {
   const base=conversationFixture();
   const state={actor:'reader', principal:'person-1', role:'owner', manage:true, available:true, failRead:false,
@@ -46,7 +46,7 @@ export function pmFixture() {
         }else if(action==='pm.thread.create'){state.thread.title=params.title;result={workspace_id:target.workspace_id,thread_id:threadId,version:1,mode:'idea'};
         }else if(action==='pm.message.append')state.messages.push({message_id:'pmm_'+String(state.messages.length+1).padStart(32,'0'),sequence:state.messages.length+1,actor:state.actor,content:params.content,created_at:stamp});
         else if(action==='pm.input.record')state.inputs.push({input_id:'pmi_'+String(state.inputs.length+1).padStart(32,'0'),...params,recorded_by:state.actor,confirmed_by:null,evidence_verification:params.source_ref.kind==='message'?'central_message':'unverified_claim'});
-        else if(action==='pm.input.confirm')state.inputs=state.inputs.map(item=>item.input_id===params.input_id?{...item,status:'user_confirmed',confirmed_by:state.actor}:item);
+        else if(action==='pm.input.confirm')state.inputs=state.inputs.map(item=>item.input_id===params.input_id?{...item,input_id:'pmi_'+'c'.repeat(32),supersedes_input_id:item.input_id,status:'user_confirmed',confirmed_by:state.actor}:item);
         else if(action==='pm.thread.plan'){
           state.thread.mode='planning';state.thread.draft_id='pmd_'+'6'.repeat(32);
           state.draft={draft_id:state.thread.draft_id,status:'draft',title:state.thread.title,rationale:params.rationale,

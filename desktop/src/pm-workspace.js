@@ -138,7 +138,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false;
   const noteCache = new Map();
   const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (!forms[i].box.isConnected) forms.splice(i, 1); else forms[i].update();}};
-  const time = value => {const date = new Date(value); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
+  const timestamp = value => typeof value === 'number' ? value * 1000 : value;
+  const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
   const sourceText = item => {
     const source = item.source_ref || {};
     if (source.kind === 'message') {
@@ -211,7 +212,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
     const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
     notes.replaceChildren(...(data.messages || []).map(message => h('article', {class: 'pm-note', 'data-note-id': message.message_id},
-      h('div', {class: 'pm-note-stamp'}, h('strong', {}, message.actor), h('time', {datetime: message.created_at}, time(message.created_at))),
+      h('div', {class: 'pm-note-stamp'}, h('strong', {}, message.actor), h('time', {datetime: new Date(timestamp(message.created_at)).toISOString()}, time(message.created_at))),
       h('div', {class: 'pm-note-text'}, message.content))));
     if (!data.messages?.length) notes.append(h('p', {class: 'muted pm-empty'}, t('pm_no_notes')));
     notes.scrollTop = bottom ? notes.scrollHeight : scroll;
@@ -256,6 +257,19 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       return row;
     });
+    for (const id of selection) if (!(data.inputs || []).some(item => item.input_id === id)) {
+      const checkbox = h('input', {type: 'checkbox', checked: true, 'aria-label': t('pm_missing_selection'),
+        disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== 'idea', onchange: event => {
+          if (event.target.checked) return;
+          const selected = new Set(JSON.parse(planForm.values().selected || '[]')); selected.delete(id);
+          planForm.set('selected', JSON.stringify([...selected])); row.remove();
+        }});
+      const old = data.input_history?.find(item => item.input_id === id);
+      const row = h('article', {class: 'pm-fact', 'data-pm-missing-selection': id},
+        h('label', {class: 'pm-fact-heading'}, checkbox, t('pm_missing_selection')),
+        h('p', {class: 'muted'}, t('pm_missing_selection_help')), old ? h('p', {}, old.value) : null);
+      rows.push(row);
+    }
     facts.replaceChildren(...rows);
     if (!rows.length) facts.append(h('p', {class: 'muted'}, t('pm_no_inputs')));
     }
