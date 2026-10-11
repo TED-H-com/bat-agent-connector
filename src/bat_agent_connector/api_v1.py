@@ -169,6 +169,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs", self.pm_runs, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/runs/(?P<run_id>pmr_[0-9a-f]{32})", self.pm_run, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/capabilities", self.pm_capabilities, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/spec-sources", self.pm_spec_sources, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/spec-sources/capabilities", self.pm_spec_source_capabilities, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plans", self.pm_plans, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/projects", self.pm_projects, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/plan-comparison", self.pm_plan_comparison, "observe"),
@@ -557,6 +559,20 @@ class ApiV1:
     async def pm_workspaces(self, principal, query, **_):
         return self._pm_read(principal, "pm_workspaces_list", query)
 
+    async def _pm_spec_read(self, principal, method, query, workspace_id):
+        from .pm_spec_reads import FIELDS, read
+        self._exact_query(query, set(FIELDS[method]) - {"workspace_id"})
+        params = {key: values[0] for key, values in query.items()}
+        if "paths" in params:
+            params["paths"] = params["paths"].split(",")
+        return 200, await read(self.daemon.ops, principal, method, {**params, "workspace_id": workspace_id})
+
+    async def pm_spec_sources(self, principal, query, workspace_id, **_):
+        return await self._pm_spec_read(principal, "pm_spec_sources_get", query, workspace_id)
+
+    async def pm_spec_source_capabilities(self, principal, query, workspace_id, **_):
+        return await self._pm_spec_read(principal, "pm_spec_source_capabilities_get", query, workspace_id)
+
     async def pm_workspace(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_workspace_get", query, workspace_id=workspace_id)
 
@@ -726,7 +742,7 @@ class ApiV1:
                                                     "roadmap": "pm.roadmap.baseline.set" in self.daemon.ops.actions,
                                                     "sprints": "pm.sprint.create" in self.daemon.ops.actions,
                                                     "governance": "pm.governance.record" in self.daemon.ops.actions,
-                                                    "kanban": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
+                                                    "kanban": True, "spec_sources": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},

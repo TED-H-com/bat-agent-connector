@@ -1086,6 +1086,51 @@ pub fn external_url(input: &str) -> Result<Url, String> {
     Ok(url)
 }
 
+// Same conservative artifact paths as the central reader; never local filesystem paths.
+fn valid_spec_source_path(path: &str) -> bool {
+    if path.len() > 800 {
+        return false;
+    }
+    if path == "openspec/config.yaml" {
+        return true;
+    }
+    let component = |part: &str| {
+        !part.is_empty()
+            && part.len() <= 100
+            && part.as_bytes()[0].is_ascii_alphanumeric()
+            && part
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+    };
+    let parts: Vec<_> = path.split('/').collect();
+    let tail = if parts.starts_with(&["openspec", "specs"]) {
+        &parts[2..]
+    } else if parts.starts_with(&["openspec", "changes"]) && parts.len() >= 4 {
+        let offset = if parts[2] == "archive" { 3 } else { 2 };
+        if parts.len() <= offset + 1 || !component(parts[offset]) {
+            return false;
+        }
+        let artifact = &parts[offset + 1..];
+        if artifact.len() == 1
+            && matches!(
+                artifact[0],
+                "proposal.md" | "design.md" | "tasks.md" | ".openspec.yaml"
+            )
+        {
+            return true;
+        }
+        if artifact[0] != "specs" {
+            return false;
+        }
+        &artifact[1..]
+    } else {
+        return false;
+    };
+    (2..=9).contains(&tail.len())
+        && tail.last() == Some(&"spec.md")
+        && tail[..tail.len() - 1].iter().all(|part| component(part))
+}
+
 pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     // Match raw paths before URL parsing so traversal cannot be normalized into an allowed route.
     if input.path.len() > 4096
@@ -1111,7 +1156,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1238,6 +1283,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let evidence_list = path.ends_with("/evidence");
             let snapshot_list = path.ends_with("/snapshots");
             let comparison = path.ends_with("/plan-comparison");
+            let spec_sources = path.ends_with("/spec-sources");
             let roadmap_list = path.ends_with("/roadmap/revisions");
             let governance_list = path.ends_with("/governance");
             let governance_history = path.contains("/governance/") && path.ends_with("/history");
@@ -1275,6 +1321,32 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
+                "repository" if spec_sources => {
+                    value.len() <= 256
+                        && value.split('/').count() == 2
+                        && value.split('/').all(|part| {
+                            !part.is_empty()
+                                && part != "."
+                                && part != ".."
+                                && part
+                                    .bytes()
+                                    .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+                        })
+                }
+                "commit_sha" if spec_sources => {
+                    value.len() == 40
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "paths" if spec_sources => {
+                    let mut selected = std::collections::HashSet::new();
+                    !value.is_empty()
+                        && value.split(',').count() <= 100
+                        && value
+                            .split(',')
+                            .all(|path| valid_spec_source_path(path) && selected.insert(path))
+                }
                 "from_revision_id" | "to_revision_id" if comparison => {
                     value.len() == 38
                         && value.starts_with("pmrev_")
@@ -1624,6 +1696,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Central query parameter is not allowed".into());
         }
     }
+    if pm
+        && path.ends_with("/spec-sources")
+        && !(query_keys.contains("repository") && query_keys.contains("commit_sha"))
+    {
+        return Err("Fixed specification reads require repository and commit".into());
+    }
     if query_keys.contains("source_kind") != query_keys.contains("source_id") {
         return Err("Delivery source selector requires kind and ID".into());
     }
@@ -1838,6 +1916,46 @@ mod tests {
         input.body = None;
         input.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&input).is_err());
+    }
+
+    #[test]
+    fn specification_reads_only_allow_exact_bounded_source_queries() {
+        let workspace = "/pm/workspaces/ws_00000000000000000000000000000000";
+        let source = format!(
+            "{workspace}/spec-sources?repository=example/project&commit_sha={}",
+            "a".repeat(40)
+        );
+        for path in [format!("{workspace}/spec-sources/capabilities"), source.clone(),
+            format!("{source}&paths=openspec/config.yaml,openspec/changes/archive/specs/tasks.md,openspec/specs/identity/login/spec.md")] {
+            assert!(validate_request(&get(&path)).is_ok(), "{path}");
+        }
+        for path in [
+            format!("{workspace}/spec-sources"),
+            format!("{workspace}/spec-sources/capabilities?repository=example/project"),
+            format!("{source}&repository=other/project"),
+            format!("{source}&actor=other"),
+            format!("{source}&paths="),
+            format!("{source}&paths=../secret"),
+            format!("{source}&paths=openspec/../config.yaml"),
+            format!("{source}&paths=openspec/config.yaml,openspec/config.yaml"),
+            format!("{source}&paths=openspec/changes/archive/tasks.md"),
+            format!("{source}&paths=openspec/changes/archive/specs/spec.md"),
+            format!("{source}&commit_sha=HEAD"),
+            format!("{source}&paths=openspec%5Cconfig.yaml"),
+            format!("{workspace}/spec-sources/apply"),
+            format!(
+                "{source}&paths={}",
+                (0..101)
+                    .map(|i| format!("openspec/specs/c{i}/spec.md"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        ] {
+            assert!(validate_request(&get(&path)).is_err(), "{path}");
+        }
+        let mut write = get(&source);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
     }
 
     #[test]
