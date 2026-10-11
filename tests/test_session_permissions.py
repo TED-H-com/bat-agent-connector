@@ -566,8 +566,8 @@ async def test_intent_only_process_interruption_cannot_reconstruct_no_send(owned
     import asyncio
     d, tid = owned
     start = d.ops._step_start
-    def crash(op_id, name, request):
-        start(op_id, name, request)
+    def crash(op_id, name, request, **kwargs):
+        start(op_id, name, request, **kwargs)
         if name == "permissions.mode":
             raise asyncio.CancelledError("process interruption loses volatile transport marker")
     monkeypatch.setattr(d.ops, "_step_start", crash)
