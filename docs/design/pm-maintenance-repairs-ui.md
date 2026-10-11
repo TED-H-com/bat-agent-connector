@@ -52,3 +52,12 @@ not imply repair acceptance, release publication or runtime termination. Capacit
 is projected separately; `PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN` explains why a
 successful parent can retain its reservation. A succeeded child alone does not
 invent this outcome, and source withdrawal clears the saved result as usual.
+
+Verified merge/deployment outcomes retain their original operation links. Runtime
+completion is shown only for the original parent/execution IDs and native-turn
+completion receipt; it does not describe the retained process as terminated.
+Capacity remains the central repair record's independent fact. A matching original
+baseline child and result show verified-deployment baseline advancement; a stopped
+selection explains that the prior baseline remains. These projections add no new
+action, confirmation, provider request or editable evidence. Original source
+withdrawal clears them together with the repair.

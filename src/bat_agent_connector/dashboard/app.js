@@ -10033,7 +10033,20 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	}
 	function render(row) {
 		const c = row.context, p = row.progress || {}, box = h("article", { "data-repair": row.repair_id }, h("h3", {}, `${t("pmr_issue")} #${c.finding.native.number}`), line("pmr_rule", c.rule.key), line("pmr_dispatch", state(row.child?.status || "not_admitted")), text(row.capacity_held === false ? "pmr_released" : "pmr_reserved"), line("pmr_verification", p.verification ? state(p.verification.status) : t("pmr_unproven")), line("pmr_quality", p.quality?.length ? t("pmr_recorded") : t("pmr_unproven")), line("pmr_publication", row.publication_child ? state(row.publication_child.status) : t("pmr_unproven")), line("pmr_ci", p.required_ci_receipts?.length ? t("pmr_recorded") : t("pmr_unproven")), text("pmr_not_fixed"));
-		if (row.outcome === "published_for_review") box.prepend(line("pmr_outcome", t("pmr_published_for_review")));
+		if ([
+			"published_for_review",
+			"merged",
+			"deployed"
+		].includes(row.outcome)) box.prepend(line("pmr_outcome", t("pmr_" + row.outcome)));
+		const completed = row.runtime_completion, baselineUpdate = row.baseline_update;
+		if (completed?.schema === "pm_repair_runtime_completion_v1" && completed.parent_operation_id === row.operation_id && completed.execution_operation_id === row.child?.operation_id && completed.runtime_status === "original_turn_completed") {
+			box.append(line("pmr_runtime", t("pmr_turn_completed")));
+			if (op.test(completed.observation_operation_id)) box.append(h("p", {}, t("pmr_completion_receipt"), " · ", link(completed.observation_operation_id)));
+		} else if (row.runtime_observer) box.append(line("pmr_runtime", t("pmr_unproven")), h("p", {}, t("pmr_completion_receipt"), " · ", link(row.runtime_observer.operation_id)));
+		if (row.delivery_child) box.append(line("pmr_delivery", state(row.delivery_child.status)), h("p", {}, t("pmr_original_delivery"), " · ", link(row.delivery_child.operation_id)));
+		if (baselineUpdate?.status === "updated" && row.baseline_child?.result?.baseline_id === baselineUpdate.baseline_id && row.baseline_child.operation_id === baselineUpdate.operation_id) box.append(line("pmr_baseline_update", t("pmr_baseline_updated")), h("p", {}, t("pmr_baseline_receipt"), " · ", link(baselineUpdate.operation_id)));
+		else if (baselineUpdate?.status === "not_updated") box.append(line("pmr_baseline_update", t("pmr_baseline_not_updated")));
+		else if (row.baseline_child) box.append(line("pmr_baseline_update", state(row.baseline_child.status)), h("p", {}, t("pmr_baseline_receipt"), " · ", link(row.baseline_child.operation_id)));
 		if (row.child) box.append(h("p", {}, t("pmr_child"), " · ", link(row.child.operation_id)));
 		if (row.publication_child) {
 			box.append(h("p", {}, t("pmr_original_publication"), " · ", link(row.publication_child.operation_id)));
@@ -18414,6 +18427,17 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-maintenance-repairs-strings.js
 var pmMaintenanceRepairsStrings = {
 	en: {
+		pmr_merged: "Verified merge",
+		pmr_deployed: "Verified deployment",
+		pmr_runtime: "Original implementation turn",
+		pmr_turn_completed: "Completion verified",
+		pmr_completion_receipt: "Original completion evidence",
+		pmr_delivery: "Delivery operation",
+		pmr_original_delivery: "Original delivery receipt",
+		pmr_baseline_update: "Maintenance baseline",
+		pmr_baseline_updated: "Updated from the verified deployment",
+		pmr_baseline_not_updated: "The original baseline was retained; check the original operation for the reason.",
+		pmr_baseline_receipt: "Original baseline selection receipt",
 		pmr_policy_runtime: "Adopted rules permit only their fixed sources and limits. Verification, acceptance and delivery still require original evidence.",
 		pmr_status_accepted: "Accepted request",
 		pmr_status_queued: "Queued",
@@ -18510,6 +18534,17 @@ var pmMaintenanceRepairsStrings = {
 		pmr_ci_help: "Select this explicitly to observe the native required set for a fixed PR head. Empty or unavailable requirements do not pass; merge and deployment still enforce current gates."
 	},
 	"zh-TW": {
+		pmr_merged: "已核對合併",
+		pmr_deployed: "已核對部署",
+		pmr_runtime: "原始實作回合",
+		pmr_turn_completed: "已核對完成",
+		pmr_completion_receipt: "原始完成證據",
+		pmr_delivery: "交付操作",
+		pmr_original_delivery: "原始交付收據",
+		pmr_baseline_update: "維護基準",
+		pmr_baseline_updated: "已依核對後的部署更新",
+		pmr_baseline_not_updated: "保留原始基準；可查看原始操作了解原因。",
+		pmr_baseline_receipt: "原始基準選定收據",
 		pmr_policy_runtime: "已採用的規則僅允許固定來源與額度內的工作。驗證、驗收與交付仍須原始證據。",
 		pmr_status_accepted: "請求已受理",
 		pmr_status_queued: "排隊中",

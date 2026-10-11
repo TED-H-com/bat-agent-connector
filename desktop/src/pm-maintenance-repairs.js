@@ -81,7 +81,19 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       line('pmr_rule',c.rule.key),line('pmr_dispatch',state(row.child?.status||'not_admitted')),text(row.capacity_held===false?'pmr_released':'pmr_reserved'),
       line('pmr_verification',p.verification?state(p.verification.status):t('pmr_unproven')),line('pmr_quality',p.quality?.length?t('pmr_recorded'):t('pmr_unproven')),
       line('pmr_publication',row.publication_child?state(row.publication_child.status):t('pmr_unproven')),line('pmr_ci',p.required_ci_receipts?.length?t('pmr_recorded'):t('pmr_unproven')),text('pmr_not_fixed'));
-    if(row.outcome==='published_for_review')box.prepend(line('pmr_outcome',t('pmr_published_for_review')));
+    if(['published_for_review','merged','deployed'].includes(row.outcome))box.prepend(line('pmr_outcome',t('pmr_'+row.outcome)));
+    const completed=row.runtime_completion,baselineUpdate=row.baseline_update;
+    if(completed?.schema==='pm_repair_runtime_completion_v1'&&completed.parent_operation_id===row.operation_id
+      &&completed.execution_operation_id===row.child?.operation_id&&completed.runtime_status==='original_turn_completed'){
+      box.append(line('pmr_runtime',t('pmr_turn_completed')));
+      if(op.test(completed.observation_operation_id))box.append(h('p',{},t('pmr_completion_receipt'),' · ',link(completed.observation_operation_id)));
+    }else if(row.runtime_observer)box.append(line('pmr_runtime',t('pmr_unproven')),h('p',{},t('pmr_completion_receipt'),' · ',link(row.runtime_observer.operation_id)));
+    if(row.delivery_child)box.append(line('pmr_delivery',state(row.delivery_child.status)),h('p',{},t('pmr_original_delivery'),' · ',link(row.delivery_child.operation_id)));
+    if(baselineUpdate?.status==='updated'&&row.baseline_child?.result?.baseline_id===baselineUpdate.baseline_id
+      &&row.baseline_child.operation_id===baselineUpdate.operation_id){
+      box.append(line('pmr_baseline_update',t('pmr_baseline_updated')),h('p',{},t('pmr_baseline_receipt'),' · ',link(baselineUpdate.operation_id)));
+    }else if(baselineUpdate?.status==='not_updated')box.append(line('pmr_baseline_update',t('pmr_baseline_not_updated')));
+    else if(row.baseline_child)box.append(line('pmr_baseline_update',state(row.baseline_child.status)),h('p',{},t('pmr_baseline_receipt'),' · ',link(row.baseline_child.operation_id)));
     if(row.child)box.append(h('p',{},t('pmr_child'),' · ',link(row.child.operation_id)));
     if(row.publication_child){box.append(h('p',{},t('pmr_original_publication'),' · ',link(row.publication_child.operation_id)));
       const receipt=row.publication_child.result?.creation_receipt;if(receipt)box.append(line('pmr_native_pr',receipt.native_pr_id),line('pmr_candidate',receipt.candidate_sha));
