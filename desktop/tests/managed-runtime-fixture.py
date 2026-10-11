@@ -68,6 +68,14 @@ def main() -> None:
             try:
                 reply = json.loads(result.stdout)
                 details = {key: reply.get(key) for key in ("error", "message", "errno", "winerror")}
+                location = reply.get("location", {})
+                details["location"] = {
+                    "phase": location.get("phase") if location.get("phase") in {
+                        "root", "launcher_lock", "prepare", "manifest", "service_lease", "spawn",
+                        "endpoint", "verify", "ensure", "serve", "stop", "unknown"} else "unknown",
+                    "storage": location.get("storage") if location.get("storage") in {
+                        "directory", "open", "read", "write", "lock", "none"} else "unknown",
+                } if isinstance(location, dict) else {"phase": "unknown", "storage": "unknown"}
             except (ValueError, TypeError):
                 details = {"error": "INVALID_RUNTIME_REPLY"}
             raise AssertionError(f"Packaged runtime {action} failed ({result.returncode}): {details}")
