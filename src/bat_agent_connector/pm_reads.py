@@ -334,7 +334,7 @@ def read(ops, principal, method, params):
             return pm_plans.get_plan(ops, principal, workspace_id, params.get("revision_id"))
         if method == "pm_plan_accepted_get":
             return pm_plans.accepted_plan(ops, principal, workspace_id)
-        return {"version": 1, "head": pm_plans.head(ops.db, workspace_id)}
+        return {"version": 1, "head": pm_plans.public_head(ops, principal, workspace_id)}
     if method == "pm_runs_list":
         from . import pm_runs
         return pm_runs.list_runs(ops, principal, workspace_id, thread_id=thread_id,
