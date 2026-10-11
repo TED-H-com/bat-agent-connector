@@ -1153,7 +1153,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	const number = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!number(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Follow-up page size");
 	let serial = 0, selected = "", loaded = false, head = null, plan = null, metadata = [], next = null, sourceLoaded = false;
-	let sourcePages = {}, snapshot = null, thread = null, editor = null, reading = false, sourceSerial = 0, retired = false;
+	let sourcePages = {}, snapshot = null, thread = null, editor = null, reading = false, sourceSerial = 0, retired = false, verifiedRole = null;
 	const status = h("div", { role: "status" }), view = h("div"), sourceStatus = h("div", { role: "status" }), choices = h("div"), meetingChoices = h("div");
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
 	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_fu_unknown"));
@@ -1213,10 +1213,10 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	}
 	function renderNavigation() {
 		const entries = metadata.map((row) => [row.intake_id, `#${row.version} · ${row.created_by}`]);
+		updateOptions(previousChoice, entries, "pm_fu_no_comparison");
 		if (selected && !entries.some(([id]) => id === selected)) entries.push([selected, t("pm_fu_saved_selection") + " · " + selected]);
 		updateOptions(choose, entries, "pm_fu_latest");
 		choose.value = selected;
-		updateOptions(previousChoice, entries, "pm_fu_no_comparison");
 		more.hidden = next == null;
 		more.disabled = reading;
 	}
@@ -1264,6 +1264,17 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		}
 		const doc = row.document;
 		const summary = h("div", { class: "pm-fu-meta" }, h("strong", {}, t("pm_fu_version", { version: row.version })), h("span", {}, t("pm_fu_prepared_at"), ": ", date(row.created_at)), h("span", {}, t("pm_fu_snapshot_at"), ": ", date(doc.snapshot_ref.as_of)));
+		const gaps = [
+			"projects_truncated",
+			"work_truncated",
+			"evidence_truncated",
+			"bytes_truncated"
+		].filter((key) => doc.coverage?.snapshot?.[key] === true).map((key) => "pm_fu_" + key);
+		if (doc.coverage?.thread?.truncated) gaps.push("pm_fu_truncated");
+		const coverageWarning = gaps.length ? h("aside", {
+			class: "pm-fact",
+			"data-pm-fu-partial": ""
+		}, h("h3", {}, t("pm_fu_partial")), note("pm_fu_partial_help"), h("ul", {}, ...gaps.map((key) => h("li", {}, t(key))))) : "";
 		const agenda = h("section", { "data-pm-fu-agenda": "" }, h("h3", {}, t("pm_fu_agenda")));
 		if (!doc.agenda.length) agenda.append(note("pm_fu_no_agenda"));
 		else agenda.append(h("ol", {}, ...doc.agenda.map((item) => h("li", { class: "pm-fact" }, h("strong", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_fu_basis_" + item.ordering_basis)), fold("pm_fu_sources", sourceRefs(item.source_refs))))));
@@ -1283,15 +1294,15 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			"unchanged",
 			"no_longer_selected"
 		].map((kind) => h("div", {}, h("h4", {}, t("pm_fu_change_" + kind)), ...(doc.changes?.[kind] || []).map((identifier) => h("p", {}, code(identifier))), !doc.changes?.[kind]?.length ? note("pm_fu_none") : "")), doc.previous_intake_id ? code(doc.previous_intake_id) : note("pm_fu_no_comparison"));
-		const sources = fold("pm_fu_fixed_sources", h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"), doc.coverage?.thread?.truncated ? note("pm_fu_truncated") : "");
-		view.append(summary, note("pm_fu_preparation_only"), agenda, knowledge, issues, changes, sources);
+		const sources = fold("pm_fu_fixed_sources", h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"));
+		view.append(summary, note("pm_fu_preparation_only"), coverageWarning, agenda, knowledge, issues, changes, sources);
 	}
 	function stale() {
 		if (!baseline.value || head == null || plan == null) return false;
 		const value = JSON.parse(baseline.value);
 		return value.expected_version !== head || value.expected_plan_version !== plan || value.thread_id !== threadChoice.value || thread && value.expected_thread_version !== thread.version;
 	}
-	const can = () => loaded && !retired && actor === caps()?.actor && permitted(false);
+	const can = () => loaded && !retired && actor === caps()?.actor && permitted(false) && (verifiedRole === null || ["owner", "contributor"].includes(verifiedRole));
 	const ready = () => can() && sourceLoaded && snapshot?.snapshot_id === snapshotChoice.value && snapshot.baseline?.document && !snapshot.visibility?.filtered && (!threadChoice.value || thread?.thread_id === threadChoice.value) && baseline.value && !stale();
 	function bindVersions() {
 		if (!editor || editor.locked() || !can() || head == null || plan == null || threadChoice.value && !thread) return;
@@ -1618,6 +1629,18 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	editorFold.addEventListener("toggle", () => {
 		if (editorFold.open && loaded && !sourceLoaded) loadSources();
 	});
+	async function verifyWorkspace(ticket) {
+		const data = await api("GET", endpoint);
+		if (!current(ticket)) return false;
+		const member = data.workspace?.membership;
+		if (data.workspace?.workspace_id !== workspaceId || member?.actor !== actor || ![
+			"owner",
+			"contributor",
+			"reader"
+		].includes(member.role)) throw Error(t("pm_fu_scope_error"));
+		verifiedRole = member.role;
+		return true;
+	}
 	async function refresh() {
 		const ticket = ++serial;
 		++sourceSerial;
@@ -1636,27 +1659,40 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 				retired = true;
 				throw Error(t("pm_fu_actor_changed"));
 			}
-			const [latest, page, planData] = await Promise.all([
-				api("GET", `${endpoint}/follow-ups/latest`),
-				api("GET", `${endpoint}/follow-ups?after=0&limit=${pageSize}`),
-				api("GET", `${endpoint}/plans/head`)
+			const listPath = `${endpoint}/follow-ups?after=0&limit=${pageSize}`, planPath = `${endpoint}/plans/head`;
+			const detailPath = selected ? `${endpoint}/follow-ups/${encodeURIComponent(selected)}` : `${endpoint}/follow-ups/latest`;
+			let [page, planData, result] = await Promise.all([
+				api("GET", listPath),
+				api("GET", planPath),
+				api("GET", detailPath).then((value) => ({ value }), (error) => ({ error }))
 			]);
 			if (!current(ticket)) return;
-			check(latest);
+			const sourceUnavailable = result.error?.code === "PM_FOLLOW_UP_SOURCE_UNAVAILABLE";
+			if (result.error && !sourceUnavailable) throw result.error;
+			if (sourceUnavailable || verifiedRole !== null) {
+				if (!await verifyWorkspace(ticket)) return;
+				[page, planData] = await Promise.all([api("GET", listPath), api("GET", planPath)]);
+				if (!current(ticket)) return;
+			}
 			metadataPage(page, 0);
 			const planHead = planData.head;
-			if (planHead?.workspace_id !== workspaceId || !number(planHead.version) || !number(latest.head_version)) throw Error(t("pm_fu_scope_error"));
-			head = latest.head_version;
+			if (planHead?.workspace_id !== workspaceId || !number(planHead.version)) throw Error(t("pm_fu_scope_error"));
+			head = page.head_version;
 			plan = planHead.version;
 			metadata = page.intakes;
 			next = page.next_cursor;
-			const detail = selected ? check(await api("GET", `${endpoint}/follow-ups/${encodeURIComponent(selected)}`)) : latest;
-			if (!current(ticket)) return;
-			if (detail.intake) validIntake(detail.intake, selected || null);
-			else if (selected) throw Error(t("pm_fu_scope_error"));
+			const detail = result.value;
+			if (detail) {
+				check(detail);
+				if (!number(detail.head_version)) throw Error(t("pm_fu_scope_error"));
+				head = Math.max(head, detail.head_version);
+				if (detail.intake) validIntake(detail.intake, selected || null);
+				else if (selected) throw Error(t("pm_fu_scope_error"));
+			}
 			loaded = true;
 			status.replaceChildren();
-			render(detail.intake);
+			if (sourceUnavailable) view.replaceChildren(note(selected ? "pm_fu_selected_unavailable" : "pm_fu_latest_unavailable"), note("pm_fu_readable_history"));
+			else render(detail.intake);
 			renderNavigation();
 			editor.update();
 			if (editorFold.open) await loadSources();
@@ -5309,6 +5345,19 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		version: 1,
 		values: {}
 	}, damaged = false, busy = false, operation = null;
+	const receiptDelays = [
+		250,
+		500,
+		1e3,
+		1500,
+		2e3,
+		3e3
+	];
+	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false;
+	const stopTimer = () => {
+		clearTimeout(receiptTimer);
+		receiptTimer = null;
+	};
 	try {
 		const raw = localStorage.getItem(storage);
 		if (raw) {
@@ -5375,7 +5424,27 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			run();
 		}
 	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
+	function pollReceipt() {
+		if (disposed || receiptTimer !== null || busy || damaged || !receiptPolling || receiptAttempt >= receiptDelays.length || !saved.intent?.operation_id || !form.isConnected || !allowed()) return;
+		if (operation && ![
+			"accepted",
+			"queued",
+			"pending",
+			"running"
+		].includes(operation.status)) return;
+		try {
+			guard();
+		} catch {
+			receiptPolling = false;
+			return;
+		}
+		receiptTimer = setTimeout(() => {
+			receiptTimer = null;
+			run(true);
+		}, receiptDelays[receiptAttempt++]);
+	}
 	function update() {
+		if (disposed) return;
 		const locked = busy || damaged || Boolean(saved.intent) || !allowed();
 		for (const input of Object.values(fields)) input.disabled = locked;
 		button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
@@ -5383,9 +5452,15 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
 		onStateChange();
+		pollReceipt();
 	}
-	async function run() {
-		if (busy || damaged || !allowed()) return;
+	async function run(automatic = false) {
+		if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		stopTimer();
+		if (!automatic) {
+			receiptAttempt = 0;
+			receiptPolling = true;
+		}
 		let firstAttempt = false;
 		try {
 			guard();
@@ -5411,6 +5486,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			persist();
 			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
 			guard();
+			if (disposed || !allowed()) {
+				receiptPolling = false;
+				return;
+			}
 			const op = data.operation;
 			if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key || !same$3({
 				action: op.action,
@@ -5434,6 +5513,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				status.replaceChildren(h("span", { class: "muted" }, t("pm_saved")));
 			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
+			receiptPolling = false;
 			if (!retired(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
@@ -5457,6 +5537,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		update,
 		changed,
 		locked: () => busy || damaged || Boolean(saved.intent),
+		dispose: () => {
+			disposed = true;
+			receiptPolling = false;
+			stopTimer();
+		},
 		set: (name, value) => {
 			if (!busy && !saved.intent && !damaged) {
 				fields[name].value = value;
@@ -6360,6 +6445,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sequence++;
 		off();
 		navigationMedia.removeEventListener("change", resizeNavigation);
+		for (const value of forms) value.dispose();
 	};
 }
 //#endregion
@@ -10437,6 +10523,9 @@ var pmFollowUpStrings = {
 		pm_fu_loading: "Reading fixed sources…",
 		pm_fu_empty: "No Follow-up preparation has been saved.",
 		pm_fu_version: "Preparation {version}",
+		pm_fu_latest_unavailable: "The latest preparation’s original sources are unavailable. Its facts are withheld.",
+		pm_fu_selected_unavailable: "This preparation’s original sources are unavailable. Its facts are withheld.",
+		pm_fu_readable_history: "Choose a readable preparation from history, or prepare a new one from accessible sources. No earlier preparation has replaced this selection.",
 		pm_fu_prepared_at: "Prepared at",
 		pm_fu_snapshot_at: "Evidence snapshot at",
 		pm_fu_unknown: "Unknown",
@@ -10480,6 +10569,12 @@ var pmFollowUpStrings = {
 		pm_fu_ref_plan_revision_id: "Plan revision",
 		pm_fu_coverage: "Only explicitly selected central records were read. Business priority and quality remain unassessed; cost is unknown.",
 		pm_fu_truncated: "The selected thread exceeds this intake’s input limit; its coverage is partial.",
+		pm_fu_partial: "Partial source coverage",
+		pm_fu_partial_help: "Some source records were omitted from this fixed preparation. The agenda does not assess those omitted records.",
+		pm_fu_projects_truncated: "The evidence snapshot includes only part of the linked projects.",
+		pm_fu_work_truncated: "The evidence snapshot includes only part of the linked work.",
+		pm_fu_evidence_truncated: "The evidence snapshot includes only part of the available evidence.",
+		pm_fu_bytes_truncated: "The evidence snapshot reached its document size limit.",
 		pm_fu_all_issues: "All recorded issues",
 		pm_fu_comparison: "Comparison with previous preparation",
 		pm_fu_comparison_help: "A source no longer selected in this preparation has not been declared resolved.",
@@ -10556,6 +10651,9 @@ var pmFollowUpStrings = {
 		pm_fu_loading: "正在讀取固定來源…",
 		pm_fu_empty: "尚未保存 Follow-up 討論準備。",
 		pm_fu_version: "第 {version} 份討論準備",
+		pm_fu_latest_unavailable: "最新討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
+		pm_fu_selected_unavailable: "這份討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
+		pm_fu_readable_history: "可從歷史選取仍能讀取的準備，或使用可讀來源建立新準備；目前沒有以舊準備取代所選內容。",
 		pm_fu_prepared_at: "準備時間",
 		pm_fu_snapshot_at: "證據快照時間",
 		pm_fu_unknown: "未知",
@@ -10599,6 +10697,12 @@ var pmFollowUpStrings = {
 		pm_fu_ref_plan_revision_id: "計畫版本",
 		pm_fu_coverage: "僅讀取明確選定的中央紀錄；業務優先序與品質尚未評估，成本仍未知。",
 		pm_fu_truncated: "所選討論超過本次資訊筆數上限，涵蓋範圍不完整。",
+		pm_fu_partial: "來源涵蓋不完整",
+		pm_fu_partial_help: "這份固定準備省略了部分來源紀錄；議程並未評估那些省略的紀錄。",
+		pm_fu_projects_truncated: "證據快照僅包含部分已關聯專案。",
+		pm_fu_work_truncated: "證據快照僅包含部分已關聯工作。",
+		pm_fu_evidence_truncated: "證據快照僅包含部分可用證據。",
+		pm_fu_bytes_truncated: "證據快照已達文件大小上限。",
 		pm_fu_all_issues: "所有已記錄問題",
 		pm_fu_comparison: "與前次討論準備比較",
 		pm_fu_comparison_help: "本次未再選取的來源，不代表問題已解決。",
