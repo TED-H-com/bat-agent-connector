@@ -60,6 +60,7 @@ try {
     const response = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/threads/${threadId}`, {headers:{Authorization:'Bearer '+fixture.token}});
     assert.equal(response.status, 200); return response.json();
   };
+  await page.getByText('Save a note without requesting analysis', {exact:true}).click();
   const note = page.locator('[data-pm-action="pm.message.append"]');
   await note.getByLabel('Add a discussion note', {exact:true}).fill('Keep the first action visible; retain a guided tour as an alternative.');
   await note.getByRole('button', {name:'Save note', exact:true}).click();

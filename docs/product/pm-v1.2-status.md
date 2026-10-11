@@ -126,8 +126,15 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 Web／Tauri 在討論旁提供明確連結與快照查閱，不依 repo 名稱自動推測歸屬。
 本批仍在分支驗證，尚未包含完整品質判定、偏差分析與五視圖。
 
-Linux native PM analysis adapter 與有界執行操作另在平行整合；模型執行與認證有效性尚未實測，
-不因離線設定預檢通過就宣稱完整 PM agent 已可日常使用。
+Linux native PM analysis adapter 已在開發分支整合：明確要求一次分析後，使用新建的自有
+原生 thread、固定討論脈絡與限制工具的 runtime。API／MCP／Web／Tauri 共用原 operation，
+完成回覆連同模型、原生事件與來源保存；取消與失聯查回原程序，不重送或接管其他 session。
+
+2026-10-11 的兩次各自獨立合成模型操作：第一次因正式 summary terminal 尚未支援而保守
+拒收，維持 aborted；修正並通過事件／journal 回歸後，新的操作以 Codex CLI 0.160.0、
+模型 gpt-6.1-sol 成功完成單次分析、來源匯入、程序退出與 writer 釋放。虛構會員範圍測試中，
+回覆保留登入／忘記密碼為已確認，推薦码與折扣為未採用建議。沒有機隊、repo 或真實工作資料。
+這是 Linux 原生討論分析的有限實測，不代表 BAT 路徑、PM 文件 writer、全平台或 M4 驗收。
 
 ## 固定快照與 Project Brief
 

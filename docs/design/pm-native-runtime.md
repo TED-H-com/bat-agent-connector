@@ -189,3 +189,19 @@ Optional real Linux checks perform no model calls: offline preflight, hostile
 ancestor configuration isolation, read-only canary enforcement and process
 identity checks. These are local boundary evidence, not end-to-end PM/model or
 Windows/macOS acceptance.
+
+## Bounded model smoke evidence
+
+On 2026-10-11, an independent synthetic discussion ran one model turn through
+`pm.run.analyze` using CLI 0.160.0 and reported model `gpt-6.1-sol`. The corrected
+summary reducer imported one assistant message with original provenance, matched
+the journal assessment, confirmed process death and released the writer. The
+response kept confirmed login/password-reset requirements separate from an
+unadopted referral/discount proposal. No repository or Fleet data was supplied.
+
+An earlier independent smoke had conservatively aborted because the initial
+reducer did not support the protocol's summary terminal. That terminal outcome
+was retained; the successful smoke was a new explicit operation, not a replay
+that changed the failed history. Synthetic scratch data was removed after an
+exact process-identity death recheck. This evidence covers one Linux analysis
+path, not all models, platforms, BAT execution or PM worktree document writing.
