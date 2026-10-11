@@ -248,6 +248,9 @@ pub struct Preview {
 }
 
 impl Destination {
+    pub(crate) fn display_name(&self) -> &str {
+        &self.name
+    }
     pub fn from_selection(path: &Path) -> Result<Self, String> {
         let name = path
             .file_name()
@@ -267,8 +270,26 @@ impl Destination {
     }
     fn publish(
         &self,
-        mut source: File,
+        source: File,
         expected: &Receipt,
+        guard: impl Fn() -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.publish_checked(source, expected.size_bytes, &expected.digest, guard)
+    }
+    pub(crate) fn publish_bytes(
+        &self,
+        bytes: &[u8],
+        size_bytes: u64,
+        digest: &str,
+        guard: impl Fn() -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.publish_checked(std::io::Cursor::new(bytes), size_bytes, digest, guard)
+    }
+    fn publish_checked(
+        &self,
+        mut source: impl Read,
+        size_bytes: u64,
+        expected_digest: &str,
         guard: impl Fn() -> Result<(), String>,
     ) -> Result<(), String> {
         let temporary = format!(".batc-{}.part", Uuid::new_v4().simple());
@@ -289,14 +310,13 @@ impl Destination {
                     break;
                 }
                 size += n as u64;
-                if size > expected.size_bytes {
+                if size > size_bytes {
                     return Err("File changed before saving".into());
                 }
                 digest.update(&buffer[..n]);
                 file.write_all(&buffer[..n]).map_err(io_error)?;
             }
-            if size != expected.size_bytes || format!("{:x}", digest.finalize()) != expected.digest
-            {
+            if size != size_bytes || format!("{:x}", digest.finalize()) != expected_digest {
                 return Err("Artifact digest does not match".into());
             }
             file.sync_all().map_err(io_error)?;
