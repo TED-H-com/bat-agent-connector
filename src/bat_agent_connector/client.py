@@ -374,7 +374,7 @@ class BatClient:
         This intentionally skips connect, retries, and semaphore acquisition;
         the outer guarded invoke already owns the connection and semaphore.
         """
-        if channel not in {"claude:get-session-meta", "claude:get-session-state", "claude:get-worktree-status", "worktree:status", "git:getRoot", "git:log", "git:branch", "workspace:load"}:
+        if channel not in {"claude:sync-session", "claude:get-session-meta", "claude:get-session-state", "claude:get-worktree-status", "worktree:status", "git:getRoot", "git:log", "git:branch", "workspace:load"}:
             raise ChannelNotAllowed("guard read channel is not an identity read")
         canonical = check_allowed(channel, allow_writes=False, allow_orchestrate=False)
         frame = {"type": "invoke", "id": f"batc-{next(self._ids)}",

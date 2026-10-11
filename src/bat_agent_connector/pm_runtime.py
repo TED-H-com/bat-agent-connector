@@ -125,6 +125,10 @@ async def sync_session(client, session_id: str, cursor: dict | None = None) -> d
 
 def fresh_send_cursor(replay: dict, expected_sdk_session_id: str) -> dict:
     """The first turn must use a fresh own session, never a resumed native thread."""
+    return _fresh_cursor(replay, expected_sdk_session_id, check_readonly)
+
+
+def _fresh_cursor(replay, expected_sdk_session_id, check_options):
     state = replay.get("state") or {}
     meta = state.get("meta") or {}
     if (replay.get("mode") != "snapshot" or replay.get("gap") or replay.get("events")
@@ -134,7 +138,7 @@ def fresh_send_cursor(replay: dict, expected_sdk_session_id: str) -> dict:
             or state.get("pendingPermission") or state.get("pendingAskUser")
             or not isinstance(state.get("messages"), list) or state["messages"]):
         raise RuntimeEvidenceError("PM_SESSION_NOT_FRESH")
-    check_readonly(meta)
+    check_options(meta)
     return _cursor(replay.get("cursor"))
 
 
@@ -152,9 +156,9 @@ def _message_text(message: dict) -> str | None:
     return None
 
 
-def assess_turn(session_id: str, send_cursor: dict, events: list[dict], current_cursor: dict,
+def _assess_turn(session_id: str, send_cursor: dict, events: list[dict], current_cursor: dict,
                 expected_sdk_session_id: str, *, gap=False, has_more=False, actual_model=None,
-                expected_prompt_digest: str | None = None) -> dict:
+                expected_prompt_digest: str | None = None, expected_options=None) -> dict:
     """Assess all durable events after one fresh session's original send cursor.
 
     Pass complete persisted events, not only the most recent page. Unknown is
@@ -192,7 +196,7 @@ def assess_turn(session_id: str, send_cursor: dict, events: list[dict], current_
                 return finish("unknown", "native_status_invalid")
             if meta.get("sdkSessionId", expected_sdk_session_id) != expected_sdk_session_id:
                 return finish("unknown", "native_session_changed")
-            if (any(key in meta and meta[key] != value for key, value in READONLY_OPTIONS.items())):
+            if (any(key in meta and meta[key] != value for key, value in expected_options.items())):
                 return finish("unknown", "permission_options_changed")
             if _text(meta.get("model")):
                 model_values.append(meta["model"])
@@ -256,6 +260,34 @@ def assess_turn(session_id: str, send_cursor: dict, events: list[dict], current_
                   source_event_seqs=[item["source_event_seq"] for item in messages] + [event["seq"]])
     return finish("completed", "native_turn_completed")
 
+
+
+def assess_turn(session_id, send_cursor, events, current_cursor, expected_sdk_session_id, **kwargs):
+    """PM observer default remains strictly read-only; no caller override."""
+    return _assess_turn(session_id, send_cursor, events, current_cursor, expected_sdk_session_id,
+                        expected_options=READONLY_OPTIONS, **kwargs)
+
+
+def _owned_options(original_confinement):
+    agent = (original_confinement.get('evidence') or {}).get('agent')
+    options = original_confinement.get('options')
+    if options != confinement.CONFINED_OPTIONS.get(agent) or not options:
+        raise RuntimeEvidenceError('PM_RUNTIME_ORIGINAL_CONFINEMENT_INVALID')
+    confinement.guard_start_record({'confinement': original_confinement})
+    return options
+
+
+def fresh_owned_send_cursor(replay, expected_sdk_session_id, original_confinement):
+    """Only explicit original managed coding options; does not weaken PM defaults."""
+    _owned_options(original_confinement)
+    return _fresh_cursor(replay, expected_sdk_session_id,
+        lambda meta: confinement.ensure_confirmed(original_confinement, meta))
+
+
+def assess_owned_turn(session_id, send_cursor, events, current_cursor, expected_sdk_session_id,
+                      *, original_confinement, **kwargs):
+    return _assess_turn(session_id, send_cursor, events, current_cursor, expected_sdk_session_id,
+                        expected_options=_owned_options(original_confinement), **kwargs)
 
 def capability_report(*, bat_version=None, runtime=None, meta=None, replay=None,
                       transport_authenticated=False) -> dict:

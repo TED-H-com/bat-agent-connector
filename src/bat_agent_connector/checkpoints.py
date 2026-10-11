@@ -505,6 +505,7 @@ def first_prompt(cp: dict, *, worktree: str, branch: str, instructions: str, mar
 async def start_in_worktree(ctx: OpContext, *, host: str, workspace: str, agent: str, worktree: str, branch: str,
                             head: str, title: str, text: str, marker: str, registry_fields: dict,
                             before_send: Callable[[], Awaitable[None]] | None = None,
+                            before_first_send: Callable[[str, str], Awaitable[None]] | None = None,
                             frame_check: Callable[[], Awaitable[None]] | None = None,
                             final_check: Callable[[], None] | None = None,
                             creation_fields: dict | None = None, model: str | None = None) -> dict:
@@ -614,6 +615,8 @@ async def start_in_worktree(ctx: OpContext, *, host: str, workspace: str, agent:
     mid = "batc-" + ctx.operation_id
 
     async def send() -> dict:
+        if before_first_send is not None:
+            await before_first_send(sid, text)
         r = await service.session_send(fleet, host, sid, text, confirm=True, message_id=mid,
                                        tool="api:" + ctx.actor, retry_on_disconnect=False,
                                        ensure_loaded=frame_check is None, before_invoke=final_check,
