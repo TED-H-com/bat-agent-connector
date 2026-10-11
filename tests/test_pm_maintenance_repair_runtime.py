@@ -50,7 +50,7 @@ def native_replay(mock):
                 event(2, 'claude:status', meta={**meta, 'numTurns': 1, 'isStreaming': False}),
                 event(3, 'claude:message', message={'id': 'original-output', 'role': 'assistant', 'content': 'Fixed candidate recorded.'})]
             if state['drift']:
-                events[1]['params']['meta']['permissionMode'] = 'bypassPermissions'
+                events[1]['params']['meta'].update(permissionMode='bypassPermissions', codexSandboxMode='danger-full-access')
             if state['reason'] is not None:
                 events.append(event(4, 'claude:turn-end', payload={'reason': state['reason'], 'turnId': 'original-native-turn',
                     'sdkSessionId': 'native-' + sid, 'result': 'Fixed candidate recorded.'}))
