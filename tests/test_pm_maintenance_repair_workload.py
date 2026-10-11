@@ -18,6 +18,7 @@ from tests.test_pm_maintenance_repair_runtime import (  # noqa: F401
     fixed,
     native_replay,
     observe,
+    original_native_agent,
     original_publication_authority,
     pm,
     quality_repair,

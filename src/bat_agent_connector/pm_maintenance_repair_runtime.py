@@ -129,6 +129,15 @@ def _registry(ops, parent, doc):
     return child
 
 
+# Rust str::trim uses Unicode White_Space (not Python's extra C0 separators).
+_RUST_WHITESPACE = '\t\n\v\f\r \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000'
+
+
+def native_prompt_text(text, agent):
+    """Preserve original request bytes while matching the existing coding adapter."""
+    return text.strip(_RUST_WHITESPACE) if agent == 'codex' else text
+
+
 async def capture(ctx, sid, text):
     """Called INSIDE the new first-send run, never its reconcile branch."""
     parent = _parent_for_execution(ctx.service, ctx.op)
@@ -144,6 +153,9 @@ async def capture(ctx, sid, text):
         'registry_created_at': entry['created_at'], 'controller': controller_authority.operation_binding(child),
         'prompt_digest': pm_runtime.prompt_digest(text), 'confinement': entry['confinement'], 'status': 'unavailable',
         'reason': 'native_replay_unavailable', 'captured_at': time.time()}
+    agent = entry['confinement']['evidence']['agent']
+    doc.update(native_prompt_digest=pm_runtime.prompt_digest(native_prompt_text(text, agent)),
+        prompt_normalization='rust_codex_trim_v1' if agent == 'codex' else 'exact_text_v1')
     client = ctx.service.context['fleet'].client(host)
     try:
         remaining = repairs._record_for(ctx.service, parent)['deadline_at'] - time.time()
@@ -461,7 +473,7 @@ async def _observe(ctx):
         events += replay['events']
     assessed = pm_runtime.assess_owned_turn(doc['session_id'], doc['send_cursor'], events, replay['cursor'],
         doc['sdk_session_id'], original_confinement=doc['confinement'], has_more=replay['has_more'],
-        expected_prompt_digest=doc['prompt_digest'])
+        expected_prompt_digest=doc.get('native_prompt_digest', doc['prompt_digest']))
     if (assessed['reason'] == 'original_input_not_observed' and not any(
             event['channel'] == 'claude:turn-end' or event['channel'] == 'claude:message'
             and event['params'].get('message', {}).get('role') == 'user' for event in events)):

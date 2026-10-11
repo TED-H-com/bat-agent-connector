@@ -30,6 +30,19 @@ repair_ready = repair_fixture
 
 
 @pytest.fixture(autouse=True)
+def original_native_agent(monkeypatch):
+    # Rust Codex establishes a native thread before the first input. Legacy
+    # Claude creates its SDK session lazily and cannot claim this early identity.
+    from tests import test_pm_maintenance_repairs
+    original = test_pm_maintenance_repairs.handoff_request
+    async def codex_request(w):
+        envelope = await original(w)
+        envelope['params']['agent'] = 'codex'
+        return envelope
+    monkeypatch.setattr(test_pm_maintenance_repairs, 'handoff_request', codex_request)
+
+
+@pytest.fixture(autouse=True)
 def native_replay(mock):
     state = {'reason': None, 'after': None, 'gap': False, 'extra_input': False, 'page_size': 100,
         'before_input': False, 'drift': False, 'input_identity': True, 'input_pending': 0}
@@ -53,7 +66,7 @@ def native_replay(mock):
             return {'seq': seq, 'channel': channel, 'params': {'sessionId': sid, **body}}
         events = []
         if source:
-            events += [event(1, 'claude:message', message={'id': 'original-input', 'role': 'user', 'content': source[0]['content']}),
+            events += [event(1, 'claude:message', message={'id': 'original-input', 'role': 'user', 'content': source[0]['content'].strip()}),
                 event(2, 'claude:status', meta={**meta, 'numTurns': 1, 'isStreaming': False}),
                 event(3, 'claude:message', message={'id': 'original-output', 'role': 'assistant', 'content': 'Fixed candidate recorded.'})]
             if state['drift']:
@@ -101,6 +114,8 @@ async def test_actual_original_cursor_native_completion_and_quality_release(obse
     w, ops = observed, observed['d'].ops
     origin = runtime.origin(ops, w['parent'])
     assert origin['status'] == 'captured'
+    assert origin['prompt_normalization'] == 'rust_codex_trim_v1'
+    assert origin['confinement']['evidence']['agent'] == 'codex'
     assert origin['execution_operation_id'] == w['child']['operation_id']
     assert origin['sdk_session_id'] == 'native-' + w['child']['result']['session_id']
     calls = mock.channels()
@@ -282,3 +297,11 @@ async def test_earlier_input_between_cursor_and_first_send_blocks_transport(repa
     assert child['status'] in {'failed', 'needs_attention', 'uncertain'}, child
     assert 'claude:send-message' not in mock.channels()
     assert view(w, parent)['capacity_held']
+
+
+def test_coding_native_prompt_normalization_retains_exact_owner_request():
+    text = ' \t原始要求\n'
+    assert runtime.native_prompt_text(text, 'codex') == '原始要求'
+    assert runtime.native_prompt_text(text, 'claude') == text
+    assert runtime.native_prompt_text('\x1cinput\x1f', 'codex') == '\x1cinput\x1f'
+    assert runtime.native_prompt_text('\u3000input\u00a0', 'codex') == 'input'
