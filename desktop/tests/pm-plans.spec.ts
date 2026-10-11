@@ -6,7 +6,8 @@ import {pmFixture, pmRoute, workspaceId, threadId, inputA} from './pm-fixture.ts
 function planning() {
   const fixture = pmFixture(), s = fixture.state;
   s.plans = true; s.start = true; s.thread.mode = 'planning';
-  s.draft = {title: s.thread.title, rationale: 'Adopt the focused first visit direction', selected_inputs: [s.inputs[0]], candidate_inputs: [s.inputs[1]], unknowns: [{slot:'finance'}]};
+  s.thread.draft_id='pmd_'+'6'.repeat(32);
+  s.draft = {draft_id:s.thread.draft_id,title: s.thread.title, rationale: 'Adopt the focused first visit direction', selected_inputs: [s.inputs[0]], candidate_inputs: [s.inputs[1]], unknowns: [{slot:'finance'}]};
   return fixture;
 }
 const action = (page:any, name:string) => page.locator(`[data-pm-action="${name}"]`);
@@ -20,6 +21,31 @@ async function savePlan(page:any, text = '# First visit\n\nKeep <script>literal 
 }
 
 for (const native of [false,true]) test.describe(native ? 'native plans' : 'web plans', () => {
+  test('Planning can select later inputs while keeping saved document revisions fixed', async({page}) => {
+    const f=planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute); await savePlan(page);
+    const original=structuredClone(f.state.revisions[0]);
+    await page.locator('[data-pm-add-input] > summary').click();
+    const record=action(page,'pm.input.record');
+    await record.getByLabel('Topic',{exact:true}).selectOption('finance');
+    await record.getByLabel('Statement or question',{exact:true}).fill('Budget still needs a decision');
+    await record.getByRole('button',{name:'Save input',exact:true}).click();
+    const last=f.state.inputs.at(-1);
+    await page.locator(`[data-input-id="${last.input_id}"] input[type=checkbox]`).check();
+    await page.locator('[data-pm-planning-revision] > summary').click();
+    const revise=action(page,'pm.thread.plan.revise');
+    await revise.getByLabel('Why update this direction?',{exact:true}).fill('Include the budget question in this planning draft.');
+    f.state.lost=true;
+    await revise.getByRole('button',{name:'Save updated Planning draft',exact:true}).click();
+    await expect(revise).toContainText('Reply unavailable');
+    await page.reload(); await page.locator('[data-pm-planning-revision] > summary').click();
+    await revise.getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(()=>f.state.writes.length).toBe(4);
+    expect(f.state.writes[2].body.params.selected_input_ids).toEqual([inputA,last.input_id]);
+    expect(f.state.writes[2].body.preconditions.expected_draft_id).toBe('pmd_'+'6'.repeat(32));
+    expect(f.state.writes[3].body).toEqual(f.state.writes[2].body);
+    expect(f.state.writes[3].idempotency_key).toBe(f.state.writes[2].idempotency_key);
+    expect(f.state.revisions[0]).toEqual(original); expect(f.state.planHead.accepted_revision_id).toBeNull();
+  });
   test('fixed plan draft and adoption stay in the discussion and do not dispatch', async({page}) => {
     const f = planning(); f.state.bound = true;
     await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);

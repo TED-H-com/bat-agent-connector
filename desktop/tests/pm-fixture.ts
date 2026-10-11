@@ -17,7 +17,7 @@ export function pmFixture() {
     writes:[] as any[], ops:new Map<string,any>()};
   const actions=['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.confirm','pm.thread.plan','pm.run.prepare','pm.plan.draft','pm.plan.adopt'];
   const caps=()=>({actor:state.actor,scopes:state.manage?['observe','manage',...(state.start?['start']:[])]:['observe'],api_version:1,contract_version:'2026-10-08',hosts:[],
-    actions:actions.map(action=>({action,allowed:state.manage})),features:state.available?{pm_workspaces:{version:1,executable_modes:['idea','planning'],context_packages:state.packages,runner:false,plan_drafting:state.plans,plan_adoption:state.plans,dispatch:false}}:{}});
+    actions:[...actions,...(state.plans?['pm.thread.plan.revise']:[])].map(action=>({action,allowed:state.manage})),features:state.available?{pm_workspaces:{version:1,executable_modes:['idea','planning'],context_packages:state.packages,runner:false,plan_drafting:state.plans,plan_adoption:state.plans,dispatch:false}}:{}});
   const binding={repository:'example/library',host:'fixture-host',workspace_id:'fixture-workspace',source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)};
   const planRead=(plan:any)=>({version:1,head:structuredClone(state.planHead),plan:plan?{...structuredClone(plan),is_current_accepted:plan.revision_id===state.planHead.accepted_revision_id}:null});
   const workspace=(w:any)=>({...w,membership:{actor:state.actor,role:state.role,controller_id:'ctr_'+'4'.repeat(32)}});
@@ -65,6 +65,11 @@ export function pmFixture() {
           state.draft={draft_id:state.thread.draft_id,status:'draft',title:state.thread.title,rationale:params.rationale,
             selected_inputs:state.inputs.filter(item=>params.selected_input_ids.includes(item.input_id)),candidate_inputs:state.inputs.filter(item=>!params.selected_input_ids.includes(item.input_id)),
             unknowns:[{slot:'finance',domain:'finance',status:'unresolved'}],execution_authorized:false,scope_revision:null};
+        }else if(action==='pm.thread.plan.revise'){
+          const previous=state.draft.draft_id;
+          state.thread.draft_id='pmd_'+String(state.ops.size+7).padStart(32,'0');
+          state.draft={...state.draft,draft_id:state.thread.draft_id,previous_draft_id:previous,rationale:params.rationale,
+            selected_inputs:state.inputs.filter(item=>params.selected_input_ids.includes(item.input_id)),candidate_inputs:state.inputs.filter(item=>!params.selected_input_ids.includes(item.input_id))};
         }else if(action==='pm.run.prepare'){
           if(params.repository_binding)state.bound=true;
           const context={thread_version:state.thread.version,messages:structuredClone(state.messages),inputs_by_status:{},coverage:{}};

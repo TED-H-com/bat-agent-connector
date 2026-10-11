@@ -96,6 +96,28 @@ Preserve the first worktree binding and original request key when recovering.
 The audited BAT runtime lacks a per-session external MCP tool boundary; its
 filesystem read-only options alone do not enable automatic Idea/Planning execution.
 
+When plan actions are advertised, `pm.thread.plan.revise` explicitly updates a
+Planning discussion's selected current inputs. It requires owner authority,
+`expected_version` and `expected_draft_id`, plus selected IDs and a rationale.
+Earlier Planning snapshots and accepted plans remain unchanged. Do not silently
+include a newly recorded assumption in the selected direction.
+
+`pm.plan.draft` saves a fixed professional document from the selected Planning
+sources. Target the workspace/thread; supply `previous_revision_id`, optional
+title/Markdown/source mappings/requirements, and both `expected_version` and
+`expected_plan_version`. Preserve unconfirmed source statuses and unresolved
+management domains. A caller-authored document is a proposal, not verified work.
+
+Read `pm_plans_list`, `pm_plan_get`, `pm_plan_accepted_get` and `pm_plan_head_get`
+to distinguish document revisions from the accepted baseline. Explicit owner
+adoption uses `pm.plan.adopt`, target `{workspace_id, revision_id}`, params
+`{rationale}`, and `expected_accepted_revision_id` (null for the first baseline).
+It also requires observe/start and the workspace's configured PM worktree.
+The server verifies the exact Git document and records the decision; clients
+cannot submit their own Git success receipt. Adoption does not dispatch work.
+An unresolved host effect retains its writer and original operation. Never clear
+its locks or change the request key to make recovery appear successful.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)

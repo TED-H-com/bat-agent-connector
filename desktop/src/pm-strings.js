@@ -1,5 +1,8 @@
 export const pmStrings = {
   en: {
+    pm_planning_revision_title: 'Update selected planning inputs', pm_planning_revision_rationale: 'Why update this direction?',
+    pm_planning_revision_save: 'Save updated Planning draft',
+    pm_planning_revision_help: 'Select current inputs above, including new facts gathered during Planning. Earlier drafts and the accepted plan remain unchanged.',
     pm_planning_source_help: 'This records the selected planning direction. See Project plan for the accepted document version.',
     pm_context_location: 'Save in a PM worktree', pm_context_location_help: 'Choose an existing repository connection and preview its published commit. The service prepares its own PM worktree.',
     pm_context_journal: 'Discussion record only', pm_context_owned: 'Use the existing PM worktree',
@@ -67,6 +70,9 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    pm_planning_revision_title: '更新選定的規劃資料', pm_planning_revision_rationale: '調整規劃方向的理由',
+    pm_planning_revision_save: '儲存更新後的規劃草稿',
+    pm_planning_revision_help: '勾選上方目前要採用的資料，包括規劃期間補充的事實。較早的草稿與正式計畫會保留。',
     pm_planning_source_help: '此處保留選定的規劃方向；正式採用的文件版本請見專案計畫。',
     pm_context_location: '保存到 PM 工作目錄', pm_context_location_help: '選擇已設定的儲存庫連線並預覽已發布 commit，服務會準備自己的 PM 工作目錄。',
     pm_context_journal: '只保留討論紀錄', pm_context_owned: '沿用既有 PM 工作目錄',

@@ -702,8 +702,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
-	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null;
+	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null;
 	const noteCache = new Map();
+	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
+	const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide && (threadData.thread.mode === "idea" || Boolean(planningRevisionForm));
+	const updateSourceControls = () => {
+		for (const checkbox of facts?.querySelectorAll("input[type=checkbox]") || []) checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
+	};
 	const updateForms = () => {
 		for (let i = forms.length - 1; i >= 0; i--) if (!forms[i].box.isConnected) forms.splice(i, 1);
 		else forms[i].update();
@@ -924,14 +929,48 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				onStateChange: () => {
 					const section = planForm?.box.closest("[data-pm-plan]");
 					if (section) section.hidden = threadData.thread.mode !== "idea" && !planForm.locked() || !threadData.capabilities?.decide;
-					for (const checkbox of facts.querySelectorAll("input[type=checkbox]")) checkbox.disabled = Boolean(planForm?.locked()) || !decide() || threadData.thread.mode !== "idea";
+					updateSourceControls();
 				},
 				extra: h("div", {}, selected, labelled("pm_plan_rationale", rationale), h("p", { class: "muted" }, t("pm_plan_help")))
 			});
+			if (caps()?.actions?.some((action) => action.action === "pm.thread.plan.revise")) {
+				const selected = h("input", { type: "hidden" });
+				selected.value = JSON.stringify(data.draft?.selected_inputs?.map((item) => item.input_id) || []);
+				selected.dataset.pmDefault = "[]";
+				const draftId = h("input", { type: "hidden" });
+				draftId.value = data.draft?.draft_id || "";
+				const rationale = input("pm_planning_revision_rationale", {
+					multiline: true,
+					max: 4e3
+				});
+				planningRevisionForm = form({
+					action: "pm.thread.plan.revise",
+					target,
+					fields: {
+						selected,
+						draftId,
+						rationale
+					},
+					params: (values) => ({
+						selected_input_ids: JSON.parse(values.selected || "[]"),
+						rationale: values.rationale
+					}),
+					preconditions: () => ({
+						expected_version: threadData.thread.version,
+						expected_draft_id: planningRevisionForm.values().draftId
+					}),
+					permitted: () => decide() && threadData.thread.mode === "planning",
+					recoverPermitted: decide,
+					label: "pm_planning_revision_save",
+					onSaved: () => load(),
+					onStateChange: updateSourceControls,
+					extra: h("div", {}, selected, draftId, labelled("pm_planning_revision_rationale", rationale), h("p", { class: "muted" }, t("pm_planning_revision_help")))
+				});
+			}
 			const inspector = h("aside", {
 				class: "pm-inspector",
 				"aria-label": t("pm_inputs")
-			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box));
+			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
 		}
 		threadTitle.textContent = thread.title;
@@ -947,6 +986,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		earlier.disabled = false;
 		coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t("pm_partial") : "";
 		permissions.textContent = !data.capabilities?.write ? t("pm_readonly") : !data.capabilities?.decide ? t("pm_owner_decides") : "";
+		if (planningRevisionForm && data.draft && !planningRevisionForm.values().draftId && !planningRevisionForm.locked()) {
+			planningRevisionForm.set("draftId", data.draft.draft_id);
+			planningRevisionForm.set("selected", JSON.stringify(data.draft.selected_inputs.map((item) => item.input_id)));
+		}
 		const oldSource = sourceSelect.value, oldSlot = slotSelect.value;
 		for (const message of data.messages || []) if (![...sourceSelect.options].some((option) => option.value === "message:" + message.message_id)) sourceSelect.append(h("option", { value: "message:" + message.message_id }, `${message.actor} · ${message.content.slice(0, 50)}`));
 		sourceSelect.value = oldSource || "statement";
@@ -963,18 +1006,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		]);
 		if (signature !== factSignature) {
 			factSignature = signature;
-			const selection = new Set(JSON.parse(planForm.values().selected || "[]"));
+			const sourceForm = selectedSourcesForm();
+			const selection = new Set(JSON.parse(sourceForm.values().selected || "[]"));
 			const rows = (data.inputs || []).map((item) => {
 				const checkbox = h("input", {
 					type: "checkbox",
 					"aria-label": t("pm_select_input", { value: item.value }),
 					checked: selection.has(item.input_id),
-					disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== "idea",
+					disabled: sourceForm.locked() || !canSelectSources(),
 					onchange: (event) => {
-						const selected = new Set(JSON.parse(planForm.values().selected || "[]"));
+						const selected = new Set(JSON.parse(sourceForm.values().selected || "[]"));
 						if (event.target.checked) selected.add(item.input_id);
 						else selected.delete(item.input_id);
-						planForm.set("selected", JSON.stringify([...selected]));
+						sourceForm.set("selected", JSON.stringify([...selected]));
 					}
 				});
 				const row = h("article", {
@@ -1014,12 +1058,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					type: "checkbox",
 					checked: true,
 					"aria-label": t("pm_missing_selection"),
-					disabled: planForm.locked() || !permitted(true) || !data.capabilities?.decide || thread.mode !== "idea",
+					disabled: sourceForm.locked() || !canSelectSources(),
 					onchange: (event) => {
 						if (event.target.checked) return;
-						const selected = new Set(JSON.parse(planForm.values().selected || "[]"));
+						const selected = new Set(JSON.parse(sourceForm.values().selected || "[]"));
 						selected.delete(id);
-						planForm.set("selected", JSON.stringify([...selected]));
+						sourceForm.set("selected", JSON.stringify([...selected]));
 						row.remove();
 					}
 				});
@@ -1039,6 +1083,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, t("pm_slot_" + item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : "", h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.plan_drafting ? "pm_planning_source_help" : "pm_draft_help")));
 		}
 		planForm.box.closest("[data-pm-plan]").hidden = thread.mode !== "idea" && !planForm.locked() || !data.capabilities?.decide;
+		if (planningRevisionForm) planningRevisionForm.box.closest("[data-pm-planning-revision]").hidden = thread.mode !== "planning" && !planningRevisionForm.locked() || !data.capabilities?.decide;
 		updateForms();
 	}
 	function renderPackages(page, append = false) {
@@ -5102,6 +5147,10 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		pm_planning_revision_title: "Update selected planning inputs",
+		pm_planning_revision_rationale: "Why update this direction?",
+		pm_planning_revision_save: "Save updated Planning draft",
+		pm_planning_revision_help: "Select current inputs above, including new facts gathered during Planning. Earlier drafts and the accepted plan remain unchanged.",
 		pm_planning_source_help: "This records the selected planning direction. See Project plan for the accepted document version.",
 		pm_context_location: "Save in a PM worktree",
 		pm_context_location_help: "Choose an existing repository connection and preview its published commit. The service prepares its own PM worktree.",
@@ -5242,6 +5291,10 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		pm_planning_revision_title: "更新選定的規劃資料",
+		pm_planning_revision_rationale: "調整規劃方向的理由",
+		pm_planning_revision_save: "儲存更新後的規劃草稿",
+		pm_planning_revision_help: "勾選上方目前要採用的資料，包括規劃期間補充的事實。較早的草稿與正式計畫會保留。",
 		pm_planning_source_help: "此處保留選定的規劃方向；正式採用的文件版本請見專案計畫。",
 		pm_context_location: "保存到 PM 工作目錄",
 		pm_context_location_help: "選擇已設定的儲存庫連線並預覽已發布 commit，服務會準備自己的 PM 工作目錄。",
