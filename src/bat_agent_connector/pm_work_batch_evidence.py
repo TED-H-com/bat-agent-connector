@@ -41,11 +41,23 @@ def evaluate(ops, principal, wid, child, selected, reference):
     base = {'condition': selected, 'source_operation_id': child['operation_id'],
         'semantic_acceptance': 'not_evaluated', 'operation_ids': [child['operation_id']]}
     if selected['profile'] == 'observed_runner_v1':
-        return {**base, **_runner(ops, principal, child, selected, reference)}
+        return {**base, **_runner(ops, principal, wid, child, selected, reference)}
     return {**base, **_github(ops, principal, wid, child, reference)}
 
 
-def _runner(ops, principal, child, selected, ref):
+def require_sources(ops, principal, wid, proof):
+    """Gate every immutable proof source before exposing saved receipt metadata."""
+    from .pm_access import require_visible
+    for oid in proof.get('operation_ids', []):
+        require_visible(ops.db, principal, ops.get(oid))
+    if proof.get('task_id'):
+        from . import pm_evidence
+        if not pm_evidence._task_visible(ops, principal, wid, proof['task_id']):
+            raise OperationError('NOT_FOUND', 'Original verifier source is unavailable', 404)
+        pm_source_lineage.require(ops.db, principal, 'execution', proof['task_id'])
+
+
+def _runner(ops, principal, wid, child, selected, ref):
     if not isinstance(ref, dict) or set(ref) != {'verification_id', 'candidate_commit', 'tree_hash'}:
         raise bad('Select an exact observed verification and full candidate commit/tree')
     if type(ref['verification_id']) is not int or not 0 < ref['verification_id'] < 2**63 or any(not SHA.fullmatch(str(ref[k])) for k in ('candidate_commit', 'tree_hash')):
@@ -55,11 +67,15 @@ def _runner(ops, principal, child, selected, ref):
         raise bad('The selected observed verification is unavailable')
     row = dict(row)
     task = ops.db.execute('SELECT * FROM tasks WHERE task_id=?', (row['task_id'],)).fetchone()
+    from . import controller_authority, pm_evidence
+    if not pm_evidence._task_visible(ops, principal, wid, row['task_id']):
+        raise OperationError('NOT_FOUND', 'Original verifier source is unavailable', 404)
     result = child.get('result') or {}
     # These are exact central identities; neither prose nor a matching worktree
     # pathname can attach an unrelated verifier to this child.
     related = bool(task and result.get('session_id') and task['host'] == result.get('host')
-        and task['session_id'] == result['session_id'])
+        and task['session_id'] == result['session_id']
+        and controller_authority.same_controller(json.loads(task['controller_authority'] or 'null'), controller_authority.operation_binding(child)))
     if related:
         pm_source_lineage.require(ops.db, principal, 'execution', row['task_id'])
     latest = ops.db.execute('SELECT verification_id FROM observed_verifications WHERE task_id=? ORDER BY verification_id DESC LIMIT 1', (row['task_id'],)).fetchone()

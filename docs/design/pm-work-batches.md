@@ -14,7 +14,11 @@ and `expected_lifecycle_revision`. Params contain `entries`, `limits`, and a
 bounded nonempty `rationale`.
 
 Each of 1–16 entries has a distinct stable `key`, a `handoff` object containing
-exact existing `target`, `params`, and `preconditions`, and `depends_on`. The
+exact existing `target`, `params`, and `preconditions`, and `depends_on`. An
+optional `result_condition` fixes the only registered proof that can settle its
+reserved capacity; omission fixes `fixed_revision_verification` with profile
+`github_reported_checks_v1`. Every edge condition must match its upstream entry's
+fixed result condition. Evidence cannot weaken that selection later. The
 child action is always `repository.continue`; callers cannot provide its key,
 authority, parent link, action, or lineage. Every entry must name an immutable
 `pm_package_ref` in this workspace and the exact WorkItem/code/source contract.
