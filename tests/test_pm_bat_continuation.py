@@ -87,7 +87,7 @@ async def test_completed_disk_context_continues_in_new_owned_bat_session(continu
     w = continuation
     human = snapshot(w['human'])
     first = await analyze(w, 'first-original')
-    assert first['status'] == 'succeeded', first
+    assert first['status'] == 'succeeded', json.dumps(first, indent=2)
     original = copy.deepcopy(pm_runs.get_by_operation(w['d'].ops.db, first['operation_id']))
     old_sid = original['session_binding']['session_id']
     old_registry = copy.deepcopy(registry.get('h1', old_sid))
@@ -141,7 +141,7 @@ async def test_unknown_original_death_blocks_second_writer_after_restart(continu
 async def test_new_session_requires_current_original_source_lifecycle_and_member(continuation, mock, changed):
     w = continuation
     first = await analyze(w, 'original-completed')
-    assert first['status'] == 'succeeded', first
+    assert first['status'] == 'succeeded', json.dumps(first, indent=2)
     if changed == 'source':
         w['raw']['github']['repos'][0]['sync']['bindings'][0]['workspace_id'] = 'other-workspace'
     await restart(w)
