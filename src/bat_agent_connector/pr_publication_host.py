@@ -93,7 +93,7 @@ def readback(area, operation_id, digest):
         'cat "$receipt"\necho "seen $(remote_head)"\n')
 
 
-async def run(area, script, *, guard=None):
+async def run(area, script, *, guard=None, timeout=None):
     """Reuse the integration mutex with our final authority check inside it."""
     lock = integration._area_locks.setdefault((area.host, area.path), asyncio.Lock())
     async with lock:
@@ -101,8 +101,8 @@ async def run(area, script, *, guard=None):
             guard()
             from .pm_source_lineage import require_frame
             require_frame()
-        output = await area.ops.context["git_runner"].run(
-            area.host, script, timeout_s=area.repo.integrate.fetch_timeout_s)
+        limit = area.repo.integrate.fetch_timeout_s if timeout is None else timeout()
+        output = await area.ops.context["git_runner"].run(area.host, script, timeout_s=limit)
     lines = output.splitlines()
     for line in lines:
         if line.startswith("error "):

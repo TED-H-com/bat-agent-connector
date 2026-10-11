@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import time
+from types import SimpleNamespace
 from urllib.parse import quote
 
 from . import (
@@ -103,6 +104,23 @@ def _child_digest(child):
         ("operation_id", "action", "target", "params", "preconditions", "actor", "idempotency_key")})
 
 
+def _quality_access(db, principal, intent):
+    selected = intent.get("quality_ref")
+    if selected is None:
+        return
+    if not pm_source_lineage._table(db, "pm_quality_reviews"):
+        raise _bad("PR_QUALITY_UNAVAILABLE", "The original quality assessment is unavailable", 404)
+    from . import pm_quality_reviews as quality
+    value = quality.get_assessment(quality._Reader(db), principal, intent["workspace_id"], **selected)
+    context = value["context"]
+    if (context["execution_operation_id"] != intent["child_operation_id"]
+            or context["handoff_contract_digest"] != intent["handoff_contract_digest"]
+            or context["native_result"]["candidate_commit"] != intent["candidate_sha"]
+            or context["native_result"]["repository_id"] != intent["repository_id"]
+            or context["native_result"]["provider_origin"] != intent["provider_origin"]):
+        raise _bad("PR_QUALITY_SOURCE_CHANGED", "The selected quality assessment belongs to another original result")
+
+
 def _repair_parent(ops, child, *, write=False):
     parent_id = (child.get("external_refs") or {}).get("pm_maintenance_repair_parent")
     installed = pm_source_lineage._table(ops.db, "pm_maintenance_repair_children")
@@ -190,6 +208,7 @@ def _admit(ops, principal, target, params, pre):
         "provider_origin": provider, "config": config, "source": source,
         "child_operation_id": child["operation_id"], "child_request_digest": _child_digest(child),
         "handoff_contract_digest": pm_package_handoff.binding(child)["contract_digest"], "repair_parent_id": parent}
+    _quality_access(ops.db, principal, intent)
     return {"principal": pm_workspace.principal_binding(principal), "pm_pr_publication": intent,
         "pm_pr_publication_digest": _digest(intent), "pm_lineage": {"workspace_id": target["workspace_id"]}}
 
@@ -213,7 +232,10 @@ def operation_visible(db, principal, operation):
         intent = _intent(op)
         _member(db, principal, intent["workspace_id"])
         child = _operation(db, intent["child_operation_id"])
+        _quality_access(db, principal, intent)
         if (_child_digest(child) != intent["child_request_digest"]
+                or _object(pm_package_handoff.binding(child)).get("contract_digest") != intent["handoff_contract_digest"]
+                or _repair_parent(SimpleNamespace(db=db), child) != intent["repair_parent_id"]
                 or not pm_package_handoff.source_visible(db, principal, child)
                 or not pm_source_lineage.visible(db, principal, "operation", child["operation_id"])):
             return False
@@ -258,6 +280,7 @@ def _guard(ctx, *, publication=False):
     ctx.require_controller()
     intent = _intent(ctx.op)
     principal = _live_principal(ctx)
+    _quality_access(ctx.service.db, principal, intent)
     child, provider, parent = _source(ctx.service, principal, ctx.target, ctx.preconditions, write=True)
     _, _, config = _config(ctx.service, ctx.target)
     if (config != intent["config"] or provider != intent["provider_origin"] or parent != intent["repair_parent_id"]
@@ -292,10 +315,22 @@ async def _get(ctx, path, query=None, *, new=True):
     intent = _intent(ctx.op)
     if ctx.service.context["github"].cfg.api_url != intent["provider_origin"]:
         raise GitHubAmbiguous("The original provider is unavailable for receipt recovery")
-    value = await ctx.service.context["github"].bounded_get(path, query=query, max_bytes=MAX_BYTES, timeout_s=20)
+    value = await ctx.service.context["github"].bounded_get(path, query=query, max_bytes=MAX_BYTES,
+        timeout_s=_timeout(ctx, 20) if new else 20)
     if value["status"] != 200:
         raise GitHubAmbiguous("The original provider identity could not be observed")
     return value["payload"]
+
+
+def _timeout(ctx, maximum):
+    parent_id = _intent(ctx.op)["repair_parent_id"]
+    if parent_id is None:
+        return maximum
+    from . import pm_maintenance_repairs as repairs
+    remaining = repairs._record_for(ctx.service, _operation(ctx.service.db, parent_id))["deadline_at"] - time.time()
+    if remaining <= 0:
+        raise _bad("PM_REPAIR_DEADLINE", "The original repair deadline forbids another publication frame")
+    return min(maximum, remaining)
 
 
 async def _preflight(ctx, *, head):
@@ -393,7 +428,8 @@ async def _run(ctx):
 
     async def prepare():
         await _preflight(ctx, head=False)
-        lines = await host.run(area, host.prepare(area, ctx.operation_id, intent, digest), guard=lambda: _guard(ctx))
+        lines = await host.run(area, host.prepare(area, ctx.operation_id, intent, digest), guard=lambda: _guard(ctx),
+            timeout=lambda: _timeout(ctx, area.repo.integrate.fetch_timeout_s))
         if "source_ready " + intent["candidate_sha"] not in lines:
             raise _bad("PR_SOURCE_CHANGED", "The exact current owned result could not be pinned")
         prepared = [line.split() for line in lines if line.startswith("prepared ")]
@@ -418,7 +454,8 @@ async def _run(ctx):
 
     async def push():
         await _preflight(ctx, head=False)
-        lines = await host.run(area, host.push(area, ctx.operation_id, intent, digest), guard=lambda: _guard(ctx, publication=True))
+        lines = await host.run(area, host.push(area, ctx.operation_id, intent, digest), guard=lambda: _guard(ctx, publication=True),
+            timeout=lambda: _timeout(ctx, area.repo.integrate.fetch_timeout_s))
         if f"created {digest} {intent['candidate_sha']} {host.branch(ctx.operation_id)}" not in lines:
             raise GitHubAmbiguous("The original create-only branch receipt is unavailable")
         return {"created": True, "branch_ref": host.branch(ctx.operation_id), "candidate_sha": intent["candidate_sha"]}
@@ -443,7 +480,7 @@ async def _post(ctx):
         _guard(ctx, publication=True)  # Final unsent POST frame; no intervening awaited read.
         status, payload = await ctx.service.context["github"].create_pull(intent["repository"],
             title=intent["public_title"], body=intent["public_body"], head=host.branch(ctx.operation_id),
-            base=intent["base_ref"], draft=intent["draft"])
+            base=intent["base_ref"], draft=intent["draft"], timeout_s=_timeout(ctx, 30))
         if status != 201:
             if status in {400, 401, 403, 404, 409, 422}:
                 raise _bad("PR_CREATE_REFUSED", "GitHub refused the original pull request creation")
