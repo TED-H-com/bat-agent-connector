@@ -39,7 +39,7 @@ publishing = publishing_fixture
 async def completed(observed, mock, monkeypatch):
     w = observed
     done = await observe(w)
-    assert done['status'] == 'succeeded', done
+    assert done['status'] == 'succeeded', json.dumps(done, indent=2)
     w['runtime_proof'] = runtime.proof(w['d'].ops, OWNER, w['parent'])
     w['clock'][0] += 1
     monkeypatch.setattr(inventory, 'time', SimpleNamespace(time=lambda: w['clock'][0],
