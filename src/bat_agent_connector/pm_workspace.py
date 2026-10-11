@@ -243,7 +243,12 @@ async def _run_member(ctx):
 
 def install(ops) -> None:
     schema(ops.journal)
-    ops.register(ActionDef("pm.workspace.create", "manage", "Create an independent PM workspace",
-                           _run_create, _admit_create, authorize_existing=_authorize_existing))
-    ops.register(ActionDef("pm.workspace.member.set", "manage", "Set or remove workspace membership",
-                           _run_member, _admit_member, ("workspace_id",), _authorize_existing))
+    actions = (
+        ActionDef("pm.workspace.create", "manage", "Create an independent PM workspace",
+                  _run_create, _admit_create, authorize_existing=_authorize_existing),
+        ActionDef("pm.workspace.member.set", "manage", "Set or remove workspace membership",
+                  _run_member, _admit_member, ("workspace_id",), _authorize_existing),
+    )
+    for action in actions:
+        if action.name not in ops.actions:
+            ops.register(action)

@@ -171,6 +171,12 @@ The owner excluded **formal signing, Mac notarization, production update channel
 
 ## Documentation
 
+The [adopted PM v1.2 plan](docs/product/pm-v1.2-plan.md) extends the product toward
+professional project management and maintenance. The first development increment
+adds workspace discussion memory and initial Planning drafts; the autonomous PM
+runner and full lifecycle remain tracked in [PM implementation status](docs/product/pm-v1.2-status.md).
+See the [PM workspace contract](docs/design/pm-workspaces.md) for API/MCP usage.
+
 | Area | Guides |
 | --- | --- |
 | Getting started | [English](docs/getting-started.md) · [繁體中文](docs/getting-started.zh-TW.md) · [Configuration example](examples/hosts.example.toml) |

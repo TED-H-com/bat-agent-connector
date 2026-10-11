@@ -1,5 +1,9 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+2026-10-11：開始已採用的 [PM v1.2](pm-v1.2-plan.md) 開發，新增範圍與 W01–W52
+逐項狀態見 [PM v1.2 開發狀態](pm-v1.2-status.md)。下文已結案的舊範圍維持原有證據，
+不代表新的專業 PM／Maintainer 已完成。
+
 查核日期：2026-10-10。依 [共用產品與 Tauri 方向](realignment-v2.md)；兩份計畫是同一產品的 UI 修訂，共用一份功能 backlog。歷史交接見
 [`2026-10-08-dispatch.md`](../handoff/2026-10-08-dispatch.md)。此表以 source evidence
 追蹤，不以測試數或 PR 數代替產品驗收。開工時 main 為 `224bc7e`（#41 已合併）；

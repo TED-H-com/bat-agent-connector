@@ -1,5 +1,12 @@
 # Repository guidance
 
+The adopted [PM v1.2 plan](docs/product/pm-v1.2-plan.md) is the current product
+direction. Professional project management is its core: requirements, scope,
+decisions, delivery evidence and maintenance across the project lifecycle.
+Earlier UI/engine decisions remain foundations; do not reduce PM to session
+summaries or treat the first implementation increment as the full plan.
+Read [PM implementation status](docs/product/pm-v1.2-status.md) for remaining work.
+
 Read [the shared product decisions](docs/product/realignment-v2.md),
 [implementation status](docs/product/implementation-status.md), and the applicable
 `docs/design/` contract before changing behavior. The owner clarified that the two

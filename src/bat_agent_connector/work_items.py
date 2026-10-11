@@ -450,6 +450,9 @@ def _link_ref(ops: OperationService, kind, ref) -> str:
         if not _OPERATION.fullmatch(ref) or not db.execute(
                 "SELECT 1 FROM operations WHERE operation_id=?", (ref,)).fetchone():
             raise _bad("LINK_TARGET_NOT_FOUND", "no such operation", 404)
+        action = db.execute("SELECT action FROM operations WHERE operation_id=?", (ref,)).fetchone()[0]
+        if action.startswith("pm."):
+            raise _bad("SCOPED_LINK_REQUIRED", "PM operations require workspace-scoped associations", 422)
     elif kind == "task":
         if not _TASK.fullmatch(ref) or not db.execute("SELECT 1 FROM tasks WHERE task_id=?", (ref,)).fetchone():
             raise _bad("LINK_TARGET_NOT_FOUND", "no such task", 404)

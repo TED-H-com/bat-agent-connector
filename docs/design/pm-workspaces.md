@@ -65,8 +65,10 @@ write as failed or apply it twice. Public result access remains membership prote
 ## Shared API and MCP reads
 
 All reads below require `observe`; workspace content also requires current membership.
-New PM MCP tools require the caller's `BATC_API_TOKEN`, including in the legacy MCP
-profile, and do not fall back to the local administrator. The same named methods are
+New PM MCP tools and shared `operation_get`, `operations_list`, `events_list` require
+the caller's `BATC_API_TOKEN`, including in the legacy MCP profile, and do not fall
+back to the local administrator. Existing direct Fleet reads retain their previous
+behavior. The same named methods are
 available through the existing authenticated daemon RPC.
 
 | HTTP GET | MCP / RPC method | Result |

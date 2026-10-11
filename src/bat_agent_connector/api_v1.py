@@ -121,6 +121,9 @@ class ApiV1:
         managed_repairs.install(daemon.ops)
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
+        from . import pm_discussions, pm_workspace
+        pm_workspace.install(daemon.ops)
+        pm_discussions.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -138,6 +141,12 @@ class ApiV1:
             ("GET", r"/api/v1/version", self.version, None),
             ("GET", r"/api/v1/capabilities", self.capabilities, "observe"),
             ("GET", r"/api/v1/workspaces", self.workspaces, "observe"),
+            ("GET", r"/api/v1/pm/workspaces", self.pm_workspaces, "observe"),
+            ("GET", r"/api/v1/pm/profiles", self.pm_profiles, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})", self.pm_workspace, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads", self.pm_threads, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})", self.pm_thread, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/threads/(?P<thread_id>pmt_[0-9a-f]{32})/context", self.pm_context, "observe"),
             ("POST", r"/api/v1/artifacts", self.create_artifact, "manage"),
             ("POST", r"/api/v1/artifact-capture-previews", self.artifact_capture_preview, "observe"),
             ("POST", r"/api/v1/artifact-managed-capture-previews", self.artifact_managed_capture_preview, "observe"),
@@ -470,6 +479,35 @@ class ApiV1:
                 raise OperationError("INVALID_PARAMS", "limit must be 1-200", 422) from None
         return 200, await session_start_operations.workspaces(self.daemon.ops, principal, request)
 
+    def _pm_read(self, principal, method, query, **ids):
+        from .pm_reads import FIELDS, read
+        self._exact_query(query, set(FIELDS[method]) - set(ids))
+        params = {key: values[0] for key, values in query.items()}
+        for key in {"limit", "max_chars", "before_message", "before_input"} & params.keys():
+            value = params[key]
+            if not re.fullmatch(r"[0-9]{1,9}", value):
+                raise OperationError("INVALID_PARAMS", f"{key} must be a positive integer", 422)
+            params[key] = int(value)
+        return 200, read(self.daemon.ops, principal, method, {**params, **ids})
+
+    async def pm_workspaces(self, principal, query, **_):
+        return self._pm_read(principal, "pm_workspaces_list", query)
+
+    async def pm_workspace(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_workspace_get", query, workspace_id=workspace_id)
+
+    async def pm_profiles(self, principal, query, **_):
+        return self._pm_read(principal, "pm_profiles_get", query)
+
+    async def pm_threads(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_threads_list", query, workspace_id=workspace_id)
+
+    async def pm_thread(self, principal, query, workspace_id, thread_id, **_):
+        return self._pm_read(principal, "pm_thread_get", query, workspace_id=workspace_id, thread_id=thread_id)
+
+    async def pm_context(self, principal, query, workspace_id, thread_id, **_):
+        return self._pm_read(principal, "pm_context_get", query, workspace_id=workspace_id, thread_id=thread_id)
+
     async def capabilities(self, principal, **_):
         fleet = self.daemon.fleet
         from . import worktree_merge_operations
@@ -509,6 +547,8 @@ class ApiV1:
                                      "reasons": ([] if self._can_continue(name) else ["HOST_CLEANUP_UNAVAILABLE"])}
                                      for name in fleet.config.hosts]},
                       "features": {"dashboard_sync": {"version": 1, "bootstrap": "/api/v1/bootstrap", "checkpoint_replay": True},
+                                  "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
+                                                    "runner": False, "plan_adoption": False, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},
                                   "execution_delivery": {"version": 1, "source_kinds": ["execution", "task_command"]},
                                   "work_item_reads": {"version": 1},
@@ -584,7 +624,7 @@ class ApiV1:
                          "projects": work_items.projects_list(db, include_archived=True),
                          "work_items": work_items.work_items_list(db, include_archived=True, limit=50,
                              principal_id=sync["principal_id"]),
-                         "operations": self.daemon.ops.list(limit=50)},
+                         "operations": self.daemon.ops.list(limit=50, principal=principal)},
                      "pagination": {"atomic": False, "session_order": "id"}}
 
     def _can_continue(self, host: str) -> bool:
@@ -726,13 +766,13 @@ class ApiV1:
         names = [host] if host else list(self.daemon.fleet.config.hosts)
         return 200, {"hosts": [await resource_policy.session_policy(self.daemon.fleet, h) for h in names]}
 
-    async def operations(self, query, **_):
+    async def operations(self, query, principal, **_):
         statuses = [s for s in (self._q(query, "status") or "").split(",") if s]
         before = self._q(query, "before")
         return 200, self.daemon.ops.list(statuses=statuses or None, actor=self._q(query, "actor"),
                                          action=self._q(query, "action"),
                                          before=float(before) if before else None,
-                                         limit=self._int(query, "limit", 50))
+                                         limit=self._int(query, "limit", 50), principal=principal)
 
     async def create_operation(self, principal, query, body, headers, **_):
         key = headers.get("idempotency-key") or body.get("idempotency_key")
@@ -742,7 +782,8 @@ class ApiV1:
                 principal, action=body.get("action"), target=body.get("target"), params=body.get("params"),
                 preconditions=body.get("preconditions"), idempotency_key=key, entry="http")
         except OperationError as error:
-            if body.get("action") not in {"setup.host", "setup.repository", "setup.verification"}:
+            if (not str(body.get("action", "")).startswith("pm.")
+                    and body.get("action") not in {"setup.host", "setup.repository", "setup.verification"}):
                 raise
             # This boundary is before a new durable setup operation exists. The UI
             # may review invalid input again; lost transport replies still keep the key.
@@ -751,8 +792,8 @@ class ApiV1:
             op = await self.daemon.ops.wait(op["operation_id"], wait)
         return (202 if created else 200), {"operation": op, "created": created}
 
-    async def operation(self, op, **_):
-        return 200, {"operation": self.daemon.ops.get(op),
+    async def operation(self, op, principal, **_):
+        return 200, {"operation": self.daemon.ops.get(op, principal=principal),
                      "work_items": work_items.work_items_for(self.daemon.journal.db, "operation", op),
                      "cleanup_receipts": cleanup.receipts(self.daemon.ops, op)}
 
@@ -836,7 +877,8 @@ class ApiV1:
         return 200, integration.integrations_list(self.daemon.ops, self._q(query, "repository"), number,
                                                   self._int(query, "limit", 20))
 
-    async def integration(self, op, **_):
+    async def integration(self, op, principal, **_):
+        self.daemon.ops.get(op, steps=False, principal=principal)
         out = integration.integration_get(self.daemon.ops, op)
         out["cleanup"] = cleanup.lookup(self.daemon.journal.db, op)
         return 200, out
