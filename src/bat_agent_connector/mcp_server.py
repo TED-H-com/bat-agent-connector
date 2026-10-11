@@ -72,6 +72,8 @@ READ_TOOLS = [
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
     "pm_release_baselines_list", "pm_release_baseline_current_get", "pm_release_baseline_get",
+    "pm_release_baseline_sources_list", "pm_release_baseline_releases_list",
+    "pm_release_baseline_deployments_list", "pm_release_baseline_preview",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
     "pm_brief_export_get",
     "pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list",
@@ -624,6 +626,30 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read one original mapping and immutable publication history under current source access."""
         return await pm_daemon("pm_issue_mapping_get", workspace_id=workspace_id, mapping_id=mapping_id)
 
+    async def pm_release_baseline_sources_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """List local explicit project/repository associations; never scan GitHub automatically."""
+        return await pm_daemon("pm_release_baseline_sources_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_release_baseline_releases_list(workspace_id: str, project_binding_id: str, repository: str,
+                                               page: int = 1, limit: int = 20) -> dict[str, Any]:
+        """Explicit bounded GitHub release discovery for one authorized source; publication only, no quality claims."""
+        return await pm_daemon("pm_release_baseline_releases_list", workspace_id=workspace_id,
+            project_binding_id=project_binding_id, repository=repository, page=page, limit=limit)
+
+    async def pm_release_baseline_deployments_list(workspace_id: str, project_binding_id: str, repository: str,
+                                                  after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """List original local verified deployment receipts with current source access."""
+        return await pm_daemon("pm_release_baseline_deployments_list", workspace_id=workspace_id,
+            project_binding_id=project_binding_id, repository=repository, after=after, limit=limit)
+
+    async def pm_release_baseline_preview(workspace_id: str, project_binding_id: str, repository: str, kind: str,
+                                          release_id: int | None = None, deployment_id: str | None = None,
+                                          maintenance_branch: str | None = None) -> dict[str, Any]:
+        """Explicitly resolve one fixed release/receipt into a registration draft; never select, publish or authorize maintenance."""
+        return await pm_daemon("pm_release_baseline_preview", workspace_id=workspace_id,
+            project_binding_id=project_binding_id, repository=repository, kind=kind, release_id=release_id,
+            deployment_id=deployment_id, maintenance_branch=maintenance_branch)
+
     async def pm_release_baselines_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read immutable primary release baseline history with current original source visibility."""
         return await pm_daemon("pm_release_baselines_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -876,6 +902,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_issue_mappings_list, pm_issue_mapping_get,
 
                pm_release_baselines_list, pm_release_baseline_current_get, pm_release_baseline_get,
+               pm_release_baseline_sources_list, pm_release_baseline_releases_list,
+               pm_release_baseline_deployments_list, pm_release_baseline_preview,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
                pm_brief_export_get,
                pm_lifecycle_get, pm_lifecycle_transitions_list, pm_lifecycle_transition_get, pm_lifecycle_inflight_list,

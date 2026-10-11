@@ -1,6 +1,7 @@
 """Release baseline HTTP/RPC/MCP parity and original-source operation privacy."""
 import asyncio
 import json
+from urllib.parse import urlencode
 
 import pytest
 
@@ -18,6 +19,7 @@ from tests.test_pm_governance_api import send
 from tests.test_pm_release_baselines import OWNER, READER, Provider, member, remove_repo, request, setup
 from tests.test_pm_release_deployments import deployments, selection
 from tests.test_pm_release_deployments import setup as deployment_setup
+from tests.test_pm_release_previews import ChoiceProvider
 from tests.test_pm_run_api import unpack
 
 daemon, served = api_daemon, api_served
@@ -183,3 +185,67 @@ async def test_source_project_update_invalidates_reads_without_rebinding_to_new_
                               tok=token(d, OWNER.actor, "observe"))
     assert status == 200 and view["visibility_filtered"] and view["baseline"] is None
     assert view["head"] == {"baseline_id": None, "version": done["result"]["version"]}
+
+
+async def test_explicit_source_choices_preview_and_selected_envelope_http_rpc_mcp(ready, monkeypatch):
+    d, port, target, binding, _ = ready
+    d.ops.context["github"] = ChoiceProvider(d.ops.context["github_config"])
+    wid = target["workspace_id"]
+    prefix = f"/api/v1/pm/workspaces/{wid}"
+    auth = token(d, READER.actor, "observe")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(d.fleet.config, read_only=True, principal_only=True)
+    before = d.ops.db.total_changes
+    chosen = {"project_binding_id": binding, "repository": target["repository"]}
+    try:
+        for method, fields, suffix in [
+            ("pm_release_baseline_sources_list", {"after": 0, "limit": 20}, "/release-baseline-sources"),
+            ("pm_release_baseline_releases_list", {**chosen, "page": 1, "limit": 20}, "/release-baseline-sources/github-releases"),
+            ("pm_release_baseline_deployments_list", {**chosen, "after": 0, "limit": 20}, "/release-baseline-sources/deployments"),
+        ]:
+            status, expected = await http(port, "GET", prefix + suffix + "?" + urlencode(fields), tok=auth)
+            assert status == 200, expected
+            assert await d.call_api(method, {"workspace_id": wid, **fields}, READER) == expected
+            assert unpack(await server.call_tool(method, {"workspace_id": wid, **fields})) == expected
+            if method == "pm_release_baseline_sources_list":
+                assert d.ops.context["github"].calls == []
+        params = {**chosen, "kind": "github_release", "release_id": 41}
+        status, http_preview = await http(port, "GET", prefix + "/release-baseline-preview?" + urlencode(params), tok=auth)
+        assert status == 200, http_preview
+        rpc_preview = await d.call_api("pm_release_baseline_preview", {"workspace_id": wid, **params}, READER)
+        mcp_preview = unpack(await server.call_tool("pm_release_baseline_preview", {"workspace_id": wid, **params}))
+        for value in (rpc_preview, mcp_preview):
+            assert value["registration"] == http_preview["registration"]
+            assert value["proof"]["source"] == http_preview["proof"]["source"]
+            assert value["proof"]["selection"] == http_preview["proof"]["selection"]
+        assert d.ops.db.total_changes == before
+        fixed = http_preview["registration"]
+        fixed["params"]["rationale"] = "Owner chooses this exact released version"
+        done = await send(d, port, fixed)
+        assert done["result"]["version"] == 1
+    finally:
+        await fleet.close()
+
+
+async def test_source_choice_and_preview_queries_are_exact_and_bounded(ready):
+    d, port, target, binding, _ = ready
+    prefix = f'/api/v1/pm/workspaces/{target["workspace_id"]}'
+    auth = token(d, OWNER.actor, "observe")
+    chosen = urlencode({"project_binding_id": binding, "repository": target["repository"]})
+    for suffix in [
+        "/release-baseline-sources?limit=21", "/release-baseline-sources?after=",
+        "/release-baseline-sources?repository=example/product", "/release-baseline-sources?after=0&after=1",
+        "/release-baseline-sources/github-releases?" + chosen + "&page=0",
+        "/release-baseline-sources/github-releases?" + chosen + "&after=0",
+        "/release-baseline-sources/deployments?" + chosen + "&page=1",
+        "/release-baseline-preview?" + chosen + "&kind=github_release&release_id=",
+        "/release-baseline-preview?" + chosen + "&kind=github_release&release_id=1&release_id=2",
+        "/release-baseline-preview?" + chosen + "&kind=github_release&release_id=9223372036854775808",
+        "/release-baseline-preview?" + chosen + "&kind=package_registry",
+        "/release-baseline-preview?" + chosen + "&kind=github_release&release_id=41&maintenance_branch=",
+        "/release-baseline-preview?" + chosen + "&kind=github_release&release_id=41&channel=stable",
+    ]:
+        status, result = await http(port, "GET", prefix + suffix, tok=auth)
+        assert status == 422, (suffix, result)
+    assert d.ops.context["github"].calls == []

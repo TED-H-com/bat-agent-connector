@@ -1,6 +1,7 @@
 """Bound, read-only release observations; no publication or mutable checkout access."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -66,6 +67,10 @@ def _release(value, release_id, channel):
 
 
 def deployment_receipt(ops, principal, wid, deployment_id, *, repository, repository_id, commit_sha, channel):
+    if (type(repository_id) is not int or not 0 < repository_id < 2**63
+            or not isinstance(commit_sha, str) or not SHA.fullmatch(commit_sha)
+            or not isinstance(channel, str) or not 1 <= len(channel) <= 256):
+        raise bad("The original deployment identity is incomplete")
     dep = deployment_store.deployment(ops.db, deployment_id=deployment_id)
     if dep is None or not pm_evidence._read_operation(ops, principal, wid, dep["operation_id"]):
         raise bad("The original deployment source is unavailable", "PM_BASELINE_SOURCE_UNAVAILABLE", 404)
@@ -99,8 +104,14 @@ def deployment_receipt(ops, principal, wid, deployment_id, *, repository, reposi
             "artifact_digest": identity.get("artifact_digest"), "current_environment_status": "not_rechecked"}
 
 
-async def observe(ops, intent, check):
+async def observe(ops, intent, check, *, discover=False):
     """One bounded source-read step. The callback rechecks original authority per GET."""
+    if discover:
+        # Only the read-only preview calls this with unspecified native identities.
+        # Registration always supplies the original required SHA/ID/channel.
+        if intent["source"]["kind"] != "github_release" or any(intent[key] is not None for key in ("repository_id", "commit_sha", "channel")):
+            raise bad("Discovery requires an unselected GitHub release preview")
+        intent = copy.deepcopy(intent)
     gh = ops.context["github"]
     repository = intent["repository"]
     base = "/repos/" + "/".join(quote(part, safe="") for part in repository.split("/"))
@@ -115,16 +126,22 @@ async def observe(ops, intent, check):
 
     async def repository_identity():
         value = await read("")
-        if (type(value.get("id")) is not int or value["id"] != intent["repository_id"]
+        if (type(value.get("id")) is not int or value["id"] <= 0
+                or intent["repository_id"] is not None and value["id"] != intent["repository_id"]
                 or str(value.get("full_name", "")).lower() != repository.lower()):
             raise bad("The configured repository identity changed", "PM_BASELINE_REPOSITORY_CHANGED")
+        if discover and intent["repository_id"] is None:
+            intent["repository_id"] = value["id"]
 
     await repository_identity()
     source = intent["source"]
     proof = None
     if source["kind"] == "github_release":
         path = "/releases/" + str(source["release_id"])
-        release = _release(await read(path), source["release_id"], intent["channel"])
+        raw_release = await read(path)
+        if discover:
+            intent["channel"] = "prerelease" if raw_release.get("prerelease") is True else "stable"
+        release = _release(raw_release, source["release_id"], intent["channel"])
         refpath = "/git/ref/tags/" + quote(release["tag"], safe="")
         ref = await read(refpath)
         if ref.get("ref") != "refs/tags/" + release["tag"]:
@@ -146,6 +163,8 @@ async def observe(ops, intent, check):
             obj = tag.get("object") or {}
         else:
             raise bad("The release tag chain exceeds the supported bound")
+        if discover:
+            intent["commit_sha"] = sha
         if sha != intent["commit_sha"]:
             raise bad("The release tag resolves to a different commit", "PM_BASELINE_TAG_CHANGED")
         commit = await read("/git/commits/" + sha)
@@ -186,4 +205,5 @@ async def observe(ops, intent, check):
     await repository_identity()
     check()
     return {"source": proof, "maintenance_branch": maintenance, "observed_at": time.time(),
-            "intent_digest": digest(intent), "observation_scope": "fixed_original_source_at_observation"}
+            "intent_digest": digest(intent), "observation_scope": "fixed_original_source_at_observation",
+            "selection": {key: intent[key] for key in ("repository_id", "commit_sha", "channel")}}
