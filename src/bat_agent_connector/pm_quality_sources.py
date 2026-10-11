@@ -140,6 +140,17 @@ def access(ops, principal, wid, context):
     return child
 
 
+def _evaluate(ops, principal, wid, context, child, condition, reference):
+    proof = verification.evaluate(ops, principal, wid, child, condition, reference)
+    if condition['profile'] == 'github_reported_checks_v1':
+        integration = operation(ops, principal, reference['integration_operation_id'])
+        native = ((integration.get('external_refs') or {}).get('admission_binding') or {}).get('pm_delivery') or {}
+        original = context['native_result']
+        if any(native.get(field) != original[field] for field in ('provider_origin', 'repository_id')):
+            proof = {**proof, 'status': 'blocked', 'reason': 'original_repository_identity_unproven'}
+    return proof
+
+
 def conclusions(ops, principal, wid, context, values):
     if not isinstance(values, list) or len(values) != len(context['criteria']):
         raise bad('Record the whole original acceptance and DoD matrix')
@@ -156,7 +167,7 @@ def conclusions(ops, principal, wid, context, values):
         criterion = expected[identity]
         proof = None
         if value['reference'] is not None:
-            proof = verification.evaluate(ops, principal, wid, child, criterion['condition'], value['reference'])
+            proof = _evaluate(ops, principal, wid, context, child, criterion['condition'], value['reference'])
         proven = bool(proof and proof['status'] == 'passed'
             and proof['candidate_commit'] == context['native_result']['candidate_commit'])
         status = ('rejected' if value['verdict'] == 'rejected' else 'accepted'
@@ -190,7 +201,7 @@ def proof_current(ops, principal, wid, context, assessment):
         proof = item['verification']
         if item['status'] != 'accepted' or not proof:
             continue
-        current = verification.evaluate(ops, principal, wid, child, proof['condition'], proof['reference'])
+        current = _evaluate(ops, principal, wid, context, child, proof['condition'], proof['reference'])
         if current['status'] != 'passed' or current['receipt_digest'] != proof['receipt_digest']:
             return False
     return True
