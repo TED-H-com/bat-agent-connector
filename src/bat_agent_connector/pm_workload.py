@@ -301,7 +301,9 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=20):
             continue
         result['snapshots'].append(_view(row))
         result['next_cursor'] = stub['sequence']
-        if _size(result) > MAX_READ_BYTES:
+        # The terminal null cursor can be wider than a small sequence ID.
+        # Reserve its width before accepting a whole record into the page.
+        if _size(result) + max(0, 4 - len(str(stub['sequence']))) > MAX_READ_BYTES:
             result['snapshots'].pop()
             if cursor == after:
                 raise _bad('PM_WORKLOAD_READ_TOO_LARGE', 'One whole workload observation exceeds the read byte limit', 413)

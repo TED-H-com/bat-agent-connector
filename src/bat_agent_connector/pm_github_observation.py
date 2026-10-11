@@ -226,7 +226,9 @@ def list_observations(ops, principal, workspace_id, *, after=0, limit=20):
             continue
         result['observations'].append(_view(row))
         result['next_cursor'] = stub['sequence']
-        if _size(result) > MAX_READ_BYTES:
+        # The terminal null cursor can be wider than a small sequence ID.
+        # Reserve its width before accepting a whole record into the page.
+        if _size(result) + max(0, 4 - len(str(stub['sequence']))) > MAX_READ_BYTES:
             result['observations'].pop()
             if cursor == after:
                 raise _bad('PM_GITHUB_READ_TOO_LARGE', 'One whole GitHub observation exceeds the read byte limit', 413)
