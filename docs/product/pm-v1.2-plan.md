@@ -1,8 +1,8 @@
 # Better Agent Dashboard 詳細開發計畫
 
-版本 1.2  
-更新日期 2026 年 10 月 11 日  
-適用專案 teddashh/bat-agent-connector  
+版本 1.2\
+更新日期 2026 年 10 月 11 日\
+適用專案 teddashh/bat-agent-connector\
 用途 供 使用者 與開發 agents 校正範圍 拆分工作與驗收
 
 本計畫將現有 Better Agent Connector 擴充為以 workspace 為單位的專案管理與交付服務。Tauri client 提供 Fleet、Dashboard、五種 PM 視圖與 agent 討論；workspace 所在 server 保存計畫、工作關聯與操作紀錄。人與 coding agents 保留各自的 BAT、VS Code 或 CLI 使用方式，彼此不接管現有 session。
@@ -1507,4 +1507,3 @@ Maintainer 必須沿用 PM／TaskDaemon，維護新的自有工作；不得以 r
 8. 以第18章的真實工作循環作主要成功判準。
 
 本計畫的產品方向是：讓 workspace 保存從 Idea、採用方向、工程規格、實際交付到維護與結束的可信脈絡，使使用者保留原有 coding 心流，同時知道目前為何而做、成果如何、是否值得繼續投入，以及何時停止。
-
