@@ -255,8 +255,16 @@ try {
     Stop-Owned $reopened
     Remove-Item -LiteralPath $central
     $app = Start-Dashboard $true
-    $managedIdentity = node tests/managed-installed-probe.mjs wait $dataRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Managed clean-profile first-run failed' }
+    $managedIdentity = node tests/managed-installed-probe.mjs wait $dataRoot (Join-Path $Evidence 'managed-startup-failure.json')
+    if ($LASTEXITCODE -ne 0) {
+        # Capture the owned native error surface before cleanup, even when the
+        # central never reaches bootstrap and the UIA readiness probe cannot run.
+        try {
+            $failedWindows = @([DashboardWindows]::Find($app.Id))
+            if ($failedWindows.Count -eq 1) { Save-Window $failedWindows[0] 'managed-startup-failed.png' }
+        } catch { Write-Warning 'Managed startup failure screenshot was unavailable' }
+        throw 'Managed clean-profile first-run failed'
+    }
     Wait-Until { @([DashboardWindows]::Find($app.Id)).Count -eq 1 } 'Managed first-run window missing'
     $window = @([DashboardWindows]::Find($app.Id))[0]
     Wait-ManagedView $app $window 'managed-first-run'
