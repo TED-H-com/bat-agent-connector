@@ -47,10 +47,10 @@ def install(ops):
 
 
 def capabilities():
-    from . import pm_maintenance_findings
+    from . import pm_maintenance_findings, pm_required_ci
     return {'version': 1, 'profiles': [provider.PROFILE], 'read_only': True, 'traversals': 2,
         'automatic_maintenance': False, 'full_github_repository_coverage': False,
-        'outside_scope': provider.OUTSIDE_SCOPE, 'maintenance_findings': pm_maintenance_findings.capabilities(),
+        'outside_scope': provider.OUTSIDE_SCOPE, 'maintenance_findings': pm_maintenance_findings.capabilities(), 'required_ci': pm_required_ci.capabilities(),
         'limits': {'pages': provider.MAX_PAGES, 'rows': provider.MAX_ROWS,
             'bytes': provider.MAX_BYTES, 'seconds': provider.MAX_SECONDS}}
 
