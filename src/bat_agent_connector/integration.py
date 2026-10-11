@@ -299,8 +299,9 @@ echo "gitver $1.$2"
         runner = self.ops.context["git_runner"]
         lock = _area_locks.setdefault((self.host, self.path), asyncio.Lock())
         async with lock:
-            from .controller_authority import require
-            require()
+            # This is the shared repository integration service. Its existing
+            # action authorization also permits receipt recovery after upgrade.
+            # New session carriers are controller-bound at handoff preparation.
             if long:
                 out = await runner.run(self.host, script, timeout_s=self.repo.integrate.fetch_timeout_s)
             else:

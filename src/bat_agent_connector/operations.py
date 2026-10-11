@@ -570,6 +570,8 @@ class OperationService:
         the worker, but cannot be claimed through resume or cancellation.
         """
         action = op["action"]
+        if action in {"session.read", "session.position", "session.labels.set", "session.record_verification"}:
+            return  # Connector metadata keeps its existing personal/manage authorization.
         if action == "cleanup.apply":
             from .cleanup import authorize_controller_existing
             if authorize_controller_existing(self, principal, op, verb):

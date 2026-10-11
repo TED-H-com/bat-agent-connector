@@ -90,7 +90,7 @@ def r_sessions(o):
                 s["agent_kind"],
                 state,
                 pend,
-                "managed" if s.get("api_access") == "managed" else s.get("provenance", "?"),
+                s.get("provenance", "?"),
                 s["last_activity_age"],
                 s["last_activity"],
                 s["title"],
@@ -98,7 +98,7 @@ def r_sessions(o):
         )
     _table(
         rows,
-        ["host", "session", "workspace", "agent", "state", "pending", "access", "age", "last_activity", "title"],
+        ["host", "session", "workspace", "agent", "state", "pending", "source", "age", "last_activity", "title"],
     )
     print(f"({o['count']} of {o['total_matched']})")
     for h, e in o["errors"].items():

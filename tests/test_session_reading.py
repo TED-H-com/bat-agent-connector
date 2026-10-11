@@ -91,6 +91,22 @@ async def test_rotation_shares_identity_but_changed_scopes_cannot_replay_or_resu
             verb(altered, op["operation_id"])
 
 
+@pytest.mark.parametrize("create", [mark, position])
+async def test_pre_controller_personal_metadata_receipts_remain_replayable(daemon, mock, create):
+    message = observe(daemon)["messages"][0]
+    original = create(daemon, message)
+    await settle_operations(daemon.ops)
+    refs = daemon.ops.get(original["operation_id"])["external_refs"]
+    refs["admission_binding"].pop("controller_authority")
+    daemon.journal.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?",
+                              (json.dumps(refs), original["operation_id"]))
+    assert create(daemon, message)["operation_id"] == original["operation_id"]
+    changed = api_auth.Principal(READER.actor, READER.scopes | {"manage"})
+    with pytest.raises(OperationError, match="original effective principal"):
+        create(daemon, message, principal=changed)
+    assert not mock.frames
+
+
 async def test_position_is_separate_has_exact_id_and_concurrent_entry_cannot_overwrite(daemon):
     doc = observe(daemon)
     first = position(daemon, doc["messages"][1])
