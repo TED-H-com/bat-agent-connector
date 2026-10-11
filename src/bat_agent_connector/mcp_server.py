@@ -78,6 +78,7 @@ READ_TOOLS = [
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
+    "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
     "pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get",
@@ -752,6 +753,22 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read due time, policy limits and current blockers; this never starts work."""
         return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
 
+    async def pm_ahp_adapters_list(workspace_id: str) -> dict[str, Any]:
+        """List administrator-granted AHP observer IDs; never returns endpoints or credentials."""
+        return await pm_daemon("pm_ahp_adapters_list", workspace_id=workspace_id)
+
+    async def pm_ahp_observations_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """List fixed AHP read receipts under current workspace and adapter source access."""
+        return await pm_daemon("pm_ahp_observations_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_ahp_observation_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read the latest saved AHP observation; no network refresh or ownership adoption."""
+        return await pm_daemon("pm_ahp_observation_current_get", workspace_id=workspace_id)
+
+    async def pm_ahp_observation_get(workspace_id: str, observation_id: str) -> dict[str, Any]:
+        """Read one original bounded catalog/snapshot receipt, preserving reconnect gaps."""
+        return await pm_daemon("pm_ahp_observation_get", workspace_id=workspace_id, observation_id=observation_id)
+
     async def pm_github_observations_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read saved GitHub observation history, preserving original policy, repository and source access."""
         return await pm_daemon("pm_github_observations_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -1047,6 +1064,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
+               pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
                pm_maintenance_policies_list, pm_maintenance_policy_current_get, pm_maintenance_policy_get,

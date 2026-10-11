@@ -570,6 +570,7 @@ class Config:
     api: ApiConfig = field(default_factory=ApiConfig)
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)
     github: GitHubConfig = field(default_factory=GitHubConfig)
+    ahp: dict = field(default_factory=dict)
     client_label: str = "BAT Agent Connector"
     path: Path | None = None
     human_name: str | None = None  # [client] human_name: who relayed messages come from (NEED-<NAME> marker)
@@ -730,7 +731,8 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
     relay_name = str(cl.get("relay_name") or "").strip() or None
     if relay_name and not re.fullmatch(r"[A-Za-z0-9 ._-]{1,40}", relay_name):
         raise ConfigError("[client] relay_name must be 1-40 letters/digits/spaces")
-    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), client_label=label,
+    from .ahp_config import parse_ahp
+    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), client_label=label,
                   path=path, human_name=human, relay_name=relay_name)
 
 

@@ -152,6 +152,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.maintenance_review.'):
         from .pm_maintenance_review import operation_visible as review_visible
         return review_visible(db, principal, op)
+    if op['action'] == 'pm.ahp.observe':
+        from .pm_ahp_observations import operation_visible as ahp_visible
+        return ahp_visible(db, principal, op)
     if op['action'] == 'pm.github.observe':
         from .pm_github_observation import operation_visible as github_visible
         return github_visible(db, principal, op)

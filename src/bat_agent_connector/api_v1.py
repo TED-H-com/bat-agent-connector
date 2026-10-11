@@ -122,6 +122,7 @@ class ApiV1:
         product_preferences.install(daemon.ops)
         project_skills.install(daemon.ops)
         from . import (
+            pm_ahp_observations,
             pm_discussions,
             pm_evidence,
             pm_execution_verification,
@@ -151,6 +152,7 @@ class ApiV1:
             pm_workspace,
         )
         pm_workspace.install(daemon.ops)
+        pm_ahp_observations.install(daemon.ops)
         pm_discussions.install(daemon.ops)
         pm_run_operations.install(daemon.ops)
         pm_native_operations.install(daemon.ops)
@@ -233,6 +235,10 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-checks/current", self.pm_maintenance_check_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-checks/(?P<run_id>pmck_[0-9a-f]{32})", self.pm_maintenance_check, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-schedule", self.pm_maintenance_schedule, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/ahp-adapters", self.pm_ahp_adapters, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/ahp-observations", self.pm_ahp_observations, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/ahp-observations/current", self.pm_ahp_observation_current, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/ahp-observations/(?P<observation_id>pmah_[0-9a-f]{32})", self.pm_ahp_observation, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/github-observations", self.pm_github_observations, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/github-observations/current", self.pm_github_observation_current, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/github-observations/(?P<observation_id>pmgh_[0-9a-f]{32})", self.pm_github_observation, "observe"),
@@ -498,6 +504,7 @@ class ApiV1:
                       self.pm_work_packages, self.pm_work_package, self.pm_work_package_readiness,
                       self.pm_maintenance_reviews, self.pm_maintenance_review_current, self.pm_maintenance_review, self.pm_maintenance_review_events,
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
+                      self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
                       self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
@@ -676,7 +683,7 @@ class ApiV1:
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
         wide_cursor = method in {"pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
-                                 "pm_workload_snapshots_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
+                                 "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
         for key in integer_fields & params.keys():
@@ -886,6 +893,18 @@ class ApiV1:
     async def pm_maintenance_schedule(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_maintenance_schedule_get", query, workspace_id=workspace_id)
 
+    async def pm_ahp_adapters(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_ahp_adapters_list", query, workspace_id=workspace_id)
+
+    async def pm_ahp_observations(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_ahp_observations_list", query, workspace_id=workspace_id)
+
+    async def pm_ahp_observation_current(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_ahp_observation_current_get", query, workspace_id=workspace_id)
+
+    async def pm_ahp_observation(self, principal, query, workspace_id, observation_id, **_):
+        return self._pm_read(principal, "pm_ahp_observation_get", query, workspace_id=workspace_id, observation_id=observation_id)
+
     async def pm_github_observations(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_github_observations_list", query, workspace_id=workspace_id)
 
@@ -1001,7 +1020,7 @@ class ApiV1:
         return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
 
     async def capabilities(self, principal, **_):
-        from . import pm_github_observation, pm_lifecycle
+        from . import pm_ahp_observations, pm_github_observation, pm_lifecycle
         fleet = self.daemon.fleet
         from . import (
             pm_execution_verification,
@@ -1062,7 +1081,7 @@ class ApiV1:
                                   "controller_isolation": {"version": 1, "identity": "server_actor",
                                       "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_github_observation": pm_github_observation.capabilities(),
-                                  "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
+                                  "pm_workspaces": {"version": 1, "ahp_observation": pm_ahp_observations.capabilities(), "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
                                                     "runtime_reason": "external_tool_policy_unverified",

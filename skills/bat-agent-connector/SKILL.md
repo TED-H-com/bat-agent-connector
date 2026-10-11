@@ -1448,3 +1448,17 @@ requirement acceptance are distinct; delivery does not mark a requirement Done.
 For declared requirement prerequisites, select original qualified quality assessments explicitly. `pm_work_package_readiness_get` accepts optional `quality_refs` mapping prerequisite requirement IDs to `{condition, reference, execution_operation_id}`. Pass the same bounded identity map as `pm_requirement_quality_refs` on the reviewed `repository.continue` intent. The server freezes and rechecks the original assessment; passing tests alone do not accept a requirement, and revocation blocks new dependent work without deleting its history.
 
 Maintain uses the existing `pm.lifecycle.set_stage` or explicit `reopen` with `stage: maintain` and exact `maintenance_ref` from current lifecycle availability. Preserve its policy/version/baseline/snapshot/digest and expected lifecycle revision. A complete policy check may admit the same fixed decision automatically from Development; new execution rechecks original controller authority, deadline and all workload sources. Never reuse pre-stop evidence to reopen, infer idleness from session count, or rewrite an unknown original request to the newest observation.
+
+For an administrator-configured AHP source, read `pm_ahp_adapters_list(workspace_id)`
+and choose an advertised adapter ID. `pm.ahp.observe` uses observe scope with target
+`{workspace_id,adapter_id}`, params `{session_uris:[],include_changesets:false}` and
+empty preconditions; keep its original operation key. Select at most eight original
+session URIs from the saved catalog. Read `pm_ahp_observations_list`,
+`pm_ahp_observation_current_get` or `pm_ahp_observation_get` for immutable receipts;
+GET never refreshes the host. Preserve `next_cursor` through empty filtered pages.
+Only bounded catalog, selected session metadata and advertised static changeset
+snapshots are implemented. Reconnect snapshot fallback is a visible history gap;
+missing/withdrawn sources hide affected original records. Manual/foreign sources
+stay read-only. Do not supply URLs/tokens, launch or sign in a host, send/interrupt/
+resume/dispose a session, infer completion/cost from status, or treat this observer
+as create-own, a PM writer, a general native CLI adapter or an adapter switch.

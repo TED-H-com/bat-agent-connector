@@ -1,0 +1,236 @@
+"""Original AHP read receipts, authority and lifecycle with actual offline sockets."""
+from __future__ import annotations
+
+import json
+import sqlite3
+from dataclasses import replace
+from types import SimpleNamespace
+
+import pytest
+
+from bat_agent_connector import api_auth, pm_access
+from bat_agent_connector import pm_ahp_observations as ahp
+from bat_agent_connector.operations import OpContext, OperationError, OperationService
+from bat_agent_connector.task_journal import Journal
+from tests.operation_helpers import settle_operations
+from tests.test_ahp_observer import SESSION, TOKEN
+from tests.test_ahp_observer import host as ahp_host
+from tests.test_pm_workspace import OWNER, create, member
+from tests.test_pm_workspace import ops as workspace_ops
+
+ops, host = workspace_ops, ahp_host
+
+
+@pytest.fixture
+async def ready(ops, host):
+    workspace = await create(ops)
+    with ops.journal.tx():
+        token = api_auth.issue(ops.db, 'observer', ['observe'])
+    principal = api_auth.authenticate(ops.db, token, 'unrelated-admin')
+    await member(ops, workspace, principal.actor, 'reader')
+    host.adapter = replace(host.adapter, workspace_ids=(workspace['workspace_id'],))
+    ops.context['fleet'] = SimpleNamespace(config=SimpleNamespace(ahp={'local': host.adapter}))
+    ahp.install(ops)
+    return ops, host, workspace['workspace_id'], principal
+
+
+def request(wid, **changes):
+    return {'action': ahp.ACTION, 'target': {'workspace_id': wid, 'adapter_id': 'local'},
+            'params': {'session_uris': [SESSION], 'include_changesets': True}, 'preconditions': {},
+            'idempotency_key': 'original-observation', **changes}
+
+
+async def run(ready, **changes):
+    ops, host, wid, principal = ready
+    op, created = ops.create(principal, **request(wid, **changes))
+    await settle_operations(ops)
+    return ops.get(op['operation_id'])
+
+
+async def test_reader_observes_manual_source_once_and_all_receipts_are_immutable(ready):
+    ops, host, wid, principal = ready
+    done = await run(ready)
+    assert done['status'] == 'succeeded', done
+    oid = done['result']['observation_id']
+    read = ahp.get_observation(ops, principal, wid, oid)['observation']
+    assert read['document']['evidence']['status'] == 'observed'
+    assert ahp.operation_visible(ops.db, principal, done)
+    assert ahp.current_observation(ops, principal, wid)['observation'] == read
+    page = ahp.list_observations(ops, principal, wid)
+    assert page['observations'][0]['observation_id'] == oid and 'document' not in page['observations'][0]
+    count = len(host.requests)
+    replay = await run(ready)
+    assert replay['operation_id'] == done['operation_id'] and replay['result'] == done['result']
+    assert len(host.requests) == count
+    with pytest.raises(sqlite3.IntegrityError):
+        ops.db.execute('UPDATE pm_ahp_observations SET document=?', ('{}',))
+    with pytest.raises(sqlite3.IntegrityError):
+        ops.db.execute('DELETE FROM pm_ahp_observations')
+    dump = '\n'.join(ops.db.iterdump())
+    assert TOKEN not in dump and host.adapter.endpoint not in dump and host.adapter.credential_ref not in dump
+    assert ahp.capabilities()['create_own'] == 'unsupported'
+
+
+async def test_crash_after_local_receipt_preserves_original_result_without_reopening_socket(ready, monkeypatch):
+    ops, host, wid, principal = ready
+    monkeypatch.setattr(ops, 'kick', lambda: None)
+    original, _ = ops.create(principal, **request(wid))
+    result = await ops.actions[ahp.ACTION].run(OpContext(ops, original))
+    count = len(host.requests)
+    recovered_journal = Journal(ops.journal.path)
+    try:
+        recovered = OperationService(recovered_journal)
+        recovered.context['fleet'] = ops.context['fleet']
+        ahp.install(recovered)
+        await settle_operations(recovered)
+        assert recovered.get(original['operation_id'])['result'] == result
+        assert len(host.requests) == count
+        assert recovered.db.execute('SELECT count(*) FROM pm_ahp_observations').fetchone()[0] == 1
+    finally:
+        recovered_journal.close()
+
+
+@pytest.mark.parametrize('withdraw', ['membership', 'adapter', 'binding'])
+async def test_original_source_withdrawal_hides_detail_list_events_and_original_replay(ready, withdraw):
+    ops, host, wid, principal = ready
+    done = await run(ready)
+    assert done['status'] == 'succeeded', done
+    if withdraw == 'membership':
+        ops.db.execute('DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?', (wid, principal.actor))
+    elif withdraw == 'adapter':
+        ops.context['fleet'].config.ahp = {}
+    else:
+        ops.context['fleet'].config.ahp = {'local': replace(host.adapter, endpoint='ws://127.0.0.1:9876/')}
+    ahp.sync_config(ops)
+    assert not pm_access.visible(ops.db, principal, done)
+    events = ops.journal.api_events(0, 500)['events']
+    assert not any(pm_access.event_visible(ops.db, principal, event) for event in events
+                   if event['body'].get('operation_id') == done['operation_id'] or event['resource_id'] == done['operation_id'])
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ahp.get_observation(ops, principal, wid, done['result']['observation_id'])
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ops.create(principal, **request(wid))
+    if withdraw != 'membership':
+        assert ahp.list_observations(ops, principal, wid)['observations'] == []
+        assert ahp.current_observation(ops, principal, wid) == {'workspace_id': wid, 'observation': None, 'visibility_filtered': True}
+
+
+@pytest.mark.parametrize('change', ['credential', 'membership', 'config', 'pause', 'reopen'])
+async def test_current_authority_and_lifecycle_stop_remaining_frames_and_publication(ready, change):
+    ops, host, wid, principal = ready
+    async def revoke(ws, req, connection):
+        if req['method'] == 'listSessions':
+            if change == 'credential':
+                api_auth.revoke(ops.db, principal.actor)
+            elif change == 'membership':
+                ops.db.execute('DELETE FROM pm_workspace_members WHERE actor=?', (principal.actor,))
+            elif change == 'config':
+                ops.context['fleet'].config.ahp = {}
+            else:
+                stage = 'paused' if change == 'pause' else 'development'
+                ops.db.execute('UPDATE pm_lifecycle_heads SET stage=?,revision=revision+1,execution_epoch=execution_epoch+1 WHERE workspace_id=?', (stage, wid))
+        return False
+    host.on_request = revoke
+    done = await run(ready)
+    assert done['status'] == 'failed', done
+    assert [r['method'] for _, r in host.requests] == ['initialize', 'listSessions']
+    assert ops.db.execute('SELECT count(*) FROM pm_ahp_observations').fetchone()[0] == 0
+    assert not ops.context['ahp_active']
+
+
+@pytest.mark.parametrize('stage', ['paused', 'closed'])
+async def test_explicit_new_read_record_allowed_while_stopped_and_original_read_after_later_stop(ready, stage):
+    ops, host, wid, principal = ready
+    ops.db.execute('UPDATE pm_lifecycle_heads SET stage=?,revision=revision+1 WHERE workspace_id=?', (stage, wid))
+    done = await run(ready)
+    assert done['status'] == 'succeeded', done
+    ops.db.execute('UPDATE pm_lifecycle_heads SET revision=revision+1,execution_epoch=execution_epoch+1 WHERE workspace_id=?', (wid,))
+    assert ahp.get_observation(ops, principal, wid, done['result']['observation_id'])['observation']
+    assert (await run(ready))['result'] == done['result']
+    assert host.connections == 1
+
+
+async def test_exact_request_schema_scopes_and_configured_ids_only(ready):
+    ops, host, wid, principal = ready
+    for changes in [{'target': {'workspace_id': wid, 'adapter_id': 'arbitrary-url'}},
+                    {'params': {'endpoint': host.adapter.endpoint}},
+                    {'params': {'session_uris': ['file:///human/checkout']}},
+                    {'params': {'session_uris': [SESSION] * 9}},
+                    {'params': {'include_changesets': 1}}, {'preconditions': {'force': True}}]:
+        with pytest.raises(OperationError):
+            ops.create(principal, **request(wid, **changes))
+    with pytest.raises(OperationError, match='FORBIDDEN'):
+        ops.create(api_auth.Principal(OWNER.actor, frozenset({'manage'})), **request(wid))
+    assert not host.requests
+    caps = ahp.adapters(ops, principal, wid)
+    assert [a['adapter_id'] for a in caps['adapters']] == ['local']
+    assert 'endpoint' not in json.dumps(caps) and 'credential' not in json.dumps(caps)
+    for values in [{'after': True}, {'after': -1}, {'after': 2**63}, {'limit': 51}, {'limit': False}]:
+        with pytest.raises(OperationError, match='INVALID_PARAMS'):
+            ahp.list_observations(ops, principal, wid, **values)
+
+
+async def test_explicit_peer_withdrawal_hides_whole_history_and_same_native_identity_can_restore(ready):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    oid = original['result']['observation_id']
+    host.catalog = []
+    withdrawn = await run(ready, idempotency_key='new-catalog')
+    assert withdrawn['status'] == 'succeeded'
+    assert not ahp.operation_visible(ops.db, principal, original)
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ahp.get_observation(ops, principal, wid, oid)
+    from tests.test_ahp_observer import SUMMARY
+    host.catalog = [{**SUMMARY, 'title': 'Same title, new native incarnation', 'createdAt': '2026-10-12T00:00:00Z'}]
+    await run(ready, idempotency_key='reused-uri-new-incarnation')
+    assert not ahp.operation_visible(ops.db, principal, original)
+    host.catalog = [dict(SUMMARY)]
+    await run(ready, idempotency_key='original-identity-positive')
+    assert ahp.operation_visible(ops.db, principal, original)
+    assert ahp.get_observation(ops, principal, wid, oid)['observation']['document_digest'] == original['result']['document_digest']
+
+
+async def test_incomplete_catalog_cannot_withdraw_previously_readable_sources(ready):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    async def incomplete(ws, req, connection):
+        if req['method'] == 'listSessions':
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'id': req['id'], 'result': {'items': [], 'nextCursor': 'cycle'}}))
+            return True
+        return False
+    host.on_request = incomplete
+    done = await run(ready, idempotency_key='incomplete-refresh')
+    assert done['status'] == 'succeeded'
+    assert done['result']['coverage_status'] == 'incomplete'
+    assert ahp.operation_visible(ops.db, principal, original)
+    assert ahp.get_observation(ops, principal, wid, original['result']['observation_id'])['observation']
+
+
+async def test_explicit_native_changeset_withdrawal_hides_original_detail_and_operation(ready):
+    from tests.test_ahp_observer import CHANGESET
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    first_connection = host.connections + 1
+    host.reconnect = {'type': 'replay', 'actions': [], 'missing': [CHANGESET]}
+    async def disconnect(ws, req, connection):
+        if connection == first_connection and req['method'] == 'subscribe' and req['params']['channel'] == CHANGESET:
+            await ws.close()
+            return True
+        return False
+    host.on_request = disconnect
+    refreshed = await run(ready, idempotency_key='changeset-withdrawal')
+    assert refreshed['status'] == 'succeeded'
+    assert not ahp.operation_visible(ops.db, principal, original)
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ahp.get_observation(ops, principal, wid, original['result']['observation_id'])
+
+
+async def test_replacing_revoked_credential_does_not_upgrade_original_pending_authority(ready, monkeypatch):
+    ops, host, wid, principal = ready
+    monkeypatch.setattr(ops, 'kick', lambda: None)
+    original, _ = ops.create(principal, **request(wid))
+    api_auth.revoke(ops.db, principal.actor)
+    api_auth.issue(ops.db, principal.actor, ['observe'])
+    with pytest.raises(OperationError, match='AHP_AUTHORITY_UNAVAILABLE'):
+        await ops.actions[ahp.ACTION].run(OpContext(ops, original))
+    assert not host.requests
