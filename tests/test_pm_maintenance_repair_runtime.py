@@ -19,13 +19,14 @@ from tests.test_pm_maintenance_repair_quality import (  # noqa: F401
     pm,
     quality_repair,
     ready,
-    repair_ready,
     view,
     world,
 )
 from tests.test_pm_maintenance_repair_quality import publishing as publishing_fixture
+from tests.test_pm_maintenance_repair_quality import repair_ready as repair_fixture
 
 publishing = publishing_fixture
+repair_ready = repair_fixture
 
 
 @pytest.fixture(autouse=True)
