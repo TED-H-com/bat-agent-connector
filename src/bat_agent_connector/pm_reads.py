@@ -14,6 +14,10 @@ FIELDS = {
     "pm_runs_list": ("workspace_id", "thread_id", "limit", "after"),
     "pm_run_get": ("workspace_id", "run_id"),
     "pm_capabilities_get": ("workspace_id",),
+    "pm_plans_list": ("workspace_id", "after", "limit"),
+    "pm_plan_get": ("workspace_id", "revision_id"),
+    "pm_plan_accepted_get": ("workspace_id",),
+    "pm_plan_head_get": ("workspace_id",),
 }
 
 
@@ -23,6 +27,16 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get"}:
+        from . import pm_plans
+        pm_workspace.require_member(ops.db, principal, workspace_id)
+        if method == "pm_plans_list":
+            return pm_plans.list_plans(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 50))
+        if method == "pm_plan_get":
+            return pm_plans.get_plan(ops, principal, workspace_id, params.get("revision_id"))
+        if method == "pm_plan_accepted_get":
+            return pm_plans.accepted_plan(ops, principal, workspace_id)
+        return {"version": 1, "head": pm_plans.head(ops.db, workspace_id)}
     if method == "pm_runs_list":
         from . import pm_runs
         return pm_runs.list_runs(ops, principal, workspace_id, thread_id=thread_id,
@@ -31,10 +45,27 @@ def read(ops, principal, method, params):
         from . import pm_runs
         return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
     if method == "pm_capabilities_get":
-        from . import pm_runtime, pm_worktree
+        from . import pm_runs, pm_runtime, pm_worktree
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
         repositories = {repository.lower() for repository in workspace["repositories"]}
+        binding = pm_runs.workspace_worktree(ops.db, workspace_id)
+        if "pm.plan.adopt" not in ops.actions:
+            adoption_reason = "action_unavailable"
+        elif not principal.admin and workspace["membership"]["role"] != "owner":
+            adoption_reason = "owner_required"
+        elif any(not principal.allows(scope) for scope in ("observe", "manage", "start")):
+            adoption_reason = "scope_required"
+        elif binding is None:
+            adoption_reason = "pm_worktree_required"
+        else:
+            adoption_reason = None
         return {"workspace_id": workspace_id, "context_packages": True,
+                "plan_drafting": "pm.plan.draft" in ops.actions,
+                "plan_adoption": "pm.plan.adopt" in ops.actions,
+                "plan_adoption_available": adoption_reason is None, "plan_adoption_reason": adoption_reason,
+                "worktree_selection": ({**{key: binding["target"][key] for key in ("repository", "host", "workspace_id")},
+                                        **{key: binding[key] for key in ("source_ref", "source_sha", "repository_id", "binding_digest")}}
+                                       if binding else None),
                 "runtime": pm_runtime.capability_report(),
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
