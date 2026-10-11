@@ -147,14 +147,29 @@ def observe(journal, principal, response, *, generation=None):
 
 
 def decorate(journal, principal, document):
+    from . import controller_authority, registry
+    from .errors import ResourceReadOnly
+
+    def personal(row):
+        if not row.get("host") or not row.get("session_id"):
+            return row
+        row = {**row, "reading": reading(journal, principal, row["host"], row["session_id"])}
+        # Inventory stores objective provenance, not the last browser's access.
+        # Compute control availability per caller after reading shared inventory.
+        if row.get("api_access") == "managed":
+            try:
+                with controller_authority.use(controller_authority.binding(journal.db, principal), journal):
+                    controller_authority.require_entry(registry.get(row["host"], row["session_id"]))
+            except ResourceReadOnly as exc:
+                row.update(api_access="read_only", read_only_code=exc.code, read_only_reason=str(exc))
+        return row
+
     document = dict(document)
     for key in ("sessions", "work"):
         if key in document:
-            document[key] = [{**row, "reading": reading(journal, principal, row["host"], row["session_id"])}
-                             if row.get("host") and row.get("session_id") else row for row in document[key]]
+            document[key] = [personal(row) for row in document[key]]
     if document.get("session"):
-        row = document["session"]
-        document["session"] = {**row, "reading": reading(journal, principal, row["host"], row["session_id"])}
+        document["session"] = personal(document["session"])
     return document
 
 

@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from bat_agent_connector import api_auth, confinement, registry, service
+from bat_agent_connector import api_auth, confinement, controller_authority, registry, service
 from bat_agent_connector.channels import GUARDED_CHANNELS, ORCHESTRATE_CHANNELS, WRITE_CHANNELS
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.inventory import Inventory, InventorySettings
@@ -30,7 +30,8 @@ def write_frames(mock):
 def daemon(mock, tmp_path):
     d = TaskDaemon(make_config(mock, writes=True, orchestrate=True, managed_roots=["/srv"],
                                safety={"write_min_interval_s": 0}), tmp_path / "tasks.db")
-    yield d
+    with controller_authority.use(controller_authority.binding(d.journal.db, dashboard_principal()), d.journal):
+        yield d
     d.journal.close()
 
 
@@ -144,8 +145,9 @@ async def test_operation_idempotency_scope_and_bat_sessions(daemon, mock):
     with pytest.raises(OperationError) as e:
         send_op(daemon, text="different words")
     assert e.value.status == 409 and e.value.code == "IDEMPOTENCY_CONFLICT"
-    other, other_created = send_op(daemon, principal=api_auth.Principal("hermes", frozenset({"operate"})))
-    assert other_created and other["operation_id"] != op["operation_id"]  # keys are scoped by actor
+    with pytest.raises(OperationError) as foreign:
+        send_op(daemon, principal=api_auth.Principal("hermes", frozenset({"operate"})))
+    assert foreign.value.code == "FOREIGN_CONTROLLER"
     with pytest.raises(OperationError) as e:
         daemon.ops.create(dashboard_principal(), action="session.delete", target={}, idempotency_key="x")
     assert e.value.status == 422
@@ -164,7 +166,10 @@ async def test_standalone_operation_records_no_task_refs(daemon, mock, kind):
     try:
         await settle_operations(daemon.ops)
         done = daemon.ops.get(op["operation_id"])
-        assert done["status"] == "succeeded" and done["external_refs"] is None
+        assert done["status"] == "succeeded"
+        binding = done["external_refs"]["admission_binding"]
+        assert binding["controller_authority"]["actor"] == "operator-dashboard"
+        assert binding["session_controller"]["session_id"] == MANUAL and "task_id" not in binding
         assert len(write_frames(mock)) == 1
         assert not daemon.journal.db.execute("SELECT 1 FROM commands").fetchone()
     finally:
@@ -278,9 +283,11 @@ async def test_cancel_before_start_never_runs(daemon, mock):
         daemon.ops.cancel(api_auth.Principal("someone-else", frozenset({"observe"})), op["operation_id"])
     assert e.value.status == 403
     other, _ = send_op(daemon, key="k-other")
-    daemon.ops.cancel(api_auth.Principal("teammate", frozenset({"operate"})), other["operation_id"])
+    with pytest.raises(OperationError, match="original resource controller"):
+        daemon.ops.cancel(api_auth.Principal("teammate", frozenset({"operate"})), other["operation_id"])
+    daemon.ops.cancel(dashboard_principal(), other["operation_id"])
     events = daemon.journal.api_events(0, 100, resource_id=other["operation_id"])["events"]
-    assert events[-1]["kind"] == "operation.cancelled" and events[-1]["actor"] == "teammate"
+    assert events[-1]["kind"] == "operation.cancelled" and events[-1]["actor"] == "operator-dashboard"
 
 
 # --------------------------------------------------------------------------- inventory
