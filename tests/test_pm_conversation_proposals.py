@@ -149,6 +149,21 @@ async def test_invalid_model_output_preserves_raw_and_never_adopts(proposal_worl
         pm_native_journal.import_reply(w["d"].ops.journal, run["run_id"], run["generation"])
 
 
+async def test_larger_accepted_plan_is_never_silently_replaced_by_bounded_proposal(proposal_world):
+    w, ops = proposal_world, proposal_world["d"].ops
+    source = pm_plans.get_plan(ops, OWNER, w["workspace_id"], w["revision"]["revision_id"])["plan"]["document"]["selected_inputs"][0]["input_id"]
+    revision = await plans.draft(w, requirements=[{"id": "member.requirement." + str(index),
+        "source_input_id": source, "acceptance_input_ids": [source], "priority": "must", "depends_on": []}
+        for index in range(21)])
+    assert (await plans.adopt(w, revision))["status"] == "succeeded"
+    before = git(w["plan"]["worktree_path"], "rev-parse", "HEAD")
+    with pytest.raises(OperationError, match="PM_CONVERSATION_BASELINE_TOO_LARGE"):
+        ops.create(OWNER, **propose_request(w))
+    assert w["instances"] == []
+    assert pm_plans.head(ops.db, w["workspace_id"])["accepted_revision_id"] == revision["revision_id"]
+    assert git(w["plan"]["worktree_path"], "rev-parse", "HEAD") == before
+
+
 async def test_conflicting_discussion_and_revoked_owner_stop_new_children(proposal_world):
     w, ops = proposal_world, proposal_world["d"].ops
     proposal = await proposed(w)

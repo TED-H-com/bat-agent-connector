@@ -161,6 +161,32 @@ var defaults = {
 	excluded: "not_applicable"
 };
 var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
+var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
+var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
+function cyclic(requirements) {
+	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
+	const visit = (id) => {
+		if (active.has(id)) return true;
+		if (done.has(id)) return false;
+		active.add(id);
+		if ((graph.get(id) || []).some(visit)) return true;
+		active.delete(id);
+		done.add(id);
+		return false;
+	};
+	return [...graph.keys()].some(visit);
+}
+function validRequirements(values, included) {
+	if (!Array.isArray(values) || values.length > 20 || values.some((row) => !record$4(row) || !key$1(row.id, 80))) return false;
+	const ids = new Set(values.map((row) => row.id));
+	return ids.size === values.length && values.every((row) => included.has(row.source_key) && refs$1(row.acceptance_keys, included) && [
+		"must",
+		"should",
+		"could",
+		"unresolved"
+	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
+}
 function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
 		workspace_id: workspaceId,
@@ -222,9 +248,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
 		label: "pcp_prepare",
 		onSaved: async (result) => {
-			if (result?.proposal_id) picker.value = result.proposal_id;
+			const id = result?.outcome?.proposal_id || result?.proposal_id;
+			if (id) picker.value = id;
 			await refreshParent?.();
-			await refresh(result?.proposal_id);
+			await refresh(id);
 		},
 		onStateChange: () => {
 			if (ready) updateControls();
@@ -233,7 +260,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	});
 	const review = hidden(), rationale = input("pcp_rationale", {
 		multiline: true,
-		max: 8e3
+		max: 4e3
 	});
 	adopt = form({
 		action: ADOPT,
@@ -297,17 +324,19 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	function checked(value) {
 		if (value?.workspace_id !== workspaceId || !record$4(value.proposal)) throw fail();
 		const p = value.proposal, c = p.context;
-		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !/^[0-9a-f]{64}$/.test(p.document_digest) || !record$4(c) || !Number.isInteger(c.thread_version) || !record$4(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$4(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
+		if (p.thread_id !== threadId || p.workspace_id !== void 0 && p.workspace_id !== workspaceId || typeof p.proposal_id !== "string" || !/^op_[0-9a-f]{32}$/.test(p.operation_id) || !record$4(c) || !Number.isInteger(c.thread_version) || !record$4(c.plan_head) || !Number.isInteger(c.plan_head.version) || !Object.hasOwn(c.plan_head, "accepted_revision_id") || !record$4(c.source_references) || typeof p.raw_reply !== "string" || !["format_valid", "needs_review"].includes(p.validation?.status)) throw fail();
 		for (const ref of Object.values(c.source_references)) if (!record$4(ref) || typeof ref.quote !== "string" || !ref.quote || typeof ref.id !== "string" || !/^[0-9a-f]{64}$/.test(ref.digest)) throw fail();
-		if (p.validation.status === "format_valid") {
+		if (p.validation.status === "needs_review") {
+			if (p.document !== null || p.document_digest !== null) throw fail();
+		} else {
 			const d = p.document;
-			if (d?.version !== 1 || typeof d.title !== "string" || typeof d.summary !== "string" || !Array.isArray(d.candidates) || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || typeof row.key !== "string" || keys.has(row.key) || typeof row.text !== "string" || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
-			for (const req of d.requirements) if (typeof req.id !== "string" || !keys.has(req.source_key) || !Array.isArray(req.acceptance_keys) || req.acceptance_keys.some((key) => !keys.has(key)) || !Array.isArray(req.depends_on)) throw fail();
+			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
 			if (!Array.isArray(d.removed_requirement_ids) || !same$8([...d.removed_requirement_ids].sort(), removed(p, d.requirements).sort())) throw fail();
 			for (const question of d.questions) if (typeof question.question !== "string" || typeof question.why_now !== "string" || !Array.isArray(question.source_refs) || question.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 		}
@@ -326,15 +355,19 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			removed_requirement_ids: copy(p.document.removed_requirement_ids)
 		};
 	}
+	function reviewIssue(value) {
+		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		const keys = active.document?.candidates?.map((row) => row.key) || [];
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
+		if (!included.size) return "pcp_empty_selection";
+		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
+		if (value.requirements.every((row) => record$4(row) && Array.isArray(row.depends_on)) && cyclic(value.requirements)) return "pcp_cycle";
+		if (!validRequirements(value.requirements, included) || !Array.isArray(value.removed_requirement_ids) || !same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort())) return "pcp_missing";
+		return null;
+	}
 	function validReview(value) {
-		if (!active || !record$4(value) || typeof value.title !== "string" || !value.title.trim() || !Array.isArray(value.rows) || !Array.isArray(value.requirements)) return false;
-		const keys = active.document?.candidates?.map((row) => row.key) || [], ids = value.requirements.map((row) => row.id), included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
-		return value.rows.length === keys.length && new Set(value.rows.map((row) => row.key)).size === keys.length && value.rows.every((row) => keys.includes(row.key) && typeof row.text === "string" && row.text.trim() && statuses.includes(row.status) && typeof row.include === "boolean") && value.requirements.length <= 20 && new Set(ids).size === ids.length && value.requirements.every((row) => typeof row.id === "string" && /^[a-z][a-z0-9_.-]{0,79}$/.test(row.id) && included.has(row.source_key) && Array.isArray(row.acceptance_keys) && row.acceptance_keys.every((key) => included.has(key)) && [
-			"must",
-			"should",
-			"could",
-			"unresolved"
-		].includes(row.priority) && Array.isArray(row.depends_on) && row.depends_on.every((id) => ids.includes(id) && id !== row.id)) && Array.isArray(value.removed_requirement_ids) && same$8([...value.removed_requirement_ids].sort(), removed(active, value.requirements).sort());
+		return reviewIssue(value) === null;
 	}
 	function sourceQuotes(refs) {
 		return h("details", { class: "pm-source" }, h("summary", {}, t("pcp_sources")), ...refs.map((key) => {
@@ -355,7 +388,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		if (active && active.validation.status === "format_valid") {
 			const reasons = content.querySelector("[data-proposal-reason]");
 			if (reasons) {
-				const reason = capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? "pcp_stale" : !validReview(original()?.review) ? "pcp_missing" : null;
+				const reason = capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? "pcp_stale" : reviewIssue(original()?.review);
 				reasons.textContent = reason ? t(reason) : "";
 				reasons.hidden = !reason;
 			}
@@ -444,7 +477,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		})) throw fail();
 		if (!prepare.locked()) prepareBox.open = false;
 		const edited = saved.review, title = input("pcp_name", {
-			max: 200,
+			max: 160,
 			value: edited.title
 		});
 		const accepted = acceptedDocument(p);
@@ -20795,6 +20828,9 @@ var pmPlanProposalStrings = {
 		pcp_mismatch: "The proposal does not match its original discussion or sources.",
 		pcp_partial: "This is a partial list. More proposals may be available.",
 		pcp_missing: "Select included information for every requirement and acceptance criterion.",
+		pcp_empty_selection: "Include at least one piece of information in this plan.",
+		pcp_acceptance_missing: "Select at least one acceptance criterion for every requirement.",
+		pcp_cycle: "Remove the circular dependency between requirements.",
 		pcp_key: "Candidate",
 		pcp_why: "Why this matters now",
 		pcp_pending: "Recover the original request before selecting a different proposal.",
@@ -20856,6 +20892,9 @@ var pmPlanProposalStrings = {
 		pcp_mismatch: "提案與原討論或來源不符。",
 		pcp_partial: "目前只載入部分提案，可繼續讀取。",
 		pcp_missing: "每項需求與接受條件都必須選用已納入的資訊。",
+		pcp_empty_selection: "至少選入一項計畫資訊。",
+		pcp_acceptance_missing: "每項需求至少要選一個接受條件。",
+		pcp_cycle: "請移除需求之間的循環相依。",
 		pcp_key: "候選資訊",
 		pcp_why: "現在需要釐清的原因",
 		pcp_pending: "請先查回原請求，再選擇其他提案。",

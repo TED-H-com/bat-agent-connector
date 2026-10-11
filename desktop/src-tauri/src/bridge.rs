@@ -1306,7 +1306,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 && path.split('/').count() == 6;
             let spec_materialization_list = path.ends_with("/spec-materializations");
             let repair_list = path.ends_with("/maintenance-repairs");
-            let workload_list = conversation_list || path.ends_with("/deliveries")
+            let workload_list = conversation_list
+                || path.ends_with("/deliveries")
                 || repair_list
                 || path.ends_with("/quality-reviews")
                 || path.ends_with("/quality")
@@ -2666,14 +2667,30 @@ mod tests {
         let proposal = "pmcp_22222222222222222222222222222222";
         for suffix in [
             "".to_string(),
-            "?after=9223372036854775807&limit=100&thread_id=pmt_33333333333333333333333333333333".into(),
+            "?after=9223372036854775807&limit=100&thread_id=pmt_33333333333333333333333333333333"
+                .into(),
             format!("/{proposal}"),
         ] {
-            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_ok(), "{suffix}");
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
         }
-        for suffix in ["?thread_id=pmt_bad", "?thread_id=", "?after=9223372036854775808",
-            "?after=0&after=1", "?actor=x", "?execute=true", "/latest", "/pmcp_bad", "?limit=101"] {
-            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err(), "{suffix}");
+        for suffix in [
+            "?thread_id=pmt_bad",
+            "?thread_id=",
+            "?after=9223372036854775808",
+            "?after=0&after=1",
+            "?actor=x",
+            "?execute=true",
+            "/latest",
+            "/pmcp_bad",
+            "?limit=101",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
         }
         assert!(validate_request(&get(&format!("{root}/{proposal}?limit=1"))).is_err());
         assert!(validate_request(&request("POST", root)).is_err());
@@ -3370,7 +3387,10 @@ mod tests {
             format!("/pr-publications/op_{}?refresh=true", "5".repeat(32)),
             "/pr-publications".into(),
             "/execution-verifications".into(),
-            format!("/executions/op_{}/verification-config?refresh=true", "5".repeat(32)),
+            format!(
+                "/executions/op_{}/verification-config?refresh=true",
+                "5".repeat(32)
+            ),
             format!("/execution-verifications/op_{}?run=true", "5".repeat(32)),
             format!("/maintenance-repairs/{repair}?start=true"),
             "/work/wi_44444444444444444444/quality?candidate=latest".into(),
