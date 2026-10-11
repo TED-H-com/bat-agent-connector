@@ -65,6 +65,7 @@ READ_TOOLS = [
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
     "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_evidence_get", "pm_capture_get", "pm_capture_latest_get",
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
+    "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_kanban_get", "pm_kanban_card_get", "pm_meetings_list", "pm_meeting_get", "pm_meeting_history_list",
     "pm_sprint_artifacts_get",
     "pm_sprint_artifact_revisions_list",
@@ -593,6 +594,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Last saved evidence snapshot for explicitly associated work, or null when no capture exists."""
         return await pm_daemon("pm_capture_latest_get", workspace_id=workspace_id, work_item_id=work_item_id)
 
+    async def pm_governance_list(workspace_id: str, kind: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read sourced risk, change and decision records without changing scope or execution."""
+        return await pm_daemon("pm_governance_list", workspace_id=workspace_id, kind=kind, after=after, limit=limit)
+
+    async def pm_governance_get(workspace_id: str, record_id: str) -> dict[str, Any]:
+        """Read one governance record with its original adopted baseline and current source permissions."""
+        return await pm_daemon("pm_governance_get", workspace_id=workspace_id, record_id=record_id)
+
+    async def pm_governance_history_list(workspace_id: str, record_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read bounded immutable finding, decision and adoption-link history."""
+        return await pm_daemon("pm_governance_history_list", workspace_id=workspace_id, record_id=record_id, after=after, limit=limit)
+
     async def pm_kanban_get(workspace_id: str, project_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Project existing work into one card per item; WIP covers this page, quality remains unassessed."""
         return await pm_daemon("pm_kanban_get", workspace_id=workspace_id, project_id=project_id, after=after, limit=limit)
@@ -763,6 +776,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
                pm_projects_list, pm_work_list, pm_evidence_list, pm_evidence_get, pm_capture_get, pm_capture_latest_get,
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
+               pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_kanban_get, pm_kanban_card_get, pm_meetings_list, pm_meeting_get, pm_meeting_history_list,
                pm_sprint_artifacts_get, pm_sprint_artifact_revisions_list, pm_sprint_artifact_get, pm_sprints_list, pm_sprint_get, pm_sprint_history_list,
                pm_plan_compare,

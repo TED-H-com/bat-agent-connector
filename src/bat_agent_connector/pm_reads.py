@@ -5,6 +5,9 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_governance_list": ("workspace_id", "kind", "after", "limit"),
+    "pm_governance_get": ("workspace_id", "record_id"),
+    "pm_governance_history_list": ("workspace_id", "record_id", "after", "limit"),
     "pm_kanban_get": ("workspace_id", "project_id", "after", "limit"),
     "pm_kanban_card_get": ("workspace_id", "work_item_id"),
     "pm_meetings_list": ("workspace_id", "sprint_id", "after", "limit"),
@@ -51,6 +54,14 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method in {"pm_governance_list", "pm_governance_get", "pm_governance_history_list"}:
+        from . import pm_governance
+        if method == "pm_governance_get":
+            return pm_governance.get_record(ops, principal, workspace_id, params.get("record_id"))
+        page = {"after": params.get("after", 0), "limit": params.get("limit", 50)}
+        if method == "pm_governance_list":
+            return pm_governance.list_records(ops, principal, workspace_id, kind=params.get("kind"), **page)
+        return pm_governance.list_history(ops, principal, workspace_id, params.get("record_id"), **page)
     if method in {"pm_kanban_get", "pm_kanban_card_get"}:
         from . import pm_kanban
         if method == "pm_kanban_card_get":
