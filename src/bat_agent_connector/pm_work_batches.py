@@ -28,6 +28,7 @@ MAX_ENTRIES = 16
 MAX_READ_BYTES = 256_000
 MAX_REQUEST_BYTES = 384_000
 TERMINAL = frozenset({'succeeded', 'failed', 'cancelled'})
+DEFAULT_CONDITION = {'kind': 'fixed_revision_verification', 'profile': 'github_reported_checks_v1'}
 
 
 def _now():
@@ -136,10 +137,12 @@ def _selection(ops, principal, wid, params):
     _limits(params['limits'], _now())
     if _size(params) > MAX_REQUEST_BYTES:
         raise _bad('PM_BATCH_REQUEST_TOO_LARGE', 'Select a smaller whole batch', 413)
-    keys, works, operation_ids = set(), set(), set()
+    keys, works, operation_ids, normalized = set(), set(), set(), []
     for entry in params['entries']:
-        if not isinstance(entry, dict) or set(entry) != {'key', 'handoff', 'depends_on'} or not KEY.fullmatch(str(entry['key'])) or entry['key'] in keys:
+        if (not isinstance(entry, dict) or set(entry) - {'key', 'handoff', 'depends_on', 'result_condition'}
+                or not {'key', 'handoff', 'depends_on'} <= set(entry) or not KEY.fullmatch(str(entry['key'])) or entry['key'] in keys):
             raise _bad('INVALID_PARAMS', 'Distinct stable entry keys are required', 422)
+        normalized.append({**entry, 'result_condition': evidence.condition(entry.get('result_condition', dict(DEFAULT_CONDITION)))})
         keys.add(entry['key'])
         handoff = entry['handoff']
         if not isinstance(handoff, dict) or set(handoff) != {'target', 'params', 'preconditions'} or any(not isinstance(handoff[key], dict) for key in handoff):
@@ -174,6 +177,11 @@ def _selection(ops, principal, wid, params):
             seen.add(edge['entry_key'])
             evidence.condition(edge['condition'])
     graph = {entry['key']: {edge['entry_key'] for edge in entry['depends_on']} for entry in params['entries']}
+    selected = {entry['key']: entry for entry in normalized}
+    for entry in normalized:
+        for edge in entry['depends_on']:
+            if edge['entry_key'] in selected and edge['condition'] != selected[edge['entry_key']]['result_condition']:
+                raise _bad('INVALID_PARAMS', 'A prerequisite must match its upstream fixed result condition', 422)
     visited, walking = set(), set()
     def visit(key):
         if key not in graph or key in walking:
@@ -187,7 +195,7 @@ def _selection(ops, principal, wid, params):
         visited.add(key)
     for key in keys:
         visit(key)
-    return sorted(operation_ids)
+    return sorted(operation_ids), normalized
 
 
 def _admit(ops, principal, target, params, pre):
@@ -201,8 +209,8 @@ def _admit(ops, principal, target, params, pre):
             raise _bad('INVALID_PRECONDITIONS', 'Exact workspace and lifecycle revisions are required', 422)
         if pre['expected_workspace_version'] != workspace['version'] or pre['expected_lifecycle_revision'] != lifecycle['revision']:
             raise _bad('PM_BATCH_CONTEXT_CHANGED', 'Workspace or lifecycle revision changed')
-        original_ids = _selection(ops, principal, wid, params)
-        intent = {'entries': params['entries'], 'limits': params['limits'], 'operation_ids': original_ids,
+        original_ids, entries = _selection(ops, principal, wid, params)
+        intent = {'entries': entries, 'limits': params['limits'], 'operation_ids': original_ids,
             'workspace_version': workspace['version'], 'execution_epoch': lifecycle['execution_epoch'],
             'lifecycle_revision': lifecycle['revision'], 'controller': controller_authority.binding(ops.db, principal, pm_workspace_id=wid)}
     return {'principal': pm_workspace.principal_binding(principal), 'work_batch_intent': intent,
@@ -248,9 +256,7 @@ def _access(ops, principal, op):
         pm_source_lineage.require(ops.db, principal, 'operation', oid)
     for row in ops.db.execute('SELECT document FROM pm_work_batch_evidence WHERE parent_id=?', (op['operation_id'],)):
         document = json.loads(row[0])
-        from .pm_access import require_visible
-        for oid in document.get('operation_ids', []):
-            require_visible(ops.db, principal, _op(ops, oid))
+        evidence.require_sources(ops, principal, wid, document)
 
 
 def _current_principal(ops, op):
@@ -335,8 +341,9 @@ def _verified(ops, principal, parent, entry, condition=None):
     child = _child(ops, parent, entry)
     if child is None:
         return False
+    required = condition or entry['result_condition']
     for proof in _proofs(ops, parent, entry['key']):
-        if proof['status'] != 'passed' or condition is not None and proof['condition'] != condition:
+        if proof['status'] != 'passed' or proof['condition'] != required:
             continue
         current = evidence.evaluate(ops, principal, parent['target']['workspace_id'], child,
             proof['condition'], proof['reference'])
@@ -525,6 +532,8 @@ def _evidence_input(ops, principal, target, params, pre):
         if not isinstance(value, dict) or set(value) != {'entry_key', 'condition', 'reference'} or value['entry_key'] not in entries or value['entry_key'] in seen:
             raise _bad('INVALID_PARAMS', 'Select one distinct original entry per evidence receipt', 422)
         seen.add(value['entry_key'])
+        if value['condition'] != entries[value['entry_key']]['result_condition']:
+            raise _bad('PM_BATCH_EVIDENCE_CONDITION_CHANGED', 'Evidence must retain the original selected result condition')
         result = evidence.evaluate(ops, principal, target['workspace_id'], _child(ops, parent, entries[value['entry_key']]), value['condition'], value['reference'])
         results.append({'entry_key': value['entry_key'], **result})
     _bounded({'evidence': results})
@@ -579,10 +588,8 @@ def operation_visible(db, principal, operation):
                 if evidence.digest(intent) != binding['batch_evidence_digest']:
                     return False
                 _access(ops, principal, _op(ops, intent['parent_operation_id']))
-                from .pm_access import require_visible
                 for proof in intent['evidence']:
-                    for oid in proof['operation_ids']:
-                        require_visible(db, principal, _op(ops, oid))
+                    evidence.require_sources(ops, principal, op['target']['workspace_id'], proof)
             else:
                 return False
             return True
@@ -607,6 +614,7 @@ def _view(ops, row):
             (parent['operation_id'], entry['key'])).fetchone()
         entries.append({'key': entry['key'], 'package_ref': entry['handoff']['params']['pm_package_ref'],
             'work_item_id': entry['handoff']['params']['work_item_id'], 'depends_on': entry['depends_on'],
+            'result_condition': entry['result_condition'],
             'source_sha': entry['handoff']['params']['source_sha'],
             'operation_id': child['operation_id'] if child else None, 'operation_status': child['status'] if child else None,
             **(json.loads(state[0]) if state else {'state': 'selected', 'reason': None}),
