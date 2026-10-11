@@ -1,15 +1,23 @@
 """Exact original accountable quality is necessary before owned publication."""
 import copy
+import sys
 import uuid
 
 import pytest
 
-from bat_agent_connector import api_auth, pm_lifecycle_gates, pm_sprints, pr_delivery
+from bat_agent_connector import (
+    api_auth,
+    pm_execution_verification,
+    pm_lifecycle_gates,
+    pm_sprints,
+    pr_delivery,
+)
 from bat_agent_connector import pm_maintenance_repair_evidence as evidence
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector import pm_quality_reviews as quality
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationError
+from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests.test_checkpoints import git
 from tests.test_pm_maintenance_repair_receipts import record
 from tests.test_pm_maintenance_repairs import (  # noqa: F401
@@ -24,20 +32,21 @@ from tests.test_pm_maintenance_repairs import (  # noqa: F401
     world,
 )
 from tests.test_pm_maintenance_repairs import repair_ready as repair_fixture
-from tests.test_pm_quality_reviews import REVIEWER, assessment, new_review
+from tests.test_pm_quality_reviews import REVIEWER, assessment, selection
 from tests.test_pm_quality_reviews import execute as quality_execute
-from tests.test_pm_work_batches import observed
 from tests.test_pm_work_packages import action, member
 
 repair_ready = repair_fixture
+COMMAND = (sys.executable, '-c', 'print("verified original fixed candidate")')
 
-OWNER = Principal('pm-owner', repairs.REQUIRED | {'integrate', 'merge', 'deploy'})
+OWNER = Principal('pm-owner', repairs.REQUIRED | {'integrate', 'merge', 'deploy', 'operate'})
 
 
 @pytest.fixture(autouse=True)
 def original_publication_authority(monkeypatch):
     from tests import test_pm_maintenance_repairs
     monkeypatch.setattr(test_pm_maintenance_repairs, 'OWNER', OWNER)
+    monkeypatch.setattr(test_pm_maintenance_repairs, 'TEST_COMMAND_ID', pm_execution_verification.command_identity(COMMAND))
 
 
 @pytest.fixture
@@ -60,8 +69,21 @@ async def quality_repair(repair_ready, monkeypatch):
     git(wt, 'config', 'user.email', 'fixture@example.invalid')
     w['candidate'] = commit(wt, 'implementation.txt', 'Exact maintenance change\n', 'Repair original Issue')
     w['tree'] = git(wt, 'rev-parse', 'HEAD^{tree}')
-    w['proof'] = observed(w, w['child'], candidate=w['candidate'], tree=w['tree'])
-    review = await new_review(w)
+    pm_execution_verification.install(ops)
+    w['d'].adapter.verifier = ObservedVerifier(VerificationSettings(
+        commands={w['child']['params']['project_id']: COMMAND}, artifact_dir=str(w['human'].parent / 'verifier-logs')))
+    configured = await pm_execution_verification.configuration(ops, OWNER, w['workspace_id'], w['child']['operation_id'])
+    verified = await execute(ops, {'action': pm_execution_verification.ACTION,
+        'target': {'workspace_id': w['workspace_id'], 'execution_operation_id': w['child']['operation_id']},
+        'params': {key: configured[key] for key in ('candidate_commit', 'tree_hash', 'command_digest')},
+        'preconditions': {'handoff_contract_digest': configured['handoff_contract_digest']}, 'idempotency_key': uuid.uuid4().hex}, who=OWNER)
+    assert verified['result']['status'] == 'passed', verified
+    w['proof'] = verified['result']['reference']
+    env = selection(w)
+    for item in env['params']['criteria']:
+        item['condition'] = repairs._intent(w['parent'])['rule']['verification']
+    created = await quality_execute(w, env)
+    review = quality.get_review(ops, OWNER, w['workspace_id'], created['result']['review_id'])['review']
     await quality_execute(w, assessment(w, review), actor=REVIEWER)
     w['review'] = quality.get_review(ops, OWNER, w['workspace_id'], review['review_id'])['review']
     saved = w['review']['assessment']

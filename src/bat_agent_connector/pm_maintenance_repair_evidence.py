@@ -89,6 +89,11 @@ def require_selected_sources(ops, principal, parent, selected, evidence):
     # Availability gates original identities, not current success/approval.
     if selected['kind'] == 'verification':
         proof = evidence['proof']
+        if 'verification_operation_id' in selected['reference']:
+            from . import pm_execution_verification
+            child = repairs._child(ops, parent)
+            pm_execution_verification.evaluate(ops, principal, parent['target']['workspace_id'], child, proof['condition'], selected['reference'])
+            return
         receipt = ops.db.execute('SELECT * FROM observed_verifications WHERE verification_id=?',
                               (selected['reference']['verification_id'],)).fetchone()
         task = ops.db.execute('SELECT host,session_id FROM tasks WHERE task_id=?', (proof['task_id'],)).fetchone()
@@ -276,7 +281,7 @@ def _ceiling(policy, level):
 def require_publication(ops, principal, parent, *, child_operation_id, candidate_sha, candidate_tree,
                         base_ref, base_sha, files, files_complete, quality_ref):
     live = repairs._guard(ops, parent, scopes=repairs.REQUIRED | {'integrate'})
-    if principal.actor != live.actor or any(not principal.allows(scope) for scope in repairs.REQUIRED | {'integrate'}):
+    if principal.actor != live.actor or any(not principal.allows(scope) for scope in {'observe', 'manage', 'integrate'}):
         raise _bad('Publication requires the original owner current authority', 'FORBIDDEN')
     intent, policy = repairs._intent(parent), policies_for(ops, parent)
     _ceiling(policy, 1)
