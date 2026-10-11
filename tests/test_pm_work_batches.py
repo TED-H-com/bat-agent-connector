@@ -317,9 +317,91 @@ async def test_retry_reservations_are_atomic_idempotent_and_do_not_count_receipt
         with pytest.raises(OperationError) as exhausted:
             ops._step_restart(oid, name, {'fixed': 'request'})
         assert exhausted.value.code == 'PM_BATCH_RETRIES_EXHAUSTED'
-        assert ops._step(oid, name)['status'] == 'uncertain'
+        assert ops.db.execute('SELECT status FROM operation_steps WHERE operation_id=? AND name=?', (oid, name)).fetchone()[0] == 'uncertain'
         ops._step_start(oid, 'batch.fixture.receipt', {}, local=True, bookkeeping=True)
         ops._step_status(oid, 'batch.fixture.receipt', 'uncertain')
         ops._step_restart(oid, 'batch.fixture.receipt', {}, bookkeeping=True)
         assert ops.db.execute('SELECT COUNT(*) FROM pm_work_batch_retries').fetchone()[0] == 1
     assert ops.get(oid)['attempts'] == 0
+
+
+@pytest.mark.parametrize('stop', ['pause', 'cancel', 'scope_union'])
+async def test_last_unsent_frame_rechecks_original_parent_stop_and_single_credential(batch_ready, mock, monkeypatch, stop):
+    from tests.test_pm_lifecycle import decide
+    w, ops = batch_ready, batch_ready['d'].ops
+    original = envelope(w, [await selected(w, 'first')])
+    parent = ops.create(OWNER, **original)[0]
+    client, stopped = w['d'].fleet.client('h1'), False
+    invoke = client.invoke
+    async def stop_before_frame(name, *args, **kwargs):
+        nonlocal stopped
+        if name == 'claude:start-session' and not stopped:
+            original_guard = kwargs['before_frame']
+            async def guard():
+                nonlocal stopped
+                stopped = True
+                if stop == 'pause':
+                    await decide(ops, w['workspace_id'], who=OWNER)
+                elif stop == 'cancel':
+                    ops.cancel(OWNER, parent['operation_id'])
+                else:
+                    ops.db.execute('UPDATE api_principals SET revoked_at=?', (time.time(),))
+                    api_auth.issue(ops.db, OWNER.actor, ['observe', 'manage'])
+                    api_auth.issue(ops.db, OWNER.actor, ['start'])
+                await original_guard()
+            kwargs['before_frame'] = guard
+        return await invoke(name, *args, **kwargs)
+    monkeypatch.setattr(client, 'invoke', stop_before_frame)
+    parent = await advance(w, parent)
+    assert stopped
+    assert not bat_writes(mock)
+    child = ops.get(view(w, parent)['entries'][0]['operation_id'])
+    assert child['error_code'] in {'PM_LIFECYCLE_STOPPED', 'PM_BATCH_STOPPED', 'PM_BATCH_AUTHORITY_UNAVAILABLE'}, child
+
+
+async def test_verified_edge_cannot_bypass_original_package_readiness(batch_ready, mock):
+    w, ops = batch_ready, batch_ready['d'].ops
+    blocked = await extra(w, 'Fixed unresolved design')
+    params = copy.deepcopy(blocked['params'])
+    params['design']['status'] = 'unresolved'
+    blocked['package'] = read(blocked, await create(blocked, **params))
+    parent = await advance(w, ops.create(OWNER, **envelope(w, [await selected(w, 'first'),
+        await selected(blocked, 'second', [{'entry_key': 'first', 'condition': CONDITION}])]))[0])
+    first = ops.get(view(w, parent)['entries'][0]['operation_id'])
+    proof = ops.create(OWNER, **proof_request(w, parent, observed(w, first)))[0]
+    await settle_operations(ops)
+    assert ops.get(proof['operation_id'])['status'] == 'succeeded'
+    parent = await advance(w, parent)
+    current = view(w, parent)
+    assert current['entries'][0]['state'] == 'fixed_revision_verified'
+    assert current['entries'][1]['reason'] == 'PM_PACKAGE_NOT_READY'
+    assert current['entries'][1]['operation_id'] is None
+    assert mock.channels().count('claude:start-session') == 1
+
+
+async def test_batch_list_has_whole_wire_budget_and_signed_cursor(batch_ready, monkeypatch):
+    from bat_agent_connector import controller_authority
+    from bat_agent_connector.operations import OpContext
+    w, ops = batch_ready, batch_ready['d'].ops
+    entry = await selected(w, 'first')
+    for _ in range(2):
+        parent = ops.create(OWNER, **envelope(w, [entry]))[0]
+        with controller_authority.use(controller_authority.operation_binding(parent), ops.journal):
+            batches._reserve(OpContext(ops, parent))
+    all_rows = batches.list_batches(ops, OWNER, w['workspace_id'])
+    assert len(all_rows['batches']) == 2
+    limit = batches._size({**all_rows, 'batches': all_rows['batches'][:1], 'next_cursor': 2**63 - 1})
+    monkeypatch.setattr(batches, 'MAX_READ_BYTES', limit)
+    first = batches.list_batches(ops, OWNER, w['workspace_id'])
+    assert len(first['batches']) == 1 and first['next_cursor'] == first['batches'][0]['sequence']
+    last = batches.list_batches(ops, OWNER, w['workspace_id'], after=first['next_cursor'])
+    assert len(last['batches']) == 1 and last['next_cursor'] is None
+    assert first['batches'][0]['batch_id'] != last['batches'][0]['batch_id']
+    assert batches._size(first) <= limit and batches._size(last) <= limit
+    for after in (True, -1, 2**63):
+        with pytest.raises(OperationError):
+            batches.list_batches(ops, OWNER, w['workspace_id'], after=after)
+    monkeypatch.setattr(batches, 'MAX_READ_BYTES', 1)
+    with pytest.raises(OperationError) as small:
+        batches.list_batches(ops, OWNER, w['workspace_id'])
+    assert small.value.status == 413

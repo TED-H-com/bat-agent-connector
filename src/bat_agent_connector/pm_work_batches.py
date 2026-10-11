@@ -120,7 +120,7 @@ def _limits(value, now):
         if type(value[key]) is not int or not low <= value[key] <= high:
             raise _bad('INVALID_PARAMS', 'Invalid batch limit: ' + key, 422)
     end = value['deadline_at']
-    if type(end) not in (int, float) or not math.isfinite(end) or not now < end <= now + 86400 or value['max_parallel'] > value['max_starts']:
+    if type(end) not in (int, float) or not now < end <= now + 86400 or not math.isfinite(end) or value['max_parallel'] > value['max_starts']:
         raise _bad('INVALID_PARAMS', 'Batch deadline or parallel limit is outside the supported bound', 422)
     return value
 
@@ -529,7 +529,7 @@ def _evidence_input(ops, principal, target, params, pre):
         raise _bad('PM_BATCH_VERSION_CONFLICT', 'Batch evidence revision changed')
     entries, seen, results = {entry['key']: entry for entry in _intent(parent)['entries']}, set(), []
     for value in params['evidence']:
-        if not isinstance(value, dict) or set(value) != {'entry_key', 'condition', 'reference'} or value['entry_key'] not in entries or value['entry_key'] in seen:
+        if not isinstance(value, dict) or set(value) != {'entry_key', 'condition', 'reference'} or not isinstance(value['entry_key'], str) or value['entry_key'] not in entries or value['entry_key'] in seen:
             raise _bad('INVALID_PARAMS', 'Select one distinct original entry per evidence receipt', 422)
         seen.add(value['entry_key'])
         if value['condition'] != entries[value['entry_key']]['result_condition']:
