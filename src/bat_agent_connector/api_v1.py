@@ -386,7 +386,8 @@ class ApiV1:
                 kwargs.update(reader=reader, writer=writer,
                               check_authorization=authorizer(self.daemon, token, principal))
             if fn in {self.repair_evidence, self.work_item_repair, self.session_instructions,
-                      self.host_preferences, self.project_skills, self.work_item_results}:
+                      self.host_preferences, self.project_skills, self.work_item_results,
+                      self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
             from . import controller_authority

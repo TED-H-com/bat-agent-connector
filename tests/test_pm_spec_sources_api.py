@@ -41,7 +41,7 @@ async def test_fixed_spec_sources_http_rpc_mcp_parity_and_observe_only(served, m
     try:
         tools = {tool.name: tool for tool in await server.list_tools()}
         for name in ("pm_spec_sources_get", "pm_spec_source_capabilities_get"):
-            assert name in tools and tools[name].annotations.readOnlyHint
+            assert name in tools and tools[name].annotations.read_only_hint
         params = {"workspace_id": wid}
         prefix = f"/api/v1/pm/workspaces/{wid}/spec-sources"
         count = len(w["runner"].phases)
