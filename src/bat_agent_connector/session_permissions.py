@@ -177,9 +177,12 @@ def complete_receipts(ops, op):
 
 
 def _check_owner(ctx, fleet, host, sid):
+    from .api_actions import check_controller_binding
+    incarnation = check_controller_binding(ctx, {"host": host, "session_id": sid})
     expected = (ctx.admission_binding or {}).get("task_id")
     if task_control.owner_task(fleet, host, sid) != expected:
         raise TaskControlRefused("TASK_BINDING_MISMATCH", "permission task owner changed since admission")
+    return incarnation
 
 
 def _command(ctx, plan):
@@ -270,11 +273,13 @@ async def execute(ctx, fleet, host, sid, mode, guard):
     """Called inside the original TaskCoordinator command and host write lock boundary."""
     from . import lifecycle
     async with service._write_lock(host):
+        incarnation = _check_owner(ctx, fleet, host, sid)
         terminal, _ = await service._resolve_session(fleet.client(host), sid)
         if terminal["id"] != sid:
             raise TaskControlRefused("TASK_BINDING_MISMATCH", "permission session no longer resolves exactly")
         client = fleet.client(host)
-        grant = await resource_policy.authorize_session(fleet, host, "session.permissions", terminal)
+        grant = await resource_policy.authorize_session(fleet, host, "session.permissions", terminal,
+                                                        expected_incarnation=incarnation)
         _check_owner(ctx, fleet, host, sid)
         plan = saved_plan(ctx)
         from .bulk_approval import check_child

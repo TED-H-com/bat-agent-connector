@@ -73,6 +73,7 @@ def check_controller_binding(ctx, target):
     ctx.require_controller()
     controller_authority.require_entry(registry.get(target["host"], target["session_id"]),
                                       expected_incarnation=expected["controller_incarnation"])
+    return expected["controller_incarnation"]
 
 
 def _admit_send(ops: OperationService, principal: Principal, target: dict, params: dict, pre: dict) -> dict | None:
@@ -113,7 +114,7 @@ async def _send(ctx: OpContext) -> dict:
 
     async def send() -> dict:
         task_control.check_binding(ctx)
-        check_controller_binding(ctx, target)
+        incarnation = check_controller_binding(ctx, target)
         from .orchestration_operations import linked
         ctx.relay_send_transported = False
         try:
@@ -121,6 +122,7 @@ async def _send(ctx: OpContext) -> dict:
                 queue=params.get("queue", False), tool="api:" + ctx.actor,
                 retry_on_disconnect=False, control_version=ctx.effective_preconditions.get("control_version"),
                 operation_id=ctx.operation_id, _exact_session_id=True,
+                _controller_incarnation=incarnation,
                 **({"_operation_context": ctx} if linked(ctx.op) else {}))
         except (ConnectionLost, InvokeTimeout, OSError, asyncio.TimeoutError) as exc:
             if linked(ctx.op) and not ctx.relay_send_transported:
@@ -190,7 +192,7 @@ async def _answer(ctx: OpContext) -> dict:
     async def answer() -> dict:
         from .bulk_approval import linked
         task_control.check_binding(ctx)
-        check_controller_binding(ctx, target)
+        incarnation = check_controller_binding(ctx, target)
         ctx.bulk_answer_transported = False
         try:
             return await service.session_answer(fleet, host, sid, confirm=True, answers=p.get("answers"),
@@ -199,6 +201,7 @@ async def _answer(ctx: OpContext) -> dict:
                                                 dont_ask_again=p.get("dont_ask_again", False),
                                                 control_version=ctx.effective_preconditions.get("control_version"),
                                                 operation_id=ctx.operation_id, _exact_session_id=True,
+                                                _controller_incarnation=incarnation,
                                                 _operation_context=ctx)
         except (ConnectionLost, InvokeTimeout, OSError, asyncio.TimeoutError) as exc:
             if linked(ctx.op) and not ctx.bulk_answer_transported:
@@ -243,10 +246,11 @@ async def _interrupt(ctx: OpContext) -> dict:
 
     async def interrupt() -> dict:
         task_control.check_binding(ctx)
-        check_controller_binding(ctx, target)
+        incarnation = check_controller_binding(ctx, target)
         r = await service.session_interrupt(fleet, host, sid, ctx.params.get("mode", "soft"), confirm=True,
                                             control_version=ctx.effective_preconditions.get("control_version"),
-                                            operation_id=ctx.operation_id, _exact_session_id=True)
+                                            operation_id=ctx.operation_id, _exact_session_id=True,
+                                            _controller_incarnation=incarnation)
         return r
 
     async def reconcile(_request: dict) -> dict | None:

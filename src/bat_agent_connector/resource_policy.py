@@ -465,7 +465,7 @@ async def classify_live(fleet, host: str, t: dict, action: str | None = None
 
 
 async def authorize_session(fleet, host: str, action: str, t: dict, *, live: LiveCheck | None = None,
-                            cls: Classification | None = None) -> WriteGrant:
+                            cls: Classification | None = None, expected_incarnation: str | None = None) -> WriteGrant:
     """Grant one session-scoped action, or raise ResourceReadOnly before any write frame."""
     from .cleanup import guard
     guard(host, session_id=t["id"], path=t.get("cwd") or t.get("worktreePath"),
@@ -473,12 +473,17 @@ async def authorize_session(fleet, host: str, action: str, t: dict, *, live: Liv
     m = BY_ACTION[action]
     if m.scope != "session":
         raise BatError(f"internal: {action} is not a session action")
+    original = registry.get(host, t["id"])
     if cls is None:
         cls, live = await classify_live(fleet, host, t, action)
     refusal = _decide(cls, m, live)
     if refusal:
         raise ResourceReadOnly(refusal[0], f"{action} refused for session {t['id'][:8]}: {refusal[1]}")
-    row = controller_authority.require_entry(registry.get(host, t["id"]))
+    # Pin before live reads; an admitted operation additionally supplies its
+    # durable nonce so an earlier resolution await cannot select a replacement.
+    controller_authority.require_entry(original, expected_incarnation=expected_incarnation)
+    row = controller_authority.require_entry(registry.get(host, t["id"]),
+                                            expected_incarnation=original["controller_incarnation"])
     return WriteGrant(host, action, t["id"], m.channels, cls.workdir, cls.isolation,
                       controller_authority.require(), row["controller_incarnation"])
 
