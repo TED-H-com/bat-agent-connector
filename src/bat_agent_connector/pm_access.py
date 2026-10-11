@@ -39,6 +39,10 @@ def event_visible(db, principal, event):
         from .pm_issue_mappings import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_release_baseline" or event["kind"].startswith("pm.release_baseline."):
+        from .pm_release_baselines import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_work_package" or event["kind"].startswith("pm.work_package."):
         from .pm_work_packages import operation_visible
         operation_id = event.get("body", {}).get("operation_id")

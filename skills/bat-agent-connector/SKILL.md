@@ -456,6 +456,39 @@ access applies to pending operations, assessments, native run reads and event
 feeds, including after a waited response. A withdrawn source must not be recovered
 through the raw response, an older event or a newer readable intake.
 
+### Select the maintained release version
+
+When `features.pm_workspaces.release_baselines` is advertised, read
+`pm_release_baseline_current_get`, `pm_release_baselines_list`, and
+`pm_release_baseline_get`. Preserve each original publication source, version,
+channel, full commit and receipt; a newer main branch or successful CI is not
+verification of the maintained release. Follow non-null history cursors even
+when a source-filtered page is empty.
+
+An explicit current workspace owner can use `pm.release_baseline.register` with
+target `{workspace_id,repository}`. Select an existing `pm.project.bind` association
+whose project includes this configured repository. Supply `project_binding_id`,
+`source`, `channel`, `maintenance_branch` (null is valid), `known_limitations` and
+`rationale`; preconditions fix the expected baseline version/previous ID,
+repository ID and full commit SHA. Reuse the exact request and operation key after
+a missing reply. Selection records an existing delivery; it does not publish,
+authorize maintenance, or enter Maintain.
+
+GitHub sources use `{kind:github_release,release_id}` and actual `stable` or
+`prerelease` flags; the server resolves the real tag instead of trusting
+`target_commitish`. Deployment sources use `{kind:deployment,deployment_id}`,
+the original environment as channel and a commit-typed version. Health-only
+checks cannot prove the deployed version. Package-registry sources are not yet
+supported; never claim a GitHub Release proves registry success. Quality remains
+unassessed unless a separate acceptance evaluation exists. Known limitations are
+owner claims. A supplied maintenance branch must be verified against the fixed
+release; it does not grant permission to write to that branch.
+
+All baseline/history/operation/event reads retain original source visibility.
+After withdrawal, do not recover quoted source details through an old result or
+substitute a newer readable publication. A hidden current baseline is unknown,
+not proof that no baseline exists.
+
 ### Prepare and review engineering work
 
 When `features.pm_workspaces.issue_mapping` is available, inspect
