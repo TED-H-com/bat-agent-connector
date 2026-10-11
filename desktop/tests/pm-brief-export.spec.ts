@@ -7,16 +7,19 @@ import {mountConversation} from './conversation-fixture.ts';
 const sid='pmsnap_'+'a'.repeat(32),older='pmsnap_'+'b'.repeat(32),media:any={markdown:'text/markdown; charset=utf-8',html:'text/html; charset=utf-8',svg:'image/svg+xml; charset=utf-8'};
 function fixture(){
   const base=pmFixture(),state:any={enabled:true,reads:[],nativeSaves:[],nativeSupport:true,cancel:false,nativeError:null,reportError:null,
-    change:null,snapshotError:null,holdReport:false,held:[],viewDigest:'2'.repeat(64),latest:sid,failWorkspace:false,holdNative:false,nativeHeld:[]};
+    change:null,snapshotError:null,holdReport:false,held:[],viewDigest:'2'.repeat(64),latest:sid,failWorkspace:false,holdNative:false,nativeHeld:[],quality:false,maintenance:false};
   base.state.manage=false;base.state.role='reader';
   const snapshot=(id=sid)=>({snapshot_id:id,workspace_id:workspaceId,title:id===older?'Earlier Brief':'Current Brief',as_of:1791720000,sequence:id===older?1:2,
     snapshot_digest:'1'.repeat(64),view_digest:state.viewDigest,journal_cursor:4,template_version:1,coverage:{},visibility:{},evidence:[],
-    brief:Object.fromEntries(['goals','delivery','blockers','deviations','decisions'].map(key=>[key,{status:'unassessed',items:key==='goals'?[{kind:'goal',text:id===older?'Original selected goal':'Current selected goal',source:{}}]:[]}]))});
+    ...(state.maintenance?{maintenance:{version:1}}:{}),
+    brief:Object.fromEntries(['goals','delivery','blockers','deviations','decisions'].map(key=>[key,{status:'unassessed',...(key==='delivery'&&state.quality?{quality:{qualified_requirements:1,total_requirements:2}}:{}),items:key==='goals'?[{kind:'goal',text:id===older?'Original selected goal':'Current selected goal',source:{}}]:[]}]))});
   const report=(id:string,format:string,locale:string)=>{
     const content=`${format} · ${locale} · ${id}\n繁體中文 source\n<script>window.reportExecuted=true</script>\n`;
     const value:any={version:1,workspace_id:workspaceId,snapshot_id:id,snapshot_digest:'1'.repeat(64),view_digest:state.viewDigest,format,locale,
-      media_type:media[format],template_version:1,renderer_version:1,content,byte_length:Buffer.byteLength(content),output_digest:createHash('sha256').update(content).digest('hex'),
-      coverage:{projection:'project_brief_only',content_truncated:false},execution_authorized:false,review_completed:false,published:false};
+      media_type:media[format],template_version:1,renderer_version:state.quality?3:state.maintenance?2:1,content,byte_length:Buffer.byteLength(content),output_digest:createHash('sha256').update(content).digest('hex'),
+      coverage:{projection:state.maintenance?'project_brief_with_maintenance_review':'project_brief_only',content_truncated:false},execution_authorized:false,review_completed:false,published:false};
+    if(state.change==='renderer')value.renderer_version=4;if(state.change==='downgrade')value.renderer_version=1;
+    if(state.change==='projection')value.coverage.projection='unknown_quality_view';
     if(state.change==='digest')value.output_digest='0'.repeat(64);if(state.change==='bytes')value.byte_length=content.length;
     if(state.change==='scope')value.workspace_id='ws_'+'9'.repeat(32);if(state.change==='view')value.view_digest='3'.repeat(64);
     return value;
@@ -87,6 +90,27 @@ for(const format of ['markdown','html','svg'])test(`native saves ${format} using
   await page.getByRole('button',{name:'Save report…',exact:true}).click();await expect(exports(page)).toContainText('Saved: selected-report');
   expect(f.state.nativeSaves).toEqual([{workspace_id:workspaceId,snapshot_id:sid,format,locale:'en',expected_view_digest:'2'.repeat(64),expected_output_digest:f.report(sid,format,'en').output_digest}]);
   expect(f.base.state.writes).toHaveLength(0);
+});
+
+for(const native of [false,true])for(const maintenance of [false,true])for(const format of ['markdown','html','svg'])test(`quality renderer 3 downloads fixed ${format} ${native?'native':'browser'} ${maintenance?'maintenance':'ordinary'} snapshot`,async({page})=>{
+  const f=fixture();f.state.quality=true;f.state.maintenance=maintenance;
+  await mount(page,native,f);await open(page);await page.getByLabel('File format',{exact:true}).selectOption(format);
+  if(native){
+    await page.getByRole('button',{name:'Save report…',exact:true}).click();
+    await expect(exports(page)).toContainText('Saved: selected-report');
+    expect(f.state.nativeSaves).toEqual([{workspace_id:workspaceId,snapshot_id:sid,format,locale:'en',expected_view_digest:'2'.repeat(64),expected_output_digest:f.report(sid,format,'en').output_digest}]);
+  }else{
+    const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'Download report',exact:true}).click();
+    expect(await readFile((await (await downloaded).path())!,'utf8')).toBe(f.report(sid,format,'en').content);
+  }
+  expect(f.base.state.writes).toHaveLength(0);
+});
+
+for(const change of ['renderer','downgrade','projection'])test(`quality report ${change} mismatch still refuses both transports`,async({page})=>{
+  const f=fixture();f.state.quality=true;f.state.change=change;await mount(page,true,f);await open(page);
+  await page.getByRole('button',{name:'Save report…',exact:true}).click();
+  await expect(brief(page)).toContainText('The report or its readable sources changed');
+  expect(f.state.nativeSaves).toHaveLength(0);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(0);
 });
 
 for(const change of ['digest','bytes','scope','view'])test(`report ${change} mismatch prevents download and clears the old Brief`,async({page})=>{
