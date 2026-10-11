@@ -101,7 +101,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await note.getByRole('button',{name:'Save note',exact:true}).click();await expect(note).toContainText('Your draft is preserved');
     await note.getByRole('button',{name:'Edit a new request',exact:true}).click();f.state.reject=null;f.state.thread.version=9;
     f.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.pm-status')).toContainText('PM read unavailable');
-    await expect(note.getByRole('button',{name:'Save note',exact:true})).toBeDisabled();await expect(note.getByLabel('Add a discussion note',{exact:true})).toHaveValue('Keep this draft');
+    await expect(note).toBeHidden();await expect(note.locator('button[type=submit]')).toBeDisabled();await expect(note.getByLabel('Add a discussion note',{exact:true})).toHaveValue('Keep this draft');
     f.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(note.getByRole('button',{name:'Save note',exact:true})).toBeEnabled();
     await note.getByRole('button',{name:'Save note',exact:true}).click();await expect(page.locator('.pm-notes')).toContainText('Keep this draft');expect(f.state.writes[1].body.preconditions).toEqual({expected_version:9});
   });

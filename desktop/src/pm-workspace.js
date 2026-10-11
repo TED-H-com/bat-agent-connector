@@ -1,5 +1,7 @@
 // PM is a central, durable discussion record. This client does not run an agent or authorize execution.
 import {workspaceSprints} from './pm-sprints.js';
+import {workspaceKanban} from './pm-kanban.js';
+import {workspaceMeetings} from './pm-meetings.js';
 import {workspaceRoadmap} from './pm-roadmap.js';
 import {projectBrief} from './pm-brief.js';
 import {workspaceEvidence} from './pm-evidence.js';
@@ -153,9 +155,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   if(roadmap)body.insertBefore(roadmap.box,content);
+  const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
+    ? workspaceKanban({h,t,api,alive,workspaceId,errorBox}) : null;
+  if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
+  const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
+    ? workspaceMeetings({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+  if(meetings)body.insertBefore(meetings.element,content);
+  const sourceSections = () => [content, evidence?.box, brief?.box, roadmap?.box, kanban?.element, sprints?.box, meetings?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -253,7 +262,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         preconditions, permitted: () => decide() && threadData.thread.mode === 'idea', label: 'pm_create_plan', onSaved: () => load(), recoverPermitted: decide,
         onStateChange: () => {
           const section = planForm?.box.closest('[data-pm-plan]');
-          if (section) section.hidden = (threadData.thread.mode !== 'idea' && !planForm.locked()) || !threadData.capabilities?.decide;
+          if (section) section.hidden = (threadData?.thread.mode !== 'idea' && !planForm.locked()) || !threadData?.capabilities?.decide;
           updateSourceControls();},
         extra: h('div', {}, selected, labelled('pm_plan_rationale', rationale), h('p', {class: 'muted'}, t('pm_plan_help')))});
       if (caps()?.actions?.some(action => action.action === 'pm.thread.plan.revise')) {
@@ -475,22 +484,32 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
       worktreeChoice?.update();
-      if (evidence) await evidence.refresh();
-      if (brief) await brief.refresh();
-      if (roadmap) await roadmap.refresh();
-      if (sprints) await sprints.refresh();
+      for (const section of [evidence, brief, roadmap, kanban, sprints, meetings]) {
+        if (section) await section.refresh();
+        alive(); if (ticket !== sequence) return;
+      }
       nativeAnalysis?.update(runs?.runs || []);
+      for (const section of sourceSections()) section.hidden = false;
       updateForms();
     } catch (error) {
-      if (!retired(error) && ticket === sequence) {loaded = false; updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
+      if (!retired(error) && ticket === sequence) {
+        loaded = false; workspace = null; threadData = null;
+        title.textContent = t('pm_title'); workspaceList.replaceChildren();
+        for (const section of sourceSections()) section.hidden = true;
+        updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
+      }
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false;}}
   }
   await load();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
+      return eventReads;
+    }
+    if (kanban && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
+      eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());
       return eventReads;
     }
   });

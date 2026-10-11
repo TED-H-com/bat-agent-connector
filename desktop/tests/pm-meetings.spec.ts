@@ -20,9 +20,10 @@ async function saveDraft(page:Page,kind='planning') {
   await reason(page,'draft');await editor.getByRole('button',{name:'Save discussion draft',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Saved discussion draft',exact:true})).toBeVisible();
 }
-async function saveNote(page:Page) {
+async function saveNote(page:Page,waitSaved=true) {
   await openAction(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('We discussed results, uncertainty and the next direction together.');
   await reason(page,'note');await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();
+  if(waitSaved)await expect(page.locator('[data-pm-meetings]')).toContainText('We discussed results, uncertainty and the next direction together.');
 }
 async function complete(page:Page) {
   await openAction(page,'complete');await action(page,'complete').getByLabel('What was discussed and concluded',{exact:true}).fill('We reviewed the evidence and agreed to observe the existing direction.');
@@ -56,6 +57,15 @@ test('a lost completion reply recovers the exact request after completed state a
   await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
   expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(3);
   await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
+});
+test('saving a note preserves another open draft and requires an explicit version refresh',async({page})=>{
+  const f=meetingFixture();await mount(page,f);await openAction(page,'draft');
+  const editor=action(page,'draft'),field=editor.getByLabel('Why this Sprint matters',{exact:true});
+  await field.fill('Keep this unfinished reasoning');await saveNote(page);
+  await expect(field).toBeVisible();await expect(field).toHaveValue('Keep this unfinished reasoning');
+  await expect(editor.locator('button[type=submit]')).toBeDisabled();
+  await expect(page.locator('[data-pm-meetings]')).toContainText('Review updated meeting baseline');
+  expect(f.state.writes.map((row:any)=>row.body.action)).toEqual(['pm.meeting.note']);
 });
 test('current membership and designated owner govern completion even after reload',async({page})=>{
   const f=meetingFixture();await mount(page,f);await saveDraft(page);
@@ -127,7 +137,7 @@ test('source choices keep exact IDs and render untrusted strings as text',async(
   await action(page,'note').getByRole('checkbox',{name:/literal evidence/}).check();
   await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('Evidence is incomplete');await reason(page,'note');
   await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();
-  expect(f.state.writes[0].body.params.source_refs).toEqual([{kind:'evidence',id:'pmev_'+'7'.repeat(32)}]);
+  expect(f.state.writes[0].body.params.source_refs).toEqual([{kind:'evidence',id:'pme_'+'7'.repeat(32)}]);
   await expect(page.locator('[data-pm-meetings] img')).toHaveCount(0);
 });
 test('review outcomes outside a changed context remain visible until explicitly removed',async({page})=>{
@@ -145,7 +155,7 @@ test('review outcomes outside a changed context remain visible until explicitly 
 test('non-latest meeting selection survives reload with its original lost note request',async({page})=>{
   const f=meetingFixture(),first=f.state.meetings[0].meeting.meeting_id;f.addMeeting('retro','Later discussion');await mount(page,f);
   await page.getByLabel('Meeting',{exact:true}).selectOption(first);await expect(page.getByRole('heading',{name:'Account recovery discussion · Draft',exact:true})).toBeVisible();
-  await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();f.state.lost=true;await saveNote(page);await expect(action(page,'note')).toContainText('Reply unavailable');
+  await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();f.state.lost=true;await saveNote(page,false);await expect(action(page,'note')).toContainText('Reply unavailable');
   const original=structuredClone(f.state.writes[0]);await page.reload();await boot(page);await expect(page.getByLabel('Meeting',{exact:true})).toHaveValue(first);
   await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
@@ -168,7 +178,7 @@ test('a malformed page cursor or mismatched workspace prevents writes and clears
   await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(0);
 });
 test('mismatched receipt and lost acknowledgement remain locked after scope revocation',async({page})=>{
-  const f=meetingFixture();await mount(page,f);f.state.mismatch=true;await saveNote(page);
+  const f=meetingFixture();await mount(page,f);f.state.mismatch=true;await saveNote(page,false);
   await expect(action(page,'note')).toContainText('does not match');const original=structuredClone(f.state.writes[0]);
   f.state.manage=false;await page.evaluate(()=>(window as any).refreshMeetings());
   await expect(action(page,'note').getByRole('button',{name:'Check original request',exact:true})).toBeDisabled();

@@ -11,16 +11,16 @@ export function meetingFixture(kind='planning') {
   const sprint={workspace_id:workspaceId,sprint_id:sprintId,version:4,status:'active',started_at:'2026-10-11T10:00:00Z',
     definition:{title:'Reliable account recovery',owner_actor:'owner',developers:['owner','developer'],capacity_note:'One focused improvement'}};
   const snapshot={workspace_id:workspaceId,snapshot_id:snapshotId,title:'Account recovery snapshot',snapshot_digest:'b'.repeat(64),as_of:'2026-10-11T12:00:00Z',journal_cursor:40,
-    evidence:[{evidence_id:'pmev_'+'7'.repeat(32),summary:'Reset tests passed; production outcome not yet checked'}]};
+    evidence:[{evidence_id:'pme_'+'7'.repeat(32),summary:'Reset tests passed; production outcome not yet checked'}]};
   const state:any={actor:'owner',role:'owner',manage:true,lost:false,writes:[],reads:[],ops:new Map(),meetings:[],sprints:[sprint],snapshots:[snapshot],histories:{},failRead:false,wrongScope:false,moreNotes:false};
   const makeContext=(id:string,version=1)=>({sequence:version,meeting_id:id,context_revision_id:'pmmctx_'+String(version).repeat(32),actor:'owner',document:{
     sprint_id:sprintId,sprint_version:sprint.version,sprint_status:sprint.status,sprint_definition:structuredClone(sprint.definition),
-    sprint_goal:{revision_id:'pmsg_'+'8'.repeat(32),text:'Members regain access without losing their account'},selection_revision_id:'pmsel_'+'9'.repeat(32),selected_items:[binding],
+    sprint_goal:{revision_id:'pmsg_'+'8'.repeat(32),text:'Members regain access without losing their account'},selection_revision_id:'pmssel_'+'9'.repeat(32),selected_items:[binding],
     snapshot_ref:{snapshot_id:snapshotId,snapshot_digest:snapshot.snapshot_digest,as_of:snapshot.as_of,journal_cursor:40},
     artifacts:{product_goal:{revision_id:'pmgoal_'+'1'.repeat(32),document:{text:'Reliable membership access'}},
       backlog:{revision_id:'pmbkl_'+'1'.repeat(32),document:{items:[binding]}},dod:{revision_id:'pmdod_'+'1'.repeat(32),document:{criteria:[{text:'Relevant tests and actual behavior are checked'}]}}}}});
   const addMeeting=(kind:string,title='Account recovery discussion')=>{
-    const id='pmm_'+String(state.meetings.length+1).repeat(32),context=makeContext(id),meeting={workspace_id:workspaceId,meeting_id:id,sprint_id:sprintId,
+    const id='pmmeet_'+String(state.meetings.length+1).repeat(32),context=makeContext(id),meeting={workspace_id:workspaceId,meeting_id:id,sprint_id:sprintId,
       sequence:state.meetings.length+1,title,kind,version:1,status:'draft',context_revision_id:context.context_revision_id,draft_revision_id:null,completion_id:null};
     const detail={workspace_id:workspaceId,meeting,context,snapshot,notes:[],draft:null,completion:null,follow_up_events:[],history_next_cursors:{notes:null,follow_ups:null}};
     state.meetings.push(detail);return detail;
@@ -64,13 +64,13 @@ export function meetingFixture(kind='planning') {
         if(action==='pm.meeting.note')detail.notes.push({meeting_id:meeting.meeting_id,note_id:'pmmnote_'+String(detail.notes.length+1).repeat(32),
           sequence:detail.notes.length+1,context_revision_id:meeting.context_revision_id,content:params.content,source_refs:params.source_refs,actor:state.actor});
         if(action==='pm.meeting.draft'){
-          const revision_id='pmmdraft_'+String(meeting.version).repeat(32),document={...structuredClone(params),kind:meeting.kind,quality:'unassessed',source_status:'discussion_proposal'};
+          const revision_id='pmmrev_'+String(meeting.version).repeat(32),document={...structuredClone(params),kind:meeting.kind,quality:'unassessed',source_status:'discussion_proposal'};
           if(meeting.kind==='planning')Object.assign(document.output,{what:[binding],how:[{binding_id:binding.binding_id,recorded_how:binding.how}]});
           if(meeting.kind==='review')document.output.unreviewed_binding_ids=document.output.outcomes.length?[]:[binding.binding_id];
           detail.draft={meeting_id:meeting.meeting_id,revision_id,document,actor:state.actor};meeting.draft_revision_id=revision_id;result.draft_revision_id=revision_id;
         }
         if(action==='pm.meeting.complete'){
-          meeting.status='completed';meeting.completion_id='pmmcomplete_'+'1'.repeat(32);
+          meeting.status='completed';meeting.completion_id='pmmc_'+'1'.repeat(32);
           detail.completion={meeting_id:meeting.meeting_id,completion_id:meeting.completion_id,actor:state.actor,document:{...params,
             follow_ups:detail.draft.document.follow_ups,decisions:detail.draft.document.decisions.map((row:any)=>({...row,disposition:params.decision_ids.includes(row.id)?'recorded_discussion_decision':'proposal'}))}};
         }
@@ -78,7 +78,7 @@ export function meetingFixture(kind='planning') {
           detail.context=makeContext(meeting.meeting_id,meeting.version);detail.context.document.snapshot_ref={...detail.context.document.snapshot_ref,snapshot_id:params.snapshot_id};
           detail.snapshot=state.snapshots.find((row:any)=>row.snapshot_id===params.snapshot_id);meeting.context_revision_id=detail.context.context_revision_id;detail.draft=null;meeting.draft_revision_id=null;
         }
-        if(action==='pm.meeting.follow_up.record')detail.follow_up_events.push({meeting_id:meeting.meeting_id,event_id:'pmmfollow_'+'1'.repeat(32),sequence:1,actor:state.actor,
+        if(action==='pm.meeting.follow_up.record')detail.follow_up_events.push({meeting_id:meeting.meeting_id,event_id:'pmfue_'+'1'.repeat(32),sequence:1,actor:state.actor,
           document:{...params,snapshot_ref:{snapshot_id:params.snapshot_id||snapshotId},verification_status:'unassessed'}});
         Object.assign(result,{meeting_id:meeting.meeting_id,version:meeting.version,status:meeting.status});
       }

@@ -6,7 +6,7 @@ export function workspaceMeetings({h, t, api, alive, workspaceId, workspace, per
   try {const saved=JSON.parse(localStorage.getItem(navigationKey)||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))navigation=saved;}
   catch { /* Navigation is only a preference, never an operation receipt. */ }
   let model = null, selectedId = typeof navigation.meeting_id === 'string' ? navigation.meeting_id : '', signature = '', serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
-  let forms = [];
+  let forms = [], editorMeetingId = null;
   const status = h('div', {role: 'status'}), view = h('div'), editors = h('div');
   const remember = (key,value) => {navigation[key]=value;try {localStorage.setItem(navigationKey,JSON.stringify(navigation));} catch { /* Request durability remains the shared form's responsibility. */ }};
   const choose = h('select', {'aria-label': t('pm_meeting_choose'), onchange: () => {selectedId = choose.value; remember('meeting_id',selectedId); void refresh(true);}});
@@ -17,7 +17,7 @@ export function workspaceMeetings({h, t, api, alive, workspaceId, workspace, per
       h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('pm_meeting_refresh'))),
     labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors);
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
-  const fold = (key, contents, open = false) => h('details', {open}, h('summary', {}, t(key)), contents);
+  const fold = (key, contents, open = false) => h('details', {open, 'data-pm-fold': key}, h('summary', {}, t(key)), contents);
   const source = id => h('code', {class: 'pm-source'}, id || t('pm_meeting_unknown'));
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const can = () => loaded && permitted(false);
@@ -269,7 +269,7 @@ export function workspaceMeetings({h, t, api, alive, workspaceId, workspace, per
       };render();widgets.push({sync});sync();
     }
     decision.mount(); follow.mount(); refs.sync();
-    return {editor, element: fold('pm_meeting_edit_draft', editor.box, editor.locked() || !detail.draft)};
+    return {editor, element: fold('pm_meeting_edit_draft', editor.box, editor.locked())};
   }
   function meetingEditors() {
     const detail = model.detail, context = detail.context.document, holder = h('div', {class: 'pm-fields'});
@@ -337,8 +337,20 @@ export function workspaceMeetings({h, t, api, alive, workspaceId, workspace, per
     return fold('pm_meeting_new',holder,!model.detail||Boolean(current?.locked()));
   }
   function renderEditors(reviewBaselines=false) {
+    const meetingId=model.detail?.meeting.meeting_id || null;
+    const expanded=editorMeetingId===meetingId ? new Set([...editors.querySelectorAll('details[open][data-pm-fold]')].map(node=>node.dataset.pmFold)) : new Set();
+    const focused=editors.contains(document.activeElement)?document.activeElement:null;
+    const action=focused?.closest('[data-pm-action]')?.dataset.pmAction;
+    const field=focused?.getAttribute('aria-label');
+    const selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
     stale=false;dirty=false;forms=[];reviewing=reviewBaselines;editors.replaceChildren();
     if(model.detail)editors.append(meetingEditors());editors.append(creationEditor());reviewing=false;update();
+    for(const node of editors.querySelectorAll('details[data-pm-fold]'))if(expanded.has(node.dataset.pmFold))node.open=true;
+    if(editorMeetingId===meetingId&&action&&field){
+      const replacement=editors.querySelector(`[data-pm-action="${CSS.escape(action)}"] [aria-label="${CSS.escape(field)}"]`);
+      if(replacement&&!replacement.disabled){replacement.focus({preventScroll:true});if(selection)replacement.setSelectionRange(...selection);}
+    }
+    editorMeetingId=meetingId;
   }
   async function pages(suffix,property) {
     let after=0,records=[];

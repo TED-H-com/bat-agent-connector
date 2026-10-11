@@ -279,26 +279,52 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			datetime: def.ends_at,
 			title: def.ends_at
 		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), row("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note("pm_sprint_quality"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id)))))), note("pm_sprint_no_execution")));
-		const ending = [...data.history || []].reverse().find((entry) => ["pm.sprint.close", "pm.sprint.cancel"].includes(entry.action));
-		if (ending) view.append(h("section", {
+		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
+		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
+		const closure = h("section", {
 			class: "pm-plans",
 			"data-pm-sprint-closure": ""
-		}, h("h3", {}, t("pm_sprint_closure")), h("p", { class: "pm-note-text" }, ending.document.rationale), ...(ending.document.items || []).map((item) => h("p", { class: "pm-note-text" }, title(item), " · ", t("pm_sprint_reconsider"), " — ", item.reason)), note("pm_sprint_no_carryover")));
+		});
+		if (terminal) view.append(closure);
+		const endingItems = (items) => h("div", { class: "pm-evidence-rows" }, ...items.map((item) => h("article", {
+			class: "pm-fact",
+			"data-pm-sprint-ended-work": item.work_item_id
+		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), h("p", { class: "pm-note-text" }, t("pm_sprint_unassessed"), " · ", t("pm_sprint_reconsider")), h("p", { class: "pm-note-text" }, item.reason), fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))));
+		function renderClosure() {
+			if (!terminal) return;
+			closure.replaceChildren(h("h3", {}, t("pm_sprint_closure")));
+			if (ending) closure.append(h("p", { class: "muted" }, t("pm_sprint_recorded_by", { actor: ending.actor })), h("p", { class: "pm-note-text" }, ending.document.rationale), endingItems(ending.document.items || []), note("pm_sprint_no_carryover"));
+			else if (eventCursor != null) closure.append(note("pm_sprint_closure_pending"), h("button", {
+				type: "button",
+				class: "secondary",
+				disabled: eventPending,
+				onclick: () => void loadEventPage?.()
+			}, t(eventPending ? "pm_sprint_history_loading" : "pm_sprint_load_closure")));
+			else closure.append(note("pm_sprint_closure_unavailable"));
+		}
 		const history = h("div");
 		for (const kind of [
 			"goals",
 			"selections",
 			"events"
 		]) {
-			const holder = h("section"), records = kind === "goals" ? data.goal_revisions : kind === "selections" ? data.selection_revisions : data.history;
+			const holder = h("section", { "data-pm-sprint-history": kind }), navigation = h("div"), seen = new Set();
+			const records = kind === "goals" ? data.goal_revisions : kind === "selections" ? data.selection_revisions : data.history;
 			holder.append(h("h4", {}, t("pm_sprint_history_" + kind)));
 			history.append(holder);
 			function append(page) {
-				for (const entry of page.records || []) {
-					if (entry.sprint_id !== sprint.sprint_id) throw Error(t("pm_scope_mismatch"));
+				if (!Array.isArray(page.records) || page.next_cursor != null && (!Number.isInteger(page.next_cursor) || page.next_cursor < 0)) throw Error(t("pm_scope_mismatch"));
+				navigation.remove();
+				for (const entry of page.records) {
+					if (entry.sprint_id !== sprint.sprint_id || entry.workspace_id !== void 0 && entry.workspace_id !== workspaceId || !Number.isInteger(entry.sequence) || entry.sequence < 1) throw Error(t("pm_scope_mismatch"));
+					if (seen.has(entry.sequence)) continue;
+					seen.add(entry.sequence);
+					const isEnding = kind === "events" && ["pm.sprint.close", "pm.sprint.cancel"].includes(entry.action);
+					if (isEnding && (!ending || entry.sequence > ending.sequence)) ending = entry;
 					const body = h("div", {}, h("p", { class: "muted" }, t("pm_sprint_recorded_by", { actor: entry.actor })), h("p", { class: "pm-note-text" }, entry.rationale || entry.document?.rationale || ""));
 					if (entry.text) body.append(h("p", { class: "pm-note-text" }, entry.text));
 					if (entry.items) body.append(workRows(entry.items));
+					if (isEnding) body.append(endingItems(entry.document?.items || []), note("pm_sprint_no_carryover"));
 					holder.append(h("details", {}, h("summary", {}, `#${entry.sequence} · ${t(kind === "events" ? {
 						"pm.sprint.create": "pm_sprint_save",
 						"pm.sprint.goal.revise": "pm_sprint_save_sprint_goal",
@@ -308,31 +334,48 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 						"pm.sprint.cancel": "pm_sprint_cancel"
 					}[entry.action] || "pm_sprint_history_events" : "pm_sprint_history_" + kind)}`), body));
 				}
+				navigation.replaceChildren();
+				holder.append(navigation);
+				if (kind === "events") {
+					eventCursor = page.next_cursor ?? null;
+					loadEventPage = null;
+				}
 				if (page.next_cursor != null) {
 					const more = h("button", {
 						type: "button",
-						class: "secondary",
-						onclick: async () => {
-							more.disabled = true;
-							try {
-								const next = check(await api("GET", `${endpoint}/sprints/${sprint.sprint_id}/history/${kind}?after=${page.next_cursor}&limit=50`));
-								alive();
-								if (!more.isConnected) return;
-								if (next.sprint_id !== sprint.sprint_id || next.kind !== kind || next.next_cursor != null && next.next_cursor <= page.next_cursor) throw Error(t("pm_scope_mismatch"));
-								more.remove();
-								append(next);
-							} catch (error) {
-								if (more.isConnected) unavailable(error);
-							} finally {
-								more.disabled = false;
+						class: "secondary"
+					}, t("pm_sprint_more_history", { kind: t("pm_sprint_history_" + kind) }));
+					const load = async () => {
+						if (more.disabled || !loaded || ticket !== serial) return;
+						more.disabled = true;
+						if (kind === "events") {
+							eventPending = true;
+							renderClosure();
+						}
+						try {
+							const next = check(await api("GET", `${endpoint}/sprints/${sprint.sprint_id}/history/${kind}?after=${page.next_cursor}&limit=50`));
+							alive();
+							if (!more.isConnected || ticket !== serial) return;
+							if (next.sprint_id !== sprint.sprint_id || next.kind !== kind || next.next_cursor != null && (!Number.isInteger(next.next_cursor) || next.next_cursor <= page.next_cursor)) throw Error(t("pm_scope_mismatch"));
+							append(next);
+						} catch (error) {
+							if (holder.isConnected && ticket === serial) unavailable(error);
+						} finally {
+							more.disabled = false;
+							if (kind === "events" && ticket === serial && closure.isConnected) {
+								eventPending = false;
+								renderClosure();
 							}
 						}
-					}, t("pm_sprint_more_history", { kind: t("pm_sprint_history_" + kind) }));
-					holder.append(more);
+					};
+					more.addEventListener("click", () => void load());
+					navigation.append(note("pm_sprint_history_partial"), more);
+					if (kind === "events") loadEventPage = load;
 				}
+				if (kind === "events") renderClosure();
 			}
 			append({
-				records,
+				records: records || [],
 				next_cursor: data.history_next_cursors?.[kind]
 			});
 		}
@@ -827,6 +870,1129 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		box,
 		refresh,
 		update
+	};
+}
+//#endregion
+//#region src/pm-kanban.js
+function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = null, pageSize = 20 }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/kanban`;
+	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
+	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
+	let serial = 0, next = null, reading = false, rows = new Map(), page = null;
+	const status = h("div", { role: "status" }), metrics = h("div", { class: "pm-kanban-summary" }), list = h("div", { class: "pm-kanban-list" });
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void loadMore()
+	}, t("pm_kanban_more"));
+	const refreshButton = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pm_kanban_refresh"));
+	const element = h("section", {
+		class: "panel pm-kanban",
+		"data-pm-kanban": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_kanban_title")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_intro"))), refreshButton), status, metrics, h("p", { class: "pm-kanban-note" }, t("pm_kanban_quality")), list, h("footer", { class: "pm-kanban-footer" }, more, h("p", { class: "pm-kanban-note" }, t("pm_kanban_limits"))));
+	const note = (key, args, warning = false) => h("p", { class: warning ? "pm-kanban-notice" : "pm-kanban-note" }, t(key, args));
+	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_kanban_unassigned"));
+	const state = (value) => {
+		if (typeof value === "boolean") return t(value ? "pm_kanban_yes" : "pm_kanban_no");
+		if (!value) return t("pm_kanban_unknown");
+		const key = "pm_kanban_state_" + value, translated = t(key);
+		return translated === key ? String(value).replaceAll("_", " ") : translated;
+	};
+	const stamp = (value) => {
+		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
+		if (!date || !Number.isFinite(date.getTime())) return t("pm_kanban_unknown");
+		const iso = date.toISOString();
+		return h("time", {
+			datetime: iso,
+			title: iso
+		}, iso.replace("T", " ").replace(/\.\d+Z$/, " UTC"));
+	};
+	const elapsed = (value) => {
+		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return t("pm_kanban_unknown");
+		if (value < 60) return t("pm_kanban_seconds");
+		const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
+		return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
+	};
+	function checkCard(card, expectedId = null) {
+		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
+		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
+		return card;
+	}
+	function checkPage(data, after) {
+		if (data?.workspace_id !== workspaceId || (data.project_id ?? null) !== projectId || !Array.isArray(data.cards) || data.next_cursor != null && (!integer(data.next_cursor) || data.next_cursor <= after) || !data.wip || ![
+			"count",
+			"unknown",
+			"cards"
+		].every((key) => integer(data.wip[key])) || data.wip.scope !== "returned_page") throw Error(t("pm_kanban_scope_error"));
+		const seen = new Set();
+		for (const card of data.cards) {
+			checkCard(card);
+			if (card.binding.sequence <= after || seen.has(card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
+			seen.add(card.work_item_id);
+		}
+		if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t("pm_kanban_scope_error"));
+		return data;
+	}
+	function notices(coverage) {
+		const out = [];
+		if (coverage?.unavailable_sources || coverage?.inaccessible_sources) out.push(note("pm_kanban_missing", {}, true));
+		if (coverage?.truncated) out.push(note("pm_kanban_truncated", {}, true));
+		if (coverage?.unsupported_sources) out.push(note("pm_kanban_unsupported"));
+		return out;
+	}
+	function unavailable(error) {
+		++serial;
+		reading = false;
+		rows.clear();
+		page = null;
+		next = null;
+		list.replaceChildren();
+		metrics.replaceChildren();
+		more.hidden = true;
+		more.disabled = false;
+		element.removeAttribute("aria-busy");
+		status.replaceChildren(errorBox ? errorBox(error) : h("p", { class: "error" }, error.message), h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => void refresh()
+		}, t("pm_kanban_retry")));
+	}
+	function renderMetrics() {
+		metrics.replaceChildren();
+		if (!page) return;
+		metrics.append(h("div", {}, h("strong", {}, t("pm_kanban_wip", page.wip)), note("pm_kanban_wip_basis"), note("pm_kanban_loaded", { count: rows.size })), h("div", { class: "pm-kanban-note" }, t("pm_kanban_page_at"), ": ", stamp(page.observed_at)));
+		if (next != null) metrics.append(note("pm_kanban_partial"));
+		if (page.coverage?.byte_limited) metrics.append(note("pm_kanban_bounded"));
+		more.hidden = next == null;
+		more.disabled = reading;
+	}
+	function detailsFor(card, observedAt) {
+		const execution = card.execution || {}, capture = card.latest_capture;
+		const lines = (kind, records, content) => records?.length ? h("ul", {}, ...records.map((value) => h("li", {}, h("strong", {}, t(kind)), " · ", content(value)))) : "";
+		const detail = h("div", { class: "pm-kanban-detail" }, h("h4", {}, t("pm_kanban_execution")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), h("h4", {}, t("pm_kanban_capture")));
+		if (!capture) detail.append(note("pm_kanban_no_capture"));
+		else {
+			if (capture.workspace_id !== workspaceId || capture.work_item_id !== card.work_item_id) throw Error(t("pm_kanban_scope_error"));
+			detail.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_capture_time"), ": ", stamp(capture.captured_at)), code(capture.capture_id), code(capture.binding_id), ...notices(capture.coverage));
+			if (card.capture_matches_binding === false || card.capture_matches_work_version === false) detail.append(note("pm_kanban_capture_different", {}, true));
+			detail.append(h("ul", {}, ...(capture.evidence || []).map((value) => {
+				if (value.workspace_id && value.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+				const sourceKey = "pm_kanban_source_" + value.source_kind, source = t(sourceKey);
+				return h("li", {}, source === sourceKey ? t("pm_kanban_fact") : source, " · ", Object.entries(value.assessment || {}).map(([key, value]) => {
+					const fieldKey = "pm_kanban_field_" + key, field = t(fieldKey);
+					return `${field === fieldKey ? key.replaceAll("_", " ") : field}: ${state(value)}`;
+				}).join(" · "), code(value.evidence_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.source_observed_at)));
+			})));
+		}
+		detail.append(h("h4", {}, t("pm_kanban_versions")), h("dl", {}, ...[
+			["pm_kanban_binding", card.binding.binding_id],
+			["pm_kanban_plan", card.binding.plan_revision_id],
+			["pm_kanban_requirements", (card.binding.requirement_ids || []).join(", ")],
+			["pm_kanban_work_version", card.work.version],
+			["pm_kanban_bound_version", card.binding.work_version]
+		].flatMap(([key, value]) => [h("dt", {}, t(key)), h("dd", {}, code(value))])), note("pm_kanban_assignment"), note("pm_kanban_dependencies"));
+		return detail;
+	}
+	function previewFor(card, observedAt) {
+		const execution = card.execution || {}, flow = card.flow || {};
+		const states = execution.tasks?.length ? execution.tasks.map((task) => task.state) : execution.attempts?.length ? execution.attempts.map((attempt) => attempt.status) : execution.operations?.length ? execution.operations.map((operation) => operation.status) : execution.sessions?.length ? execution.sessions.map((session) => session.runtime_status) : [];
+		const summary = [...new Set(states.map((value) => state(value)))].join(" · ");
+		const node = h("div", {}, h("div", { class: "pm-kanban-overview" }, h("div", { class: "pm-kanban-work" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")))), ...notices(execution.coverage));
+		if (flow.history !== "available_central_events") node.append(note("pm_kanban_history_unknown"));
+		node.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt), " · ", t(card.latest_capture ? "pm_kanban_capture_time" : "pm_kanban_no_capture"), card.latest_capture ? ": " : "", card.latest_capture ? stamp(card.latest_capture.captured_at) : ""));
+		return node;
+	}
+	function renderCard(card, observedAt) {
+		const ticket = serial, preview = h("div", {}, previewFor(card, observedAt));
+		const node = h("article", {
+			class: "pm-kanban-card",
+			"data-pm-kanban-work": card.work_item_id
+		}, preview);
+		const body = h("div"), fold = h("details", {}, h("summary", {}, t("pm_kanban_detail")), body);
+		let detailRequest = 0;
+		fold.addEventListener("toggle", async () => {
+			const request = ++detailRequest;
+			if (!fold.open) {
+				body.replaceChildren();
+				return;
+			}
+			body.replaceChildren(note("pm_kanban_detail_loading"));
+			try {
+				const data = await api("GET", `${endpoint}/${encodeURIComponent(card.work_item_id)}`);
+				alive();
+				if (ticket !== serial || request !== detailRequest || !fold.open || !node.isConnected) return;
+				if (data.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+				checkCard(data.card, card.work_item_id);
+				const contents = detailsFor(data.card, data.observed_at);
+				preview.replaceChildren(previewFor(data.card, data.observed_at));
+				body.replaceChildren(contents);
+			} catch (error) {
+				if (ticket === serial && request === detailRequest && node.isConnected) unavailable(error);
+			}
+		});
+		node.append(fold);
+		return node;
+	}
+	function accept(data, append) {
+		if (!append) {
+			rows.clear();
+			list.replaceChildren();
+		}
+		for (const card of data.cards) {
+			const previous = rows.get(card.work_item_id), node = renderCard(card, data.observed_at);
+			if (previous) previous.node.replaceWith(node);
+			else list.append(node);
+			rows.set(card.work_item_id, {
+				node,
+				card
+			});
+		}
+		page = data;
+		next = data.next_cursor ?? null;
+		if (!rows.size) list.replaceChildren(note("pm_kanban_empty"));
+		status.replaceChildren();
+		renderMetrics();
+	}
+	const path = (after) => `${endpoint}?${new URLSearchParams({
+		...projectId ? { project_id: projectId } : {},
+		after: String(after),
+		limit: String(pageSize)
+	})}`;
+	async function refresh() {
+		const ticket = ++serial;
+		reading = true;
+		page = null;
+		next = null;
+		rows.clear();
+		list.replaceChildren();
+		metrics.replaceChildren();
+		more.hidden = true;
+		status.replaceChildren(note("pm_kanban_loading"));
+		element.setAttribute("aria-busy", "true");
+		try {
+			const data = checkPage(await api("GET", path(0)), 0);
+			alive();
+			if (ticket === serial) accept(data, false);
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		} finally {
+			if (ticket === serial) {
+				reading = false;
+				element.removeAttribute("aria-busy");
+				more.disabled = false;
+			}
+		}
+	}
+	async function loadMore() {
+		if (reading || next == null) return;
+		const ticket = serial, after = next;
+		reading = true;
+		more.disabled = true;
+		try {
+			const data = checkPage(await api("GET", path(after)), after);
+			alive();
+			if (ticket === serial) accept(data, true);
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		} finally {
+			if (ticket === serial) {
+				reading = false;
+				more.disabled = false;
+			}
+		}
+	}
+	return {
+		element,
+		box: element,
+		refresh
+	};
+}
+//#endregion
+//#region src/pm-meetings.js
+function workspaceMeetings({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const navigationKey = `batc.pm.meeting-navigation.${workspaceId}.${caps()?.actor}`;
+	let navigation = {};
+	try {
+		const saved = JSON.parse(localStorage.getItem(navigationKey) || "{}");
+		if (saved && typeof saved === "object" && !Array.isArray(saved)) navigation = saved;
+	} catch {}
+	let model = null, selectedId = typeof navigation.meeting_id === "string" ? navigation.meeting_id : "", signature = "", serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
+	let forms = [], editorMeetingId = null;
+	const status = h("div", { role: "status" }), view = h("div"), editors = h("div");
+	const remember = (key, value) => {
+		navigation[key] = value;
+		try {
+			localStorage.setItem(navigationKey, JSON.stringify(navigation));
+		} catch {}
+	};
+	const choose = h("select", {
+		"aria-label": t("pm_meeting_choose"),
+		onchange: () => {
+			selectedId = choose.value;
+			remember("meeting_id", selectedId);
+			refresh(true);
+		}
+	});
+	const warning = h("p", {
+		class: "muted",
+		hidden: true
+	}, t("pm_meeting_stale"));
+	const rebase = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			if (loaded) renderEditors(true);
+		}
+	}, t("pm_meeting_rebase"));
+	const element = h("section", {
+		class: "panel pm-evidence",
+		"data-pm-meetings": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_meeting_title")), h("p", { class: "muted" }, t("pm_meeting_intro"))), h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pm_meeting_refresh"))), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors);
+	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
+	const fold = (key, contents, open = false) => h("details", {
+		open,
+		"data-pm-fold": key
+	}, h("summary", {}, t(key)), contents);
+	const source = (id) => h("code", { class: "pm-source" }, id || t("pm_meeting_unknown"));
+	const check = (data) => {
+		if (data?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return data;
+	};
+	const can = () => loaded && permitted(false);
+	const role = (actor) => workspace()?.members?.find((member) => member.actor === actor)?.role || (actor === caps()?.actor ? workspace()?.membership?.role : null);
+	const owner = () => can() && caps()?.actor === model?.detail?.context.document.sprint_definition.owner_actor && role(caps()?.actor) === "owner";
+	const reason = () => input("pm_meeting_reason", {
+		multiline: true,
+		max: 4e3
+	});
+	const lines = (value) => value.split("\n").map((item) => item.trim()).filter(Boolean);
+	const hidden = (value) => {
+		const node = h("input", {
+			type: "hidden",
+			value: JSON.stringify(value)
+		});
+		node.dataset.pmDefault = JSON.stringify(value);
+		return node;
+	};
+	const options = (key, entries, value = "") => {
+		const node = h("select", { "aria-label": t(key) }, ...entries.map(([id, text]) => h("option", { value: id }, text)));
+		if (value && !entries.some(([id]) => id === value)) node.append(h("option", { value }, value));
+		node.value = value;
+		node.dataset.pmDefault = value;
+		return node;
+	};
+	const target = () => ({
+		workspace_id: workspaceId,
+		meeting_id: model.detail.meeting.meeting_id
+	});
+	const pre = () => ({ expected_version: model.detail.meeting.version });
+	function update() {
+		forms.forEach((editor) => editor.update());
+		warning.hidden = rebase.hidden = !stale;
+		rebase.disabled = !loaded;
+		choose.disabled = !loaded;
+	}
+	function unavailable(error) {
+		loaded = false;
+		update();
+		view.replaceChildren();
+		choose.replaceChildren();
+		editors.hidden = true;
+		status.replaceChildren(errorBox(error));
+	}
+	function localForm(config) {
+		const expected = JSON.stringify({
+			preconditions: config.preconditions(),
+			context: config.context || null
+		});
+		const baseline = h("input", {
+			type: "hidden",
+			value: expected
+		});
+		baseline.dataset.pmDefault = expected;
+		const editor = form({
+			...config,
+			fields: {
+				...config.fields,
+				_baseline: baseline
+			},
+			params: (values) => config.params(Object.fromEntries(Object.entries(values).filter(([key]) => key !== "_baseline"))),
+			preconditions: () => JSON.parse(baseline.value).preconditions,
+			permitted: () => !stale && config.permitted(),
+			recoverPermitted: can,
+			extra: h("div", {}, config.extra, baseline),
+			onSaved: (result) => {
+				if (config.action === "pm.meeting.create" && result?.meeting_id) {
+					selectedId = result.meeting_id;
+					remember("meeting_id", selectedId);
+				}
+				return refresh(true);
+			}
+		});
+		if (reviewing && !editor.locked()) editor.set("_baseline", expected);
+		if (!editor.locked() && baseline.value !== expected) stale = true;
+		editor.box.addEventListener("input", () => {
+			dirty = true;
+		});
+		editor.box.addEventListener("change", () => {
+			dirty = true;
+		});
+		forms.push(editor);
+		return editor;
+	}
+	function sourceChoices() {
+		const detail = model.detail, context = detail.context.document;
+		return [
+			{
+				kind: "snapshot",
+				id: context.snapshot_ref.snapshot_id,
+				label: t("pm_meeting_snapshot")
+			},
+			{
+				kind: "sprint_goal",
+				id: context.sprint_goal.revision_id,
+				label: t("pm_meeting_goal")
+			},
+			...context.selection_revision_id ? [{
+				kind: "selection",
+				id: context.selection_revision_id,
+				label: t("pm_meeting_selection")
+			}] : [],
+			...Object.entries(context.artifacts).map(([kind, row]) => ({
+				kind,
+				id: row.revision_id,
+				label: t("pm_meeting_" + kind)
+			})),
+			...(detail.snapshot.evidence || []).map((row) => ({
+				kind: "evidence",
+				id: row.evidence_id,
+				label: row.summary || row.title || t("pm_meeting_evidence")
+			})),
+			...(detail.notes || []).filter((row) => row.context_revision_id === detail.context.context_revision_id).map((row) => ({
+				kind: "note",
+				id: row.note_id,
+				label: row.content
+			}))
+		];
+	}
+	function refsView(refs = []) {
+		return h("ul", { class: "pm-source" }, ...refs.map((ref) => h("li", {}, t("pm_meeting_" + ref.kind), " · ", source(ref.id))));
+	}
+	function refsControl(field, getEditor) {
+		const holder = h("div"), choices = sourceChoices();
+		const key = (ref) => `${ref.kind}:${ref.id}`;
+		const saved = JSON.parse(field.value || "[]");
+		for (const ref of saved) if (!choices.some((choice) => key(choice) === key(ref))) choices.push({
+			...ref,
+			label: t("pm_meeting_source_unavailable")
+		});
+		const controls = choices.map((choice) => {
+			const checkbox = h("input", { type: "checkbox" });
+			checkbox.addEventListener("change", () => {
+				if (!getEditor() || getEditor().locked() || !can() || stale) return;
+				const refs = JSON.parse(field.value || "[]").filter((ref) => key(ref) !== key(choice));
+				if (checkbox.checked) refs.push({
+					kind: choice.kind,
+					id: choice.id
+				});
+				field.value = JSON.stringify(refs);
+				getEditor().changed();
+				dirty = true;
+			});
+			holder.append(h("label", { class: "pm-fact-heading" }, checkbox, h("span", { class: "pm-source" }, choice.label, " · ", source(choice.id))));
+			return [checkbox, key(choice)];
+		});
+		const sync = () => {
+			const selected = JSON.parse(field.value || "[]").map(key);
+			for (const [node, id] of controls) {
+				node.checked = selected.includes(id);
+				node.disabled = !can() || stale || Boolean(getEditor()?.locked());
+			}
+		};
+		return {
+			element: fold("pm_meeting_sources", h("div", {}, note("pm_meeting_source_help"), holder)),
+			sync
+		};
+	}
+	function workView(items) {
+		return h("div", { class: "pm-evidence-rows" }, ...items.map((item) => h("article", { class: "pm-fact" }, h("a", {
+			href: `#/work/${encodeURIComponent(item.work_item_id)}`,
+			class: "pm-source"
+		}, item.title || item.work_item_id), h("p", {}, item.assignee), h("p", { class: "pm-note-text" }, item.how || t("pm_meeting_how_missing")), source(item.binding_id))));
+	}
+	function outputView(document) {
+		const output = document.output, holder = h("div", { "data-pm-meeting-output": document.kind });
+		const prose = (key, text) => holder.append(h("h4", {}, t("pm_meeting_" + key)), h("p", { class: "pm-note-text" }, text));
+		const list = (key, rows) => {
+			if (rows?.length) holder.append(h("h4", {}, t("pm_meeting_" + key)), h("ul", {}, ...rows.map((text) => h("li", { class: "pm-note-text" }, text))));
+		};
+		if (document.kind === "planning") {
+			for (const key of [
+				"why",
+				"delivery_approach",
+				"capacity_discussion"
+			]) prose(key, output[key]);
+			list("dependency_notes", output.dependency_notes);
+		} else if (document.kind === "review") {
+			prose("goal_review", output.goal_review);
+			for (const item of output.outcomes || []) holder.append(h("p", { class: "pm-note-text" }, item.observation), source(item.binding_id));
+			for (const key of [
+				"feedback",
+				"environment_changes",
+				"next_steps"
+			]) list(key, output[key]);
+			if (output.unreviewed_binding_ids?.length) holder.append(note("pm_meeting_unreviewed"), ...output.unreviewed_binding_ids.map(source));
+		} else {
+			list("observations", output.observations);
+			prose("previous_improvement_review", output.previous_improvement_review);
+			if (output.no_improvement_rationale) prose("no_improvement_rationale", output.no_improvement_rationale);
+		}
+		for (const item of document.decisions || []) holder.append(h("article", { class: "pm-fact" }, h("h4", {}, item.text), note("pm_meeting_proposal"), h("p", { class: "pm-note-text" }, item.rationale), refsView(item.source_refs)));
+		for (const item of document.follow_ups || []) holder.append(h("article", { class: "pm-fact" }, h("h4", {}, item.text), h("p", {}, t("pm_meeting_assigned", { actor: item.owner_actor })), h("p", { class: "pm-note-text" }, item.expected_effect), h("p", { class: "pm-note-text" }, t("pm_meeting_verification"), ": ", item.verification), refsView(item.source_refs)));
+		list("unresolved_questions", document.unresolved_questions);
+		holder.append(refsView(document.source_refs), note("pm_meeting_quality"));
+		return holder;
+	}
+	function historyView(detail) {
+		const holder = h("div");
+		for (const kind of [
+			"notes",
+			"follow_ups",
+			"contexts",
+			"drafts"
+		]) {
+			const section = h("section", {}, h("h4", {}, t("pm_meeting_history_" + kind)));
+			holder.append(section);
+			const append = (records, cursor) => {
+				for (const record of records) {
+					if (record.meeting_id !== detail.meeting.meeting_id) throw Error(t("pm_scope_mismatch"));
+					const document = record.document;
+					section.append(h("details", {}, h("summary", {}, `#${record.sequence} · ${record.actor}`), kind === "notes" ? h("div", {}, h("p", { class: "pm-note-text" }, record.content), refsView(record.source_refs)) : kind === "drafts" ? outputView(document) : kind === "contexts" ? h("div", {}, h("p", { class: "pm-note-text" }, document.sprint_goal.text), source(document.snapshot_ref.snapshot_id), source(record.context_revision_id)) : h("div", {}, h("p", {}, t("pm_meeting_" + document.status)), h("p", { class: "pm-note-text" }, document.result), note("pm_meeting_quality"), source(document.follow_up_id), source(document.snapshot_ref.snapshot_id), refsView(document.source_refs)), source(record.context_revision_id || record.event_id || record.revision_id)));
+				}
+				if (cursor != null) {
+					if (!Number.isInteger(cursor) || cursor < 0) throw Error(t("pm_scope_mismatch"));
+					const more = h("button", {
+						type: "button",
+						class: "secondary",
+						onclick: async () => {
+							more.disabled = true;
+							try {
+								const page = check(await api("GET", `${endpoint}/meetings/${detail.meeting.meeting_id}/history/${kind}?after=${cursor}&limit=20`));
+								alive();
+								if (!more.isConnected) return;
+								if (page.meeting_id !== detail.meeting.meeting_id || page.kind !== kind || !Array.isArray(page.records) || page.next_cursor != null && (!Number.isInteger(page.next_cursor) || page.next_cursor <= cursor)) throw Error(t("pm_scope_mismatch"));
+								more.remove();
+								append(page.records, page.next_cursor);
+							} catch (error) {
+								if (section.isConnected) unavailable(error);
+							} finally {
+								more.disabled = false;
+							}
+						}
+					}, t("pm_meeting_more", { kind: t("pm_meeting_history_" + kind) }));
+					section.append(more);
+				}
+			};
+			append(kind === "notes" ? detail.notes : kind === "follow_ups" ? detail.follow_up_events : [], ["notes", "follow_ups"].includes(kind) ? detail.history_next_cursors?.[kind] : 0);
+		}
+		return fold("pm_meeting_history", holder);
+	}
+	function renderView() {
+		view.replaceChildren();
+		const detail = model.detail;
+		if (!detail) {
+			view.append(note("pm_meeting_empty"));
+			return;
+		}
+		const context = detail.context.document;
+		view.append(h("section", { class: "pm-plans" }, h("h3", {}, detail.meeting.title, " · ", t("pm_meeting_" + detail.meeting.status)), h("p", {}, t("pm_meeting_" + detail.meeting.kind)), h("h4", {}, t("pm_meeting_goal")), h("p", { class: "pm-note-text" }, context.sprint_goal.text), fold("pm_meeting_fixed_context", h("div", {}, h("p", {}, context.sprint_definition.title), h("p", {}, t("pm_meeting_snapshot"), " · ", context.snapshot_ref.as_of), source(context.snapshot_ref.snapshot_id), h("p", {}, source(detail.context.context_revision_id)), h("p", {}, source(context.sprint_goal.revision_id)), workView(context.selected_items), h("h4", {}, t("pm_meeting_dod")), h("ul", {}, ...context.artifacts.dod.document.criteria.map((item) => h("li", {}, item.text))), note("pm_meeting_quality"))), note("pm_meeting_source_frozen")));
+		if (detail.draft) view.append(h("section", { class: "pm-plans" }, h("h3", {}, t("pm_meeting_saved_draft")), note("pm_meeting_draft_help"), outputView(detail.draft.document), source(detail.draft.revision_id)));
+		if (detail.completion) {
+			const record = detail.completion;
+			view.append(h("section", {
+				class: "pm-plans",
+				"data-pm-meeting-completion": ""
+			}, h("h3", {}, t("pm_meeting_completed")), h("p", { class: "pm-note-text" }, record.document.discussion_summary), h("p", {}, t("pm_meeting_recorded_by", { actor: record.actor })), ...(record.document.decisions || []).map((item) => h("p", { class: "pm-note-text" }, item.text, " · ", t(item.disposition === "recorded_discussion_decision" ? "pm_meeting_recorded_decision" : "pm_meeting_proposal"))), note("pm_meeting_completion_help"), source(record.completion_id)));
+		}
+		view.append(historyView(detail));
+	}
+	function collection(field, getEditor, definitions, limit, key) {
+		const rows = h("div"), add = h("button", {
+			type: "button",
+			class: "secondary"
+		}, t("pm_meeting_add_" + key));
+		const holder = h("div", {}, rows, add);
+		let controls = [];
+		const change = (values) => {
+			if (!getEditor() || getEditor().locked() || !can() || stale) return;
+			field.value = JSON.stringify(values);
+			getEditor().changed();
+			dirty = true;
+		};
+		function render() {
+			controls = [];
+			rows.replaceChildren();
+			const values = JSON.parse(field.value || "[]");
+			for (const item of values) {
+				const fields = definitions.map((def) => {
+					const node = def.choices ? options(def.label, def.choices, item[def.name] || "") : input(def.label, {
+						multiline: true,
+						max: 4e3,
+						required: def.required !== false,
+						value: item[def.name] || ""
+					});
+					node.addEventListener("input", () => {
+						const values = JSON.parse(field.value || "[]"), row = values.find((value) => value.id === item.id);
+						if (row) {
+							row[def.name] = node.value;
+							change(values);
+						}
+					});
+					controls.push(node);
+					return labelled(def.label, node);
+				});
+				const remove = h("button", {
+					type: "button",
+					class: "secondary",
+					onclick: () => {
+						change(JSON.parse(field.value || "[]").filter((row) => row.id !== item.id));
+						render();
+						sync();
+					}
+				}, t("pm_meeting_remove"));
+				controls.push(remove);
+				rows.append(h("article", { class: "pm-fact pm-fields" }, ...fields, refsView(item.source_refs), remove));
+			}
+		}
+		const sync = () => {
+			const disabled = !can() || stale || Boolean(getEditor()?.locked());
+			controls.forEach((node) => {
+				node.disabled = disabled;
+			});
+			add.disabled = disabled || JSON.parse(field.value || "[]").length >= limit;
+		};
+		add.addEventListener("click", () => {
+			const values = JSON.parse(field.value || "[]");
+			if (values.length >= limit) return;
+			change([...values, {
+				id: `${key}_${crypto.randomUUID().replaceAll("-", "")}`,
+				...Object.fromEntries(definitions.map((def) => [def.name, def.choices?.[0]?.[0] || ""]))
+			}]);
+			render();
+			sync();
+		});
+		return {
+			element: holder,
+			mount: () => {
+				render();
+				sync();
+			},
+			sync
+		};
+	}
+	function draftEditor() {
+		const detail = model.detail, context = detail.context.document, saved = detail.draft?.document;
+		const fields = {}, body = h("div", { class: "pm-fields" }), widgets = [];
+		let editor;
+		const textField = (key, value, required = true) => {
+			const node = input("pm_meeting_" + key, {
+				multiline: true,
+				max: 8e3,
+				required,
+				value
+			});
+			fields[key] = node;
+			body.append(labelled("pm_meeting_" + key, node));
+		};
+		const output = saved?.output || {}, kind = detail.meeting.kind;
+		let outcomeHolder;
+		if (kind === "planning") {
+			for (const key of [
+				"why",
+				"delivery_approach",
+				"capacity_discussion"
+			]) textField(key, output[key] || "");
+			body.append(note("pm_meeting_what_how"));
+			textField("dependency_notes", (output.dependency_notes || []).join("\n"), false);
+		} else if (kind === "review") {
+			textField("goal_review", output.goal_review || "");
+			fields.outcomes = hidden((output.outcomes || []).map(({ binding_id, observation }) => ({
+				binding_id,
+				observation
+			})));
+			outcomeHolder = h("div");
+			body.append(outcomeHolder);
+			for (const key of [
+				"feedback",
+				"environment_changes",
+				"next_steps"
+			]) textField(key, (output[key] || []).join("\n"), false);
+			body.append(note("pm_meeting_review_help"));
+		} else {
+			textField("observations", (output.observations || []).join("\n"));
+			textField("previous_improvement_review", output.previous_improvement_review || "");
+			textField("no_improvement_rationale", output.no_improvement_rationale || "", false);
+			body.append(note("pm_meeting_retro_help"));
+		}
+		fields.decisions = hidden((saved?.decisions || []).map(({ id, text, rationale, alternatives, source_refs }) => ({
+			id,
+			text,
+			rationale,
+			alternatives,
+			source_refs
+		})));
+		fields.follow_ups = hidden((saved?.follow_ups || []).map(({ id, text, owner_actor, expected_effect, verification, source_refs }) => ({
+			id,
+			text,
+			owner_actor,
+			expected_effect,
+			verification,
+			source_refs
+		})));
+		const writers = (workspace()?.members || []).filter((member) => ["owner", "contributor"].includes(member.role)).map((member) => [member.actor, member.actor]);
+		const decision = collection(fields.decisions, () => editor, [{
+			name: "text",
+			label: "pm_meeting_decision_text"
+		}, {
+			name: "rationale",
+			label: "pm_meeting_decision_reason"
+		}], 10, "decision");
+		const follow = collection(fields.follow_ups, () => editor, [
+			{
+				name: "text",
+				label: "pm_meeting_follow_text"
+			},
+			{
+				name: "owner_actor",
+				label: "pm_meeting_owner",
+				choices: writers
+			},
+			{
+				name: "expected_effect",
+				label: "pm_meeting_expected_effect"
+			},
+			{
+				name: "verification",
+				label: "pm_meeting_verification"
+			}
+		], kind === "retro" ? 5 : 10, "followup");
+		widgets.push(decision, follow);
+		body.append(fold("pm_meeting_decisions", h("div", {}, note("pm_meeting_proposal"), decision.element)), fold("pm_meeting_follow_ups", h("div", {}, note("pm_meeting_follow_help"), follow.element)));
+		textField("unresolved_questions", (saved?.unresolved_questions || []).join("\n"), false);
+		fields.source_refs = hidden(saved?.source_refs || []);
+		fields.rationale = reason();
+		body.append(labelled("pm_meeting_reason", fields.rationale));
+		const contextId = detail.context.context_revision_id;
+		editor = localForm({
+			action: "pm.meeting.draft",
+			target: target(),
+			fields,
+			preconditions: pre,
+			context: contextId,
+			permitted: () => can() && model.detail.meeting.status === "draft",
+			label: "pm_meeting_save_draft",
+			onStateChange: () => widgets.forEach((widget) => widget.sync()),
+			extra: body,
+			params: (values) => {
+				return {
+					output: kind === "planning" ? {
+						why: values.why,
+						delivery_approach: values.delivery_approach,
+						capacity_discussion: values.capacity_discussion,
+						dependency_notes: lines(values.dependency_notes)
+					} : kind === "review" ? {
+						goal_review: values.goal_review,
+						outcomes: JSON.parse(values.outcomes).filter((row) => row.observation.trim()),
+						feedback: lines(values.feedback),
+						environment_changes: lines(values.environment_changes),
+						next_steps: lines(values.next_steps)
+					} : {
+						observations: lines(values.observations),
+						previous_improvement_review: values.previous_improvement_review,
+						...values.no_improvement_rationale.trim() ? { no_improvement_rationale: values.no_improvement_rationale } : {}
+					},
+					decisions: JSON.parse(values.decisions),
+					follow_ups: JSON.parse(values.follow_ups),
+					source_refs: JSON.parse(values.source_refs),
+					unresolved_questions: lines(values.unresolved_questions),
+					rationale: values.rationale
+				};
+			}
+		});
+		const refs = refsControl(fields.source_refs, () => editor);
+		widgets.push(refs);
+		body.append(refs.element);
+		if (outcomeHolder) {
+			let nodes = [];
+			const sync = () => nodes.forEach((node) => {
+				node.disabled = !can() || stale || editor.locked();
+			});
+			const render = () => {
+				const outcomes = JSON.parse(fields.outcomes.value), items = [...context.selected_items];
+				nodes = [];
+				outcomeHolder.replaceChildren();
+				for (const outcome of outcomes) if (!items.some((item) => item.binding_id === outcome.binding_id)) items.push({
+					binding_id: outcome.binding_id,
+					unavailable: true
+				});
+				for (const item of items) {
+					const node = input("pm_meeting_outcome", {
+						multiline: true,
+						max: 4e3,
+						required: false,
+						value: outcomes.find((row) => row.binding_id === item.binding_id)?.observation || ""
+					});
+					nodes.push(node);
+					const change = (values) => {
+						if (!can() || stale || editor.locked()) return;
+						fields.outcomes.value = JSON.stringify(values);
+						editor.changed();
+						dirty = true;
+					};
+					node.addEventListener("input", () => change([...JSON.parse(fields.outcomes.value).filter((row) => row.binding_id !== item.binding_id), {
+						binding_id: item.binding_id,
+						observation: node.value
+					}]));
+					const label = h("label", {}, t("pm_meeting_outcome"), " · ", h("span", { class: "pm-source" }, item.title || item.work_item_id || item.binding_id), node);
+					outcomeHolder.append(label);
+					if (item.unavailable) {
+						const remove = h("button", {
+							type: "button",
+							class: "secondary",
+							onclick: () => {
+								change(JSON.parse(fields.outcomes.value).filter((row) => row.binding_id !== item.binding_id));
+								render();
+								sync();
+							}
+						}, t("pm_meeting_remove"));
+						nodes.push(remove);
+						outcomeHolder.append(note("pm_meeting_source_unavailable"), remove);
+					}
+				}
+			};
+			render();
+			widgets.push({ sync });
+			sync();
+		}
+		decision.mount();
+		follow.mount();
+		refs.sync();
+		return {
+			editor,
+			element: fold("pm_meeting_edit_draft", editor.box, editor.locked())
+		};
+	}
+	function meetingEditors() {
+		const detail = model.detail, context = detail.context.document, holder = h("div", { class: "pm-fields" });
+		const content = input("pm_meeting_note_text", {
+			multiline: true,
+			max: 8e3
+		}), rationale = reason(), refs = hidden([]);
+		let noteEditor, sourceWidget;
+		const extra = h("div", { class: "pm-fields" }, labelled("pm_meeting_note_text", content), labelled("pm_meeting_reason", rationale));
+		noteEditor = localForm({
+			action: "pm.meeting.note",
+			target: target(),
+			fields: {
+				content,
+				rationale,
+				source_refs: refs
+			},
+			preconditions: pre,
+			context: detail.context.context_revision_id,
+			permitted: () => can() && model.detail.meeting.status === "draft",
+			label: "pm_meeting_save_note",
+			extra,
+			onStateChange: () => sourceWidget?.sync(),
+			params: (values) => ({
+				...values,
+				source_refs: JSON.parse(values.source_refs)
+			})
+		});
+		sourceWidget = refsControl(refs, () => noteEditor);
+		extra.append(sourceWidget.element);
+		sourceWidget.sync();
+		const notes = fold("pm_meeting_discuss", noteEditor.box, noteEditor.locked());
+		notes.hidden = detail.meeting.status === "completed" && !noteEditor.locked();
+		holder.append(notes);
+		const draft = draftEditor();
+		draft.element.hidden = detail.meeting.status === "completed" && !draft.editor.locked();
+		holder.append(draft.element);
+		const draftId = hidden(detail.draft?.revision_id || null), summary = input("pm_meeting_summary", {
+			multiline: true,
+			max: 8e3
+		}), completeReason = reason();
+		const selected = hidden([]), choices = h("div");
+		let completion;
+		const decisionControls = [];
+		const addDecision = (item) => {
+			const node = h("input", {
+				type: "checkbox",
+				onchange: () => {
+					if (!completion || completion.locked() || !owner() || stale) return;
+					const values = JSON.parse(selected.value).filter((id) => id !== item.id);
+					if (node.checked) values.push(item.id);
+					selected.value = JSON.stringify(values);
+					completion.changed();
+					dirty = true;
+				}
+			});
+			choices.append(h("label", { class: "pm-fact-heading" }, node, item.text));
+			decisionControls.push([node, item.id]);
+		};
+		(detail.draft?.document.decisions || []).forEach(addDecision);
+		const syncDecisions = () => {
+			for (const [node, id] of decisionControls) {
+				node.checked = JSON.parse(selected.value).includes(id);
+				node.disabled = !owner() || stale || Boolean(completion?.locked());
+			}
+		};
+		completion = localForm({
+			action: "pm.meeting.complete",
+			target: target(),
+			fields: {
+				draft_revision_id: draftId,
+				discussion_summary: summary,
+				decision_ids: selected,
+				rationale: completeReason
+			},
+			preconditions: pre,
+			context: {
+				revision_id: detail.context.context_revision_id,
+				draft_revision_id: detail.draft?.revision_id || null
+			},
+			permitted: () => owner() && model.detail.meeting.status === "draft" && Boolean(detail.draft),
+			label: "pm_meeting_complete",
+			onStateChange: syncDecisions,
+			extra: h("div", { class: "pm-fields" }, note("pm_meeting_complete_help"), !owner() ? note("pm_meeting_owner_only") : "", labelled("pm_meeting_summary", summary), choices, note("pm_meeting_decision_help"), labelled("pm_meeting_reason", completeReason)),
+			params: (values) => ({
+				...values,
+				draft_revision_id: JSON.parse(values.draft_revision_id),
+				decision_ids: JSON.parse(values.decision_ids)
+			})
+		});
+		for (const id of JSON.parse(selected.value)) if (!decisionControls.some(([, key]) => key === id)) addDecision({
+			id,
+			text: `${t("pm_meeting_source_unavailable")} · ${id}`
+		});
+		if (reviewing && !completion.locked()) completion.set("draft_revision_id", JSON.stringify(detail.draft?.revision_id || null));
+		syncDecisions();
+		const completeBox = fold("pm_meeting_complete", completion.box, completion.locked());
+		completeBox.hidden = detail.meeting.status === "completed" && !completion.locked();
+		holder.append(completeBox);
+		const snapshots = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${row.as_of}`]), context.snapshot_ref.snapshot_id), contextReason = reason();
+		const sprint = model.sprints.find((row) => row.sprint_id === detail.meeting.sprint_id);
+		const revise = localForm({
+			action: "pm.meeting.context.revise",
+			target: target(),
+			fields: {
+				snapshot_id: snapshots,
+				rationale: contextReason
+			},
+			preconditions: () => ({
+				...pre(),
+				expected_sprint_version: sprint?.version
+			}),
+			context: detail.context.context_revision_id,
+			permitted: () => can() && Boolean(sprint) && model.detail.meeting.status === "draft",
+			label: "pm_meeting_context_save",
+			params: (values) => values,
+			extra: h("div", { class: "pm-fields" }, note("pm_meeting_context_help"), labelled("pm_meeting_snapshot", snapshots), labelled("pm_meeting_reason", contextReason))
+		});
+		const reviseBox = fold("pm_meeting_context_change", revise.box, revise.locked());
+		reviseBox.hidden = detail.meeting.status === "completed" && !revise.locked();
+		holder.append(reviseBox);
+		const items = detail.completion?.document.follow_ups || [], allowedItems = items.filter((item) => owner() || item.owner_actor === caps()?.actor), followId = options("pm_meeting_follow_choice", allowedItems.map((item) => [item.id, `${item.text} · ${item.owner_actor}`]), allowedItems[0]?.id || "");
+		const state = options("pm_meeting_follow_status", [
+			"open",
+			"blocked",
+			"reported_done"
+		].map((key) => [key, t("pm_meeting_" + key)]), "open"), result = input("pm_meeting_follow_result", {
+			multiline: true,
+			max: 8e3
+		}), followReason = reason();
+		const snapshot = options("pm_meeting_result_snapshot", [["", t("pm_meeting_keep_snapshot")], ...model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${row.as_of}`])]);
+		const follow = localForm({
+			action: "pm.meeting.follow_up.record",
+			target: target(),
+			fields: {
+				follow_up_id: followId,
+				status: state,
+				result,
+				rationale: followReason,
+				snapshot_id: snapshot
+			},
+			preconditions: pre,
+			context: detail.meeting.completion_id,
+			permitted: () => can() && detail.meeting.status === "completed" && items.some((item) => item.id === followId.value && (owner() || item.owner_actor === caps()?.actor && ["owner", "contributor"].includes(role(caps()?.actor)))),
+			label: "pm_meeting_save_result",
+			params: (values) => {
+				const { snapshot_id, ...rest } = values;
+				return {
+					...rest,
+					...snapshot_id ? { snapshot_id } : {},
+					source_refs: []
+				};
+			},
+			extra: h("div", { class: "pm-fields" }, note("pm_meeting_follow_help"), labelled("pm_meeting_follow_choice", followId), labelled("pm_meeting_follow_status", state), labelled("pm_meeting_follow_result", result), labelled("pm_meeting_result_snapshot", snapshot), labelled("pm_meeting_reason", followReason))
+		});
+		followId.addEventListener("change", () => follow.update());
+		const followBox = fold("pm_meeting_record_result", follow.box, follow.locked());
+		followBox.hidden = !items.length && !follow.locked();
+		holder.append(followBox);
+		return holder;
+	}
+	function creationEditor() {
+		const initial = model.sprints.some((row) => row.sprint_id === navigation.sprint_id) ? navigation.sprint_id : model.sprints.find((row) => row.status === "active")?.sprint_id || model.sprints[0]?.sprint_id || "";
+		const holder = h("div", { class: "pm-fields" }), sprint = options("pm_meeting_sprint", model.sprints.map((row) => [row.sprint_id, row.definition.title]), initial), slot = h("div");
+		holder.append(labelled("pm_meeting_sprint", sprint), slot);
+		let current;
+		const render = () => {
+			const selected = model.sprints.find((row) => row.sprint_id === sprint.value);
+			if (!selected) {
+				slot.replaceChildren(note("pm_meeting_sprint_required"));
+				return;
+			}
+			const title = input("pm_meeting_name", { max: 200 }), kind = options("pm_meeting_kind", [
+				"planning",
+				"review",
+				"retro"
+			].map((key) => [key, t("pm_meeting_" + key)]), "planning"), snapshot = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${row.as_of}`]), model.snapshots.at(-1)?.snapshot_id || ""), rationale = reason();
+			current = localForm({
+				action: "pm.meeting.create",
+				target: {
+					workspace_id: workspaceId,
+					sprint_id: selected.sprint_id
+				},
+				fields: {
+					title,
+					kind,
+					snapshot_id: snapshot,
+					rationale
+				},
+				preconditions: () => ({ expected_sprint_version: selected.version }),
+				permitted: () => can() && model.snapshots.length > 0 && (kind.value === "planning" || Boolean(selected.started_at)),
+				label: "pm_meeting_create",
+				params: (values) => values,
+				extra: h("div", { class: "pm-fields" }, labelled("pm_meeting_name", title), labelled("pm_meeting_kind", kind), note("pm_meeting_started_help"), labelled("pm_meeting_snapshot", snapshot), !model.snapshots.length ? note("pm_meeting_snapshot_required") : "", labelled("pm_meeting_reason", rationale))
+			});
+			kind.addEventListener("change", () => current.update());
+			slot.replaceChildren(current.box);
+			update();
+		};
+		sprint.addEventListener("change", () => {
+			remember("sprint_id", sprint.value);
+			render();
+		});
+		render();
+		return fold("pm_meeting_new", holder, !model.detail || Boolean(current?.locked()));
+	}
+	function renderEditors(reviewBaselines = false) {
+		const meetingId = model.detail?.meeting.meeting_id || null;
+		const expanded = editorMeetingId === meetingId ? new Set([...editors.querySelectorAll("details[open][data-pm-fold]")].map((node) => node.dataset.pmFold)) : new Set();
+		const focused = editors.contains(document.activeElement) ? document.activeElement : null;
+		const action = focused?.closest("[data-pm-action]")?.dataset.pmAction;
+		const field = focused?.getAttribute("aria-label");
+		const selection = focused && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
+		stale = false;
+		dirty = false;
+		forms = [];
+		reviewing = reviewBaselines;
+		editors.replaceChildren();
+		if (model.detail) editors.append(meetingEditors());
+		editors.append(creationEditor());
+		reviewing = false;
+		update();
+		for (const node of editors.querySelectorAll("details[data-pm-fold]")) if (expanded.has(node.dataset.pmFold)) node.open = true;
+		if (editorMeetingId === meetingId && action && field) {
+			const replacement = editors.querySelector(`[data-pm-action="${CSS.escape(action)}"] [aria-label="${CSS.escape(field)}"]`);
+			if (replacement && !replacement.disabled) {
+				replacement.focus({ preventScroll: true });
+				if (selection) replacement.setSelectionRange(...selection);
+			}
+		}
+		editorMeetingId = meetingId;
+	}
+	async function pages(suffix, property) {
+		let after = 0, records = [];
+		for (let count = 0; count < 20; count++) {
+			const page = await api("GET", `${endpoint}/${suffix}?after=${after}&limit=50`);
+			alive();
+			if (page.workspace_id !== void 0) check(page);
+			if (!Array.isArray(page[property])) throw Error(t("pm_scope_mismatch"));
+			for (const row of page[property]) check(row);
+			records.push(...page[property]);
+			if (page.next_cursor == null) return records;
+			if (!Number.isInteger(page.next_cursor) || page.next_cursor <= after) throw Error(t("pm_scope_mismatch"));
+			after = page.next_cursor;
+		}
+		throw Error(t("pm_meeting_partial"));
+	}
+	async function refresh(force = false) {
+		const focused = element.contains(document.activeElement) ? document.activeElement : null;
+		const selection = focused && typeof focused.selectionStart === "number" ? [focused.selectionStart, focused.selectionEnd] : null;
+		const ticket = ++serial;
+		loaded = false;
+		update();
+		status.replaceChildren();
+		try {
+			const [meetings, sprints, snapshots] = await Promise.all([
+				pages("meetings", "meetings"),
+				pages("sprints", "sprints"),
+				pages("snapshots", "snapshots")
+			]);
+			alive();
+			if (ticket !== serial) return;
+			if (!meetings.some((row) => row.meeting_id === selectedId)) selectedId = meetings.at(-1)?.meeting_id || "";
+			const detail = selectedId ? check(await api("GET", `${endpoint}/meetings/${selectedId}?history_limit=20`)) : null;
+			alive();
+			if (ticket !== serial) return;
+			if (detail && (check(detail.meeting).meeting_id !== selectedId || detail.context?.meeting_id !== selectedId || detail.context.context_revision_id !== detail.meeting.context_revision_id || detail.context.document.sprint_id !== detail.meeting.sprint_id || check(detail.snapshot).snapshot_id !== detail.context.document.snapshot_ref.snapshot_id || detail.draft && (detail.draft.meeting_id !== selectedId || detail.draft.revision_id !== detail.meeting.draft_revision_id) || detail.completion && (detail.completion.meeting_id !== selectedId || detail.completion.completion_id !== detail.meeting.completion_id))) throw Error(t("pm_scope_mismatch"));
+			const next = JSON.stringify([
+				selectedId,
+				detail?.meeting.version,
+				sprints.map((row) => [row.sprint_id, row.version]),
+				snapshots.map((row) => row.snapshot_id),
+				workspace()?.version
+			]);
+			const changed = signature && signature !== next;
+			model = {
+				meetings,
+				sprints,
+				snapshots,
+				detail
+			};
+			loaded = true;
+			editors.hidden = false;
+			choose.replaceChildren(...meetings.length ? meetings.map((row) => h("option", { value: row.meeting_id }, `${row.title} · ${t("pm_meeting_" + row.kind)} · ${t("pm_meeting_" + row.status)}`)) : [h("option", { value: "" }, t("pm_meeting_empty"))]);
+			choose.value = selectedId;
+			renderView();
+			if (force || !signature || changed && !dirty && !forms.some((editor) => editor.locked())) renderEditors();
+			else if (changed) stale = true;
+			signature = next;
+			update();
+			if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {
+				focused.focus({ preventScroll: true });
+				if (selection) focused.setSelectionRange(...selection);
+			}
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		}
+	}
+	return {
+		element,
+		refresh
 	};
 }
 //#endregion
@@ -2878,6 +4044,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (roadmap) body.insertBefore(roadmap.box, content);
+	const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban ? workspaceKanban({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	}) : null;
+	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
 		h,
 		t,
@@ -2893,6 +4068,30 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps
 	}) : null;
 	if (sprints) body.insertBefore(sprints.box, content);
+	const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox,
+		caps
+	}) : null;
+	if (meetings) body.insertBefore(meetings.element, content);
+	const sourceSections = () => [
+		content,
+		evidence?.box,
+		brief?.box,
+		roadmap?.box,
+		kanban?.element,
+		sprints?.box,
+		meetings?.element
+	].filter(Boolean);
 	const noteCache = new Map();
 	const selectedSourcesForm = () => threadData?.thread.mode === "planning" && planningRevisionForm ? planningRevisionForm : planForm;
 	const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide && (threadData.thread.mode === "idea" || Boolean(planningRevisionForm));
@@ -3135,7 +4334,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				recoverPermitted: decide,
 				onStateChange: () => {
 					const section = planForm?.box.closest("[data-pm-plan]");
-					if (section) section.hidden = threadData.thread.mode !== "idea" && !planForm.locked() || !threadData.capabilities?.decide;
+					if (section) section.hidden = threadData?.thread.mode !== "idea" && !planForm.locked() || !threadData?.capabilities?.decide;
 					updateSourceControls();
 				},
 				extra: h("div", {}, selected, labelled("pm_plan_rationale", rationale), h("p", { class: "muted" }, t("pm_plan_help")))
@@ -3473,15 +4672,29 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 			if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
 			worktreeChoice?.update();
-			if (evidence) await evidence.refresh();
-			if (brief) await brief.refresh();
-			if (roadmap) await roadmap.refresh();
-			if (sprints) await sprints.refresh();
+			for (const section of [
+				evidence,
+				brief,
+				roadmap,
+				kanban,
+				sprints,
+				meetings
+			]) {
+				if (section) await section.refresh();
+				alive();
+				if (ticket !== sequence) return;
+			}
 			nativeAnalysis?.update(runs?.runs || []);
+			for (const section of sourceSections()) section.hidden = false;
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
 				loaded = false;
+				workspace = null;
+				threadData = null;
+				title.textContent = t("pm_title");
+				workspaceList.replaceChildren();
+				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
 				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
 			}
@@ -3502,9 +4715,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_plan",
 			"pm_evidence",
 			"pm_snapshot",
-			"pm_roadmap"
+			"pm_roadmap",
+			"pm_sprint",
+			"pm_meeting"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
+			return eventReads;
+		}
+		if (kanban && [
+			"work_item",
+			"project",
+			"task",
+			"command",
+			"operation",
+			"session"
+		].includes(event.resource_type)) {
+			eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());
 			return eventReads;
 		}
 	});
@@ -7396,7 +8622,7 @@ var pmSprintStrings = {
 		pm_sprint_none: "None",
 		pm_sprint_mode: "Management mode",
 		pm_sprint_personal: "Personal iteration",
-		pm_sprint_scrum: "Scrum artifacts · events not yet implemented",
+		pm_sprint_scrum: "Scrum artifacts · conformance not established",
 		pm_sprint_name: "Sprint name",
 		pm_sprint_start_at: "Start (UTC)",
 		pm_sprint_end_at: "End (UTC)",
@@ -7448,6 +8674,11 @@ var pmSprintStrings = {
 		pm_sprint_active: "Active",
 		pm_sprint_closed: "Closed",
 		pm_sprint_cancelled: "Cancelled",
+		pm_sprint_closure_pending: "The end-of-period record has not been loaded yet. More decision history is available.",
+		pm_sprint_closure_unavailable: "The Sprint has ended, but its end-of-period record is unavailable in the returned history.",
+		pm_sprint_load_closure: "Load next decision history page",
+		pm_sprint_history_loading: "Loading decision history…",
+		pm_sprint_history_partial: "More history remains to be loaded.",
 		pm_sprint_closure: "End-of-period record",
 		pm_sprint_reconsider: "Requires Product Backlog consideration",
 		pm_sprint_no_carryover: "Nothing is automatically carried into another Sprint. Review and Retrospective are not recorded by closing.",
@@ -7486,7 +8717,7 @@ var pmSprintStrings = {
 		pm_sprint_none: "無",
 		pm_sprint_mode: "管理模式",
 		pm_sprint_personal: "個人迭代",
-		pm_sprint_scrum: "Scrum 產物模式・尚未實作完整事件",
+		pm_sprint_scrum: "Scrum 產物模式・尚未完整符合",
 		pm_sprint_name: "Sprint 名稱",
 		pm_sprint_start_at: "開始時間（UTC）",
 		pm_sprint_end_at: "結束時間（UTC）",
@@ -7538,6 +8769,11 @@ var pmSprintStrings = {
 		pm_sprint_active: "進行中",
 		pm_sprint_closed: "已結束",
 		pm_sprint_cancelled: "已取消",
+		pm_sprint_closure_pending: "本輪結束紀錄尚未載入，仍有後續決策歷史可讀取。",
+		pm_sprint_closure_unavailable: "Sprint 已結束，但回傳的歷史中無法取得本輪結束紀錄。",
+		pm_sprint_load_closure: "載入下一頁決策歷史",
+		pm_sprint_history_loading: "正在載入決策歷史…",
+		pm_sprint_history_partial: "仍有尚未載入的歷史。",
 		pm_sprint_closure: "本輪結束紀錄",
 		pm_sprint_reconsider: "待重新考慮產品待辦",
 		pm_sprint_no_carryover: "不會自動搬入下一輪工作。結束本輪也不代表已完成 Review 或 Retro。",
@@ -7548,10 +8784,460 @@ var pmSprintStrings = {
 	}
 };
 //#endregion
+//#region src/pm-kanban-strings.js
+var pmKanbanStrings = {
+	en: {
+		pm_kanban_title: "Work flow",
+		pm_kanban_intro: "One work item per row, with its current activity and recorded evidence.",
+		pm_kanban_refresh: "Refresh work flow",
+		pm_kanban_retry: "Retry work flow",
+		pm_kanban_loading: "Reading work flow…",
+		pm_kanban_empty: "No work has been explicitly associated with this workspace.",
+		pm_kanban_more: "Load more work",
+		pm_kanban_partial: "More work remains outside this page.",
+		pm_kanban_bounded: "This read was shortened to fit the response limit.",
+		pm_kanban_loaded: "{count} distinct work items shown",
+		pm_kanban_wip: "Latest page: {count} WIP · {unknown} unknown · {cards} unarchived work items",
+		pm_kanban_wip_basis: "WIP runs from recorded start to content approval. Archived work is excluded.",
+		pm_kanban_quality: "Content approval does not establish DoD, passing tests or a verified deployment.",
+		pm_kanban_limits: "WIP limits, resource capacity and work dependencies are not configured here.",
+		pm_kanban_read_at: "Read at",
+		pm_kanban_page_at: "Page summary at",
+		pm_kanban_stage: "Management stage",
+		pm_kanban_unknown: "Unknown",
+		pm_kanban_age: "Work age",
+		pm_kanban_cycle: "Management cycle",
+		pm_kanban_wait: "Current waiting",
+		pm_kanban_attempts: "{count} accepted sends",
+		pm_kanban_attempt_basis: "Returned visible send identities; not a count of completed work.",
+		pm_kanban_no_execution: "No visible linked execution",
+		pm_kanban_quality_unknown: "DoD unassessed",
+		pm_kanban_detail: "Execution and sources",
+		pm_kanban_detail_loading: "Checking current source access…",
+		pm_kanban_execution: "Current execution read",
+		pm_kanban_capture: "Saved evidence snapshot",
+		pm_kanban_no_capture: "No saved evidence snapshot",
+		pm_kanban_capture_different: "This snapshot describes an earlier binding or work version.",
+		pm_kanban_capture_time: "Captured at",
+		pm_kanban_source_time: "Source observed at",
+		pm_kanban_missing: "Some linked sources are unavailable to this read.",
+		pm_kanban_truncated: "Source coverage is limited.",
+		pm_kanban_unsupported: "Some linked source types are not projected in this view.",
+		pm_kanban_saved_only: "Saved central records; hosts and providers were not checked by this read.",
+		pm_kanban_history_unknown: "Recorded flow history cannot establish reliable timing.",
+		pm_kanban_versions: "Fixed work association",
+		pm_kanban_binding: "Binding",
+		pm_kanban_plan: "Plan revision",
+		pm_kanban_requirements: "Requirements",
+		pm_kanban_unassigned: "Not associated",
+		pm_kanban_work_version: "Current work version",
+		pm_kanban_bound_version: "Work version when associated",
+		pm_kanban_assignment: "Assignee unknown",
+		pm_kanban_dependencies: "Work dependencies unknown",
+		pm_kanban_task: "Task",
+		pm_kanban_operation: "Operation",
+		pm_kanban_session: "Session",
+		pm_kanban_attempt: "Send identity",
+		pm_kanban_accepted: "Acceptance recorded",
+		pm_kanban_accept_unknown: "Acceptance unknown",
+		pm_kanban_stream_unknown: "Live activity unknown",
+		pm_kanban_reopened: "Recorded reopenings",
+		pm_kanban_seconds: "Under 1 minute",
+		pm_kanban_minutes: "{count} min",
+		pm_kanban_hours: "{count} h",
+		pm_kanban_days: "{count} d",
+		pm_kanban_scope_error: "The work-flow response does not match this workspace or page.",
+		pm_kanban_state_backlog: "Backlog",
+		pm_kanban_state_in_progress: "In progress",
+		pm_kanban_state_waiting: "Waiting",
+		pm_kanban_state_review: "Review / verify",
+		pm_kanban_state_accepted: "Accepted",
+		pm_kanban_content_approved: "Content approved",
+		pm_kanban_state_archived: "Archived",
+		pm_kanban_state_queued: "Queued",
+		pm_kanban_state_dispatching: "Dispatching",
+		pm_kanban_state_running: "Running",
+		pm_kanban_state_waiting_permission: "Waiting for permission",
+		pm_kanban_state_quota_limited: "Quota limited",
+		pm_kanban_state_human_owned: "Human controlled",
+		pm_kanban_state_needs_ted: "Needs attention",
+		pm_kanban_state_verifying: "Verifying",
+		pm_kanban_state_done: "Reported done",
+		pm_kanban_state_failed: "Failed",
+		pm_kanban_state_uncertain: "Uncertain",
+		pm_kanban_state_needs_attention: "Needs attention",
+		pm_kanban_state_pending: "Pending",
+		pm_kanban_state_succeeded: "Operation succeeded",
+		pm_kanban_state_cancelled: "Cancelled",
+		pm_kanban_state_settled: "Settled",
+		pm_kanban_state_needs_review: "Needs review",
+		pm_kanban_state_rejected: "Rejected",
+		pm_kanban_state_intent: "Intent recorded",
+		pm_kanban_state_passed: "Passed",
+		pm_kanban_state_verified: "Verified",
+		pm_kanban_state_unverified: "Unverified",
+		pm_kanban_state_merged: "Merged",
+		pm_kanban_state_open: "Open",
+		pm_kanban_source_operation_status: "Operation record",
+		pm_kanban_source_execution_state: "Task record",
+		pm_kanban_source_execution_command: "Command record",
+		pm_kanban_source_observed_verification: "Recorded verification",
+		pm_kanban_source_resource_relation: "Resource association",
+		pm_kanban_source_pr_observation: "PR observation",
+		pm_kanban_source_pr_merge: "Verified merge receipt",
+		pm_kanban_source_integration_delivery: "Integration delivery",
+		pm_kanban_source_deployment: "Deployment record",
+		pm_kanban_source_work_claim: "Work claim and approval",
+		pm_kanban_source_work_link: "Work source link",
+		pm_kanban_source_session_observation: "Session observation",
+		pm_kanban_fact: "Recorded fact",
+		pm_kanban_field_status: "Status",
+		pm_kanban_field_state: "State",
+		pm_kanban_field_verification: "Verification",
+		pm_kanban_field_deployment: "Deployment",
+		pm_kanban_field_delivery: "Delivery",
+		pm_kanban_field_merge_verified: "Merge verified",
+		pm_kanban_yes: "Yes",
+		pm_kanban_no: "No"
+	},
+	"zh-TW": {
+		pm_kanban_title: "工作流",
+		pm_kanban_intro: "一項工作一列，同時查看目前活動與已記錄證據。",
+		pm_kanban_refresh: "重新整理工作流",
+		pm_kanban_retry: "重試工作流",
+		pm_kanban_loading: "正在讀取工作流…",
+		pm_kanban_empty: "這個工作區尚未明確關聯任何工作。",
+		pm_kanban_more: "載入更多工作",
+		pm_kanban_partial: "這一頁以外還有其他工作。",
+		pm_kanban_bounded: "本次讀取因回應大小限制而縮短。",
+		pm_kanban_loaded: "已顯示 {count} 項不同工作",
+		pm_kanban_wip: "最近一頁：{count} 項 WIP・{unknown} 項未知・{cards} 項未封存工作",
+		pm_kanban_wip_basis: "WIP 從記錄的開始時間算至內容核可，封存工作不列入。",
+		pm_kanban_quality: "內容核可不代表符合 DoD、測試通過或部署已驗證。",
+		pm_kanban_limits: "這裡尚未設定 WIP 上限、資源容量與工作依賴。",
+		pm_kanban_read_at: "讀取時間",
+		pm_kanban_page_at: "本頁摘要時間",
+		pm_kanban_stage: "管理階段",
+		pm_kanban_unknown: "未知",
+		pm_kanban_age: "進行時間",
+		pm_kanban_cycle: "管理週期",
+		pm_kanban_wait: "目前等待",
+		pm_kanban_attempts: "{count} 次已受理派送",
+		pm_kanban_attempt_basis: "僅計算本次可見派送身分，不是完成工作數。",
+		pm_kanban_no_execution: "沒有可見的關聯執行",
+		pm_kanban_quality_unknown: "DoD 尚未評估",
+		pm_kanban_detail: "執行與來源",
+		pm_kanban_detail_loading: "正在核對目前來源存取權…",
+		pm_kanban_execution: "目前執行讀取",
+		pm_kanban_capture: "已保存的證據快照",
+		pm_kanban_no_capture: "尚無已保存的證據快照",
+		pm_kanban_capture_different: "這份快照對應較早的關聯或工作版本。",
+		pm_kanban_capture_time: "擷取時間",
+		pm_kanban_source_time: "來源觀察時間",
+		pm_kanban_missing: "本次讀取無法取得部分關聯來源。",
+		pm_kanban_truncated: "來源涵蓋範圍有限。",
+		pm_kanban_unsupported: "這個畫面尚未呈現部分關聯來源類型。",
+		pm_kanban_saved_only: "內容來自中央已保存紀錄；本次讀取未查詢主機或服務供應者。",
+		pm_kanban_history_unknown: "現有工作流歷史不足以確認可靠時間。",
+		pm_kanban_versions: "固定工作關聯",
+		pm_kanban_binding: "關聯",
+		pm_kanban_plan: "計畫版本",
+		pm_kanban_requirements: "需求",
+		pm_kanban_unassigned: "尚未關聯",
+		pm_kanban_work_version: "目前工作版本",
+		pm_kanban_bound_version: "建立關聯時的工作版本",
+		pm_kanban_assignment: "負責人未知",
+		pm_kanban_dependencies: "工作依賴未知",
+		pm_kanban_task: "任務",
+		pm_kanban_operation: "操作",
+		pm_kanban_session: "工作階段",
+		pm_kanban_attempt: "派送身分",
+		pm_kanban_accepted: "已記錄受理",
+		pm_kanban_accept_unknown: "受理情況未知",
+		pm_kanban_stream_unknown: "即時活動未知",
+		pm_kanban_reopened: "已記錄的重開次數",
+		pm_kanban_seconds: "不到 1 分鐘",
+		pm_kanban_minutes: "{count} 分鐘",
+		pm_kanban_hours: "{count} 小時",
+		pm_kanban_days: "{count} 天",
+		pm_kanban_scope_error: "工作流回應與這個工作區或分頁不相符。",
+		pm_kanban_state_backlog: "待辦",
+		pm_kanban_state_in_progress: "進行中",
+		pm_kanban_state_waiting: "等待中",
+		pm_kanban_state_review: "檢視／驗證",
+		pm_kanban_state_accepted: "已受理",
+		pm_kanban_content_approved: "內容已核可",
+		pm_kanban_state_archived: "已封存",
+		pm_kanban_state_queued: "排隊中",
+		pm_kanban_state_dispatching: "派送中",
+		pm_kanban_state_running: "執行中",
+		pm_kanban_state_waiting_permission: "等待權限",
+		pm_kanban_state_quota_limited: "額度受限",
+		pm_kanban_state_human_owned: "由人控制",
+		pm_kanban_state_needs_ted: "需要處理",
+		pm_kanban_state_verifying: "驗證中",
+		pm_kanban_state_done: "回報完成",
+		pm_kanban_state_failed: "失敗",
+		pm_kanban_state_uncertain: "結果不明",
+		pm_kanban_state_needs_attention: "需要處理",
+		pm_kanban_state_pending: "待處理",
+		pm_kanban_state_succeeded: "操作成功",
+		pm_kanban_state_cancelled: "已取消",
+		pm_kanban_state_settled: "已收尾",
+		pm_kanban_state_needs_review: "需要檢視",
+		pm_kanban_state_rejected: "已拒絕",
+		pm_kanban_state_intent: "意圖已記錄",
+		pm_kanban_state_passed: "通過",
+		pm_kanban_state_verified: "已驗證",
+		pm_kanban_state_unverified: "尚未驗證",
+		pm_kanban_state_merged: "已合併",
+		pm_kanban_state_open: "開啟中",
+		pm_kanban_source_operation_status: "操作紀錄",
+		pm_kanban_source_execution_state: "任務紀錄",
+		pm_kanban_source_execution_command: "命令紀錄",
+		pm_kanban_source_observed_verification: "已記錄驗證",
+		pm_kanban_source_resource_relation: "資源關聯",
+		pm_kanban_source_pr_observation: "PR 觀察",
+		pm_kanban_source_pr_merge: "已核對合併收據",
+		pm_kanban_source_integration_delivery: "整合交付",
+		pm_kanban_source_deployment: "部署紀錄",
+		pm_kanban_source_work_claim: "工作宣稱與核可",
+		pm_kanban_source_work_link: "工作來源連結",
+		pm_kanban_source_session_observation: "工作階段觀察",
+		pm_kanban_fact: "已記錄事實",
+		pm_kanban_field_status: "狀態",
+		pm_kanban_field_state: "狀態",
+		pm_kanban_field_verification: "驗證",
+		pm_kanban_field_deployment: "部署",
+		pm_kanban_field_delivery: "交付",
+		pm_kanban_field_merge_verified: "合併已驗證",
+		pm_kanban_yes: "是",
+		pm_kanban_no: "否"
+	}
+};
+//#endregion
+//#region src/pm-meetings-strings.js
+var pmMeetingStrings = {
+	en: {
+		pm_meeting_title: "Sprint discussions",
+		pm_meeting_intro: "Plan the work, inspect results and improve collaboration with the original evidence in view.",
+		pm_meeting_choose: "Meeting",
+		pm_meeting_refresh: "Refresh meetings",
+		pm_meeting_empty: "No meeting has been recorded.",
+		pm_meeting_stale: "The source version changed. Your draft and any original request are preserved. Review the updated baseline before a new submission.",
+		pm_meeting_rebase: "Review updated meeting baseline",
+		pm_meeting_unknown: "Unknown",
+		pm_meeting_reason: "Reason for this record",
+		pm_meeting_snapshot: "Saved project snapshot",
+		pm_meeting_goal: "Sprint Goal",
+		pm_meeting_sprint_goal: "Sprint Goal revision",
+		pm_meeting_selection: "Selected work revision",
+		pm_meeting_product_goal: "Product Goal",
+		pm_meeting_backlog: "Product Backlog",
+		pm_meeting_dod: "Definition of Done",
+		pm_meeting_evidence: "Evidence",
+		pm_meeting_note: "Discussion note",
+		pm_meeting_source_unavailable: "Source outside the current context — remove it before saving",
+		pm_meeting_sources: "Source references",
+		pm_meeting_source_help: "Choose references from this fixed context. Discussion claims remain unverified.",
+		pm_meeting_how_missing: "Implementation approach is not recorded.",
+		pm_meeting_quality: "DoD and improvement effects are unassessed. A discussion record does not prove completion of the work.",
+		pm_meeting_fixed_context: "Fixed context: selected work and quality commitments",
+		pm_meeting_source_frozen: "This meeting keeps its saved source versions. Refreshing the page does not replace them.",
+		pm_meeting_draft: "Draft",
+		pm_meeting_completed: "Discussion completed",
+		pm_meeting_planning: "Planning",
+		pm_meeting_review: "Review",
+		pm_meeting_retro: "Retrospective",
+		pm_meeting_saved_draft: "Saved discussion draft",
+		pm_meeting_draft_help: "Saving an outline or report keeps the meeting in draft.",
+		pm_meeting_why: "Why this Sprint matters",
+		pm_meeting_delivery_approach: "Delivery approach",
+		pm_meeting_capacity_discussion: "Capacity and availability discussed",
+		pm_meeting_dependency_notes: "Dependencies (one per line)",
+		pm_meeting_what_how: "What and each developer’s How come from the fixed Sprint selection above.",
+		pm_meeting_goal_review: "What the results mean for the Goal",
+		pm_meeting_outcome: "Observed result",
+		pm_meeting_feedback: "Feedback (one point per line)",
+		pm_meeting_environment_changes: "Relevant changes (one per line)",
+		pm_meeting_next_steps: "Next direction (one point per line)",
+		pm_meeting_review_help: "Review needs feedback and a next direction. Continuing the current direction or observing is valid; new work is optional.",
+		pm_meeting_unreviewed: "These selected items have not been discussed in the saved outcomes:",
+		pm_meeting_observations: "Process and collaboration observations (one per line)",
+		pm_meeting_previous_improvement_review: "What happened to previous improvements",
+		pm_meeting_no_improvement_rationale: "If adopting no improvement, explain why",
+		pm_meeting_retro_help: "Choose a few owned improvements, or explain why this reflection adopts none.",
+		pm_meeting_decisions: "Decision proposals",
+		pm_meeting_proposal: "Proposal; scope is unchanged",
+		pm_meeting_decision_text: "Proposed decision",
+		pm_meeting_decision_reason: "Reason for the proposed decision",
+		pm_meeting_add_decision: "Add decision proposal",
+		pm_meeting_remove: "Remove",
+		pm_meeting_follow_ups: "Improvements and follow-up",
+		pm_meeting_follow_text: "Improvement or follow-up",
+		pm_meeting_owner: "Responsible person",
+		pm_meeting_expected_effect: "Expected effect",
+		pm_meeting_verification: "How the result will be checked",
+		pm_meeting_add_followup: "Add follow-up",
+		pm_meeting_follow_help: "Record responsibility and a way to check the result. This does not create or dispatch a work item.",
+		pm_meeting_assigned: "Responsible: {actor}",
+		pm_meeting_unresolved_questions: "Unresolved questions (one per line)",
+		pm_meeting_edit_draft: "Prepare discussion draft",
+		pm_meeting_save_draft: "Save discussion draft",
+		pm_meeting_note_text: "Discussion note",
+		pm_meeting_save_note: "Save discussion note",
+		pm_meeting_discuss: "Record the discussion",
+		pm_meeting_summary: "What was discussed and concluded",
+		pm_meeting_complete: "Complete discussion",
+		pm_meeting_complete_help: "Complete the exact saved draft after recording the actual discussion. This is a meeting record, not a quality or delivery approval.",
+		pm_meeting_owner_only: "Only the Sprint’s designated owner, with current workspace owner access, can complete this discussion.",
+		pm_meeting_decision_help: "Select the proposals actually decided in this discussion. Recording them does not adopt scope changes.",
+		pm_meeting_recorded_decision: "Recorded discussion decision; scope is unchanged",
+		pm_meeting_recorded_by: "Recorded by {actor}",
+		pm_meeting_completion_help: "The designated owner recorded the discussion. Attendance and quality are not independently verified.",
+		pm_meeting_context_change: "Update fixed context",
+		pm_meeting_context_save: "Save new meeting context",
+		pm_meeting_context_help: "Explicitly capture the current Sprint and a chosen snapshot. The previous notes and draft stay in history; a new draft and discussion are needed for this context.",
+		pm_meeting_follow_choice: "Follow-up to update",
+		pm_meeting_follow_status: "Reported status",
+		pm_meeting_open: "Open",
+		pm_meeting_blocked: "Blocked",
+		pm_meeting_reported_done: "Reported done — unverified",
+		pm_meeting_follow_result: "Result and remaining uncertainty",
+		pm_meeting_result_snapshot: "Evidence snapshot for this result",
+		pm_meeting_keep_snapshot: "Keep the meeting’s original snapshot",
+		pm_meeting_save_result: "Record follow-up result",
+		pm_meeting_record_result: "Follow up on improvements",
+		pm_meeting_sprint: "Sprint",
+		pm_meeting_sprint_required: "Plan a Sprint before creating a meeting.",
+		pm_meeting_snapshot_required: "Save a visible project snapshot before creating a meeting.",
+		pm_meeting_name: "Meeting title",
+		pm_meeting_kind: "Discussion type",
+		pm_meeting_started_help: "Review and Retrospective require a Sprint that has actually started.",
+		pm_meeting_create: "Create meeting draft",
+		pm_meeting_new: "New Sprint discussion",
+		pm_meeting_partial: "The source list is incomplete. Narrow the workspace or retry before creating a record.",
+		pm_meeting_history: "Discussion and source history",
+		pm_meeting_history_notes: "Discussion notes",
+		pm_meeting_history_follow_ups: "Follow-up results",
+		pm_meeting_history_contexts: "Context revisions",
+		pm_meeting_history_drafts: "Draft revisions",
+		pm_meeting_more: "More {kind}"
+	},
+	"zh-TW": {
+		pm_meeting_title: "Sprint 討論",
+		pm_meeting_intro: "根據原始證據規劃工作、檢視成果，並改善合作方式。",
+		pm_meeting_choose: "會議",
+		pm_meeting_refresh: "更新會議資料",
+		pm_meeting_empty: "尚未建立會議紀錄。",
+		pm_meeting_stale: "來源版本已變更。草稿與原操作請求均已保留；送出新操作前，請檢視更新後的基準。",
+		pm_meeting_rebase: "檢視更新後的會議基準",
+		pm_meeting_unknown: "未知",
+		pm_meeting_reason: "記錄理由",
+		pm_meeting_snapshot: "已儲存的專案快照",
+		pm_meeting_goal: "Sprint Goal",
+		pm_meeting_sprint_goal: "Sprint Goal 版本",
+		pm_meeting_selection: "選入工作版本",
+		pm_meeting_product_goal: "Product Goal",
+		pm_meeting_backlog: "Product Backlog",
+		pm_meeting_dod: "Definition of Done",
+		pm_meeting_evidence: "證據",
+		pm_meeting_note: "討論紀錄",
+		pm_meeting_source_unavailable: "來源不在目前脈絡中，請先移除再儲存",
+		pm_meeting_sources: "來源引用",
+		pm_meeting_source_help: "選擇此固定脈絡內的來源。討論中的說法仍未經驗證。",
+		pm_meeting_how_missing: "尚未記錄實作方式。",
+		pm_meeting_quality: "DoD 與改善效果尚未評估。討論紀錄無法證明工作已完成。",
+		pm_meeting_fixed_context: "固定脈絡：選入工作與品質要求",
+		pm_meeting_source_frozen: "會議保留已儲存的來源版本，重新整理畫面不會替換來源。",
+		pm_meeting_draft: "草稿",
+		pm_meeting_completed: "討論已完成",
+		pm_meeting_planning: "Planning 規劃",
+		pm_meeting_review: "Review 成果檢視",
+		pm_meeting_retro: "Retrospective 回顧改善",
+		pm_meeting_saved_draft: "已儲存的討論草稿",
+		pm_meeting_draft_help: "儲存大綱或報告後，會議仍維持草稿狀態。",
+		pm_meeting_why: "這輪 Sprint 的價值",
+		pm_meeting_delivery_approach: "交付安排",
+		pm_meeting_capacity_discussion: "討論過的容量與可用時間",
+		pm_meeting_dependency_notes: "依賴事項（每行一項）",
+		pm_meeting_what_how: "What 與每位開發者的 How，沿用上方固定的 Sprint 選入工作。",
+		pm_meeting_goal_review: "成果對 Goal 的意義",
+		pm_meeting_outcome: "觀察到的成果",
+		pm_meeting_feedback: "回饋（每行一項）",
+		pm_meeting_environment_changes: "相關環境變化（每行一項）",
+		pm_meeting_next_steps: "後續方向（每行一項）",
+		pm_meeting_review_help: "Review 需要實際回饋與後續方向。可以維持方向或繼續觀察，不必新增工作。",
+		pm_meeting_unreviewed: "這些選入工作尚未記錄成果討論：",
+		pm_meeting_observations: "流程與合作觀察（每行一項）",
+		pm_meeting_previous_improvement_review: "先前改善事項的結果",
+		pm_meeting_no_improvement_rationale: "若本次不採用改善，請說明理由",
+		pm_meeting_retro_help: "選擇少量、有負責人的改善，或說明本次反思不採用改善的理由。",
+		pm_meeting_decisions: "決策提案",
+		pm_meeting_proposal: "提案；尚未改變範圍",
+		pm_meeting_decision_text: "建議的決策",
+		pm_meeting_decision_reason: "建議此決策的理由",
+		pm_meeting_add_decision: "新增決策提案",
+		pm_meeting_remove: "移除",
+		pm_meeting_follow_ups: "改善與後續追蹤",
+		pm_meeting_follow_text: "改善或後續事項",
+		pm_meeting_owner: "負責人",
+		pm_meeting_expected_effect: "預期效果",
+		pm_meeting_verification: "如何核對結果",
+		pm_meeting_add_followup: "新增追蹤事項",
+		pm_meeting_follow_help: "記錄責任與結果核對方式；此操作不會建立或派送工作。",
+		pm_meeting_assigned: "負責人：{actor}",
+		pm_meeting_unresolved_questions: "未解問題（每行一項）",
+		pm_meeting_edit_draft: "準備討論草稿",
+		pm_meeting_save_draft: "儲存討論草稿",
+		pm_meeting_note_text: "討論內容",
+		pm_meeting_save_note: "儲存討論紀錄",
+		pm_meeting_discuss: "記錄討論",
+		pm_meeting_summary: "實際討論內容與結論",
+		pm_meeting_complete: "完成討論",
+		pm_meeting_complete_help: "記錄實際討論後，明確完成指定草稿。這是會議紀錄，不代表品質或交付已通過。",
+		pm_meeting_owner_only: "只有 Sprint 指定負責人，且仍具 workspace owner 權限，才能完成討論。",
+		pm_meeting_decision_help: "勾選本次確實決定的提案。記錄決策不會直接採用範圍變更。",
+		pm_meeting_recorded_decision: "已記錄的討論決策；尚未改變範圍",
+		pm_meeting_recorded_by: "記錄者：{actor}",
+		pm_meeting_completion_help: "指定負責人已記錄討論；出席與品質尚未獨立查驗。",
+		pm_meeting_context_change: "更新固定脈絡",
+		pm_meeting_context_save: "儲存新會議脈絡",
+		pm_meeting_context_help: "明確擷取目前 Sprint 與選定快照。舊紀錄及草稿保留在歷史中；此脈絡需要重新準備草稿並討論。",
+		pm_meeting_follow_choice: "要更新的追蹤事項",
+		pm_meeting_follow_status: "回報狀態",
+		pm_meeting_open: "待處理",
+		pm_meeting_blocked: "受阻",
+		pm_meeting_reported_done: "回報完成，尚未驗證",
+		pm_meeting_follow_result: "結果與仍不確定的事項",
+		pm_meeting_result_snapshot: "此結果的證據快照",
+		pm_meeting_keep_snapshot: "保留會議原有快照",
+		pm_meeting_save_result: "記錄追蹤結果",
+		pm_meeting_record_result: "追蹤改善結果",
+		pm_meeting_sprint: "Sprint",
+		pm_meeting_sprint_required: "請先規劃 Sprint，再建立會議。",
+		pm_meeting_snapshot_required: "請先儲存可見的專案快照，再建立會議。",
+		pm_meeting_name: "會議標題",
+		pm_meeting_kind: "討論類型",
+		pm_meeting_started_help: "Review 與 Retrospective 需要已實際開始的 Sprint。",
+		pm_meeting_create: "建立會議草稿",
+		pm_meeting_new: "新增 Sprint 討論",
+		pm_meeting_partial: "來源清單尚未完整載入。請縮小 workspace 或重試後再新增紀錄。",
+		pm_meeting_history: "討論與來源歷史",
+		pm_meeting_history_notes: "討論紀錄",
+		pm_meeting_history_follow_ups: "追蹤結果",
+		pm_meeting_history_contexts: "脈絡版本",
+		pm_meeting_history_drafts: "草稿版本",
+		pm_meeting_more: "更多{kind}"
+	}
+};
+//#endregion
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
 		...pmSprintStrings.en,
+		...pmKanbanStrings.en,
+		...pmMeetingStrings.en,
 		pm_roadmap_historical_work: "Previously selected work association",
 		pm_roadmap_missing_dependency: "Removed milestone dependency",
 		pm_roadmap_work_scope: "Select an overlapping requirement first",
@@ -7869,6 +9555,8 @@ var pmStrings = {
 	},
 	"zh-TW": {
 		...pmSprintStrings["zh-TW"],
+		...pmKanbanStrings["zh-TW"],
+		...pmMeetingStrings["zh-TW"],
 		pm_roadmap_historical_work: "先前選定的工作關聯",
 		pm_roadmap_missing_dependency: "已移除里程碑的依賴",
 		pm_roadmap_work_scope: "請先選定有重疊的需求",
@@ -16639,6 +18327,7 @@ async function api(method, path, body, key) {
 	if (status < 200 || status >= 300) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
 		error.admissionRefused = data.error?.admission_refused === true;
+		error.reason = data.error?.reason;
 		throw error;
 	}
 	return data;
@@ -17364,9 +19053,23 @@ async function streamEvents() {
 					namespace: state.namespace,
 					sync: state.sync
 				};
+				const accessChanged = error.reason === "access_changed";
+				if (accessChanged) {
+					generation++;
+					state.viewReady = false;
+					teardown?.();
+					teardown = null;
+					freshPage();
+					workspaceSidebar?.dispose();
+					workspaceSidebar = null;
+					workspaceNav?.dispose();
+					workspaceNav = null;
+					workspaceIdentity = "";
+					document.getElementById("main").replaceChildren(h("p", { class: "muted" }, t("sync_waiting")));
+				}
 				try {
 					await activate(state.caps, state.endpoint, true);
-					if (state.namespace === previous.namespace && (editing || typing())) idleReload = route;
+					if (!accessChanged && state.namespace === previous.namespace && (editing || typing())) idleReload = route;
 					else await route();
 				} catch {
 					state.sync = previous.sync;
