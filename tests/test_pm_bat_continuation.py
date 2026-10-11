@@ -100,7 +100,7 @@ async def test_completed_disk_context_continues_in_new_owned_bat_session(continu
     await restart(w)
     await act(w['d'].ops, w['target'], 'pm.message.append', {'content': 'Discuss recovery without adding referral scope.'})
     second = await analyze(w, 'second-new-session')
-    assert second['status'] == 'succeeded', second
+    assert second['status'] == 'succeeded', json.dumps(second, indent=2)
     successor = pm_runs.get_by_operation(w['d'].ops.db, second['operation_id'])
     assert successor['generation'] == original['generation'] + 1
     assert successor['run_id'] != original['run_id']
