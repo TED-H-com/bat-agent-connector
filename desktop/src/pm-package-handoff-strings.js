@@ -1,4 +1,5 @@
 export const pmPackageHandoffStrings={en:{
+  ph_spec_attachment:'Specification delivery',ph_inline:'Complete spec in first prompt',ph_fixed_attachment:'Fixed specification attachment',ph_spec_help:'Select a saved attachment when needed, then review this handoff again. The exact attachment revision and digest will be preserved.',ph_spec_missing:'The originally selected specification attachment is unavailable.',ph_spec_filtered:'Some specification attachments are hidden by current source access.',
   ph_workspace:'Selected BAT workspace',
   ph_title:'Implement the selected work package',ph_intro:'Start one managed BAT session from this fixed package. The original specification and work relationship stay attached to the attempt.',
   ph_select:'Select an engineering work package above to prepare an implementation.',ph_review:'Review fixed implementation base',ph_reviewed:'Reviewed implementation base',
@@ -14,6 +15,7 @@ export const pmPackageHandoffStrings={en:{
   ph_invalid:'The response does not match the selected fixed engineering package.',ph_reading:'Reading the original package, project and published base…',
   ph_started:'Implementation was started. Verification and delivery remain unassessed.',ph_open:'Open managed execution',ph_preparation:'Preparation',ph_project_version:'Project version',
 },'zh-TW':{
+  ph_spec_attachment:'規格交付方式',ph_inline:'在首則指示中包含完整規格',ph_fixed_attachment:'固定規格附件',ph_spec_help:'需要時選取已保存附件，再重新核對此次交接；保留附件的精確版次與摘要值。',ph_spec_missing:'原選取的規格附件目前無法讀取。',ph_spec_filtered:'部分規格附件因目前來源權限而隱藏。',
   ph_workspace:'所選 BAT 工作區',
   ph_title:'實作所選工程工作包',ph_intro:'依這份固定工作包開啟一個自有 BAT session；原始規格與工作關聯會保留在這次執行中。',
   ph_select:'先在上方選取工程工作包，再準備實作。',ph_review:'核對固定實作基底',ph_reviewed:'已核對實作基底',
