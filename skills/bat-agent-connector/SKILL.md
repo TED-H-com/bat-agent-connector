@@ -1444,3 +1444,5 @@ It returns fixed original package references and saved integration, merge and
 deployment receipts without refreshing providers or creating operations. Preserve
 `next_after` through filtered pages. Push, merge, runtime verification and
 requirement acceptance are distinct; delivery does not mark a requirement Done.
+
+Maintain uses the existing `pm.lifecycle.set_stage` or explicit `reopen` with `stage: maintain` and exact `maintenance_ref` from current lifecycle availability. Preserve its policy/version/baseline/snapshot/digest and expected lifecycle revision. A complete policy check may admit the same fixed decision automatically from Development; new execution rechecks original controller authority, deadline and all workload sources. Never reuse pre-stop evidence to reopen, infer idleness from session count, or rewrite an unknown original request to the newest observation.
