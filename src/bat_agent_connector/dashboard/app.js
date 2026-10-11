@@ -2316,14 +2316,30 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		}, ...[
 			"idea",
 			"planning",
-			"development"
+			"development",
+			"maintain"
 		].map((value) => h("option", { value }, stageName(value)))) : null;
 		if (choice) choice.dataset.pmDefault = "idea";
+		const maintenance = stage ? hidden() : null;
 		const values = {
 			reason,
 			version,
-			...choice ? { stage: choice } : {},
+			...choice ? {
+				stage: choice,
+				maintenance
+			} : {},
 			...fields
+		};
+		const selectedMaintenance = () => {
+			try {
+				return JSON.parse(maintenance?.value || "null");
+			} catch {
+				return null;
+			}
+		};
+		const maintenanceReady = () => !choice || choice.value !== "maintain" || current?.maintenance?.available === true && JSON.stringify(selectedMaintenance()) === JSON.stringify(current.maintenance.reference);
+		const captureMaintenance = () => {
+			if (maintenance) editor.set("maintenance", choice.value === "maintain" && current?.maintenance?.available ? JSON.stringify(current.maintenance.reference) : "");
 		};
 		let editor;
 		editor = form({
@@ -2333,17 +2349,18 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			params: (data) => ({
 				reason: data.reason,
 				...choice ? { stage: data.stage } : {},
+				...choice && data.stage === "maintain" ? { maintenance_ref: JSON.parse(data.maintenance) } : {},
 				...params(data)
 			}),
 			preconditions: () => ({ expected_lifecycle_revision: Number(version.value) }),
-			permitted: () => Boolean(gate() && eligible() && version.value !== "" && Number(version.value) === current.lifecycle.revision),
+			permitted: () => Boolean(gate() && eligible() && maintenanceReady() && version.value !== "" && Number(version.value) === current.lifecycle.revision),
 			recoverPermitted: () => permitted(true),
 			label: kind === "retain_inflight" ? "pm_lifecycle_retain" : "pm_lifecycle_" + kind,
 			onStateChange: () => {
 				if (kind === "retain_inflight") for (const check of retentionChoices.querySelectorAll("input")) check.disabled = retentionLocked();
 			},
 			onSaved: () => refresh(),
-			extra: h("div", {}, choice ? labelled("pm_lifecycle_stage", choice) : "", extra, labelled("pm_lifecycle_reason", reason), version, ...Object.values(fields))
+			extra: h("div", {}, choice ? labelled("pm_lifecycle_stage", choice) : "", extra, labelled("pm_lifecycle_reason", reason), version, maintenance, ...Object.values(fields))
 		});
 		const rebase = h("button", {
 			type: "button",
@@ -2351,10 +2368,17 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			onclick: () => {
 				if (!gate() || editor.locked()) return;
 				editor.set("version", String(current.lifecycle.revision));
+				captureMaintenance();
 				if (kind === "retain_inflight") editor.set("transition", current.lifecycle.transition_id || "");
 				editor.update();
 			}
 		}, t("pm_lifecycle_review_version"));
+		if (choice) choice.addEventListener("change", () => {
+			if (!editor.locked()) {
+				captureMaintenance();
+				editor.update();
+			}
+		});
 		const warning = h("p", {
 			class: "muted",
 			hidden: true
@@ -2366,7 +2390,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			if (current && !editor.locked() && (version.value === "" || empty)) editor.set("version", String(current.lifecycle.revision));
 			if (kind === "retain_inflight" && current && !editor.locked() && (!fields.transition.value || empty)) editor.set("transition", current.lifecycle.transition_id || "");
 			originalUpdate();
-			const stale = Boolean(current && version.value !== "" && Number(version.value) !== current.lifecycle.revision);
+			const stale = Boolean(current && version.value !== "" && (Number(version.value) !== current.lifecycle.revision || !maintenanceReady()));
 			warning.hidden = !stale;
 			rebase.hidden = !stale;
 			rebase.disabled = !gate() || editor.locked();
@@ -2396,7 +2420,8 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		["close", close],
 		["reopen", reopen]
 	]) controls.append(h("details", { "data-pm-lifecycle-intent": kind }, h("summary", {}, t("pm_lifecycle_" + kind)), editor.box));
-	controls.append(h("p", { class: "muted" }, t("pm_lifecycle_maintenance_unavailable")));
+	const maintenanceNote = h("p", { class: "muted" });
+	controls.append(maintenanceNote);
 	const retained = hidden(), transition = hidden(), retentionChoices = h("div");
 	const retain = makeEditor("retain_inflight", {
 		fields: {
@@ -2484,6 +2509,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	function render() {
 		const state = current.lifecycle, stopped = ["paused", "closed"].includes(state.stage);
 		summary.replaceChildren(h("p", { class: "pm-lifecycle-stage" }, h("strong", {}, stageName(["pausing", "closing"].includes(state.status) ? state.status : state.stage))), h("p", { class: "muted" }, t(state.stage === null ? "pm_lifecycle_legacy_help" : stopped ? "pm_lifecycle_stopped_help" : "pm_lifecycle_active_help")));
+		maintenanceNote.textContent = t(state.stage === "maintain" ? "pm_lifecycle_maintenance_active" : current.maintenance?.available ? "pm_lifecycle_maintenance_ready" : "pm_lifecycle_maintenance_unavailable");
 		if (current.transition?.reason) summary.append(h("p", {}, current.transition.reason));
 		if (!permitted(true)) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_reader")));
 		if (current.inflight_summary.visibility_filtered || current.transition_visibility_filtered) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
@@ -2501,6 +2527,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		historyLoaded = false;
 		historyRequest = null;
 		workFiltered = false;
+		maintenanceNote.textContent = "";
 		summary.replaceChildren();
 		work.replaceChildren();
 		retentionChoices.replaceChildren();
@@ -9498,6 +9525,195 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	};
 }
 //#endregion
+//#region src/pm-maintenance-repair-policy.js
+function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciAvailable, reviewedHandoff, baseline, editable, changed }) {
+	const hidden = () => h("input", { type: "hidden" }), fields = {
+		repair_rules: hidden(),
+		repair_rules_set: hidden(),
+		repair_key: input("pmr_rule_key", {
+			required: false,
+			max: 48
+		}),
+		repair_kind: h("select", { "aria-label": t("pmr_work_kind") }, ...[
+			"dependency_fix",
+			"bug_fix",
+			"documentation"
+		].map((value) => h("option", { value }, t("pmp_" + value)))),
+		repair_labels: input("pmr_rule_labels", {
+			multiline: true,
+			required: false,
+			max: 2020
+		}),
+		repair_paths: input("pmr_rule_paths", {
+			multiline: true,
+			required: false,
+			max: 51300
+		}),
+		repair_command: input("pmr_rule_command", {
+			required: false,
+			max: 4e3
+		}),
+		repair_ci: h("select", { "aria-label": t("pmr_ci_profile") }, h("option", { value: "" }, t("pmr_ci_unchanged")), h("option", { value: "github_required_status_checks_v1" }, t("pmr_ci_explicit")))
+	};
+	let visible = false, busy = false, epoch = 0;
+	const rows = h("div"), status = h("p", {
+		role: "status",
+		class: "muted"
+	});
+	const read = () => {
+		const value = fields.repair_rules.value ? JSON.parse(fields.repair_rules.value) : [];
+		if (!Array.isArray(value) || value.length > 16) throw Error(t("pmr_invalid"));
+		return value;
+	};
+	const selected = () => {
+		try {
+			return reviewedHandoff();
+		} catch {
+			return null;
+		}
+	};
+	const lines = (value) => value.split("\n").map((v) => v.trim()).filter(Boolean);
+	const add = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void addRule()
+	}, t("pmr_add_rule"));
+	const element = h("details", { "data-policy-group": "pmr_rules" }, h("summary", {}, t("pmr_rules")), h("p", { class: "muted" }, t("pmr_rules_help")), rows, h("div", { class: "pm-fields" }, labelled("pmr_rule_key", fields.repair_key), labelled("pmr_work_kind", fields.repair_kind)), labelled("pmr_rule_labels", fields.repair_labels), labelled("pmr_rule_paths", fields.repair_paths), labelled("pmr_rule_command", fields.repair_command), h("p", { class: "muted" }, t("pmr_command_help")), add, status, labelled("pmr_ci_profile", fields.repair_ci), h("p", { class: "muted" }, t("pmr_ci_help")));
+	async function addRule() {
+		if (!visible || !editable() || busy || !available()) return;
+		const source = selected(), release = baseline(), original = JSON.stringify(source), ticket = ++epoch;
+		try {
+			const rules = read(), key = fields.repair_key.value, labels = lines(fields.repair_labels.value), paths = lines(fields.repair_paths.value), kind = fields.repair_kind.value, command = fields.repair_command.value;
+			if (!source?.handoff || !release || source.handoff.params.pm_package_ref?.workspace_id !== release.workspace_id || source.handoff.params.source_sha !== release.document.commit_sha || source.handoff.params.source_ref !== release.document.proof.maintenance_branch.ref || source.handoff.preconditions.repository_id !== release.document.repository_id || rules.length >= 16 || !/^[a-z][a-z0-9_]{0,47}$/.test(key) || rules.some((r) => r.key === key || r.handoff.params.work_item_id === source.handoff.params.work_item_id) || !labels.length || labels.length > 20 || new Set(labels).size !== labels.length || labels.some((v) => v.length > 100 || /[\x00-\x1f]/.test(v)) || !paths.length || paths.length > 100 || new Set(paths).size !== paths.length || paths.some((v) => v.length > 512 || v !== "." && (/[\\:*?\[\]\x00-\x1f]/.test(v) || v.replace(/\/$/, "").split("/").some((p) => [
+				"",
+				".",
+				".."
+			].includes(p)))) || !command.trim() || /[\x00-\x1f]/.test(command)) throw Error(t("pmr_rule_invalid"));
+			busy = true;
+			update();
+			const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(command))), digest = [...new Uint8Array(bytes)].map((n) => n.toString(16).padStart(2, "0")).join("");
+			if (ticket !== epoch || !visible || !editable() || JSON.stringify(selected()) !== original || baseline()?.baseline_id !== release.baseline_id) throw Error(t("pmr_review_changed"));
+			rules.push({
+				key,
+				work_kind: kind,
+				labels_all: labels,
+				paths,
+				release: {
+					baseline_id: release.baseline_id,
+					baseline_digest: release.document_digest,
+					commit_sha: release.document.commit_sha,
+					release_version: structuredClone(release.document.release_version)
+				},
+				handoff: structuredClone(source.handoff),
+				verification: {
+					kind: "fixed_revision_verification",
+					profile: "observed_runner_v1",
+					command_digest: digest
+				}
+			});
+			fields.repair_rules.value = JSON.stringify(rules);
+			fields.repair_rules_set.value = "1";
+			status.textContent = t("pmr_rule_added");
+			changed();
+		} catch (error) {
+			if (ticket === epoch && visible) status.textContent = error.message;
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	function update(show = visible) {
+		visible = show;
+		rows.replaceChildren();
+		element.hidden = !available() && !fields.repair_rules_set.value && !fields.repair_ci.value;
+		add.disabled = !visible || !editable() || busy || !available() || !selected();
+		fields.repair_ci.disabled = !visible || !editable() || !ciAvailable();
+		if (!visible) {
+			epoch++;
+			status.textContent = "";
+			return;
+		}
+		for (const rule of read()) rows.append(h("article", { class: "pm-repair-rule" }, h("h4", {}, rule.key), h("p", {}, t("pmp_" + rule.work_kind), " · ", rule.labels_all.join(" · ")), h("p", { class: "pm-source" }, rule.paths.join(" · ")), h("details", {}, h("summary", {}, t("pmr_rule_original")), h("p", { class: "pm-source" }, rule.handoff.params.pm_package_ref.package_id), h("p", { class: "pm-source" }, rule.release.baseline_id), h("p", { class: "pm-source" }, rule.verification.command_digest)), h("button", {
+			type: "button",
+			class: "secondary",
+			disabled: !editable(),
+			onclick: () => {
+				if (!editable()) return;
+				fields.repair_rules.value = JSON.stringify(read().filter((r) => r.key !== rule.key));
+				fields.repair_rules_set.value = "1";
+				changed();
+				update();
+			}
+		}, t("pmr_remove_rule"))));
+	}
+	function initialize(policy) {
+		return {
+			repair_rules: JSON.stringify(policy.repair_rules || []),
+			repair_rules_set: Object.hasOwn(policy, "repair_rules") ? "1" : "",
+			repair_ci: policy.observation?.required_ci_profile || ""
+		};
+	}
+	function build(values) {
+		const result = {};
+		if (values.repair_rules_set) {
+			const rules = JSON.parse(values.repair_rules || "[]"), release = baseline(), paths = lines(values.paths), kinds = JSON.parse(values.works), labels = lines(values.finding_labels);
+			if (!Array.isArray(rules) || rules.length > 16 || rules.some((rule) => !kinds.includes(rule.work_kind) || values.finding_issues !== "true" || !labels.every((label) => rule.labels_all.includes(label)) || rule.paths.some((path) => !paths.some((root) => root === "." || root === path || root.endsWith("/") && path.startsWith(root))) || !release || rule.release.baseline_id !== release.baseline_id || rule.release.baseline_digest !== release.document_digest || rule.release.commit_sha !== release.document.commit_sha)) throw Error(t("pmr_rule_invalid"));
+			result.repair_rules = rules;
+		}
+		return result;
+	}
+	async function checkSources({ api, endpoint, workspaceId, valid }) {
+		const signature = fields.repair_rules.value, rules = read(), seen = new Set();
+		for (const rule of rules) {
+			const ref = rule.handoff?.params?.pm_package_ref, release = rule.release;
+			if (ref?.workspace_id !== workspaceId || !/^pmwp_[0-9a-f]{32}$/.test(ref.package_id) || !/^[0-9a-f]{64}$/.test(ref.document_digest) || !/^pmrb_[0-9a-f]{32}$/.test(release?.baseline_id) || !/^[0-9a-f]{64}$/.test(release.baseline_digest)) throw Error(t("pmr_invalid"));
+			const reads = [[
+				"work-packages",
+				ref.package_id,
+				"package",
+				ref.document_digest
+			], [
+				"release-baselines",
+				release.baseline_id,
+				"baseline",
+				release.baseline_digest
+			]];
+			const spec = rule.handoff.params.pm_spec_ref;
+			if (spec) {
+				if (spec.workspace_id !== workspaceId || !/^pmsp_[0-9a-f]{32}$/.test(spec.materialization_id) || !/^[0-9a-f]{64}$/.test(spec.document_digest)) throw Error(t("pmr_invalid"));
+				reads.push([
+					"spec-materializations",
+					spec.materialization_id,
+					"materialization",
+					spec.document_digest
+				]);
+			}
+			for (const [path, id, key, digest] of reads) {
+				const cache = path + id + digest;
+				if (seen.has(cache)) continue;
+				seen.add(cache);
+				const value = await api("GET", `${endpoint}/${path}/${encodeURIComponent(id)}`);
+				if (!valid()) return;
+				const row = value[key];
+				if (value.workspace_id !== workspaceId || row?.workspace_id !== workspaceId || row[key === "package" ? "package_id" : key === "baseline" ? "baseline_id" : "materialization_id"] !== id || row.document_digest !== digest) throw Error(t("pmr_invalid"));
+			}
+		}
+		if (signature !== fields.repair_rules.value) throw Error(t("pmr_review_changed"));
+	}
+	return {
+		element,
+		fields,
+		initialize,
+		build,
+		update,
+		checkSources
+	};
+}
+function maintenanceRepairPolicyView({ h, t, policy }) {
+	if (!policy.repair_rules?.length && !policy.observation?.required_ci_profile) return null;
+	return h("section", {}, h("h4", {}, t("pmr_rules")), ...(policy.repair_rules || []).map((rule) => h("p", { class: "pm-source" }, rule.key, " · ", t("pmp_" + rule.work_kind), " · ", rule.labels_all.join(" · "))), policy.observation?.required_ci_profile ? h("p", {}, t("pmr_ci_explicit")) : null, h("p", { class: "muted" }, t("pmr_rules_help")));
+}
+//#endregion
 //#region src/pm-maintenance-checks.js
 function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, errorBox }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, profile = "github_open_prs_and_actions_v1";
@@ -9953,7 +10169,7 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 }
 //#endregion
 //#region src/pm-maintenance-policy.js
-function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox }) {
+function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, reviewedHandoff = () => null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.maintenance_policy.adopt";
 	const sourceKinds = [
 		"issues",
@@ -9966,6 +10182,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		"bug_fix",
 		"documentation"
 	];
+	let repairSourcesReady = false;
 	let epoch = 0, ready = false, current = null, baseline = null, lifecycle = null, editor = null, syncing = false, historyLoaded = false, historyCursor = null, historyFiltered = false;
 	const view = h("div", { "data-maintenance-current": "" }), status = h("div", { role: "status" }), source = h("div", { "data-maintenance-source": "" }), history = h("div");
 	const check = (value) => {
@@ -10007,6 +10224,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		return field;
 	};
 	const fields = {
+		original_policy: hidden(),
 		initialized: hidden(),
 		context: hidden(),
 		enabled: select("pmp_enabled", [["false", "pmp_enabled_no"], ["true", "pmp_enabled_yes"]]),
@@ -10075,6 +10293,19 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		available: () => caps()?.features?.pm_github_observation?.maintenance_findings?.version === 1
 	});
 	Object.assign(fields, findingControls.fields);
+	const repairControls = maintenanceRepairPolicyControls({
+		h,
+		t,
+		input,
+		labelled,
+		reviewedHandoff,
+		baseline: () => baseline?.baseline,
+		available: () => caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1,
+		ciAvailable: () => caps()?.features?.pm_github_observation?.required_ci?.profiles?.includes("github_required_status_checks_v1") === true,
+		editable: () => ready && allowed() && !editor?.locked(),
+		changed: () => editor?.changed()
+	});
+	Object.assign(fields, repairControls.fields);
 	const selected = (field) => {
 		try {
 			const values = JSON.parse(field.value);
@@ -10118,12 +10349,14 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		hidden: true,
 		onclick: () => {
 			if (!ready || !allowed() || stopped() || editor.locked() || !context()) return;
+			if (!fields.original_policy.value) Object.entries(repairControls.initialize(current.policy?.document?.policy || {})).forEach(([key, value]) => editor.set(key, value));
+			editor.set("original_policy", JSON.stringify(current.policy?.document?.policy || {}));
 			editor.set("context", JSON.stringify(context()));
 			editor.update();
 		}
 	}, t("pmp_use_versions"));
 	const eligibility = h("p", { class: "muted" });
-	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), findingControls.element, group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
+	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), findingControls.element, repairControls.element, group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
 	function context() {
 		return ready && baseline?.baseline && !baseline.visibility_filtered && current && !current.visibility_filtered && lifecycle ? {
 			expected_policy_revision: current.head.revision,
@@ -10172,6 +10405,11 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		syncing = true;
 		try {
 			if (ready && allowed() && !editor.locked() && !fields.initialized.value && context()) initialize();
+			if (ready && matches() && !editor.locked() && !fields.original_policy.value) {
+				fields.original_policy.value = JSON.stringify(current.policy?.document?.policy || {});
+				Object.entries(repairControls.initialize(current.policy?.document?.policy || {})).forEach(([key, value]) => fields[key].value = value);
+				editor.changed();
+			}
 			baseUpdate();
 			const editing = ready && allowed() && !editor.locked();
 			for (const [key, field] of Object.entries(fields)) if (!["context", "initialized"].includes(key)) field.disabled = !editing;
@@ -10183,6 +10421,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			fields.profile.disabled = !editing || !profileAvailable();
 			envLabel.hidden = fields.delivery.value !== "deploy";
 			fields.environment.disabled = !editing || envLabel.hidden;
+			repairControls.update(ready && repairSourcesReady);
 			stale.hidden = editor.locked() || !ready || !fields.context.value || Boolean(matches());
 			useVersions.hidden = stale.hidden || !context();
 			useVersions.disabled = !editing || stopped();
@@ -10231,7 +10470,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t(maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
+	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? "pmr_policy_runtime" : maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
 	function controls() {
 		editorDetails.hidden = !owner() && !(editor.locked() && recover());
 		permission.hidden = owner();
@@ -10273,6 +10512,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			}
 		};
 		const values = {
+			original_policy: JSON.stringify(p),
 			initialized: "1",
 			context: JSON.stringify(context()),
 			enabled: String(p.enabled),
@@ -10300,7 +10540,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			retries: p.limits.retries,
 			rationale: ""
 		};
-		Object.assign(values, findingControls.initialize(p.observation));
+		Object.assign(values, findingControls.initialize(p.observation), repairControls.initialize(p));
 		for (const [key, value] of Object.entries(values)) fields[key].value = String(value);
 		editor.changed();
 	}
@@ -10357,29 +10597,43 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		if (profileAvailable() && v.profile !== githubProfile || v.profile && !profileAvailable()) throw Error(t("pmp_profile_required"));
 		const works = selection(v.works, workKinds, true);
 		if (works.length && (v.delivery === "report" || baseline?.baseline?.document?.proof?.maintenance_branch?.status !== "verified_at_observation")) throw Error(t("pmp_repair_invalid"));
+		const original = JSON.parse(v.original_policy || "{}");
+		const finding = findingControls.build(v, selection(v.sources, sourceKinds), v.profile, baseline?.baseline);
+		const merge = (old, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries({
+			...old,
+			...value
+		}).map(([key, item]) => [key, Object.hasOwn(value, key) ? merge(old?.[key], item) : item])) : value;
+		const findingPolicy = merge(original.observation?.maintenance_sources ? { maintenance_sources: original.observation.maintenance_sources } : {}, finding);
 		return {
+			...original,
+			...repairControls.build(v),
 			enabled: v.enabled === "true",
 			after_release_policy: v.after,
 			sources: selection(v.sources, sourceKinds),
 			allowed_work_kinds: works,
 			allowed_paths: paths,
 			delivery: {
+				...original.delivery,
 				maximum: v.delivery,
 				environment: v.delivery === "deploy" ? required(v.environment, 256) : null
 			},
 			observation: {
+				...original.observation,
+				...v.repair_ci ? { required_ci_profile: v.repair_ci } : {},
 				max_age_seconds: integer(v.age, 1, 86400),
 				stable_for_seconds: integer(v.stable, 0, 604800),
 				...v.profile ? { github_profile: v.profile } : {},
-				...findingControls.build(v, selection(v.sources, sourceKinds), v.profile, baseline?.baseline)
+				...findingPolicy
 			},
 			schedule: {
+				...original.schedule,
 				timezone: v.timezone,
 				check_interval_seconds: integer(v.interval, 60, 2678400),
 				review_weekday: integer(v.weekday, 0, 6),
 				review_local_time: v.time
 			},
 			limits: {
+				...original.limits,
 				max_parallel: integer(v.parallel, 1, 16),
 				run_seconds: integer(v.run, 1, 86400),
 				period_seconds: integer(v.period, 60, 2678400),
@@ -10388,6 +10642,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 				retries: integer(v.retries, 0, 10)
 			},
 			verification: {
+				...original.verification,
 				required_ci: v.ci === "true",
 				review_required: v.review === "true",
 				acceptance_evidence: list(v.acceptance, 40, 2e3)
@@ -10410,6 +10665,12 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			["period_runs", "period_runs"],
 			["retries", "retries"]
 		].map(([label, key]) => line(`pmp_${label}`, p.limits[key])), line("pmp_cost", p.limits.cost_microusd === null ? t("pmp_cost_none") : String(p.limits.cost_microusd / 1e6)), line("pmp_reason", doc.rationale), line("pmp_author", row.actor), line("pmp_recorded", stamp(row.created_at)), line("pmp_original_baseline", row.baseline_id), line("pmp_lifecycle", doc.lifecycle_revision), line("pmp_revision", row.revision), h("p", { class: "mono" }, row.document_digest), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation")));
+		const repairPolicy = maintenanceRepairPolicyView({
+			h,
+			t,
+			policy: p
+		});
+		if (repairPolicy) details.append(repairPolicy);
 		const findingPolicy = findingPolicyView({
 			h,
 			t,
@@ -10419,6 +10680,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		return h("article", { "data-maintenance-policy": row.policy_id }, h("h3", {}, isCurrent ? t("pmp_current") : `${t("pmp_revision")} ${row.revision}`), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
 	}
 	function withdraw() {
+		repairSourcesReady = false;
 		maintenanceRuns?.withdraw();
 		observations?.withdraw();
 		epoch++;
@@ -10495,6 +10757,17 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 				source.append(h("h3", {}, t("pmp_baseline")), h("p", {}, doc.release_version.value, " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, doc.proof.maintenance_branch.status === "verified_at_observation" ? `${t("pmp_branch")}: ${doc.proof.maintenance_branch.ref}` : t("pmp_no_branch")), h("details", {}, h("summary", {}, t("pmp_versions")), line("pmp_revision", p.head.revision), line("pmp_lifecycle", l.lifecycle.revision), line("pmp_original_baseline", row.baseline_id), h("p", { class: "mono" }, row.document_digest)));
 			}
 			controls();
+			if (!p.visibility_filtered && !b.visibility_filtered) {
+				await repairControls.checkSources({
+					api,
+					endpoint,
+					workspaceId,
+					valid: () => valid(ticket)
+				});
+				if (!valid(ticket)) return;
+				repairSourcesReady = true;
+				controls();
+			}
 			if (historyDetails.open) await readHistory(false);
 			if (valid(ticket)) await maintenanceRuns?.refresh();
 			if (valid(ticket)) await observations?.refresh();
@@ -10506,7 +10779,8 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	return {
 		element,
 		refresh,
-		withdraw
+		withdraw,
+		update: () => editor.update()
 	};
 }
 //#endregion
@@ -18967,7 +19241,9 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stale: "The activity state changed. Your draft still uses the earlier version; review the current state before submitting it.",
 		pm_lifecycle_no_dispatch: "Selecting a stage does not dispatch work. Reopening leaves old queued requests stopped.",
 		pm_lifecycle_close_help: "Preserve the project history and stop new investment. In-flight work is listed below; closing does not archive the GitHub repository.",
-		pm_lifecycle_maintenance_unavailable: "Maintain becomes available after a release baseline and maintenance policy are configured.",
+		pm_lifecycle_maintenance_unavailable: "Maintain requires a release baseline, an adopted policy and current complete idle-work evidence.",
+		pm_lifecycle_maintenance_ready: "Current original evidence permits Maintain. This decision keeps that exact observation and is checked again before it takes effect.",
+		pm_lifecycle_maintenance_active: "Maintenance uses the adopted policy. Its own repairs keep this stage; new development and unknown work remain visible.",
 		pm_lifecycle_inflight: "Previously admitted work",
 		pm_lifecycle_inflight_empty: "No unresolved work is visible in this recorded management scope.",
 		pm_lifecycle_filtered: "Some records are outside your current source access. Visible rows are not a complete project total.",
@@ -19014,7 +19290,9 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stale: "投入狀態已變更；草稿仍以原版本為準，請檢視目前狀態後再送出。",
 		pm_lifecycle_no_dispatch: "指定管理階段不會派工；重開也不會重新執行之前佇列中的請求。",
 		pm_lifecycle_close_help: "保留專案歷史並停止新投入。在途工作列於下方，結案不會封存 GitHub repository。",
-		pm_lifecycle_maintenance_unavailable: "設定發布基準與維護政策後，才可進入維護。",
+		pm_lifecycle_maintenance_unavailable: "進入維護需要發布基準、已採用政策，以及新鮮完整的閒置工作證據。",
+		pm_lifecycle_maintenance_ready: "目前原始證據允許進入維護；這項決定會保存選定觀察，生效前再次核對。",
+		pm_lifecycle_maintenance_active: "維護沿用已採用政策；自身修復不反覆切換階段，新的開發與未知工作仍持續顯示。",
 		pm_lifecycle_inflight: "先前已受理的工作",
 		pm_lifecycle_inflight_empty: "這次管理範圍的可讀紀錄中，沒有尚待核對的工作。",
 		pm_lifecycle_filtered: "部分紀錄不在你目前的來源權限內；可見列數不是整個專案的總數。",
