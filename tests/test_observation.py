@@ -1997,8 +1997,12 @@ async def test_b03_rpc_admin_identity_is_not_claimed_human(served, monkeypatch):
     from bat_agent_connector.task_daemon import request
     d, port = served
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
-    t = task(d.journal, "a")
-    bind(d.journal, t, "sid")
+    principal = api_auth.authenticate(d.journal.db, d._admin_token, d._admin_token)
+    assert principal is not None and principal.admin
+    # The real RPC caller owns this task; claimed human fields do not grant control.
+    with controller_scope(d.journal, principal):
+        t = task(d.journal, "a")
+        bind(d.journal, t, "sid")
     await asyncio.to_thread(request, "work_pause", _auth_token=d._admin_token, task_id=t["task_id"], actor="ted", source_message_id="claimed-human-message")
     events = Observation(d.journal).history("execution", t["task_id"])["events"]
     paused = next(e for e in events if e["kind"] == "task.paused")
