@@ -1,5 +1,6 @@
 export const pmWorkBatchesStrings={
   en:{
+    pmb_acceptance_profile:'Qualified original requirement acceptance',pmb_acceptance_help:'Requires all original package acceptance criteria and DoD, independent verification, and the responsible reviewer’s reasoned conclusions.',pmb_changed_dependency:'An upstream result condition changed. Clear and select its prerequisite again to review that exact condition.',pmb_accepted:'Original requirements accepted with complete qualified review.',pmb_assessment:'Qualified original assessment',pmb_assessment_operation:'Original assessment operation',pmb_assessment_version:'Assessment version',pmb_state_requirements_accepted:'Original requirements accepted',
     pmb_title:'Selected engineering batch',pmb_intro:'Choose reviewed handoffs, set limits, and track their original operations.',pmb_refresh:'Refresh batch sources',pmb_draft:'New batch selection',
     pmb_selection_help:'Review an engineering handoff and fill its instructions first. Adding it saves that exact request here; later handoff edits do not replace it.',pmb_add:'Add reviewed handoff',
     pmb_history:'Saved batch',pmb_choose:'Choose…',pmb_stale:'Workspace or lifecycle version changed. Review the current state before using its versions for a new request.',pmb_use_versions:'Use current workspace versions',
@@ -9,7 +10,7 @@ export const pmWorkBatchesStrings={
     pmb_start:'Start selected batch',pmb_empty:'No handoffs selected.',pmb_duplicate:'This WorkItem is already selected. Remove its saved entry before choosing a different handoff.',
     pmb_profile:'Result condition: GitHub-reported checks at the delivered fixed revision.',pmb_profile_label:'Result condition',pmb_github_profile:'GitHub-reported checks',pmb_observed_profile:'Observed runner command',
     pmb_fixed_handoff:'Saved handoff details',pmb_entry_key:'Stable entry key',pmb_base:'Fixed code revision',pmb_package:'Original package',pmb_attachment:'Fixed specification attachment',
-    pmb_dependencies:'Prerequisites in this selection',pmb_dependency_help:'Wait for the selected upstream entry’s fixed revision verification. This does not resolve unknown requirement dependencies.',
+    pmb_dependencies:'Prerequisites in this selection',pmb_dependency_help:'Wait for the exact selected upstream result condition. Requirement dependencies need an explicitly selected qualified original assessment.',
     pmb_wait_for:'Wait for',pmb_missing_dependency:'A selected prerequisite was removed. Clear this missing prerequisite before starting.',pmb_remove_dependency:'Clear missing prerequisite',pmb_remove:'Remove this entry',
     pmb_observation_complete:'Complete sampled scope',pmb_observation_incomplete:'Incomplete sampled scope',pmb_limits_invalid:'Parallel capacity must not exceed the start limit; use whole-number limits.',
     pmb_selection_required:'Choose readable original entries and evidence; prerequisites must exist and have no cycle.',pmb_deadline_invalid:'Choose a future deadline within the next 24 hours.',
@@ -19,7 +20,7 @@ export const pmWorkBatchesStrings={
     pmb_parent_operation:'Open parent operation and controls',pmb_child_operation:'Open original child operation',pmb_no_child:'No child operation admitted.',
     pmb_verified:'Recorded fixed revision checks passed; requirement acceptance remains unassessed.',pmb_unproven:'Recorded evidence did not prove the fixed result.',
     pmb_observation_digest:'Original observation digest',pmb_result_commit:'Verified candidate revision',pmb_source_seq:'Original integration source',pmb_verification_id:'Observed verification',pmb_result_tree:'Candidate tree',pmb_command_digest:'Required command digest',
-    pmb_evidence:'Record fixed result evidence',pmb_evidence_help:'Choose an original delivered integration receipt and a saved GitHub observation. The central checks exact identity, completeness and reported results. Recording evidence does not restart a stopped batch.',
+    pmb_evidence:'Record fixed result evidence',pmb_evidence_help:'Choose evidence for the entry’s saved result condition: a qualified original assessment, or a delivered integration receipt and saved GitHub observation. The central checks exact identity, completeness and reported results. Recording evidence does not restart a stopped batch.',
     pmb_evidence_entry:'Original batch entry',pmb_delivery:'Delivered integration receipt',pmb_observation:'Saved GitHub observation',pmb_record:'Record selected evidence',pmb_use_evidence_version:'Use current evidence revision',
     pmb_original_missing:'Original selection unavailable',pmb_no_evidence_entry:'No admitted entry with GitHub-reported checks is available for this evidence selector. Observed-runner evidence requires its registered source workflow.',
     pmb_filtered:'Some original records are hidden by source access. Visible history does not describe the entire batch history.',
@@ -27,6 +28,7 @@ export const pmWorkBatchesStrings={
     pmb_state_dispatched_awaiting_result:'Dispatched; original result capacity retained',pmb_state_original_dispatch_unsettled:'Original dispatch outcome unresolved'
   },
   'zh-TW':{
+    pmb_acceptance_profile:'合格原始需求驗收',pmb_acceptance_help:'需要原始套件的全部驗收條件與 DoD、獨立驗證，以及負責審查人的具理由結論。',pmb_changed_dependency:'上游結果條件已變更。請取消並重新選擇前置項目，明確核對這份條件。',pmb_accepted:'原始需求已通過完整合格審查。',pmb_assessment:'合格原始評估',pmb_assessment_operation:'原始評估操作',pmb_assessment_version:'評估版本',pmb_state_requirements_accepted:'原始需求已驗收',
     pmb_title:'選定工程批次',pmb_intro:'選入已核對的交接、設定限制，並追蹤原始操作。',pmb_refresh:'更新批次來源',pmb_draft:'新批次選擇',
     pmb_selection_help:'先核對工程交接並填寫執行指示。加入時會保存這份確切請求；之後修改交接不會取代已選入的內容。',pmb_add:'加入已核對的交接',
     pmb_history:'已保存批次',pmb_choose:'請選擇…',pmb_stale:'工作空間或生命週期版本已變更。請核對目前狀態，再將目前版本用於新請求。',pmb_use_versions:'使用目前工作空間版本',
@@ -36,7 +38,7 @@ export const pmWorkBatchesStrings={
     pmb_start:'開始選定批次',pmb_empty:'尚未選入交接。',pmb_duplicate:'這個 WorkItem 已選入。若要換用另一份交接，請先移除原本的項目。',
     pmb_profile:'結果條件：已交付固定版本的 GitHub 回報檢查。',pmb_profile_label:'結果條件',pmb_github_profile:'GitHub 回報檢查',pmb_observed_profile:'已觀察的執行命令',
     pmb_fixed_handoff:'已保存的交接內容',pmb_entry_key:'穩定項目鍵',pmb_base:'固定程式版本',pmb_package:'原始工程套件',pmb_attachment:'固定規格附件',
-    pmb_dependencies:'這次選擇中的前置條件',pmb_dependency_help:'等待選定上游項目的固定版本驗證；這不會解除尚未確認的需求相依關係。',
+    pmb_dependencies:'這次選擇中的前置條件',pmb_dependency_help:'等待選定上游項目的確切結果條件。需求相依必須明確選定合格原始評估。',
     pmb_wait_for:'等待',pmb_missing_dependency:'原本選定的前置項目已移除。開始前請明確清除這個缺少的前置條件。',pmb_remove_dependency:'清除缺少的前置條件',pmb_remove:'移除此項目',
     pmb_observation_complete:'抽樣範圍完整',pmb_observation_incomplete:'抽樣範圍不完整',pmb_limits_invalid:'並行容量不得超過開始次數；請使用整數限制。',
     pmb_selection_required:'請選擇可讀取的原始項目與證據；前置項目必須存在且不能形成循環。',pmb_deadline_invalid:'請選擇未來 24 小時內的截止時間。',
@@ -46,7 +48,7 @@ export const pmWorkBatchesStrings={
     pmb_parent_operation:'開啟父操作與控制',pmb_child_operation:'開啟原始子操作',pmb_no_child:'尚未受理子操作。',
     pmb_verified:'已記錄固定版本檢查通過；需求驗收仍未評估。',pmb_unproven:'已記錄的證據尚未證明固定結果。',
     pmb_observation_digest:'原始觀察摘要',pmb_result_commit:'驗證候選版本',pmb_source_seq:'原始整合來源序號',pmb_verification_id:'已觀察驗證',pmb_result_tree:'候選檔案樹',pmb_command_digest:'指定命令摘要',
-    pmb_evidence:'記錄固定結果證據',pmb_evidence_help:'選擇原始已交付整合收據與已保存的 GitHub 觀察。中央服務會核對確切身分、完整性與回報結果。記錄證據不會重新啟動已停止的批次。',
+    pmb_evidence:'記錄固定結果證據',pmb_evidence_help:'依項目保存的結果條件，選擇合格原始評估，或原始已交付整合收據與已保存的 GitHub 觀察。中央服務會核對確切身分、完整性與回報結果。記錄證據不會重新啟動已停止的批次。',
     pmb_evidence_entry:'原始批次項目',pmb_delivery:'已交付整合收據',pmb_observation:'已保存 GitHub 觀察',pmb_record:'記錄選定證據',pmb_use_evidence_version:'使用目前證據修訂版',
     pmb_original_missing:'無法讀取原本選擇',pmb_no_evidence_entry:'目前沒有已受理且使用 GitHub 回報檢查的項目可供選擇。已觀察執行命令的證據需使用其註冊來源流程。',
     pmb_filtered:'部分原始紀錄因來源權限而隱藏。可見歷史不代表完整批次歷史。',
