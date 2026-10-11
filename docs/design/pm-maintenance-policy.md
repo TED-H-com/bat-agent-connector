@@ -111,3 +111,9 @@ receipt recovery, baseline advancement, malformed policies, pagination and zone
 data fallback without system files. Entry tests compare HTTP/RPC/MCP and cover
 global operation/event filtering. These are automated contract checks, not real
 Fleet, production publication or native installation acceptance.
+
+An optional `observation.github_profile` may explicitly select
+`github_open_prs_and_actions_v1`. Omission retains the original broad
+`github_scope=repository`; existing policies and drafts are never silently
+narrowed. The adopted precise profile and its exclusions are described in
+[GitHub workload observations](pm-github-observation.md).
