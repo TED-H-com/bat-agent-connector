@@ -56,7 +56,9 @@ def controller_scope(journal, principal=None):
 @pytest.fixture
 def controller_context(tmp_path):
     """Opt-in authority backed by a real durable server identity, without legacy adoption."""
-    journal = Journal(tmp_path / "test-controller.db")
+    # Journal must create its own private directory: pytest's existing Windows
+    # temporary directory need not have the current-user owner/private DACL.
+    journal = Journal(tmp_path / "test-controller" / "journal.db")
     try:
         with controller_scope(journal) as value:
             yield journal, value
