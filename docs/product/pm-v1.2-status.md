@@ -98,11 +98,11 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W31 | P0 | Idea thread 與明確轉 Planning | 本批：持久 Idea 與指定輸入轉 Planning 草稿 |
 | W32 | P0 | PhaseProfile 與 command policy | 本批：九種 profile 契約；Idea／Planning 可用，runtime 限制待接 adapter |
 | W33 | P0 | InputRecord 與循序資訊取得 | 開發分支：來源與確認者、假設／未知分離、固定八領域資訊與已確認回答的續接；新增固定 Follow-up 單次分析、影響／選項與零至三個問題，原回覆與格式檢查分開；後端回歸與語意品質驗證仍待完成，其他階段引導／研究 runner 待做 |
-| W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿、文件與 accepted scope 分開；開發分支已有 Sprint、治理、工程工作包與單次交接，有界批次已接中央入口，回歸及 UI 整合待完成 |
+| W34 | P0 | Thread plan change Sprint batch 狀態 | thread、Planning 草稿、文件與 accepted scope 分開；開發分支已有 Sprint、治理、工程工作包與單次交接，有界批次已接中央及共用 UI，最終整合回歸待完成 |
 | W35 | P1 | 架構與 SDD 工程工作包 | 開發分支：固定採用需求／接受條件、規格 bytes、獨立程式版本、設計／技術工作／驗證與交付安排；Web／Tauri 可交接完整工作包或明確選定原固定規格附件；接受條件品質判定仍待做 |
 | W36 | P1 | OpenSpec read adapter | 開發分支：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | 開發分支：PM 自有 Git append-only 規格與一般 immutable artifact、原操作查回、穩定 task ID／刪除歷史、完整工程包引用與最後 frame 驗證；Web／Tauri／API／MCP 已接入，不宣稱 OpenSpec CLI 相容或規格勾選等於完成 |
-| W38 | P1 | 有界批次與工作包交接 | 開發分支：1–16 筆固定既有 handoff、starts／並行／期限／proven-unsent retry 上限、固定條件的來源驗證與原 child 查回已接中央入口；批次 UI、最終回歸及語意品質接受仍待完成，模型費用未量測 |
+| W38 | P1 | 有界批次與工作包交接 | 開發分支：1–16 筆固定既有 handoff、starts／並行／期限／proven-unsent retry 上限、固定條件的來源驗證與原 child 查回已接中央／API／MCP／Web／Tauri；共用 UI 可選原 GitHub 驗證收據，observed-runner 使用已註冊來源流程；最終回歸及語意品質接受待完成，模型費用未量測 |
 | W39 | P1 | DocumentSnapshot 與五視圖 SVG | #96 已合併固定快照；開發分支加入 Project Brief 的分頁 SVG、目前權限／來源／輸出 digest 與共用下載；其餘四視圖 SVG 待做 |
 | W40 | P1 | 專案文件與簡報 | 開發分支加入同一固定 Brief 的 Markdown／HTML／SVG、中英文及 Web／Tauri 存檔；其他文件種類、可編輯簡報／播放／下載待做 |
 | W41 | P1 | Actor 決策責任與 follow-up | 開發分支：指定決策者、改善責任、固定治理／會議結果與前次比較；新增依固定準備提出偏差／決策效果與下一步的評估，API／MCP／Web／Tauri 共用原操作；建議仍未採用，後端回歸、判斷品質與自動排程待完成 |
@@ -113,7 +113,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W46 | P1 | Maintainer profile 與政策執行 | 開發分支：owner 明確採用不可變維護政策、範圍／驗證／交付上限／時區；有界檢查排程與預算 reservation 已接入，修復執行待做 |
 | W47 | P1 | 依賴 Issue PR 維護來源 | 開發分支：雙次有界 GitHub PR／checks／statuses／Actions 觀察，另可明確設定 Issue labels、Dependabot 原生 Bot／分支／manifest 與 alerts，保存固定 finding／原始頁面／既有 work 關聯；Web／Tauri／API／MCP 已接入；發布版本適用性與完整依賴掃描仍是 unknown，finding 不授權修復 |
 | W48 | P0 | 維護排程與恢復 | 開發分支：既有 worker 到期檢查與每週 Review、固定窗去重／漏跑合併、原 owner 憑證、並行／期間上限與絕對期限、原 children 查回；API／MCP／Web／Tauri 已接入；自有 repair 流程另見 W46 |
-| W49 | P1 | 每週 Maintenance Review 與改進研究 | 開發分支：固定每週報告與來源涵蓋、差異／候選／實際討論／owner 完成決策／責任追蹤、原操作與 CAS、排程共用容量、Brief 中英文輸出及原生保存已接入；觀察消失不等於解決，研究與語意品質評估尚未完成 |
+| W49 | P1 | 每週 Maintenance Review 與改進研究 | 開發分支：固定每週報告與來源涵蓋、原設定 Issue／依賴 finding 比較、候選／實際討論／owner 完成決策／責任追蹤、原操作與 CAS、排程共用容量、Brief 中英文輸出及原生保存已接入；觀察消失不等於解決，研究與語意品質評估尚未完成 |
 | W50 | P0 | 暫停 關閉與 reopen | 開發分支：同 journal 的操作／step／local effect 邊界、原 execution epoch、在途查回與明確保留；重開不復活舊佇列、不封存 GitHub、不接管外部 session；中央回歸待跑 |
 | W51 | P1 | 維護 API MCP skills 與 UI | 開發分支：lifecycle／政策／工作量／GitHub finding／檢查排程／Review 共用註冊操作、來源讀取、API／MCP／原生路由及中英文同頁控制；repair 入口與最終整合回歸待完成 |
 | W52 | P1 | 完整生命週期實機驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
@@ -124,7 +124,9 @@ Roadmap #98 與 Sprint #99 已合併；其餘 PR 仍按各自精確提交的 CI 
 
 本機固定提交的交付鏈後端在 Python 3.12／3.10 各通過 278 項；大型規格核心在 Python 3.12 通過 35 項、Python 3.10 延伸回歸通過 126 項。設定維護來源的修正版在 Python 3.10 延伸回歸通過 202 項。來源撤權與原操作恢復另有共用入口及 Web／Tauri fixture 驗證；最終合併來源的 Ruff、完整 Python suites 與原生／UI 檢查仍需完成。
 
-M4 尚未完成：BAT PM runtime 工具限制、自有維護修復的完整驗證／交付、語意品質與 DoD 接受、有界批次 UI 和端到端支援仍有工作。M5／M6 及原 W01–W52 範圍保持不變。
+本輪固定來源的批次模組 Python 3.12／3.10 各通過 25 項；之前 Python 3.10 延伸回歸另有 114 項通過，不能合稱同一全套執行。週報與設定 finding 整合在 Python 3.12 通過 33 項、Python 3.10 延伸回歸通過 94 項。共用介面新增批次掛載、唯讀政策條件及固定 finding 報告後，Web／Tauri／EN／zh-TW 的 124 項 UI 檢查通過，建置、生成資產一致性與 Ruff 通過；先前固定共享來源的 native 全套亦通過。上述皆為本機 fixture，並非 Windows／macOS 實機或 live 交付證據。
+
+M4 尚未完成：BAT PM runtime 工具限制、自有維護修復與中央自有 PR 建立的完整驗證／交付、語意品質與 DoD 接受及端到端支援仍有工作。M5／M6 及原 W01–W52 範圍保持不變。
 
 ## 工作證據與分析 adapter
 
