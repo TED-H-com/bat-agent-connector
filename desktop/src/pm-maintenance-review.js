@@ -1,0 +1,275 @@
+import {maintenanceReviewView} from './pm-maintenance-review-view.js';
+
+// The central retains report facts and decides authority. Forms keep exact original requests.
+export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox}) {
+  const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,prefix='pm.maintenance_review.';
+  const navigationKey=`batc.pm.review-navigation.${workspaceId}.${caps()?.actor}`;
+  let selected='';try{const value=JSON.parse(localStorage.getItem(navigationKey)||'{}');if(typeof value.review_id==='string')selected=value.review_id;}catch{}
+  let model=null,ready=false,ticket=0,forms=[],widgets=[],signature='',dirty=false,editorId=null,output=null;
+  const status=h('div',{role:'status'}),scheduleView=h('div'),view=h('div'),editors=h('div'),warning=h('p',{class:'muted',hidden:true},t('pmrv_stale'));
+  const text=key=>h('p',{class:'muted pm-note-text'},t(key));
+  const fold=(key,contents,open=false)=>h('details',{'data-review-fold':key,open},h('summary',{},t(key)),contents);
+  const check=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('pmrv_invalid'));return value;};
+  const valid=epoch=>{try{alive();return epoch===ticket;}catch{return false;}};
+  const readable=()=>ready&&caps()?.scopes?.includes('observe');
+  const can=()=>Boolean(readable()&&permitted(false)&&caps()?.scopes?.includes('manage'));
+  const role=actor=>workspace()?.members?.find(member=>member.actor===actor)?.role;
+  const owner=()=>can()&&role(caps()?.actor)==='owner';
+  const date=value=>Number.isFinite(value)?new Date(value*1000).toLocaleString():t('pmrv_unknown');
+  const remember=()=>{try{localStorage.setItem(navigationKey,JSON.stringify({review_id:selected}));}catch{}};
+  const choose=h('select',{'aria-label':t('pmrv_choose'),onchange:()=>{selected=choose.value;remember();void refresh(true);}});
+  const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready)renderEditors(true);}},t('pmrv_use_versions'));
+  const element=h('section',{class:'panel pm-evidence','data-pm-maintenance-review':''},
+    h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmrv_title')),text('pmrv_intro')),
+      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmrv_refresh'))),
+    labelled('pmrv_choose',choose),status,warning,rebase,scheduleView,view,editors);
+  const hidden=value=>{const field=h('input',{type:'hidden',value:JSON.stringify(value)});field.dataset.pmDefault=field.value;return field;};
+  const lines=value=>value.split('\n').map(value=>value.trim()).filter(Boolean);
+  const select=(key,entries,value='')=>{const node=h('select',{'aria-label':t(key)},...entries.map(([id,label])=>h('option',{value:id},label)));node.value=value;node.dataset.pmDefault=value;return node;};
+  const reason=()=>input('pmrv_reason',{multiline:true,max:4000});
+  const target=()=>({workspace_id:workspaceId,review_id:model.detail.review.review_id});
+  const pre=()=>({expected_version:model.detail.review.version});
+  const sourceRows=()=>model?.detail?.snapshot.maintenance.report.sources||[];
+  const sourceLabel=row=>`${t('pmrv_ref_'+row.kind)} · ${row.id}`;
+  const known=(field,choices)=>{const selected=JSON.parse(field.value||'[]');return selected.every(id=>choices.some(row=>row.id===id));};
+  const request=async(...args)=>{const current=ticket;try{return await api(...args);}catch(error){
+    if(valid(current)&&([401,403,404].includes(error.status)||['FORBIDDEN','NOT_FOUND'].includes(error.code)))failure(error);throw error;
+  }};
+  function update(){
+    let stale=false;for(const entry of forms){stale ||= !entry.editor.locked()&&entry.stale();entry.editor.update();}
+    widgets.forEach(widget=>widget.sync());warning.hidden=rebase.hidden=!stale;rebase.disabled=!ready;choose.disabled=!ready;
+    output?.update();
+  }
+  function withdraw(){ticket++;ready=false;model=null;view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();editors.hidden=true;status.replaceChildren();output=null;update();}
+  function failure(error){withdraw();status.replaceChildren(text('pmrv_unavailable'),errorBox(error));}
+  function localForm(config){
+    const expected=()=>JSON.stringify({preconditions:config.preconditions(),context:config.context?.()??null});
+    const baseline=h('input',{type:'hidden',value:expected()});baseline.dataset.pmDefault=baseline.value;
+    const stale=()=>ready&&baseline.value!==expected();
+    let editor;
+    editor=form({...config,api:request,fields:{...config.fields,_baseline:baseline},
+      params:values=>{if(config.valid&&!config.valid())throw Error(t('pmrv_selection_required'));return config.params(Object.fromEntries(Object.entries(values).filter(([name])=>name!=='_baseline')));},
+      onStateChange:()=>{if(ready&&editor&&!editor.locked()&&config.valid&&!config.valid())editor.box.querySelector('button[type=submit]').disabled=true;widgets.forEach(widget=>widget.sync());},
+      preconditions:()=>JSON.parse(baseline.value).preconditions,permitted:()=>!stale()&&config.permitted(),
+      recoverPermitted:can,extra:h('div',{},config.extra,baseline),onSaved:async result=>{
+        if(config.action===prefix+'prepare'&&result?.review_id){selected=result.review_id;remember();}await refresh(true);
+      }});
+    editor.box.addEventListener('input',()=>{dirty=true;update();});editor.box.addEventListener('change',()=>{dirty=true;update();});
+    forms.push({editor,stale,rebase:()=>{if(!editor.locked())editor.set('_baseline',expected());}});
+    return editor;
+  }
+  function choices(field,getEditor,getChoices,key){
+    const holder=h('div',{class:'pm-review-checks'});let previous='',controls=[];
+    const sync=()=>{
+      const available=getChoices(),chosen=JSON.parse(field.value||'[]'),rows=[...available];
+      for(const id of chosen)if(!rows.some(row=>row.id===id))rows.push({id,label:`${t('pmrv_source_missing')} · ${id}`,unavailable:true});
+      const signature=JSON.stringify(rows);
+      if(signature!==previous){
+        previous=signature;controls=[];holder.replaceChildren();
+        for(const row of rows){const node=h('input',{type:'checkbox','aria-label':row.label});
+          node.addEventListener('input',()=>{const editor=getEditor();if(!editor||editor.locked()||!can()||node.disabled)return;
+            const values=JSON.parse(field.value||'[]').filter(value=>value!==row.id);if(node.checked)values.push(row.id);
+            field.value=JSON.stringify(values);editor.changed();dirty=true;update();});
+          holder.append(h('label',{},node,h('span',{},row.label)));controls.push({node,row});
+        }
+        if(!rows.length)holder.append(text('pmrv_none'));
+      }
+      for(const{node,row}of controls){node.checked=chosen.includes(row.id);node.disabled=!can()||Boolean(getEditor()?.locked());}
+    };
+    const widget={element:fold(key,h('div',{},text('pmrv_source_help'),holder)),sync};widgets.push(widget);return widget;
+  }
+  function sourceChoices(field,getEditor){return choices(field,getEditor,()=>sourceRows().map(row=>({id:row.source_id,label:sourceLabel(row)})),'pmrv_source_refs');}
+  function collection(field,getEditor,definitions,key,limit=10){
+    const holder=h('div'),rows=h('div'),add=h('button',{type:'button',class:'secondary'},t('pmrv_'+key));let controls=[];
+    const change=values=>{if(!getEditor()||getEditor().locked()||!can())return;field.value=JSON.stringify(values);getEditor().changed();dirty=true;update();};
+    const render=()=>{
+      rows.replaceChildren();controls=[];
+      for(const item of JSON.parse(field.value||'[]')){
+        const fields=definitions.map(def=>{
+          const choices=def.choices?.(),value=item[def.name]??'';
+          const node=choices?select(def.label,choices,value):input(def.label,{multiline:!def.type,max:def.max||4000,value});
+          if(def.type)node.type=def.type;
+          if(choices&&value&&!choices.some(([id])=>id===value))node.append(h('option',{value},`${t('pmrv_source_missing')} · ${value}`));
+          node.value=value;
+          node.addEventListener('input',()=>{const values=JSON.parse(field.value||'[]'),current=values.find(row=>row.id===item.id);if(current){current[def.name]=node.value;change(values);}});
+          controls.push(node);return labelled(def.label,node);
+        });
+        const remove=h('button',{type:'button',class:'secondary',onclick:()=>{change(JSON.parse(field.value||'[]').filter(row=>row.id!==item.id));render();sync();}},t('pmrv_remove'));
+        controls.push(remove);rows.append(h('div',{class:'pm-review-assignment pm-fields'},...fields,remove));
+      }
+    };
+    const sync=()=>{const disabled=!can()||Boolean(getEditor()?.locked());controls.forEach(node=>{node.disabled=disabled;});add.disabled=disabled||JSON.parse(field.value||'[]').length>=limit;};
+    add.addEventListener('click',()=>{if(add.disabled)return;const values=JSON.parse(field.value||'[]');change([...values,{id:crypto.randomUUID().replaceAll('-',''),
+      ...Object.fromEntries(definitions.map(def=>[def.name,def.choices?.()[0]?.[0]||'']))}]);render();sync();});
+    holder.append(rows,add);const widget={element:holder,sync,mount:render};widgets.push(widget);return widget;
+  }
+  function mutationEditors(){
+    const detail=model.detail,holder=h('div'),snapshotId=detail.snapshot.snapshot_id;
+    const context=()=>model?.detail?.snapshot.snapshot_id??null;
+    const prepared=()=>can()&&model?.detail?.review.status==='prepared';
+    const content=input('pmrv_note_content',{multiline:true,max:8000}),noteReason=reason(),noteRefs=hidden([]);let noteEditor;
+    const noteSources=sourceChoices(noteRefs,()=>noteEditor);
+    noteEditor=localForm({action:prefix+'note',target:target(),fields:{content,rationale:noteReason,source_refs:noteRefs},preconditions:pre,context,
+      permitted:prepared,valid:()=>known(noteRefs,sourceRows().map(row=>({id:row.source_id}))),label:'pmrv_note',
+      params:values=>({...values,source_refs:JSON.parse(values.source_refs)}),extra:h('div',{class:'pm-fields'},
+        labelled('pmrv_note_content',content),labelled('pmrv_reason',noteReason),noteSources.element)});
+    const noteBox=fold('pmrv_note',noteEditor.box,noteEditor.locked());noteBox.hidden=detail.review.status==='completed'&&!noteEditor.locked();holder.append(noteBox);
+    const candidateFields={};for(const[key,label,max]of [['title','candidate_title',200],['problem','problem',4000],['goal_relation','goal_relation',4000],
+      ['expected_effect','expected_effect',4000],['options','options',20000],['hypotheses','hypotheses',20000]])candidateFields[key]=input('pmrv_'+label,{multiline:key!=='title',max,required:!['options','hypotheses'].includes(key)});
+    candidateFields.rationale=reason();candidateFields.source_refs=hidden([]);candidateFields.public_sources=hidden([]);let candidateEditor;
+    const candidateSources=sourceChoices(candidateFields.source_refs,()=>candidateEditor);
+    const publicSources=collection(candidateFields.public_sources,()=>candidateEditor,[{name:'url',label:'pmrv_public_url',type:'url',max:2000},
+      {name:'title',label:'pmrv_public_title',type:'text',max:200},{name:'checked_at',label:'pmrv_public_date',type:'datetime-local'},
+      {name:'claim',label:'pmrv_public_claim',max:4000}],'add_public_source',5);
+    candidateEditor=localForm({action:prefix+'candidate.record',target:target(),fields:candidateFields,preconditions:pre,context,
+      permitted:prepared,valid:()=>JSON.parse(candidateFields.source_refs.value).length>0&&known(candidateFields.source_refs,sourceRows().map(row=>({id:row.source_id}))),
+      label:'pmrv_candidate',params:values=>({...values,options:lines(values.options),hypotheses:lines(values.hypotheses),source_refs:JSON.parse(values.source_refs),
+        public_sources:JSON.parse(values.public_sources).map(({id,...source})=>({...source,checked_at:new Date(source.checked_at).getTime()/1000}))}),
+      extra:h('div',{class:'pm-fields'},text('pmrv_candidate_help'),...Object.entries(candidateFields).filter(([,node])=>node.type!=='hidden').map(([key,node])=>labelled('pmrv_'+({title:'candidate_title',rationale:'reason'}[key]||key),node)),
+        candidateSources.element,fold('pmrv_public_sources',h('div',{},text('pmrv_attributed_source'),publicSources.element)))});
+    publicSources.mount();const candidateBox=fold('pmrv_candidate',candidateEditor.box,candidateEditor.locked());candidateBox.hidden=detail.review.status==='completed'&&!candidateEditor.locked();holder.append(candidateBox);
+    const notes=hidden([]),candidates=hidden([]),ack=hidden(false),summary=input('pmrv_summary',{multiline:true,max:8000}),direction=select('pmrv_direction',
+      ['continue_maintenance','bounded_repair_proposal','explore_idea','request_planning','revise_policy','pause_proposal','close_proposal','defer'].map(value=>[value,t('pmrv_direction_'+value)]),'defer'),
+      directionReason=input('pmrv_direction_reason',{multiline:true,max:4000}),followups=hidden([]),focus=input('pmrv_next_focus',{multiline:true,max:40000,required:false}),completeReason=reason();let completeEditor;
+    const events=kind=>(model?.detail?.events||[]).filter(row=>row.kind===kind).map(row=>({id:row.event_id,label:`${row.actor} · ${row.document.content||row.document.title}`}));
+    const noteChoices=choices(notes,()=>completeEditor,()=>events('note'),'pmrv_acknowledged_notes'),candidateChoices=choices(candidates,()=>completeEditor,()=>events('candidate.record'),'pmrv_candidates');
+    const checkAck=h('input',{type:'checkbox','aria-label':t('pmrv_acknowledge'),oninput:()=>{if(!completeEditor.locked()&&owner()){ack.value=JSON.stringify(checkAck.checked);completeEditor.changed();dirty=true;update();}}});
+    const assignments=collection(followups,()=>completeEditor,[{name:'text',label:'pmrv_followup_text'},
+      {name:'owner_actor',label:'pmrv_owner',choices:()=>workspace().members.filter(row=>['owner','contributor'].includes(row.role)).map(row=>[row.actor,row.actor])},
+      {name:'expected_effect',label:'pmrv_expected_effect'},{name:'verification',label:'pmrv_verification'}],'add_followup');
+    widgets.push({sync:()=>{checkAck.checked=JSON.parse(ack.value);checkAck.disabled=!owner()||Boolean(completeEditor?.locked());}});
+    completeEditor=localForm({action:prefix+'complete',target:target(),fields:{acknowledged_note_ids:notes,candidate_ids:candidates,discussion_acknowledged:ack,
+      discussion_summary:summary,direction,direction_rationale:directionReason,follow_ups:followups,next_observation_focus:focus,rationale:completeReason},preconditions:pre,context,
+      permitted:()=>prepared()&&owner(),valid:()=>JSON.parse(ack.value)===true&&JSON.parse(notes.value).length>0&&known(notes,events('note'))&&known(candidates,events('candidate.record'))
+        &&JSON.parse(followups.value).every(row=>['owner','contributor'].includes(role(row.owner_actor))),label:'pmrv_complete',
+      params:values=>({...values,acknowledged_note_ids:JSON.parse(values.acknowledged_note_ids),candidate_ids:JSON.parse(values.candidate_ids),
+        discussion_acknowledged:JSON.parse(values.discussion_acknowledged),follow_ups:JSON.parse(values.follow_ups).map(item=>({...item,source_refs:[]})),next_observation_focus:lines(values.next_observation_focus)}),
+      extra:h('div',{class:'pm-fields'},text('pmrv_completion_help'),!owner()?text('pmrv_complete_owner'):'',noteChoices.element,
+        h('label',{class:'pm-review-ack'},checkAck,t('pmrv_acknowledge')),labelled('pmrv_summary',summary),labelled('pmrv_direction',direction),
+        labelled('pmrv_direction_reason',directionReason),candidateChoices.element,fold('pmrv_followups',assignments.element),
+        labelled('pmrv_next_focus',focus),labelled('pmrv_reason',completeReason))});
+    assignments.mount();const completeBox=fold('pmrv_complete',completeEditor.box,completeEditor.locked());completeBox.hidden=detail.review.status==='completed'&&!completeEditor.locked();holder.append(completeBox);
+    // Always mount original action targets for lost completion/result receipt recovery.
+    const allowedAssignments=()=>model?.detail?.completion?.document.follow_ups?.filter(item=>owner()||item.owner_actor===caps()?.actor)||[];
+    const assigned=select('pmrv_select_followup',allowedAssignments().map(item=>[item.id,`${item.text} · ${item.owner_actor}`]),allowedAssignments()[0]?.id||''),
+      reported=select('pmrv_followup_status',['open','blocked','reported_done'].map(value=>[value,t('pmrv_followup_'+value)]),'open'),result=input('pmrv_result',{multiline:true,max:8000}),followReason=reason(),
+      snapshot=select('pmrv_result_snapshot',[['',t('pmrv_same_snapshot')],...model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${date(row.as_of)}`])]);
+    const followEditor=localForm({action:prefix+'follow_up.record',target:target(),fields:{follow_up_id:assigned,status:reported,result,rationale:followReason,snapshot_id:snapshot},preconditions:pre,
+      context:()=>model?.detail?.review.completion_id??null,permitted:()=>can()&&model?.detail?.review.status==='completed'&&allowedAssignments().some(item=>item.id===assigned.value)
+        ,valid:()=>!snapshot.value||model.snapshots.some(row=>row.snapshot_id===snapshot.value),label:'pmrv_save_followup',
+      params:({snapshot_id,...values})=>({...values,...(snapshot_id?{snapshot_id}:{})}),extra:h('div',{class:'pm-fields'},text('pmrv_unassessed'),
+        labelled('pmrv_select_followup',assigned),labelled('pmrv_followup_status',reported),labelled('pmrv_result',result),
+        labelled('pmrv_result_snapshot',snapshot),labelled('pmrv_reason',followReason))});
+    const followBox=fold('pmrv_save_followup',followEditor.box,followEditor.locked());followBox.hidden=!detail.completion?.document.follow_ups?.length&&!followEditor.locked();holder.append(followBox);
+    holder.dataset.snapshotId=snapshotId;return holder;
+  }
+  const localTime=value=>{const date=new Date(value);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+  function prepareEditor(){
+    const title=input('pmrv_report_title',{max:200}),start=input('pmrv_start',{value:localTime(Date.now()-7*86400000)}),end=input('pmrv_end',{value:localTime(Date.now())});
+    start.type=end.type='datetime-local';start.dataset.pmDefault=start.value;end.dataset.pmDefault=end.value;
+    const previous=select('pmrv_previous',[['',t('pmrv_no_previous')],...model.reviews.map(row=>[row.review_id,`${row.title} · ${date(row.created_at)}`])]);
+    const p=()=>({expected_plan_version:model.plan.head.version,expected_review_revision:model.current.revision,
+      expected_policy_id:model.policy?.policy_id??null,expected_policy_version:model.policy?.revision??null,
+      expected_baseline_id:model.baseline?.baseline_id??null,expected_lifecycle_revision:model.lifecycle.revision});
+    const periodValid=()=>{const a=new Date(start.value).getTime(),b=new Date(end.value).getTime();return Number.isFinite(a)&&Number.isFinite(b)&&b>a&&b<=Date.now()&&b-a<=31*86400000;};
+    const editor=localForm({action:prefix+'prepare',target:{workspace_id:workspaceId},fields:{title,period_start:start,period_end:end,previous_review_id:previous},
+      preconditions:p,permitted:()=>can()&&Boolean(model.policy&&model.baseline),valid:()=>periodValid()&&(!previous.value||model.reviews.some(row=>row.review_id===previous.value)),
+      label:'pmrv_prepare',params:values=>({title:values.title,period_start:new Date(values.period_start).getTime()/1000,period_end:new Date(values.period_end).getTime()/1000,
+        ...(values.previous_review_id?{previous_review_id:values.previous_review_id}:{})}),
+      extra:h('div',{class:'pm-fields'},text('pmrv_prepare_help'),!model.policy||!model.baseline?text('pmrv_context_missing'):'',
+        labelled('pmrv_report_title',title),h('div',{class:'capture-fields'},labelled('pmrv_start',start),labelled('pmrv_end',end)),text('pmrv_period_help'),
+        labelled('pmrv_previous',previous))});
+    return fold('pmrv_prepare',editor.box,!model.detail||editor.locked());
+  }
+  function renderEditors(rebase=false){
+    const id=model.detail?.review.review_id??null;
+    const expanded=editorId===id?new Set([...editors.querySelectorAll('[data-review-fold][open]')].map(node=>node.dataset.reviewFold)):new Set();
+    forms.forEach(entry=>entry.editor.dispose?.());forms=[];widgets=[];dirty=false;editors.replaceChildren();
+    if(model.detail)editors.append(mutationEditors());editors.append(prepareEditor());
+    if(rebase)forms.forEach(entry=>entry.rebase());
+    for(const node of editors.querySelectorAll('[data-review-fold]'))if(expanded.has(node.dataset.reviewFold))node.open=true;
+    editorId=id;update();
+  }
+  function eventPage(data,after){
+    check(data);if(data.review_id!==model.detail.review.review_id||!Array.isArray(data.events)||typeof data.visibility_filtered!=='boolean'
+      ||data.next_cursor!==null&&(!Number.isSafeInteger(data.next_cursor)||data.next_cursor<=after))throw Error(t('pmrv_invalid'));
+    const seen=new Set(model.detail.events.map(row=>row.event_id));
+    for(const row of data.events){check(row);if(row.review_id!==data.review_id||seen.has(row.event_id))throw Error(t('pmrv_invalid'));seen.add(row.event_id);}
+    return data;
+  }
+  function renderView(){
+    view.replaceChildren();output=null;
+    if(!model.detail){view.append(text(model.current.visibility_filtered?'pmrv_hidden':'pmrv_empty'));return;}
+    output=maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable:failure,detail:model.detail});view.append(output.element);
+    const detail=model.detail;
+    if(detail.visibility_filtered)view.append(text('pmrv_history_filtered'));
+    if(detail.next_cursor!==null){
+      view.append(text('pmrv_history_partial'));
+      const after=detail.next_cursor,epoch=ticket,rid=detail.review.review_id;
+      const more=h('button',{type:'button',class:'secondary',onclick:async()=>{
+        more.disabled=true;try{
+          const page=await api('GET',`${base}/maintenance-reviews/${rid}/events?after=${after}&limit=20`);if(!valid(epoch)||!more.isConnected)return;
+          eventPage(page,after);model.detail.events.push(...page.events);model.detail.next_cursor=page.next_cursor;model.detail.visibility_filtered ||= page.visibility_filtered;
+          renderView();update();
+        }catch(error){if(valid(epoch))failure(error);}finally{more.disabled=false;}
+      }},t('pmrv_more_events'));view.append(more);
+    }
+  }
+  function renderSchedule(data){
+    scheduleView.replaceChildren();
+    if(data===null){scheduleView.append(text('pmrv_weekly_unavailable'));return;}
+    check(data);if(typeof data.visibility_filtered!=='boolean'||data.visibility_filtered&&data.schedule!==null)throw Error(t('pmrv_invalid'));
+    const weekly=data.schedule?.weekly_review;
+    if(!weekly){scheduleView.append(text(data.visibility_filtered?'pmrv_hidden':'pmrv_weekly_unavailable'));return;}
+    if(typeof weekly.execution_available!=='boolean'||weekly.next_due!==null&&!Number.isFinite(weekly.next_due))throw Error(t('pmrv_invalid'));
+    const reasons={PM_MAINTENANCE_BUDGET_EXHAUSTED:'capacity',PM_MAINTENANCE_STAGE_STOPPED:'stage',PM_MAINTENANCE_DISABLED:'disabled',
+      PM_MAINTENANCE_AUTHORITY_UNAVAILABLE:'authority',PM_MAINTENANCE_CONTROLLER_CHANGED:'authority',
+      PM_MAINTENANCE_SOURCES_UNAVAILABLE:'sources',PM_MAINTENANCE_REVIEW_SOURCE_UNAVAILABLE:'sources'};
+    scheduleView.append(fold('pmrv_weekly',h('div',{},h('p',{},t('pmrv_weekly_next'),': ',date(weekly.next_due)),
+      text(!weekly.execution_available?'pmrv_weekly_unavailable':weekly.blocked_reason?'pmrv_weekly_'+(reasons[weekly.blocked_reason]||'blocked'):'pmrv_weekly_ready'),
+      weekly.pending_report?text('pmrv_weekly_pending'):'',text('pmrv_not_completed'))));
+  }
+  async function pages(suffix,property,epoch){
+    let after=0,records=[],filtered=false;const ids=new Set();
+    for(let count=0;count<20;count++){
+      const page=check(await api('GET',`${base}/${suffix}?after=${after}&limit=50`));if(!valid(epoch))return null;
+      if(!Array.isArray(page[property])||typeof page.visibility_filtered!=='boolean'||page.next_cursor!==null&&(!Number.isSafeInteger(page.next_cursor)||page.next_cursor<=after))throw Error(t('pmrv_invalid'));
+      for(const row of page[property]){check(row);const id=property==='reviews'?row.review_id:row.snapshot_id;
+        if(!(property==='reviews'?/^pmrevw_[0-9a-f]{32}$/:/^pmsnap_[0-9a-f]{32}$/).test(id)||ids.has(id))throw Error(t('pmrv_invalid'));ids.add(id);records.push(row);}
+      filtered ||= page.visibility_filtered===true;if(page.next_cursor===null)return {records,filtered};after=page.next_cursor;
+    }throw Error(t('pmrv_history_bound'));
+  }
+  async function refresh(force=false){
+    const focus=editors.contains(document.activeElement)?document.activeElement:null,selection=focus&&typeof focus.selectionStart==='number'?[focus.selectionStart,focus.selectionEnd]:null;
+    const epoch=++ticket;ready=false;editors.hidden=true;view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();status.replaceChildren();output=null;update();
+    try{
+      const [reviews,snapshots,current,policy,baseline,lifecycle,plan,schedule]=await Promise.all([pages('maintenance-reviews','reviews',epoch),pages('snapshots','snapshots',epoch),
+        ...['maintenance-reviews/current?history_limit=20','maintenance-policies/current','release-baselines/current','lifecycle','plans/head'].map(path=>api('GET',`${base}/${path}`)),
+        caps()?.features?.pm_workspaces?.maintenance_checks?.weekly_review_execution===true?api('GET',`${base}/maintenance-schedule`):Promise.resolve(null)]);
+      if(!valid(epoch))return;
+      for(const row of [current,policy,baseline,lifecycle])check(row);
+      if(!Number.isSafeInteger(current.revision)||typeof current.visibility_filtered!=='boolean'
+        ||!Number.isSafeInteger(lifecycle.lifecycle?.revision)||!Number.isSafeInteger(plan.head?.version)
+        ||typeof policy.visibility_filtered!=='boolean'||typeof baseline.visibility_filtered!=='boolean'
+        ||policy.policy&&(check(policy.policy).policy_id!==policy.head?.policy_id||policy.policy.revision!==policy.head.revision)
+        ||baseline.baseline&&check(baseline.baseline).baseline_id!==baseline.head?.baseline_id)throw Error(t('pmrv_invalid'));
+      const detail=selected?check(await api('GET',`${base}/maintenance-reviews/${encodeURIComponent(selected)}?history_limit=20`)):current.review?current:null;
+      if(!valid(epoch))return;
+      if(detail&&(check(detail.review).review_id!==(selected||current.review.review_id)||!Number.isSafeInteger(detail.review.version)
+        ||!Array.isArray(detail.events)||detail.next_cursor!==null&&(!Number.isSafeInteger(detail.next_cursor)||detail.next_cursor<0)))throw Error(t('pmrv_invalid'));
+      const next=JSON.stringify([detail?.review.review_id,detail?.review.version,current.revision,policy.head,baseline.head,lifecycle.lifecycle.revision,plan.head.version,workspace()?.version]);
+      const changed=signature&&next!==signature;
+      model={reviews:reviews.records,snapshots:snapshots.records,current,detail,policy:policy.visibility_filtered?null:policy.policy,
+        baseline:baseline.visibility_filtered?null:baseline.baseline,lifecycle:lifecycle.lifecycle,plan};ready=true;editors.hidden=false;
+      choose.replaceChildren(h('option',{value:''},t('pmrv_current')),...model.reviews.map(row=>h('option',{value:row.review_id},`${row.title} · ${date(row.created_at)}`)));
+      if(selected&&!model.reviews.some(row=>row.review_id===selected))choose.append(h('option',{value:selected},detail.review.title));choose.value=selected;
+      renderView();renderSchedule(schedule);
+      if(force||!signature||editorId!==(detail?.review.review_id??null)||changed&&!dirty&&!forms.some(entry=>entry.editor.locked()))renderEditors();
+      signature=next;update();
+      if(reviews.filtered||snapshots.filtered)status.append(text('pmrv_history_filtered'));
+      if(!can())status.append(text('pmrv_write_scope'));
+      if(focus?.isConnected&&!focus.disabled&&document.activeElement===document.body){focus.focus({preventScroll:true});if(selection)focus.setSelectionRange(...selection);}
+    }catch(error){if(valid(epoch))failure(error);}
+  }
+  return {element,refresh,withdraw};
+}
