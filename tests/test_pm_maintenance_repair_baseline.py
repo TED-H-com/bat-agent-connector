@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from bat_agent_connector import pm_lifecycle_gates
+from bat_agent_connector import deployment_store, pm_lifecycle_gates
 from bat_agent_connector import pm_maintenance_policy as policies
 from bat_agent_connector import pm_maintenance_repair_baseline as baseline
 from bat_agent_connector import pm_release_baselines as baselines
@@ -39,6 +39,13 @@ base_ready_chain = fixtures.ready_chain
 @pytest.fixture
 async def ready_chain(base_ready_chain):
     w = base_ready_chain
+    comparison = w['gh'].comparison
+    def compare(base, head, page):
+        result = comparison(base, head, page)
+        if result is not None:
+            result['base_commit'] = {'sha': w['gh'].branches.get(base, base)}
+        return result
+    w['gh'].comparison = compare
     after_post = w['after_post']
     def published(payload):
         after_post(payload)
@@ -156,3 +163,62 @@ async def test_stop_before_selection_preserves_delivery_and_original_baseline(re
     assert baselines._head(ops.db, w['workspace_id'])['baseline_id'] == w['initial_baseline']['baseline_id']
     assert baseline.child(ops, parent) is None
     assert w['gh'].count('POST', 'dispatches') == 2
+
+
+async def test_committed_baseline_recovers_parent_after_a_later_deployment(ready_chain):
+    w, ops = ready_chain, ready_chain['d'].ops
+    parent = await finish_deployment(w)
+    await ops._execute(parent['operation_id'])
+    selection = baseline.child(ops, parent)
+    assert selection is not None
+    await ops._execute(selection['operation_id'])
+    assert ops.get(selection['operation_id'])['status'] == 'succeeded'
+    selected = ops.get(selection['operation_id'])['result']
+    assert not ops.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? AND name='pm.repair.delivered'",
+                             (parent['operation_id'],)).fetchone()
+    original = chain.child(ops, parent)
+    previous = deployment_store.deployment(ops.db, operation_id=original['operation_id'])
+    newer = 'd' * 40
+    w['gh'].commits[newer] = {'sha': newer, 'parents': [{'sha': previous['identity']['source_sha']}]}
+    w['gh'].branches['main'] = newer
+    await deployments.deployed(w['d'], w['gh'], key='later-independent-deployment', sha=newer)
+    assert deployment_store.deployment(ops.db, operation_id=original['operation_id'])['state'] == 'superseded'
+    await ops._execute(parent['operation_id'])
+    recovered = ops.get(parent['operation_id'])
+    assert recovered['status'] == 'succeeded', (recovered.get('error_code'), recovered.get('reason'))
+    assert recovered['result']['baseline_update']['baseline_id'] == selected['baseline_id']
+    assert recovered['result']['delivery']['deployment']['state'] == 'superseded'
+    assert view(w, recovered)['baseline_child']['operation_id'] == selection['operation_id']
+    assert baselines.get_baseline(ops, OWNER, w['workspace_id'], selected['baseline_id'])['baseline']['previous_baseline_id'] == w['initial_baseline']['baseline_id']
+    assert w['gh'].count('POST', 'dispatches') == 3 and len(chain._rows(ops, parent, 'baseline')) == 1
+
+
+@pytest.mark.parametrize('token_missing', [False, True])
+async def test_private_baseline_uses_bounded_http_and_current_token(ready_chain, monkeypatch, token_missing):
+    from bat_agent_connector.errors import TokenUnavailable
+    w, ops = ready_chain, ready_chain['d'].ops
+    parent = await finish_deployment(w)
+    await ops._execute(parent['operation_id'])
+    selection = baseline.child(ops, parent)
+    assert selection is not None
+    client = ops.context['github']
+    request, timeouts = client._request, []
+    def capture(method, path, body=None, query=None, *, timeout_s=None):
+        timeouts.append(timeout_s)
+        return request(method, path, body, query, timeout_s=timeout_s)
+    monkeypatch.setattr(client, '_request', capture)
+    reads = len(w['gh'].requests)
+    if token_missing:
+        def unavailable():
+            raise TokenUnavailable('fixture current token unavailable')
+        monkeypatch.setattr(client, '_fixed_token', None)
+        monkeypatch.setattr(client.cfg, 'token', unavailable)
+        client._last_token = 'fixture-stale-token-never-reused'
+    await ops._execute(selection['operation_id'])
+    assert timeouts and all(value is not None and 0 < value <= 30 for value in timeouts)
+    if token_missing:
+        assert ops.get(selection['operation_id'])['status'] != 'succeeded'
+        assert len(w['gh'].requests) == reads
+        assert baselines._head(ops.db, w['workspace_id'])['baseline_id'] == w['initial_baseline']['baseline_id']
+    else:
+        assert ops.get(selection['operation_id'])['status'] == 'succeeded', ops.get(selection['operation_id'])
