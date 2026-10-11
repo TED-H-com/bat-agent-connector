@@ -124,3 +124,58 @@ def test_task_binding_ignores_controller_keys_but_keeps_task_identity():
     assert relay.task_binding({"controller_authority": {}, "session_controller": {}}) is None
     full["control_version"] += 1
     assert relay.task_binding(full) != task
+
+
+async def test_failover_cannot_reuse_ended_foreign_carrier(daemon, mock):
+    with controller_scope(daemon.journal, OWNER):
+        _add_wt_claude(mock, SID)
+    with controller_scope(daemon.journal, OTHER):
+        adopt("ended-foreign", cwd="/srv/other", origin_cwd="/srv/demo", agent_preset="claude-code-worktree")
+        registry.update("h1", "ended-foreign", status="ended")
+    # Historical shared inventory can predate the new reservation guard.
+    path = registry.registry_path()
+    document = json.loads(path.read_text())
+    row = next(row for row in document["sessions"] if row["session_id"] == "ended-foreign")
+    row.update(cwd="/srv/demo/.bat-worktrees/abc", worktree_path="/srv/demo/.bat-worktrees/abc",
+               branch="bat/worktree-abc", shares_worktree_with=SID)
+    path.write_text(json.dumps(document))
+    mock.handlers["git:log"] = lambda p: [{"hash": "a" * 40}]
+    op, _ = daemon.ops.create(OWNER, action="session.failover", target={"host": "h1", "session_id": SID},
+                              idempotency_key="shared-foreign-failover")
+    await settle_operations(daemon.ops)
+    result = daemon.ops.get(op["operation_id"])
+    assert result["status"] == "failed", result
+    assert result["error_code"] == "FOREIGN_CONTROLLER", result
+    assert not api.write_frames(mock)
+
+
+async def test_relay_foreign_target_is_read_only_without_fallback(daemon, mock):
+    with controller_scope(daemon.journal, OWNER):
+        adopt(api.MANUAL, agent_preset="claude-code")
+    op, _ = daemon.ops.create(OTHER, action="session.relay", target={"host": "h1", "session_id": api.MANUAL},
+                              params={"message": "read this source only"}, idempotency_key="foreign-relay")
+    await settle_operations(daemon.ops)
+    result = daemon.ops.get(op["operation_id"])
+    assert result["status"] == "succeeded" and result["result"]["sent"] is False, result
+    assert not api.write_frames(mock)
+    assert not [row for row in daemon.ops.list()["operations"] if row["action"] == "session.send"]
+
+
+async def test_fanout_can_read_foreign_planner_but_never_stop_it(daemon, mock):
+    from tests.test_fanout_operations import ITEMS, replies, settle
+
+    with controller_scope(daemon.journal, OWNER):
+        adopt(api.MANUAL, role="planner", agent_preset="claude-code")
+    replies(mock, tasks=ITEMS[:1])
+    mock.handlers["git:log"] = lambda p: [{"hash": "a" * 40}]
+    daemon.fleet.config.host("h1").orchestrate_max_sessions = 8
+    op, _ = daemon.ops.create(OTHER, action="fanout.start", target={"host": "h1", "session_id": api.MANUAL},
+                              params={}, idempotency_key="foreign-planner-source")
+    result = await settle(daemon, op["operation_id"])
+    assert result["status"] == "succeeded", (result["error_code"], result["status_reason"], result["steps"])
+    assert result["result"]["count"] == 1
+    assert "claude:stop-session" not in mock.channels()
+    assert registry.get("h1", api.MANUAL)["status"] == "active"
+    authority = controller_authority.binding(daemon.journal.db, OTHER)
+    for child in result["result"]["started"]:
+        assert controller_authority.same_controller(registry.get("h1", child["session_id"])["controller_authority"], authority)

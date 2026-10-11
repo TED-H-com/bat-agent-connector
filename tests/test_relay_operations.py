@@ -15,7 +15,7 @@ from tests.operation_helpers import settle_operations
 
 daemon, served, owned = api.daemon, api.served, tasks.owned
 SID = api.MANUAL
-P = api_auth.Principal('relay-caller', frozenset({'operate', 'observe', 'start'}))
+P = api_auth.Principal('operator-dashboard', frozenset({'operate', 'observe', 'start'}))
 WORDS = '  原始說明\nDo this exactly.  '
 
 
@@ -256,7 +256,7 @@ async def test_child_control_retains_parent_actor_and_scopes(daemon, mock):
     other = api_auth.Principal('other', P.scopes)
     for caller in (reduced, other):
         for oid in (out['operation_id'], child_id):
-            with pytest.raises(OperationError, match='FORBIDDEN'):
+            with pytest.raises(OperationError, match='FORBIDDEN' if caller is reduced else 'CONTROLLER_MISMATCH'):
                 daemon.ops.cancel(caller, oid)
     with pytest.raises(OperationError, match='FORBIDDEN'):
         daemon.ops.create(reduced, **intent(params={'message': WORDS, 'start_if_missing': True}))
