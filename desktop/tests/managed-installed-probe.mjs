@@ -1,38 +1,86 @@
 // Used only by disposable installed-app fixtures. Never writes or logs credentials.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFile, readdir, lstat } from 'node:fs/promises';
+import { readFile, readdir, lstat, open, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
-export async function probeManaged(dataRoot, { wait = false } = {}) {
+// Keep diagnostics finite and non-sensitive: never return file contents, paths,
+// endpoint/identity values, or arbitrary exception messages from the runtime.
+export async function serviceFailure(dataRoot) {
+  let file;
+  try {
+    const path = join(dataRoot, 'managed-central/service.log');
+    const stat = await lstat(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16384) return { state: 'unavailable' };
+    file = await open(path, 'r');
+    const bytes = Buffer.alloc(16385);
+    const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
+    if (bytesRead > 16384) return { state: 'unavailable' };
+    const value = JSON.parse(bytes.subarray(0, bytesRead).toString('utf8'));
+    if (value.protocol !== 1 || value.error !== 'MANAGED_RUNTIME_UNAVAILABLE') return { state: 'unavailable' };
+    const classes = ['PermissionError', 'FileNotFoundError', 'OSError', 'ValueError', 'KeyError',
+      'RuntimeError', 'ImportError', 'ModuleNotFoundError', 'TimeoutError'];
+    const kind = classes.find(name => value.message === `${name}: managed installation needs recovery`);
+    return { state: 'reported', error: 'MANAGED_RUNTIME_UNAVAILABLE', exception: kind || 'other',
+      errno: Number.isSafeInteger(value.errno) ? value.errno : null,
+      winerror: Number.isSafeInteger(value.winerror) ? value.winerror : null };
+  } catch (error) {
+    return { state: error.code === 'ENOENT' ? 'absent' : 'unavailable' };
+  } finally { await file?.close(); }
+}
+
+export async function probeManagedOnce(dataRoot) {
   const root = join(dataRoot, 'managed-central');
+  let phase = 'installation';
+  try {
+    const path = join(root, 'installation.json');
+    assert(!(await lstat(path)).isSymbolicLink());
+    const installation = JSON.parse(await readFile(path, 'utf8'));
+    phase = 'installation_ready';
+    assert.equal(installation.state, 'ready');
+    phase = 'service_pointer';
+    const pointer = JSON.parse(await readFile(join(root, 'state/task-service.json'), 'utf8'));
+    const endpoint = new URL(pointer.endpoint);
+    assert.equal(endpoint.hostname, '127.0.0.1');
+    assert.equal(endpoint.protocol, 'http:');
+    assert.equal(endpoint.pathname, '/rpc');
+    phase = 'credential';
+    const token = (await readFile(join(root, 'identity.token'), 'utf8')).trim();
+    phase = 'bootstrap';
+    const response = await fetch(`${endpoint.origin}/api/v1/bootstrap`, {
+      headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(3000),
+    });
+    phase = 'authenticated_bootstrap';
+    assert.equal(response.status, 200);
+    const bootstrap = await response.json();
+    phase = 'identity';
+    assert.equal(bootstrap.sync.server_id, installation.server_id);
+    assert.equal(bootstrap.sync.principal_id, installation.principal_id);
+    return { installation_id: installation.installation_id, server_id: installation.server_id,
+      principal_id: installation.principal_id, runtime_version: installation.runtime_version,
+      authenticated_bootstrap: true };
+  } catch (error) {
+    const codes = ['ENOENT', 'EACCES', 'EPERM', 'ERR_ASSERTION', 'ECONNREFUSED'];
+    const failure = codes.includes(error.code) ? error.code
+      : error.name === 'TimeoutError' ? 'timeout' : 'invalid_or_unavailable';
+    const safe = new Error(`Managed startup phase ${phase}: ${failure}`);
+    safe.diagnostic = { phase, failure };
+    throw safe;
+  }
+}
+
+export async function probeManaged(dataRoot, { wait = false } = {}) {
   const deadline = Date.now() + (wait ? 70_000 : 5_000);
   do {
-    try {
-      const path = join(root, 'installation.json');
-      assert(!(await lstat(path)).isSymbolicLink());
-      const installation = JSON.parse(await readFile(path, 'utf8'));
-      assert.equal(installation.state, 'ready');
-      const pointer = JSON.parse(await readFile(join(root, 'state/task-service.json'), 'utf8'));
-      const endpoint = new URL(pointer.endpoint);
-      assert.equal(endpoint.hostname, '127.0.0.1');
-      assert.equal(endpoint.protocol, 'http:');
-      assert.equal(endpoint.pathname, '/rpc');
-      const token = (await readFile(join(root, 'identity.token'), 'utf8')).trim();
-      const response = await fetch(`${endpoint.origin}/api/v1/bootstrap`, {
-        headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(3000),
-      });
-      assert.equal(response.status, 200);
-      const bootstrap = await response.json();
-      assert.equal(bootstrap.sync.server_id, installation.server_id);
-      assert.equal(bootstrap.sync.principal_id, installation.principal_id);
-      return { installation_id: installation.installation_id, server_id: installation.server_id,
-        principal_id: installation.principal_id, runtime_version: installation.runtime_version,
-        authenticated_bootstrap: true };
-    } catch {
-      if (Date.now() >= deadline) throw new Error('Installed managed service did not authenticate');
+    try { return await probeManagedOnce(dataRoot); }
+    catch (error) {
+      if (Date.now() >= deadline) {
+        const failure = new Error(`Installed managed service did not authenticate (${error.message})`);
+        failure.diagnostic = { ...error.diagnostic, service: await serviceFailure(dataRoot) };
+        throw failure;
+      }
       await delay(200);
     }
   } while (true);
@@ -56,8 +104,14 @@ export async function stopManaged(dataRoot) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [action, root] = process.argv.slice(2);
+  const [action, root, evidence] = process.argv.slice(2);
   assert(root && ['wait', 'probe', 'stop'].includes(action));
   if (action === 'stop') await stopManaged(root);
-  else console.log(JSON.stringify(await probeManaged(root, { wait: action === 'wait' })));
+  else {
+    try { console.log(JSON.stringify(await probeManaged(root, { wait: action === 'wait' }))); }
+    catch (error) {
+      if (evidence) await writeFile(evidence, JSON.stringify(error.diagnostic) + '\n');
+      throw error;
+    }
+  }
 }
