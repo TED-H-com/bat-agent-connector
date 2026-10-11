@@ -6239,6 +6239,520 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	};
 }
 //#endregion
+//#region src/pm-maintenance-policy.js
+function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.maintenance_policy.adopt";
+	const sourceKinds = [
+		"issues",
+		"pull_requests",
+		"dependencies",
+		"documentation",
+		"research"
+	], workKinds = [
+		"dependency_fix",
+		"bug_fix",
+		"documentation"
+	];
+	let epoch = 0, ready = false, current = null, baseline = null, lifecycle = null, editor = null, syncing = false, historyLoaded = false, historyCursor = null, historyFiltered = false;
+	const view = h("div", { "data-maintenance-current": "" }), status = h("div", { role: "status" }), source = h("div", { "data-maintenance-source": "" }), history = h("div");
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("pmp_invalid"));
+		return value;
+	};
+	const valid = (ticket) => {
+		try {
+			alive();
+			return ticket === epoch;
+		} catch {
+			return false;
+		}
+	};
+	const owner = () => permitted(true) && workspace()?.membership?.role === "owner" && caps()?.scopes?.includes("manage");
+	const recover = () => Boolean(workspace()?.membership) && caps()?.scopes?.includes("manage");
+	const githubProfile = "github_open_prs_and_actions_v1";
+	const profileAvailable = () => caps()?.features?.pm_github_observation?.profiles?.includes(githubProfile) === true;
+	const allowed = () => owner() && caps()?.features?.pm_workspaces?.maintenance_policy?.policy_adoption === true;
+	const stopped = () => !lifecycle || ["paused", "closed"].includes(lifecycle.stage) || [
+		"pausing",
+		"closing",
+		"paused",
+		"closed"
+	].includes(lifecycle.status);
+	const stamp = (value) => new Date(value * 1e3).toLocaleString();
+	const hidden = () => h("input", { type: "hidden" });
+	const select = (label, options) => h("select", { "aria-label": t(label) }, ...options.map(([value, key]) => h("option", { value }, t(key))));
+	const bool = (label) => select(label, [["true", "pmp_yes"], ["false", "pmp_no"]]);
+	const numeric = (label, low, high) => {
+		const field = input(label, {
+			required: false,
+			max: 16
+		});
+		field.type = "number";
+		field.min = low;
+		field.max = high;
+		field.step = 1;
+		return field;
+	};
+	const fields = {
+		initialized: hidden(),
+		context: hidden(),
+		enabled: select("pmp_enabled", [["false", "pmp_enabled_no"], ["true", "pmp_enabled_yes"]]),
+		after: select("pmp_after", [
+			"manual",
+			"maintain_when_idle",
+			"continue_development"
+		].map((key) => [key, `pmp_${key}`])),
+		sources: hidden(),
+		works: hidden(),
+		profile: select("pmp_github_profile", [["", "pmp_profile_choose"], ...profileAvailable() ? [[githubProfile, "pmp_profile_github"]] : []]),
+		paths: input("pmp_paths", {
+			multiline: true,
+			required: false,
+			max: 51300
+		}),
+		delivery: select("pmp_delivery", [
+			"report",
+			"pull_request",
+			"merge",
+			"deploy"
+		].map((key) => [key, `pmp_${key}`])),
+		environment: input("pmp_environment", {
+			required: false,
+			max: 256
+		}),
+		ci: bool("pmp_ci"),
+		review: bool("pmp_review"),
+		acceptance: input("pmp_acceptance", {
+			multiline: true,
+			required: false,
+			max: 80040
+		}),
+		timezone: input("pmp_timezone", {
+			required: false,
+			max: 128
+		}),
+		interval: numeric("pmp_interval", 60, 2678400),
+		weekday: select("pmp_weekday", Array.from({ length: 7 }, (_, day) => [String(day), `pmp_day_${day}`])),
+		time: input("pmp_time", {
+			required: false,
+			max: 5
+		}),
+		age: numeric("pmp_max_age", 1, 86400),
+		stable: numeric("pmp_stable", 0, 604800),
+		parallel: numeric("pmp_parallel", 1, 16),
+		run: numeric("pmp_run_seconds", 1, 86400),
+		period: numeric("pmp_period_seconds", 60, 2678400),
+		runs: numeric("pmp_period_runs", 1, 1e3),
+		cost: input("pmp_cost", {
+			required: false,
+			max: 20
+		}),
+		retries: numeric("pmp_retries", 0, 10),
+		rationale: input("pmp_rationale", {
+			multiline: true,
+			required: false,
+			max: 4e3
+		})
+	};
+	const selected = (field) => {
+		try {
+			const values = JSON.parse(field.value);
+			return Array.isArray(values) ? values : [];
+		} catch {
+			return [];
+		}
+	};
+	const checks = [];
+	function choices(field, values, label) {
+		return h("fieldset", { class: "pm-policy-choices" }, h("legend", {}, t(label)), ...values.map((value) => {
+			const check = h("input", {
+				type: "checkbox",
+				"aria-label": `${t(label)}: ${t(`pmp_${value}`)}`,
+				onchange: () => {
+					if (!editor || editor.locked() || !allowed()) return;
+					field.value = JSON.stringify(checks.filter((item) => item.field === field && item.check.checked).map((item) => item.value));
+					editor.changed();
+				}
+			});
+			checks.push({
+				field,
+				value,
+				check
+			});
+			return h("label", {}, check, t(`pmp_${value}`));
+		}));
+	}
+	const profileLabel = labelled("pmp_github_profile", fields.profile);
+	const profileHelp = h("p", { class: "muted" }, t(profileAvailable() ? "pmp_profile_help" : "pmp_profile_unavailable"));
+	const envLabel = labelled("pmp_environment", fields.environment);
+	const group = (name, ...nodes) => h("details", { "data-policy-group": name }, h("summary", {}, t(name)), ...nodes);
+	const grid = (...names) => h("div", { class: "pm-fields" }, ...names.map(([key, label]) => labelled(label, fields[key])));
+	const stale = h("p", {
+		class: "muted",
+		hidden: true
+	}, t("pmp_stale"));
+	const useVersions = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			if (!ready || !allowed() || stopped() || editor.locked() || !context()) return;
+			editor.set("context", JSON.stringify(context()));
+			editor.update();
+		}
+	}, t("pmp_use_versions"));
+	const eligibility = h("p", { class: "muted" });
+	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
+	function context() {
+		return ready && baseline?.baseline && !baseline.visibility_filtered && current && !current.visibility_filtered && lifecycle ? {
+			expected_policy_revision: current.head.revision,
+			expected_previous_policy_id: current.head.policy_id,
+			expected_baseline_id: baseline.baseline.baseline_id,
+			expected_lifecycle_revision: lifecycle.revision
+		} : null;
+	}
+	const matches = () => context() && fields.context.value === JSON.stringify(context());
+	const editorApi = async (...args) => {
+		const ticket = epoch;
+		try {
+			return await api(...args);
+		} catch (error) {
+			if (valid(ticket) && [
+				401,
+				403,
+				404
+			].includes(error.status)) failure(error);
+			throw error;
+		}
+	};
+	editor = form({
+		action,
+		target: { workspace_id: workspaceId },
+		fields,
+		api: editorApi,
+		params: (values) => ({
+			policy: policy(values),
+			rationale: required(values.rationale, 4e3)
+		}),
+		preconditions: () => JSON.parse(fields.context.value),
+		permitted: () => Boolean(allowed() && ready && !stopped() && matches()),
+		recoverPermitted: recover,
+		label: "pmp_save",
+		extra,
+		onSaved: () => refresh(),
+		onStateChange: () => {
+			if (editor && !syncing) editor.update();
+		}
+	});
+	editor.box.noValidate = true;
+	const baseUpdate = editor.update;
+	editor.update = () => {
+		if (syncing) return;
+		syncing = true;
+		try {
+			if (ready && allowed() && !editor.locked() && !fields.initialized.value && context()) initialize();
+			baseUpdate();
+			const editing = ready && allowed() && !editor.locked();
+			for (const [key, field] of Object.entries(fields)) if (!["context", "initialized"].includes(key)) field.disabled = !editing;
+			for (const item of checks) {
+				item.check.checked = selected(item.field).includes(item.value);
+				item.check.disabled = !editing;
+			}
+			profileLabel.hidden = !profileAvailable();
+			fields.profile.disabled = !editing || !profileAvailable();
+			envLabel.hidden = fields.delivery.value !== "deploy";
+			fields.environment.disabled = !editing || envLabel.hidden;
+			stale.hidden = editor.locked() || !ready || !fields.context.value || Boolean(matches());
+			useVersions.hidden = stale.hidden || !context();
+			useVersions.disabled = !editing || stopped();
+			editorDetails.hidden = !owner() && !(editor.locked() && recover());
+			permission.hidden = owner();
+			eligibility.textContent = !allowed() ? t("pmp_owner") : !ready ? "" : stopped() ? t("pmp_stopped") : !baseline?.baseline ? t(baseline?.visibility_filtered ? "pmp_baseline_hidden" : "pmp_no_baseline") : current?.visibility_filtered ? t("pmp_hidden") : "";
+		} finally {
+			syncing = false;
+		}
+	};
+	fields.delivery.addEventListener("change", () => editor.update());
+	const editorDetails = h("details", { "data-maintenance-editor": "" }, h("summary", {}, t("pmp_edit")), editor.box);
+	const historyDetails = h("details", {}, h("summary", {}, t("pmp_history")), history);
+	historyDetails.addEventListener("toggle", () => {
+		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
+	});
+	const permission = h("p", { class: "muted" }, t("pmp_owner"));
+	const element = h("section", {
+		class: "pm-brief pm-maintenance-policy",
+		"data-pm-maintenance-policy": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmp_title")), h("p", { class: "muted" }, t("pmp_intro"))), h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t("pmp_runtime")), historyDetails, permission, editorDetails);
+	function controls() {
+		editorDetails.hidden = !owner() && !(editor.locked() && recover());
+		permission.hidden = owner();
+		editor.update();
+	}
+	function initialize() {
+		const p = current.policy?.document?.policy || {
+			enabled: false,
+			after_release_policy: "manual",
+			sources: ["issues", "pull_requests"],
+			allowed_work_kinds: [],
+			allowed_paths: ["."],
+			delivery: {
+				maximum: "report",
+				environment: null
+			},
+			verification: {
+				required_ci: true,
+				review_required: true,
+				acceptance_evidence: []
+			},
+			schedule: {
+				timezone: "UTC",
+				check_interval_seconds: 3600,
+				review_weekday: 0,
+				review_local_time: "09:00"
+			},
+			observation: {
+				max_age_seconds: 1800,
+				stable_for_seconds: 300
+			},
+			limits: {
+				max_parallel: 1,
+				run_seconds: 1800,
+				period_seconds: 86400,
+				period_runs: 4,
+				cost_microusd: null,
+				retries: 0
+			}
+		};
+		const values = {
+			initialized: "1",
+			context: JSON.stringify(context()),
+			enabled: String(p.enabled),
+			after: p.after_release_policy,
+			sources: JSON.stringify(p.sources),
+			works: JSON.stringify(p.allowed_work_kinds),
+			paths: p.allowed_paths.join("\n"),
+			delivery: p.delivery.maximum,
+			environment: p.delivery.environment || "",
+			ci: String(p.verification.required_ci),
+			review: String(p.verification.review_required),
+			acceptance: p.verification.acceptance_evidence.join("\n"),
+			profile: p.observation.github_profile || "",
+			timezone: p.schedule.timezone,
+			interval: p.schedule.check_interval_seconds,
+			weekday: p.schedule.review_weekday,
+			time: p.schedule.review_local_time,
+			age: p.observation.max_age_seconds,
+			stable: p.observation.stable_for_seconds,
+			parallel: p.limits.max_parallel,
+			run: p.limits.run_seconds,
+			period: p.limits.period_seconds,
+			runs: p.limits.period_runs,
+			cost: p.limits.cost_microusd === null ? "" : String(p.limits.cost_microusd / 1e6),
+			retries: p.limits.retries,
+			rationale: ""
+		};
+		for (const [key, value] of Object.entries(values)) fields[key].value = String(value);
+		editor.changed();
+	}
+	function required(value, max) {
+		if (typeof value !== "string" || !value.trim() || [...value].length > max || value.includes("\0")) throw Error(t("pmp_validation"));
+		return value;
+	}
+	function policy(v) {
+		const integer = (value, low, high) => {
+			const n = Number(value);
+			if (!/^\d+$/.test(value) || !Number.isSafeInteger(n) || n < low || n > high) throw Error(t("pmp_validation"));
+			return n;
+		};
+		const list = (value, max, chars) => {
+			const rows = value.split("\n").map((line) => line.trim()).filter(Boolean);
+			if (!rows.length || rows.length > max) throw Error(t("pmp_validation"));
+			rows.forEach((line) => required(line, chars));
+			return rows;
+		};
+		const selection = (value, options, empty = false) => {
+			const rows = JSON.parse(value);
+			if (!Array.isArray(rows) || !empty && !rows.length || rows.length !== new Set(rows).size || rows.some((x) => !options.includes(x))) throw Error(t("pmp_validation"));
+			return rows;
+		};
+		const paths = list(v.paths, 100, 512);
+		if (paths.length !== new Set(paths).size || paths.some((path) => path !== "." && (/[\\:*?\[\]\x00-\x1f]/.test(path) || path.replace(/\/$/, "").split("/").some((part) => [
+			"",
+			".",
+			".."
+		].includes(part))))) throw Error(t("pmp_validation"));
+		if (!["true", "false"].includes(v.enabled) || !["true", "false"].includes(v.ci) || !["true", "false"].includes(v.review) || ![
+			"manual",
+			"maintain_when_idle",
+			"continue_development"
+		].includes(v.after) || ![
+			"report",
+			"pull_request",
+			"merge",
+			"deploy"
+		].includes(v.delivery)) throw Error(t("pmp_validation"));
+		try {
+			new Intl.DateTimeFormat("en", { timeZone: required(v.timezone, 128) });
+		} catch {
+			throw Error(t("pmp_validation"));
+		}
+		if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v.time)) throw Error(t("pmp_validation"));
+		let cost = null;
+		if (v.cost) {
+			if (!/^\d+(\.\d{1,6})?$/.test(v.cost)) throw Error(t("pmp_validation"));
+			const [whole, fraction = ""] = v.cost.split(".");
+			cost = Number(BigInt(whole) * 1000000n + BigInt(fraction.padEnd(6, "0")));
+			if (!Number.isSafeInteger(cost) || cost < 1 || cost > 10 ** 12) throw Error(t("pmp_validation"));
+		}
+		if (profileAvailable() && v.profile !== githubProfile || v.profile && !profileAvailable()) throw Error(t("pmp_profile_required"));
+		const works = selection(v.works, workKinds, true);
+		if (works.length && (v.delivery === "report" || baseline?.baseline?.document?.proof?.maintenance_branch?.status !== "verified_at_observation")) throw Error(t("pmp_repair_invalid"));
+		return {
+			enabled: v.enabled === "true",
+			after_release_policy: v.after,
+			sources: selection(v.sources, sourceKinds),
+			allowed_work_kinds: works,
+			allowed_paths: paths,
+			delivery: {
+				maximum: v.delivery,
+				environment: v.delivery === "deploy" ? required(v.environment, 256) : null
+			},
+			observation: {
+				max_age_seconds: integer(v.age, 1, 86400),
+				stable_for_seconds: integer(v.stable, 0, 604800),
+				...v.profile ? { github_profile: v.profile } : {}
+			},
+			schedule: {
+				timezone: v.timezone,
+				check_interval_seconds: integer(v.interval, 60, 2678400),
+				review_weekday: integer(v.weekday, 0, 6),
+				review_local_time: v.time
+			},
+			limits: {
+				max_parallel: integer(v.parallel, 1, 16),
+				run_seconds: integer(v.run, 1, 86400),
+				period_seconds: integer(v.period, 60, 2678400),
+				period_runs: integer(v.runs, 1, 1e3),
+				cost_microusd: cost,
+				retries: integer(v.retries, 0, 10)
+			},
+			verification: {
+				required_ci: v.ci === "true",
+				review_required: v.review === "true",
+				acceptance_evidence: list(v.acceptance, 40, 2e3)
+			}
+		};
+	}
+	function fixed(row) {
+		if (row?.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.policy_id !== row.policy_id || row.document.revision !== row.revision || !/^pmmp_[0-9a-f]{32}$/.test(row.policy_id) || !Number.isSafeInteger(row.revision) || row.document.automatic_execution_started !== false) throw Error(t("pmp_invalid"));
+		return row;
+	}
+	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), String(value ?? t("pmp_none")));
+	function record(row, isCurrent = false) {
+		fixed(row);
+		const doc = row.document, p = doc.policy, s = doc.scope, details = h("details", {}, h("summary", {}, t("pmp_details")));
+		const names = (values) => values.length ? values.map((value) => t(`pmp_${value}`)).join(" · ") : t("pmp_none");
+		details.append(line("pmp_after", t(`pmp_${p.after_release_policy}`)), line("pmp_sources", names(p.sources)), h("p", { class: "muted" }, t("pmp_sources_help")), line("pmp_work", names(p.allowed_work_kinds)), line("pmp_paths", p.allowed_paths.join(" · ")), line("pmp_delivery", t(`pmp_${p.delivery.maximum}`)), ...p.delivery.environment ? [line("pmp_environment", p.delivery.environment)] : [], line("pmp_ci", t(p.verification.required_ci ? "pmp_yes" : "pmp_no")), line("pmp_review", t(p.verification.review_required ? "pmp_yes" : "pmp_no")), h("p", {}, h("strong", {}, t("pmp_acceptance"))), h("ul", {}, ...p.verification.acceptance_evidence.map((text) => h("li", {}, text))), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), h("p", { class: "muted" }, t(s.github_scope === githubProfile ? "pmp_profile_help" : "pmp_profile_legacy_help")), line("pmp_timezone", p.schedule.timezone), line("pmp_interval", p.schedule.check_interval_seconds), line("pmp_weekday", t(`pmp_day_${p.schedule.review_weekday}`)), line("pmp_time", p.schedule.review_local_time), line("pmp_max_age", p.observation.max_age_seconds), line("pmp_stable", p.observation.stable_for_seconds), ...[
+			["parallel", "max_parallel"],
+			["run_seconds", "run_seconds"],
+			["period_seconds", "period_seconds"],
+			["period_runs", "period_runs"],
+			["retries", "retries"]
+		].map(([label, key]) => line(`pmp_${label}`, p.limits[key])), line("pmp_cost", p.limits.cost_microusd === null ? t("pmp_cost_none") : String(p.limits.cost_microusd / 1e6)), line("pmp_reason", doc.rationale), line("pmp_author", row.actor), line("pmp_recorded", stamp(row.created_at)), line("pmp_original_baseline", row.baseline_id), line("pmp_lifecycle", doc.lifecycle_revision), line("pmp_revision", row.revision), h("p", { class: "mono" }, row.document_digest), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation")));
+		return h("article", { "data-maintenance-policy": row.policy_id }, h("h3", {}, isCurrent ? t("pmp_current") : `${t("pmp_revision")} ${row.revision}`), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
+	}
+	function withdraw() {
+		epoch++;
+		ready = false;
+		current = null;
+		baseline = null;
+		lifecycle = null;
+		historyLoaded = false;
+		historyCursor = null;
+		historyFiltered = false;
+		view.replaceChildren();
+		source.replaceChildren();
+		history.replaceChildren();
+		controls();
+	}
+	function failure(error) {
+		withdraw();
+		status.replaceChildren(h("p", { class: "muted" }, t("pmp_unavailable")), errorBox(error));
+	}
+	async function readHistory(append) {
+		const ticket = epoch, after = append ? historyCursor : 0;
+		try {
+			const data = check(await api("GET", `${endpoint}/maintenance-policies?after=${after}&limit=20`));
+			if (!valid(ticket)) return;
+			if (!Array.isArray(data.policies) || data.next_cursor !== null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pmp_invalid"));
+			const rows = data.policies.map((row) => record(row));
+			if (!append) {
+				history.replaceChildren();
+				historyFiltered = false;
+			} else history.querySelector("[data-policy-more]")?.remove();
+			historyLoaded = true;
+			historyCursor = data.next_cursor;
+			historyFiltered ||= data.visibility_filtered;
+			history.append(...rows);
+			history.querySelector("[data-policy-coverage]")?.remove();
+			history.append(h("p", {
+				"data-policy-coverage": "",
+				class: "muted"
+			}, t(historyFiltered ? "pmp_filtered" : "pmp_partial")));
+			if (historyCursor !== null) history.append(h("button", {
+				"data-policy-more": "",
+				type: "button",
+				class: "secondary",
+				onclick: (event) => {
+					event.currentTarget.disabled = true;
+					readHistory(true);
+				}
+			}, t("pmp_more")));
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	async function refresh() {
+		withdraw();
+		status.replaceChildren();
+		const ticket = epoch;
+		try {
+			const responses = await Promise.all([
+				api("GET", `${endpoint}/maintenance-policies/current`),
+				api("GET", `${endpoint}/release-baselines/current`),
+				api("GET", `${endpoint}/lifecycle`)
+			]);
+			if (!valid(ticket)) return;
+			const [p, b, l] = responses.map(check);
+			if (!Number.isSafeInteger(p.head?.revision) || p.head.revision < 0 || !Number.isSafeInteger(l.lifecycle?.revision) || l.lifecycle.revision < 0 || !Number.isSafeInteger(b.head?.version) || typeof p.visibility_filtered !== "boolean" || typeof b.visibility_filtered !== "boolean" || p.visibility_filtered && (p.policy !== null || p.head.policy_id !== null) || b.visibility_filtered && (b.baseline !== null || b.head.baseline_id !== null) || p.policy && (p.policy.policy_id !== p.head.policy_id || p.policy.revision !== p.head.revision) || !p.policy && !p.visibility_filtered && (p.head.policy_id !== null || p.head.revision !== 0) || !b.baseline && !b.visibility_filtered && (b.head.baseline_id !== null || b.head.version !== 0) || b.baseline && (b.baseline.document?.workspace_id !== workspaceId || b.baseline.document.baseline_id !== b.baseline.baseline_id || b.baseline.document.version !== b.baseline.version || b.baseline.workspace_id !== workspaceId || b.baseline.baseline_id !== b.head.baseline_id || b.baseline.version !== b.head.version)) throw Error(t("pmp_invalid"));
+			if (p.policy) fixed(p.policy);
+			current = p;
+			baseline = b;
+			lifecycle = l.lifecycle;
+			ready = true;
+			view.replaceChildren(p.policy ? record(p.policy, true) : h("p", { class: "muted" }, t(p.visibility_filtered || p.head.revision ? "pmp_hidden" : "pmp_empty")));
+			if (b.baseline) {
+				const row = b.baseline, doc = row.document;
+				source.append(h("h3", {}, t("pmp_baseline")), h("p", {}, doc.release_version.value, " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, doc.proof.maintenance_branch.status === "verified_at_observation" ? `${t("pmp_branch")}: ${doc.proof.maintenance_branch.ref}` : t("pmp_no_branch")), h("details", {}, h("summary", {}, t("pmp_versions")), line("pmp_revision", p.head.revision), line("pmp_lifecycle", l.lifecycle.revision), line("pmp_original_baseline", row.baseline_id), h("p", { class: "mono" }, row.document_digest)));
+			}
+			controls();
+			if (historyDetails.open) await readHistory(false);
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		}
+	}
+	controls();
+	return {
+		element,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-release-baselines.js
 function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -8251,6 +8765,21 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace
 	}) : null;
 	if (releaseBaselines) body.insertBefore(releaseBaselines.element, content);
+	const maintenancePolicy = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_policy?.version === 1 ? workspaceMaintenancePolicy({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		workspace: () => workspace,
+		caps,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox
+	}) : null;
+	if (maintenancePolicy) body.insertBefore(maintenancePolicy.element, content);
 	const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap ? workspaceRoadmap({
 		h,
 		t,
@@ -8394,6 +8923,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		evidence?.box,
 		brief?.box,
 		releaseBaselines?.element,
+		maintenancePolicy?.element,
 		roadmap?.box,
 		kanban?.element,
 		sprints?.box,
@@ -8923,6 +9453,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		handoff?.withdraw();
 		issues?.withdraw();
 		releaseBaselines?.withdraw();
+		maintenancePolicy?.withdraw();
 		try {
 			alive();
 			const list = await api("GET", "/pm/workspaces");
@@ -9009,6 +9540,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				evidence,
 				brief,
 				releaseBaselines,
+				maintenancePolicy,
 				roadmap,
 				kanban,
 				sprints,
@@ -9038,6 +9570,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				handoff?.withdraw();
 				issues?.withdraw();
 				releaseBaselines?.withdraw();
+				maintenancePolicy?.withdraw();
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
 				for (const section of sourceSections()) section.hidden = true;
@@ -9070,7 +9603,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_work_package",
 			"pm_lifecycle",
 			"pm_issue_mapping",
-			"pm_release_baseline"
+			"pm_release_baseline",
+			"pm_maintenance_policy"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -12825,6 +13359,222 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	};
 }
 //#endregion
+//#region src/pm-maintenance-policy-strings.js
+var pmMaintenancePolicyStrings = {
+	en: {
+		pmp_title: "Maintenance policy",
+		pmp_intro: "Decide how to care for the released version, within explicit limits.",
+		pmp_refresh: "Refresh maintenance policy",
+		pmp_unavailable: "Policy sources could not be verified. Saved drafts are kept; refresh to check access.",
+		pmp_invalid: "The policy response does not match this workspace or its fixed versions.",
+		pmp_empty: "No maintenance policy has been adopted.",
+		pmp_hidden: "A policy exists, but its original sources are outside your current access.",
+		pmp_runtime: "Automatic checks and repairs are not available yet. Adopting a policy saves your choices; it does not start maintenance.",
+		pmp_current: "Current adopted policy",
+		pmp_revision: "Policy revision",
+		pmp_history: "Policy history",
+		pmp_more: "Load more policies",
+		pmp_partial: "Only loaded policy records are shown.",
+		pmp_filtered: "Some original sources are outside your access; this is a partial history.",
+		pmp_edit: "Review and adopt a policy",
+		pmp_owner: "Only a current workspace owner with management access can adopt a policy.",
+		pmp_baseline: "Current release for this decision",
+		pmp_no_baseline: "Select a readable current release baseline before adopting a policy.",
+		pmp_baseline_hidden: "The current release baseline is outside your access. It has not been cleared.",
+		pmp_branch: "Maintenance branch",
+		pmp_no_branch: "No verified maintenance branch. Observation-only policies remain available.",
+		pmp_stopped: "New policy decisions are paused or closed. An earlier request can still be checked.",
+		pmp_stale: "The policy, release baseline or project stage changed. Your draft still uses its original versions.",
+		pmp_use_versions: "Use these reviewed versions",
+		pmp_versions: "Fixed decision versions",
+		pmp_lifecycle: "Project stage revision",
+		pmp_save: "Adopt maintenance policy",
+		pmp_rationale: "Reason for this policy",
+		pmp_enabled: "Policy permission",
+		pmp_enabled_yes: "Permit work within this policy",
+		pmp_enabled_no: "Keep maintenance disabled",
+		pmp_after: "After release",
+		pmp_maintain_when_idle: "Maintain when development is confirmed idle",
+		pmp_continue_development: "Continue development",
+		pmp_manual: "Decide manually",
+		pmp_scope: "Sources, work and delivery",
+		pmp_sources: "Sources to check",
+		pmp_sources_help: "Selected sources describe what may be checked; they are not completed checks.",
+		pmp_issues: "Issues",
+		pmp_pull_requests: "Pull requests",
+		pmp_dependencies: "Dependencies and upstream",
+		pmp_documentation: "Documentation",
+		pmp_research: "Research and opportunities",
+		pmp_work: "Permitted repair kinds",
+		pmp_work_help: "Leave all unchecked for observation only. Repairs require a verified maintenance branch and at least a pull-request ceiling.",
+		pmp_dependency_fix: "Dependency fixes",
+		pmp_bug_fix: "Bug fixes",
+		pmp_paths: "Repository paths (one per line)",
+		pmp_paths_help: "Exact files or directory prefixes ending in /. A single . explicitly allows the whole repository. No wildcards.",
+		pmp_delivery: "Maximum delivery",
+		pmp_report: "Report only",
+		pmp_pull_request: "Open a pull request",
+		pmp_merge: "Merge",
+		pmp_deploy: "Deploy",
+		pmp_environment: "Deployment environment",
+		pmp_delivery_help: "This is a ceiling. Repository checks and current permissions still apply.",
+		pmp_verification: "Verification requirements",
+		pmp_ci: "Require CI",
+		pmp_review: "Require review",
+		pmp_yes: "Required",
+		pmp_no: "No additional policy requirement",
+		pmp_acceptance: "Required acceptance evidence (one per line)",
+		pmp_acceptance_help: "Describe the evidence a repair must provide. Recording this policy does not verify a repair.",
+		pmp_github_profile: "GitHub workload coverage",
+		pmp_profile_choose: "Choose the coverage to adopt",
+		pmp_profile_github: "Open PR heads and GitHub Actions",
+		pmp_profile_help: "Includes open PRs with checks and statuses at their exact heads, and nonterminal GitHub Actions. Excludes other CI, issues and work outside GitHub. Selecting this profile does not run a check.",
+		pmp_profile_unavailable: "This central does not yet provide a selectable GitHub observation profile. Repository-wide coverage remains unknown.",
+		pmp_profile_legacy: "Repository-wide coverage (not established)",
+		pmp_profile_legacy_help: "The original policy requested repository-wide coverage. A narrower observation cannot establish it; adopt an explicit profile to change this scope.",
+		pmp_profile_required: "Choose the available GitHub workload coverage before adopting this policy.",
+		pmp_schedule: "Schedule and observation",
+		pmp_timezone: "Time zone (IANA)",
+		pmp_interval: "Check interval (seconds)",
+		pmp_weekday: "Weekly review day",
+		pmp_time: "Weekly review time",
+		pmp_day_0: "Monday",
+		pmp_day_1: "Tuesday",
+		pmp_day_2: "Wednesday",
+		pmp_day_3: "Thursday",
+		pmp_day_4: "Friday",
+		pmp_day_5: "Saturday",
+		pmp_day_6: "Sunday",
+		pmp_max_age: "Maximum observation age (seconds)",
+		pmp_stable: "Minimum stable observation period (seconds)",
+		pmp_limits: "Resource limits",
+		pmp_parallel: "Maximum concurrent work",
+		pmp_run_seconds: "Maximum run duration (seconds)",
+		pmp_period_seconds: "Budget period (seconds)",
+		pmp_period_runs: "Maximum runs per period",
+		pmp_cost: "Cost budget (USD, optional)",
+		pmp_cost_none: "No cost budget specified",
+		pmp_retries: "Retry limit",
+		pmp_none: "None",
+		pmp_disabled: "Maintenance disabled by this policy",
+		pmp_permitted: "Maintenance permitted within this policy",
+		pmp_observation: "Observation only; no repairs permitted",
+		pmp_details: "Full policy and original versions",
+		pmp_reason: "Decision rationale",
+		pmp_author: "Adopted by",
+		pmp_recorded: "Recorded at",
+		pmp_original_baseline: "Originally selected release baseline",
+		pmp_validation: "Review all policy fields. Use supported choices, bounded whole numbers, an IANA time zone, exact relative paths, and 1–40 acceptance evidence lines.",
+		pmp_repair_invalid: "Repairs need a verified maintenance branch and at least a pull-request delivery ceiling."
+	},
+	"zh-TW": {
+		pmp_title: "維護政策",
+		pmp_intro: "明確決定已發布版本的維護範圍與投入上限。",
+		pmp_refresh: "重新讀取維護政策",
+		pmp_unavailable: "目前無法核對政策來源。草稿已保留，請重新讀取以確認權限。",
+		pmp_invalid: "政策回應與此工作區或固定版本不一致。",
+		pmp_empty: "尚未採用維護政策。",
+		pmp_hidden: "已有政策，但原始來源不在你目前的讀取權限內。",
+		pmp_runtime: "目前尚不支援自動檢查與修復。採用政策會保存你的選擇，不會開始維護工作。",
+		pmp_current: "目前已採用政策",
+		pmp_revision: "政策版本",
+		pmp_history: "政策歷史",
+		pmp_more: "載入更多政策",
+		pmp_partial: "此處只顯示已載入的政策紀錄。",
+		pmp_filtered: "部分原始來源無法讀取，這不是完整歷史。",
+		pmp_edit: "檢視並採用政策",
+		pmp_owner: "只有具管理權限的現任工作區 owner 可以採用政策。",
+		pmp_baseline: "這次決策使用的目前發布版本",
+		pmp_no_baseline: "請先選定可讀取的目前發布基準，再採用政策。",
+		pmp_baseline_hidden: "目前發布基準不在你的權限內，並未被清除。",
+		pmp_branch: "維護分支",
+		pmp_no_branch: "尚無已驗證的維護分支，仍可採用只觀察、不修復的政策。",
+		pmp_stopped: "專案已暫停或關閉，不能採用新政策；仍可查回先前的請求。",
+		pmp_stale: "政策、發布基準或專案階段已變動。草稿仍保留原先的版本。",
+		pmp_use_versions: "使用這組已檢視版本",
+		pmp_versions: "固定決策版本",
+		pmp_lifecycle: "專案階段版本",
+		pmp_save: "採用維護政策",
+		pmp_rationale: "採用此政策的理由",
+		pmp_enabled: "政策許可",
+		pmp_enabled_yes: "允許政策範圍內的工作",
+		pmp_enabled_no: "維持停用維護",
+		pmp_after: "發布後安排",
+		pmp_maintain_when_idle: "確認無開發安排後轉入維護",
+		pmp_continue_development: "繼續開發",
+		pmp_manual: "由我另行決定",
+		pmp_scope: "來源、工種與交付",
+		pmp_sources: "可檢查的來源",
+		pmp_sources_help: "勾選的是可檢查範圍，不代表已經完成檢查。",
+		pmp_issues: "Issues",
+		pmp_pull_requests: "Pull requests",
+		pmp_dependencies: "依賴與上游",
+		pmp_documentation: "文件",
+		pmp_research: "研究與新機會",
+		pmp_work: "允許的修復工種",
+		pmp_work_help: "全部不勾選即只觀察。修復必須有已驗證的維護分支，交付上限至少允許建立 PR。",
+		pmp_dependency_fix: "依賴修復",
+		pmp_bug_fix: "錯誤修復",
+		pmp_paths: "儲存庫路徑（每行一個）",
+		pmp_paths_help: "使用確切檔案或以 / 結尾的目錄前綴；單獨填 . 表示明確允許整個儲存庫。不接受萬用字元。",
+		pmp_delivery: "交付上限",
+		pmp_report: "僅整理報告",
+		pmp_pull_request: "建立 Pull request",
+		pmp_merge: "合併",
+		pmp_deploy: "部署",
+		pmp_environment: "部署環境",
+		pmp_delivery_help: "這是上限，仍須符合儲存庫檢查與目前權限。",
+		pmp_verification: "驗證要求",
+		pmp_ci: "要求 CI",
+		pmp_review: "要求審查",
+		pmp_yes: "要求",
+		pmp_no: "政策不另加要求",
+		pmp_acceptance: "必要驗收證據（每行一項）",
+		pmp_acceptance_help: "說明修復必須提供哪些證據；登記政策不代表修復已通過驗證。",
+		pmp_github_profile: "GitHub 工作觀察範圍",
+		pmp_profile_choose: "選擇這次採用的觀察範圍",
+		pmp_profile_github: "開啟中的 PR 固定 head 與 GitHub Actions",
+		pmp_profile_help: "涵蓋開啟中的 PR、其固定 head 的 checks 與 statuses，以及尚未結束的 GitHub Actions。不涵蓋其他 CI、Issues 或 GitHub 以外的工作；選定範圍不會立即執行檢查。",
+		pmp_profile_unavailable: "目前中央尚未提供可選的 GitHub 觀察範圍；整個儲存庫的涵蓋情況仍未知。",
+		pmp_profile_legacy: "整個儲存庫（尚未取得完整觀察）",
+		pmp_profile_legacy_help: "原政策要求整個儲存庫的完整觀察，較窄的觀察範圍不能代替。若要變更，請明確選定範圍並採用新政策。",
+		pmp_profile_required: "採用政策前，請明確選定目前支援的 GitHub 工作觀察範圍。",
+		pmp_schedule: "排程與觀察",
+		pmp_timezone: "時區（IANA）",
+		pmp_interval: "檢查間隔（秒）",
+		pmp_weekday: "每週檢視日",
+		pmp_time: "每週檢視時間",
+		pmp_day_0: "星期一",
+		pmp_day_1: "星期二",
+		pmp_day_2: "星期三",
+		pmp_day_3: "星期四",
+		pmp_day_4: "星期五",
+		pmp_day_5: "星期六",
+		pmp_day_6: "星期日",
+		pmp_max_age: "觀察資料最長有效時間（秒）",
+		pmp_stable: "最短穩定觀察時間（秒）",
+		pmp_limits: "資源上限",
+		pmp_parallel: "最多同時工作數",
+		pmp_run_seconds: "單次執行最長時間（秒）",
+		pmp_period_seconds: "額度週期（秒）",
+		pmp_period_runs: "每週期最多執行次數",
+		pmp_cost: "費用上限（美元，選填）",
+		pmp_cost_none: "未設定費用上限",
+		pmp_retries: "重試次數上限",
+		pmp_none: "無",
+		pmp_disabled: "此政策停用維護",
+		pmp_permitted: "允許政策範圍內的維護",
+		pmp_observation: "僅觀察，不允許修復",
+		pmp_details: "完整政策與原始版本",
+		pmp_reason: "決策理由",
+		pmp_author: "採用者",
+		pmp_recorded: "紀錄時間",
+		pmp_original_baseline: "原先選定的發布基準",
+		pmp_validation: "請檢查各項政策欄位：使用支援的選項、有界整數、IANA 時區、確切相對路徑，以及 1–40 行驗收證據。",
+		pmp_repair_invalid: "修復必須有已驗證的維護分支，交付上限至少允許建立 PR。"
+	}
+};
+//#endregion
 //#region src/pm-release-baseline-strings.js
 var pmReleaseBaselineStrings = {
 	en: {
@@ -15305,6 +16055,7 @@ var STRINGS = {
 		...pmStrings["zh-TW"],
 		...pmReleaseBaselineStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
+		...pmMaintenancePolicyStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -16757,6 +17508,7 @@ var STRINGS = {
 		...pmStrings.en,
 		...pmReleaseBaselineStrings.en,
 		...pmPackageHandoffStrings.en,
+		...pmMaintenancePolicyStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
