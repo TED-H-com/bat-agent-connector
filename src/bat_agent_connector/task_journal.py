@@ -592,6 +592,7 @@ class Journal:
                      "send", "needs_review", f"batc-{next_command_id}",
                      json.dumps({"purpose": "operator:" + command_id, "before": next_before,
                                  "control_version": task["control_version"], "operation_id": operation_id,
+                                 "controller_incarnation": payload.get("controller_incarnation"),
                                  "prompt_sha256": next_prompt_sha256}), now, now,
                      json.dumps(task["controller_authority"], sort_keys=True) if task.get("controller_authority") else None))
                 self._event(task_id, "command_intent", {"command_id": next_command_id, "kind": "send",

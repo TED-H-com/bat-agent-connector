@@ -987,7 +987,7 @@ class TaskDaemon:
                 goose_task = {**task, "_route_provider": self.goose.config.provider}
                 await self.goose.run_task(goose_task, goose_cwd, capability=capability,
                                           journal=self.journal)
-            except TaskControlRefused:
+            except (TaskControlRefused, ResourceReadOnly):
                 raise
             except Exception as exc:  # noqa: BLE001 - reconcile before uncertainty
                 logging.warning("Goose ACP task %s failed before settlement: %s",
@@ -1019,7 +1019,7 @@ class TaskDaemon:
             finally:
                 if temporary_cwd:
                     shutil.rmtree(temporary_cwd, ignore_errors=True)
-        except TaskControlRefused as exc:
+        except (TaskControlRefused, ResourceReadOnly) as exc:
             logging.info("Task %s tick cancelled by %s", task_id[:8], exc.code)
         except Exception as exc:  # noqa: BLE001 - one task cannot kill worker
             logging.warning("Task %s needs reconciliation after %s", task_id[:8], type(exc).__name__)

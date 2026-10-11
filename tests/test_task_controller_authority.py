@@ -271,6 +271,7 @@ async def test_goose_never_launches_without_original_session(journal, monkeypatc
     daemon._tick_task_bound = lambda tid: TaskDaemon._tick_task_bound(daemon, tid)
     with ca.use(ca.binding(journal.db, BOB), journal):
         await TaskDaemon._tick_task(daemon, task["task_id"])
+    assert journal.get(task["task_id"])["state"] == "accepted"
     assert journal.commands(task["task_id"]) == original_commands
     assert not journal.db.execute("SELECT 1 FROM capabilities").fetchone()
     assert registry.get("h1", "lead")["controller_authority"]["actor"] == entry_caller.actor
