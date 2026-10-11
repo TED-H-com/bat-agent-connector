@@ -12,7 +12,7 @@ const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.p
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
 await mkdir(scratch, {recursive:true});
 const temporary = await mkdtemp(resolve(scratch, 'pm-central-run-'));
-let child, browser, output, stopped, spawnError;
+let child, browser, output, stopped, spawnError, failureDetails=async()=>({});
 async function bounded(promise, milliseconds, message) {
   let timer;
   try {return await Promise.race([promise, new Promise((_, reject) => {timer = setTimeout(() => reject(Error(message)), milliseconds);})]);}
@@ -43,6 +43,13 @@ try {
   const fixture = await next();
   browser = await chromium.launch();
   const origin = `http://127.0.0.1:${fixture.port}`, page = await browser.newPage({locale: 'en-US'}), errors = [];
+  const requests=[];
+  page.on('response',response=>{const url=new URL(response.url());if(url.pathname.startsWith('/api/v1/')){
+    requests.push({method:response.request().method(),path:url.pathname,status:response.status()});if(requests.length>30)requests.shift();
+  }});
+  failureDetails=async()=>({requests,errors,forms:await page.locator('[data-pm-action]').evaluateAll(forms=>forms.map(form=>({
+    action:form.getAttribute('data-pm-action'),status:form.querySelector('[role=status]')?.textContent,
+    disabled:form.querySelector('button[type=submit]')?.disabled}))),status:await page.locator('.pm-status').allTextContents()});
   page.on('pageerror', error => errors.push(error.message));
   // Test this checkout's exact generated frontend even when the backend is supplied by an integration worktree.
   for (const file of ['app.js', 'app.css']) await page.route(`**/dashboard/${file}`, route =>
@@ -247,6 +254,9 @@ try {
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create'].sort());
   assert.deepEqual(errors, []);
   console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads; zero hosts or tasks.');
+} catch(error) {
+  console.error('Synthetic PM fixture state:',await failureDetails().catch(()=>({unavailable:true})));
+  throw error;
 } finally {
   try {await browser?.close();}
   finally {
