@@ -174,6 +174,9 @@ def source_visible(db, principal, run):
     if run["context"].get("output_destination") == "follow_up_assessment" or row and row[0] == "pm.follow_up.analyze":
         from .pm_follow_up_analysis import operation_visible
         return operation_visible(db, principal, {"operation_id": run["operation_id"]})
+    if row and row[0] == "pm.spec.materialize":
+        from .pm_spec_materialization import source_visible as spec_visible
+        return spec_visible(db, principal, {"operation_id": run["operation_id"]})
     return True
 
 
@@ -621,8 +624,8 @@ def complete_service(journal, run_id, generation, outcome):
     with journal.tx():
         run = get(journal.db, run_id)
         operation = journal.db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
-        if not operation or operation[0] != "pm.plan.adopt" or run["adapter"] != "connector.git":
-            raise _error("Service completion requires the original plan adoption", "PM_SERVICE_REQUIRED")
+        if not operation or operation[0] not in {"pm.plan.adopt", "pm.spec.materialize"} or run["adapter"] != "connector.git":
+            raise _error("Service completion requires the original registered Git writer", "PM_SERVICE_REQUIRED")
         if run["generation"] != generation:
             raise _error("PM writer changed", "PM_WRITER_CHANGED")
         if run["status"] == "completed_service":
