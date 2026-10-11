@@ -211,6 +211,7 @@ def test_installed_runtime_options_and_model_do_not_claim_tool_isolation():
     assert not report["automatic_pm_turn"] and not report["write_files"]
     assert report["fallback"] == "observer_context_only"
     assert report["authentication"]["model_provider"] == "unverified"
+    assert report["headless"] == {"status": "unverified", "session_observed": True}
 
 
 async def test_probe_only_reads_and_does_not_expose_runtime_paths(mock):
