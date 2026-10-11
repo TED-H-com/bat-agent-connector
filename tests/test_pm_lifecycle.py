@@ -380,3 +380,54 @@ async def test_another_journal_stop_commits_between_precheck_and_original_operat
         submit(ops, wid)
     assert ops.db.execute('SELECT COUNT(*) FROM operations').fetchone()[0] == before
     assert gates.head(ops.db, wid)['stage'] == 'paused'
+
+
+@pytest.mark.parametrize('public_comment', [False, True])
+async def test_only_canonical_admitted_local_issue_cancel_is_a_stopped_record_variant(ops, public_comment):
+    from bat_agent_connector import pm_work_packages
+
+    wid = (await workspace(ops))['workspace_id']
+    selected = {'rationale': 'Stop tracking this work locally'}
+    if public_comment:
+        selected['public_reason'] = 'Optional new external comment'
+    intent = {'workspace_id': wid, 'kind': 'cancel', 'selected': selected}
+    def admit(service, principal, target, params, pre):
+        return {'principal': pm_workspace.principal_binding(principal), 'issue_intent': intent,
+                'issue_intent_digest': pm_work_packages._digest(intent)}
+    writes = []
+    async def work(ctx):
+        return ctx.effect('local.cancel', lambda: writes.append('local') or {'state': 'cancelled'})
+    register(ops, work, name='pm.issue.cancel', admit=admit)
+    await decide(ops, wid)
+    caps = life.get_lifecycle(ops, OWNER, wid)
+    assert 'pm.issue.cancel' in caps['blocked_actions']
+    assert caps['record_variants'] == {'pm.issue.cancel': {'absent_params': ['public_reason']}}
+    if public_comment:
+        # Empty caller params cannot disguise the trusted intent's publication.
+        with pytest.raises(OperationError, match='PM_LIFECYCLE_STOPPED'):
+            submit(ops, wid, 'pm.issue.cancel')
+        assert writes == []
+    else:
+        original = submit(ops, wid, 'pm.issue.cancel')
+        await ops._execute(original['operation_id'])
+        assert ops.get(original['operation_id'])['result'] == {'state': 'cancelled'} and writes == ['local']
+        assert not ops.db.execute("SELECT 1 FROM pm_lifecycle_steps WHERE kind='external'").fetchone()
+
+
+@pytest.mark.parametrize('bad', ['missing_intent', 'mismatched_digest', 'extra_field'])
+async def test_issue_cancel_raw_params_or_corrupt_binding_never_bypass_stopped_admission(ops, bad):
+    from bat_agent_connector import pm_work_packages
+
+    wid = (await workspace(ops))['workspace_id']
+    intent = {'workspace_id': wid, 'kind': 'cancel', 'selected': {'rationale': 'A local note'}}
+    if bad == 'extra_field':
+        intent['selected']['unexpected_public_text'] = 'must not be treated as local'
+    binding = {'issue_intent': intent, 'issue_intent_digest': pm_work_packages._digest(intent)}
+    if bad == 'missing_intent':
+        binding.pop('issue_intent')
+    elif bad == 'mismatched_digest':
+        binding['issue_intent_digest'] = '0' * 64
+    register(ops, lambda ctx: None, name='pm.issue.cancel', admit=lambda *args: binding)
+    await decide(ops, wid)
+    with pytest.raises(OperationError, match='PM_LIFECYCLE_STOPPED'):
+        submit(ops, wid, 'pm.issue.cancel')

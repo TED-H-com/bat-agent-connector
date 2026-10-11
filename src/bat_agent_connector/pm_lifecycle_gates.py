@@ -6,6 +6,7 @@ Original external step reconciliation never calls a new-admission hook.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 
@@ -21,6 +22,8 @@ RECORD_ACTIONS = frozenset({
     'pm.governance.adoption.link', 'pm.sprint.close', 'pm.sprint.cancel',
 })
 STOPPED = frozenset({'paused', 'closed'})
+# UI draft hints only; backend classification uses the original trusted binding.
+RECORD_VARIANTS = {'pm.issue.cancel': {'absent_params': ['public_reason']}}
 
 
 def installed(db):
@@ -46,9 +49,20 @@ def lineage(action, target, binding):
     return wid
 
 
-def kind(action):
+def kind(action, binding=None):
     if action.startswith('pm.lifecycle.'):
         return 'lifecycle'
+    if action == 'pm.issue.cancel':
+        intent = (binding or {}).get('issue_intent')
+        if (isinstance(intent, dict) and intent.get('kind') == 'cancel'
+                and isinstance(intent.get('selected'), dict) and set(intent['selected']) == {'rationale'}):
+            try:
+                digest = hashlib.sha256(json.dumps(intent, ensure_ascii=False, sort_keys=True,
+                    separators=(',', ':'), allow_nan=False).encode('utf-8')).hexdigest()
+            except (TypeError, ValueError, UnicodeError):
+                digest = None
+            if digest is not None and digest == binding.get('issue_intent_digest'):
+                return 'record'
     return 'record' if action in RECORD_ACTIONS else 'investment'
 
 
@@ -64,7 +78,7 @@ def admit_operation(db, operation_id, action, target, binding):
     wid = lineage(action, target, binding)
     if not wid or not installed(db):
         return
-    current, mode = head(db, wid), kind(action)
+    current, mode = head(db, wid), kind(action, binding)
     if mode == 'investment':
         _require(current, current['execution_epoch'])
     db.execute('INSERT INTO pm_lifecycle_operations VALUES(?,?,?,?,?)',
@@ -83,7 +97,7 @@ def operation_binding(db, operation_id):
         return None
     refs = json.loads(row['external_refs'] or '{}')
     wid = lineage(row['action'], json.loads(row['target']), refs.get('admission_binding'))
-    return {'workspace_id': wid, 'execution_epoch': 0, 'kind': kind(row['action'])} if wid else None
+    return {'workspace_id': wid, 'execution_epoch': 0, 'kind': kind(row['action'], refs.get('admission_binding'))} if wid else None
 
 
 def require_local(db, operation_id, *, bookkeeping=False):
