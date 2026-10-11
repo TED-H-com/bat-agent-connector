@@ -1,10 +1,22 @@
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
 const flatten = rows => (rows || []).flatMap(row => [row, ...flatten(row.children)]);
-export function workspaceEvidence({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox}) {
+// Retain only explicit selection IDs across a same-principal access revalidation.
+// The catalog, associations and evidence are always read again before displaying them.
+const projectSelections = new Map();
+export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = '', active = null;
+  const selectionKey = namespace ? JSON.stringify([namespace, workspaceId]) : null;
+  let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = projectSelections.get(selectionKey) || '', active = null;
   const rows = h('div', {class: 'pm-evidence-rows'}), status = h('div', {role: 'status'});
-  const choose = h('select', {'aria-label': t('pm_evidence_project'), onchange: () => {selected = choose.value; void loadProject();}});
+  const choose = h('select', {'aria-label': t('pm_evidence_project'), onchange: () => {
+    alive(); selected = choose.value;
+    if (selectionKey) {
+      projectSelections.delete(selectionKey);
+      if (selected) projectSelections.set(selectionKey, selected);
+      if (projectSelections.size > 40) projectSelections.delete(projectSelections.keys().next().value);
+    }
+    void loadProject();
+  }});
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-evidence': ''}, h('h2', {}, t('pm_evidence_title')),
     h('p', {class: 'muted'}, t('pm_evidence_intro')), labelled('pm_evidence_project', choose), status, rows);
   const stateText = value => {const key = 'pm_evidence_state_' + value, translated = t(key); return translated === key ? String(value) : translated;};

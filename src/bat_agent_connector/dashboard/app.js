@@ -1496,14 +1496,22 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 //#endregion
 //#region src/pm-evidence.js
 var flatten = (rows) => (rows || []).flatMap((row) => [row, ...flatten(row.children)]);
-function workspaceEvidence({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
+var projectSelections = new Map();
+function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = "", active = null;
+	const selectionKey = namespace ? JSON.stringify([namespace, workspaceId]) : null;
+	let loaded = false, generation = 0, projects = [], bindings = [], workBindings = [], selected = projectSelections.get(selectionKey) || "", active = null;
 	const rows = h("div", { class: "pm-evidence-rows" }), status = h("div", { role: "status" });
 	const choose = h("select", {
 		"aria-label": t("pm_evidence_project"),
 		onchange: () => {
+			alive();
 			selected = choose.value;
+			if (selectionKey) {
+				projectSelections.delete(selectionKey);
+				if (selected) projectSelections.set(selectionKey, selected);
+				if (projectSelections.size > 40) projectSelections.delete(projectSelections.keys().next().value);
+			}
 			loadProject();
 		}
 	});
@@ -2598,6 +2606,19 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		version: 1,
 		values: {}
 	}, damaged = false, busy = false, operation = null;
+	const receiptDelays = [
+		250,
+		500,
+		1e3,
+		1500,
+		2e3,
+		3e3
+	];
+	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false;
+	const stopTimer = () => {
+		clearTimeout(receiptTimer);
+		receiptTimer = null;
+	};
 	try {
 		const raw = localStorage.getItem(storage);
 		if (raw) {
@@ -2664,7 +2685,27 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			run();
 		}
 	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
+	function pollReceipt() {
+		if (disposed || receiptTimer !== null || busy || damaged || !receiptPolling || receiptAttempt >= receiptDelays.length || !saved.intent?.operation_id || !form.isConnected || !allowed()) return;
+		if (operation && ![
+			"accepted",
+			"queued",
+			"pending",
+			"running"
+		].includes(operation.status)) return;
+		try {
+			guard();
+		} catch {
+			receiptPolling = false;
+			return;
+		}
+		receiptTimer = setTimeout(() => {
+			receiptTimer = null;
+			run(true);
+		}, receiptDelays[receiptAttempt++]);
+	}
 	function update() {
+		if (disposed) return;
 		const locked = busy || damaged || Boolean(saved.intent) || !allowed();
 		for (const input of Object.values(fields)) input.disabled = locked;
 		button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
@@ -2672,9 +2713,15 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
 		onStateChange();
+		pollReceipt();
 	}
-	async function run() {
-		if (busy || damaged || !allowed()) return;
+	async function run(automatic = false) {
+		if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		stopTimer();
+		if (!automatic) {
+			receiptAttempt = 0;
+			receiptPolling = true;
+		}
 		let firstAttempt = false;
 		try {
 			guard();
@@ -2700,6 +2747,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			persist();
 			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`) : await api("POST", "/operations?wait=3", intent.request, intent.key);
 			guard();
+			if (disposed || !allowed()) {
+				receiptPolling = false;
+				return;
+			}
 			const op = data.operation;
 			if (!/^op_[0-9a-f]{32}$/.test(op?.operation_id) || op.actor !== caps()?.actor || op.idempotency_key !== intent.key || !same$3({
 				action: op.action,
@@ -2723,6 +2774,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				status.replaceChildren(h("span", { class: "muted" }, t("pm_saved")));
 			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
+			receiptPolling = false;
 			if (!retired(error)) {
 				if (firstAttempt && error.admissionRefused === true && !saved.intent?.operation_id) {
 					saved.intent.initialAdmissionRefused = true;
@@ -2746,6 +2798,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		update,
 		changed,
 		locked: () => busy || damaged || Boolean(saved.intent),
+		dispose: () => {
+			disposed = true;
+			receiptPolling = false;
+			stopTimer();
+		},
 		set: (name, value) => {
 			if (!busy && !saved.intent && !damaged) {
 				fields[name].value = value;
@@ -2842,6 +2899,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		workspace: () => workspace,
 		permitted,
@@ -3513,6 +3571,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sequence++;
 		off();
 		navigationMedia.removeEventListener("change", resizeNavigation);
+		for (const value of forms) value.dispose();
 	};
 }
 //#endregion

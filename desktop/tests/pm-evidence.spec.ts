@@ -4,17 +4,22 @@ import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture, pmRoute, workspaceId} from './pm-fixture.ts';
 const pid='prj_'+'1'.repeat(20), wid='wi_'+'2'.repeat(20), rid='pmrev_'+'3'.repeat(32), eid='pme_'+'4'.repeat(32);
 function fixture() {
-  const base=pmFixture(), state={...base.state, associated:false, tracked:false, lost:false, sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any};
+  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, associated:false, tracked:false, lost:false, sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any};
   const project={project_id:pid,name:'Reader experience',version:2};
   const binding=()=>({workspace_id:workspaceId,work_item_id:wid,binding_id:'pmwb_'+'5'.repeat(32),project_id:pid,plan_revision_id:null,requirement_ids:[]});
   let workBinding:any=null;
   const summary={evidence_id:eid,workspace_id:workspaceId,source_kind:'work_claim',source_observed_at:1791720000,captured_at:1791720001,assessment:{state:'done'}};
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),path=url.pathname;
+    if(path==='/events'){
+      if(!url.searchParams.get('checkpoint')?.startsWith(`evidence-access-${state.accessVersion}-`))return {status:409,data:{error:{code:'EVENT_CURSOR_RESET',reason:'access_changed',preserve_drafts:true}}};
+      const result=await base.dispatch(input);result.data.sync.checkpoint.token=`evidence-access-${state.accessVersion}-${result.data.next_cursor}`;return result;
+    }
     if(path==='/capabilities'||path==='/bootstrap'){
       const result=await base.dispatch(input),caps=path==='/bootstrap'?result.data.capabilities:result.data;
       caps.features.pm_workspaces.work_evidence=true;
       caps.actions.push(...['pm.project.bind','pm.work.bind','pm.evidence.capture'].map(action=>({action,allowed:base.state.manage})));
+      if(path==='/bootstrap'){state.bootstraps++;result.data.sync.checkpoint.token=`evidence-access-${state.accessVersion}-0`;}
       return result;
     }
     if(path==='/projects')return {status:200,data:{projects:[project]}};
@@ -47,6 +52,15 @@ const action=(page:any,name:string)=>page.locator(`[data-pm-action="${name}"]`);
 const selectProject=async(page:any)=>{await page.getByLabel('Connector project',{exact:true}).selectOption(pid);};
 const openWork=async(page:any)=>{await page.locator('[data-pm-work] > summary').click();};
 for(const native of [false,true])test.describe(native?'native evidence':'web evidence',()=>{
+  test('access revalidation preserves a still-readable project selection and unsent association',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);
+    const bind=action(page,'pm.project.bind'),rationale=bind.getByLabel('Why associate this work?',{exact:true});
+    await rationale.fill('Keep the same project and unsent reason');const before=f.state.bootstraps;f.state.accessVersion++;
+    await expect.poll(()=>f.state.bootstraps,{timeout:10000}).toBeGreaterThan(before);
+    await expect(page.getByLabel('Connector project',{exact:true})).toHaveValue(pid);
+    await expect(rationale).toBeVisible();await expect(rationale).toHaveValue('Keep the same project and unsent reason');
+    expect(f.state.writes).toHaveLength(0);
+  });
   test('explicit project and work association records selected plan requirements without dispatch',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);
     await action(page,'pm.project.bind').getByLabel('Why associate this work?',{exact:true}).fill('Manage reader experience here');
