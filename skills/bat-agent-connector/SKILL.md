@@ -502,6 +502,30 @@ After withdrawal, do not recover quoted source details through an old result or
 substitute a newer readable publication. A hidden current baseline is unknown,
 not proof that no baseline exists.
 
+### Adopt bounded maintenance policy
+
+When `features.pm_workspaces.maintenance_policy.policy_adoption` is available,
+read `pm_maintenance_policy_current_get`, `pm_maintenance_policies_list` and
+`pm_maintenance_policy_get` with the same original-source visibility as the
+release baseline. A filtered current policy is unknown, not absent. Continue
+through empty pages that carry a cursor.
+
+A current workspace owner may use `pm.maintenance_policy.adopt` with target
+`{workspace_id}`, `{policy,rationale}` and exact expected policy revision,
+previous policy ID, baseline ID and lifecycle revision. Use the recorded owner
+choice for sources, allowed work kinds/paths, delivery ceiling, verification,
+time zone, schedule and resource limits. Do not invent a policy or use an article,
+model recommendation or "looks good" as execution authorization. One explicit
+policy decision does not require separate approvals for each field.
+
+Adoption records intent only. Check advertised `scheduler_available` and
+`repair_dispatch_available`; both are currently false. It does not prove an idle
+workspace, start a repair, enter Maintain or give control over another session.
+Repository-wide GitHub coverage cannot be inferred from a list of linked PRs.
+Required checks, scopes and original source access still apply under a policy.
+Reuse the original operation envelope/key after a lost reply; never rebuild it
+against a newer policy or release merely to recover the original result.
+
 ### Prepare and review engineering work
 
 When `features.pm_workspaces.issue_mapping` is available, inspect

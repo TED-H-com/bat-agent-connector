@@ -12,6 +12,9 @@ FIELDS = {
     "pm_issue_mappings_list": ("workspace_id", "after", "limit"),
     "pm_issue_mapping_get": ("workspace_id", "mapping_id"),
 
+    "pm_maintenance_policies_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_policy_current_get": ("workspace_id",),
+    "pm_maintenance_policy_get": ("workspace_id", "policy_id"),
     "pm_release_baselines_list": ("workspace_id", "after", "limit"),
     "pm_release_baseline_current_get": ("workspace_id",),
     "pm_release_baseline_get": ("workspace_id", "baseline_id"),
@@ -90,6 +93,14 @@ def read(ops, principal, method, params):
         return pm_issue_mappings.list_mappings(ops, principal, workspace_id,
                                                after=params.get("after", 0), limit=params.get("limit", 50))
 
+    if method in {"pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get"}:
+        from . import pm_maintenance_policy
+        if method == "pm_maintenance_policy_current_get":
+            return pm_maintenance_policy.current_policy(ops, principal, workspace_id)
+        if method == "pm_maintenance_policy_get":
+            return pm_maintenance_policy.get_policy(ops, principal, workspace_id, params.get("policy_id"))
+        return pm_maintenance_policy.list_policies(ops, principal, workspace_id,
+            after=params.get("after", 0), limit=params.get("limit", 20))
     if method in {"pm_release_baselines_list", "pm_release_baseline_current_get", "pm_release_baseline_get"}:
         from . import pm_release_baselines
         if method == "pm_release_baseline_current_get":
