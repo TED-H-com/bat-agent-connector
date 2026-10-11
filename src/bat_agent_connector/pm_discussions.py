@@ -307,11 +307,15 @@ def _input_out(row):
     return result
 
 
-def _capabilities(workspace, principal):
+def _capabilities(ops, workspace, principal):
+    from . import pm_native_capabilities
+
     role = workspace["membership"]["role"]
     return {"write": principal.allows("manage") and (principal.admin or role in {"owner", "contributor"}),
             "decide": principal.allows("manage") and (principal.admin or role == "owner"),
-            "runtime": False, "adopt": False, "dispatch": False}
+            "runtime": False, "runtime_adapter": "bat", "runtime_legacy": True,
+            "native_analysis": pm_native_capabilities.read(ops, principal, workspace),
+            "adopt": False, "dispatch": False}
 
 
 def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
@@ -323,8 +327,9 @@ def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
                           (workspace_id, after, after, limit + 1)).fetchall()
     return {"version": 1, "workspace_id": workspace_id, "threads": [dict(row) for row in rows[:limit]],
             "next_cursor": rows[limit - 1]["thread_id"] if len(rows) > limit else None,
-            "capabilities": _capabilities(workspace, principal), **pm_profiles.catalog(),
-            "runtime": {"available": False, "reason": "manual_discussion_only"}}
+            "capabilities": _capabilities(ops, workspace, principal), **pm_profiles.catalog(),
+            "runtime": {"available": False, "adapter": "bat", "legacy": True,
+                        "reason": "external_tool_policy_unverified"}}
 
 
 def _draft_row(db, thread, *, draft_id=None):
@@ -385,7 +390,7 @@ def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_mess
             "next_input_cursor": history[limit - 1]["sequence"] if len(history) > limit else None,
             "coverage": {"messages_truncated": len(messages) > limit, "inputs_truncated": len(inputs) > 100,
                          "history_truncated": len(history) > limit},
-            "capabilities": _capabilities(workspace, principal)}
+            "capabilities": _capabilities(ops, workspace, principal)}
 
 
 def context(ops, principal, workspace_id, thread_id, *, max_chars=32000):

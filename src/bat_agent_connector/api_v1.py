@@ -124,6 +124,7 @@ class ApiV1:
         from . import (
             pm_discussions,
             pm_evidence,
+            pm_native_operations,
             pm_plan_operations,
             pm_run_operations,
             pm_snapshots,
@@ -132,6 +133,7 @@ class ApiV1:
         pm_workspace.install(daemon.ops)
         pm_discussions.install(daemon.ops)
         pm_run_operations.install(daemon.ops)
+        pm_native_operations.install(daemon.ops)
         pm_plan_operations.install(daemon.ops)
         pm_evidence.install(daemon.ops)
         pm_snapshots.install(daemon.ops)
@@ -632,6 +634,7 @@ class ApiV1:
                                       "unproven_legacy": "read_only", "admin_takeover": False},
                                   "pm_workspaces": {"version": 1, "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,
+                                                    "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
                                                     "runtime_reason": "external_tool_policy_unverified",
                                                     "plan_drafting": "pm.plan.draft" in self.daemon.ops.actions,
                                                     "plan_adoption": "pm.plan.adopt" in self.daemon.ops.actions,

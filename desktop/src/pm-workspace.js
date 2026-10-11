@@ -3,6 +3,7 @@ import {projectBrief} from './pm-brief.js';
 import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
+import {nativeRunState, pmDiscussionMessage, pmNativeAnalysis} from './pm-native-analysis.js';
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -140,7 +141,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   main.append(h('div', {class: 'pm-shell'}, h('aside', {}, nav), body));
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
   const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
     ? workspaceEvidence({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
   if (evidence) body.append(evidence.box);
@@ -187,8 +188,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       noteForm = form({action: 'pm.message.append', target, fields: {content: text}, params: values => ({content: values.content}), preconditions,
         permitted: write, label: 'pm_save_note', onSaved: () => load(),
         extra: h('div', {}, labelled('pm_note_content', text), h('p', {class: 'muted'}, t('pm_note_help')))});
+      discussionHint = h('p', {class: 'muted'});
       const column = h('section', {class: 'pm-discussion'},
-        h('div', {class: 'pm-thread-heading'}, threadTitle, mode), h('p', {class: 'muted'}, t('pm_manual')), earlier, notes, coverage, noteForm.box);
+        h('div', {class: 'pm-thread-heading'}, threadTitle, mode), discussionHint, earlier, notes, coverage);
+      if (caps()?.features?.pm_workspaces?.native_analysis) {
+        nativeAnalysis = pmNativeAnalysis({h, t, form, input, labelled, caps,
+          capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
+        column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation'},
+          h('summary', {}, t('pm_native_note_only')), noteForm.box));
+      } else column.append(noteForm.box);
       if (caps()?.features?.pm_workspaces?.plan_drafting) {
         revisions = planRevisions({h, t, api, alive, workspaceId, threadId, thread: () => threadData,
           form, input, labelled, permitted, refresh: load, errorBox});
@@ -261,10 +269,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
     }
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
+    discussionHint.textContent = t(nativeAnalysis || data.messages?.some(message => message.role === 'assistant') ? 'pm_native_discussion' : 'pm_manual');
     const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
-    notes.replaceChildren(...(data.messages || []).map(message => h('article', {class: 'pm-note', 'data-note-id': message.message_id},
-      h('div', {class: 'pm-note-stamp'}, h('strong', {}, message.actor), h('time', {datetime: new Date(timestamp(message.created_at)).toISOString()}, time(message.created_at))),
-      h('div', {class: 'pm-note-text'}, message.content))));
+    notes.replaceChildren(...(data.messages || []).map(message => pmDiscussionMessage({h, t, message, time, timestamp})));
     if (!data.messages?.length) notes.append(h('p', {class: 'muted pm-empty'}, t('pm_no_notes')));
     notes.scrollTop = bottom ? notes.scrollHeight : scroll;
     earlier.hidden = !historyCursor; earlier.disabled = false;
@@ -351,7 +358,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (!append) {packages.replaceChildren(); packageSignature = signature;}
     for (const run of page.runs || []) {
       const detail = h('div'), item = h('details', {'data-pm-run': run.run_id},
-        h('summary', {}, run.purpose, ' · ', time(run.created_at)), detail);
+        h('summary', {}, run.purpose, ' · ', time(run.created_at),
+          run.adapter === 'codex-native-linux' ? ' · ' + nativeRunState(t, run) : ''), detail);
       let fetched = false, pending = false;
       item.addEventListener('toggle', async () => {
         if (!item.open || fetched || pending) return;
@@ -368,7 +376,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
               h('section', {}, h('h4', {}, t('pm_status_' + status)), ...inputs.map(input => h('div', {}, h('p', {}, input.value),
                 h('small', {class: 'muted'}, [input.source_ref?.ref || input.source_ref?.message_id,
                   input.source_ref?.path, input.source_ref?.revision].filter(Boolean).join(' · ')))))),
-            h('h4', {}, t('pm_notes')), ...(context.messages || []).map(message => h('p', {}, h('strong', {}, message.actor + ': '), message.content)),
+            h('h4', {}, t('pm_notes')), ...(context.messages || []).map(message => h('p', {},
+              h('strong', {}, (message.role === 'assistant' ? t('pm_native_assistant') : message.actor) + ': '), message.content)),
             h('p', {class: 'muted'}, t('pm_package_frozen')));
           if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length
               || context.coverage?.messages_truncated || context.coverage?.inputs_truncated)
@@ -419,7 +428,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
           threadId && caps()?.features?.pm_workspaces?.plan_drafting
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-          threadId && caps()?.features?.pm_workspaces?.plan_drafting
+          threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis)
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -460,6 +469,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       worktreeChoice?.update();
       if (evidence) await evidence.refresh();
       if (brief) await brief.refresh();
+      nativeAnalysis?.update(runs?.runs || []);
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {loaded = false; updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
