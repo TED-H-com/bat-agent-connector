@@ -144,7 +144,8 @@ async def test_a05_raw_operation_door_cannot_opt_into_legacy_key_mode(served, ke
 async def test_a05_reserved_key_prefix_cannot_hide_in_legacy_task_hash(daemon, size):
     with pytest.raises(OperationError, match="INVALID_IDEMPOTENCY_KEY"):
         await daemon.call("work_submit", {"host": "h1", "workspace": "demo-project", "project": "p",
-                                          "original_words": "saved", "idempotency_key": NO_KEY_PREFIX + "x" * size})
+                                          "original_words": "saved", "idempotency_key": NO_KEY_PREFIX + "x" * size},
+                          principal=PRINCIPAL)
     assert not daemon.journal.db.execute("SELECT 1 FROM operations").fetchone()
     assert not daemon.journal.db.execute("SELECT 1 FROM tasks").fetchone()
 

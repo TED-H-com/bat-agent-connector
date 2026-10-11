@@ -16,9 +16,25 @@
 
 現有已安裝 client 仍按原 managed installation 運行。本批不搬遷既有 journal、不合併同 repo
 的舊 project、不啟動其他 daemon；新 PM workspace 由使用者明確建立，舊資料保留未歸屬。
-新增 controller ID 也不代表既有 session 寫入入口已完成跨 controller 隔離。
+第一批建立 controller ID；既有 session 寫入入口的隔離由以下第二批補齊。
 
 合併、安裝與真人實測狀態以本批 PR 的實際驗證為準；本表不宣稱 M0–M4 已完成。
+
+## 第二批：原控制者與可恢復操作
+
+追蹤 [#87](https://github.com/teddashh/bat-agent-connector/issues/87)，接續第一批。
+已認證的 server／actor 決定穩定 controller；新 session、背景 task 與 command 保存原始 authority。
+受理與最後執行點核對 controller 和建立時的 incarnation，涵蓋 API／MCP／CLI、背景派工、
+failover、fanout、relay、permissions、worktree merge 與 reviewed cleanup。
+相同 actor 的多 client、token 輪替與重啟不改變身分；admin 不接管其他 controller 的資源。
+
+讀取他人的來源後可以建立自己的 worktree；共同使用同一個可寫工作目錄仍受原控制者限制。
+舊資料缺少建立證據時維持唯讀，已送出但回覆遺失的操作保留查回路徑。
+個人閱讀資料與共用 GitHub integration 沿用既有授權；它們不會因為引用 session 就取得控制權。
+Dashboard inventory 與帶 token 的 CLI／MCP policy 顯示目前 caller 的操作可用性，來源標記保持不變。
+
+本批是 PM 自有執行環境的必要基礎；PM worktree、BAT capability wrapper、PM runner、
+專業 PM 領域模型與完整生命週期仍按下表開發。自動驗證與發布狀態以本批 PR 為準。
 
 ## 工作與剩餘範圍
 
@@ -28,7 +44,7 @@
 | 工作 | 優先級 | 原計畫項目 | 狀態／尚缺 |
 | --- | --- | --- | --- |
 | W01 | P0 | Workspace identity 與 scope migration | 本批：workspace identity／membership；待舊專案明確綁定與部署遷移 |
-| W02 | P0 | 全入口 controller policy | 本批只建立 controller 身分；所有既有 session 入口隔離仍待做 |
+| W02 | P0 | 全入口 controller policy | 第二批：既有執行入口、最後 frame、背景恢復與清理已接入原 controller／incarnation；驗證見 #87 的實作 PR |
 | W03 | P0 | Operation request key 與查回 | 本批重用 PM operation key／receipt；Git 採用與外部效果仍待驗證 |
 | W04 | P0 | BAT capability adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W05 | P0 | Evidence IDs 與 replay 去重 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -82,7 +98,7 @@
 
 ## 後續順序
 
-1. 補齊 controller admission、BAT capability wrapper、工作／證據關聯、PM 自有 worktree 與 BAT runner。
+1. 完成第二批驗證，接入 BAT capability wrapper、工作／證據關聯、PM 自有 worktree 與 BAT runner。
 2. 接入 Git／journal 可恢復計畫採用、固定規格版本、工程工作包與就緒判斷。
 3. 完整五視圖、Sprint／Review／Retro、決策與偏差，沿用現有 Orchestrator 交付並回填。
 4. 發布基準、維護政策與有界排程、Maintenance Review、原子暫停／關閉與明確重開。
