@@ -1239,21 +1239,44 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let snapshot_list = path.ends_with("/snapshots");
             let comparison = path.ends_with("/plan-comparison");
             let roadmap_list = path.ends_with("/roadmap/revisions");
-            let sequence_list =
-                plan_list || project_list || work_list || evidence_list || snapshot_list || roadmap_list;
+            let sequence_list = plan_list
+                || project_list
+                || work_list
+                || evidence_list
+                || snapshot_list
+                || roadmap_list;
             let thread_detail = path
                 .split('/')
                 .nth(5)
                 .is_some_and(|id| id.starts_with("pmt_"))
                 && !path.ends_with("/context");
             let valid = match key.as_ref() {
-                "from_revision_id" | "to_revision_id" if comparison => value.len() == 38
-                    && value.starts_with("pmrev_") && value[6..].bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()),
-                "binding_ids" if comparison => value.is_empty() || (value.split(',').count() <= 100
-                    && value.split(',').all(|id| id.len() == 37 && id.starts_with("pmwb_")
-                        && id[5..].bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))),
-                "journal_cursor" if comparison => !value.is_empty() && value.len() <= 9 && value.bytes().all(|b| b.is_ascii_digit()),
-                "kind" if roadmap_list => matches!(value.as_ref(), "baseline" | "forecast" | "observation"),
+                "from_revision_id" | "to_revision_id" if comparison => {
+                    value.len() == 38
+                        && value.starts_with("pmrev_")
+                        && value[6..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "binding_ids" if comparison => {
+                    value.is_empty()
+                        || (value.split(',').count() <= 100
+                            && value.split(',').all(|id| {
+                                id.len() == 37
+                                    && id.starts_with("pmwb_")
+                                    && id[5..]
+                                        .bytes()
+                                        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                            }))
+                }
+                "journal_cursor" if comparison => {
+                    !value.is_empty()
+                        && value.len() <= 9
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                }
+                "kind" if roadmap_list => {
+                    matches!(value.as_ref(), "baseline" | "forecast" | "observation")
+                }
                 "limit" if thread_list || thread_detail || run_list || sequence_list => {
                     !value.is_empty()
                         && value.len() <= 3
