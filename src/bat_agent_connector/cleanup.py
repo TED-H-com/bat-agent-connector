@@ -1533,7 +1533,6 @@ def _retire_absent_sessions(ctx, carrier_id=None):
             continue
         entry = item.get("registry", {})
         try:
-            _require_resource_controller(ctx.service, item)
             owner = task_control.owner_task(ctx.service.context["fleet"], item["host"], item["session_id"])
         except (ResourceReadOnly, registry.RegistryInvariantError, OSError) as error:
             _receipt(ctx, item, row["status"], after=_capacity_failure(error))
@@ -1541,6 +1540,8 @@ def _retire_absent_sessions(ctx, carrier_id=None):
         if (owner and row["status"] == "already_absent" and item.get("task_cleanup", {}).get("eligible")
                 and (carrier in carriers or carrier is None and not entry.get("worktree_path"))):
             try:
+                ctx.require_controller()
+                controller_authority.require_entry(entry)
                 capacity = task_cleanup.retire_absent(ctx, item)
             except (ResourceReadOnly, registry.RegistryInvariantError, OSError) as error:
                 capacity = _capacity_failure(error)
@@ -1565,8 +1566,13 @@ def _retire_absent_sessions(ctx, carrier_id=None):
                 "carrier_resource_id": carrier, "stopped_by_cleanup": False})
             continue
         try:
+            # Read-only descriptions above do not require creation authority. An actual
+            # retirement must retain both the accepted owner and its locked row identity.
+            ctx.require_controller()
+            controller_authority.require_entry(entry)
             capacity = registry.retire(item["host"], item["session_id"], "absent_at_cleanup",
-                created_at=item["registry"].get("created_at"), actor=ctx.actor, operation_id=ctx.operation_id,
+                created_at=entry.get("created_at"), controller_incarnation=entry["controller_incarnation"],
+                actor=ctx.actor, operation_id=ctx.operation_id,
                 carrier_resource_id=carrier, reason="session observed absent; no worktree or carrier removed/already absent")
         except (ResourceReadOnly, registry.RegistryInvariantError, OSError) as e:
             capacity = _capacity_failure(e)
