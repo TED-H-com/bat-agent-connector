@@ -54,8 +54,12 @@ into BAT events and never enter BAT's turn-end parser.
 
 Import requires both confirmed original-process death and complete native turn
 evidence. The native reducer must match the original request acknowledgement,
-thread, turn, terminal original user input/client ID/digest, full terminal items,
-and final assistant message. Tool calls, event gaps, partial replies, another
+thread, turn, original user input/client ID/digest, complete turn items,
+and final assistant message. A native summary terminal may instead be matched
+to the original complete user and assistant `item/completed` events: the fixed
+input/client ID/digest must match, and its terminal assistant must exactly equal
+the completed final assistant from that same turn. The evidence references retain
+the user item, assistant item and terminal event sequences. Tool calls, event gaps, partial replies, another
 request, a changed prompt, or an unknown runtime assessment are insufficient.
 The saved runtime assessment must equal a new reduction over the unchanged
 journal events; process death alone never establishes a completed reply.
@@ -91,6 +95,9 @@ A saved complete original reply may be imported on recovery only while the
 original caller still has write membership and has not cancelled. A fresh
 explicit operation after an aborted run gets the next generation; it cannot
 resume or impersonate the previous native process.
+Updating the reducer cannot reopen an already aborted run, replace its immutable
+assessment, or change a failed operation to success. A new explicit operation
+uses the updated contract while the original outcome remains historical evidence.
 
 ## Verification
 
