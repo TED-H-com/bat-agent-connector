@@ -188,6 +188,8 @@ async def before_send_frame(ctx):
     meta = await asyncio.wait_for(client.guard_read('claude:get-session-meta', {'sessionId': doc['session_id']}),
         min(10, max(0.001, remaining)))
     _meta(doc, meta, fresh=True)
+    repairs.require_child(ctx.service, ctx.op)
+    remaining = repairs._record_for(ctx.service, parent)['deadline_at'] - time.time()
     raw = await asyncio.wait_for(client.guard_read('claude:sync-session',
         {'sessionId': doc['session_id'], 'cursor': doc['send_cursor']}), min(10, max(0.001, remaining)))
     replay = pm_runtime.parse_replay(raw, doc['session_id'], doc['send_cursor'])
