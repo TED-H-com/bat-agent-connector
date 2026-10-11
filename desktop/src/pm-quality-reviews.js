@@ -1,3 +1,4 @@
+import {workspaceExecutionVerification} from './pm-execution-verification.js';
 // Fixed quality conclusions remain central; this view selects original receipts.
 const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record',REVOKE='pm.quality.review.revoke';
 const sha=/^[0-9a-f]{40}$/,digest=/^[0-9a-f]{64}$/,operation=/^op_[0-9a-f]{32}$/,reviewId=/^pmqr_[0-9a-f]{32}$/;
@@ -5,7 +6,7 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),clone=value=>structuredC
 const github={kind:'fixed_revision_verification',profile:'github_reported_checks_v1'};
 export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSelectionChange=()=>{}}){
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let workId=null,serial=0,ready=false,filtered=false,model=null,selected='',chosen=null,create=null,record=null,revoke=null,formKey='',matrixKey='';
+  let workId=null,serial=0,ready=false,filtered=false,model=null,selected='',chosen=null,create=null,record=null,revoke=null,formKey='',matrixKey='',verifier=null;
   const navigation=`batc.pm.quality-navigation.${namespace}.${workspaceId}`;
   const workChoice=h('select',{'aria-label':t('pmq_work')}),status=h('div',{role:'status'}),facts=h('div'),draft=h('div'),assessment=h('div'),withdrawal=h('div'),history=h('select',{'aria-label':t('pmq_history')});
   const text=key=>h('p',{class:'muted'},t(key)),line=(key,value)=>h('p',{class:'pm-source'},h('strong',{},t(key)+': '),String(value??t('pmq_none')));
@@ -25,7 +26,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   function options(field,rows){const previous=field.value;field.replaceChildren(h('option',{value:''},t('pmq_choose')),...rows.map(([id,label])=>h('option',{value:id},label)));
     if(previous&&!rows.some(([id])=>id===previous))field.append(h('option',{value:previous},t('pmq_original_missing')));field.value=previous;}
   function update(){for(const editor of [create,record,revoke])editor?.update();history.disabled=!ready;}
-  function clear(){ready=false;model=null;facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
+  function clear(){ready=false;model=null;verifier?.withdraw();facts.replaceChildren();history.replaceChildren();draft.hidden=assessment.hidden=withdrawal.hidden=true;emit(null);update();}
   function purge(){for(const editor of [create,record,revoke])editor?.dispose();create=record=revoke=null;formKey=matrixKey='';draft.replaceChildren();assessment.replaceChildren();withdrawal.replaceChildren();}
   function withdraw(){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren();}
   function failure(err){serial++;clear();purge();workChoice.replaceChildren();status.replaceChildren(text('pmq_unavailable'),errorBox(err));}
@@ -54,8 +55,9 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   function criteria(pkg,dod){return [...(pkg?.document.requirements||[]).flatMap(req=>(req.acceptance||[]).map(item=>({criterion:{kind:'acceptance',requirement_id:req.id,input_id:item.source_input_id},text:item.text}))),
     ...(dod?.document.criteria||[]).map(item=>({criterion:{kind:'dod',criterion_id:item.id},text:item.text}))];}
   function dodChoices(pkg){const fixed=pkg?.document.context.dod_ref;return (model?.dods||[]).filter(row=>row.document.plan_ref?.scope_revision===pkg?.document.context.plan_ref.scope_revision&&(!fixed||row.revision_id===fixed.revision_id));}
-  function policyChoices(){return [['github',t('pmq_github')],...model.proofs.filter(row=>row.condition.profile==='observed_runner_v1').map(row=>[row.key,`${t('pmq_runner')} · ${row.reference.candidate_commit.slice(0,12)} · #${row.reference.verification_id}`])];}
-  function policy(value){if(value==='github')return github;const row=model.proofs.find(row=>row.key===value&&row.condition.profile==='observed_runner_v1');if(!row)throw Error(t('pmq_select_proof'));return row.condition;}
+  function policySources(){return [...model.proofs,...(model.configuration?[{key:'configured:'+model.configuration.execution_operation_id,condition:{kind:'fixed_revision_verification',profile:'observed_runner_v1',command_digest:model.configuration.command_digest},reference:{candidate_commit:model.configuration.candidate_commit||'',verification_id:t('pmq_configured')}}]:[])];}
+  function policyChoices(){return [['github',t('pmq_github')],...policySources().filter(row=>row.condition.profile==='observed_runner_v1').map(row=>[row.key,`${t('pmq_runner')} · ${row.reference.candidate_commit.slice(0,12)} · #${row.reference.verification_id||row.reference.verification_operation_id}`])];}
+  function policy(value){if(value==='github')return github;const row=policySources().find(row=>row.key===value&&row.condition.profile==='observed_runner_v1');if(!row)throw Error(t('pmq_select_proof'));return row.condition;}
   function buildCreate(){
     if(!create){
       const pkg=choice('pmq_package'),child=choice('pmq_execution'),candidate=input('pmq_candidate',{max:40}),dod=choice('pmq_dod'),reviewer=choice('pmq_reviewer'),rationale=input('pmq_policy_reason',{multiline:true,max:4000});
@@ -66,14 +68,14 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
       const chosenCriteria=()=>criteria(packageFor(pkg.value),model?.dods.find(row=>row.revision_id===dod.value));
       const rows=()=>{try{return JSON.parse(policies.value);}catch{return [];}};
       const permittedCreate=()=>owner()&&packageFor(pkg.value)&&children(packageFor(pkg.value)).some(row=>row.operation_id===child.value)&&sha.test(candidate.value)
-        &&reviewer.value&&chosenCriteria().length>0&&same(rows().map(row=>row.criterion),chosenCriteria().map(row=>row.criterion))&&rows().every(row=>row.condition)
+        &&reviewer.value&&chosenCriteria().length>0&&same(rows().map(row=>row.criterion),chosenCriteria().map(row=>row.criterion))&&rows().every(row=>{try{return same(row.condition,policy(row.choice));}catch{return false;}})
         &&JSON.parse(baseline.value)===previous();
       const sync=()=>{if(!ready)return;const original=packageFor(pkg.value);options(pkg,model.packages.map(row=>[row.package_id,`${row.document.title} · ${row.package_id}`]));
         options(child,children(original).map(row=>[row.operation_id,`${row.actor} · ${row.operation_id}`]));
         options(dod,dodChoices(original).map(row=>[row.revision_id,`${t('pmq_dod')} · ${row.revision_id}`]));
         if(original?.document.context.dod_ref&&!dod.value&&!create.locked())create.set('dod',original.document.context.dod_ref.revision_id);
         options(reviewer,(workspace()?.members||[]).filter(row=>['owner','contributor'].includes(row.role)).map(row=>[row.actor,row.actor]));
-        const signature=JSON.stringify([pkg.value,dod.value,chosenCriteria(),model.proofs.map(row=>row.key)]);
+        const signature=JSON.stringify([pkg.value,dod.value,chosenCriteria(),policySources().map(row=>row.key)]);
         if(signature!==matrixKey){matrixKey=signature;matrix.replaceChildren();const saved=rows();
           for(const criterion of chosenCriteria()){const field=choice('pmq_policy_profile'),old=saved.find(row=>same(row.criterion,criterion.criterion));options(field,policyChoices());field.value=old?.choice||'';
             field.addEventListener('change',()=>{if(create.locked())return;const values=rows().filter(row=>!same(row.criterion,criterion.criterion));if(field.value)values.push({criterion:criterion.criterion,condition:policy(field.value),choice:field.value});
@@ -153,11 +155,19 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
       options(workChoice,[...new Map(catalog.map(row=>[row.work_item_id,`${row.document.title} · ${row.work_item_id}`])).entries()]);workChoice.value=id||'';
       if(!id){status.replaceChildren(text('pmq_choose_work'));return;}
       const packages=catalog.filter(row=>row.work_item_id===id);
-      const [operations,dods,reviews,evidence,deliveries,observations]=await Promise.all([pages('/operations?action=repository.continue&status=succeeded','operations',ticket,{cursor:'next_before',wid:false,descending:true}),
+      const [operations,dods,reviews,evidence,deliveries,observations,verifications]=await Promise.all([pages('/operations?action=repository.continue&status=succeeded','operations',ticket,{cursor:'next_before',wid:false,descending:true}),
         pages(`${base}/sprint-artifacts/dod`,'revisions',ticket,{wid:false}),pages(`${base}/work/${id}/quality`,'reviews',ticket),
-        pages(`${base}/evidence?work_item_id=${id}`,'evidence',ticket),pages(`${base}/work/${id}/deliveries`,'deliveries',ticket,{cursor:'next_after'}),pages(`${base}/github-observations`,'observations',ticket)]);
+        pages(`${base}/evidence?work_item_id=${id}`,'evidence',ticket),pages(`${base}/work/${id}/deliveries`,'deliveries',ticket,{cursor:'next_after'}),pages(`${base}/github-observations`,'observations',ticket),caps()?.features?.pm_workspaces?.execution_verification?.version===1?pages('/operations?action=pm.execution.verify','operations',ticket,{cursor:'next_before',wid:false,descending:true}):Promise.resolve([])]);
       if(!valid(ticket)||workId!==id)return;
       const proofs=[];
+      for(const op of verifications.filter(value=>value.action==='pm.execution.verify'&&value.target?.workspace_id===workspaceId&&operations.some(child=>child.operation_id===value.target.execution_operation_id&&child.params?.work_item_id===id))){
+        const saved=await request('GET',`${base}/execution-verifications/${op.operation_id}`);if(!valid(ticket))return;const receipt=saved.verification;
+        if(saved.workspace_id!==workspaceId)throw error();if(!receipt)continue;
+        if(receipt.operation_id!==op.operation_id||receipt.workspace_id!==workspaceId||receipt.execution_operation_id!==op.target.execution_operation_id||!digest.test(receipt.receipt_digest)||receipt.reference?.verification_operation_id!==op.operation_id
+          ||!sha.test(receipt.reference.candidate_commit)||!sha.test(receipt.reference.tree_hash)||!digest.test(op.params?.command_digest)||receipt.profile!=='observed_runner_v1')throw error();
+        proofs.push({key:op.operation_id,label:`${t('pmq_runner')} · ${receipt.reference.candidate_commit.slice(0,12)} · ${op.operation_id}`,source_operation_id:op.target.execution_operation_id,
+          condition:{kind:'fixed_revision_verification',profile:'observed_runner_v1',command_digest:op.params.command_digest},reference:receipt.reference});
+      }
       for(const entry of evidence.filter(value=>value.source_kind==='observed_verification')){const data=await request('GET',`${base}/evidence/${entry.evidence_id}`);if(!valid(ticket))return;
         const e=data.evidence,f=e?.document?.facts;if(e?.workspace_id!==workspaceId||e.evidence_id!==entry.evidence_id||!f||!sha.test(f.candidate_commit)||!sha.test(f.tree_hash)||!digest.test(f.command_digest)||!Number.isSafeInteger(f.verification_id)||f.verification_id<1)throw error();
         proofs.push({key:entry.evidence_id,label:`${t('pmq_runner')} · #${f.verification_id} · ${f.candidate_commit.slice(0,12)}`,
@@ -168,7 +178,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
           reference:{integration_operation_id:delivery.operation_id,source_seq:source.seq,candidate_commit:source.delivered_sha,observation_id:observation.observation_id,document_digest:observation.document_digest}});}}
       if(packages.some(row=>row.workspace_id!==workspaceId||row.work_item_id!==id)||dods.some(row=>row.workspace_id!==workspaceId))throw error();
       model={packages,operations,dods,reviews:reviews.map(checkReview),proofs};ready=true;options(history,reviews.map(row=>[row.review_id,`${row.context.native_result.candidate_commit.slice(0,12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
-      if(selected&&!reviews.some(row=>row.review_id===selected))selected='';history.value=selected;buildCreate();renderReview();status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
+      if(selected&&!reviews.some(row=>row.review_id===selected))selected='';history.value=selected;buildCreate();renderReview();await verifier.setSources(operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
       if(previous&&current()?.qualified&&same(previous,reference(current())))emit(previous);update();
     }catch(err){if(valid(ticket))failure(err);}
   }
@@ -176,5 +186,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     workId=/^wi_[0-9a-f]{20}$/.test(id||'')?id:null;selected='';try{const saved=JSON.parse(localStorage.getItem(navigation));if(saved.workId===workId)selected=saved.review_id||'';}catch{}
     void refresh();}
   workChoice.addEventListener('change',()=>setWork(workChoice.value));
+  verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,onSaved:()=>refresh(),onUnavailable:failure,onConfiguration:value=>{if(model){model.configuration=value?.available&&digest.test(value.command_digest)?value:null;matrixKey='';create?.sync();}}});
+  element.insertBefore(verifier.element,draft.parentElement);
   return {element,setWork,refresh,withdraw,selection:()=>ready&&chosen?clone(chosen):null};
 }

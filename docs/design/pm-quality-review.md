@@ -232,3 +232,19 @@ and English/zh-TW translations. Original criteria, hashes, and receipt details
 wrap without abbreviation. Appointing, recording, and revoking use the existing
 durable form and explicit original-request recovery, including stale-version
 rebase rather than silently replacing a saved version.
+
+The optional `pm.execution.verify` producer uses `requiredScope: 'operate'` in
+the shared durable form, plus observe and current workspace writer authority.
+`workspaceExecutionVerification` is reusable by quality and repair views. Its
+`setSources` accepts original execution operation identities; configuration is
+read from `/executions/{id}/verification-config`. The central supplies the clean
+candidate, tree, configured command digest and fixed handoff digest. There is no
+caller command or task ownership inference. The original durable operation key
+survives changed candidate/configuration and uncertain replies.
+
+Source-gated `execution-verifications/{operation_id}` receipts are selected with
+`{verification_operation_id,candidate_commit,tree_hash}`. The exact verifier
+operation contributes its original command digest and execution identity; the
+quality adapter remains responsible for independently checking the proof and
+complete criterion acceptance. An available configured command may establish a
+review policy before its first receipt exists, but cannot itself satisfy it.
