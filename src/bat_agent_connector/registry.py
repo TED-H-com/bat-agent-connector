@@ -325,6 +325,9 @@ def _require_owned_carriers(host, entry, items, *, replaces=None):
     for row in items:
         if row.get("host") == host and row.get("session_id") != entry.get("session_id") and paths & {
                 None if is_pending_worktree_source(row) else row.get("cwd"), row.get("worktree_path")}:
+            from .pm_bat_operations import permits_completed_carrier
+            if permits_completed_carrier(host, entry, row):
+                continue
             controller_authority.require_entry(row)
 
 
@@ -603,7 +606,9 @@ def retire(host: str, session_id: str, status: str, *, created_at, actor: str, r
                 if e.get("controller_incarnation") != incarnation:
                     return {**result, "capacity_reason": "generation_changed"}
                 from . import controller_authority
-                controller_authority.require_entry(e, expected_incarnation=incarnation)
+                from .pm_bat_operations import permits_completed_retirement
+                if not permits_completed_retirement(host, e, operation_id):
+                    controller_authority.require_entry(e, expected_incarnation=incarnation)
             if e.get("task_id"):
                 return {**result, "capacity_reason": "task_owned"}
             if e.get("status") == "starting":
