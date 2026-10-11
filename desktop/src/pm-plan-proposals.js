@@ -4,6 +4,19 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),copy=value=>structuredCl
 const statuses=['user_confirmed','agent_assumption','unresolved','conflicting','not_applicable'];
 const defaults={proposal:'user_confirmed',assumption:'agent_assumption',unknown:'unresolved',conflict:'conflicting',excluded:'not_applicable'};
 const record=value=>value&&typeof value==='object'&&!Array.isArray(value);
+const key=(value,max)=>typeof value==='string'&&value.length<=max&&/^[a-z][a-z0-9_.-]*$/.test(value);
+const text=(value,max)=>typeof value==='string'&&!!value.trim()&&[...value].length<=max&&!value.includes('\0');
+const refs=(values,allowed,min=1)=>Array.isArray(values)&&values.length>=min&&values.length<=20&&new Set(values).size===values.length&&values.every(value=>allowed.has(value));
+function cyclic(requirements){
+  const graph=new Map(requirements.map(row=>[row.id,row.depends_on])),active=new Set(),done=new Set();
+  const visit=id=>{if(active.has(id))return true;if(done.has(id))return false;active.add(id);if((graph.get(id)||[]).some(visit))return true;active.delete(id);done.add(id);return false;};
+  return [...graph.keys()].some(visit);
+}
+function validRequirements(values,included){
+  if(!Array.isArray(values)||values.length>20||values.some(row=>!record(row)||!key(row.id,80)))return false;
+  const ids=new Set(values.map(row=>row.id));return ids.size===values.length&&values.every(row=>included.has(row.source_key)
+    &&refs(row.acceptance_keys,included)&&['must','should','could','unresolved'].includes(row.priority)&&refs(row.depends_on,ids,0))&&!cyclic(values);
+}
 export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,endpoint=base+'/conversation-proposals',target={workspace_id:workspaceId,thread_id:threadId};
   let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,ready=false,prepare,adopt;
@@ -27,10 +40,10 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     preconditions:()=>({expected_version:thread().thread.version,expected_plan_version:head.version,expected_accepted_revision_id:head.accepted_revision_id}),
     permitted:()=>writing()&&head&&caps()?.scopes?.includes('start')&&capability?.native_analysis?.authorized!==false&&capability?.native_analysis?.eligible_for_preflight===true&&!adopt?.locked(),
     recoverPermitted:()=>writing()&&caps()?.scopes?.includes('start'),label:'pcp_prepare',
-    onSaved:async result=>{if(result?.proposal_id)picker.value=result.proposal_id;await refreshParent?.();await refresh(result?.proposal_id);},
+    onSaved:async result=>{const id=result?.outcome?.proposal_id||result?.proposal_id;if(id)picker.value=id;await refreshParent?.();await refresh(id);},
     onStateChange:()=>{if(ready)updateControls();},
     extra:h('div',{class:'pm-fields'},labelled('pcp_purpose',purpose),h('details',{},h('summary',{},t('pcp_model')),labelled('pcp_model',model)),note('pcp_prepare_help'),prepareReason)});
-  const review=hidden(),rationale=input('pcp_rationale',{multiline:true,max:8000});
+  const review=hidden(),rationale=input('pcp_rationale',{multiline:true,max:4000});
   adopt=form({action:ADOPT,target,fields:{review,rationale},params:values=>{
       const saved=JSON.parse(values.review);if(!active||saved.proposal_id!==active.proposal_id||!validReview(saved.review))throw Error(t('pcp_missing'));
       return {proposal_id:saved.proposal_id,review:saved.review,rationale:values.rationale};},
@@ -47,31 +60,35 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   function checked(value){
     if(value?.workspace_id!==workspaceId||!record(value.proposal))throw fail();const p=value.proposal,c=p.context;
     if(p.thread_id!==threadId||p.workspace_id!==undefined&&p.workspace_id!==workspaceId||typeof p.proposal_id!=='string'||!/^op_[0-9a-f]{32}$/.test(p.operation_id)
-      ||!/^[0-9a-f]{64}$/.test(p.document_digest)||!record(c)||!Number.isInteger(c.thread_version)||!record(c.plan_head)
+      ||!record(c)||!Number.isInteger(c.thread_version)||!record(c.plan_head)
       ||!Number.isInteger(c.plan_head.version)||!Object.hasOwn(c.plan_head,'accepted_revision_id')||!record(c.source_references)
       ||typeof p.raw_reply!=='string'||!['format_valid','needs_review'].includes(p.validation?.status))throw fail();
     for(const ref of Object.values(c.source_references))if(!record(ref)||typeof ref.quote!=='string'||!ref.quote||typeof ref.id!=='string'||!/^[0-9a-f]{64}$/.test(ref.digest))throw fail();
-    if(p.validation.status==='format_valid'){
-      const d=p.document;if(d?.version!==1||typeof d.title!=='string'||typeof d.summary!=='string'||!Array.isArray(d.candidates)||d.candidates.length>20
+    if(p.validation.status==='needs_review'){if(p.document!==null||p.document_digest!==null)throw fail();}
+    else {
+      const d=p.document;if(!/^[0-9a-f]{64}$/.test(p.document_digest)||d?.version!==1||!text(d.title,160)||!text(d.summary,8000)||!Array.isArray(d.candidates)||!d.candidates.length||d.candidates.length>20
         ||!Array.isArray(d.requirements)||d.requirements.length>20||!Array.isArray(d.questions)||d.questions.length>3)throw fail();
-      const keys=new Set();for(const row of d.candidates){if(!record(row)||typeof row.key!=='string'||keys.has(row.key)||typeof row.text!=='string'
+      const keys=new Set();for(const row of d.candidates){if(!record(row)||!key(row.key,60)||keys.has(row.key)||!text(row.text,4000)
         ||!Object.hasOwn(defaults,row.kind)||!Array.isArray(row.source_refs)||!row.source_refs.length||row.source_refs.some(ref=>!Object.hasOwn(c.source_references,ref)))throw fail();keys.add(row.key);}
-      for(const req of d.requirements)if(typeof req.id!=='string'||!keys.has(req.source_key)||!Array.isArray(req.acceptance_keys)||req.acceptance_keys.some(key=>!keys.has(key))||!Array.isArray(req.depends_on))throw fail();
+      if(!validRequirements(d.requirements,new Set(d.candidates.filter(row=>row.kind!=='excluded').map(row=>row.key))))throw fail();
       if(!Array.isArray(d.removed_requirement_ids)||!same([...d.removed_requirement_ids].sort(),removed(p,d.requirements).sort()))throw fail();
       for(const question of d.questions)if(typeof question.question!=='string'||typeof question.why_now!=='string'||!Array.isArray(question.source_refs)||question.source_refs.some(ref=>!Object.hasOwn(c.source_references,ref)))throw fail();
     }return p;
   }
   function defaultsFor(p){return {title:p.document.title,rows:p.document.candidates.map(row=>({key:row.key,text:row.text,status:defaults[row.kind],include:row.kind!=='excluded'})),requirements:copy(p.document.requirements),removed_requirement_ids:copy(p.document.removed_requirement_ids)};}
-  function validReview(value){
-    if(!active||!record(value)||typeof value.title!=='string'||!value.title.trim()||!Array.isArray(value.rows)||!Array.isArray(value.requirements))return false;
-    const keys=active.document?.candidates?.map(row=>row.key)||[],ids=value.requirements.map(row=>row.id),included=new Set(value.rows.filter(row=>row.include).map(row=>row.key));
-    return value.rows.length===keys.length&&new Set(value.rows.map(row=>row.key)).size===keys.length&&value.rows.every(row=>keys.includes(row.key)
-      &&typeof row.text==='string'&&row.text.trim()&&statuses.includes(row.status)&&typeof row.include==='boolean')&&value.requirements.length<=20
-      &&new Set(ids).size===ids.length&&value.requirements.every(row=>typeof row.id==='string'&&/^[a-z][a-z0-9_.-]{0,79}$/.test(row.id)&&included.has(row.source_key)
-        &&Array.isArray(row.acceptance_keys)&&row.acceptance_keys.every(key=>included.has(key))&&['must','should','could','unresolved'].includes(row.priority)
-        &&Array.isArray(row.depends_on)&&row.depends_on.every(id=>ids.includes(id)&&id!==row.id))
-      &&Array.isArray(value.removed_requirement_ids)&&same([...value.removed_requirement_ids].sort(),removed(active,value.requirements).sort());
+  function reviewIssue(value){
+    if(!active||!record(value)||!text(value.title,160)||!Array.isArray(value.rows)||value.rows.some(row=>!record(row))||!Array.isArray(value.requirements)||value.requirements.length>20||value.requirements.some(row=>!record(row)))return 'pcp_missing';
+    const keys=active.document?.candidates?.map(row=>row.key)||[];
+    if(value.rows.length!==keys.length||new Set(value.rows.map(row=>row.key)).size!==keys.length||value.rows.some(row=>!keys.includes(row.key)
+      ||!key(row.key,60)||!text(row.text,4000)||!statuses.includes(row.status)||typeof row.include!=='boolean'))return 'pcp_missing';
+    const included=new Set(value.rows.filter(row=>row.include).map(row=>row.key));if(!included.size)return 'pcp_empty_selection';
+    if(value.requirements.some(row=>Array.isArray(row.acceptance_keys)&&!row.acceptance_keys.length))return 'pcp_acceptance_missing';
+    if(value.requirements.every(row=>record(row)&&Array.isArray(row.depends_on))&&cyclic(value.requirements))return 'pcp_cycle';
+    if(!validRequirements(value.requirements,included)||!Array.isArray(value.removed_requirement_ids)
+      ||!same([...value.removed_requirement_ids].sort(),removed(active,value.requirements).sort()))return 'pcp_missing';
+    return null;
   }
+  function validReview(value){return reviewIssue(value)===null;}
   function sourceQuotes(refs){return h('details',{class:'pm-source'},h('summary',{},t('pcp_sources')),...refs.map(key=>{
     const row=active.context.source_references[key];return h('div',{},h('blockquote',{class:'pm-note-text'},row.quote),h('small',{},row.kind,' · ',row.id));}));}
   function updateControls(){
@@ -80,7 +97,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     prepareReason.hidden=!unavailable;prepareReason.textContent=unavailable?t('pcp_runtime'):'';
     for(const element of content.querySelectorAll('input,textarea,select,button'))element.disabled=locked;
     if(active&&active.validation.status==='format_valid'){
-      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?'pcp_stale':!validReview(original()?.review)?'pcp_missing':null;reasons.textContent=reason?t(reason):'';reasons.hidden=!reason;}
+      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?'pcp_stale':reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';reasons.hidden=!reason;}
     }
   }
   function saveEditor(title){
@@ -106,7 +123,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     }
     if(!same(saved.preconditions,{expected_version:p.context.thread_version,expected_plan_version:p.context.plan_head.version,expected_accepted_revision_id:p.context.plan_head.accepted_revision_id,expected_proposal_digest:p.document_digest}))throw fail();
     if(!prepare.locked())prepareBox.open=false;
-    const edited=saved.review,title=input('pcp_name',{max:200,value:edited.title});
+    const edited=saved.review,title=input('pcp_name',{max:160,value:edited.title});
     const accepted=acceptedDocument(p);
     content.append(h('p',{class:'pm-note-text'},p.document.summary),h('details',{},h('summary',{},t('pcp_before')),
       accepted?h('div',{},h('strong',{},accepted.title||''),h('p',{class:'pm-note-text'},accepted.markdown||''),h('ul',{},...(accepted.requirements||[]).map(row=>h('li',{},row.id,' · ',row.text))),h('small',{class:'pm-source'},t('pcp_baseline'),' · ',p.context.plan_head.accepted_revision_id)):note('pcp_first')),

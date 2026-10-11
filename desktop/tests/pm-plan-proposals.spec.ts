@@ -35,6 +35,37 @@ test('excluding a selected prerequisite blocks apply until review is consistent'
   const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);const row=editor(page).locator('[data-proposal-candidate="reset"]');await row.locator('summary').first().click();await row.getByLabel('Include in this plan').uncheck();
   await expect(editor(page).getByRole('button',{name:'Adopt this update',exact:true})).toBeDisabled();await expect(editor(page)).toContainText('Select included information');expect(f.state.writes).toEqual([]);
 });
+test('every requirement needs an acceptance criterion before adoption',async({page})=>{
+  const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);const req=editor(page).locator('[data-proposal-requirement]');await req.locator('summary').click();
+  await req.getByLabel('Acceptance criteria').selectOption([]);await expect(editor(page).locator('button[type=submit]')).toBeDisabled();
+  await expect(editor(page)).toContainText('Select at least one acceptance criterion');expect(f.state.writes).toEqual([]);
+  await req.getByLabel('Acceptance criteria').selectOption(['reset']);await editor(page).getByLabel('Reason for adopting this update').fill('Retain the explicit reset criterion');
+  await editor(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.review.requirements[0].acceptance_keys).toEqual(['reset']);
+});
+test('an empty inclusion decision is explained without sending an adoption',async({page})=>{
+  const f=proposalFixture(),p=f.save();p.document.requirements=[];await mountProposal(page,f);await selectProposal(page);
+  for(const key of ['login','reset','provider']){const row=editor(page).locator(`[data-proposal-candidate="${key}"]`);await row.locator('summary').first().click();await row.getByLabel('Include in this plan').uncheck();}
+  await expect(editor(page).locator('button[type=submit]')).toBeDisabled();await expect(editor(page)).toContainText('Include at least one piece of information');expect(f.state.writes).toEqual([]);
+});
+test('a circular dependency blocks adoption until the original draft is repaired',async({page})=>{
+  const f=proposalFixture(),p=f.save();p.document.requirements.push({id:'password_reset',source_key:'reset',acceptance_keys:['reset'],priority:'must',depends_on:[]});
+  await mountProposal(page,f);await selectProposal(page);const rows=editor(page).locator('[data-proposal-requirement]');await rows.nth(0).locator('summary').click();await rows.nth(1).locator('summary').click();
+  await rows.nth(0).getByLabel('Depends on requirements').selectOption(['password_reset']);await rows.nth(1).getByLabel('Depends on requirements').selectOption(['member_login']);
+  await expect(editor(page).locator('button[type=submit]')).toBeDisabled();await expect(editor(page)).toContainText('Remove the circular dependency');expect(f.state.writes).toEqual([]);
+  await rows.nth(1).getByLabel('Depends on requirements').selectOption([]);await editor(page).getByLabel('Reason for adopting this update').fill('Use the reviewed acyclic order');
+  await editor(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.review.requirements.map((r:any)=>r.depends_on)).toEqual([['password_reset'],[]]);
+});
+test('backend title rationale and stable requirement ID limits remain usable',async({page})=>{
+  const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);const req=editor(page).locator('[data-proposal-requirement]');await req.locator('summary').click();
+  const title=editor(page).getByLabel('Plan title',{exact:true}),rationale=editor(page).getByLabel('Reason for adopting this update'),id=req.getByLabel('Stable requirement ID');
+  await expect(title).toHaveAttribute('maxlength','160');await expect(rationale).toHaveAttribute('maxlength','4000');await expect(id).toHaveAttribute('maxlength','80');
+  await title.fill('T'.repeat(160));await rationale.fill('R'.repeat(4000));await id.fill('r'.repeat(80));await editor(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.review.title).toHaveLength(160);expect(f.state.writes[0].body.params.review.requirements[0].id).toHaveLength(80);expect(f.state.writes[0].body.params.rationale).toHaveLength(4000);
+});
+test('a purported valid proposal with an empty candidate key fails closed',async({page})=>{
+  const f=proposalFixture(),p=f.save();p.document.candidates[0].key='';await mountProposal(page,f);await panel(page).getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);
+  await expect(panel(page)).toContainText('does not match its original discussion or sources');await expect(editor(page)).toHaveCount(0);expect(f.state.writes).toEqual([]);
+});
 test('known baseline changes preserve edits and refuse a fresh adoption',async({page})=>{
   const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);await editor(page).getByLabel('Plan title',{exact:true}).fill('Retained draft');f.state.head.version++;
   await page.evaluate(()=>(window as any).proposalRefresh());await expect(editor(page).getByLabel('Plan title',{exact:true})).toHaveValue('Retained draft');await expect(editor(page)).toContainText('discussion or plan has changed');await expect(editor(page).locator('button[type=submit]')).toBeDisabled();
@@ -51,7 +82,7 @@ test('source withdrawal removes summaries quotes rows and counts while preservin
   f.state.deny=false;await page.evaluate(()=>(window as any).proposalRefresh());await expect(editor(page).getByLabel('Reason for adopting this update')).toHaveValue('Private saved decision');
 });
 test('invalid structured output preserves raw analysis and has no adoption form',async({page})=>{
-  const f=proposalFixture(),p=f.save();p.validation={status:'needs_review',errors:['Unknown source reference']};p.document=null;p.raw_reply='Unverified claim that everything is accepted';await mountProposal(page,f);
+  const f=proposalFixture(),p=f.save();p.validation={status:'needs_review',errors:['Unknown source reference']};p.document=null;p.document_digest=null;p.raw_reply='Unverified claim that everything is accepted';await mountProposal(page,f);
   await panel(page).getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);await expect(panel(page)).toContainText('reply needs review');await expect(editor(page)).toHaveCount(0);await panel(page).getByText('Original analysis reply',{exact:true}).click();await expect(panel(page)).toContainText(p.raw_reply);expect(f.state.writes).toEqual([]);
 });
 test('an older central receives no proposal requests',async({page})=>{const f=proposalFixture();f.state.available=false;await mountProposal(page,f);expect(f.state.reads.filter((p:string)=>p.includes('conversation-proposals'))).toEqual([]);await expect(panel(page)).toBeHidden();});

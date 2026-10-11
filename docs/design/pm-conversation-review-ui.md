@@ -5,7 +5,9 @@ the workspace's ordinary forms, typography, spacing and source disclosures; no
 new tab, raw JSON editor, model runner or delivery engine is introduced.
 
 `pm.conversation.propose` freezes the current discussion and plan head. Its result
-is selected by its original proposal ID. A reviewed update contains every
+is selected by the original proposal ID in the saved run outcome. Invalid
+structured output retains its raw reply with null document and digest; it has no
+adoption form. A reviewed update contains every
 original candidate key, the owner's edited text/status/inclusion, structured
 requirements and explicit removed requirement IDs. Source references remain
 fixed and display their original literal quote. The owner submits the whole
@@ -13,7 +15,9 @@ review with one rationale and one `pm.conversation.adopt` operation.
 
 The UI shows requirements removed from the original accepted document by ID and
 text, and recalculates that list when a requirement is deleted or renamed.
-Missing removal coverage fails closed. Suggestions default to confirmation only
+Missing removal coverage fails closed. The review requires included information,
+at least one acceptance criterion per requirement and acyclic dependencies.
+Title/rationale and stable ID bounds match the central contract. Suggestions default to confirmation only
 as part of the explicit owner decision; assumptions, unknowns, conflicts and
 excluded candidates retain distinct defaults. No repository-verification status
 can be entered. Adoption remains separate from execution authorization.
