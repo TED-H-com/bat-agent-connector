@@ -25,8 +25,8 @@ def unkeyed(result):
 @pytest.mark.parametrize("method", ["work_pause", "work_resume"])
 async def test_unkeyed_controls_have_distinct_operations_and_real_effects(owned, method):
     d, tid = owned
-    one = await d.call(method, {"task_id": tid})
-    two = await d.call(method, {"task_id": tid})
+    one = await tasks.call_owned(d, method, {"task_id": tid})
+    two = await tasks.call_owned(d, method, {"task_id": tid})
     assert one["operation_id"] != two["operation_id"]
     assert d.journal.get(tid)["control_version"] == 2
     for result in (one, two, d.ops.get(one["operation_id"]), *d.ops.list()["operations"]):
@@ -46,7 +46,7 @@ async def test_task_control_key_projection_survives_rpc_mcp_http_and_cli_reads(s
     task = d.journal.submit(project="p", host="h1", workspace="demo-project", original_words="fixed task",
                             idempotency_key="fixture")
     tid = task["task_id"]
-    token = api.token(d, "caller", "observe", "operate")
+    token = api.token(d, "operator-dashboard", "observe", "operate")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", token)
     server, fleet = build_server(d.fleet.config, principal_only=True)
@@ -73,16 +73,16 @@ async def test_task_control_key_projection_survives_rpc_mcp_http_and_cli_reads(s
 async def test_named_and_historical_keys_preserve_replay_and_conflict(owned):
     d, tid = owned
     params = {"task_id": tid, "idempotency_key": "original"}
-    first = await d.call("work_pause", params)
+    first = await tasks.call_owned(d, "work_pause", params)
     assert first["idempotency_key"] == "original" and first["idempotency_enabled"]
-    assert await d.call("work_pause", params) == first
+    assert await tasks.call_owned(d, "work_pause", params) == first
     with pytest.raises(OperationError, match="IDEMPOTENCY_CONFLICT"):
-        await d.call("work_pause", {**params, "abort_current": True})
+        await tasks.call_owned(d, "work_pause", {**params, "abort_current": True})
     assert d.journal.get(tid)["control_version"] == 1
     # Historical Part A rows retain their old keys. Do not rewrite IDs, receipts or history.
     historical = "legacy-request:" + "a" * 32
     d.journal.db.execute("UPDATE operations SET idem_key=? WHERE operation_id=?", (historical, first["operation_id"]))
-    result = await d.call("work_pause", {**params, "idempotency_key": historical})
+    result = await tasks.call_owned(d, "work_pause", {**params, "idempotency_key": historical})
     assert result["operation_id"] == first["operation_id"]
     assert result["idempotency_key"] == historical and result["idempotency_enabled"]
     assert d.journal.get(tid)["control_version"] == 1
@@ -117,11 +117,11 @@ async def test_submit_still_requires_its_original_explicit_key_and_task_scope(da
 async def test_task_send_keeps_existing_step_identity_and_does_not_repeat(owned, mock):
     d, tid = owned
     params = {"task_id": tid, "text": "one fixed instruction", "step_id": "step-one"}
-    first = await d.call("task_send", params)
+    first = await tasks.call_owned(d, "task_send", params)
     frames = list(tasks.writes(mock))
     assert first["idempotency_key"] == f"task-step:{tid}:step-one" and first["idempotency_enabled"]
-    assert await d.call("task_send", params) == first
+    assert await tasks.call_owned(d, "task_send", params) == first
     assert tasks.writes(mock) == frames
     with pytest.raises(OperationError, match="IDEMPOTENCY_CONFLICT"):
-        await d.call("task_send", {**params, "text": "different instruction"})
+        await tasks.call_owned(d, "task_send", {**params, "text": "different instruction"})
     assert tasks.writes(mock) == frames
