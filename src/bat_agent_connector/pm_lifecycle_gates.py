@@ -52,6 +52,10 @@ def lineage(action, target, binding):
 def kind(action, binding=None):
     if action.startswith('pm.lifecycle.'):
         return 'lifecycle'
+    # Original PM session observation remains usable while investment is paused.
+    # The lineage is service-admitted; it is never accepted from caller params.
+    if action in {'session.read', 'session.position'} and (binding or {}).get('pm_source_roots'):
+        return 'record'
     if action == 'pm.issue.cancel':
         intent = (binding or {}).get('issue_intent')
         if (isinstance(intent, dict) and intent.get('kind') == 'cancel'
