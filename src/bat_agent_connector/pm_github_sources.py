@@ -62,6 +62,8 @@ def project(row, kind, scope, sha=None):
             'base_sha': _sha((row.get('base') or {}).get('sha'))}
     if kind == 'statuses':
         # The exact SHA comes from the fixed request; commit statuses lack a SHA field.
+        if not isinstance(row.get('context'), str) or not row['context'] or len(row['context']) > 1024:
+            raise Incomplete('provider_status_context_unproven')
         return {**result, 'head_sha': sha, 'state': _state(row.get('state'), ('error', 'failure', 'pending', 'success')),
             'context_digest': digest(row.get('context'))}
     if _sha(row.get('head_sha')) != sha and kind != 'actions':
@@ -125,6 +127,7 @@ class Traversal:
         self.root = '/repos/' + self.scope['repository']
         self.pages, self.rows, self.bytes, self.receipts = 0, 0, 0, []
         self.open_pulls, self.nonterminal_actions = False, False
+        self.last_received = started
         self.deadline = time.monotonic() + max(0, MAX_SECONDS - (time.time() - started))
 
     def limits(self):
@@ -211,6 +214,9 @@ class Traversal:
         self.pages += 1
         if 'error' in receipt:
             raise Incomplete(receipt['error'])
+        if not self.last_received <= receipt['received_at'] <= time.time():
+            raise Incomplete('observation_clock_changed')
+        self.last_received = receipt['received_at']
         self.bytes += receipt['bytes']
         self.rows += len(receipt['rows'])
         self.open_pulls |= kind == 'pulls' and bool(receipt['rows'])
