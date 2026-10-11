@@ -396,7 +396,9 @@ def adopt_revision(ctx):
 
 def latest_git_receipt(db, workspace_id):
     """Internal previous Git fact, including commits not yet adopted in SQLite."""
-    row = db.execute("SELECT receipt FROM pm_plan_git_receipts WHERE workspace_id=? ORDER BY created_at DESC,operation_id DESC LIMIT 1",
+    # Writers serialize these immutable facts. Wall time may move backwards;
+    # insertion order, not a timestamp, identifies the next Git parent.
+    row = db.execute("SELECT receipt FROM pm_plan_git_receipts WHERE workspace_id=? ORDER BY rowid DESC LIMIT 1",
                       (workspace_id,)).fetchone()
     return json.loads(row[0]) if row else None
 
