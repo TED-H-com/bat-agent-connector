@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import inspect
 import sqlite3
@@ -99,6 +100,15 @@ class FakeRuntime:
         if self.settings.get("block_turn"):
             await self.release.wait()
         values = protocol(prompt, CLIENT)
+        if self.settings.get("summary_terminal"):
+            terminal = values[-1]
+            user, assistant = copy.deepcopy(terminal["params"]["turn"]["items"])
+            terminal["params"]["turn"].update(itemsView="summary", items=[assistant])
+            started_assistant = {**assistant, "text": ""}
+            values = [values[0], values[1], *[
+                {"method": method, "params": {"threadId": THREAD, "turnId": TURN, "item": item}}
+                for method, item in (("item/started", user), ("item/completed", user),
+                                     ("item/started", started_assistant), ("item/completed", assistant))], terminal]
         if self.settings.get("ack_only"):
             values = values[:1]
         if self.settings.get("ack_mismatch"):
@@ -352,9 +362,11 @@ async def test_public_analysis_cannot_set_runtime_paths_tools_or_unbounded_value
 
 
 @pytest.mark.parametrize("later", ["none", "cancel", "revoke"])
-async def test_lost_execute_ack_recovers_same_turn_and_preserves_later_cancel_or_revocation(world, monkeypatch, later):
-    ops, _, instances = world
+@pytest.mark.parametrize("summary", [False, True])
+async def test_lost_execute_ack_recovers_same_turn_and_preserves_later_cancel_or_revocation(world, monkeypatch, later, summary):
+    ops, settings, instances = world
     target = await prepared(ops)
+    settings['summary_terminal'] = summary
     original_done = ops._step_done
     lost = False
     def lose_ack(operation_id, name, *args, **kwargs):
@@ -563,3 +575,64 @@ async def test_post_insert_import_failure_rolls_back_message_provenance_and_writ
     recovered = await retry(ops, op)
     assert recovered['status'] == 'succeeded' and not writer(ops, target)
     assert len(instances) == 1 and instances[0].sends == 1 and len(read(ops, target)['messages']) == 1
+
+
+async def test_summary_native_terminal_imports_original_user_and_final_item_provenance(world):
+    ops, settings, instances = world
+    target = await prepared(ops)
+    settings['summary_terminal'] = True
+    op = await finish(ops, request(ops, target))
+    assert op['status'] == 'succeeded', op
+    assert len(instances) == 1 and instances[0].sends == 1 and instances[0].closed
+    saved = run(ops, op)
+    facts = pm_native_journal.lifecycle(ops.db, saved['run_id'])
+    proof = pm_native_journal.assessment(ops.db, saved['run_id'])
+    assert proof == facts['turn_assessment']['assessment'] and proof['complete']
+    rows = pm_native_journal.events(ops.db, saved['run_id'])
+    assert rows[-1]['event']['params']['turn']['itemsView'] == 'summary'
+    assert rows[-1]['event']['params']['turn']['items'] == [rows[-2]['event']['params']['item']]
+    message = read(ops, target)['messages'][0]
+    refs = message['provenance']['source_refs']
+    assert {4, 6, 7} <= set(refs['native_event_seqs'])
+    assert len(refs['event_digests']) == 7 and message['provenance']['completeness'] == 'complete'
+    assert not writer(ops, target)
+    replay = request(ops, target, key=op['idempotency_key'], version=saved['thread_version'])
+    assert replay['operation_id'] == op['operation_id'] and replay['status'] == 'succeeded'
+    assert await pm_native_operations._analyze(OpContext(ops, op)) == op['result']
+    assert len(instances) == 1 and len(read(ops, target)['messages']) == 1
+
+
+async def test_reducer_upgrade_cannot_reopen_original_aborted_summary_turn(world, monkeypatch):
+    ops, settings, instances = world
+    target = await prepared(ops)
+    settings['summary_terminal'] = True
+    current_reducer = pm_native_runtime.assess_turn
+    def old_summary_reducer(*args, **kwargs):
+        reduced = current_reducer(*args, **kwargs)
+        return {**reduced, 'status': 'unknown', 'complete': False, 'reason': 'native_items_incomplete',
+                'content': None, 'native_message_id': None, 'source_event_seqs': []}
+    with monkeypatch.context() as old:
+        old.setattr(pm_native_runtime, 'assess_turn', old_summary_reducer)
+        original = await finish(ops, request(ops, target))
+    assert original['status'] == 'failed' and original['error_code'] == 'PM_COMPLETION_UNPROVEN'
+    saved = run(ops, original)
+    assert saved['state'] == 'aborted' and not writer(ops, target)
+    assert len(instances) == 1 and read(ops, target)['messages'] == []
+    # Even a stronger later reducer cannot replace the original assessment or
+    # reactivate a terminal generation. This remains the historical failed run.
+    replay = request(ops, target, key=original['idempotency_key'])
+    assert replay['operation_id'] == original['operation_id'] and replay['status'] == 'failed'
+    with pytest.raises(OperationError, match='PM_COMPLETION_UNPROVEN'):
+        await pm_native_operations._analyze(OpContext(ops, original))
+    with pytest.raises(OperationError, match='PM_WRITER_CHANGED'):
+        pm_native_journal.import_reply(ops.journal, saved['run_id'], saved['generation'])
+    assert run(ops, original) == saved and len(instances) == 1
+    assert not pm_native_journal.assessment(ops.db, saved['run_id'])['complete']
+    # A new explicit request, with a new operation key, uses the fixed reducer.
+    fresh = await finish(ops, request(ops, target))
+    assert fresh['status'] == 'succeeded', fresh
+    assert len(instances) == 2 and all(runtime.sends == 1 for runtime in instances)
+    assert run(ops, fresh)['generation'] == saved['generation'] + 1
+    assert run(ops, original) == saved and ops.get(original['operation_id'])['status'] == 'failed'
+    message = read(ops, target)['messages'][0]
+    assert message['provenance']['run_id'] == run(ops, fresh)['run_id']
