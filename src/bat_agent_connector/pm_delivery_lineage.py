@@ -30,6 +30,8 @@ def schema(journal):
         provider_origin TEXT NOT NULL, repository_id INTEGER NOT NULL, repository TEXT NOT NULL,
         pull_number INTEGER, source_sha TEXT, relation TEXT NOT NULL, created_at REAL NOT NULL,
         PRIMARY KEY(operation_id,resource_type,resource_id,relation))""")
+    journal.db.execute("CREATE INDEX IF NOT EXISTS pm_delivery_pr_lookup ON pm_delivery_links "
+        "(provider_origin,repository COLLATE NOCASE,pull_number,resource_type)")
     for verb in ("UPDATE", "DELETE"):
         journal.db.execute(f"CREATE TRIGGER IF NOT EXISTS pm_delivery_links_{verb.lower()}_immutable "
             f"BEFORE {verb} ON pm_delivery_links BEGIN SELECT RAISE(ABORT, 'PM delivery lineage is immutable'); END")
@@ -170,10 +172,60 @@ def record(ctx, revision, relation):
             bind(ctx.service.db, ctx.operation_id, selected, revision=revision, relation=relation)
 
 
-def require_target(ctx, *, provider, repository_id):
+def require_target(ctx, *, provider, repository_id, pull_number=None):
+    from .pm_source_lineage import roots
     selected = (ctx.admission_binding or {}).get("pm_delivery")
     if selected and (selected["provider_origin"] != provider or selected["repository_id"] != repository_id):
         raise OperationError("PM_DELIVERY_TARGET_CHANGED", "The provider or numeric repository changed", 409)
+    number = pull_number if pull_number is not None else ctx.target.get("pull_number", (selected or {}).get("pull_number"))
+    key = identity(provider, repository_id, number)
+    known = roots(ctx.service.db, "github_pr", key) if key else set()
+    if not known <= roots(ctx.service.db, "operation", ctx.operation_id):
+        raise OperationError("PM_DELIVERY_SOURCE_CHANGED", "The fixed delivery target has additional PM sources; submit a newly reviewed intent", 409)
+
+
+def observed_roots(ops, operation):
+    """Read only original native target receipts; never infer from a branch/path."""
+    from .pm_source_lineage import _table, roots
+    action = operation["action"]
+    if action not in ACTIONS:
+        return set()
+    refs = operation.get("external_refs") or {}
+    document = (refs.get("admission_binding") or {}).get("pm_delivery")
+    preview_id = operation["params"].get("preview_id")
+    if preview_id:
+        table = "integration_previews" if preview_id.startswith("ipv_") else "pr_merge_previews"
+        row = ops.db.execute(f"SELECT document FROM {table} WHERE preview_id=?", (preview_id,)).fetchone() if _table(ops.db, table) else None  # noqa: S608
+        if row:
+            document = json.loads(row[0])
+    if action.startswith("deployment.") or action == "delivery.merge_and_deploy":
+        from .deployment_store import deployment
+        dep = deployment(ops.db, operation_id=operation["operation_id"])
+        if dep is None and action == "deployment.rollback":
+            dep = deployment(ops.db, deployment_id=operation["params"].get("deployment_id"))
+        if dep:
+            snapshot = dep["recipe_snapshot"]
+            document = {"provider_origin": snapshot.get("provider_origin"), "repository_id": snapshot.get("repository_id"),
+                "source_sha": dep["identity"].get("source_sha"), "merge": document or {}}
+        elif action == "deployment.start":
+            from .deployment import bound_environment, recipe
+            env = bound_environment(ops, recipe(ops, operation["target"]["recipe"]))
+            document = {"provider_origin": env["provider_origin"], "repository_id": env["repository_id"],
+                "source_sha": operation["params"].get("source_sha")}
+    found = set()
+    if document:
+        for kind, key in references(document):
+            found.update(roots(ops.db, kind, key))
+        if isinstance(document.get("merge"), dict):
+            for kind, key in references(document["merge"]):
+                found.update(roots(ops.db, kind, key))
+    return found
+
+
+def require_admitted_sources(ops, operation):
+    from .pm_source_lineage import roots
+    if not observed_roots(ops, operation) <= roots(ops.db, "operation", operation["operation_id"]):
+        raise OperationError("PM_DELIVERY_SOURCE_CHANGED", "PM sources changed after delivery admission; submit a newly reviewed intent", 409)
 
 
 def require_current(ops, operation):
@@ -205,7 +257,7 @@ def preserve_preview(ops, document):
 
 def sent_readback(ctx, name):
     """Only fixed provider observations after this operation's recorded send."""
-    if not (ctx.admission_binding or {}).get("pm_delivery"):
+    if not (ctx.admission_binding or {}).get("pm_delivery") and not observed_roots(ctx.service, ctx.op):
         return False
     if re.fullmatch(r"merge\.verify(?:\.retry\.[0-9]+)?", name):
         return ctx.op["action"] in {"github.pr.merge", "delivery.merge_and_deploy"} and bool(ctx.service.db.execute(
@@ -296,7 +348,7 @@ def for_work(ops, principal, workspace_id, work_item_id, *, after=0, limit=50):
         packages.append({"operation_id": original_id, **ref})
     result = {"workspace_id": workspace_id, "work_item_id": work_item_id, "contract": CONTRACT,
         "original_packages": packages, "deliveries": [], "next_after": None,
-        "requirement_acceptance": "not_evaluated_by_delivery"}
+        "requirement_acceptance": "not_evaluated_by_delivery", "source_visibility_filtered": False}
     if not originals:
         return result
     marks = ",".join("?" for _ in originals)

@@ -5,6 +5,7 @@ import copy
 import json
 import sqlite3
 import uuid
+from dataclasses import replace
 
 import pytest
 
@@ -299,3 +300,91 @@ async def test_contributor_delivery_keeps_scopes_and_current_membership(delivery
     done = await settle(w, op)
     assert done["status"] == "failed" and done["error_code"] == "FORBIDDEN", done
     assert len(w["runner"].scripts) == before
+
+
+async def test_queued_ordinary_preview_cannot_gain_pm_target_authority(delivery_ready):
+    w = delivery_ready
+    ordinary = submit(w, "integration.preview", TARGET, {"sources": [{"kind": "branch", "id": "feature-1"}]})
+    assert not lineage.roots(w["d"].ops.db, "operation", ordinary["operation_id"])
+    # Binding the explicit PM selection is synchronous with its operation INSERT,
+    # before either worker starts or any native target lookup returns.
+    submit(w, "integration.preview", TARGET, {"sources": [{"kind": "execution", "id": w["original"]["operation_id"]}]})
+    done = await settle(w, ordinary)
+    assert done["error_code"] == "PM_DELIVERY_SOURCE_CHANGED", done
+    assert "pr" not in done["external_refs"]
+    assert not any(ordinary["operation_id"][3:15] in script for script in w["runner"].scripts)
+
+
+async def test_queued_ordinary_apply_keeps_original_binding_after_target_becomes_pm(delivery_ready):
+    w = delivery_ready
+    external = w["human"].parent / "ordinary-external-source"
+    git(external.parent, "clone", "-q", str(w["remote"]), str(external))
+    git(external, "config", "user.name", "fixture")
+    git(external, "config", "user.email", "fixture@example.invalid")
+    git(external, "checkout", "-qb", "ordinary-source")
+    commit(external, "external.txt", "Ordinary external change\n", "Independent external work")
+    git(external, "push", "-q", "origin", "ordinary-source")
+    ordinary = await settle(w, submit(w, "integration.preview", TARGET,
+        {"sources": [{"kind": "branch", "id": "ordinary-source"}]}))
+    assert ordinary["status"] == "succeeded", ordinary
+    pv = ordinary["result"]
+    operation = apply(w, pv)
+    assert not lineage.roots(w["d"].ops.db, "operation", operation["operation_id"])
+    submit(w, "integration.preview", TARGET, {"sources": [{"kind": "execution", "id": w["original"]["operation_id"]}]})
+    done = await settle(w, operation)
+    assert done["error_code"] == "PM_DELIVERY_SOURCE_CHANGED", done
+    assert not any(operation["operation_id"][3:15] in script for script in w["runner"].scripts)
+    # An old preview is still a saved native target, so its read policy follows
+    # the current original sources even though its own creation was ordinary.
+    assert lineage.roots(w["d"].ops.db, "delivery_preview", pv["preview_id"]) == {w["original"]["operation_id"]}
+    revoke(w)
+    with pytest.raises(OperationError):
+        lineage.read_response(w["d"].ops.db, DELIVERER, {"preview": pv})
+
+
+async def test_queued_ordinary_merge_cannot_send_after_target_becomes_pm(delivery_ready):
+    w = delivery_ready
+    pv = (await delivery.pr_preview(w["d"].ops, "o/r", 1))["merge_preview"]
+    operation, _ = w["d"].ops.create(DELIVERER, **pr_delivery.merge_envelope(pv), idempotency_key="old-merge")
+    submit(w, "integration.preview", TARGET, {"sources": [{"kind": "execution", "id": w["original"]["operation_id"]}]})
+    done = await settle(w, operation)
+    assert done["error_code"] == "PM_DELIVERY_SOURCE_CHANGED", done
+    assert w["gh"].count("PUT", "merge-async") == 0
+
+
+async def test_same_native_pr_cannot_bypass_sources_using_another_repository_name(delivery_ready, monkeypatch):
+    w = delivery_ready
+    await preview(w)
+    cfg = w["d"].ops.context["github_config"]
+    cfg.repos["o/renamed"] = replace(cfg.repos["o/r"], repository="o/renamed")
+    client = w["d"].ops.context["github"]
+    pull = client.pull
+    async def alias(repository, number):
+        return await pull("o/r" if repository == "o/renamed" else repository, number)
+    monkeypatch.setattr(client, "pull", alias)
+    op = submit(w, "integration.preview", {**TARGET, "repository": "o/renamed"},
+        {"sources": [{"kind": "branch", "id": "feature-1"}]})
+    assert not lineage.roots(w["d"].ops.db, "operation", op["operation_id"])
+    before = len(w["runner"].scripts)
+    done = await settle(w, op)
+    assert done["error_code"] == "PM_DELIVERY_SOURCE_CHANGED", done
+    assert "pr" not in done["external_refs"] and len(w["runner"].scripts) == before
+
+
+async def test_pr_source_withdrawal_during_provider_read_discards_shared_response(delivery_ready, monkeypatch):
+    w = delivery_ready
+    await settle(w, apply(w, await preview(w)))
+    client = w["d"].ops.context["github"]
+    pull = client.pull
+    withdrew = False
+    async def withdraw(*args):
+        nonlocal withdrew
+        result = await pull(*args)
+        if not withdrew:
+            withdrew = True
+            revoke(w)
+        return result
+    monkeypatch.setattr(client, "pull", withdraw)
+    with pytest.raises(OperationError) as caught:
+        await w["d"].call_api("github_pr_preview", {"repository": "o/r", "pull_number": 1}, DELIVERER)
+    assert caught.value.code == "NOT_FOUND"

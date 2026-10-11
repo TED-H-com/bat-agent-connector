@@ -775,6 +775,8 @@ async def _run_preview(ctx: OpContext) -> dict:
     pr = refs.get("pr")
     if pr is None:  # read once; replays use the same facts
         pr = _pr_facts(await _read(gh.pull(repo.repository, number), "read the pull request"))
+        from .pm_delivery_lineage import require_target
+        require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr["base"]["repo"] or {}).get("id"))
         exp = ctx.preconditions.get("expected_head_sha")
         if exp and exp != pr["head"]["sha"]:
             raise OperationError("TARGET_HEAD_CHANGED", f"PR #{number} head is now {str(pr['head']['sha'])[:12]}, "

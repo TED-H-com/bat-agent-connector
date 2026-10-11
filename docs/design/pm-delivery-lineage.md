@@ -35,6 +35,12 @@ scopes authorize the same actions for contributors; this extension adds no
 owner-only approval. The lifecycle epoch is captured by the existing operation
 INSERT and checked before every new step or proven-unsent retry.
 
+A target may gain PM provenance after an ordinary operation was admitted. Native
+provider/repository/PR or revision identities are checked again before new
+effects. Newly discovered roots are refused instead of attaching a new workspace
+or lifecycle epoch to that old operation. Repository renames cannot bypass this
+check. The caller reviews a new intent with all original roots included.
+
 Recorded targets and sent effects establish provenance and privacy, not evidence
 that a push, merge or deploy succeeded. Only the existing confirmed receipts
 report those outcomes. A verified merged revision may seed a later explicit
