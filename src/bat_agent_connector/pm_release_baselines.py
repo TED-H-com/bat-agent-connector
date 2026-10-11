@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import re
 import time
+from contextlib import contextmanager
+from functools import wraps
 
 from . import pm_evidence, pm_workspace, work_items
 from . import pm_release_sources as sources
@@ -17,6 +19,29 @@ ACTION = "pm.release_baseline.register"
 BASELINE = re.compile(r"pmrb_[0-9a-f]{32}")
 MAX_READ_BYTES = 2_000_000
 MAX_ANCESTORS = 256
+
+
+@contextmanager
+def _snapshot(db):
+    """One WAL read point for membership, head and all original source records."""
+    if db.in_transaction:
+        yield
+        return
+    db.execute("BEGIN")
+    try:
+        yield
+        db.execute("COMMIT")
+    except BaseException:
+        db.execute("ROLLBACK")
+        raise
+
+
+def _snapshot_read(fn):
+    @wraps(fn)
+    def read(ops, *args, **kwargs):
+        with _snapshot(ops.db):
+            return fn(ops, *args, **kwargs)
+    return read
 
 
 def _bad(message, code="INVALID_PARAMS", status=422):
@@ -118,7 +143,11 @@ class _Reader:
 
 
 def _access_context(ops, principal, wid, intent, *, decide=False):
-    ws = _member(ops, principal, wid, decide=decide)
+    # Source visibility is not an extra API scope: manage-only owners must be
+    # able to receive/replay their admitted action. Standalone reads enforce
+    # observe in their public entry before invoking this shared source policy.
+    ws = (_member(ops, principal, wid, decide=True) if decide
+          else pm_workspace.require_member(ops.db, principal, wid))
     if ws["server_id"] != intent["server_id"]:
         raise _bad("Original workspace source unavailable", "NOT_FOUND", 404)
     binding = intent["project_binding"]
@@ -227,6 +256,11 @@ def _admit(ops, principal, target, params, pre):
 
 
 def operation_visible(db, principal, operation):
+    with _snapshot(db):
+        return _operation_visible(db, principal, operation)
+
+
+def _operation_visible(db, principal, operation):
     row = db.execute("SELECT * FROM operations WHERE operation_id=?", (operation.get("operation_id"),)).fetchone()
     if row is None or row["action"] != ACTION:
         return False
@@ -273,7 +307,18 @@ async def _run(ctx):
     if saved:
         return json.loads(saved[0])  # Original local receipt recovery precedes current authority/lifecycle checks.
     principal = pm_workspace.admitted_principal(ctx)
-    intent = _current(ctx, principal)
+    try:
+        intent = _current(ctx, principal)
+    except (Cancelled, OperationError):
+        # This named step has only fixed GETs. If its original read was interrupted,
+        # authority/cancel loss proves there is no external mutation left to settle.
+        # Keep failed evidence instead of leaving an indefinite unknown investment.
+        row = ctx.service.db.execute("SELECT status FROM operation_steps WHERE operation_id=? AND name='pm.baseline.sources'",
+                                     (ctx.operation_id,)).fetchone()
+        if row and row[0] in {"started", "uncertain"}:
+            ctx.service._step_status(ctx.operation_id, "pm.baseline.sources", "failed",
+                error={"code": "PM_BASELINE_READ_STOPPED", "message": "Original read-only observation stopped without a baseline selection"})
+        raise
 
     async def reread(_):
         return RERUN  # Bounded GETs have no external mutation; still subject to current epoch before rerun.
@@ -330,6 +375,7 @@ def _view(row):
                                     "document", "document_digest", "actor", "created_at", "operation_id")}
 
 
+@_snapshot_read
 def get_baseline(ops, principal, workspace_id, baseline_id):
     _member(ops, principal, workspace_id)
     row = _record(ops.db, workspace_id, baseline_id)
@@ -337,6 +383,7 @@ def get_baseline(ops, principal, workspace_id, baseline_id):
     return _bounded({"workspace_id": workspace_id, "baseline": _view(row)})
 
 
+@_snapshot_read
 def current_baseline(ops, principal, workspace_id):
     _member(ops, principal, workspace_id)
     head = _head(ops.db, workspace_id)
@@ -352,6 +399,7 @@ def current_baseline(ops, principal, workspace_id):
                      "baseline": baseline, "visibility_filtered": filtered, "maintenance_available": False})
 
 
+@_snapshot_read
 def list_baselines(ops, principal, workspace_id, *, after=0, limit=20):
     _member(ops, principal, workspace_id)
     if type(after) is not int or not 0 <= after <= 2**63 - 1 or type(limit) is not int or not 1 <= limit <= 100:

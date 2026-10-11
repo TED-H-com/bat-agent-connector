@@ -161,6 +161,10 @@ An already successful local receipt is returned before authority/cancel/epoch
 checks internally, including after process restart. Public visibility is evaluated
 independently and can deny that same result. No uncertain publication is repaired
 by publishing again: this action has no publication effect.
+If an interrupted source read loses authority or is cancelled, the worker can
+record that original read as stopped without repeating it. This only applies to
+the named GET-only step: it does not produce a proof or baseline, and avoids
+retaining an indefinite unknown external mutation where none was possible.
 
 ## Reads and integration hooks
 
@@ -186,6 +190,28 @@ ordinary spacing. List pages return a complete-record prefix. Filtered records
 consume their original sequence; an entirely hidden page can still have a forward
 cursor. A single mandatory record that cannot fit returns 413 rather than truncating
 its proof or looping a cursor. Public reads do not mutate any state.
+Head, membership and every record/source check in a public read or operation
+visibility evaluation share one SQLite WAL read snapshot. An existing transaction
+is reused. A withdrawal committed concurrently is visible on the next read;
+the current response cannot mix the old head with a different authorization or
+source snapshot. No provider calls occur while holding this read transaction.
+
+The shared entries use:
+
+| HTTP GET under `/pm/workspaces/{workspace_id}` | RPC / MCP |
+| --- | --- |
+| `/release-baselines?after=0&limit=20` | `pm_release_baselines_list` |
+| `/release-baselines/current` | `pm_release_baseline_current_get` |
+| `/release-baselines/{baseline_id}` | `pm_release_baseline_get` |
+
+Detail/current routes accept no selectors. Empty, repeated or extra queries fail;
+HTTP/native cursors are bounded to nine digits, matching other PM read routes.
+Direct RPC rejects wrong types and integers outside signed 64-bit range. Shared
+`POST /operations` is the only decision entry; its existing original-key and
+waited-result source checks apply. MCP writes use the same central operation.
+The Tauri bridge permits only these exact GET paths/queries, without an operation
+key. Global `features.pm_workspaces.release_baselines` exposes `capabilities()`;
+visibility does not grant selection or network access.
 
 ## Verification mapping
 

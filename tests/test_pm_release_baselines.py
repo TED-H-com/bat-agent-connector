@@ -281,6 +281,71 @@ async def test_interrupted_get_reuses_original_intent_only_with_current_authorit
     assert result["version"] == 1 and ops.db.execute("SELECT COUNT(*) FROM pm_release_baselines").fetchone()[0] == 1
 
 
+async def test_interrupted_read_can_settle_without_resending_after_source_withdrawal(ops):
+    target, binding, pid = await setup(ops)
+    gh = ops.context["github"]
+
+    async def lost_reply(path):
+        if path.endswith("releases/41"):
+            raise GitHubAmbiguous("synthetic read reply lost")
+    gh.hook = lost_reply
+    done = await execute(ops, request(ops, target, binding), success=False)
+    assert done["status"] == "uncertain"
+    await remove_repo(ops, pid)
+    before = len(gh.calls)
+    await ops._execute(done["operation_id"])
+    assert len(gh.calls) == before
+    assert ops.get(done["operation_id"])["status"] == "failed"
+    assert ops.db.execute("SELECT status FROM operation_steps WHERE operation_id=? AND name='pm.baseline.sources'",
+                          (done["operation_id"],)).fetchone()[0] == "failed"
+
+
+@pytest.mark.parametrize("change", ["cancel", "owner_revoked"])
+async def test_cancellation_and_owner_revocation_during_reads_never_select(ops, change):
+    target, binding, _ = await setup(ops)
+    gh = ops.context["github"]
+    op = ops.create(OWNER, **request(ops, target, binding))[0]
+
+    async def stop(path):
+        if path.endswith("releases/41"):
+            if change == "cancel":
+                ops.cancel(OWNER, op["operation_id"])
+            else:
+                ops.db.execute("UPDATE pm_workspace_members SET role='contributor' WHERE workspace_id=? AND actor=?",
+                               (target["workspace_id"], OWNER.actor))
+    gh.hook = stop
+    await ops._execute(op["operation_id"])
+    done = ops.get(op["operation_id"])
+    assert done["status"] == ("cancelled" if change == "cancel" else "failed"), done
+    assert len(gh.calls) == 2
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_release_baselines").fetchone()[0] == 0
+
+
+async def test_read_uses_one_wal_snapshot_for_head_and_original_source_visibility(ops, monkeypatch):
+    target, binding, pid = await setup(ops)
+    done = await execute(ops, request(ops, target, binding))
+    other = sqlite3.connect(ops.journal.path, isolation_level=None)
+    original = baselines._head
+    observed = []
+
+    def revoke_after_head(db, wid):
+        value = original(db, wid)
+        observed.append(db.in_transaction)
+        other.execute("UPDATE projects SET repositories='[]' WHERE project_id=?", (pid,))
+        return value
+    try:
+        monkeypatch.setattr(baselines, "_head", revoke_after_head)
+        during = baselines.current_baseline(ops, OWNER, target["workspace_id"])
+        assert observed == [True]
+        assert during["head"]["baseline_id"] == during["baseline"]["baseline_id"] == done["result"]["baseline_id"]
+        monkeypatch.setattr(baselines, "_head", original)
+        after = baselines.current_baseline(ops, OWNER, target["workspace_id"])
+        assert after["baseline"] is None and after["visibility_filtered"] is True
+        assert not ops.db.in_transaction
+    finally:
+        other.close()
+
+
 @pytest.mark.parametrize("field,value", [("channel", []), ("source", {"kind": []}), ("known_limitations", "none"),
     ("maintenance_branch", "../main"), ("maintenance_branch", "main.lock"), ("maintenance_branch", "refs/heads/main\n")])
 async def test_malformed_requests_fail_before_provider(ops, field, value):
