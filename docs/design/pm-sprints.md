@@ -132,6 +132,32 @@ insertion sequences (`after`, `limit` 1–100), so clock rollback does not chang
 history order. `get_sprint(history_limit=50)` includes the current Goal and selected
 items alongside bounded initial histories and `history_next_cursors`. Clients
 must follow those cursors rather than treating a partial page as complete history.
+Every domain read has a 2,000,000-byte UTF-8 JSON limit, including ordinary HTTP
+JSON spacing and response metadata. Artifact getters return the complete artifact
+or an explicit `PM_SPRINT_READ_TOO_LARGE` (413). The limit applies to the domain
+payload; RPC/MCP transport envelopes have their own additional framing.
+
+History, artifact revision and Sprint lists return whole-record prefixes with
+`coverage: {max_bytes, after, returned, has_more, byte_limited}`. `byte_limited`
+distinguishes the byte boundary from a requested record-count boundary. No work
+item, criterion, Goal, How, rationale or claim is shortened. A continuation uses
+the last included insertion sequence. A standalone list whose first requested
+record cannot fit returns the same explicit error instead of an empty page with a
+non-advancing cursor. Only lightweight identifiers/sequences are fetched as a
+batch; full history documents are materialized one at a time until the first
+record that cannot fit.
+
+`get_sprint` reserves the complete current definition, Goal and selected items
+first. If those mandatory facts and coverage cannot fit, it returns the explicit
+error. Otherwise it fills complete history prefixes in the deterministic order
+Goals, selections, events under one shared byte budget. Its additive
+`coverage: {max_bytes, histories: {goals, selections, events}}` reports the same
+per-history fields (without repeating `max_bytes`). A history with no room for
+its first record has an empty array and continuation `0`; clients can request the
+standalone history from `after=0`. It is not complete or absent history. Each
+history keeps its own continuation, so an earlier large record cannot hide a
+later record within that same stream.
+
 Reads do not refresh evidence, dispatch work or write audit events.
 
 ## Durability and boundaries
