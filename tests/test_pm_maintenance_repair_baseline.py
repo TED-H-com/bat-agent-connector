@@ -95,7 +95,9 @@ async def test_verified_same_channel_uses_original_registration_and_keeps_policy
     parent = await advance(w, parent, rounds=10)
     assert parent['status'] == 'succeeded', parent
     selected = parent['result']['baseline_update']
-    assert selected['status'] == 'updated', selected
+    original = baseline.child(ops, parent)
+    assert selected['status'] == 'updated', (selected, original and original['reason'],
+        original and [(step['name'], step.get('error')) for step in original.get('steps', [])])
     record = baselines.get_baseline(ops, OWNER, w['workspace_id'], selected['baseline_id'])['baseline']
     assert record['previous_baseline_id'] == w['initial_baseline']['baseline_id']
     assert record['document']['intent']['source']['deployment_id'] == parent['result']['delivery']['deployment']['deployment_id']
@@ -117,15 +119,19 @@ async def test_verified_same_channel_uses_original_registration_and_keeps_policy
         baselines.get_baseline(ops, OWNER, w['workspace_id'], selected['baseline_id'])
 
 
-@pytest.mark.parametrize('stop', ['revoke', 'pause'])
+@pytest.mark.parametrize('stop', ['revoke', 'pause', 'cancel'])
 async def test_stop_before_selection_preserves_delivery_and_original_baseline(ready_chain, stop):
     from tests.test_pm_lifecycle import decide
     w, ops = ready_chain, ready_chain['d'].ops
     parent = await finish_deployment(w)
     if stop == 'revoke':
         ops.db.execute('UPDATE api_principals SET revoked_at=0 WHERE actor=?', (OWNER.actor,))
-    else:
+    elif stop == 'pause':
         await decide(ops, w['workspace_id'], who=OWNER)
+    else:
+        # Simulate restart of a running original parent whose cancellation was
+        # committed after delivery completed but before its local result did.
+        ops.db.execute("UPDATE operations SET status='running',cancel_requested=1 WHERE operation_id=?", (parent['operation_id'],))
     parent = await advance(w, parent, rounds=4)
     assert parent['status'] == 'succeeded', parent
     assert parent['result']['outcome'] == 'deployed' and parent['result']['baseline_update']['status'] == 'not_updated'
