@@ -211,13 +211,40 @@ def _check(ops, principal, action, target, params, pre):
         _text(params.get("rationale"), "rationale", 4000)
         if "title" in params:
             _text(params["title"], "title", 160)
+    from .pm_access import require_operation_sources
+    require_operation_sources(ops.db, principal, _derived_sources(ops.db, action, thread, params))
     return workspace, thread
+
+
+def _derived_sources(db, action, thread, params):
+    """Only explicit original message/input selections create derived authority."""
+    if thread is None:
+        return []
+    sources = []
+    if action in {"pm.input.record", "pm.input.confirm"}:
+        previous = params.get("input_id") if action == "pm.input.confirm" else params.get("supersedes_input_id")
+        if previous:
+            sources.append(_input(db, thread["thread_id"], previous)["operation_id"])
+        source = params.get("source_ref", {})
+        if source.get("kind") == "message":
+            row = db.execute("SELECT operation_id FROM pm_messages WHERE thread_id=? AND message_id=?",
+                (thread["thread_id"], source["message_id"])).fetchone()
+            if row:
+                sources.append(row[0])
+    elif action in {"pm.thread.plan", "pm.thread.plan.revise"}:
+        # The draft also exposes candidate IDs and their original disposition.
+        sources.extend(row[0] for row in db.execute("""SELECT operation_id FROM pm_inputs i WHERE thread_id=?
+            AND NOT EXISTS(SELECT 1 FROM pm_inputs n WHERE n.supersedes_input_id=i.input_id)""", (thread["thread_id"],)))
+        if thread["draft_id"]:
+            sources.append(_draft_row(db, thread)["operation_id"])
+    return sources
 
 
 def _admitter(action):
     def admit(ops, principal, target, params, pre):
-        _check(ops, principal, action, target, params, pre)
-        return {"principal": pm_workspace.principal_binding(principal)}
+        _, thread = _check(ops, principal, action, target, params, pre)
+        return {"principal": pm_workspace.principal_binding(principal),
+                "pm_discussion_sources": {"operation_ids": _derived_sources(ops.db, action, thread, params)}}
     return admit
 
 
@@ -241,6 +268,8 @@ def _apply(ctx, thread):
     db, params, now = ctx.service.db, ctx.params, time.time()
     suffix, workspace_id = ctx.operation_id[3:], ctx.target["workspace_id"]
     action = ctx.op["action"]
+    from .pm_access import inherit_operation_sources
+    inherit_operation_sources(db, ctx.operation_id, _derived_sources(db, action, thread, params))
     if action == "pm.thread.create":
         thread_id = "pmt_" + suffix
         db.execute("INSERT INTO pm_threads VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -302,10 +331,13 @@ def _limit(limit):
     return limit
 
 
-def _input_out(row):
+def _input_out(row, *, db=None):
     result = dict(row)
     result["source_ref"] = json.loads(result["source_ref"])
     result["evidence_verification"] = "central_message" if result["source_ref"]["kind"] == "message" else "unverified_claim"
+    if db is not None:
+        from .pm_conversation_adoption import input_disposition
+        result = input_disposition(db, result)
     return result
 
 
@@ -328,11 +360,29 @@ def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
         _thread(ops.db, workspace_id, after)
     rows = ops.db.execute("SELECT * FROM pm_threads WHERE workspace_id=? AND (? IS NULL OR thread_id>?) ORDER BY thread_id LIMIT ?",
                           (workspace_id, after, after, limit + 1)).fetchall()
-    return {"version": 1, "workspace_id": workspace_id, "threads": [dict(row) for row in rows[:limit]],
+    visible = [dict(row) for row in rows[:limit] if _thread_sources_visible(ops.db, principal, row["thread_id"])]
+    return {"version": 1, "workspace_id": workspace_id, "threads": visible,
+            "visibility_filtered": len(visible) != len(rows[:limit]),
             "next_cursor": rows[limit - 1]["thread_id"] if len(rows) > limit else None,
             "capabilities": _capabilities(ops, workspace, principal), **pm_profiles.catalog(),
             "runtime": {"available": False, "adapter": "bat", "legacy": True,
                         "reason": "external_tool_policy_unverified"}}
+
+
+def _thread_sources_visible(db, principal, thread_id):
+    """Even version/count metadata derives from original hidden thread rows."""
+    from . import pm_source_lineage
+    if not pm_source_lineage.installed(db):
+        return True
+    rows = db.execute("""SELECT DISTINCT original_operation_id FROM pm_source_lineage
+        WHERE resource_type='operation' AND resource_id IN (
+            SELECT operation_id FROM pm_inputs WHERE thread_id=? UNION
+            SELECT operation_id FROM pm_messages WHERE thread_id=? UNION
+            SELECT operation_id FROM pm_planning_drafts WHERE thread_id=? UNION
+            SELECT operation_id FROM pm_planning_draft_revisions WHERE thread_id=?) LIMIT ?""",
+        (thread_id, thread_id, thread_id, thread_id, pm_source_lineage.MAX_ROOTS + 1)).fetchall()
+    return (len(rows) <= pm_source_lineage.MAX_ROOTS
+            and pm_source_lineage.visible_roots(db, principal, {row[0] for row in rows}))
 
 
 def _draft_row(db, thread, *, draft_id=None):
@@ -352,15 +402,20 @@ def _draft_row(db, thread, *, draft_id=None):
     return dict(row)
 
 
-def _draft(db, thread, *, draft_id=None):
+def _draft(db, thread, *, draft_id=None, principal=None):
     draft = _draft_row(db, thread, draft_id=draft_id)
     if draft is None:
         return None
     for field in ("selected_input_ids", "candidate_input_ids"):
         draft[field] = json.loads(draft[field])
     # Selected sources are always returned in full even if the current-input page excludes them.
-    draft["selected_inputs"] = [_input_out(_input(db, thread["thread_id"], value)) for value in draft["selected_input_ids"]]
-    draft["candidate_inputs"] = [_input_out(_input(db, thread["thread_id"], value)) for value in draft["candidate_input_ids"][:100]]
+    selected = [_input(db, thread["thread_id"], value) for value in draft["selected_input_ids"]]
+    candidates = [_input(db, thread["thread_id"], value) for value in draft["candidate_input_ids"][:100]]
+    if principal is not None:
+        from .pm_access import require_operation_sources
+        require_operation_sources(db, principal, [draft["operation_id"], *[row["operation_id"] for row in selected + candidates]])
+    draft["selected_inputs"] = [_input_out(row, db=db) for row in selected]
+    draft["candidate_inputs"] = [_input_out(row, db=db) for row in candidates]
     slots = {row["slot"] for row in draft["selected_inputs"]}
     draft.update(status="draft", scope_revision=None, execution_authorized=False, adopted=False,
         candidate_mode="idea", candidates_truncated=len(draft["candidate_input_ids"]) > 100,
@@ -379,6 +434,8 @@ def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_mess
             raise _bad("history cursors must be positive sequence numbers")
     with ops.journal.tx():
         thread = _thread(ops.db, workspace_id, thread_id)
+        if not _thread_sources_visible(ops.db, principal, thread_id):
+            raise _bad("Original discussion sources are unavailable", "PM_SOURCE_UNAVAILABLE", 404)
         messages = ops.db.execute("""SELECT * FROM pm_messages WHERE thread_id=? AND (? IS NULL OR sequence<?)
             ORDER BY sequence DESC LIMIT ?""", (thread_id, before_message, before_message, limit + 1)).fetchall()
         history = ops.db.execute("""SELECT * FROM pm_inputs WHERE thread_id=? AND (? IS NULL OR sequence<?)
@@ -386,9 +443,16 @@ def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_mess
         inputs = ops.db.execute("""SELECT * FROM pm_inputs i WHERE thread_id=?
             AND NOT EXISTS(SELECT 1 FROM pm_inputs n WHERE n.supersedes_input_id=i.input_id)
             ORDER BY sequence DESC LIMIT 101""", (thread_id,)).fetchall()
+        from .pm_access import require_operation_sources
+        from .pm_runs import message_source_visible
+        require_operation_sources(ops.db, principal, [row["operation_id"]
+            for row in [*inputs[:100], *history[:limit], *messages[:limit]]])
+        if any(not message_source_visible(ops.db, principal, row) for row in messages[:limit]):
+            raise _bad("Original discussion sources are unavailable", "PM_SOURCE_UNAVAILABLE", 404)
+        draft = _draft(ops.db, thread, principal=principal)
         return {"version": 1, "thread": thread, "profile": pm_profiles.get(thread["mode"]),
-            "messages": [message_out(ops.db, row) for row in reversed(messages[:limit])], "inputs": [_input_out(row) for row in inputs[:100]],
-            "input_history": [_input_out(row) for row in history[:limit]], "draft": _draft(ops.db, thread),
+            "messages": [message_out(ops.db, row) for row in reversed(messages[:limit])], "inputs": [_input_out(row, db=ops.db) for row in inputs[:100]],
+            "input_history": [_input_out(row, db=ops.db) for row in history[:limit]], "draft": draft,
             "next_message_cursor": messages[limit - 1]["sequence"] if len(messages) > limit else None,
             "next_input_cursor": history[limit - 1]["sequence"] if len(history) > limit else None,
             "coverage": {"messages_truncated": len(messages) > limit, "inputs_truncated": len(inputs) > 100,

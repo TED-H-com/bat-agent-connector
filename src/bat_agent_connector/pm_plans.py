@@ -94,6 +94,57 @@ def head(db, workspace_id):
                                 "latest_revision_id": None, "accepted_revision_id": None}
 
 
+def source_operation_ids(db, workspace_id, revision_id, *, include_adoption=True):
+    """Original fixed revision inputs; never substitute a newer plan head."""
+    revision = _revision(db, workspace_id, revision_id)
+    sources = {revision["operation_id"]}
+    sources.update(row["operation_id"] for row in revision["document"].get("selected_inputs", []))
+    draft = pm_discussions._draft_row(db, {"workspace_id": workspace_id, "thread_id": revision["thread_id"],
+                                         "draft_id": revision["planning_draft_id"]})
+    sources.add(draft["operation_id"])
+    for previous in (revision["previous_revision_id"], revision["base_accepted_revision_id"]):
+        if previous:
+            sources.add(_revision(db, workspace_id, previous)["operation_id"])
+    if include_adoption:
+        adoption = db.execute("SELECT operation_id FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? ORDER BY created_at DESC LIMIT 1",
+                              (workspace_id, revision_id)).fetchone()
+        if adoption:
+            sources.add(adoption["operation_id"])
+    return sorted(sources)
+
+
+def _require_revision_sources(db, principal, workspace_id, revision_id):
+    from .pm_access import require_operation_sources
+    require_operation_sources(db, principal, source_operation_ids(db, workspace_id, revision_id))
+
+
+def public_head(ops, principal, workspace_id):
+    with ops.journal.tx():
+        _read(ops, principal, workspace_id)
+        current = head(ops.db, workspace_id)
+        for revision_id in {current["latest_revision_id"], current["accepted_revision_id"]} - {None}:
+            _require_revision_sources(ops.db, principal, workspace_id, revision_id)
+        return current
+
+
+def _public_head_projection(ops, principal, workspace_id):
+    try:
+        return {"head": public_head(ops, principal, workspace_id)}
+    except OperationError as error:
+        if error.status != 404:
+            raise
+        return {"head": None, "head_unavailable": True}
+
+
+def _draft_sources(db, workspace_id, thread, current):
+    draft = pm_discussions._draft(db, thread)
+    sources = {draft["operation_id"]} if draft else set()
+    sources.update(row["operation_id"] for row in (draft or {}).get("selected_inputs", []))
+    for revision_id in {current["latest_revision_id"], current["accepted_revision_id"]} - {None}:
+        sources.update(source_operation_ids(db, workspace_id, revision_id))
+    return sorted(sources)
+
+
 def _revision(db, workspace_id, revision_id):
     if not isinstance(revision_id, str) or not REVISION_ID.fullmatch(revision_id):
         raise _bad("PM_PLAN_NOT_FOUND", "Plan revision not found", 404)
@@ -246,13 +297,16 @@ def _check_draft(ops, principal, target, params, pre, revision_id):
         raise _bad("VERSION_CONFLICT", "Read current discussion and plan versions before drafting", 409)
     if "previous_revision_id" not in params or params["previous_revision_id"] != current["latest_revision_id"]:
         raise _bad("PM_PLAN_REVISION_CONFLICT", "A draft must name the current document revision as its parent", 409)
+    from .pm_access import require_operation_sources
+    require_operation_sources(ops.db, principal, _draft_sources(ops.db, target["workspace_id"], thread, current))
     document, scope_digest = _document(ops.db, target["workspace_id"], thread, params, revision_id)
     return thread, current, document, scope_digest
 
 
 def _admit_draft(ops, principal, target, params, pre):
-    _check_draft(ops, principal, target, params, pre, "pmrev_" + "0" * 32)
-    return {"principal": pm_workspace.principal_binding(principal)}
+    thread, current, _, _ = _check_draft(ops, principal, target, params, pre, "pmrev_" + "0" * 32)
+    return {"principal": pm_workspace.principal_binding(principal),
+            "pm_plan_sources": {"operation_ids": _draft_sources(ops.db, target["workspace_id"], thread, current)}}
 
 
 async def _run_draft(ctx):
@@ -267,6 +321,9 @@ async def _run_draft(ctx):
         thread, current, document, scope_digest = _check_draft(ctx.service, principal, ctx.target, ctx.params,
                                                              ctx.preconditions, revision_id)
         now, workspace_id = time.time(), ctx.target["workspace_id"]
+        from .pm_access import inherit_operation_sources
+        inherit_operation_sources(ctx.service.db, ctx.operation_id,
+                                  _draft_sources(ctx.service.db, workspace_id, thread, current))
         files = _files(revision_id, document)
         ctx.service.db.execute("""INSERT INTO pm_plan_revisions(revision_id,workspace_id,thread_id,planning_draft_id,
             previous_revision_id,base_accepted_revision_id,document_digest,scope_digest,document,created_by,created_at,operation_id)
@@ -301,6 +358,7 @@ def prepare_adoption(ops, principal, target, params, pre):
         raise _bad("PRECONDITION_REQUIRED", "Supply the previous accepted revision, or null for the first adoption")
     pm_workspace.require_member(ops.db, principal, target.get("workspace_id"), decide=True)
     revision = _revision(ops.db, target["workspace_id"], target.get("revision_id"))
+    _require_revision_sources(ops.db, principal, target["workspace_id"], revision["revision_id"])
     current = head(ops.db, target["workspace_id"])
     if (pre["expected_accepted_revision_id"] != current["accepted_revision_id"]
             or revision["base_accepted_revision_id"] != current["accepted_revision_id"]):
@@ -308,7 +366,8 @@ def prepare_adoption(ops, principal, target, params, pre):
     _text(params.get("rationale"), "rationale", 8000)
     revision_files(ops.db, target["workspace_id"], revision["revision_id"])
     return {"principal": pm_workspace.principal_binding(principal), "revision_id": revision["revision_id"],
-            "document_digest": revision["document_digest"], "scope_digest": revision["scope_digest"]}
+            "document_digest": revision["document_digest"], "scope_digest": revision["scope_digest"],
+            "pm_plan_sources": {"operation_ids": source_operation_ids(ops.db, target["workspace_id"], revision["revision_id"])}}
 
 
 def _adoption_context(ctx):
@@ -480,6 +539,7 @@ def _read(ops, principal, workspace_id):
 
 def _get_plan(ops, principal, workspace_id, revision_id):
     _read(ops, principal, workspace_id)
+    _require_revision_sources(ops.db, principal, workspace_id, revision_id)
     revision = _revision(ops.db, workspace_id, revision_id)
     revision_files(ops.db, workspace_id, revision_id)
     adoption = ops.db.execute("SELECT result,rationale,created_at FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? ORDER BY created_at DESC LIMIT 1",
@@ -487,8 +547,10 @@ def _get_plan(ops, principal, workspace_id, revision_id):
     revision["adoption"] = {**json.loads(adoption[0]), "rationale": adoption[1], "created_at": adoption[2]} if adoption else None
     revision["status"] = "adopted" if adoption else "draft"
     revision["structured_scope_digest"] = revision.pop("scope_digest")
-    revision["is_current_accepted"] = head(ops.db, workspace_id)["accepted_revision_id"] == revision_id
-    return {"version": 1, "plan": revision, "head": head(ops.db, workspace_id)}
+    projection = _public_head_projection(ops, principal, workspace_id)
+    revision["is_current_accepted"] = (projection["head"]["accepted_revision_id"] == revision_id
+                                       if projection["head"] is not None else None)
+    return {"version": 1, "plan": revision, **projection}
 
 
 def get_plan(ops, principal, workspace_id, revision_id):
@@ -499,7 +561,7 @@ def get_plan(ops, principal, workspace_id, revision_id):
 def accepted_plan(ops, principal, workspace_id):
     with ops.journal.tx():
         _read(ops, principal, workspace_id)
-        current = head(ops.db, workspace_id)
+        current = public_head(ops, principal, workspace_id)
         return _get_plan(ops, principal, workspace_id, current["accepted_revision_id"]) if current["accepted_revision_id"] else {
             "version": 1, "head": current, "plan": None}
 
@@ -512,5 +574,16 @@ def list_plans(ops, principal, workspace_id, *, after=0, limit=50):
         rows = ops.db.execute("""SELECT sequence,revision_id,thread_id,planning_draft_id,previous_revision_id,
             document_digest,scope_digest AS structured_scope_digest,created_by,created_at FROM pm_plan_revisions
             WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?""", (workspace_id, after, limit + 1)).fetchall()
-        return {"version": 1, "workspace_id": workspace_id, "head": head(ops.db, workspace_id),
-                "revisions": [dict(row) for row in rows[:limit]], "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
+        visible, filtered = [], False
+        for row in rows[:limit]:
+            try:
+                _require_revision_sources(ops.db, principal, workspace_id, row["revision_id"])
+            except OperationError as error:
+                if error.status != 404:
+                    raise
+                filtered = True
+                continue
+            visible.append(dict(row))
+        return {"version": 1, "workspace_id": workspace_id, **_public_head_projection(ops, principal, workspace_id),
+                "revisions": visible, "visibility_filtered": filtered,
+                "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
