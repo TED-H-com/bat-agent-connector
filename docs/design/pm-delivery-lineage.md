@@ -56,6 +56,24 @@ cursors; inaccessible singular documents are refused. Source revocation during
 an awaited read is checked again before returning. Historical receipts are not
 rewritten or copied into a new operation to recover them.
 
+The PM work projection is `pm_delivery_lineage.for_work`: it returns the exact
+original package IDs/digests and saved delivery operation identities. Integration
+push/receipt facts, observed merge and verified merge facts, and deployment
+source/environment/workflow/run/verification facts remain separate. It does not
+change WorkItem completion, Sprint acceptance or requirement verification.
+Reads make no BAT/provider requests and create no operations. Pagination uses a
+nonnegative signed 64-bit scan cursor, at most 100 whole operation records and a
+192 KB response budget. Source filtering retains scan progress. A single record
+over the budget is refused whole.
+
+An uncertain async merge is not declared failed merely because the PR is still
+open when source access is revoked. The existing request may complete later;
+read-back keeps the original request pending and never uses lost access to
+justify another PUT. After a recorded send, registered merge/deployment reads
+may observe that original result and save a local receipt. The local
+`receipt_only` step itself never calls a provider, and it cannot admit the next
+deployment after a lifecycle stop.
+
 ## Explicit limits
 
 The associations describe Connector-selected targets and observed receipts.
