@@ -21,6 +21,7 @@ POLICY = re.compile(r"pmmp_[0-9a-f]{32}")
 SOURCES = frozenset({"issues", "pull_requests", "dependencies", "documentation", "research"})
 WORK_KINDS = frozenset({"dependency_fix", "bug_fix", "documentation"})
 DELIVERY = ("report", "pull_request", "merge", "deploy")
+GITHUB_PROFILE = 'github_open_prs_and_actions_v1'
 MAX_HISTORY = 256
 
 
@@ -89,7 +90,11 @@ def validate_policy(policy, baseline):
         if delivery["maximum"] == "report" or maintenance.get("status") != "verified_at_observation":
             raise _bad("Automated repairs need a verified maintenance branch and at least a pull-request ceiling")
     observation = policy["observation"]
-    _exact(observation, {"max_age_seconds", "stable_for_seconds"})
+    if not isinstance(observation, dict) or set(observation) not in (
+            {'max_age_seconds', 'stable_for_seconds'}, {'max_age_seconds', 'stable_for_seconds', 'github_profile'}):
+        raise _bad('Use the exact observation fields and an optional supported GitHub profile')
+    if 'github_profile' in observation and observation['github_profile'] != GITHUB_PROFILE:
+        raise _bad('Select the supported explicit GitHub observation profile')
     _integer(observation["max_age_seconds"], 1, 86400, "Observation age")
     _integer(observation["stable_for_seconds"], 0, 604800, "Stable observation period")
     schedule = policy["schedule"]
@@ -217,7 +222,7 @@ def _check(ops, principal, target, params, pre):
     return {"workspace_id": wid, "baseline_id": baseline["baseline_id"], "baseline_digest": baseline["document_digest"],
             "previous_policy_id": current["policy_id"], "previous_revision": current["revision"],
             "lifecycle_revision": pre["expected_lifecycle_revision"], "policy": policy, "rationale": params["rationale"],
-            "scope": _scope(ops, doc),
+            "scope": _scope(ops, doc, policy),
             "controller": {key: authority[key] for key in ("server_id", "controller_id", "actor")}}
 
 
@@ -237,13 +242,14 @@ def _bat_bindings(ops, repository):
     return result
 
 
-def _scope(ops, document):
+def _scope(ops, document, policy=None):
     if baselines.sources.configured(ops, document["repository"]) != document["intent"]["config"]:
         raise _bad("The baseline's original provider configuration changed", "PM_MAINTENANCE_SCOPE_CHANGED", 409)
     return {"repository": document["repository"], "repository_id": document["repository_id"], "channel": document["channel"],
             "project_binding": document["intent"]["project_binding"], "maintenance_branch": document["proof"]["maintenance_branch"],
             "provider_digest": baselines.sources.digest(document["intent"]["config"]),
-            "bat_workspaces": _bat_bindings(ops, document["repository"]), "github_scope": "repository", "central_project": True}
+            "bat_workspaces": _bat_bindings(ops, document["repository"]),
+            "github_scope": (policy or {}).get('observation', {}).get('github_profile', 'repository'), "central_project": True}
 
 
 def _admit(ops, principal, target, params, pre):
@@ -341,7 +347,7 @@ def active_record(ops, principal, workspace_id):
         bid = baselines._head(ops.db, workspace_id)["baseline_id"]
         baseline = baselines._record(ops.db, workspace_id, bid)
         baselines._access(ops, principal, workspace_id, baseline)
-        observed = _scope(ops, baseline["document"])
+        observed = _scope(ops, baseline["document"], current['policy'])
         adopted = current["scope"]
         fields = ("repository", "repository_id", "channel", "project_binding", "bat_workspaces", "github_scope", "central_project", "provider_digest")
         if any(observed[key] != adopted[key] for key in fields):

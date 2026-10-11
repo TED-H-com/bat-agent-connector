@@ -41,6 +41,14 @@ def has_table(db, name):
 
 def visible(ops, principal, wid, ref):
     kind, ident = ref['kind'], ref['id']
+    if kind == 'github_observation':
+        from . import pm_github_observation
+        try:
+            row = pm_github_observation._record(ops.db, wid, ident)
+            pm_github_observation._access(ops, principal, wid, row)
+            return True
+        except pm_github_observation.OperationError:
+            return False
     if kind == 'operation':
         return pm_evidence._read_operation(ops, principal, wid, ident) is not None
     if kind == 'task':
@@ -373,6 +381,10 @@ class Collector:
         # W47 may add a fixed, authenticated, fully paginated observation source;
         # do not let a caller-supplied coverage flag substitute for that receipt.
         kind = self.scope.get('github_scope')
+        from . import pm_github_observation
+        if kind == pm_github_observation.provider.PROFILE:
+            pm_github_observation.workload_evidence(self)
+            return
         self.coverage.append({'kind': 'github', 'repository': self.scope['repository'],
             'requested_scope': kind, 'basis': 'linked_journal_receipts', 'status': 'incomplete',
             'network_checked': False, 'outside_scope': ['unlinked_remote_work', 'current_remote_pr_ci_state']})
