@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector import controller_authority as ca
-from bat_agent_connector import task_actions, task_control
+from bat_agent_connector import registry, task_actions, task_control
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.errors import ResourceReadOnly
 from bat_agent_connector.operations import OperationError, OperationService
@@ -16,7 +17,7 @@ from bat_agent_connector.task_bat import BatTaskAdapter
 from bat_agent_connector.task_core import TaskCoordinator
 from bat_agent_connector.task_daemon import TaskDaemon
 from bat_agent_connector.task_journal import Journal
-from tests.conftest import adopt
+from tests.conftest import adopt, make_config
 from tests.test_task_service import FakeBAT
 
 ALICE = Principal("alice", frozenset({"start", "operate", "manage"}))
@@ -71,6 +72,69 @@ async def test_background_and_restart_use_original_task_not_inherited_caller(jou
         assert reopened.get(task["task_id"])["controller_authority"] == original
     finally:
         reopened.close()
+
+
+@pytest.mark.parametrize("next_step", ["goose", "registry_loss"])
+async def test_successful_start_preserves_creation_receipt_for_next_step(mock, tmp_path, next_step):
+    mock.handlers["agent:usage-snapshot"] = lambda _: {"claude": {
+        "fetchedAt": time.time() * 1000,
+        "fiveHour": {"utilization": 0}, "sevenDay": {"utilization": 0}}}
+    daemon = TaskDaemon(make_config(mock, writes=True, orchestrate=True, tabs=False,
+                                   safety={"write_min_interval_s": 0}), tmp_path / "daemon" / "tasks.db")
+    calls = []
+
+    async def run_goose(task, _cwd, *, capability, journal):
+        assert journal.authorize_capability(capability, task["task_id"])
+        calls.append(ca.require())
+
+    try:
+        daemon.goose = SimpleNamespace(config=SimpleNamespace(enabled=True, provider="claude"),
+                                       run_task=run_goose)
+        original = ca.binding(daemon.journal.db, ALICE)
+        with ca.use(original, daemon.journal):
+            task = daemon.journal.submit(project="demo", host="h1", workspace="demo-project",
+                original_words="Inspect the requested change", idempotency_key="successful-start",
+                engine="goose", lead_agent="claude", task_path="minimal",
+                engine_decision={"selected": "goose", "effective": "goose"})
+        # Exercise the successful coordinator ACK path, not adapter.start in isolation.
+        with ca.use(ca.binding(daemon.journal.db, BOB), daemon.journal):
+            await daemon._tick_task(task["task_id"])
+        current = daemon.journal.get(task["task_id"])
+        assert current["state"] == "running"
+        sid = current["session_id"]
+        entry = registry.get("h1", sid)
+        start = next(c for c in daemon.journal.commands(task["task_id"]) if c["kind"] == "start_lead")
+        receipt = json.loads(start["payload"])
+        assert start["status"] == "settled" and receipt["start_sent"] is True
+        assert receipt["controller_incarnation"] == entry["controller_incarnation"]
+        assert receipt["controller_authority"] == original
+        assert task_control.authority(start) == original
+        frames = [i for i in mock.invokes if i["channel"] in {"claude:start-session", "claude:send-message"}]
+        assert [i["channel"] for i in frames] == ["claude:start-session", "claude:send-message"]
+
+        if next_step == "goose":
+            with ca.use(ca.binding(daemon.journal.db, BOB), daemon.journal):
+                await daemon._tick_task(task["task_id"])
+            assert calls == [original]
+            command = next(c for c in daemon.journal.commands(task["task_id"]) if c["kind"] == "goose_run")
+            assert command["status"] == "settled"
+            assert daemon.journal.get(task["task_id"])["state"] == "verifying"
+        else:
+            registry.registry_path().unlink()
+            with ca.use(original, daemon.journal):
+                assert await daemon.adapter.session_presence(current, sid) == "present"
+            restored = registry.get("h1", sid)
+            assert restored["recovered_from"] == "task_journal"
+            assert restored["controller_incarnation"] == receipt["controller_incarnation"]
+            assert restored["controller_authority"] == original
+            assert calls == []
+        assert [i for i in mock.invokes if i["channel"] in {"claude:start-session", "claude:send-message"}] == frames
+    finally:
+        await daemon.artifact_store.close_reaper()
+        await daemon.api.session_observation.close()
+        await daemon.inventory.close()
+        await daemon.fleet.close()
+        daemon.journal.close()
 
 
 async def test_legacy_task_is_read_only_but_sent_unknown_can_be_reconciled(journal):
