@@ -57,6 +57,15 @@ server requests cause the turn to fail closed.
 
 ## Preflight and capability evidence
 
+`installation_eligibility()` is a cheap filesystem/platform hint used by capability
+reads. It never spawns a process or reads credential bytes. Finding executable
+paths and a readable auth file only makes the installation a preflight candidate;
+version, options, authentication and model response remain unverified. Workspace
+and thread reads advertise `native_analysis` separately from the legacy BAT
+`runtime:false` field, which is explicitly marked with `runtime_adapter=bat` and
+`runtime_legacy=true`. Every client uses the same central `pm.run.analyze` action
+and original operation key; refreshing a page does not launch an agent.
+
 `await probe(scratch_root, run_id, ...)` launches and closes an isolated process
 without sending `turn/start`. `use_auth=False, offline=True` also omits auth and
 isolates the network namespace, allowing a no-provider test.

@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "4eae8d13e92faac9588c3d50009a6f2f3682a1cea665a8890145e871e38da603"
+  canonical_sha256: "a316dbabfbb215e649f1f8b7249e0f972d105cecabcc180b57c9b34a62d4a1f4"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -72,8 +72,9 @@ may still expose direct Fleet tools that do not enforce API principal scopes.
 Professional PM manages value, scope, schedule, resources, quality, risk and decisions.
 Use `pm_workspaces_list` and `pm_workspace_get` to select an explicit server/workspace;
 these identities differ from BAT runtime workspaces and legacy project records. Never
-infer an association from matching repository names. Check `features.pm_workspaces`:
-the first increment has durable discussion memory, not an autonomous PM runner.
+infer an association from matching repository names. Check `features.pm_workspaces`
+and workspace capabilities for the actual discussion and adapter support. Durable
+discussion memory alone does not establish an executable PM runtime.
 PM reads and shared `operation_get`, `operations_list`, `events_list` require your
 explicit `BATC_API_TOKEN` even in the legacy MCP profile; they do not fall back to
 the local administrator. Existing direct Fleet observation tools keep their original behavior.
@@ -118,6 +119,25 @@ and also requires `start`; a repository name alone never grants filesystem acces
 Preserve the first worktree binding and original request key when recovering.
 The audited BAT runtime lacks a per-session external MCP tool boundary; its
 filesystem read-only options alone do not enable automatic Idea/Planning execution.
+
+When `features.pm_workspaces.native_analysis` is advertised, `pm.run.analyze`
+requests one bounded native PM analysis of the saved discussion. Use the same
+workspace/thread target, current `expected_version`, required `purpose`, optional
+`model` (at most 128 characters), `max_chars` (2000–64000) and `timeout_s` (1–3600).
+Contributor membership plus observe/manage/start scopes is required. This consumes
+the fixed discussion/profile/source snapshot on the Connector service; it does not
+open repository files, inherit a human session or authorize coding work.
+
+`pm_capabilities_get` and thread capabilities expose `native_analysis` separately
+from legacy `runtime:false` (the BAT adapter). Installation eligibility is a cheap
+read: no runtime is started, and version, tool restrictions, authentication and
+model execution are not verified by that read. The original run records actual
+per-run capability evidence, model, native turn/message IDs and original events.
+Use `pm_run_get`, `pm_thread_get` and the original operation to recover the result.
+Only a reply with original native completion provenance is an assistant outcome;
+ACK, process exit and an unverified draft are not completion. Cancellation targets
+the original operation and reconciles its own process; never resend or take over
+another session to repair an unknown analysis result.
 
 When plan actions are advertised, `pm.thread.plan.revise` explicitly updates a
 Planning discussion's selected current inputs. It requires owner authority,

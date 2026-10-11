@@ -166,6 +166,27 @@ def _check_host_config() -> None:
              "PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED")
 
 
+def installation_eligibility() -> dict:
+    """Cheap installation hints only: never spawn, read auth bytes, or verify a model."""
+    result = {"adapter": "codex-native-linux", "contract": CONTRACT, "required_version": VERSION,
+              "execution_scope": "frozen_context_only", "execution_location": "connector_service",
+              "eligible_for_preflight": False, "options_confirmed": False,
+              "version_verification": "per_run", "auth_validity": "unverified",
+              "model_execution_verified": False, "auth_file_readable": False}
+    try:
+        _require(sys.platform == "linux", "PM_NATIVE_PLATFORM_UNSUPPORTED")
+        _require(shutil.which("codex") and shutil.which("bwrap"), "PM_NATIVE_EXECUTABLE_UNAVAILABLE")
+        _check_host_config()
+        _, native = _host_paths()
+        auth = native / "auth.json"
+        readable = auth.is_file() and not auth.is_symlink() and os.access(auth, os.R_OK)
+        result["auth_file_readable"] = readable
+        _require(readable, "PM_NATIVE_AUTH_UNAVAILABLE")
+        return {**result, "eligible_for_preflight": True, "reason": None}
+    except (NativeRuntimeError, OSError, ValueError) as error:
+        return {**result, "reason": getattr(error, "code", "PM_NATIVE_INSTALLATION_UNAVAILABLE")}
+
+
 def assess_turn(events: list[dict], *, run_id: str, thread_id: str, prompt_digest: str,
                 client_message_id: str, actual_model: str, stream_complete: bool = True) -> dict:
     """Reduce original native notifications. ACK, exit, or assistant text alone is insufficient."""
