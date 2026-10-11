@@ -50,6 +50,8 @@ def bat_world(daemon, mock, monkeypatch):
             value = capability(sid, params["options"]["pmContextDigest"])
             if settings.get("unattested"):
                 value["pmRuntime"]["attestation"]["externalToolsDisabled"] = False
+            if settings.get("wrong_inner_session"):
+                value["pmRuntime"]["sessionId"] = "different-original-session"
             proofs[sid] = value
             if failure := settings.get('preflight_failure'):
                 partial = value['pmRuntime']
@@ -73,7 +75,9 @@ def bat_world(daemon, mock, monkeypatch):
                 return {"sessionId": sid, "mode": "snapshot", "cursor": cursor,
                     "state": {"sessionId": sid, "meta": copy.deepcopy(mock.metas[sid]), "isStreaming": False, "messages": []}}
             items = [event for event in events.get(sid, []) if event["seq"] > params["cursor"]["seq"]]
-            return {"sessionId": sid, "mode": "delta", "events": copy.deepcopy(items), "hasMore": False,
+            more = bool(settings.get('page_size') and len(items) > settings['page_size'])
+            items = items[:settings['page_size']] if settings.get('page_size') else items
+            return {"sessionId": sid, "mode": "delta", "events": copy.deepcopy(items), "hasMore": more,
                 "cursor": {**cursor, "seq": items[-1]["seq"] if items else params["cursor"]["seq"]}}
         if channel == "claude:send-message":
             result = original(channel, params)
@@ -91,6 +95,10 @@ def bat_world(daemon, mock, monkeypatch):
                     event(2, "claude:message", message={"id": "answer-1", "role": "assistant", "content": "Discuss the original evidence."}),
                     event(3, "claude:turn-end", payload={"reason": "completed", "turnId": "original-turn",
                         "sdkSessionId": value["threadId"], "result": "Discuss the original evidence."})]
+                if settings.get('page_size'):
+                    for item in events[sid]:
+                        item['seq'] += 9
+                    events[sid] = [event(i, 'claude:status', status='working') for i in range(1, 10)] + events[sid]
                 native = {"method": "turn/completed", "params": {"threadId": value["threadId"],
                     "turn": {"id": "original-turn", "status": "completed", "items": [{"type": "agentMessage",
                         "id": "native-answer", "text": "Discuss the original evidence."}], "itemsView": "summary"}}}
@@ -124,6 +132,12 @@ async def test_complete_turn_retains_sources_and_releases_only_dead_original_wri
     assert runtime.death_proof(ops.db, run)["process"] == next(iter(proofs.values()))["pmRuntime"]["process"]
     assert ops.db.execute("SELECT run_id FROM pm_writer_slots WHERE workspace_id=?", (target["workspace_id"],)).fetchone()[0] is None
     assert read(ops, target)["messages"][-1]["actor"] == "pm:" + target["workspace_id"]
+    provenance = read(ops, target)['messages'][-1]['provenance']['source_refs']['bat_runtime']
+    original = next(iter(proofs.values()))['pmRuntime']
+    assert provenance['native_event_digest'] == original['terminal']['eventDigest']
+    assert provenance['native_message_id'] == 'native-answer'
+    assert provenance['process_completion']['process'] == original['process']
+    assert pm_runs.read(ops, OWNER, target['workspace_id'], run['run_id'])['bat_runtime_provenance'] == provenance
     assert mock.channels().count("claude:start-session") == mock.channels().count("claude:send-message") == 1
     assert ops.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
     row = registry.get("h1", run["session_binding"]["session_id"])
@@ -168,7 +182,7 @@ async def test_lost_transport_reply_reads_original_effect_once(bat_world, mock, 
     assert mock.channels().count(phase) == 1
 
 
-@pytest.mark.parametrize("setting", ["ack_only", "gap", "unattested"])
+@pytest.mark.parametrize("setting", ["ack_only", "gap", "unattested", "wrong_inner_session"])
 async def test_unproven_runtime_never_imports_assistant(bat_world, mock, setting):
     ops, settings, _, _ = bat_world
     settings[setting] = True
@@ -176,8 +190,24 @@ async def test_unproven_runtime_never_imports_assistant(bat_world, mock, setting
     out = await request(ops, target)
     assert out["status"] != "succeeded", out
     assert read(ops, target)["messages"] == []
-    if setting == "unattested":
+    if setting in {"unattested", "wrong_inner_session"}:
         assert "claude:send-message" not in mock.channels()
+
+
+async def test_more_than_eight_replay_pages_recover_without_aborting_dead_original(bat_world, mock):
+    ops, settings, _, _ = bat_world
+    settings['page_size'] = 1
+    target = await prepared(ops)
+    out = await request(ops, target)
+    assert out['status'] == 'uncertain', out
+    run = pm_runs.get_by_operation(ops.db, out['operation_id'])
+    assert run['has_more'] and run['state'] not in {'aborted', 'failed', 'completed'}
+    assert runtime.death_proof(ops.db, run)
+    assert read(ops, target)['messages'] == []
+    ops.db.execute('UPDATE operations SET next_run_at=0 WHERE operation_id=?', (out['operation_id'],))
+    await settle_operations(ops)
+    assert ops.get(out['operation_id'])['status'] == 'succeeded', ops.get(out['operation_id'])
+    assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 1
 
 
 async def test_final_frame_membership_withdrawal_prevents_input(bat_world, mock, monkeypatch):

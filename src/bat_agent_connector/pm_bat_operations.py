@@ -290,6 +290,8 @@ async def _analyze(ctx):
             # Read-back uses the original operation scheduler rather than a
             # second background engine or a replacement turn.
             run, _ = await _observe(ctx, pm_runs.get(ctx.service.db, run["run_id"]), client)
+            if run["has_more"] and not run["gaps"]:
+                raise Uncertain("pm.bat.observe", "Continue reading the original bounded replay pages")
             value, launch = _assessment(ctx, run)
             runtime.require_completed(ctx.service.db, run, value, prompt_digest=launch["prompt_digest"],
                 message_id="batc-pm-" + run["run_id"])
