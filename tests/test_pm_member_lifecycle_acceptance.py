@@ -127,7 +127,9 @@ async def member_batch(ready, monkeypatch):
     assert plan['revision_id'] != original_plan and '推薦碼' not in plan['document']['markdown']
     assert snapshot(w['human']) == before and len(instances) == 1 and instances[0].sends == 1
     w['revision'] = {'revision_id': plan['revision_id']}
-    w['requirements'] = plan['document']['requirements']
+    w['requirements'] = [{**{key: row[key] for key in ('id', 'source_input_id', 'depends_on')},
+        'acceptance_input_ids': [item['source_input_id'] for item in row['acceptance']]}
+        for row in plan['document']['requirements']]
     assert [item['id'] for item in w['requirements']] == ['member.login', 'member.recovery']
     w['params']['verification'][0]['acceptance_input_ids'] = w['requirements'][0]['acceptance_input_ids']
     await packages.associate(w)
