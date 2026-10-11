@@ -238,6 +238,7 @@ class _Execution:
 
 
 def _card(ops, principal, wid, binding, now):
+    from .pm_quality_projections import card_quality
     item = work_items._get_item(ops.db, binding["work_item_id"])
     completion = work_items.completion(item)
     project = work_items._get_project(ops.db, item["project_id"])
@@ -249,8 +250,7 @@ def _card(ops, principal, wid, binding, now):
             "work": {k: item[k] for k in _WORK_FIELDS}, "column": column, "completion": completion,
             "project_archived": bool(project["archived"]), "flow": _flow(ops, principal, wid, item, completion, now),
             "execution": _Execution(ops, principal, wid).collect(item["work_item_id"]),
-            "quality": {"dod": "unassessed", "acceptance_criteria": "unassessed", "verification": "see_evidence",
-                        "deployment": "see_evidence", "management_approval_is_quality": False},
+            "quality": card_quality(ops, principal, wid, binding, capture),
             "latest_capture": capture,
             "capture_matches_binding": capture["binding_id"] == binding["binding_id"] if capture else None,
             "capture_matches_work_version": capture["source_work_version"] == item["version"] if capture else None,

@@ -363,7 +363,7 @@ def _check(ops, principal, action, target, params, pre):
         if ops.db.execute("SELECT 1 FROM pm_sprint_state WHERE workspace_id=? AND status='active'", (wid,)).fetchone():
             raise _bad('PM_SPRINT_ACTIVE', 'This workspace already has an active Sprint', 409)
         return sprint, None
-    _only(params, ('rationale', 'work_notes'))
+    _only(params, ('rationale', 'work_notes', 'quality_refs'))
     notes = params.get('work_notes', {})
     if not isinstance(notes, dict) or len(notes) > MAX_ITEMS:
         raise _bad('INVALID_PARAMS', 'work_notes must be bounded selected-work reasons')
@@ -372,6 +372,10 @@ def _check(ops, principal, action, target, params, pre):
         raise _bad('INVALID_PARAMS', 'Work notes must name currently selected work')
     for value in notes.values():
         _text(value, 'work note')
+    refs = params.get('quality_refs', {})
+    if not isinstance(refs, dict) or set(refs) - known or len(refs) > MAX_ITEMS:
+        raise _bad('INVALID_PARAMS', 'quality_refs must select original assessments for currently selected work')
+    _selected_quality(ops, principal, sprint, refs)
     if action == 'pm.sprint.close' and (sprint['status'] != 'active' or time.time() < _date(sprint['definition']['ends_at']).timestamp()):
         raise _bad('PM_SPRINT_TIMEBOX', 'Close an active Sprint when its fixed period has ended; cancel an obsolete Goal explicitly', 409)
     return sprint, notes
@@ -386,18 +390,45 @@ def _admitter(action):
 
 def _authorize_existing(ops, principal, op, verb):
     _member(ops, principal, op['target']['workspace_id'], write=True)
+    from .pm_quality_projections import operation_visible
+    if not operation_visible(ops.db, principal, op):
+        raise _bad('NOT_FOUND', 'Original selected quality sources are unavailable', 404)
     if verb != 'replay' and principal.actor != op['actor']:
         raise _bad('FORBIDDEN', 'Only the original requester may control this management operation', 403)
 
 
-def _end_document(ops, sprint, notes):
+def _selected_quality(ops, principal, sprint, refs):
+    if not refs:
+        return {}
+    from . import pm_quality_projections as quality
+    wid = sprint['workspace_id']
+    selected = {item['work_item_id']: item for item in _selection(ops.db, sprint)}
+    result = {}
+    for work_id, reference in refs.items():
+        binding = _binding(ops, principal, wid, selected[work_id]['binding_id'])
+        scope = _plan(ops, principal, wid, binding['plan_revision_id'])['scope_revision']
+        result[work_id] = quality.select(ops, principal, wid, reference, work_item_id=work_id,
+            binding_id=binding['binding_id'], scope_revision=scope, dod_revision_id=sprint['definition']['dod_revision_id'])
+    return result
+
+
+def _end_document(ops, sprint, notes, quality=None):
     selected = _selection(ops.db, sprint)
+    items = []
+    for value in selected:
+        item = {**value, 'quality': 'unassessed', 'counts_as_done': False,
+                'disposition': 'requires_product_backlog_consideration',
+                'reason': notes.get(value['work_item_id'], 'DoD and item acceptance have not been assessed by this service')}
+        fact = (quality or {}).get(value['work_item_id'])
+        if fact:
+            item.update(quality='qualified' if fact['qualified'] else 'not_qualified', quality_assessment=fact,
+                counts_as_done=fact['qualified'],
+                disposition='qualified_increment' if fact['qualified'] else 'requires_product_backlog_consideration',
+                reason=notes.get(value['work_item_id'], 'Original acceptance and Sprint DoD assessed against the selected fixed result'))
+        items.append(item)
     return {'goal_revision_id': sprint['goal_revision_id'], 'started_goal_revision_id': sprint['started_goal_revision_id'],
             'selection_revision_id': sprint['selection_revision_id'], 'dod_revision_id': sprint['definition']['dod_revision_id'],
-            'items': [{**value, 'quality': 'unassessed', 'counts_as_done': False,
-                       'disposition': 'requires_product_backlog_consideration',
-                       'reason': notes.get(value['work_item_id'], 'DoD and item acceptance have not been assessed by this service')}
-                      for value in selected],
+            'items': items,
             'automatic_carryover': False, 'execution_changed': False, 'review_completed': False, 'retro_completed': False}
 
 
@@ -439,7 +470,9 @@ async def _run(ctx):
             elif action == 'pm.sprint.start':
                 ops.db.execute("UPDATE pm_sprint_state SET status='active',version=version+1,started_goal_revision_id=goal_revision_id,started_selection_revision_id=selection_revision_id,started_at=? WHERE sprint_id=?", (now, sprint_id))
             else:
-                detail.update(_end_document(ops, source, document))
+                quality = _selected_quality(ops, principal, source, ctx.params.get('quality_refs', {}))
+                detail.update(_end_document(ops, source, document, quality))
+                _checked_read(detail)
                 ops.db.execute('UPDATE pm_sprint_state SET status=?,version=version+1,ended_at=? WHERE sprint_id=?',
                                ('closed' if action == 'pm.sprint.close' else 'cancelled', now, sprint_id))
             current = _sprint(ops.db, wid, sprint_id)
@@ -546,10 +579,25 @@ def _history_record(db, kind, sequence):
     return {**dict(row), **({field: json.loads(row[field])} if field else {})}
 
 
+def _quality_access(ops, principal, workspace_id, sprint_id):
+    from .pm_quality_projections import sprint_sources
+    quality = None
+    # There is at most one terminal event; check it even beyond the first page.
+    for row in ops.db.execute("SELECT document FROM pm_sprint_events WHERE sprint_id=? AND action IN ('pm.sprint.close','pm.sprint.cancel')", (sprint_id,)):
+        document = json.loads(row['document'])
+        sprint_sources(ops, principal, workspace_id, document)
+        if any(item.get('quality_assessment') for item in document.get('items', [])):
+            quality = {'basis': 'fixed_original_close_assessments', 'total_selected_items': len(document['items']),
+                'qualified_items': sum(item['counts_as_done'] is True for item in document['items']),
+                'current_applicability': 'not_evaluated'}
+    return quality
+
+
 def list_history(ops, principal, workspace_id, sprint_id, kind, *, after=0, limit=50):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
         _sprint(ops.db, workspace_id, sprint_id)
+        _quality_access(ops, principal, workspace_id, sprint_id)
         rows = _history_rows(ops.db, sprint_id, kind, after, limit)
         return _list_page({'version': 1, 'workspace_id': workspace_id, 'sprint_id': sprint_id, 'kind': kind},
                           'records', rows, lambda row: _history_record(ops.db, kind, row['sequence']), after, limit)
@@ -559,6 +607,7 @@ def get_sprint(ops, principal, workspace_id, sprint_id, *, history_limit=50):
     with ops.journal.tx():
         workspace = _member(ops, principal, workspace_id)
         sprint = _sprint(ops.db, workspace_id, sprint_id)
+        quality = _quality_access(ops, principal, workspace_id, sprint_id)
         meetings_available = ('pm.meeting.create' in ops.actions and sprint['started_at'] is not None
                               and principal.allows('manage')
                               and (principal.admin or workspace['membership']['role'] in {'owner', 'contributor'}))
@@ -569,7 +618,8 @@ def get_sprint(ops, principal, workspace_id, sprint_id, *, history_limit=50):
                 'selection_revisions': [], 'selected_items': _selection(ops.db, sprint),
                 'history': [], 'history_next_cursors': {kind: 0 if entries else None for kind, entries in rows.items()},
                 'timebox_elapsed': time.time() >= _date(sprint['definition']['ends_at']).timestamp(),
-                'quality': 'unassessed', 'review_available': meetings_available, 'retro_available': meetings_available,
+                'quality': 'fixed_original_assessments' if quality else 'unassessed',
+                **({'quality_summary': quality} if quality else {}), 'review_available': meetings_available, 'retro_available': meetings_available,
                 'execution_authorized': False, 'owner_reassignment_available': False,
                 'coverage': {'max_bytes': MAX_READ_BYTES, 'histories': coverage}})
         # Deterministic prefix order: Goals, selections, events. Each history has

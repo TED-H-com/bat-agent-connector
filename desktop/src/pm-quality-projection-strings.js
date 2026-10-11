@@ -1,0 +1,26 @@
+export const qualityProjectionStrings = {
+  en: {
+    pq_acceptance: 'Original acceptance', pq_dod: 'Definition of Done', pq_accepted: 'Accepted', pq_rejected: 'Rejected',
+    pq_unassessed: 'Unassessed', pq_not_defined: 'Not defined', pq_qualified: 'Qualified result', pq_not_qualified: 'Not yet qualified',
+    pq_fixed: 'Fixed original assessment; current applicability is separate.', pq_original: 'Original assessment and candidate',
+    pq_include: 'Include chosen assessment', pq_clear: 'Clear assessment selection', pq_none: 'No assessment selected',
+    pq_choose_help: 'Choose an original assessment in Quality review, then include it here.',
+    pq_changed: 'This exact assessment no longer qualifies for the selected work and commitments. Review its original sources.',
+    pq_count: 'Qualified original requirements: {qualified} / {total}',
+    pq_coverage: 'Each original requirement is counted once. Unreviewed work remains unassessed.',
+    pq_increment: 'Qualified Increment', pq_recorded_by: 'Assessed by {actor}',
+    pm_brief_status_fixed_quality_assessments: 'Explicit original quality assessments', pm_evidence_kind_quality_assessment: 'Original quality assessment',
+  },
+  'zh-TW': {
+    pq_acceptance: '原始驗收條件', pq_dod: '完成定義', pq_accepted: '符合', pq_rejected: '不符合',
+    pq_unassessed: '尚未評估', pq_not_defined: '尚未定義', pq_qualified: '符合品質條件的成果', pq_not_qualified: '尚未符合品質條件',
+    pq_fixed: '固定的原始評估；目前是否適用另行判斷。', pq_original: '原始評估與候選提交',
+    pq_include: '納入已選評估', pq_clear: '清除評估選取', pq_none: '尚未選取評估',
+    pq_choose_help: '先在品質審查選取原始評估，再於此處納入。',
+    pq_changed: '這筆固定評估已不適用於所選工作與承諾，請重新核對原始來源。',
+    pq_count: '符合驗收與完成定義的原始需求：{qualified} / {total}',
+    pq_coverage: '每個原始需求只計入一次；尚未審查的工作仍標示未評估。',
+    pq_increment: '符合品質條件的 Increment', pq_recorded_by: '評估者：{actor}',
+    pm_brief_status_fixed_quality_assessments: '明確選取的原始品質評估', pm_evidence_kind_quality_assessment: '原始品質評估',
+  },
+};
