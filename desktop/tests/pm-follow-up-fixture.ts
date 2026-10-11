@@ -65,7 +65,7 @@ export function fixture() {
     else if(p===base+'/plans/head')data={version:1,head:{workspace_id:workspaceId,version:state.plan}};
     else if(p===base+'/snapshots')data={workspace_id:workspaceId,snapshots:[{workspace_id:workspaceId,snapshot_id:snapshotId,title:'Adopted membership evidence',sequence:1}],next_cursor:null};
     else if(p===base+'/snapshots/'+snapshotId)data={workspace_id:workspaceId,snapshot:{workspace_id:workspaceId,snapshot_id:snapshotId,baseline:{document:{title:'Accepted plan'}},visibility:{filtered:false}}};
-    else if(p===base+'/threads')data={workspace_id:workspaceId,threads:[{workspace_id:workspaceId,thread_id:threadId,title:'Pricing discussion',version:state.threadVersion}],next_cursor:null};
+    else if(p===base+'/threads')data={workspace_id:workspaceId,threads:[{workspace_id:workspaceId,thread_id:threadId,title:'Pricing discussion',mode:'planning',version:state.threadVersion}],next_cursor:null};
     else if(p===base+'/threads/'+threadId)data={workspace_id:workspaceId,thread:{workspace_id:workspaceId,thread_id:threadId,version:state.threadVersion}};
     else if(p===base+'/governance')data={workspace_id:workspaceId,records:[{record:{workspace_id:workspaceId,record_id:recordId},revision:{revision_id:governanceId,version:2,document:{title:'Recovery reliability assumption'}}}],next_cursor:null};
     else if(p===base+'/meetings')data={workspace_id:workspaceId,meetings:[{workspace_id:workspaceId,meeting_id:meetingId,title:'Recovery retrospective',completion_id:completionId}],next_cursor:null};
