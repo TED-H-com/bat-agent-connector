@@ -166,11 +166,11 @@ def _repair_projection(response):
     row = response['repair']
     source = ref('maintenance_repair', row['repair_id'], row['context_digest'], basis='admission_context')
     children = []
-    for slot in ('child', 'publication_child', 'delivery_child', 'runtime_observer'):
+    for slot in ('child', 'publication_child', 'delivery_child', 'baseline_child', 'runtime_observer'):
         child = row.get(slot)
         if isinstance(child, dict):
             children.append({'slot': slot, **{key: child.get(key) for key in
-                ('operation_id', 'action', 'status', 'error_code')}})
+                ('operation_id', 'action', 'status', 'error_code', 'result')}})
     return {'source_id': key(source), 'repair_id': row['repair_id'], 'operation_id': row['operation_id'],
         'work_item_id': row['work_item_id'], 'started_at': row['created_at'], 'finished_at': row['finished_at'],
         'scope_digest': baselines.sources.digest(row['context']['check']['workload']['scope']),
@@ -179,7 +179,9 @@ def _repair_projection(response):
         'release_status': row['release_status'], 'cost_coverage': row['cost_coverage'],
         'retries_used': row['retries_used'], 'children': children,
         'progress': row['progress'], 'runtime_completion': row.get('runtime_completion'),
-        'required_ci_selection': row.get('required_ci_selection'), 'composed_delivery': row.get('composed_delivery'),
+        'required_ci_selection': row.get('required_ci_selection'),
+        'composed_delivery': row.get('composed_delivery') or (row.get('delivery_child') or {}).get('result'),
+        'baseline_update': row.get('baseline_update'),
         'observation_basis': 'saved_repair_point', 'later_changes_included': False}, source
 
 

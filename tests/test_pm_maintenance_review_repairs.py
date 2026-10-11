@@ -34,6 +34,7 @@ async def test_original_publication_is_reported_without_inventing_completion(ori
     assert sample['runtime_completion'] is None and sample['repair_fixed'] is False
     assert sample['release_status'] == 'not_inferred'
     assert {child['slot'] for child in sample['children']} == {'child', 'publication_child'}
+    assert next(child['result'] for child in sample['children'] if child['slot'] == 'publication_child') == repair['publication_child']['result']
     assert report['effort']['repair_counts'] == {'selected': 1, 'capacity_held': 1, 'runtime_completed': 0,
         'delivery_outcomes': {'published_for_review': 1, 'merged': 0, 'deployed': 0}}
     original = copy.deepcopy(report)
