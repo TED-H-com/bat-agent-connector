@@ -84,8 +84,14 @@ def _check(ops, principal, target, params, pre):
 
 
 def _admit(ops, principal, target, params, pre):
-    _check(ops, principal, target, params, pre)
-    return {"principal": pm_workspace.principal_binding(principal)}
+    workspace, current = _check(ops, principal, target, params, pre)
+    sources = set()
+    for revision_id in {current["latest_revision_id"], current["accepted_revision_id"]} - {None}:
+        sources.update(pm_plans.source_operation_ids(ops.db, workspace["workspace_id"], revision_id))
+    from .pm_access import require_operation_sources
+    require_operation_sources(ops.db, principal, sources)
+    return {"principal": pm_workspace.principal_binding(principal),
+            "pm_snapshot_sources": {"operation_ids": sorted(sources)}}
 
 
 def _authorize_existing(ops, principal, op, control):
@@ -335,6 +341,31 @@ def _build(ctx, principal, workspace, current):
     return doc
 
 
+def _plan_source_operations(db, document, *, freeze=False):
+    """Use only revision and adoption identities saved in this snapshot."""
+    sources = set()
+    wid = document["workspace_id"]
+    baseline = document["baseline"]
+    candidate = document.get("candidate_document") or {}
+    for revision_id in {baseline.get("document_revision"), candidate.get("revision_id")} - {None}:
+        sources.update(pm_plans.source_operation_ids(db, wid, revision_id,
+            include_adoption=freeze and revision_id == candidate.get("revision_id")))
+    adoption = baseline.get("adoption") or {}
+    if adoption.get("decision_id"):
+        original = db.execute("SELECT operation_id FROM pm_plan_adoptions WHERE workspace_id=? AND decision_id=?",
+                              (wid, adoption["decision_id"])).fetchone()
+        if original:
+            sources.add(original["operation_id"])
+    if adoption.get("commit_operation_id"):
+        sources.add(adoption["commit_operation_id"])
+    return sorted(sources)
+
+
+def _require_original_sources(db, principal, row, document):
+    from .pm_access import require_operation_sources
+    require_operation_sources(db, principal, [row["operation_id"], *_plan_source_operations(db, document)])
+
+
 def _insert(ctx, workspace, document):
     """Insert one already-built snapshot inside its caller's journal transaction.
 
@@ -346,6 +377,10 @@ def _insert(ctx, workspace, document):
         raise _bad('PM_SNAPSHOT_TRANSACTION_REQUIRED', 'Insert the original snapshot inside its journal transaction', 409)
     if not _fits(document):
         raise _bad('PM_SNAPSHOT_BASELINE_TOO_LARGE', 'The complete fixed snapshot exceeds its byte bound', 413)
+    from .pm_access import inherit_operation_sources, require_operation_sources
+    sources = _plan_source_operations(ops.db, document, freeze=True)
+    require_operation_sources(ops.db, pm_workspace.admitted_principal(ctx), sources)
+    inherit_operation_sources(ops.db, ctx.operation_id, sources)
     digest = _digest(document)
     sequence = ops.db.execute("""INSERT INTO pm_document_snapshots(snapshot_id,workspace_id,title,as_of,journal_cursor,
         template_version,snapshot_digest,document,created_by,operation_id) VALUES(?,?,?,?,?,?,?,?,?,?)""",
@@ -374,6 +409,7 @@ async def _run(ctx):
 
 def _out(ops, principal, row):
     document = json.loads(row["document"])
+    _require_original_sources(ops.db, principal, row, document)
     if _digest(document) != row["snapshot_digest"] or document["template_version"] != TEMPLATE_VERSION:
         raise _bad("PM_SNAPSHOT_UNAVAILABLE", "The fixed snapshot or its template cannot be read", 409)
     if 'maintenance' in document:
@@ -413,6 +449,13 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=50):
             # read path after one of the report's original sources is withdrawn.
             stored = ops.db.execute('SELECT document FROM pm_document_snapshots WHERE snapshot_id=?', (row['snapshot_id'],)).fetchone()
             document = json.loads(stored['document'])
+            try:
+                _require_original_sources(ops.db, principal, row, document)
+            except OperationError as exc:
+                if exc.status != 404:
+                    raise
+                filtered = True
+                continue
             if 'maintenance' in document:
                 from . import pm_maintenance_review_sources
                 try:
