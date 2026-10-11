@@ -183,10 +183,13 @@ def check_grant(grant: WriteGrant | None, host: str, channel: str, params: dict 
         raise ResourceReadOnly("CONTROLLER_OWNER_UNPROVEN", "The grant has no reserved resource incarnation")
     # Sharing a carrier never transfers its controller, even when a helper omitted
     # an explicit shared-session relationship during initial admission.
-    carrier = grant.workdir or (row or {}).get("worktree_path") or (row or {}).get("cwd")
+    source_only = (grant.action == "session.create" and channel == "worktree:create" and grant.workdir is None
+                   and registry.is_pending_worktree_source(row))
+    carrier = None if source_only else grant.workdir or row.get("worktree_path") or row.get("cwd")
     if carrier:
         for other in registry.list_entries(host):
-            if other.get("session_id") != grant.session_id and carrier in {other.get("worktree_path"), other.get("cwd")}:
+            if other.get("session_id") != grant.session_id and carrier in {
+                    other.get("worktree_path"), None if registry.is_pending_worktree_source(other) else other.get("cwd")}:
                 controller_authority.require_entry(other)
     from .failover_operations import check_writer
     check_writer(host, grant.session_id, channel, workdir=grant.workdir)
