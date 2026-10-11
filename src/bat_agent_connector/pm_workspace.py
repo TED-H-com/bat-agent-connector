@@ -134,6 +134,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'] == 'pm.maintenance.check':
         from .pm_maintenance_checks import operation_visible as maintenance_visible
         return maintenance_visible(db, principal, op)
+    if op['action'] == 'pm.spec.materialize':
+        from .pm_spec_materialization import operation_visible as spec_visible
+        return spec_visible(db, principal, op)
     if op['action'].startswith('pm.maintenance_review.'):
         from .pm_maintenance_review import operation_visible as review_visible
         return review_visible(db, principal, op)

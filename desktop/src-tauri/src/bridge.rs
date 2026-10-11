@@ -1158,7 +1158,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1299,7 +1299,9 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 path.contains("/maintenance-reviews/") && path.ends_with("/events");
             let maintenance_review_detail = path.split('/').nth(4) == Some("maintenance-reviews")
                 && path.split('/').count() == 6;
-            let workload_list = maintenance_review_events
+            let spec_materialization_list = path.ends_with("/spec-materializations");
+            let workload_list = spec_materialization_list
+                || maintenance_review_events
                 || path.ends_with("/maintenance-reviews")
                 || path.ends_with("/workload-snapshots")
                 || path.ends_with("/github-observations")
@@ -1360,6 +1362,19 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value.len() <= 19
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<i64>().is_ok_and(|n| n >= 0)
+                }
+                "package_id" if spec_materialization_list => {
+                    value.len() == 37
+                        && value.starts_with("pmwp_")
+                        && value[5..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
+                "limit" if spec_materialization_list => {
+                    !value.is_empty()
+                        && value.len() <= 2
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=50).contains(&n))
                 }
                 "project_binding_id" if baseline_source => {
                     value.len() == 37
@@ -2149,6 +2164,40 @@ mod tests {
         let mut keyed = get(root);
         keyed.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&keyed).is_err());
+    }
+
+    #[test]
+    fn spec_materialization_reads_are_fixed_bounded_and_read_only() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/spec-materializations";
+        let id = "pmsp_22222222222222222222222222222222";
+        for suffix in [
+            "".into(),
+            "?after=9223372036854775807&limit=50".into(),
+            "?package_id=pmwp_33333333333333333333333333333333".into(),
+            format!("/{id}"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "?after=9223372036854775808".into(),
+            "?limit=51".into(),
+            "?after=".into(),
+            "?package_id=bad".into(),
+            "?package_id=".into(),
+            "?materialize=true".into(),
+            "?limit=1&limit=2".into(),
+            "/current".into(),
+            format!("/{id}?package_id=pmwp_33333333333333333333333333333333"),
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        assert!(validate_request(&request("POST", root)).is_err());
     }
 
     #[test]

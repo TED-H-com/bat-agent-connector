@@ -80,3 +80,14 @@ shortcut is used. The original inline path remains available for small packages.
 Materialization history, operations, events, artifacts and derived execution all
 retain their original full source lineage; readers never receive a partial package
 when some source has been withdrawn.
+
+## Shared entry points
+
+HTTP reads use `/pm/workspaces/{workspace_id}/spec-materializations` and
+`/{materialization_id}`; RPC/MCP use `pm_spec_materializations_list` and
+`pm_spec_materialization_get`. The list accepts an optional exact `package_id`,
+`after` up to the signed 64-bit bound, and `limit` from 1 to 50. Reads retain one
+SQLite snapshot across membership and original source checks and refuse whole
+records exceeding the 2 MB wire budget. Filtering retains scan progress and
+never exposes a hidden ID. The native bridge permits only those exact GETs.
+All writes use the registered durable operation; no extra confirmation is added.

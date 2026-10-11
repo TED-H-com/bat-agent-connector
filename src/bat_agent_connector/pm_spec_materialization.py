@@ -23,6 +23,7 @@ from . import (
 )
 from .errors import ResourceReadOnly
 from .operations import RERUN, ActionDef, Cancelled, OperationError, OperationService, StepFailed, Uncertain
+from .pm_release_baselines import _snapshot_read
 
 ACTION = "pm.spec.materialize"
 _SOURCE_READ = ContextVar("pm_spec_source_read", default=None)
@@ -164,6 +165,17 @@ def _record(db, wid, identity):
     return value
 
 
+def _read_size(value):
+    return len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode())
+
+
+def _bounded(value):
+    if _read_size(value) > 2_000_000:
+        raise _error("PM_SPEC_READ_TOO_LARGE", "Whole materialization exceeds the read budget", 413)
+    return value
+
+
+@_snapshot_read
 def get_materialization(ops, principal, workspace_id, materialization_id):
     if not principal.allows("observe"):
         raise _error("FORBIDDEN", "Spec reads require observe scope", 403)
@@ -171,24 +183,39 @@ def get_materialization(ops, principal, workspace_id, materialization_id):
     value = _record(ops.db, workspace_id, materialization_id)
     if not source_visible(ops.db, principal, {"operation_id": value["operation_id"]}):
         raise _error("NOT_FOUND", "Original spec sources are unavailable", 404)
-    return {"version": 1, "workspace_id": workspace_id, "materialization": value}
+    return _bounded({"version": 1, "workspace_id": workspace_id, "materialization": value})
 
 
+@_snapshot_read
 def list_materializations(ops, principal, workspace_id, *, package_id=None, after=0, limit=20):
     if not principal.allows("observe"):
         raise _error("FORBIDDEN", "Spec reads require observe scope", 403)
     pm_workspace.require_member(ops.db, principal, workspace_id)
-    if type(after) is not int or after < 0 or type(limit) is not int or not 1 <= limit <= 50:
-        raise _error("INVALID_PARAMS", "Use the previous sequence cursor and a limit of 1–50", 422)
+    if (type(after) is not int or not 0 <= after <= 2**63 - 1
+            or type(limit) is not int or not 1 <= limit <= 50
+            or package_id is not None and (not isinstance(package_id, str) or not pm_work_packages.PACKAGE.fullmatch(package_id))):
+        raise _error("INVALID_PARAMS", "Select an exact package, a signed 64-bit cursor and a limit of 1–50", 422)
     rows = ops.db.execute("SELECT * FROM pm_spec_materializations WHERE workspace_id=? AND sequence>? "
         "AND (? IS NULL OR package_id=?) ORDER BY sequence LIMIT ?", (workspace_id, after, package_id, package_id, limit + 1)).fetchall()
-    values = []
+    result = {"version": 1, "workspace_id": workspace_id, "materializations": [],
+              "next_after": None, "source_visibility_filtered": False}
+    scanned = after
     for row in rows[:limit]:
-        if source_visible(ops.db, principal, {"operation_id": row["operation_id"]}):
-            values.append({key: value for key, value in _record(ops.db, workspace_id, row["materialization_id"]).items() if key != "document"})
-    return {"version": 1, "workspace_id": workspace_id, "materializations": values,
-            "next_after": rows[limit - 1]["sequence"] if len(rows) > limit else None,
-            "source_visibility_filtered": len(values) != len(rows[:limit])}
+        if not source_visible(ops.db, principal, {"operation_id": row["operation_id"]}):
+            scanned = row["sequence"]
+            result["source_visibility_filtered"] = True
+            continue
+        value = {key: value for key, value in _record(ops.db, workspace_id, row["materialization_id"]).items() if key != "document"}
+        candidate = {**result, "materializations": [*result["materializations"], value], "next_after": 2**63 - 1}
+        if _read_size(candidate) > 2_000_000:
+            if scanned == after:
+                raise _error("PM_SPEC_READ_TOO_LARGE", "Whole materialization exceeds the read budget", 413)
+            result["next_after"] = scanned
+            return _bounded(result)
+        result["materializations"].append(value)
+        scanned = row["sequence"]
+    result["next_after"] = scanned if len(rows) > limit else None
+    return _bounded(result)
 
 
 def _result(record):

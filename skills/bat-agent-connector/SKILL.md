@@ -1354,3 +1354,12 @@ of a historical verified deployment. Only explicit operation source bindings con
 - No store delete, standalone artifact_materialize tool or dirty directory snapshot. Do not scrape a folder or
   use arbitrary host shell to fill these gaps. Deployed Actions artifacts are separate. The shared UI has the
   manual remote-file chooser; managed capture/accept UI and native OS file pickers have separate delivery status.
+
+`pm.spec.materialize` freezes the selected engineering package in the workspace's
+owned PM Git carrier and one ordinary immutable artifact. Use its exact package
+digest and adopted scope revision; it does not execute engineering or adopt scope.
+Read `pm_spec_materializations_list` / `pm_spec_materialization_get` for original
+receipts and stable task identities. An optional `repository.continue.pm_spec_ref`
+must match the fixed package and the explicitly included ordinary artifact ref;
+keep both in the original operation envelope. Unknown Git results retain the
+original writer and reconcile; never recreate a commit or repurpose a checkout.

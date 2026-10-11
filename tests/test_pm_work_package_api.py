@@ -65,7 +65,8 @@ async def test_fixed_package_http_rpc_mcp_parity_without_read_effects(served, mo
                 assert expected['handoff'] == {
                     'action': 'repository.continue', 'contract': 'pm-engineering-handoff/v1',
                     'code_basis_required': True, 'compatibility': 'unverified',
-                    'source_materialization': 'bounded_full_prompt'}
+                    'source_materialization': 'bounded_full_prompt_or_fixed_spec_artifact',
+                    'materialization_action': 'pm.spec.materialize'}
         assert d.ops.db.total_changes == before and len(w['runner'].phases) == calls
         assert not write_frames(mock)
     finally:

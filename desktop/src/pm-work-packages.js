@@ -83,7 +83,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       ||readiness.ready_for!=='engineering_handoff_review'||readiness.execution_authorized!==false||readiness.execution_available!==false
       ||!(readiness.dispatch_readiness==='not_implemented'||readiness.dispatch_readiness==='separate_fixed_handoff_admission'
         &&readiness.handoff?.action==='repository.continue'&&readiness.handoff.contract==='pm-engineering-handoff/v1'
-        &&readiness.handoff.code_basis_required===true&&readiness.handoff.compatibility==='unverified'&&readiness.handoff.source_materialization==='bounded_full_prompt')
+        &&readiness.handoff.code_basis_required===true&&readiness.handoff.compatibility==='unverified'&&['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(readiness.handoff.source_materialization))
       ||!['ready','blocked'].includes(readiness.status)||!Array.isArray(readiness.checks))throw Error(t('wp_invalid'));
     render(row,readiness);onSelection(row);
   }

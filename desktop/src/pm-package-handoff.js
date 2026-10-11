@@ -13,7 +13,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   const controls=h('details',{'data-pm-package-handoff-controls':''},h('summary',{},t('ph_title')),
     h('p',{class:'muted'},t('ph_intro')),summary,h('p',{class:'muted'},t('ph_boundary')),availabilityNotice,review,status,facts,useReview,editorView,outcome);
   const element=h('section',{class:'pm-packages','data-pm-package-handoff':''},controls);
-  const available=()=>{const cap=caps()?.features?.pm_workspaces?.package_handoff;return cap?.available===true&&cap.action==='repository.continue'&&cap.contract===contract&&cap.code_basis_required===true&&cap.source_materialization==='bounded_full_prompt';};
+  const available=()=>{const cap=caps()?.features?.pm_workspaces?.package_handoff;return cap?.available===true&&cap.action==='repository.continue'&&cap.contract===contract&&cap.code_basis_required===true&&['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(cap.source_materialization);};
   const writer=()=>permitted(false)&&['owner','contributor'].includes(workspace()?.membership?.role)&&['observe','manage','start'].every(scope=>caps()?.scopes?.includes(scope))
     &&caps()?.actions?.some(row=>row.action==='repository.continue'&&row.allowed);
   const write=()=>available()&&writer();
@@ -43,7 +43,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
     if(value?.version!==1||value.workspace_id!==workspaceId||value.package_id!==row.package_id||value.document_digest!==row.document_digest
       ||value.ready_for!=='engineering_handoff_review'||value.execution_authorized!==false||value.execution_available!==false
       ||value.dispatch_readiness!=='separate_fixed_handoff_admission'||handoff?.contract!==contract||handoff.action!=='repository.continue'
-      ||handoff.code_basis_required!==true||handoff.compatibility!=='unverified'||handoff.source_materialization!=='bounded_full_prompt'||!Array.isArray(value.checks))throw Error(t('ph_invalid'));
+      ||handoff.code_basis_required!==true||handoff.compatibility!=='unverified'||!['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(handoff.source_materialization)||!Array.isArray(value.checks))throw Error(t('ph_invalid'));
     if(value.checks.some(check=>check.status!=='passed'&&check.check!=='spec_code_alignment'))throw Error(t('ph_blocked'));
   }
   const hostReady=row=>caps()?.hosts?.some(host=>host.host===row.document.code_source.host&&host.writes===true&&host.orchestrate===true)
