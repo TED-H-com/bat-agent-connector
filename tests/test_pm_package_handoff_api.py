@@ -148,3 +148,29 @@ async def test_unimplemented_derivative_cannot_remove_source_policy(dispatched):
     revoke(w)
     status, body = await http(w["port"], "GET", f"/api/v1/work-items/{other}", tok=w["token"])
     assert status == 200 and "Ordinary unrelated work" in json.dumps(body)
+
+
+async def test_mcp_selected_package_is_assigned_by_the_existing_command(fixed, mock, monkeypatch):
+    w, d = fixed, fixed["d"]
+    env = await request(w)
+    tok = token(d, OWNER.actor, "observe", "manage", "start")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{w['port']}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", tok)
+    server, fleet = build_server(d.fleet.config, principal_only=True)
+    try:
+        tool = next(row for row in await server.list_tools() if row.name == "work_continue_from_repository")
+        assert {"pm_package_ref", "pm_code_basis", "work_item_id", "expected_work_item_fingerprint"} <= set(tool.inputSchema["properties"])
+        arguments = {**env["target"], **env["params"], **env["preconditions"],
+            "idempotency_key": env["idempotency_key"], "wait_s": 0, "confirm": True}
+        result = await call(server, "work_continue_from_repository", arguments)
+        assert "op_" in result and "INVALID" not in result, result
+        await settle_operations(d.ops)
+        op = d.ops.list(action="repository.continue")["operations"][0]
+        op = d.ops.get(op["operation_id"])
+        assert op["status"] == "succeeded", op
+        assert op["external_refs"]["admission_binding"]["pm_handoff"]["contract"]["package_ref"] == env["params"]["pm_package_ref"]
+        assert mock.channels().count("claude:send-message") == 1
+        replay = await call(server, "work_continue_from_repository", arguments)
+        assert op["operation_id"] in replay and mock.channels().count("claude:send-message") == 1
+    finally:
+        await fleet.close()
