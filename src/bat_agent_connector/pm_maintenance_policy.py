@@ -150,9 +150,9 @@ def install(ops):
                                _admit, ("workspace_id",), authorize_existing=_authorize_existing))
 
 
-def capabilities():
+def capabilities(ops=None):
     return {"version": 1, "sources": sorted(SOURCES), "work_kinds": sorted(WORK_KINDS),
-            "policy_adoption": True, "scheduler_available": False, "repair_dispatch_available": False,
+            "policy_adoption": True, "scheduler_available": ops is not None and "pm.maintenance.check" in ops.actions, "repair_dispatch_available": False,
             "after_release_policies": ["maintain_when_idle", "continue_development", "manual"]}
 
 

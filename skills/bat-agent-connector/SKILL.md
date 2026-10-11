@@ -551,6 +551,29 @@ Retain freshness, profile, outside-scope facts and source visibility. A saved
 observation may contribute to a later explicit workload capture. Neither action
 authorizes maintenance, repairs, publication, merge or deployment.
 
+### Read and run bounded maintenance checks
+
+When `features.pm_workspaces.maintenance_checks.server_schedule` is advertised,
+the current enabled policy schedules bounded observations in Development or
+Maintain. Each original due window and its capacity reservation are committed
+atomically in the existing operation journal. Missed intervals coalesce to one
+current check; they do not replay a backlog. Paused, Closed, Idea, disabled policy,
+expired authority, source changes or exhausted capacity prevent new checks.
+
+Use `pm_maintenance_schedule_get`, `pm_maintenance_check_current_get`,
+`pm_maintenance_checks_list` and `pm_maintenance_check_get` to inspect original
+windows, next due time, blockers, reserved capacity and original child receipts.
+These reads never schedule or refresh providers. A filtered current record is
+unavailable, not an empty history. Preserve incomplete and uncertain outcomes.
+
+An explicit `pm.maintenance.check` uses the same target, policy and preconditions
+as `pm.workload.capture`. The original policy owner needs current observe and
+manage authority. The service rechecks that authority and the parent deadline
+before each unsent GitHub page and workload capture. Recover the exact original
+request and children; never replace an uncertain child or clear its reservation.
+Checks do not dispatch repairs, call a model, change lifecycle stage or execute a
+weekly review. Provider billing remains unmeasured, never a fabricated zero cost.
+
 ### Adopt bounded maintenance policy
 
 When `features.pm_workspaces.maintenance_policy.policy_adoption` is available,

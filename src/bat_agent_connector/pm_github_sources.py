@@ -145,10 +145,13 @@ class Traversal:
 
         async def read_once():
             self.check()
+            from . import pm_maintenance_checks
+            timeout_s = pm_maintenance_checks.child_timeout(self.ctx.service, self.ctx.op,
+                max(0.001, min(30, self.deadline - time.monotonic())))
             try:
                 answer = await self.gh.bounded_get(path, query=query,
                     max_bytes=min(PAGE_BYTES, MAX_BYTES - self.bytes),
-                    timeout_s=max(0.001, min(30, self.deadline - time.monotonic())))
+                    timeout_s=timeout_s)
                 self.check()
                 meta, status = answer['metadata'], answer['status']
                 if (meta.get('authenticated') is not True or type(meta.get('bytes')) is not int

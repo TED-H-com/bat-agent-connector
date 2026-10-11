@@ -143,6 +143,8 @@ async def _run(ctx):
 
     def check():
         ctx.check_cancel()
+        from . import pm_maintenance_checks
+        pm_maintenance_checks.require_child(ctx.service, ctx.op)
         current = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         if current != intent or sources.digest(current) != binding.get('github_observation_intent_digest'):
             raise _bad('PM_GITHUB_CONTEXT_CHANGED', 'Original GitHub observation scope changed')

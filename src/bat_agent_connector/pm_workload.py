@@ -217,6 +217,8 @@ async def _run(ctx):
     def capture():
         ctx.check_cancel()
         principal = pm_workspace.admitted_principal(ctx)
+        from . import pm_maintenance_checks
+        pm_maintenance_checks.require_child(ctx.service, ctx.op)
         intent = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         binding = ctx.admission_binding or {}
         if intent != binding.get('workload_intent') or sources.digest(intent) != binding.get('workload_intent_digest'):

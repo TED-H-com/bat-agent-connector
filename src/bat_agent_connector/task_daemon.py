@@ -79,6 +79,8 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_projects_list": "observe", "pm_work_list": "observe", "pm_evidence_list": "observe",
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
            "pm_governance_list": "observe", "pm_governance_get": "observe", "pm_governance_history_list": "observe",
+           "pm_maintenance_checks_list": "observe", "pm_maintenance_check_get": "observe",
+           "pm_maintenance_check_current_get": "observe", "pm_maintenance_schedule_get": "observe",
            "pm_github_observations_list": "observe", "pm_github_observation_get": "observe", "pm_github_observation_current_get": "observe",
            "pm_workload_snapshots_list": "observe", "pm_workload_snapshot_get": "observe", "pm_workload_snapshot_current_get": "observe",
            "pm_maintenance_policies_list": "observe", "pm_maintenance_policy_get": "observe", "pm_maintenance_policy_current_get": "observe",
@@ -940,6 +942,12 @@ class TaskDaemon:
         while True:
             self.journal.db.execute("UPDATE daemon_owner SET heartbeat_at=? WHERE singleton=1 AND owner_id=?",
                                     (time.time(), self._owner_id))
+            if self.journal.owner_valid():
+                try:
+                    from . import pm_maintenance_checks
+                    pm_maintenance_checks.tick(self.ops)
+                except Exception as exc:  # a malformed record must not stop task coordination
+                    logging.warning("maintenance scheduling error: %s", type(exc).__name__)
             for task in self.journal.list_active() + self.journal.list_cleanup_pending():
                 tid = task["task_id"]
                 if time.monotonic() < self._cleanup_retry_after.get(tid, 0):

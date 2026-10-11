@@ -57,7 +57,7 @@ async def test_http_rpc_mcp_reads_and_manage_only_original_receipt(ready, monkey
         assert all(replay[key] == original[key] for key in ("target", "params", "preconditions"))
         assert len(d.ops.context["github"].calls) == calls
         status, caps = await http(port, "GET", "/api/v1/capabilities", tok=auth)
-        assert status == 200 and caps["features"]["pm_workspaces"]["maintenance_policy"] == policies.capabilities()
+        assert status == 200 and caps["features"]["pm_workspaces"]["maintenance_policy"] == policies.capabilities(d.ops)
         assert not write_frames(mock)
     finally:
         await fleet.close()

@@ -1158,7 +1158,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-schedule|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/capture)?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1295,8 +1295,9 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let assessment_list = path.ends_with("/follow-up-assessments");
             let work_package_list = path.ends_with("/work-packages");
             let issue_mapping_list = path.ends_with("/issue-mappings");
-            let workload_list =
-                path.ends_with("/workload-snapshots") || path.ends_with("/github-observations");
+            let workload_list = path.ends_with("/workload-snapshots")
+                || path.ends_with("/github-observations")
+                || path.ends_with("/maintenance-checks");
             let release_baseline_list =
                 path.ends_with("/release-baselines") || path.ends_with("/maintenance-policies");
             let baseline_catalog = path.ends_with("/release-baseline-sources");
@@ -2142,6 +2143,42 @@ mod tests {
         let mut keyed = get(root);
         keyed.idempotency_key = Some("not-a-write".into());
         assert!(validate_request(&keyed).is_err());
+    }
+
+    #[test]
+    fn maintenance_check_reads_preserve_exact_routes_and_scope() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111";
+        for suffix in [
+            "/maintenance-checks",
+            "/maintenance-checks/current",
+            "/maintenance-checks/pmck_22222222222222222222222222222222",
+            "/maintenance-checks?after=9223372036854775807&limit=100",
+            "/maintenance-schedule",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "/maintenance-checks?after=9223372036854775808",
+            "/maintenance-checks?after=0&after=1",
+            "/maintenance-checks?limit=101",
+            "/maintenance-checks?run=true",
+            "/maintenance-checks/current?limit=1",
+            "/maintenance-checks/pmck_bad",
+            "/maintenance-checks/pmck_22222222222222222222222222222222?after=0",
+            "/maintenance-schedule?refresh=true",
+            "/maintenance-schedule/run",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        assert!(
+            validate_request(&request("POST", &format!("{root}/maintenance-schedule"))).is_err()
+        );
     }
 
     #[test]

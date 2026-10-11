@@ -5,6 +5,10 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_maintenance_checks_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_check_current_get": ("workspace_id",),
+    "pm_maintenance_check_get": ("workspace_id", "run_id"),
+    "pm_maintenance_schedule_get": ("workspace_id",),
     "pm_github_observations_list": ("workspace_id", "after", "limit"),
     "pm_github_observation_current_get": ("workspace_id",),
     "pm_github_observation_get": ("workspace_id", "observation_id"),
@@ -99,6 +103,15 @@ def read(ops, principal, method, params):
         return pm_issue_mappings.list_mappings(ops, principal, workspace_id,
                                                after=params.get("after", 0), limit=params.get("limit", 50))
 
+    if method in {"pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get"}:
+        from . import pm_maintenance_checks as checks
+        if method == "pm_maintenance_check_current_get":
+            return checks.current_run(ops, principal, workspace_id)
+        if method == "pm_maintenance_check_get":
+            return checks.get_run(ops, principal, workspace_id, params.get("run_id"))
+        if method == "pm_maintenance_schedule_get":
+            return checks.schedule_status(ops, principal, workspace_id)
+        return checks.list_runs(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
     if method in {"pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get"}:
         from . import pm_github_observation
         if method == "pm_github_observation_current_get":
