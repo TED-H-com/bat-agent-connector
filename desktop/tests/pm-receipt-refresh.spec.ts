@@ -128,6 +128,8 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     await inputForm.getByRole('button',{name:'Save input',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
     await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);await expect(inputForm).toHaveCount(0);
     await page.evaluate(({wid,tid})=>{location.hash=`#/pm/${wid}/${tid}`;},{wid:workspaceId,tid:threadId});
+    await expect(inputForm).toHaveCount(1);
+    if(!await page.locator('[data-pm-add-input]').evaluate((node:HTMLDetailsElement)=>node.open))await page.locator('[data-pm-add-input]>summary').click();
     await expect(inputForm.getByRole('button',{name:'Check original request',exact:true})).toBeVisible();release();
     await expect(inputForm.getByLabel('Topic',{exact:true})).toBeEnabled();
     await expect(inputForm.getByLabel('Statement or question',{exact:true})).toHaveValue('');
