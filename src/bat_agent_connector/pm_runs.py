@@ -20,7 +20,7 @@ from .operations import OperationError
 RUN_ID = re.compile(r"pmr_[0-9a-f]{32}")
 PHASES = {"prepare", "start", "send", "observe", "import"}
 RECEIPT_STATUSES = {"prepared", "sent", "confirmed", "unknown", "failed"}
-TERMINAL = {"completed", "failed", "aborted", "prepared_manual"}
+TERMINAL = {"completed", "failed", "aborted", "prepared_manual", "completed_service"}
 
 
 def _error(message, code="PM_RUN_CONFLICT", status=409):
@@ -553,6 +553,31 @@ def complete_preparation(journal, run_id, generation, *, worktree_binding, snaps
             bind_worktree(journal, run_id, generation, worktree_binding)
         receipt(journal, run_id, generation, "prepare", "confirmed", outcome)
         _release(journal.db, run, "prepared_manual", outcome)
+        return get(journal.db, run_id)
+
+
+def complete_service(journal, run_id, generation, outcome):
+    """Internal Git/journal completion, with no native assistant output claim.
+
+    The adoption service calls this within the transaction recording its decision,
+    or after proving every host effect when no decision can be made. Receipt
+    reconciliation remains possible after requester membership is revoked.
+    """
+    with journal.tx():
+        run = get(journal.db, run_id)
+        operation = journal.db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
+        if not operation or operation[0] != "pm.plan.adopt" or run["adapter"] != "connector.git":
+            raise _error("Service completion requires the original plan adoption", "PM_SERVICE_REQUIRED")
+        if run["generation"] != generation:
+            raise _error("PM writer changed", "PM_WRITER_CHANGED")
+        if run["status"] == "completed_service":
+            if run["outcome"] != outcome:
+                raise _error("Original service completion differs")
+            return run
+        run = _active(journal.db, run_id, generation)
+        if any(r["phase"] in {"start", "send"} for r in run["receipts"]):
+            raise _error("Native effects need their own completion proof", "PM_EFFECT_UNKNOWN")
+        _release(journal.db, run, "completed_service", outcome)
         return get(journal.db, run_id)
 
 
