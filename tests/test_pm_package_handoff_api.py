@@ -159,7 +159,7 @@ async def test_mcp_selected_package_is_assigned_by_the_existing_command(fixed, m
     server, fleet = build_server(d.fleet.config, principal_only=True)
     try:
         tool = next(row for row in await server.list_tools() if row.name == "work_continue_from_repository")
-        assert {"pm_package_ref", "pm_code_basis", "work_item_id", "expected_work_item_fingerprint"} <= set(tool.inputSchema["properties"])
+        assert {"pm_package_ref", "pm_code_basis", "work_item_id", "expected_work_item_fingerprint"} <= set(tool.input_schema["properties"])
         arguments = {**env["target"], **env["params"], **env["preconditions"],
             "idempotency_key": env["idempotency_key"], "wait_s": 0, "confirm": True}
         result = await call(server, "work_continue_from_repository", arguments)
