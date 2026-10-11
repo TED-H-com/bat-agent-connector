@@ -887,7 +887,8 @@ def record_task_start(journal, task_id: str, sid: str, entry: dict) -> None:
                     and c["kind"] in {"start_lead", "start_reviewer"}), None)
     if command:
         payload = json.loads(command["payload"])
-        payload.update({k: entry[k] for k in ("confinement", "write_scope", "permission_mode_claude", "agent_params", "start_sent")
+        payload.update({k: entry[k] for k in ("confinement", "write_scope", "permission_mode_claude", "agent_params", "start_sent",
+                                             "controller_authority", "controller_incarnation")
                         if k in entry})
         journal.db.execute("UPDATE commands SET payload=? WHERE command_id=?",
                            (json.dumps(payload), command["command_id"]))
