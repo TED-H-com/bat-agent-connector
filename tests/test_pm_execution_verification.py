@@ -18,8 +18,11 @@ from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests.test_checkpoints import git, snapshot
 from tests.test_pm_lifecycle import decide
-from tests.test_pm_package_handoff import fixed, pm, ready, request, revoke, run, world  # noqa: F401
+from tests.test_pm_package_handoff import fixed as fixed_fixture
+from tests.test_pm_package_handoff import pm, ready, request, revoke, run, world  # noqa: F401
 from tests.test_pm_work_packages import member
+
+fixed = fixed_fixture
 
 OWNER = Principal('pm-owner', frozenset({'observe', 'manage', 'start', 'operate'}))
 
@@ -214,3 +217,46 @@ async def test_exact_original_receipt_cannot_verify_another_child(owned):
         verifier.evaluate(ops, OWNER, w['workspace_id'], child, condition, done['result']['reference'])
     assert pm_package_handoff.binding(w['child'])['contract_digest'] == w['config']['handoff_contract_digest']
     assert git(w['child']['result']['worktree_path'], 'rev-parse', 'HEAD') == w['config']['candidate_commit']
+
+
+async def test_another_key_cannot_run_during_active_or_unknown_original(owned, monkeypatch):
+    w, ops = owned, owned['d'].ops
+    op = ops.create(OWNER, **envelope(w))[0]
+    with pytest.raises(OperationError, match='PM_VERIFIER_IN_PROGRESS'):
+        ops.create(OWNER, **envelope(w))
+    original = ObservedVerifier._group_run
+    async def lost(self, *args, **kwargs):
+        await original(self, *args, **kwargs)
+        raise asyncio.CancelledError('unknown sent process')
+    monkeypatch.setattr(ObservedVerifier, '_group_run', lost)
+    with pytest.raises(asyncio.CancelledError):
+        await ops._execute(op['operation_id'])
+    await ops._execute(op['operation_id'])
+    with pytest.raises(OperationError, match='PM_VERIFIER_IN_PROGRESS'):
+        ops.create(OWNER, **envelope(w))
+    assert w['marker'].read_text() == 'x'
+
+
+async def test_unproven_process_termination_is_held_not_a_safe_retry(owned, monkeypatch):
+    from bat_agent_connector.task_verifier import VerificationProcessStuck
+    w, ops = owned, owned['d'].ops
+    async def stuck(self, *args, **kwargs):
+        raise VerificationProcessStuck('Fixture simulates unknown remote group; no actual process')
+    monkeypatch.setattr(ObservedVerifier, '_group_run', stuck)
+    done = await execute(w)
+    assert done['status'] == 'needs_attention' and done['error_code'] == 'PM_VERIFIER_PROCESS_UNRESOLVED', done
+    with pytest.raises(OperationError, match='PM_VERIFIER_IN_PROGRESS'):
+        ops.create(OWNER, **envelope(w))
+
+
+async def test_configured_deadline_bounds_actual_local_process(owned):
+    import time
+    w = owned
+    runner = w['d'].adapter.verifier
+    runner.settings = replace(runner.settings, timeout_s=.3,
+        commands={w['child']['params']['project_id']: (sys.executable, '-c', 'import time; time.sleep(30)')})
+    w['config'] = await verifier.configuration(w['d'].ops, OWNER, w['workspace_id'], w['child']['operation_id'])
+    started = time.monotonic()
+    done = await execute(w)
+    assert done['status'] == 'succeeded' and done['result']['status'] == 'blocked', done
+    assert time.monotonic() - started < 5

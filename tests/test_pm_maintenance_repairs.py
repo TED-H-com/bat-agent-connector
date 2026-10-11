@@ -164,7 +164,7 @@ async def repair_ready(fixed, monkeypatch):
             'expected_baseline_id': baseline['baseline_id'], 'expected_lifecycle_revision': epoch}, 'idempotency_key': uuid.uuid4().hex}, who=OWNER)
     w['policy_id'] = adopted['result']['policy_id']
     await decide(ops, wid, 'set_stage', params={'stage': 'development'}, who=OWNER)
-    api_auth.issue(ops.db, OWNER.actor, sorted(repairs.REQUIRED))
+    api_auth.issue(ops.db, OWNER.actor, sorted(OWNER.scopes))
     # Credential was issued just after the fixed test clock.
     clock[0] = time.time() + 1
     await refresh(w)

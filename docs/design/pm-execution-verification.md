@@ -59,6 +59,10 @@ The durable OperationService process step preserves its original outcome through
 separate local receipt step before outer completion. It records only original
 observed metadata; command output stays in the existing private verifier log.
 A lost process outcome with no saved receipt stays unknown and is never rerun.
+Existing operation/process rows exclude a second verification key for the same
+original execution while an earlier verification is active or unknown. The first
+original admission wins the final process guard; unproven process termination
+retains this exclusion rather than becoming a safe terminal failure.
 A saved receipt settles the same outer step without executing a replacement.
 Historical read access always rechecks the full original source chain.
 
