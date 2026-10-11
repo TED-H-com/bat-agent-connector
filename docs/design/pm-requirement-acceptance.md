@@ -37,9 +37,15 @@ optional `pm_requirement_quality_refs` request map from requirement ID to
 The condition must name the same original accepted plan and cover that exact
 prerequisite requirement. Other readiness checks remain independent.
 
-The integrator owns optional repository request schema, readiness and handoff
-contract wiring. The exact map must be frozen at original child admission and
-rechecked before every new frame. For intra-batch dependencies, the batch derives
+The repository request accepts optional `pm_requirement_quality_refs`; package
+readiness reads accept the same map as `quality_refs` across HTTP, RPC and MCP.
+HTTP uses one JSON-encoded query value with a 16 KiB decoded UTF-8 bound, a
+64 KiB encoded request-head bound on this exact read route, and the unchanged
+16 KiB header-field bound. The native bridge admits only this exact bounded GET.
+Reads execute no verification command and write no journal records.
+The exact map is frozen at original child admission and rechecked before every
+new frame. Historical children retain original-source visibility after later
+revocation; their old identity cannot authorize a new start. For intra-batch dependencies, the batch derives
 this map only from the explicitly recorded original upstream proof and stores it
 in the existing immutable child request. Reading a historical child uses that
 stored request; later evidence never rewrites its provenance.

@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "06606d5f76452b96bb2358f93f969f00836b3ebaa616fd16999d234e67c4cd5e"
+  canonical_sha256: "d31aefd146d753408aadb8d89b4d0e0ebcd9cb5f7b6003b6124e5e97c4da2fbf"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1447,4 +1447,6 @@ It returns fixed original package references and saved integration, merge and
 deployment receipts without refreshing providers or creating operations. Preserve
 `next_after` through filtered pages. Push, merge, runtime verification and
 requirement acceptance are distinct; delivery does not mark a requirement Done.
+
+For declared requirement prerequisites, select original qualified quality assessments explicitly. `pm_work_package_readiness_get` accepts optional `quality_refs` mapping prerequisite requirement IDs to `{condition, reference, execution_operation_id}`. Pass the same bounded identity map as `pm_requirement_quality_refs` on the reviewed `repository.continue` intent. The server freezes and rechecks the original assessment; passing tests alone do not accept a requirement, and revocation blocks new dependent work without deleting its history.
 <!-- END CANONICAL WORKFLOW -->

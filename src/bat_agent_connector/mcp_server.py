@@ -799,9 +799,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read one immutable engineering package and its original provenance."""
         return await pm_daemon("pm_work_package_get", workspace_id=workspace_id, package_id=package_id)
 
-    async def pm_work_package_readiness_get(workspace_id: str, package_id: str) -> dict[str, Any]:
+    async def pm_work_package_readiness_get(workspace_id: str, package_id: str, quality_refs: dict[str, Any] | None = None) -> dict[str, Any]:
         """Check engineering handoff review readiness only; never execution authorization."""
-        return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id)
+        return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id,
+                               **({'quality_refs': quality_refs} if quality_refs is not None else {}))
 
     async def pm_follow_up_assessments_list(workspace_id: str, intake_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """List fixed Follow-up assessment metadata; source filtering retains the original cursor."""

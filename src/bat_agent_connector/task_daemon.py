@@ -834,11 +834,17 @@ class TaskDaemon:
             if not peer or peer[0] not in {"127.0.0.1", "::1"}:
                 raise ValueError("loopback client required")
             head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
-            if len(head) > 16_384:
-                raise ValueError("request headers too large")
             lines = head.decode("ascii").split("\r\n")
             request_line = lines[0].split(" ")
             path = request_line[1].split("?", 1)[0] if len(request_line) == 3 else ""
+            # This one read accepts a bounded encoded selector map. Keep the
+            # ordinary header budget and every other request's existing bound.
+            import re
+            extended_readiness = (len(request_line) == 3 and request_line[0] == "GET"
+                and re.fullmatch(r"/api/v1/pm/workspaces/ws_[0-9a-f]{32}/work-packages/pmwp_[0-9a-f]{32}/readiness", path))
+            if (len(head) > 65_536 or len(head) - len(lines[0]) - 2 > 16_384
+                    or len(head) > 16_384 and not extended_readiness):
+                raise ValueError("request headers too large")
             dashboard = is_dashboard_path(path)
             if (len(request_line) == 3 and request_line[2] in {"HTTP/1.0", "HTTP/1.1"}
                     and (dashboard or path.rstrip("/").startswith("/api/v1"))):

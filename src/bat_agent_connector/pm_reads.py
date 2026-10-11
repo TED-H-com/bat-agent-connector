@@ -49,7 +49,7 @@ FIELDS = {
     "pm_release_baseline_get": ("workspace_id", "baseline_id"),
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
-    "pm_work_package_readiness_get": ("workspace_id", "package_id"),
+    "pm_work_package_readiness_get": ("workspace_id", "package_id", "quality_refs"),
     "pm_follow_up_assessments_list": ("workspace_id", "intake_id", "after", "limit"),
     "pm_follow_up_assessment_get": ("workspace_id", "assessment_id"),
     "pm_follow_up_list": ("workspace_id", "after", "limit"),
@@ -226,7 +226,7 @@ def read(ops, principal, method, params):
         if method == "pm_work_package_get":
             return pm_work_packages.get_package(ops, principal, workspace_id, params.get("package_id"))
         if method == "pm_work_package_readiness_get":
-            return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"))
+            return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"), quality_refs=params.get('quality_refs'))
         return pm_work_packages.list_packages(ops, principal, workspace_id, work_item_id=params.get("work_item_id"),
                                               after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_follow_up_assessments_list", "pm_follow_up_assessment_get"}:
