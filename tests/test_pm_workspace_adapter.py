@@ -306,10 +306,17 @@ async def test_shared_http_rpc_mcp_read_and_registered_action_use_original_choic
         body = {'action': adapters.ACTION, 'target': {'workspace_id': w['workspace_id']},
             'params': {'adapter': adapters.ADAPTERS[1], 'rationale': 'Use the original owned BAT carrier'},
             'preconditions': read['workspace_adapter']['preconditions']}
-        status, admitted = await http(port, 'POST', '/api/v1/operations?wait=3', tok=auth,
+        status, admitted = await http(port, 'POST', '/api/v1/operations', tok=auth,
             body=body, headers={'Idempotency-Key': uuid.uuid4().hex})
-        assert status == 202, admitted  # Newly admitted operations retain HTTP202 even after wait succeeds.
+        assert status == 202, admitted
+        original_id = admitted['operation']['operation_id']
+        # This fixture owns no daemon polling loop. Use the real registered
+        # scheduler, then recover through the shared original-operation read.
+        await bundles.finish(w, admitted['operation'])
+        status, admitted = await http(port, 'GET', f'/api/v1/operations/{original_id}', tok=auth)
+        assert status == 200, admitted
         assert admitted['operation']['status'] == 'succeeded', admitted
+        assert admitted['operation']['operation_id'] == original_id
         expected = (await http(port, 'GET', path, tok=auth))[1]
         target = {'workspace_id': w['workspace_id']}
         assert expected == await d.call_api('pm_capabilities_get', target, plans.OWNER)
