@@ -79,7 +79,7 @@ def _continuity(db, principal, wid):
 
 
 def _access(db, principal, wid, document):
-    pm_workspace.require_member(db, principal, wid)
+    workspace = pm_workspace.require_member(db, principal, wid)
     if not principal.allows('observe'):
         raise bad('PM choice reads require observe', 'FORBIDDEN', 403)
     anchor = document['continuity']
@@ -92,6 +92,9 @@ def _access(db, principal, wid, document):
     carrier = pm_runs.workspace_worktree(db, wid)
     if anchor['carrier_digest'] is not None and (pm_runs._digest(carrier) if carrier else None) != anchor['carrier_digest']:
         raise bad('Original PM carrier unavailable', 'NOT_FOUND', 404)
+    if anchor['carrier_digest'] is not None and carrier['target']['repository'].lower() not in {
+            repo.lower() for repo in workspace['repositories']}:
+        raise bad('Original PM repository is unavailable', 'NOT_FOUND', 404)
 
 
 def _check(ops, principal, target, params, pre):
