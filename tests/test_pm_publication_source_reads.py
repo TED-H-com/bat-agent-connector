@@ -9,6 +9,7 @@ from bat_agent_connector import pm_execution_verification as verifier
 from bat_agent_connector import pm_maintenance_repair_publication as publication
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector import pm_quality_reviews as quality
+from bat_agent_connector import pm_workload as workload
 from bat_agent_connector.operations import OperationError
 from tests import pm_joined_maintenance_helpers as maintenance
 from tests.pm_joined_lifecycle_helpers import OWNER
@@ -57,6 +58,7 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
     with monkeypatch.context() as prior:
         prior.setattr(verifier, 'operation_visible', prior_verifier_visible)
         prior.setattr(quality, '_access', prior_quality_access)
+        prior.setattr(workload, '_access', workload._source_access)
         prior.setattr(pr_publication, '_quality_access', pr_publication._quality_sources)
         prior.setattr(pr_publication, 'operation_visible', pr_publication._operation_visible)
         old, old_queries = measured(ops.db, read)

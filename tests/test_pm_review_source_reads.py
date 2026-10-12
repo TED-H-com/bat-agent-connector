@@ -107,8 +107,12 @@ async def test_original_review_candidate_and_frozen_run_reads_share_no_later_aut
 
 
 async def test_review_original_workload_graph_reuses_complete_sources(ops, monkeypatch, record_property):  # noqa: F811
-    data = await planning.prepared(ops, monkeypatch)
-    candidate = ops.get(data['event']['operation_id'])
+    gh = planning.reviews.gh
+    data = await gh.prepared(ops, monkeypatch)
+    gh.worktests.inventory(ops)
+    await gh.observe(ops, data)
+    await gh.worktests.capture(ops, data)
+    prepared, _ = await planning.reviews.prepare(ops, data)
     original, calls = pm_workload._source_access, []
     def counted(*args):
         calls.append(args[3]['snapshot_id'])
@@ -117,10 +121,10 @@ async def test_review_original_workload_graph_reuses_complete_sources(ops, monke
     changes = ops.db.total_changes
     with monkeypatch.context() as prior:
         prior.setattr(pm_workload, '_access', counted)
-        assert review.operation_visible(ops.db, READER, candidate)
+        assert review.operation_visible(ops.db, READER, prepared)
     old = len(calls)
     calls.clear()
-    assert review.operation_visible(ops.db, READER, candidate)
+    assert review.operation_visible(ops.db, READER, prepared)
     new = len(calls)
     assert new == len(set(calls)) > 0
     assert new < old
