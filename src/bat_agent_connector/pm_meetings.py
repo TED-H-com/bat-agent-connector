@@ -359,6 +359,11 @@ class _SourceReader:
     """Read-only evidence policy adapter; no service/schema/worker construction."""
     def __init__(self, db):
         self.db = db
+        self.journal = self
+
+    def tx(self):
+        from .pm_release_baselines import _snapshot
+        return _snapshot(self.db)
 
     def get(self, operation_id, *, steps=False, principal=None):
         row = self.db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
