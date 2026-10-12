@@ -34,7 +34,7 @@ const receiptSubscribers = new Map();
 // Only disclosure preferences survive a same-principal remount. Facts are always
 // removed and reread after an access reset; drafts retain their existing namespace.
 const threadDisclosures = new Map();
-const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]'];
+const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]', '[data-pm-revision-editor]'];
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
