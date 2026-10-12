@@ -6,13 +6,13 @@
 
 Better Agent Dashboard is a project workspace for people working with coding agents. Discuss an idea, review a proposed plan, dispatch work into the agent's own workspace, and follow the result back to its requirements, tests and delivery. After release, adopted maintenance policies govern observations, repair work and review.
 
-The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
-
-> **Development preview.** This introduction describes merged source, with screenshots captured from `7d7f21f0` (October 12, 2026). PM v1.2 is still being integrated. The [progress report](docs/product/progress-2026-10-12.md) separates the public baseline, M4/M5 candidates and remaining work. Choose a successful package for an exact source commit; a newer draft PR is not a released build.
-
 ![Project workspace: project tree, conversation, reply and linked results.](site/images/workspace-en.png)
 
-*Actual shared frontend with synthetic demonstration data. All public screenshots were refreshed for this baseline; [source and reproduction instructions](site/images/README.md). Screenshots do not establish native installation or live acceptance.*
+*Actual UI · synthetic demonstration data · [capture source](site/images/README.md).*
+
+The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
+
+> **Development preview.** This introduction describes merged source, with screenshots captured from `66246031` (October 12, 2026). PM v1.2 is still being integrated. The [progress report](docs/product/progress-2026-10-12.md) separates the public baseline, M4/M5 candidates and remaining work. Choose a successful package for an exact source commit; a newer draft PR is not a released build.
 
 ## What it helps you answer
 
@@ -42,6 +42,8 @@ Each stage uses the same project history. Discussion does not automatically adop
 ![PM planning: inspect a fixed draft and its sources before adoption.](site/images/pm-planning-en.png)
 
 ![PM Kanban: follow work and its recorded evidence.](site/images/pm-kanban-en.png)
+
+![Project dispatch: instructions, destination and agent settings.](site/images/dispatch-en.png)
 
 ## Install and connect
 

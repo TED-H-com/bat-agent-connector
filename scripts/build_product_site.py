@@ -54,7 +54,6 @@ parts = [
 <main id="main"><section class="hero section" id="top"><div class="hero-grid"><div>'''
 ]
 parts += [
-    bi("Project management for agent work", "讓 Agent 工作接上專案管理", "p", "eyebrow"),
     bi("Keep the plan.<br>Follow the result.", "記得原計畫，<br>追到真成果。", "h1"),
     bi(
         "Discuss the goal, review the plan and connect agent work to delivery evidence. A shared Web and desktop workspace keeps decisions, progress and maintenance in view.",
@@ -66,65 +65,20 @@ parts += [
     + link("#product", "Explore the workspace", "看看工作空間", "button primary")
     + link("#start", "Install and start", "安裝與開始使用", "text-link")
     + "</div>",
-    bi(
-        "Open source · Web + Tauri · English / 繁體中文",
-        "開源 · Web + Tauri · English / 繁體中文",
-        "p",
-        "hero-meta",
-    ),
-    '</div><aside class="hero-aside" aria-label="Product focus / 產品重點">',
+    '</div></div></section>',
 ]
-for n, en, zh, desc, dz in [
-    (
-        "01",
-        "Make the agreement clear",
-        "把共識說清楚",
-        "Sourced discussion, reviewable proposals and an adopted plan.",
-        "有來源的討論、可審閱提案與正式採用的計畫。",
-    ),
-    (
-        "02",
-        "See what the evidence says",
-        "看懂成果的依據",
-        "Fixed requirements, responsible reviews and traceable delivery.",
-        "固定需求、負責任的審閱，以及可追溯的交付。",
-    ),
-    (
-        "03",
-        "Keep the work connected",
-        "讓工作接續下去",
-        "Agent-owned workspaces, bounded maintenance and the next decision.",
-        "Agent 自有工作區、有界維護，以及下一個需要決定的事。",
-    ),
-]:
-    parts.append(
-        f'<div class="focus-row"><span class="index">{n}</span><div>'
-        + bi(en, zh, "h2")
-        + bi(desc, dz, "p")
-        + "</div></div>"
-    )
-parts.append(
-    '</aside></div><div class="release-note">'
+release_note = (
+    '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "This tour shows merged main with demonstration data. PM v1.2 remains in integration; candidate features and validation are listed separately.",
-        "本頁展示已合併主線與展示資料。PM v1.2 仍在整合；候選功能及驗證另列，下載前請核對來源。",
+        "PM v1.2 is in integration. Check the current scope and validated packages before installing.",
+        "PM v1.2 仍在整合。安裝前請查看目前範圍與已通過驗證的套件。",
     )
-    + link("#status", "See current scope", "查看目前範圍")
-    + "</div></section>"
+    + link("#status", "Current scope", "目前範圍")
+    + "</div>"
 )
+parts.append('<section class="section product-tour" id="product" aria-label="Product tour / 介面導覽">')
 
-parts.append(
-    '<section class="section" id="product">'
-    + heading(
-        "Inside the workspace",
-        "介面導覽",
-        "From the conversation to the work.",
-        "從討論，看見工作怎麼前進。",
-        "The actual shared frontend, captured from 7d7f21f0 on October 12, 2026. All examples use synthetic data.",
-        "以下為 2026 年 10 月 12 日從 7d7f21f0 拍攝的共用介面，全部使用合成展示資料。",
-    )
-)
 shots = [
     (
         "workspace",
@@ -184,7 +138,8 @@ for key, _, _, en, zh in shots:
         + "</figcaption></figure>"
     )
 parts.append(
-    doc("site/images/README.md", "Screenshot sources and reproduction →", "截圖來源與重拍方式 →")
+    release_note
+    + doc("site/images/README.md", "Screenshot sources and reproduction →", "截圖來源與重拍方式 →")
     + '<div class="principles">'
 )
 for en, zh, d, dz in [
