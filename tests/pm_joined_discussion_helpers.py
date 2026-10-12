@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import copy
 import json
+import xml.etree.ElementTree as ET
 
 from bat_agent_connector import pm_bat_runtime as bat_runtime
 from bat_agent_connector import (
+    pm_brief_exports,
     pm_follow_up,
     pm_follow_up_analysis,
     pm_governance,
@@ -73,6 +75,19 @@ async def discuss_original_failure(w, item, verification, condition, mock):
     snapshot = await projections.snapshot(w)
     fact = next(row for row in snapshot['evidence'] if row['source_kind'] == 'quality_assessment')
     assert fact['document']['facts']['reference']['document_digest'] == reference['document_digest']
+    deviations = snapshot['brief']['deviations']
+    assert deviations['version'] == 1 and deviations['status'] == 'fixed_quality_deviations'
+    assert len(deviations['items']) == len(review['context']['criteria'])
+    assert all(row['source']['evidence_id'] == fact['evidence_id']
+        and row['details']['reference'] == reference and row['status'] == 'rejected'
+        for row in deviations['items'])
+    assert snapshot['brief']['delivery']['coverage']['current_environment'] == 'not_assessed'
+    for locale in ('en', 'zh-TW'):
+        for format in ('markdown', 'html', 'svg'):
+            report = pm_brief_exports.render_brief(ops, OWNER, wid, snapshot['snapshot_id'], format=format, locale=locale)
+            text = ''.join(ET.fromstring(report['content']).itertext()) if format == 'svg' else report['content']
+            assert report['view_digest'] == snapshot['view_digest'] and report['renderer_version'] == 4
+            assert reference['document_digest'] in ''.join(text.split())
     drift = await execute(w, 'pm.governance.record', {'workspace_id': wid},
         {'kind': 'drift', 'root_cause_key': 'original-login-regression', 'snapshot_id': snapshot['snapshot_id'],
             'title': 'Original login candidate does not satisfy its selected acceptance',
@@ -89,6 +104,7 @@ async def discuss_original_failure(w, item, verification, condition, mock):
     intake = pm_follow_up.get_intake(ops, OWNER, wid, intake_op['result']['intake_id'])['intake']
     selected = intake['document']['selected_governance_refs'][0]
     assert selected['document_digest'] == governance['revision']['document_digest']
+    assert intake['document']['knowledge']['finance']['coverage'] == 'unresolved'
     document = {'version': 1,
         'summary': {'text': 'The original login result needs correction; the first release scope is unchanged.',
             'source_refs': ['selected_governance_refs.0']},
