@@ -17,6 +17,7 @@ import {workspaceMeetings} from './pm-meetings.js';
 import {workspaceRoadmap} from './pm-roadmap.js';
 import {projectBrief} from './pm-brief.js';
 import {workspaceMaintenanceReview} from './pm-maintenance-review.js';
+import {reviewCandidateProof} from './pm-review-candidate.js';
 import {workspaceMaintenanceRepairs} from './pm-maintenance-repairs.js';
 import {workspaceMaintenancePolicy} from './pm-maintenance-policy.js';
 import {workspaceReleaseBaselines} from './pm-release-baselines.js';
@@ -257,7 +258,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,labelled,errorBox,namespace}) : null;
   if(maintenanceRepairs)body.insertBefore(maintenanceRepairs.element,content);
   const maintenanceReview = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_review?.version === 1
-    ? workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox}) : null;
+    ? workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace}) : null;
   if(maintenanceReview)body.insertBefore(maintenanceReview.element,content);
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
@@ -325,6 +326,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const message = threadData?.messages?.find(row => row.message_id === source.message_id);
       return message ? t('pm_note_source', {author: message.actor, time: time(message.created_at)}) : t('pm_saved_note_source');
     }
+    if(source.kind==='maintenance_review_candidate')return t('pmrv_idea_original')+' · '+source.event_id;
     return [source.ref, source.revision, source.path].filter(Boolean).join(' · ');
   };
   function renderThread(data) {
@@ -480,6 +482,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           h('span', {class: `chip ${item.status === 'user_confirmed' ? 'ok' : ['unresolved', 'conflicting', 'agent_assumption'].includes(item.status) ? 'warn' : ''}`}, t('pm_status_' + item.status))),
         h('p', {class: 'pm-note-text'}, item.value), h('p', {class: 'muted pm-source'}, sourceText(item)),
         h('p', {class: 'muted'}, item.status === 'user_confirmed' ? t('pm_confirmed_by', {actor: item.confirmed_by || item.recorded_by}) : t('pm_unverified')));
+      if(item.source_candidate)row.append(reviewCandidateProof({h,t,source:item.source_candidate}));
       if (data.capabilities?.decide && item.status !== 'user_confirmed') {
         const rationale = input('pm_confirm_rationale', {max: 2000});
         const confirm = form({action: 'pm.input.confirm', target: {workspace_id: workspaceId, thread_id: threadId},

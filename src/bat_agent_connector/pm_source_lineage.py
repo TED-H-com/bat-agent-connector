@@ -183,7 +183,11 @@ def visible_roots(db, principal, original_ids):
         if row is None:
             return False
         operation = OperationService._decode(row)
-        if operation["action"] in {"pm.conversation.propose", "pm.conversation.adopt"}:
+        if operation['action'] == 'pm.input.record' and (operation.get('external_refs') or {}).get('admission_binding', {}).get('pm_review_candidate'):
+            from .pm_review_candidate_sources import operation_visible as candidate_visible
+            if not candidate_visible(db, principal, operation):
+                return False
+        elif operation["action"] in {"pm.conversation.propose", "pm.conversation.adopt"}:
             from .pm_conversation_proposals import operation_visible as conversation_visible
             if not conversation_visible(db, principal, operation):
                 return False
@@ -275,7 +279,8 @@ def bind_operation(db, operation_id, target, params, binding):
         from .session_start_operations import NAMESPACE
         original_ids = [operation_id, *original_ids]
         resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
-    if binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None:
+    if (binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
+            or binding.get('pm_review_candidate') is not None):
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
         from .checkpoints import _SESSION_NS

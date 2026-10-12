@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "83863203f1841fc37f03f21bc0c65fe9c14ecac6f83e8f0856b48eb5cd9a80a5"
+  canonical_sha256: "5411f68e673e9c8ff4ffa2a5ec1ac18bdfdabbec15a2052ba89cd4029cfe6308"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -121,6 +121,15 @@ Use ordinary `operation_submit` with the authenticated principal and original re
 - `pm.message.append`: target `{workspace_id, thread_id}`, params `{content}`.
 - `pm.input.record`: same target, params `{slot, value, status, source_ref}`. Sources can
   refer to a saved message, repository, external material or an attributed statement.
+  When `features.pm_workspaces.maintenance_review.planning_candidate_source.version=1`,
+  an original Review candidate also exposes `planning_source` with exact fields
+  `{kind:"maintenance_review_candidate", review_id, event_id, document_digest, operation_id}`.
+  Select that complete source unchanged for an existing Idea in the same workspace;
+  use the original candidate title as `value`, a chosen domain as `slot`, and
+  `status:"unresolved"`. Do not supersede another input or mark this import confirmed.
+  Reads and fixed analysis contexts retain the full original `source_candidate`
+  document, including its disposition and rationale; over-budget context is refused.
+  Current original source access gates the input and all derived Planning records.
   Never claim `user_confirmed` without an authorized decision; the service derives the
   confirmer from the authenticated caller. Corrections preserve source history.
 - `pm.input.confirm`: same target, params `{input_id, rationale}`, owner decision required.
@@ -718,6 +727,14 @@ and reason, follow-up assignments and next observation focus. An unattended
 report stays prepared. Candidates and proposed Planning directions are not scope
 adoption or dispatch. Public research URLs are dated actor claims until separately
 verified. Follow-up `reported_done` remains unassessed quality.
+
+On an explicit request to explore a saved candidate, first select an existing
+same-workspace Idea and use `pm.input.record` with that candidate's immutable
+`planning_source` as described above. Ordinary pasted text or a candidate ID in an
+`external`/`statement` reference does not preserve its source authority. Keep the
+original key for recovery; confirming the new input and selecting a Planning draft
+remain separate owner actions. Never select the latest candidate or completion in
+place of the original reference.
 
 These five commands save local records while a project is paused or closed;
 they do not reopen investment. Original policy, release, observations and previous

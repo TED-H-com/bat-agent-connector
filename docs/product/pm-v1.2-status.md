@@ -68,7 +68,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W01 | P0 | Workspace identity 與 scope migration | 本批：workspace identity／membership；待舊專案明確綁定與部署遷移 |
 | W02 | P0 | 全入口 controller policy | 第二批：既有執行入口、最後 frame、背景恢復與清理已接入原 controller／incarnation；驗證見 #87 的實作 PR |
 | W03 | P0 | Operation request key 與查回 | 已接入 PM 原 request key、Git／journal 查回與取消；部分 Git transaction 保留原 writer，驗證以各批 PR 為準 |
-| W04 | P0 | BAT capability adapter | 開發分支：新增 Linux 獨立 Codex BAT PM profile、原生完成及原程序退出證據；對應 BAT 修改仍在未安裝的獨立分支，不推定其他工具／平台可用 |
+| W04 | P0 | BAT capability adapter | Connector 整合候選新增 Linux 獨立 Codex BAT PM profile、原生完成及原程序退出證據；對應 BAT 修改已由 owner fork #2 合併，但尚未安裝或 live-tested，不推定其他工具／平台可用 |
 | W05 | P0 | Evidence IDs 與 replay 去重 | #95 已合併：固定來源／digest／journal cursor、快照與重播去重；DoD 尚未評估，不把收集證據算成驗收 |
 | W06 | P0 | Session worktree work 關聯 | #95 已合併：原 project／work 明確綁定、固定已採用 plan／需求引用、既有來源關聯；不轉移 session 控制權 |
 | W07 | P0 | PM worktree bootstrap | 第三、四批：設定綁定、固定來源、自有 worktree、不可覆寫草稿與計畫 commit；不夾帶程式或其他 index 修改 |
@@ -133,6 +133,22 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 固定已採用文件已接入原生與 BAT 的單次分析，可預覽精確 Git／採用收據、整份檔案及明列省略的涵蓋範圍。原來源撤權會隱藏討論與衍生提案、計畫、Follow-up、diff、工作包及快照，但不阻止已保存副作用的原收據查回。整合程式 `1369ec6` 的最後完整 Python 3.12／3.10 回歸進行中；相同共享前端已有 1,848 項 UI 通過／3 項跳過、32 項 Node 通過，原生全套 132 項通過／1 項忽略。建置、生成資產／skills、公開內容與增量歷史秘密檢查通過。以上均不是 live 模型、BAT 或真人桌面驗收。
 
 M4 尚未完成：這批整合仍待完整回歸及精確來源 CI／合併；BAT 修改未安裝，真人硬體驗收仍由使用者負責。M5／M6 及原 W01–W52 範圍保持不變。
+
+2026-10-12 00:24 UTC 更新：BAT owner fork 的 [#1](https://github.com/teddashh/better-agent-terminal/pull/1)
+已合併 44 個 upstream 前置提交至 `7ff2124a`；專用 PM runtime、原輸入 epoch 與 queued-input
+防護由 [#2](https://github.com/teddashh/better-agent-terminal/pull/2) 合併至 `dcc33d8a`。
+兩個 merge tree 分別等於測試來源 `b7419892` 與 `ff486a87`。
+[精確來源 CI](https://github.com/teddashh/better-agent-terminal/actions/runs/38187417986)
+的 baseline／feature Rust 分別 540／561 項通過，各有 1 項原有 ignored；feature 包含
+16 項專用 PM 與 86 項一般 Codex 測試。兩者的 TypeScript、build、13 組 sidecar script、
+headless check 與 inotify／bubblewrap 探針通過。先前本機 inotify 耗盡導致的監看 fixture
+失敗仍保留為該次紀錄，不能改稱該次已全過；新 CI 的同一監看 fixture 已通過。
+這些 BAT 來源已合併，尚未安裝、發布 release、部署或完成 live 模型／Connector 端到端驗收。
+
+M4 第 13 步的窄 followup 在隔離分支補上固定 Maintenance Review 候選到既有 Idea 的
+來源橋；完整原候選隨討論／Planning context 保存，初始輸入未確認，沒有自動採用或派工。
+共享介面 72 項檢查通過，新增多候選／普通輸入草稿隔離後的 13 項候選介面檢查亦通過；
+後端測試尚未執行，等待主整合的完整 Python 3.12／3.10 回歸結束後才使用共用測試鎖。
 
 ## 工作證據與分析 adapter
 
@@ -341,4 +357,5 @@ BAT runtime `a1ee88e` 的 16 項專屬測試通過；工作區 Rust 回歸 556 �
 
 #103 與 #108 的新提交已通過 Windows 安裝後 fixture；其他必要 CI 仍依精確 head 收齊。
 這些是 CI／離線 fixture，並非真人 Windows／macOS 硬體或 live Fleet／provider／model 驗收。
-本次程式未安裝至使用者環境，BAT 分支也尚未發布或安裝。
+本次程式未安裝至使用者環境。BAT 分支後續已合併至 owner fork，詳見上方 00:24 UTC 更新；
+合併不代表安裝或 live 驗收。

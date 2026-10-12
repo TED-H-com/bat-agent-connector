@@ -109,6 +109,7 @@ def install(ops):
 
 def capabilities():
     return {'version': 1, 'actions': list(ACTIONS), 'deterministic_report': True, 'model_required': False,
+        'planning_candidate_source': {'version': 1, 'kind': 'maintenance_review_candidate', 'initial_status': 'unresolved'},
         'period_max_seconds': MAX_PERIOD_SECONDS, 'automatic_scope_adoption': False,
         'automatic_meetings': False, 'research_verification': 'attributed_source_claims_only'}
 
@@ -415,7 +416,11 @@ def _view(row):
 
 
 def _event_view(row):
-    return _view(row)
+    result = _view(row)
+    if row['kind'] == 'candidate.record':
+        from .pm_review_candidate_sources import reference
+        result['planning_source'] = reference(row)
+    return result
 
 
 async def _run(ctx):
