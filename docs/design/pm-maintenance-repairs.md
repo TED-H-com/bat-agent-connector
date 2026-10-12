@@ -4,6 +4,14 @@ Status: implementation contract; tests and shared integration are required befor
 claiming completion. This composes existing repository.continue and delivery; it
 is not another agent, task queue, scanner, resolver or merge engine.
 
+Each synchronous repair frame obtains current credentials and runs all existing
+policy, source, rule, lifecycle and deadline checks. The policy/baseline source
+read and the complete synchronous guard share completed original-source booleans
+only through `pm_source_reads.scope`; no guard result or eligibility is memoized.
+Scopes end before any provider await or journal mutation, and every subsequent
+page/effect obtains a fresh scope. Credential identity, source withdrawal and
+the existing cycle/depth/node bounds remain unchanged.
+
 ## Explicit executable policy
 
 An optional `repair_rules` list in MaintenancePolicy preserves old canonical

@@ -146,15 +146,19 @@ class _Reader:
 
 
 def _intent_access(ops, principal, wid, intent):
-    pm_workspace.require_member(ops.db, principal, wid)
-    original = _policy().fixed_record(ops, principal, wid, intent['policy_id'])
-    if (original['document_digest'] != intent['document_digest'] or original['scope'] != intent['scope']
-            or original['version'] != intent['version'] or original['observation'] != intent['observation']):
-        raise _bad('NOT_FOUND', 'Original workload policy unavailable', 404)
-    baseline = baselines._record(ops.db, wid, intent['baseline_id'])
-    if baseline['document_digest'] != intent['baseline_digest']:
-        raise _bad('NOT_FOUND', 'Original workload baseline unavailable', 404)
-    baselines._access(ops, principal, wid, baseline)
+    from .pm_source_reads import scope
+    # The adopted policy and selected baseline can share original sources.
+    # Reuse only their completed source booleans in this synchronous read.
+    with scope(ops.db, principal):
+        pm_workspace.require_member(ops.db, principal, wid)
+        original = _policy().fixed_record(ops, principal, wid, intent['policy_id'])
+        if (original['document_digest'] != intent['document_digest'] or original['scope'] != intent['scope']
+                or original['version'] != intent['version'] or original['observation'] != intent['observation']):
+            raise _bad('NOT_FOUND', 'Original workload policy unavailable', 404)
+        baseline = baselines._record(ops.db, wid, intent['baseline_id'])
+        if baseline['document_digest'] != intent['baseline_digest']:
+            raise _bad('NOT_FOUND', 'Original workload baseline unavailable', 404)
+        baselines._access(ops, principal, wid, baseline)
 
 
 def _access(ops, principal, wid, row):
