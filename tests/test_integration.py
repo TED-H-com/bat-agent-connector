@@ -724,13 +724,18 @@ def test_parse_push_outcomes():
         p(["rc 1", "something else"], head, "f", base)
 
 
-def test_only_integration_py_runs_git_push():
+def test_only_reviewed_integration_and_publication_paths_run_git_push():
     src = Path(integration.__file__).parent
     for f in src.glob("*.py"):
         text = f.read_text()
         hits = re.findall(r"\bpush\s+--(?:porcelain\s+--no-verify|dry-run)[^\n]*", text)
         if f.name == "integration.py":
             assert len(hits) == 2 and sum("--dry-run" in h for h in hits) == 1, hits
+        elif f.name == "pr_publication_host.py":
+            # The adopted publication contract permits one generated create-only
+            # ref. Real Git foreign-ref races are covered in test_pr_publication.
+            assert len(hits) == 1 and "--dry-run" not in hits[0], hits
+            assert text.count('"--force-with-lease=" + ref + ":"') == 1
         else:
             assert not hits and not re.search(r"['\"]push['\"]\s*,", text), f.name
         assert not re.search(r"push[^\n]*(--force|--mirror|--delete|--prune|--all\b|--tags)", text), f.name

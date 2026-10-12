@@ -192,14 +192,16 @@ async def test_lost_push_reply_uses_original_host_receipt_without_second_push(pu
     assert w["runner"].ran["publication-push"] == 1 and len(w["posts"]) == 1
 
 
-async def test_foreign_branch_race_cannot_fast_forward_or_create_pr(pub):
+@pytest.mark.parametrize('existing', ['ancestor', 'candidate'])
+async def test_foreign_branch_race_cannot_fast_forward_or_create_pr(pub, existing):
     w = pub
     op = create(w)
     ref = "refs/heads/" + host.branch(op["operation_id"])
-    w["runner"].inject["publication-push"] = f'git --git-dir="{w["remote"]}" update-ref {ref} {w["state"]["sha"]}'
+    foreign = w['state']['sha'] if existing == 'ancestor' else w['result_sha']
+    w["runner"].inject["publication-push"] = f'git --git-dir="{w["remote"]}" update-ref {ref} {foreign}'
     done = await settle(w, op)
     assert done["status"] == "failed" and done["error_code"] == "PR_BRANCH_CREATE_REFUSED", done
-    assert git(w["remote"], "rev-parse", ref) == w["state"]["sha"]
+    assert git(w["remote"], "rev-parse", ref) == foreign
     assert w["posts"] == []
 
 
