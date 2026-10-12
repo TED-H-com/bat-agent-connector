@@ -7842,6 +7842,16 @@ var pmStrings = {
 		pm_evidence_kind_deployment: "Deployment evidence",
 		pm_analysis_adapter: "Run analysis with",
 		pm_analysis_local: "Connector · native Codex",
+		pm_choice_title: "Workspace PM adapter",
+		pm_choice_adapter: "Save workspace adapter",
+		pm_choice_select: "Choose an adapter",
+		pm_choice_reason: "Reason for this choice",
+		pm_choice_save: "Save workspace choice",
+		pm_choice_revision: "Choice",
+		pm_choice_unset: "No workspace choice saved. Existing analysis requests keep their own adapter.",
+		pm_choice_help: "Saves the adapter for new PM analysis, plan proposals and Follow-up. This does not start a session or verify installation, sign-in or model availability. Accepted documents stay fixed; pending requests keep their original adapter and key.",
+		pm_choice_busy: "The original PM writer must finish or be reconciled before changing this choice. Unknown work keeps its slot.",
+		pm_choice_owner: "A workspace owner with observe, manage and start access can save this choice.",
 		pm_analysis_bat: "Selected BAT workspace · dedicated Codex",
 		pm_analysis_original: "Original request",
 		pm_analysis_recover_other: "Check the original request before starting another analysis. Select:",
@@ -8220,6 +8230,16 @@ var pmStrings = {
 		pm_evidence_kind_deployment: "部署證據",
 		pm_analysis_adapter: "分析執行方式",
 		pm_analysis_local: "Connector · 原生 Codex",
+		pm_choice_title: "工作區 PM 執行方式",
+		pm_choice_adapter: "保存工作區執行方式",
+		pm_choice_select: "選擇執行方式",
+		pm_choice_reason: "選擇原因",
+		pm_choice_save: "保存工作區選擇",
+		pm_choice_revision: "選擇版本",
+		pm_choice_unset: "尚未保存工作區選擇。既有分析請求保留各自的執行方式。",
+		pm_choice_help: "保存新 PM 分析、計畫提案與 Follow-up 的執行方式。不會啟動 session，也不表示已驗證安裝、登入或模型可用性。已採用文件保持固定；待查回請求保留原執行方式與 key。",
+		pm_choice_busy: "需先完成或查明原 PM writer，才能更換選擇。結果未知的工作仍占用原位置。",
+		pm_choice_owner: "工作區 owner 需具備 observe、manage 與 start 權限，才能保存選擇。",
 		pm_analysis_bat: "所選 BAT 工作區・獨立 Codex",
 		pm_analysis_original: "原始請求",
 		pm_analysis_recover_other: "開始另一個分析前，請先查回原始請求。請選擇：",
@@ -16019,7 +16039,7 @@ async function readWorkSessionContext({ api, guard, workspaceId, workItemId, att
 }
 //#endregion
 //#region src/pm-work-publish.js
-var ACTION$5 = "github.pr.publish";
+var ACTION$6 = "github.pr.publish";
 var SHA40 = /^[0-9a-f]{40}$/;
 var OP_ID = /^op_[0-9a-f]{32}$/;
 var TARGET_KEYS = [
@@ -16111,7 +16131,7 @@ function exactPreconditions(value) {
 }
 function actionRows(list) {
 	if (!Array.isArray(list)) return [];
-	return list.filter((row) => row && row.action === ACTION$5);
+	return list.filter((row) => row && row.action === ACTION$6);
 }
 function paramsReady(entry) {
 	return Array.isArray(entry?.required_params) && PARAM_NAMES.every((name) => entry.required_params.includes(name)) && entry.required_params.every((name) => PARAM_NAMES.includes(name));
@@ -16204,7 +16224,7 @@ function catalogAllows(caps, entry) {
 		"integrate"
 	]).every((scope) => scopes.includes(scope))) return false;
 	if (!scopes.includes("integrate")) return false;
-	return Boolean(current?.actions?.some((row) => row.action === ACTION$5 && row.allowed === true));
+	return Boolean(current?.actions?.some((row) => row.action === ACTION$6 && row.allowed === true));
 }
 function receiptSha(envelope) {
 	const rows = envelope?.delivery?.pull_requests;
@@ -16458,7 +16478,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 		}, h("p", { id: groupId }, t("wpub_draft_group")), h("p", { class: "muted" }, t("wpub_draft_help")), h("label", { class: "pm-work-publish-choice" }, yes, h("span", {}, t("wpub_draft_yes"), " ", h("span", { class: "muted" }, t("wpub_draft_yes_help")))), h("label", { class: "pm-work-publish-choice" }, no, h("span", {}, t("wpub_draft_no"), " ", h("span", { class: "muted" }, t("wpub_draft_no_help"))))), gapNode);
 		editor = form({
 			namespace: `${namespace}.work-publish.${candidateKey}`,
-			action: ACTION$5,
+			action: ACTION$6,
 			target: {
 				workspace_id: entry.target.workspace_id,
 				repository: entry.target.repository,
@@ -16646,7 +16666,7 @@ function createWorkPublish({ h, t, form, namespace, caps, errorBox }) {
 }
 //#endregion
 //#region src/pm-execution-verification.js
-var ACTION$4 = "pm.execution.verify";
+var ACTION$5 = "pm.execution.verify";
 var sha$5 = /^[0-9a-f]{40}$/;
 var digest$9 = /^[0-9a-f]{64}$/;
 var operation$1 = /^op_[0-9a-f]{32}$/;
@@ -16692,7 +16712,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		execution_operation_id: selected
 	});
 	const fixedMatches = (value) => !fixedResult || value?.execution_operation_id === fixedResult.execution_operation_id && value?.candidate_commit === fixedResult.candidate_commit;
-	const canWrite = () => writer() && allowedAction(ACTION$4, target());
+	const canWrite = () => writer() && allowedAction(ACTION$5, target());
 	const enabled = () => caps()?.features?.pm_workspaces?.execution_verification?.version === 1;
 	const line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	function clear() {
@@ -16782,7 +16802,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 				namespace: `${namespace}.verification`,
 				api,
 				requiredScope: "operate",
-				action: ACTION$4,
+				action: ACTION$5,
 				target: target(),
 				fields,
 				params: (values) => {
@@ -20043,6 +20063,67 @@ function workspaceExternalHistory({ h, t, api, alive, workspaceId, errorBox }) {
 	};
 }
 //#endregion
+//#region src/pm-workspace-adapter.js
+var ACTION$4 = "pm.workspace.adapter.select";
+var workspaceAdapter = (capability) => capability?.workspace_adapter?.version === 1 ? capability.workspace_adapter : null;
+var workspaceAdapterAllows = (capability, adapter) => {
+	if (capability?.workspace_adapter && capability.workspace_adapter.version !== 1) return false;
+	const saved = workspaceAdapter(capability);
+	return !saved || saved.reason !== "original_sources_unavailable" && (!saved.choice || saved.choice.adapter === adapter);
+};
+function workspaceAdapterChoice({ h, t, form, input, labelled, caps, capability, permitted, target, refresh, onStateChange }) {
+	const saved = () => workspaceAdapter(capability()), advertised = () => caps()?.features?.pm_workspaces?.workspace_adapter?.version === 1;
+	const adapter = h("select", {
+		"aria-label": t("pm_choice_adapter"),
+		required: true
+	}, h("option", { value: "" }, t("pm_choice_select")), h("option", { value: "codex-native-linux" }, t("pm_analysis_local")), h("option", { value: "bat-pm-linux-v1" }, t("pm_analysis_bat")));
+	const rationale = input("pm_choice_reason", {
+		multiline: true,
+		max: 4e3
+	});
+	const summary = h("p", {
+		class: "pm-source",
+		"data-pm-choice-current": ""
+	}), reason = h("p", { class: "muted" });
+	const request = form({
+		action: ACTION$4,
+		target: { workspace_id: target.workspace_id },
+		fields: {
+			adapter,
+			rationale
+		},
+		params: (values) => ({
+			adapter: values.adapter,
+			rationale: values.rationale
+		}),
+		preconditions: () => saved().preconditions,
+		permitted: () => advertised() && permitted(true) && saved()?.available === true && Boolean(saved()?.preconditions),
+		recoverPermitted: () => permitted(true),
+		label: "pm_choice_save",
+		onSaved: refresh,
+		onStateChange,
+		extra: h("div", { class: "pm-fields" }, labelled("pm_choice_adapter", adapter), labelled("pm_choice_reason", rationale))
+	});
+	const box = h("details", { "data-pm-workspace-adapter": "" }, h("summary", {}, t("pm_choice_title")), summary, h("p", { class: "muted" }, t("pm_choice_help")), reason, request.box);
+	function update() {
+		const current = saved();
+		box.hidden = !advertised() && !request.locked() || !current || current.reason === "original_sources_unavailable";
+		summary.replaceChildren();
+		if (current?.choice) {
+			const choice = current.choice;
+			summary.append(t(choice.adapter === "bat-pm-linux-v1" ? "pm_analysis_bat" : "pm_analysis_local"), " · ", t("pm_choice_revision") + " " + choice.version, " · ", h("a", { href: `#/op/${encodeURIComponent(choice.operation_id)}` }, t("pm_operation")));
+		} else summary.textContent = t("pm_choice_unset");
+		reason.textContent = current?.reason === "original_writer_unresolved" ? t("pm_choice_busy") : current?.available === false ? t("pm_choice_owner") : "";
+		reason.hidden = !reason.textContent;
+		request.update();
+	}
+	return {
+		box,
+		update,
+		locked: request.locked
+	};
+}
+//#endregion
 //#region src/pm-structured-analysis.js
 var NATIVE = "codex-native-linux";
 var BAT = "bat-pm-linux-v1";
@@ -20064,12 +20145,17 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 		const rows = supported() ? capability().structured_analysis.actions?.[action]?.adapters : null;
 		return Array.isArray(rows) ? rows.find((row) => row?.adapter === field.value) : null;
 	};
-	const eligible = () => supported() ? Boolean([NATIVE, BAT].includes(field.value) && descriptor()?.action_registered === true && descriptor()?.authorized === true && descriptor()?.eligible_for_preflight === true) : field.value === NATIVE && legacyEligible();
+	const eligible = () => workspaceAdapterAllows(capability(), field.value) && (supported() ? Boolean([NATIVE, BAT].includes(field.value) && descriptor()?.action_registered === true && descriptor()?.authorized === true && descriptor()?.eligible_for_preflight === true) : field.value === NATIVE && legacyEligible());
 	function update(request) {
 		activeRequest = request;
+		const fixed = workspaceAdapter(capability())?.choice?.adapter;
+		if (supported() && fixed && !request?.locked() && field.value !== fixed) {
+			request?.set("adapter", fixed);
+			request?.update();
+		}
 		box.hidden = !readable();
 		choice.hidden = !supported() && field.value === NATIVE;
-		field.disabled = Boolean(request?.locked()) || !authorized();
+		field.disabled = Boolean(request?.locked()) || Boolean(fixed) || !authorized();
 		const selected = descriptor(), legacy = action === "pm.conversation.propose" ? capability()?.native_analysis : capability()?.follow_up_analysis;
 		const code = selected?.reason || (!supported() && field.value === NATIVE ? legacy?.reason : null);
 		const key = !authorized() || selected?.authorized === false ? "pm_native_permissions" : eligible() ? field.value === BAT ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : field.value === BAT ? {
@@ -34556,6 +34642,21 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
 	const requests = [];
 	let primary = true, composerNode = null, ask = null, connection = null, working = null, clock = null, composerText = null, clearDraft = null, limit = null, requestDetails = null;
+	const choice = workspaceAdapterChoice({
+		h,
+		t,
+		form,
+		input,
+		labelled,
+		caps,
+		capability,
+		permitted,
+		target,
+		refresh,
+		onStateChange: () => {
+			if (ready) for (const row of requests) row.request.update();
+		}
+	});
 	const otherLocked = (spec) => requests.some((row) => row.spec !== spec && row.request.locked());
 	for (const spec of specs) {
 		const purpose = input("pm_native_purpose", {
@@ -34591,7 +34692,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 				...values.model.trim() ? { model: values.model.trim() } : {}
 			}),
 			preconditions: () => ({ expected_version: thread().thread.version }),
-			permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec) && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
+			permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec) && !choice.locked() && workspaceAdapterAllows(capability(), spec.adapter) && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
 			recoverPermitted: authorized,
 			label: "pm_native_analyze",
 			onSaved: refresh,
@@ -34625,13 +34726,17 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	const box = h("section", {
 		class: "pm-packages pm-native-analysis",
 		"data-pm-native-analysis": ""
-	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), h("div", { class: "pm-fields" }, labelled("pm_analysis_adapter", selector)), explanation, binding, recovery, ...requests.map((row) => row.request.box), current);
+	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), choice.box, h("div", { class: "pm-fields" }, labelled("pm_analysis_adapter", selector)), explanation, binding, recovery, ...requests.map((row) => row.request.box), current);
 	function render() {
+		const locked = requests.find((row) => row.request.locked());
+		const fixed = workspaceAdapter(capability())?.choice?.adapter;
+		if (fixed) selected = locked?.spec.key || specs.find((spec) => spec.adapter === fixed)?.key || selected;
 		const active = specs.find((spec) => spec.key === selected);
 		const descriptor = capability()?.[selected];
 		const options = requests.filter((row) => advertised(row.spec) || row.request.locked() || row.spec === active);
 		selector.replaceChildren(...options.map((row) => h("option", { value: row.spec.key }, t(row.spec.label) + (row.request.locked() ? " · " + t("pm_analysis_original") : ""))));
 		selector.value = selected;
+		selector.disabled = Boolean(fixed);
 		for (const row of requests) row.request.box.hidden = row.spec !== active;
 		const pending = requests.filter((row) => row.spec !== active && row.request.locked());
 		recovery.hidden = !pending.length;
@@ -34680,6 +34785,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	let lastRuns = [];
 	function update(runs) {
 		if (runs) lastRuns = runs;
+		choice.update();
 		render();
 		current.replaceChildren(...lastRuns.filter((run) => specs.some((spec) => spec.adapter === run.adapter)).map((run) => h("p", { class: "pm-source" }, h("strong", {}, run.purpose), " · ", t(specs.find((spec) => spec.adapter === run.adapter).label), " · ", nativeRunState(t, run), run.outcome?.actual_model ? " · " + run.outcome.actual_model : "", " · ", h("a", { href: `#/op/${encodeURIComponent(run.operation_id)}` }, t("pm_operation")))));
 		for (const row of requests) row.request.update();
