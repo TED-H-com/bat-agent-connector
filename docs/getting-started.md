@@ -143,6 +143,29 @@ These steps describe available product actions, not a claim that the complete
 14-step M4 live acceptance has run. Record actual operation, source, runtime and
 delivery receipts separately from offline tests and CI.
 
+### Read an AHP host catalog
+
+In a PM workspace, expand **AHP observations**. An operator must first configure an
+adapter for this workspace on central, including its endpoint, credential reference
+and protocol profile; see the [AHP observation contract](design/pm-ahp-observer.md).
+The client does not accept host URLs or credentials here. This is separate from
+selecting an analysis runtime or moving a writer to another adapter.
+
+Choose the configured adapter and **Capture host catalog**. Select up to eight
+sessions from that saved catalog, optionally include advertised static changesets,
+then **Capture selected snapshots**. Only catalogued sessions and bounded metadata
+are read; no session is created, messaged or stopped. **Reload saved observations**
+and **Saved observation history** read central receipts without contacting the host.
+Open **Original source document and receipt** for identities, event metadata, replay
+gaps, missing sources and the original operation. An incomplete observation does not
+prove absence, completion, cost or management authority.
+
+Changing adapters separates selections and request keys. If a response is lost,
+return to the original adapter and use **Check original request**; a changed or
+withdrawn source may prevent recovery until its original access is restored. Never
+recreate an uncertain request on another adapter. Configured protocol support and
+offline tests do not establish live host acceptance.
+
 ## Advanced: existing central and operator deployment
 
 Existing desktop central configuration is retained. To join a different service explicitly, use **Advanced: join an existing central**, then enroll its separate credential. The remaining sections describe an operator-managed central; they are not prerequisites for the normal bundled installation.

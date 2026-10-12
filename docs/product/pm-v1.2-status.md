@@ -43,10 +43,12 @@ workspace writer generation、PM 自有 controller、來源／原生回覆紀錄
 固定 commit 工作目錄與不可覆寫草稿。API／MCP／Web／Tauri 共用 `pm.run.prepare`；
 畫面可查回原始討論版本，保存脈絡不會產生 AI 回覆或採用計畫。
 
-BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK session ID，保留重播缺口；
-這是 runner 的內部基礎。目前核對的 BAT 介面可傳遞檔案唯讀設定，但沒有逐次限制外部 MCP
-工具的契約，因此自動 Idea／Planning 執行仍不可用，明示 `external_tool_policy_unverified`。
-這個限制與使用者自行處理的真人實機驗收分開。W09 與 #88 尚未全部完成。
+BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK session ID，保留重播缺口。
+第三批的通用 BAT 介面沒有逐次限制外部 MCP 工具的契約，仍明示
+`external_tool_policy_unverified`。#113 整合候選另外加入專用 Linux Codex 單次分析路徑，
+要求固定 producer、runtime 與原程序退出證據；不能因此宣稱通用 BAT 路徑已驗證。
+相應 BAT producer 已合併至 owner fork，尚未安裝。長期工作 adapter 接續與 W09／#88
+的剩餘範圍仍待完成，與使用者自行處理的真人實機驗收分開。
 
 第四批追蹤 [#91](https://github.com/teddashh/bat-agent-connector/issues/91)：專業計畫以固定來源、
 八個管理領域、需求與接受條件保存不可變版本，未決事項仍維持未決。Planning 期間可明確
@@ -86,10 +88,10 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W19 | P1 | Orchestrator readiness 與派工 | #110 已合併固定工作包經既有 repository.continue 交接，#112 加入有界批次；整合候選再以原始已合格需求評估滿足明確前置條件，保留原來源及最後執行檢查 |
 | W20 | P1 | 現有 integration 與 merge 接入 | #112 已合併既有 integration preview／apply／conflict handoff／PR merge 的固定工作包與來源 lineage，最後 frame 與已送出結果查回分開；Web／Tauri／API／MCP 可讀原推送／合併 receipt，不據此接受需求 |
 | W21 | P1 | 現有 deploy 與 receipt 接入 | #112 已合併既有 deploy／rollback／merge-and-deploy 的原來源權限與固定 release receipt，交付投影分開顯示合併、部署驗證與目前部署；未安裝或 live-tested |
-| W22 | P1 | AHP observer 與 create-own | 開始開發 AHP 唯讀觀察；正式設定／入口整合及 create-own 尚未完成，不以既有 BAT observer 代替此項 |
+| W22 | P1 | AHP observer 與 create-own | 開發分支已接明確設定的 AHP 有界唯讀觀察、原始來源權限、API／MCP／Web／Tauri；固定 1.0 canonical subset 與 VS Code 0.10 profiles 已有 fixture，完整 CI／合併待完成；create-own、寫入及 live host 尚未驗證 |
 | W23 | P1 | 第一個 native CLI adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W24 | P1 | PM adapter 切換 | 單次 PM 分析已有明確 adapter selector 與獨立原操作查回；長期 workspace adapter／PM 文件接續與 writer 切換尚待完成 |
-| W25 | P1 | Fleet readiness 與安裝版 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W25 | P1 | Fleet readiness 與安裝版 | 沿用既有 managed installation；開發分支準備 core 0.2.5／desktop 0.1.1 及固定舊版實包升級 fixture，跨平台升級 CI 與完整 Fleet 矩陣仍待完成，尚未發布或安裝 |
 | W26 | P1 | Canonical MCP skills | 本批：PM read tools 與共用 operations；其他 v1.2 契約逐批加入 |
 | W27 | P1 | 端到端實機驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W28 | P2 | 其餘具名 CLI 能力 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -153,6 +155,33 @@ M4 第 13 步的 followup 已接入本批整合：固定 Maintenance Review 候�
 未確認輸入，完整原候選隨討論／Planning context 保存，沿既有確認、採用與 Follow-up 規則接續。
 來源撤權也會隱藏衍生輸入與計畫。整合共享介面 77 項及 Node 34 項通過，包含 13 項候選介面案例；
 固定 `bddeb08` 的 12 項後端來源／權限案例在 Python 3.12／3.10 均通過；同來源的 Review、討論、提案、Planning、Follow-up 與差異回歸在 Python 3.12 另有 211 項通過。
+
+## 下一批：AHP 觀察與實包升級
+
+這批獨立於 #113，依 [AHP 觀察契約](../design/pm-ahp-observer.md)接入同一操作服務。
+管理者明確綁定 endpoint 與可見 workspace，使用者只選 adapter 及其原生 catalog 中的來源。
+觀察保留固定原始資料、版本與缺口；重連資料先核對原 session 身分，來源撤回後整份歷史、
+操作與事件一起隱藏。早期紀錄只能從自身完整證據恢復，不用最新清單補認原來源。
+畫面沿用原操作 key、各 adapter 草稿與英／繁中工作區，不取得任何 session 控制權。
+
+固定整合 `cfea00e` 的 AHP socket、來源／歷史、API 與 skill 回歸在 Python 3.12／3.10
+各 112 項通過。原生來源 `fa0107c` 的全部 targets 有 134 項通過、1 項既有忽略；
+共享 UI 的最終欄位回歸 `bf318e1` 有 38 項通過，Node 34 項、兩種建置與生成資產檢查通過。
+保存前現以實際 UTF-8 序列化檢查完整回應，避免文件成功保存卻超過讀取上限；
+精確 2 MB ±1 byte 與來源／API 回歸 `8eeabb2` 在 Python 3.12／3.10 各 49 項通過。
+這些是分段 fixture 結果，完整後端與目標平台 CI、合併及 live host 驗證仍分開追蹤。
+
+同批準備不同的 core／app 版號，使新 client 不會因 core 同版號而重用舊程式。
+升級 fixture 使用兩份實際打包 binary，核對原身分、workspace、operation key／歷史、
+三個並行 clients、重啟與拒絕降版；未知外部結果必須阻擋升級並保留舊 owner。
+加入完整回應大小防護後，最後整合 `f00070f` 的 Linux 0.2.5 core 已從成功 desktop CI 的 `56d1bf5`／0.2.4 實包升級通過，
+上述身分／歷史／並行／重啟／拒絕降版與未知效果防護均已核對，測試服務及目錄已清除。
+這次使用 child PATH 無 Python 的打包程式；較早 package pair 的結果分開保留。
+CI 將由固定 `56d1bf5`／0.2.4 建立 baseline，在各桌面平台驗證新 core；目前尚未跑完。
+這是 core 升級 fixture，不代表應用程式 installer 原地升級或使用者環境驗收。
+
+W22 的 create-own、W23 的一般 coding adapter、W24 的持久 adapter 切換仍未完成。
+這批沒有啟動模型、接手外部 session、寫入 live host 或安裝到使用者環境。
 
 ## 工作證據與分析 adapter
 

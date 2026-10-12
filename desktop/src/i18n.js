@@ -1,3 +1,4 @@
+import {ahpObserverStrings} from './pm-ahp-observer-strings.js';
 import {pmMaintenanceRepairsStrings} from './pm-maintenance-repairs-strings.js';
 import {pmQualityReviewsStrings} from './pm-quality-reviews-strings.js';
 import {qualityProjectionStrings} from './pm-quality-projection-strings.js';
@@ -17,6 +18,7 @@ import {instructionReceiptStrings} from './instruction-receipts.js';
 const STRINGS = {
   "zh-TW": {
     ...pmStrings["zh-TW"],
+    ...ahpObserverStrings["zh-TW"],
     ...qualityProjectionStrings["zh-TW"],
     ...pmQualityReviewsStrings["zh-TW"],
     ...pmMaintenanceRepairsStrings["zh-TW"],
@@ -904,6 +906,7 @@ const STRINGS = {
   },
   en: {
     ...pmStrings.en,
+    ...ahpObserverStrings.en,
     ...qualityProjectionStrings.en,
     ...pmQualityReviewsStrings.en,
     ...pmMaintenanceRepairsStrings.en,

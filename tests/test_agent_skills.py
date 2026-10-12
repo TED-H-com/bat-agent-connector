@@ -82,17 +82,20 @@ def test_canonical_change_invalidates_both_bundles_and_updates_provenance(bundle
         assert (bundle_repo / relative).read_bytes() == new
 
 
-@pytest.mark.parametrize("relative,old,new", [
-    ("src/bat_agent_connector/api_v1.py", 'CONTRACT_VERSION = "2026-10-08"', 'CONTRACT_VERSION = "2026-10-09"'),
-    ("src/bat_agent_connector/api_v1.py", "API_VERSION = 1", "API_VERSION = 2"),
-    ("src/bat_agent_connector/__init__.py", '__version__ = "0.2.4"', '__version__ = "0.2.5"'),
-    ("pyproject.toml", 'version = "0.2.4"', 'version = "0.2.5"'),
+@pytest.mark.parametrize("relative,pattern,new", [
+    ("src/bat_agent_connector/api_v1.py", r'^CONTRACT_VERSION = "[^"]+"', 'CONTRACT_VERSION = "2099-01-01"'),
+    ("src/bat_agent_connector/api_v1.py", r"^API_VERSION = \d+$", "API_VERSION = 999"),
+    ("src/bat_agent_connector/__init__.py", r'^__version__ = "[^"]+"$', '__version__ = "999.0.0"'),
+    ("pyproject.toml", r'^version = "[^"]+"$', 'version = "999.0.0"'),
 ])
-def test_version_drift_requires_canonical_review_before_generation(bundle_repo, relative, old, new):
+def test_version_drift_requires_canonical_review_before_generation(bundle_repo, relative, pattern, new):
     assert run_generator(bundle_repo).returncode == 0
     before = {p: (bundle_repo / p).read_bytes() for p in generator.render(bundle_repo)}
     source = bundle_repo / relative
-    source.write_text(source.read_text().replace(old, new, 1))
+    original = source.read_text()
+    changed, replacements = re.subn(pattern, new, original, count=1, flags=re.MULTILINE)
+    assert replacements == 1 and changed != original, "Fixture must actually introduce version drift"
+    source.write_text(changed)
     assert run_generator(bundle_repo, "--check").returncode == 1
     assert run_generator(bundle_repo).returncode == 1
     assert before == {p: (bundle_repo / p).read_bytes() for p in before}
