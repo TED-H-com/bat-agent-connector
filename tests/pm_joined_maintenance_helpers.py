@@ -5,6 +5,7 @@ actions, source gates, ownership, verifier and delivery engines remain real.
 """
 from __future__ import annotations
 
+import asyncio
 import copy
 import re
 import sys
@@ -33,13 +34,44 @@ from tests.test_checkpoints import git
 from tests.test_integration import commit
 from tests.test_pm_delivery_lineage import sync_provider_graph
 from tests.test_pm_maintenance_repair_receipts import record
-from tests.test_pm_maintenance_repairs import advance, shared_request, view
+from tests.test_pm_maintenance_repairs import shared_request, view
 from tests.test_pm_package_handoff import request as handoff_request
 from tests.test_repository_sync import REQUEST
 
 REPAIR_COMMAND = (sys.executable, '-B', '-c',
     "import recovery; assert recovery.reset_password('original-reset-token', 17) is False; "
     "import runpy,sys; sys.argv=['member_regression.py','recovery']; runpy.run_path('member_regression.py')")
+
+
+async def advance(w, parent, rounds=3):
+    """Wait for each captured attempt wave, keeping its existing 60-second bound.
+
+    Publication and its later observation are different registered operations.
+    Newly admitted children wait for the next bounded scheduler iteration; they
+    cannot inherit a nearly exhausted deadline from a completed earlier child.
+    """
+    ops = w['d'].ops
+    for _ in range(rounds):
+        ops.wake(parent['operation_id'])  # Only waiting_external; never force an uncertain child.
+        started = time.monotonic()
+        await ops.run_due()
+        active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
+        if not active:
+            continue
+        _, pending = await asyncio.wait([task for _, task in active],
+            timeout=max(0, 60 - (time.monotonic() - started)))
+        assert not pending, [(oid, ops.get(oid)['action'], ops.get(oid)['status'])
+            for oid, task in active if task in pending]
+        outcomes = []
+        for oid, task in active:
+            task.result()  # Persisted status alone does not prove the worker finished.
+            outcome = ops.get(oid)
+            assert outcome['status'] not in {'accepted', 'running'}, outcome
+            outcomes.append((outcome['action'], outcome['status']))
+        print('Repair attempt wave:', round(time.monotonic() - started, 3), outcomes, flush=True)
+    result = ops.get(parent['operation_id'])
+    assert result['error_code'] != 'INTERNAL', result
+    return result
 
 
 async def enter_maintenance(w, mock):
