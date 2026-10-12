@@ -1,4 +1,5 @@
 """Shared immutable specification readers and original-source event barriers."""
+import asyncio
 import json
 
 import pytest
@@ -17,7 +18,31 @@ world, pm, ready, fixed = fixtures.world, fixtures.pm, fixtures.ready, fixtures.
 async def test_fixed_spec_read_parity_routes_and_original_source_withdrawal(fixed, monkeypatch):
     w, d = fixed, fixed['d']
     original = request(w)
-    done = await materialize(w, original)
+    store = d.artifact_store
+    reap_started, release_reap = asyncio.Event(), asyncio.Event()
+    original_reap = store.reap_best_effort
+
+    async def held_reap(operation_id=None):
+        if asyncio.current_task() is store._reap_task:
+            reap_started.set()
+            await release_reap.wait()
+        await original_reap(operation_id)
+
+    # Operation settlement does not include its independently scheduled staging
+    # reaper. Hold that real task so this test always covers pending cleanup.
+    monkeypatch.setattr(store, 'reap_best_effort', held_reap)
+    try:
+        done = await materialize(w, original)
+        await asyncio.wait_for(reap_started.wait(), 5)
+        assert store._reap_task is not None and not store._reap_task.done()
+    finally:
+        release_reap.set()
+        if store._reap_task is not None:
+            await store._reap_task
+    upload = d.ops.db.execute('SELECT reserved_bytes,released_at FROM artifact_uploads WHERE operation_id=?',
+                              (done['operation_id'],)).fetchone()
+    assert upload['reserved_bytes'] == 0 and upload['released_at'] is not None
+    # The unchanged counter below now covers only the advertised read paths.
     wid, ident = w['workspace_id'], done['result']['materialization_id']
     auth = token(d, OWNER.actor, 'observe', 'manage', 'start')
     root = f'/api/v1/pm/workspaces/{wid}/spec-materializations'
