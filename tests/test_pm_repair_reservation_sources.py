@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import pm_access
+from bat_agent_connector import pm_access, pm_source_reads
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector.api_auth import Principal
@@ -15,6 +15,10 @@ from tests.pm_joined_lifecycle_helpers import OWNER
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
 from tests.test_pm_joined_lifecycle import test_same_ledger_development_and_semantic_dependency as run_story
 from tests.test_pm_source_reads_joined import measured
+
+
+class SourcesChecked(Exception):
+    """Stop this focused source case before the independent delivery story."""
 
 
 @contextmanager
@@ -27,6 +31,24 @@ def journal_change(db):
     finally:
         db.execute('ROLLBACK TO fixture_reservation_negative')
         db.execute('RELEASE fixture_reservation_negative')
+
+
+def source_queries(ops, principal, parent, *, scoped):
+    count = 0
+    def trace(sql):
+        nonlocal count
+        if sql.lstrip().upper().startswith('SELECT'):
+            count += 1
+    ops.db.set_trace_callback(trace)
+    try:
+        if scoped:
+            with pm_source_reads.scope(ops.db, principal):
+                repairs._full_access(ops, principal, parent)
+        else:
+            repairs._full_access(ops, principal, parent)
+    finally:
+        ops.db.set_trace_callback(None)
+    return count
 
 
 def saved_sources(w, parent, recorded, monkeypatch, record_property):
@@ -44,6 +66,11 @@ def saved_sources(w, parent, recorded, monkeypatch, record_property):
     record_property('repair_scoped_source_queries', new_queries)
     record_property('repair_original_root_visits', sum(old_roots.values()))
     record_property('repair_scoped_root_visits', sum(new_roots.values()))
+    direct = source_queries(ops, OWNER, parent, scoped=False)
+    scoped = source_queries(ops, OWNER, parent, scoped=True)
+    record_property('repair_direct_full_access_queries', direct)
+    record_property('repair_scoped_full_access_queries', scoped)
+    assert scoped <= direct
     for op in originals:
         assert ops.get(op['operation_id'], principal=OWNER)['operation_id'] == op['operation_id']
     events = []
@@ -89,7 +116,7 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
             parent_id = repairs._row(w['d'].ops, w['workspace_id'], request['target']['repair_id'])['operation_id']
             saved_sources(w, w['d'].ops.get(parent_id), result, monkeypatch, record_property)
             source_reads.append(parent_id)
-            return result
+            raise SourcesChecked
         return await original_settle(w, request)
     monkeypatch.setattr(maintenance, 'settle', settle)
     def check(ops, principal, target, params, pre, *, reserving=False):
@@ -149,6 +176,8 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
     monkeypatch.setattr(repairs, '_check', guarded_check)
     try:
         await run_story(joined, mock, monkeypatch)
+    except SourcesChecked:
+        pass
     except BaseException:
         if failures:
             raise AssertionError(failures[0]) from None
