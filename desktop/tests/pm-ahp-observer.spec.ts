@@ -13,7 +13,7 @@ function fixture(){
       operation_id:'op_'+index.toString(16).padStart(32,'0'),coverage_status:'observed',document:{schema:'ahp_observation_v1',observation_id:id,workspace_id:workspaceId,adapter_id:adapterId,binding_digest:binding,started_at:1791720000,finished_at:1791720001,
       original_sources:[],evidence:{protocol_version:'1.0.0',server_info:{name:'Fake editor',version:'fixture'},status:'observed',reason:null,catalog_complete:true,
         catalog:Array.from({length:count},(_,i)=>({resource:`ahp-session://${adapterId}/${i+1}`,title:`${adapterId} session ${i+1}`,provider:'example-agent',source_identity:'c'.repeat(64),createdAt:'2026-10-11',modifiedAt:'2026-10-11',status:0,ownership:'foreign_or_manual',access:'read_only',completion:'not_inferred'})),
-        snapshots:[{resource:'ahp-root://',from_seq:1,later_events_observed:false,state:{kind:'root'}}],events:[],gaps:[],missing:[],reconnect:'not_needed',completion:'not_inferred',cost:'not_inferred'}}};state.rows.push(r);return r;};
+        snapshots:[{resource:'ahp-root://',from_seq:1,later_event_observed:false,state:{kind:'root'}}],events:[],gaps:[],missing:[],reconnect:'not_needed',completion:'not_inferred',cost:'not_inferred'}}};state.rows.push(r);return r;};
   const dispatch=async(input:any)=>{const url=new URL(input.path,'http://fixture'),path=url.pathname;state.reads.push(input.path);
     if(path==='/bootstrap'||path==='/capabilities'){const r=await pm.dispatch(input),c=path==='/bootstrap'?r.data.capabilities:r.data;
       c.features.pm_workspaces.ahp_observation=contract;c.actions.push({action:'pm.ahp.observe',allowed:true});return r;}
@@ -99,9 +99,27 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
   test('snapshot metadata displays its negotiated protocol and later-event caveat',async({page})=>{
     const f=fixture(),r=f.make();Object.assign(f.state.adapters[0],{protocol_version:'0.10.0',protocol_versions:['0.10.0','1.0.0'],decoder_profiles:{'0.10.0':'vscode_0_10_observer_v1','1.0.0':'ahp_1_0_observer_v1'}});
-    Object.assign(r.document.evidence,{protocol_version:'1.0.0',negotiated_version:'1.0.0',snapshots:[{resource:'ahp-session://editor/1',source_kind:'session',from_seq:12,later_events_observed:true,state:{title:'Original snapshot title',provider:'example-agent',lifecycle:'ready'}},{resource:'ahp-changeset://editor/fixed',source_kind:'changeset',from_seq:13,later_events_observed:false,state:{files:[{id:'fixed-source-file',edit:{after:{uri:'file:///fixture/source.js'}}}]}}]});
+    Object.assign(r.document.evidence,{protocol_version:'1.0.0',negotiated_version:'1.0.0',snapshots:[{resource:'ahp-session://editor/1',source_kind:'session',from_seq:12,later_event_observed:true,state:{title:'Original snapshot title',provider:'example-agent',lifecycle:'ready'}},{resource:'ahp-changeset://editor/fixed',source_kind:'changeset',from_seq:13,later_event_observed:false,state:{files:[{id:'fixed-source-file',edit:{after:{uri:'file:///fixture/source.js'}}}]}}]});
     await open(page,native,f);await expect(page.locator('[data-ahp-detail]')).toContainText('Protocol: 1.0.0');await page.getByText('Snapshot details',{exact:true}).click();await page.getByText('Original snapshot title',{exact:true}).click();
     await expect(page.locator('[data-ahp-detail]')).toContainText('Later events recorded: Yes');await expect(page.locator('[data-ahp-detail]')).toContainText('Reported lifecycle (not a completion proof): ready');
+  });
+  for(const locale of ['en-US','zh-TW'])test.describe(`snapshot event evidence ${locale}`,()=>{
+    test.use({locale});
+    test('original boolean flag is distinct from absent or invalid evidence',async({page})=>{
+      const f=fixture(),r=f.make(),cases=[
+        {title:'Recorded later event',fields:{later_event_observed:true},en:'Yes',zh:'是'},
+        {title:'Recorded no later event',fields:{later_event_observed:false},en:'No',zh:'否'},
+        {title:'Original flag missing',fields:{later_events_observed:true},en:'Unknown',zh:'未知'},
+        {title:'Original flag invalid',fields:{later_event_observed:'false'},en:'Unknown',zh:'未知'}
+      ];
+      Object.assign(r.document.evidence,{snapshots:cases.map((c,i)=>({resource:`copilot:/original-${i}`,source_kind:'session',from_seq:i,
+        ...c.fields,state:{title:c.title,provider:'copilot',lifecycle:'ready'}}))});
+      await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-ahp] > summary').click();
+      await page.getByText(locale==='zh-TW'?'快照詳情':'Snapshot details',{exact:true}).click();
+      for(const c of cases){const title=page.getByText(c.title,{exact:true});await title.click();
+        await expect(title.locator('..').getByText(`${locale==='zh-TW'?'已記錄後續事件':'Later events recorded'}: ${locale==='zh-TW'?c.zh:c.en}`,{exact:true})).toBeVisible();}
+      expect(f.state.writes).toHaveLength(0);
+    });
   });
   test('catalog pagination does not drop selections from previous page',async({page})=>{
     const f=fixture();f.make('editor',22);await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();await page.locator('[data-ahp-catalog]').getByRole('button',{name:'Next',exact:true}).click();
@@ -113,8 +131,8 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
     Object.assign(f.state.adapters[0],{protocol_versions:['1.0.0','0.10.0'],decoder_profiles:{'0.10.0':'vscode_0_10_observer_v1'}});
     Object.assign(r.document.evidence.catalog[0],{resource:uri,source_kind:'session',provider:'copilot'});
     Object.assign(r.document.evidence,{protocol_version:'0.10.0',negotiated_version:'0.10.0',decoder_profile:'vscode_0_10_observer_v1',snapshots:[
-      {resource:uri,source_kind:'session',from_seq:4,later_events_observed:false,state:{title:'Opaque original session',provider:'copilot',lifecycle:'ready'}},
-      {resource:uri+'/changeset/session',source_kind:'changeset',from_seq:5,later_events_observed:false,state:{files:[{id:'fixed-path',edit:{after:{uri:'file:///fixture/source.js'}}}]}}
+      {resource:uri,source_kind:'session',from_seq:4,later_event_observed:false,state:{title:'Opaque original session',provider:'copilot',lifecycle:'ready'}},
+      {resource:uri+'/changeset/session',source_kind:'changeset',from_seq:5,later_event_observed:false,state:{files:[{id:'fixed-path',edit:{after:{uri:'file:///fixture/source.js'}}}]}}
     ]});
     await open(page,native,f);await page.getByText('Adapter capabilities and limits',{exact:true}).click();await expect(page.locator('[data-pm-ahp]')).toContainText('Protocol: 1.0.0, 0.10.0');
     await expect(page.locator('[data-ahp-detail]')).toContainText('Recorded decoder profile: vscode_0_10_observer_v1');await page.getByText('Snapshot details',{exact:true}).click();
@@ -125,9 +143,9 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
   test('missing or unknown snapshot kind remains generic even with a familiar URI prefix',async({page})=>{
     const f=fixture(),r=f.make('editor',1);Object.assign(r.document.evidence,{snapshots:[
-      {resource:'ahp-session://looks-like-session',from_seq:1,later_events_observed:false,state:{title:'Legacy untyped snapshot',provider:'looks-like-provider',lifecycle:'ready'}},
-      {resource:'ahp-changeset://looks-like-files',source_kind:'future_kind',from_seq:2,later_events_observed:false,state:{files:[{id:'not-classified'}]}},
-      {resource:'copilot:/legacy-typed',from_seq:3,later_events_observed:false,state:{source_kind:'session',title:'Originally typed session',provider:'copilot',lifecycle:'ready'}}
+      {resource:'ahp-session://looks-like-session',from_seq:1,later_event_observed:false,state:{title:'Legacy untyped snapshot',provider:'looks-like-provider',lifecycle:'ready'}},
+      {resource:'ahp-changeset://looks-like-files',source_kind:'future_kind',from_seq:2,later_event_observed:false,state:{files:[{id:'not-classified'}]}},
+      {resource:'copilot:/legacy-typed',from_seq:3,later_event_observed:false,state:{source_kind:'session',title:'Originally typed session',provider:'copilot',lifecycle:'ready'}}
     ]});
     await open(page,native,f);await page.getByText('Snapshot details',{exact:true}).click();await page.getByText('Legacy untyped snapshot',{exact:true}).click();
     await expect(page.locator('[data-ahp-detail]')).toContainText('URI does not establish its type');await expect(page.locator('[data-ahp-detail]')).not.toContainText('Provider: looks-like-provider');

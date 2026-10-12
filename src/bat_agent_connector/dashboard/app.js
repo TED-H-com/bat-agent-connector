@@ -207,7 +207,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		for (const snapshot of e.snapshots) {
 			const state = snapshot.state || {}, kind = snapshot.source_kind ?? state.source_kind ?? (state.kind === "root" ? "root" : "unknown");
 			if (kind === "root") continue;
-			snapshots.append(h("details", {}, h("summary", {}, state.title || snapshot.resource), h("p", { class: "mono" }, snapshot.resource), line("ahp_from_sequence", snapshot.from_seq), line("ahp_later_events", t(snapshot.later_events_observed ? "ahp_yes" : "ahp_no")), ...kind === "session" ? [line("ahp_provider", state.provider), line("ahp_native_lifecycle", state.lifecycle)] : kind === "changeset" ? [line("ahp_file_count", state.files?.length ?? 0)] : [h("p", { class: "muted" }, t("ahp_unknown_source_kind"))]));
+			snapshots.append(h("details", {}, h("summary", {}, state.title || snapshot.resource), h("p", { class: "mono" }, snapshot.resource), line("ahp_from_sequence", snapshot.from_seq), line("ahp_later_events", t(snapshot.later_event_observed === true ? "ahp_yes" : snapshot.later_event_observed === false ? "ahp_no" : "ahp_unknown")), ...kind === "session" ? [line("ahp_provider", state.provider), line("ahp_native_lifecycle", state.lifecycle)] : kind === "changeset" ? [line("ahp_file_count", state.files?.length ?? 0)] : [h("p", { class: "muted" }, t("ahp_unknown_source_kind"))]));
 		}
 		const meta = h("details", {}, h("summary", {}, t("ahp_original")), h("p", { class: "mono" }, r.observation_id), h("p", { class: "mono" }, r.document_digest), h("a", { href: `#/op/${r.operation_id}` }, t("pm_operation")), h("pre", {}, JSON.stringify(d, null, 2)));
 		detail.replaceChildren(h("section", {
@@ -19905,6 +19905,7 @@ var ahpObserverStrings = {
 		ahp_later_events: "Later events recorded",
 		ahp_yes: "Yes",
 		ahp_no: "No",
+		ahp_unknown: "Unknown",
 		ahp_provider: "Provider",
 		ahp_native_lifecycle: "Reported lifecycle (not a completion proof)",
 		ahp_file_count: "File metadata records",
@@ -19957,6 +19958,7 @@ var ahpObserverStrings = {
 		ahp_later_events: "已記錄後續事件",
 		ahp_yes: "是",
 		ahp_no: "否",
+		ahp_unknown: "未知",
 		ahp_provider: "Provider",
 		ahp_native_lifecycle: "原生回報 lifecycle（非完成證明）",
 		ahp_file_count: "檔案 metadata 紀錄",
