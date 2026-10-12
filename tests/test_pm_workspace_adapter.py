@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_discussions, pm_runs
+from bat_agent_connector import pm_access, pm_discussions, pm_runs, pm_workspace
 from bat_agent_connector import pm_workspace_adapter as adapters
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationError
@@ -86,6 +86,10 @@ async def test_running_or_unknown_writer_never_released_by_selection(chosen_worl
     op = bundles.request(w)
     runtime = await await_runtime(ops, w['native_instances'], op)
     try:
+        run = pm_runs.get_by_operation(ops.db, op['operation_id'])
+        public = adapters.read(ops, plans.OWNER, w['workspace_id'])
+        assert public['writer'] == {'generation': run['generation'], 'occupied': True}
+        assert run['run_id'] not in json.dumps(public)
         with pytest.raises(OperationError, match='PM_WRITER_BUSY'):
             request(w, adapters.ADAPTERS[1])
     finally:
@@ -98,6 +102,39 @@ async def test_running_or_unknown_writer_never_released_by_selection(chosen_worl
     else:
         assert result['status'] == 'succeeded', result
         assert (await select(w, adapters.ADAPTERS[1]))['result']['version'] == 2
+
+
+async def test_same_workspace_reader_cannot_discover_private_active_writer_id(chosen_world, monkeypatch):
+    w, ops = chosen_world, chosen_world['d'].ops
+    reader = Principal('limited-source-reader', frozenset({'observe'}))
+    workspace = pm_workspace.get_workspace(ops.db, plans.OWNER, w['workspace_id'])
+    member = ops.create(plans.OWNER, action='pm.workspace.member.set', target={'workspace_id': w['workspace_id']},
+        params={'actor': reader.actor, 'role': 'reader'}, preconditions={'expected_version': workspace['version']},
+        idempotency_key=uuid.uuid4().hex)[0]
+    assert (await bundles.finish(w, member))['status'] == 'succeeded'
+    await select(w)
+    message = await plans.act(w, 'pm.message.append', {'content': 'A separately protected original discussion source'})
+    source = ops.db.execute('SELECT operation_id FROM pm_messages WHERE message_id=?', (message['message_id'],)).fetchone()[0]
+    w['native_settings']['block_turn'] = True
+    op = bundles.request(w)
+    runtime = await await_runtime(ops, w['native_instances'], op)
+    try:
+        run = pm_runs.get_by_operation(ops.db, op['operation_id'])
+        assert pm_runs.read(ops, reader, w['workspace_id'], run['run_id'])['run_id'] == run['run_id']
+        original = pm_access.visible
+        # Withdraw one actual original message at the central source access seam,
+        # keeping both membership and the accepted document carrier readable.
+        monkeypatch.setattr(pm_access, 'visible', lambda db, principal, value:
+            not (principal.actor == reader.actor and value['operation_id'] == source) and original(db, principal, value))
+        with pytest.raises(OperationError):
+            pm_runs.read(ops, reader, w['workspace_id'], run['run_id'])
+        public = adapters.read(ops, reader, w['workspace_id'])
+        assert public['choice'] is not None
+        assert public['writer'] == {'occupied': True, 'generation': run['generation']}
+        assert run['run_id'] not in json.dumps(public) and op['operation_id'] not in json.dumps(public)
+    finally:
+        runtime.release.set()
+        await bundles.finish(w, op)
 
 
 async def test_queued_analysis_cannot_start_after_choice_changes(chosen_world):

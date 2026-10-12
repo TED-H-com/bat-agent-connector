@@ -64,8 +64,11 @@ def _authority(db, principal, wid):
 
 
 def _continuity(db, principal, wid):
+    workspace = pm_workspace.require_member(db, principal, wid)
     current = pm_plans.head(db, wid)
     carrier = pm_runs.workspace_worktree(db, wid)
+    if carrier and carrier['target']['repository'].lower() not in {repo.lower() for repo in workspace['repositories']}:
+        raise bad('Original PM repository is unavailable', 'NOT_FOUND', 404)
     selected = pm_context_bundles._selected(db, principal, wid)[0] if current['accepted_revision_id'] else None
     sources = set(selected['source_operation_ids'] if selected else [])
     if carrier:
@@ -223,4 +226,5 @@ def read(ops, principal, wid):
             'expected_writer_generation': writer['generation'], 'expected_plan_version': continuity['plan_version'],
             'expected_accepted_revision_id': continuity['accepted_revision_id'],
             'expected_continuity_digest': pm_runs._digest(continuity)},
-        'writer': writer, 'runtime_preflight': 'not_performed', 'execution_authorized': False}
+        'writer': {'generation': writer['generation'], 'occupied': writer['run_id'] is not None},
+        'runtime_preflight': 'not_performed', 'execution_authorized': False}
