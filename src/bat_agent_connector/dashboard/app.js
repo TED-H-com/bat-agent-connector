@@ -9308,7 +9308,7 @@ function maintenanceFindingsView({ h, t, workspaceId, data }) {
 }
 //#endregion
 //#region src/pm-maintenance-review-view.js
-function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, errorBox, onUnavailable, detail }) {
+function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, errorBox, onUnavailable, detail, candidateInput }) {
 	const { review, snapshot, completion, events } = detail, extension = snapshot?.maintenance, report = extension?.report;
 	if (review?.workspace_id !== workspaceId || snapshot?.workspace_id !== workspaceId || extension?.review_id !== review.review_id || review.snapshot_id !== snapshot.snapshot_id || !/^pmrevw_[0-9a-f]{32}$/.test(review.review_id) || extension.schema_version !== 1 || report?.schema_version !== 1 || report.meeting_completed !== false || report.scope_adopted !== false || report.automatic_maintenance_authorized !== false || !Array.isArray(events)) throw Error(t("pmrv_invalid"));
 	const text = (value) => h("p", { class: "pm-note-text" }, String(value));
@@ -9511,6 +9511,7 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 					rel: "noopener noreferrer"
 				}, source.title), line("pmrv_public_date", stamp(source.checked_at)), text(source.claim), text(t("pmrv_attributed_source")));
 			}
+			if (candidateInput) box.append(candidateInput(event));
 		}
 		if (event.kind === "complete") {
 			box.append(text(d.discussion_summary), line("pmrv_direction", label("pmrv_direction", d.direction)), text(d.direction_rationale), text(t("pmrv_completion_help")));
@@ -9543,8 +9544,212 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 	};
 }
 //#endregion
+//#region src/pm-review-candidate.js
+function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form, labelled, event, errorBox, namespace }) {
+	let dead = false, ticket = 0, loaded = false, reading = false, thread = null, request = null, rows = [], next = null;
+	const ref = event.planning_source, actor = caps()?.actor;
+	const valid = ref?.kind === "maintenance_review_candidate" && ref.review_id === event.review_id && ref.event_id === event.event_id && ref.document_digest === event.document_digest && ref.operation_id === event.operation_id && Object.keys(ref).sort().join(",") === "document_digest,event_id,kind,operation_id,review_id";
+	const supported = () => valid && caps()?.features?.pm_workspaces?.maintenance_review?.planning_candidate_source?.version === 1;
+	const guard = () => {
+		alive();
+		if (dead || caps()?.actor !== actor) throw Error(t("pmrv_candidate_unavailable"));
+	};
+	const current = (n) => {
+		guard();
+		return n === ticket;
+	};
+	const key = `${namespace}.candidate-destination.${event.event_id}`;
+	let selected = "";
+	try {
+		selected = localStorage.getItem(key) || "";
+	} catch {}
+	const status = h("div", { role: "status" }), body = h("div"), chooser = h("select", { "aria-label": t("pmrv_idea_choose") }), pages = h("div");
+	const refresh = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void load()
+	}, t("pmrv_idea_refresh"));
+	const element = h("details", { "data-review-candidate-import": event.event_id }, h("summary", {}, t("pmrv_add_to_idea")), h("p", { class: "muted" }, t("pmrv_idea_help")), labelled("pmrv_idea_choose", chooser), h("div", { class: "actions" }, refresh, pages), status, body);
+	function controls() {
+		chooser.disabled = reading || Boolean(request?.locked()) || !can();
+		refresh.disabled = reading || Boolean(request?.locked());
+	}
+	function update() {
+		controls();
+		request?.update();
+	}
+	function navigation() {
+		chooser.replaceChildren(h("option", { value: "" }, t("pmrv_idea_choose")), ...rows.filter((row) => row.mode === "idea").map((row) => h("option", { value: row.thread_id }, row.title)));
+		if (selected && ![...chooser.options].some((row) => row.value === selected)) chooser.append(h("option", { value: selected }, t("pmrv_idea_saved")));
+		chooser.value = selected;
+		pages.replaceChildren();
+		if (next) pages.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => void load(true)
+		}, t("pmrv_idea_more")));
+		controls();
+	}
+	async function choose() {
+		const n = ++ticket;
+		request?.dispose();
+		request = null;
+		thread = null;
+		body.replaceChildren();
+		status.replaceChildren();
+		if (!selected) return;
+		reading = true;
+		update();
+		try {
+			const data = await api("GET", `/pm/workspaces/${workspaceId}/threads/${encodeURIComponent(selected)}`);
+			if (!current(n)) return;
+			if (data.thread?.workspace_id !== workspaceId || data.thread.thread_id !== selected || !Number.isSafeInteger(data.thread.version)) throw Error(t("pmrv_candidate_unavailable"));
+			thread = data;
+			const slot = h("select", { "aria-label": t("pmrv_idea_topic") }, ...[
+				"governance",
+				"scope",
+				"schedule",
+				"finance",
+				"stakeholders",
+				"resources",
+				"risk",
+				"quality"
+			].map((value) => h("option", { value }, t("pm_slot_" + value))));
+			slot.value = "scope";
+			slot.dataset.pmDefault = "scope";
+			const version = h("input", {
+				type: "hidden",
+				value: String(data.thread.version)
+			});
+			version.dataset.pmDefault = version.value;
+			const stale = () => Number(version.value) !== thread?.thread.version;
+			const warning = h("p", { class: "muted" }, t("pmrv_idea_stale"));
+			const rebase = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					guard();
+					if (request && !request.locked() && can()) {
+						request.set("version", String(thread.thread.version));
+						sync();
+						request.update();
+					}
+				}
+			}, t("pmrv_idea_use_version"));
+			const sync = () => {
+				warning.hidden = rebase.hidden = !stale();
+				rebase.disabled = !can() || Boolean(request?.locked());
+				navigation();
+			};
+			request = form({
+				action: "pm.input.record",
+				target: {
+					workspace_id: workspaceId,
+					thread_id: selected
+				},
+				guard,
+				namespace: `${namespace}.review-candidate.${event.event_id}`,
+				fields: {
+					slot,
+					version
+				},
+				params: (values) => ({
+					slot: values.slot,
+					value: event.document.title,
+					status: "unresolved",
+					source_ref: ref
+				}),
+				preconditions: () => ({ expected_version: Number(version.value) }),
+				permitted: () => supported() && can() && thread?.capabilities?.write === true && thread.thread.mode === "idea" && !stale(),
+				recoverPermitted: () => can() && thread?.capabilities?.write === true,
+				label: "pmrv_add_to_idea",
+				onStateChange: () => {
+					if (request) sync();
+				},
+				onSaved: () => {
+					guard();
+					status.replaceChildren(h("p", {}, t("pmrv_idea_saved_input")), h("a", { href: `#/pm/${workspaceId}/${selected}` }, t("pmrv_idea_open")));
+				},
+				extra: h("div", { class: "pm-fields" }, labelled("pmrv_idea_topic", slot), version)
+			});
+			body.append(thread.thread.mode !== "idea" ? h("p", { class: "muted" }, t("pmrv_idea_only")) : "", request.box, warning, rebase, h("a", { href: `#/pm/${workspaceId}/${selected}` }, t("pmrv_idea_open")));
+			sync();
+		} catch (error) {
+			if (n === ticket && !dead) {
+				thread = null;
+				body.replaceChildren();
+				status.replaceChildren(errorBox(error));
+			}
+		} finally {
+			reading = false;
+			update();
+		}
+	}
+	async function load(more = false) {
+		if (reading || request?.locked() || !supported()) return;
+		const n = ++ticket;
+		reading = true;
+		update();
+		try {
+			const after = more ? next : null, data = await api("GET", `/pm/workspaces/${workspaceId}/threads?limit=20${after ? "&after=" + encodeURIComponent(after) : ""}`);
+			if (!current(n)) return;
+			if (data.workspace_id !== workspaceId || !Array.isArray(data.threads) || data.threads.some((row) => row.workspace_id !== workspaceId) || data.next_cursor != null && (!/^pmt_[0-9a-f]{32}$/.test(data.next_cursor) || data.next_cursor === after)) throw Error(t("pmrv_candidate_unavailable"));
+			rows = more ? [...rows, ...data.threads.filter((row) => !rows.some((old) => old.thread_id === row.thread_id))] : data.threads;
+			next = data.next_cursor;
+			loaded = true;
+			navigation();
+			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(h("p", { class: "muted" }, t("pmrv_idea_empty")));
+			if (selected && !more) await choose();
+		} catch (error) {
+			if (n === ticket && !dead) {
+				thread = null;
+				request?.update();
+				status.replaceChildren(errorBox(error));
+			}
+		} finally {
+			reading = false;
+			update();
+		}
+	}
+	chooser.addEventListener("change", () => {
+		guard();
+		if (request?.locked()) return;
+		selected = chooser.value;
+		try {
+			localStorage.setItem(key, selected);
+		} catch {}
+		choose();
+	});
+	element.addEventListener("toggle", () => {
+		if (element.open && !loaded) load();
+	});
+	element.hidden = !supported();
+	return {
+		element,
+		update,
+		dispose: () => {
+			dead = true;
+			ticket++;
+			request?.dispose();
+		}
+	};
+}
+function reviewCandidateProof({ h, t, source }) {
+	const d = source.document;
+	return h("details", { "data-review-candidate-proof": "" }, h("summary", {}, t("pmrv_idea_original")), h("p", { class: "muted" }, t("pmrv_idea_original_help")), ...[
+		"title",
+		"problem",
+		"goal_relation",
+		"expected_effect",
+		"rationale"
+	].map((key) => h("p", { class: "pm-note-text" }, h("strong", {}, t("pmrv_" + ({
+		title: "candidate_title",
+		rationale: "reason"
+	}[key] || key))), ": ", d[key])), h("p", { class: "pm-source" }, `${source.kind} · ${d.disposition} · ${source.event_id}`), h("details", {}, h("summary", {}, t("pmrv_proof")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(source, null, 2))));
+}
+//#endregion
 //#region src/pm-maintenance-review.js
-function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox }) {
+function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, prefix = "pm.maintenance_review.";
 	const navigationKey = `batc.pm.review-navigation.${workspaceId}.${caps()?.actor}`;
 	let selected = "";
@@ -9552,7 +9757,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		const value = JSON.parse(localStorage.getItem(navigationKey) || "{}");
 		if (typeof value.review_id === "string") selected = value.review_id;
 	} catch {}
-	let model = null, ready = false, ticket = 0, forms = [], widgets = [], signature = "", dirty = false, editorId = null, output = null;
+	let model = null, ready = false, ticket = 0, forms = [], widgets = [], signature = "", dirty = false, editorId = null, output = null, imports = [];
 	const status = h("div", { role: "status" }), scheduleView = h("div"), view = h("div"), editors = h("div"), warning = h("p", {
 		class: "muted",
 		hidden: true
@@ -9661,11 +9866,14 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		rebase.disabled = !ready;
 		choose.disabled = !ready;
 		output?.update();
+		imports.forEach((item) => item.update());
 	}
 	function withdraw() {
 		ticket++;
 		ready = false;
 		model = null;
+		imports.forEach((item) => item.dispose());
+		imports = [];
 		view.replaceChildren();
 		scheduleView.replaceChildren();
 		choose.replaceChildren();
@@ -10212,12 +10420,32 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		return data;
 	}
 	function renderView() {
+		imports.forEach((item) => item.dispose());
+		imports = [];
 		view.replaceChildren();
 		output = null;
 		if (!model.detail) {
 			view.append(text(model.current.visibility_filtered ? "pmrv_hidden" : "pmrv_empty"));
 			return;
 		}
+		const candidateInput = (event) => {
+			const entry = reviewCandidateToIdea({
+				h,
+				t,
+				api,
+				alive,
+				workspaceId,
+				caps,
+				can,
+				form,
+				labelled,
+				event,
+				errorBox,
+				namespace
+			});
+			imports.push(entry);
+			return entry.element;
+		};
 		output = maintenanceReviewView({
 			h,
 			t,
@@ -10228,7 +10456,8 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			readable,
 			errorBox,
 			onUnavailable: failure,
-			detail: model.detail
+			detail: model.detail,
+			candidateInput
 		});
 		view.append(output.element);
 		const detail = model.detail;
@@ -14461,7 +14690,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		form,
 		input,
 		labelled,
-		errorBox
+		errorBox,
+		namespace
 	}) : null;
 	if (maintenanceReview) body.insertBefore(maintenanceReview.element, content);
 	const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap ? workspaceRoadmap({
@@ -14725,6 +14955,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				time: time(message.created_at)
 			}) : t("pm_saved_note_source");
 		}
+		if (source.kind === "maintenance_review_candidate") return t("pmrv_idea_original") + " · " + source.event_id;
 		return [
 			source.ref,
 			source.revision,
@@ -15083,6 +15314,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					"conflicting",
 					"agent_assumption"
 				].includes(item.status) ? "warn" : ""}` }, t("pm_status_" + item.status))), h("p", { class: "pm-note-text" }, item.value), h("p", { class: "muted pm-source" }, sourceText(item)), h("p", { class: "muted" }, item.status === "user_confirmed" ? t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by }) : t("pm_unverified")));
+				if (item.source_candidate) row.append(reviewCandidateProof({
+					h,
+					t,
+					source: item.source_candidate
+				}));
 				if (data.capabilities?.decide && item.status !== "user_confirmed") {
 					const rationale = input("pm_confirm_rationale", { max: 2e3 });
 					const confirm = form({
@@ -20025,6 +20261,22 @@ var maintenanceFindingStrings = {
 //#endregion
 //#region src/pm-maintenance-review-strings.js
 var rows$1 = {
+	add_to_idea: ["Add to Idea discussion", "加入 Idea 討論"],
+	idea_choose: ["Choose an existing Idea discussion", "選擇既有 Idea 討論"],
+	idea_help: ["Select an existing Idea and topic. The original candidate is saved as unresolved; confirming a direction and adopting a plan remain separate actions.", "選擇既有 Idea 與主題。原候選會保存為待確認；確認方向與採用計畫仍是後續各自的操作。"],
+	idea_refresh: ["Refresh Idea discussions", "重新讀取 Idea 討論"],
+	idea_more: ["More discussions", "更多討論"],
+	idea_saved: ["Previously selected discussion", "先前選定的討論"],
+	idea_topic: ["Topic for this candidate", "這個候選的主題"],
+	idea_empty: ["Create an Idea discussion in this PM workspace first, then return to select it.", "請先在此 PM workspace 建立 Idea 討論，再回來選擇。"],
+	idea_stale: ["The discussion changed. Review its current version before adding a new input.", "討論已變更。加入新輸入前，請先檢視目前版本。"],
+	idea_use_version: ["Use this discussion version", "使用目前討論版本"],
+	idea_only: ["This discussion is no longer in Idea. The original request can still be checked.", "此討論已不在 Idea 階段，仍可查回原請求。"],
+	idea_saved_input: ["Original candidate saved as unresolved. No plan was adopted.", "原候選已保存為待確認，尚未採用計畫。"],
+	idea_open: ["Open selected discussion", "開啟選定討論"],
+	candidate_unavailable: ["The original candidate or selected discussion is unavailable.", "無法讀取原候選或選定討論。"],
+	idea_original: ["Original maintenance candidate", "原維護候選"],
+	idea_original_help: ["This fixed proposal retains its original wording, disposition and sources. The input’s confirmation does not rewrite the original Review.", "這份固定提案保留原文字、處置與來源；輸入的確認不會改寫原 Review。"],
 	source_repairs: ["Maintenance repair outcomes", "維護修復成果"],
 	ref_maintenance_repair: ["Original maintenance repair", "原維護修復工作"],
 	repair_outcome: ["Saved repair outcome", "已保存修復結果"],

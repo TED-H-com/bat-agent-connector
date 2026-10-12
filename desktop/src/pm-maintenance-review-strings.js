@@ -1,4 +1,13 @@
 const rows={
+  add_to_idea:['Add to Idea discussion','加入 Idea 討論'],idea_choose:['Choose an existing Idea discussion','選擇既有 Idea 討論'],
+  idea_help:['Select an existing Idea and topic. The original candidate is saved as unresolved; confirming a direction and adopting a plan remain separate actions.','選擇既有 Idea 與主題。原候選會保存為待確認；確認方向與採用計畫仍是後續各自的操作。'],
+  idea_refresh:['Refresh Idea discussions','重新讀取 Idea 討論'],idea_more:['More discussions','更多討論'],idea_saved:['Previously selected discussion','先前選定的討論'],
+  idea_topic:['Topic for this candidate','這個候選的主題'],idea_empty:['Create an Idea discussion in this PM workspace first, then return to select it.','請先在此 PM workspace 建立 Idea 討論，再回來選擇。'],
+  idea_stale:['The discussion changed. Review its current version before adding a new input.','討論已變更。加入新輸入前，請先檢視目前版本。'],idea_use_version:['Use this discussion version','使用目前討論版本'],
+  idea_only:['This discussion is no longer in Idea. The original request can still be checked.','此討論已不在 Idea 階段，仍可查回原請求。'],
+  idea_saved_input:['Original candidate saved as unresolved. No plan was adopted.','原候選已保存為待確認，尚未採用計畫。'],idea_open:['Open selected discussion','開啟選定討論'],
+  candidate_unavailable:['The original candidate or selected discussion is unavailable.','無法讀取原候選或選定討論。'],idea_original:['Original maintenance candidate','原維護候選'],
+  idea_original_help:['This fixed proposal retains its original wording, disposition and sources. The input’s confirmation does not rewrite the original Review.','這份固定提案保留原文字、處置與來源；輸入的確認不會改寫原 Review。'],
   source_repairs:['Maintenance repair outcomes','維護修復成果'],ref_maintenance_repair:['Original maintenance repair','原維護修復工作'],
   repair_outcome:['Saved repair outcome','已保存修復結果'],repair_pending:['Outcome not yet proven','結果尚未證實'],
   repair_published_for_review:['Published for review','已發布供審查'],repair_merged:['Merged','已合併'],repair_deployed:['Deployed','已部署'],

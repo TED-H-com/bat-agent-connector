@@ -2,7 +2,7 @@ import {briefExport} from './pm-brief-export.js';
 import {maintenanceFindingsView} from './pm-maintenance-findings.js';
 
 // Render only the supplied original Snapshot. Discussion stays in separate records.
-export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable,detail}) {
+export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable,detail,candidateInput}) {
   const {review,snapshot,completion,events}=detail,extension=snapshot?.maintenance,report=extension?.report;
   if(review?.workspace_id!==workspaceId||snapshot?.workspace_id!==workspaceId||extension?.review_id!==review.review_id
     ||review.snapshot_id!==snapshot.snapshot_id||!/^pmrevw_[0-9a-f]{32}$/.test(review.review_id)
@@ -116,6 +116,7 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
         let url;try{url=new URL(source.url);if(url.protocol!=='https:'||url.username||url.password)throw Error();}catch{throw Error(t('pmrv_invalid'));}
         box.append(h('a',{href:url.href,target:'_blank',rel:'noopener noreferrer'},source.title),line('pmrv_public_date',stamp(source.checked_at)),text(source.claim),text(t('pmrv_attributed_source')));
       }
+      if(candidateInput)box.append(candidateInput(event));
     }
     if(event.kind==='complete'){
       box.append(text(d.discussion_summary),line('pmrv_direction',label('pmrv_direction',d.direction)),text(d.direction_rationale),text(t('pmrv_completion_help')));

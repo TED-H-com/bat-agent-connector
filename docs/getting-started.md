@@ -62,31 +62,86 @@ comes from that central's capabilities; an older installation may expose fewer
 steps. See the [current PM implementation status](product/pm-v1.2-status.md) for
 merged, candidate and remaining work.
 
+**PM runtime prerequisite:** plan proposals and Follow-up analysis currently run
+on a configured **Linux central service**, independently of the client OS. Its
+service account needs Codex CLI **0.160.0**, bubblewrap, and a readable regular
+native sign-in file in its configured `CODEX_HOME` (normally `~/.codex/auth.json`).
+The current adapter does not import custom provider configuration or API-key
+environment variables, and does not support administrator-managed Codex
+configuration. Do not remove managed policy to enable it. Windows/macOS clients
+can join that configured central. See the [native runtime boundary](design/pm-native-runtime.md).
+Selecting BAT for ordinary discussion analysis does not move plan-proposal or
+Follow-up generation to BAT. BAT analysis additionally requires the reviewed
+dedicated PM runtime on the selected Linux BAT host; ordinary read-only BAT
+settings are insufficient. See [BAT analysis prerequisites](design/pm-bat-analysis.md).
+Capabilities show installation eligibility; each run still checks the actual
+runtime, authentication and original completion evidence.
+
 1. Open **PM**, create a workspace and start an Idea discussion. Save the project
    goal and constraints in ordinary notes—for example, member login and password
    reset, with referral codes outside the first release.
-2. Under **Plan update from this discussion**, prepare a proposal. The configured
+2. Open **Prepare discussion context** → **Save in a PM worktree**. Choose the
+   intended existing repository/host/workspace connection, enter the published
+   branch and choose **Preview published revision**. Check the fixed commit,
+   describe the purpose and **Save context package**. This needs the repository
+   binding and managed Git/start prerequisites described above. **Discussion
+   record only** does not prepare the Git worktree needed for adoption or BAT
+   analysis. Later requests can select **Use the existing PM worktree**.
+3. Under **Plan update from this discussion**, prepare a proposal. The configured
    native analysis runtime must be available. Review its source quotes, retained
    requirements, exclusions, proposed removals and open questions. Edit the
    wording as needed, then adopt the whole update once. Adoption needs workspace
    owner authority and the prepared PM-owned Git worktree.
-3. Associate the adopted requirements with work, prepare the engineering packages
+4. Associate the adopted requirements with work, prepare the engineering packages
    and review their explicit repository/commit destinations. An accepted plan
    records direction; starting a package is a separate product action.
-4. Verify the fixed result using the configured command or original GitHub checks.
+5. Verify the fixed result using the configured command or original GitHub checks.
    Appoint a **Quality review** against the fixed criteria and Definition of Done.
    The responsible reviewer records conclusions, reasons and original evidence.
    Select that assessment for the work or its dependency condition; the shared
    views use the same original result. Passing tests alone leave acceptance open.
-5. After publication, record the verified release baseline and review a maintenance
+6. After publication, record the verified release baseline and review a maintenance
    policy's sources, repair bounds and delivery ceiling. Maintenance Review shows
    the original findings and repair receipts. A published PR, merged result,
    verified deployment and completed runtime remain distinct facts.
+   Enable a reviewed policy with the explicit GitHub observation profile, sources,
+   budget and repair rule before expecting scheduled checks or repairs. Maintain
+   entry requires a fresh, complete eligible workload observation; an idle-looking
+   session or a retained finished worktree does not decide the stage.
+7. In **Project Brief**, **Save project snapshot**, select that saved snapshot and
+   open its download controls. Choose SVG, Markdown or HTML and the language.
+   Every export uses that same fixed snapshot. In Review, select the intended
+   snapshot, record discussion and feedback, then record the owner's outcome and
+   owned next steps. A prepared report or downloaded SVG is not a completed Review.
+   Select the previous Review when preparing the next one to retain its decisions
+   and reported effects.
+8. To explore a saved Maintenance Review candidate, first create or select an
+   existing **Idea** in this workspace. Open that candidate's **Add to Idea
+   discussion**, choose the Idea and topic, and submit. The full original proposal,
+   rationale and source identities remain attached; the new input starts
+   unresolved. Open the selected discussion to confirm or select its direction,
+   then explicitly prepare Planning or a plan proposal. Importing a candidate
+   does not adopt it, create a discussion automatically or start work.
+9. For another analysis, open **Ask the PM** and choose the adapter. Under
+   **Accepted plan for this analysis (optional)**, preview the accepted revision,
+   check complete/omitted file coverage, then select that exact version. Without
+   this selection the analysis uses the bounded discussion context. On the BAT
+   adapter, a new request uses a new owned session on the same binding after the
+   original turn and process death are proven. Service restart preserves the
+   discussion and fixed files; an unknown old writer blocks a successor.
+10. Under **Project activity**, record a reason to pause or close. New managed work
+    stops; inspect original in-flight operations and readable results. Reopen is
+    an explicit owner action with the current lifecycle version. It does not
+    replay old commands or resume the old execution epoch. Retaining an unresolved
+    operation is not proof that its runtime stopped or permission to resend it.
 
 A missing runtime, Git worktree, verifier or original source is reported at its
 step. Resolve that prerequisite before starting a new action. For a lost reply,
 use **Check original request** with the saved draft; recovery retains its original
 version and operation. Human checkouts and manual sessions remain read-only.
+These steps describe available product actions, not a claim that the complete
+14-step M4 live acceptance has run. Record actual operation, source, runtime and
+delivery receipts separately from offline tests and CI.
 
 ## Advanced: existing central and operator deployment
 

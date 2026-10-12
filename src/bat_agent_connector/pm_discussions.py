@@ -127,6 +127,9 @@ def _authorize_existing(ops, principal, op, control):
 
 
 def _source(db, thread_id, value):
+    from . import pm_review_candidate_sources as candidates
+    if isinstance(value, dict) and value.get('kind') == candidates.KIND:
+        return candidates.validate(value)
     _only(value, ("kind", "message_id", "ref", "revision", "path"))
     kind = value.get("kind")
     if not isinstance(kind, str):
@@ -184,6 +187,12 @@ def _check(ops, principal, action, target, params, pre):
         if params.get("status") not in pm_profiles.STATUSES:
             raise _bad("unknown input status")
         _source(ops.db, thread["thread_id"], params.get("source_ref"))
+        from . import pm_review_candidate_sources as candidates
+        if params['source_ref']['kind'] == candidates.KIND:
+            event = candidates.require(ops, principal, target['workspace_id'], params['source_ref'])
+            if (thread['mode'] != 'idea' or params['status'] != 'unresolved'
+                    or params['value'] != event['document']['title'] or params.get('supersedes_input_id') is not None):
+                raise candidates.invalid()
         if params.get("status") == "repo_evidence" and params["source_ref"]["kind"] != "repository":
             raise _bad("repo_evidence needs an attributed repository reference")
         revision = params.get("applicable_revision")
@@ -243,8 +252,15 @@ def _derived_sources(db, action, thread, params):
 def _admitter(action):
     def admit(ops, principal, target, params, pre):
         _, thread = _check(ops, principal, action, target, params, pre)
-        return {"principal": pm_workspace.principal_binding(principal),
+        binding = {"principal": pm_workspace.principal_binding(principal),
                 "pm_discussion_sources": {"operation_ids": _derived_sources(ops.db, action, thread, params)}}
+        from . import pm_review_candidate_sources as candidates
+        from . import pm_source_lineage
+        if action == candidates.ACTION and params.get('source_ref', {}).get('kind') == candidates.KIND:
+            if not pm_source_lineage.installed(ops.db):
+                raise OperationError('PM_SOURCE_UNAVAILABLE', 'Original source lineage is unavailable', 409)
+            binding.update(pm_review_candidate=params['source_ref'], pm_lineage={'workspace_id': target['workspace_id']})
+        return binding
     return admit
 
 
@@ -336,6 +352,10 @@ def _input_out(row, *, db=None):
     result["source_ref"] = json.loads(result["source_ref"])
     result["evidence_verification"] = "central_message" if result["source_ref"]["kind"] == "message" else "unverified_claim"
     if db is not None:
+        from . import pm_review_candidate_sources as candidates
+        if result['source_ref']['kind'] == candidates.KIND:
+            result['source_candidate'] = candidates.projection(db, result['workspace_id'], result['source_ref'])
+            result['evidence_verification'] = 'original_maintenance_review_candidate'
         from .pm_conversation_adoption import input_disposition
         result = input_disposition(db, result)
     return result
@@ -484,6 +504,8 @@ def context(ops, principal, workspace_id, thread_id, *, max_chars=32000):
         seen.add(item["input_id"])
         size = len(json.dumps(item, ensure_ascii=False))
         if used + size > max_chars:
+            if item.get('source_candidate'):
+                raise _bad('The complete original maintenance candidate exceeds the selected context budget', 'PM_CONTEXT_TOO_LARGE', 413)
             result["coverage"]["omitted_input_ids"].append(item["input_id"])
         else:
             result["inputs_by_status"][item["status"]].append(item)
