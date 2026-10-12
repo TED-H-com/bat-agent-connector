@@ -151,6 +151,21 @@ ACK, process exit and an unverified draft are not completion. Cancellation targe
 the original operation and reconciles its own process; never resend or take over
 another session to repair an unknown analysis result.
 
+When `features.pm_workspaces.workspace_adapter.version` is 1, the workspace
+capabilities read also returns `workspace_adapter`: the original saved choice,
+writer status, availability and exact selection preconditions. An owner with
+observe/manage/start may use `pm.workspace.adapter.select`, target `{workspace_id}`,
+params `{adapter,rationale}`, copying all returned preconditions unchanged. The
+supported choices are `codex-native-linux` and `bat-pm-linux-v1`. This local receipt
+does not launch work or prove runtime/auth/model readiness. An occupied or unknown
+writer must reconcile first; never clear its slot to switch. Once saved, all new
+ordinary/structured PM analysis must explicitly use that adapter. Existing pending
+operations retain their original adapter/key, and queued old-choice requests may
+be refused before starting. Recover original receipts through the existing operation
+read; a new choice never replaces their source references. An unconfigured workspace
+keeps the existing per-request adapter behavior. This is bounded PM analysis, not
+native coding or AHP execution support.
+
 When plan actions are advertised, `pm.thread.plan.revise` explicitly updates a
 Planning discussion's selected current inputs. It requires owner authority,
 `expected_version` and `expected_draft_id`, plus selected IDs and a rationale.

@@ -274,6 +274,8 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
                     workspace_id, thread_id, principal.actor, adapter, purpose, expected_version, execution_authority, max_chars):
                 raise _error("Original PM run intent differs")
             return run
+        from .pm_workspace_adapter import require_new_run
+        require_new_run(ops, principal, operation_id, workspace_id, adapter)
         from .pm_lifecycle_gates import require_local
         require_local(ops.db, operation_id)
         if not principal.allows("manage"):

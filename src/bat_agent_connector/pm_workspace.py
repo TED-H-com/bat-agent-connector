@@ -129,6 +129,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         from .pm_context_bundles import operation_visible as bundle_visible
         if not bundle_visible(db, principal, op):
             return False
+    if op['action'] == 'pm.workspace.adapter.select':
+        from .pm_workspace_adapter import operation_visible as adapter_visible
+        return adapter_visible(db, principal, op)
     if op['action'].startswith('pm.lifecycle.'):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         return lifecycle_visible(db, principal, op)

@@ -82,6 +82,9 @@ def event_visible(db, principal, event):
     from .pm_source_lineage import document_roots, visible_roots
     if not visible_roots(db, principal, document_roots(db, event)):
         return False
+    if event['resource_type'] == 'pm_workspace_adapter':
+        from .pm_workspace_adapter import operation_visible
+        return operation_visible(db, principal, {'operation_id': event.get('body', {}).get('operation_id')})
     if event["resource_type"] == "operation":
         row = db.execute("SELECT operation_id,actor,action,target,result FROM operations WHERE operation_id=?",
                          (event["resource_id"],)).fetchone()
