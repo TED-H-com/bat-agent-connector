@@ -19,7 +19,7 @@ def journal_change(db):
         db.execute('RELEASE fixture_reservation_negative')
 
 
-async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blocking(joined, mock, monkeypatch):  # noqa: F811
+async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blocking(joined, mock, monkeypatch, record_property):  # noqa: F811
     original_check, inspected = repairs._check, []
     def check(ops, principal, target, params, pre, *, reserving=False):
         if reserving:
@@ -61,6 +61,6 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
             inspected.append(ctx.operation_id)
         return original_check(ops, principal, target, params, pre, reserving=reserving)
     monkeypatch.setattr(repairs, '_check', check)
-    await run_story(joined, mock, monkeypatch)
+    await run_story(joined, mock, monkeypatch, record_property)
     assert len(inspected) == 1
     assert repairs._RESERVING_WORKLOAD.get() is None
