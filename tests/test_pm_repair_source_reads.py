@@ -1,19 +1,19 @@
 """The actual Review-to-Idea DAG reuses only complete repair source decisions."""
 import asyncio
 import copy
+import uuid
 from collections import Counter
 from dataclasses import replace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_runs, pm_source_reads
+from bat_agent_connector import pm_access, pm_discussions, pm_run_operations, pm_runs, pm_source_reads
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector.operations import OperationError
 from tests import test_pm_joined_lifecycle as story
 from tests.pm_joined_lifecycle_helpers import OWNER
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
 from tests.test_pm_publication_source_reads import measured
-from tests.test_pm_runs import create as freeze_run
 
 
 class SourcesChecked(Exception):
@@ -30,7 +30,12 @@ async def test_complete_repair_sources_are_reused_in_original_review_pm_context(
         target = {'workspace_id': wid, 'thread_id': w['ledger'].references['next_idea_thread_id']}
         # Freeze the existing local context seam, not another model execution.
         # Its actual original Review candidate carries the complete repair DAG.
-        run = freeze_run(ops, target, who=OWNER, max_chars=64000)
+        operation_id = 'op_' + uuid.uuid4().hex
+        authority = pm_run_operations.execution_authority(ops.db, OWNER, wid, operation_id)
+        run = pm_runs.create(ops, OWNER, **target, operation_id=operation_id,
+            expected_version=pm_discussions.get_thread(ops, OWNER, **target)['thread']['version'],
+            adapter='bat.codex', purpose='Read the original Review candidate',
+            execution_authority=authority, max_chars=64000)
         assert run['status'] == 'prepared'
         source, calls = repairs._access, Counter()
         def counted(reader, principal, original):
