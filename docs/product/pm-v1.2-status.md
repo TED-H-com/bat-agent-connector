@@ -3,7 +3,38 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
-## 目前整合狀態（2026-10-12 13:27 UTC）
+## 目前整合狀態（2026-10-12 14:12 UTC）
+
+主線仍為 #115 的 `c0027daa`；M4 [#116](https://github.com/teddashh/bat-agent-connector/pull/116)
+固定候選為 `15752e1`（core `0.2.6`／desktop `0.1.2`），尚未合併。
+該來源的 desktop 五個 jobs、Pages 驗證與 secret scan 已通過，Linux 共享 UI 為
+2,013 項通過、3 項跳過；四個 Python 版本的完整 CI 仍在執行。
+四平台 core `0.2.5` → `0.2.6` 升級、Windows／兩種 macOS 的安裝 fixture，
+以及 Linux DEB 解包後的 WebView fixture，共八份原始回執及 GitHub artifact 雜湊已核對。
+Linux 解包驗證不代表 OS 套件安裝，CI 也不代表 owner 已安裝或 live 驗收。
+
+本機 `3b27301` 的 Python src/tests 與該 M4 候選相同。完整同帳本流程在 Python 3.12
+通過（254.16 秒），但 Python 3.10 仍於最後 PM 接續送出超過原 60 秒 wave
+（整例 367.40 秒）；原送出不確定，尚未完成該次 lost-ACK 恢復。原 repair observer
+已成功。失敗帳本與 IO 壓力記錄保留，不以起始低負載或單次通過掩蓋失敗。
+
+下一批本機候選已整合以下範圍，尚未推送或合併；最終整合驗證仍在執行：
+
+| 範圍 | 使用行為與限制 | 已有來源證據 |
+| --- | --- | --- |
+| W24 workspace PM 選擇 | 保存 native／BAT 有界討論 runtime，沿原文件與 CAS 建立新自有 run；佔用或不確定 writer 不清除，恢復先查原 key | `2dd2151` Python 3.12／3.10 各 39 項；共享 UI 與原 W24 來源相同 |
+| 人工序列活動觀察 | 只讀 2–64 次完整、不交錯的原生輸入；缺 replay、排隊或身分改變仍未知；回執之後的完整 inventory 必須符合原 workspace／SDK／counter | `b58b29d` 新 56 項 Python 3.12 通過；相關雙版回歸待完成；UI `7ec49f3` 44 項通過及英／繁中窄畫面檢視 |
+| BAT PM 每次查核 | 同步範圍內共用歷史來源讀取，保留兩次目前 requester／writer 查核；跨 I/O 或新 frame 重新檢查 | `a99a8f2` Python 3.12／3.10 各 22 項；小 fixture SELECT 103 → 69，原完整流程仍待核對 |
+
+下一批準備 core `0.2.7`／desktop `0.1.3`，其升級 baseline 暫固定為上述 M4 候選；
+若 M4 來源再修正，須同步基準後重新收齊下一批實包證據。原生工具不提供原子 workspace／
+input 快照，人工觀察不能控制未來活動；詳見[原回合與人工活動契約](../design/pm-execution-runtime-completion.md)。
+這批不宣稱完成一般 native coding、AHP create-own、完整 M5／M6、owner 安裝或 live 模型驗收。
+跨 CLI 用量／效率機制保留於 W30 規劃，尚未實作 collector，也沒有更改模型政策。
+
+## 前次整合紀錄（2026-10-12 13:27 UTC）
+
+以下保留各固定來源當時的結果與失敗；目前狀態以上節為準。
 
 #98–#115 已合併，主線為 `c0027daa`。下列分開記錄已合併來源與本機接續候選；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。

@@ -1,5 +1,19 @@
 # Better Agent Dashboard／Connector 實作狀態
 
+2026-10-12 14:12 UTC：M4 [#116](https://github.com/teddashh/bat-agent-connector/pull/116)
+候選 `15752e1` 的 Windows、兩種 macOS、Linux 與 endpoint jobs 已通過；Linux
+共享 UI 2,013 項通過、3 項跳過，八份升級／桌面 fixture 回執及 artifact 雜湊已核對。
+四個 Python 版本的完整 CI 尚未結束。本機同來源 Python 3.12 完整流程通過，3.10
+晚段 PM 送出仍超時；不把任一單例或平台成功當成整體交付通過。主線仍為 `c0027daa`。
+
+下一批本機整合 workspace PM runtime 選擇、人工 2–64 次序列輸入的唯讀觀察，以及
+BAT PM 同步來源查核的重複讀取修正。core `0.2.7`／desktop `0.1.3` 尚未推送、合併或
+安裝；來源回歸與最終整合檢查分開記錄，詳見 [PM 開發狀態](pm-v1.2-status.md)。
+工具選擇不清除未知 writer，人工觀察不取得 session 控制權或代替品質驗收。
+W30 跨 CLI 用量／效率仍是規劃，完整 M5／M6 的未完範圍保留。
+
+以下保留前次固定來源紀錄；目前狀態以上述快照與 PM 開發狀態為準。
+
 2026-10-12 13:27 UTC：[M4 整合 PR #116](https://github.com/teddashh/bat-agent-connector/pull/116)
 尚未合併。`64c848a` 的四個 Python CI 均為 5,770 項通過、3 項失敗、51 項跳過：
 兩項公開版本 API 讀取失敗，以及完整流程的維修 GitHub 觀察超時。
