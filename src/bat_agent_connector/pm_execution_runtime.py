@@ -172,6 +172,8 @@ async def capture(ctx, sid, text):
     document = {'schema': 'pm_execution_native_turn_v1', 'workspace_id': parent['target']['workspace_id'],
         'parent_operation_id': parent['operation_id'], 'entry_key': selected['key'],
         'execution_operation_id': child['operation_id'], 'host': child['target']['host'], 'session_id': sid,
+        'bat_workspace_id': child['target']['workspace_id'],
+        'profile_id': ctx.service.context['fleet'].config.host(child['target']['host']).profile_id,
         'host_binding_digest': native._host_binding(ctx.service, child['target']['host']),
         'registry_incarnation': entry['controller_incarnation'], 'registry_created_at': entry['created_at'],
         'controller': controller_authority.operation_binding(child), 'confinement': entry['confinement'],
