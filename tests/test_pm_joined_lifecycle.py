@@ -38,7 +38,7 @@ async def joined(world, bat_world, mock, monkeypatch):  # noqa: F811
     return await prepare_world(world)
 
 
-async def test_same_ledger_development_and_semantic_dependency(joined, mock, monkeypatch):
+async def test_same_ledger_development_and_semantic_dependency(joined, mock, monkeypatch, record_property):
     w = await develop_original_requirements(joined, mock)
     assert w['ledger'].phases == ['idea_to_adopted_planning', 'development_and_quality']
     assert len(w['ledger'].references['execution_ids']) == 2
@@ -63,3 +63,7 @@ async def test_same_ledger_development_and_semantic_dependency(joined, mock, mon
     await repair_original_release(w, mock)
     await review_and_reopen(w, mock)
     await reconnect_and_replan(w, mock, monkeypatch)
+    w['ledger'].assert_original(w)
+    record_property('joined_workspace_id', w['ledger'].workspace_id)
+    record_property('joined_phases', json.dumps(w['ledger'].phases))
+    record_property('joined_original_references', json.dumps(w['ledger'].references, sort_keys=True))
