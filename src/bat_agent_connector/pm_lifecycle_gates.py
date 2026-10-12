@@ -18,10 +18,13 @@ from .operations import OperationError
 # None of these actions launches a runtime, changes accepted product scope, or
 # selects new development work. Their existing scope/source/owner checks still run.
 RECORD_ACTIONS = frozenset({
+    'pm.work_batch.evidence.record',
     'pm.workspace.member.set', 'pm.message.append', 'pm.input.record',
     'pm.evidence.capture', 'pm.snapshot.create', 'pm.roadmap.observe', 'pm.workload.capture', 'pm.github.observe',
     'pm.meeting.note', 'pm.meeting.complete', 'pm.meeting.follow_up.record',
     'pm.governance.adoption.link', 'pm.sprint.close', 'pm.sprint.cancel',
+    'pm.maintenance_review.prepare', 'pm.maintenance_review.note', 'pm.maintenance_review.candidate.record',
+    'pm.maintenance_review.complete', 'pm.maintenance_review.follow_up.record',
 })
 STOPPED = frozenset({'paused', 'closed'})
 # UI draft hints only; backend classification uses the original trusted binding.

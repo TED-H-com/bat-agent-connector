@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
-const packageId='pmwp_'+'6'.repeat(32),workId='wi_'+'7'.repeat(32),hash='a'.repeat(64),route=`/dashboard/#/pm/${workspaceId}`;
+const packageId='pmwp_'+'6'.repeat(32),workId='wi_'+'7'.repeat(20),hash='a'.repeat(64),route=`/dashboard/#/pm/${workspaceId}`;
 function fixture(){
   const base=pmFixture();
   const document={package_id:packageId,workspace_id:workspaceId,work_item_id:workId,title:'Restore member access',execution_authorized:false,quality_assessment:'unassessed',
@@ -106,4 +106,37 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`en
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.PM_WORK_PACKAGE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}
   await context.close();
+});
+
+for(const native of [false,true])test.describe(native?'native saved engineering delivery':'web saved engineering delivery',()=>{
+  test('saved delivery facts stay separate, paginate filtered pages and clear after source withdrawal',async({page})=>{
+    const f=fixture();let withdrawn=false;const deliveryCalls:string[]=[];
+    const row={operation_id:'op_'+'a'.repeat(32),action:'delivery.merge_and_deploy',status:'succeeded',target:{repository:'example/library',pull_number:12},
+      requirement_acceptance:'not_evaluated_by_delivery',merge:{merged:true,verified:false,merged_sha:'b'.repeat(40)},
+      deployment:{environment:'staging',state:'verified',verified:true,is_current:false,run_id:55,source_sha:'b'.repeat(40)}};
+    const dispatch=async(input:any)=>{
+      const url=new URL(input.path,'http://fixture'),p=url.pathname;
+      if(p.endsWith('/deliveries')){
+        deliveryCalls.push(input.path);
+        if(withdrawn)return{status:404,data:{error:{code:'NOT_FOUND',message:'Source withdrawn'}}};
+        const first=!url.searchParams.get('after')||url.searchParams.get('after')==='0';
+        return{status:200,data:{workspace_id:workspaceId,work_item_id:workId,contract:'pm-engineering-delivery/v1',
+          original_packages:[{workspace_id:workspaceId,package_id:packageId,document_digest:hash,operation_id:'op_'+'f'.repeat(32)}],
+          deliveries:first?[]:[row],next_after:first?12:null,source_visibility_filtered:first,requirement_acceptance:'not_evaluated_by_delivery'}};
+      }
+      const response=await f.dispatch(input);
+      if(p==='/bootstrap'||p==='/capabilities')(p==='/bootstrap'?response.data.capabilities:response.data).features.pm_workspaces.engineering_delivery={contract:'pm-engineering-delivery/v1',read_only:true};
+      return response;
+    };
+    await mountConversation(page,native,dispatch);await page.goto(route);await review(page);
+    const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator('summary').click();
+    await expect(box).toContainText('This page is incomplete.');await box.getByRole('button',{name:'More delivery records',exact:true}).click();
+    await expect(box).toContainText('Merge observed: Yes');await expect(box).toContainText('Merge verification: No');
+    await expect(box).toContainText('Runtime verification: Yes');await expect(box).toContainText('Current deployment: No');
+    await expect(box).toContainText('Requirements and Definition of Done still need their own assessment.');
+    expect(deliveryCalls.some(path=>path.includes('after=12'))).toBe(true);
+    withdrawn=true;await box.getByRole('button',{name:'Refresh delivery records',exact:true}).click();
+    await expect(box).toContainText('Delivery evidence is unavailable');await expect(box).not.toContainText('staging');
+    await expect(box.locator('a')).toHaveCount(0);
+  });
 });

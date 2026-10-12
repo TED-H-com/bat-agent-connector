@@ -201,6 +201,8 @@ def save_preview(ops, document: dict) -> dict:
             ops.db.execute("INSERT INTO pr_merge_previews VALUES (?,?,?,?,?,?,?)",
                            (doc["preview_id"], doc["repository"], doc["target"]["number"], json.dumps(doc),
                             doc["digest"], doc["created_at"], doc["expires_at"]))
+            from .pm_delivery_lineage import preserve_preview
+            preserve_preview(ops, doc)
             from .observation import summary
             ops.journal.api_event("pr_merge_preview", doc["preview_id"], "delivery.merge_previewed", summary(doc, pr=True),
                                   context={"observer": "delivery-service", "evidence": [{"table": "pr_merge_previews", "id": doc["preview_id"]}]})
@@ -386,8 +388,9 @@ async def verify_merge(ctx, pr: dict, doc: dict) -> dict:
             return {"verification_error": "MERGE_RESULT_UNVERIFIABLE", "message": str(exc), "merged_sha": merged}
     async def reread(_):
         return RERUN  # verification is read-only, including recovery after a process exits mid-read
-    receipt = await ctx.step(name, verify, request={"merged_sha": merged, "preview_id": doc["preview_id"]},
-                             reconcile=reread)
+    from .pm_delivery_lineage import readback_step
+    receipt = await readback_step(ctx, name, verify, request={"merged_sha": merged, "preview_id": doc["preview_id"]},
+                                 reconcile=reread)
     if receipt.get("verification_pending"):
         from .delivery import _check_wait
         _check_wait(ctx, "merge_verification_wait_started_at")
@@ -477,10 +480,13 @@ async def run_update(ctx):
         status, pr = await gh.pull(repository, number)
         if status != 200:
             raise OperationError(f"GITHUB_{status}", "cannot read PR metadata")
+        from .pm_delivery_lineage import require_target
+        require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr.get("base", {}).get("repo") or {}).get("id"), pull_number=number)
         before = metadata(pr)
         if not (pr.get("base", {}).get("repo") or {}).get("id"):
             raise OperationError("REPOSITORY_ID_CHANGED", "PR omitted repository identity")
         return {"before": before, "after": {**before, **ctx.params},
+                "provider_origin": gh.cfg.api_url, "pull_number": number,
                 "repository_id": (pr.get("base", {}).get("repo") or {}).get("id"),
                 "html_url": pr.get("html_url")}
     async def reread(_):
@@ -492,6 +498,8 @@ async def run_update(ctx):
         raise OperationError("PR_METADATA_CHANGED", "PR title/body changed; read github_pr_preview and edit again", 409)
     async def write():
         pr = await _read(gh.pull(repository, number), "re-read metadata immediately before PATCH")
+        from .pm_delivery_lineage import require_target
+        require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr.get("base", {}).get("repo") or {}).get("id"), pull_number=number)
         if metadata(pr) != p["before"] or (pr.get("base", {}).get("repo") or {}).get("id") != p["repository_id"]:
             return {"conflict_before_write": True, "observed": metadata(pr)}
         status, _ = await gh.update_pull(repository, number, ctx.params)

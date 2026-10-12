@@ -12,7 +12,7 @@ import unicodedata
 from . import pm_snapshots
 from .operations import OperationError
 
-RENDERER_VERSION = 1
+RENDERER_VERSION = 2
 MAX_CONTENT_BYTES = 1_500_000
 MAX_RESPONSE_BYTES = 2_000_000
 MAX_SVG_PAGES = 32
@@ -184,11 +184,14 @@ def _blocks(snapshot, locale):
             source = next(value for ref, value in sources if ref == identifier)
             blocks.extend([("body", _item_text(item, source, text, locale)),
                            ("note", f"{text['status']}: {_status(item['status'], locale)} · {text['source']}: {identifier}")])
+    if snapshot.get("maintenance"):
+        from .pm_maintenance_review_exports import blocks as maintenance_blocks
+        blocks.extend(maintenance_blocks(snapshot["maintenance"], locale))
     blocks.append(("heading", text["identity"]))
     identity = {key: snapshot[key] for key in ("snapshot_id", "workspace_id", "server_id", "workspace_version", "sequence", "as_of",
                 "journal_cursor", "template_version", "snapshot_digest", "view_digest", "created_by", "operation_id")}
     identity["baseline"] = {key: baseline.get(key) for key in ("status", "plan_head_version", "document_revision", "scope_revision", "document_digest")}
-    identity.update(renderer_version=RENDERER_VERSION, visibility=snapshot["visibility"])
+    identity.update(renderer_version=RENDERER_VERSION if snapshot.get("maintenance") else 1, visibility=snapshot["visibility"])
     blocks.append(("source", _json(identity)))
     if snapshot["candidate_document"]:
         blocks.extend([("subheading", text["candidate"]), ("source", _json(snapshot["candidate_document"]))])
@@ -327,11 +330,11 @@ def render_brief(ops, principal, workspace_id, snapshot_id, *, format="markdown"
     raw = content.encode("utf-8")
     result = {"version": 1, "workspace_id": workspace_id, "snapshot_id": snapshot_id,
         "snapshot_digest": snapshot["snapshot_digest"], "view_digest": snapshot["view_digest"],
-        "template_version": snapshot["template_version"], "renderer_version": RENDERER_VERSION,
+        "template_version": snapshot["template_version"], "renderer_version": RENDERER_VERSION if snapshot.get("maintenance") else 1,
         "locale": locale, "format": format, "media_type": FORMATS[format], "content": content,
         "byte_length": len(raw), "output_digest": hashlib.sha256(raw).hexdigest(), "page_count": pages,
         "coverage": {"snapshot": snapshot["coverage"], "visibility": snapshot["visibility"],
-                     "projection": "project_brief_only", "other_management_views": "not_rendered",
+                     "projection": "project_brief_with_maintenance_review" if snapshot.get("maintenance") else "project_brief_only", "other_management_views": "not_rendered",
                      "referenced_sources": "fixed_authorized_view", "unreferenced_evidence": "not_expanded",
                      "content_truncated": False}, "execution_authorized": False, "review_completed": False,
         "published": False}

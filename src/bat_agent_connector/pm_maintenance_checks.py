@@ -87,10 +87,11 @@ def install(ops):
             _run, _admit, ('workspace_id',), authorize_existing=_authorize_existing))
 
 
-def capabilities():
+def capabilities(ops=None):
+    from . import pm_maintenance_review_schedule as weekly
     return {'version': 1, 'action': ACTION, 'required_scopes': sorted(REQUIRED),
         'server_schedule': True, 'missed_windows': 'coalesce_latest', 'automatic_repairs': False,
-        'automatic_lifecycle_transition': False, 'weekly_review_execution': False,
+        'automatic_lifecycle_transition': False, 'weekly_review_execution': bool(ops and weekly.available(ops)),
         'cost_coverage': {'model_requests': 'none', 'provider_billing': 'unmeasured'},
         'retry_behavior': 'original_child_receipts_only'}
 
@@ -285,6 +286,12 @@ def _capacity(ops, wid, intent, now):
     concurrent = ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_check_runs WHERE workspace_id=? AND finished_at IS NULL', (wid,)).fetchone()[0]
     count = ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_check_runs WHERE policy_id=? AND budget_period=?',
         (intent['workload']['policy_id'], period)).fetchone()[0]
+    from . import pm_maintenance_review_schedule as weekly
+    if weekly.installed(ops.db):
+        concurrent += ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_review_windows WHERE workspace_id=? AND finished_at IS NULL',
+            (wid,)).fetchone()[0]
+        count += ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_review_windows WHERE policy_id=? AND budget_period=?',
+            (intent['workload']['policy_id'], period)).fetchone()[0]
     if concurrent >= intent['limits']['max_parallel'] or count >= intent['limits']['period_runs']:
         raise _bad('PM_MAINTENANCE_BUDGET_EXHAUSTED', 'Current concurrent or period run capacity is exhausted')
     return period
@@ -543,12 +550,18 @@ def schedule_status(ops, principal, workspace_id):
             if exc.status not in (403, 404):
                 raise
             return {'workspace_id': workspace_id, 'schedule': None, 'visibility_filtered': True}
+    from . import pm_maintenance_review_schedule as weekly
+    try:
+        weekly_status = weekly.status(ops, principal, record, now)
+    except OperationError as exc:
+        if exc.status not in (403, 404):
+            raise
+        return {'workspace_id': workspace_id, 'schedule': None, 'visibility_filtered': True}
     next_due = record['created_at'] + ((latest['window'] + 1) if latest else 1) * schedule['check_interval_seconds']
     return _bounded({'workspace_id': workspace_id, 'visibility_filtered': False, 'schedule': {
         'schedule_id': sid, 'policy_id': record['policy_id'], 'policy_version': record['revision'],
         'next_due': next_due, 'overdue': now >= next_due, 'blocked_reason': blocked, 'latest_window': last, 'last_success': last_success,
-        'weekly_review': {'weekday': schedule['review_weekday'], 'local_time': schedule['review_local_time'],
-            'timezone': schedule['timezone'], 'execution_available': False},
+        'weekly_review': weekly_status,
         'missed_windows': 'coalesce_latest', 'automatic_repairs': False}})
 
 
@@ -571,8 +584,10 @@ def tick(ops):
     """
     if ACTION not in ops.actions:
         return {'scheduled': 0, 'reconciled': 0}
-    scheduled = reconciled = 0
+    from . import pm_maintenance_review_schedule as weekly
+    scheduled = reconciled = weekly_scheduled = 0
     with ops.journal.tx():
+        weekly_reconciled = weekly.reconcile(ops)
         state = ops.db.execute('SELECT * FROM pm_maintenance_check_cursor WHERE singleton=1').fetchone()
         runs = ops.db.execute('SELECT * FROM pm_maintenance_check_runs WHERE finished_at IS NULL AND sequence>? ORDER BY sequence LIMIT ?',
             (state['run_sequence'], MAX_TICK + 1)).fetchall()
@@ -584,6 +599,12 @@ def tick(ops):
             AND p.revision=(SELECT MAX(h.revision) FROM pm_maintenance_policies h WHERE h.workspace_id=p.workspace_id)
             ORDER BY p.sequence LIMIT ?''', (state['policy_sequence'], MAX_TICK + 1)).fetchall()
         for raw in rows[:MAX_TICK]:
+            try:
+                # A due weekly report takes the shared slot before interval
+                # checks, avoiding starvation when max_parallel is one.
+                weekly_scheduled += weekly.maybe_schedule(ops, raw)
+            except OperationError:
+                pass
             try:
                 with ops.journal.tx():
                     record = policies._record(ops.db, raw['workspace_id'], raw['policy_id'])
@@ -615,4 +636,5 @@ def tick(ops):
                 continue
         ops.db.execute('UPDATE pm_maintenance_check_cursor SET policy_sequence=? WHERE singleton=1',
             (rows[MAX_TICK - 1]['sequence'] if len(rows) > MAX_TICK else 0,))
-    return {'scheduled': scheduled, 'reconciled': reconciled}
+    return {'scheduled': scheduled, 'reconciled': reconciled,
+        'weekly_scheduled': weekly_scheduled, 'weekly_reconciled': weekly_reconciled}

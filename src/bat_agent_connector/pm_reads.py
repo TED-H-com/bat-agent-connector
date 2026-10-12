@@ -5,6 +5,16 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_work_deliveries_list": ("workspace_id", "work_item_id", "after", "limit"),
+    "pm_work_batches_list": ("workspace_id", "after", "limit"),
+    "pm_work_batch_get": ("workspace_id", "batch_id"),
+    "pm_maintenance_findings_current_get": ("workspace_id",),
+    "pm_spec_materializations_list": ("workspace_id", "package_id", "after", "limit"),
+    "pm_spec_materialization_get": ("workspace_id", "materialization_id"),
+    "pm_maintenance_reviews_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_review_current_get": ("workspace_id", "history_limit"),
+    "pm_maintenance_review_get": ("workspace_id", "review_id", "history_limit"),
+    "pm_maintenance_review_events_list": ("workspace_id", "review_id", "after", "limit"),
     "pm_maintenance_checks_list": ("workspace_id", "after", "limit"),
     "pm_maintenance_check_current_get": ("workspace_id",),
     "pm_maintenance_check_get": ("workspace_id", "run_id"),
@@ -86,6 +96,35 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_work_deliveries_list":
+        from .pm_delivery_lineage import for_work
+        return for_work(ops, principal, workspace_id, params.get("work_item_id"),
+                        after=params.get("after", 0), limit=params.get("limit", 50))
+    if method == "pm_maintenance_findings_current_get":
+        from . import pm_maintenance_findings
+        return pm_maintenance_findings.current_findings(ops, principal, workspace_id)
+    if method in {"pm_work_batches_list", "pm_work_batch_get"}:
+        from . import pm_work_batches
+        if method == "pm_work_batch_get":
+            return pm_work_batches.get_batch(ops, principal, workspace_id, params.get("batch_id"))
+        return pm_work_batches.list_batches(ops, principal, workspace_id,
+                                           after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_spec_materializations_list", "pm_spec_materialization_get"}:
+        from . import pm_spec_materialization as specs
+        if method == "pm_spec_materialization_get":
+            return specs.get_materialization(ops, principal, workspace_id, params.get("materialization_id"))
+        return specs.list_materializations(ops, principal, workspace_id, package_id=params.get("package_id"),
+                                          after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list"}:
+        from . import pm_maintenance_review as review
+        if method == "pm_maintenance_review_current_get":
+            return review.current_review(ops, principal, workspace_id, history_limit=params.get("history_limit", 20))
+        if method == "pm_maintenance_review_get":
+            return review.get_review(ops, principal, workspace_id, params.get("review_id"), history_limit=params.get("history_limit", 20))
+        page = {"after": params.get("after", 0), "limit": params.get("limit", 20)}
+        if method == "pm_maintenance_review_events_list":
+            return review.list_events(ops, principal, workspace_id, params.get("review_id"), **page)
+        return review.list_reviews(ops, principal, workspace_id, **page)
     if method in {"pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list"}:
         from . import pm_lifecycle
         if method == "pm_lifecycle_get":

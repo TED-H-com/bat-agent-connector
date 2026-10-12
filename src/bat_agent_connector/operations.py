@@ -453,7 +453,9 @@ class OperationService:
         with self.journal.tx():
             if not bookkeeping:
                 from .pm_source_lineage import require_new_effect
+                from .pm_work_batches import admit_restart
                 require_new_effect(self, operation_id)
+                admit_restart(self, operation_id, name)
             from .pm_lifecycle_gates import admit_step
             admit_step(self.db, operation_id, name, bookkeeping=bookkeeping, restart=True)
             self.db.execute("""UPDATE operation_steps SET status='started',request=?,response=NULL,error=NULL,

@@ -534,4 +534,5 @@ def readiness(ops, principal, workspace_id, package_id):
             "dispatch_readiness": "separate_fixed_handoff_admission",
             "handoff": {"action": "repository.continue", "contract": "pm-engineering-handoff/v1",
                         "code_basis_required": True, "compatibility": "unverified",
-                        "source_materialization": "bounded_full_prompt"}})
+                        "source_materialization": "bounded_full_prompt_or_fixed_spec_artifact",
+                        "materialization_action": "pm.spec.materialize"}})

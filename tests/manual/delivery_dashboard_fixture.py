@@ -68,23 +68,17 @@ async def main():
             "SELECT * FROM deployments WHERE deployment_id=?", (current["deployment_id"],)
         ).fetchone()
     )
-    from bat_agent_connector.operations import ActionDef, OperationService
+    from tests.legacy_deployment_fixture import legacy_deployment
 
-    async def obsolete(ctx):
-        return {}
-
-    oldops = OperationService(
-        d.journal, actions=[ActionDef("deployment.start", "deploy", "fixture", obsolete)]
-    )
     for n in range(10):
         name = "unsupported" if n == 9 else "artifact" if n in (3, 4) else "prod"
-        old = oldops.create(
-            OPERATOR,
+        old = legacy_deployment(
+            d.journal, OPERATOR,
             action="deployment.start",
             target={"recipe": name},
             params={"source_sha": MERGED},
             idempotency_key=f"fixture-{n}",
-        )[0]
+        )
         d.ops.db.execute(
             "UPDATE operations SET status='failed',error_code='DEPLOY_FAILED' WHERE operation_id=?",
             (old["operation_id"],),

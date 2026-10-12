@@ -421,7 +421,38 @@ def adopt_revision(ctx):
 
 def latest_git_receipt(db, workspace_id):
     """Internal previous Git fact, including commits not yet adopted in SQLite."""
-    return original_git_receipt(db, workspace_id)
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_spec_materializations'").fetchone():
+        return original_git_receipt(db, workspace_id)
+    from . import pm_runs
+    # Plans and owned spec artifacts use the same carrier. Select the unique tip
+    # from original parent links; wall time and per-table insertion order cannot
+    # interleave those facts safely.
+    records = [json.loads(row[0]) for row in db.execute(
+        "SELECT receipt FROM pm_plan_git_receipts WHERE workspace_id=?", (workspace_id,))]
+    records += [json.loads(row[0]) for row in db.execute(
+        "SELECT git_receipt FROM pm_spec_materializations WHERE workspace_id=?", (workspace_id,))]
+    original = {row["commit_sha"]: row for row in records if "source_operation_id" not in row}
+    if not original:
+        return None
+    parents = {}
+    for sha, row in original.items():
+        step = db.execute("SELECT request,status FROM operation_steps WHERE operation_id=? AND name='pm.revision.commit'",
+                          (row["operation_id"],)).fetchone()
+        if step is None or step["status"] != "succeeded":
+            raise _bad("PM_GIT_CHAIN_UNPROVEN", "Original carrier parent receipts cannot be verified", 409)
+        parent = json.loads(step["request"])["expected_parent"]
+        if parent in parents:
+            raise _bad("PM_GIT_CHAIN_UNPROVEN", "The original carrier receipts contain competing children", 409)
+        parents[parent] = sha
+    tips = set(original) - set(parents)
+    plan = pm_runs.workspace_worktree(db, workspace_id)
+    head, visited = plan["source_sha"], set()
+    while head in parents and head not in visited:
+        visited.add(head)
+        head = parents[head]
+    if len(tips) != 1 or head not in tips or len(visited) != len(original):
+        raise _bad("PM_GIT_CHAIN_UNPROVEN", "The original carrier receipts do not form one append-only chain", 409)
+    return original[head]
 
 
 def original_git_receipt(db, workspace_id, revision_id=None):

@@ -295,10 +295,13 @@ set -- $(git version | sed -n 's/^git version \\([0-9]*\\)\\.\\([0-9]*\\).*/\\1 
 echo "gitver $1.$2"
 """
 
-    async def run(self, script: str, *, long: bool = False) -> list[str]:
+    async def run(self, script: str, *, long: bool = False, mutation: bool = False) -> list[str]:
         runner = self.ops.context["git_runner"]
         lock = _area_locks.setdefault((self.host, self.path), asyncio.Lock())
         async with lock:
+            if mutation:
+                from .pm_source_lineage import require_frame
+                require_frame()
             # This is the shared repository integration service. Its existing
             # action authorization also permits receipt recovery after upgrade.
             # New session carriers are controller-bound at handoff preparation.
@@ -752,6 +755,7 @@ def _block(code: str, text: str, **extra) -> dict:
 
 def _digest(doc: dict, sources: list[dict]) -> str:
     return hashlib.sha256(_canonical({
+        **({"provider_origin": doc["provider_origin"]} if "provider_origin" in doc else {}),
         "host": doc["host"], "repository": doc["repository"].lower(), "repository_id": doc["repository_id"],
         "pull_number": doc["pull_number"], "head_ref": doc["target"]["head_ref"], "head_sha": doc["target"]["head_sha"],
         "remote_url": doc["remote_url"], "predicted_tree": doc["predicted_tree"],
@@ -771,11 +775,15 @@ async def _run_preview(ctx: OpContext) -> dict:
     pr = refs.get("pr")
     if pr is None:  # read once; replays use the same facts
         pr = _pr_facts(await _read(gh.pull(repo.repository, number), "read the pull request"))
+        from .pm_delivery_lineage import require_target
+        require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr["base"]["repo"] or {}).get("id"))
         exp = ctx.preconditions.get("expected_head_sha")
         if exp and exp != pr["head"]["sha"]:
             raise OperationError("TARGET_HEAD_CHANGED", f"PR #{number} head is now {str(pr['head']['sha'])[:12]}, "
                                  f"not {exp[:12]}; reload the PR", 409)
         ctx.set_refs(pr=pr)
+    from .pm_delivery_lineage import require_target
+    require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr["base"]["repo"] or {}).get("id"))
     area = Area(ops, repo, host)
     tag = ctx.operation_id[3:15]
     pv_id = "ipv_" + ctx.operation_id[3:]
@@ -789,7 +797,7 @@ async def _run_preview(ctx: OpContext) -> dict:
                         ("MERGE_IN_PROGRESS", _merge_in_progress(ops, repo.repository, number))):
         if other:
             blocking.append(_block(code, f"{other} is working on this PR", operation_id=other))
-    doc = {"preview_id": pv_id, "host": host, "repository": repo.repository,
+    doc = {"preview_id": pv_id, "host": host, "repository": repo.repository, "provider_origin": gh.cfg.api_url,
            "repository_id": (pr["base"]["repo"] or {}).get("id") or 0, "pull_number": number,
            "html_url": pr["html_url"], "remote_url": area.url,
            "target": {"head_ref": head_ref, "head_sha": pr["head"]["sha"], "base_ref": pr["base"]["ref"],
@@ -810,7 +818,7 @@ async def _run_preview(ctx: OpContext) -> dict:
 
         async def prepare() -> dict:
             execution_sources.revalidate(ops, sources)
-            lines = await area.run(preview_prepare_script(area, tag, head_ref, number, sources), long=True)
+            lines = await area.run(preview_prepare_script(area, tag, head_ref, number, sources), long=True, mutation=True)
             return {"lines": lines}
 
         async def rerun(_request: dict) -> dict:
@@ -845,7 +853,7 @@ async def _run_preview(ctx: OpContext) -> dict:
             s["pin"] = pins.get(s["seq"])
         if not blocking:
             async def analyze() -> dict:
-                return {"lines": await area.run(analyze_script(area, tag, head_ref, pr["head"]["sha"], sources))}
+                return {"lines": await area.run(analyze_script(area, tag, head_ref, pr["head"]["sha"], sources), mutation=True)}
 
             alines = (await ctx.step("analyze", analyze, request={"target": pr["head"]["sha"], "pins": pins},
                                      reconcile=rerun))["lines"]
@@ -1073,7 +1081,7 @@ async def _run_apply(ctx: OpContext) -> dict:
 
     async def prepare() -> dict:
         execution_sources.revalidate(ops, sources)
-        return {"lines": await area.run(apply_prepare_script(area, tag, head_ref, base, sources), long=True)}
+        return {"lines": await area.run(apply_prepare_script(area, tag, head_ref, base, sources), long=True, mutation=True)}
 
     lines = (await ctx.step("prepare", prepare, request={"base": base, "pins": {s["seq"]: s["pin"] for s in sources}},
                             reconcile=rerun))["lines"]
@@ -1097,7 +1105,7 @@ async def _run_apply(ctx: OpContext) -> dict:
                f"Batc-Source: {s['kind']}:{s['id']} {s['pin']}\nBatc-Operation: {ctx.operation_id}")
 
         async def compose(s=s, prev=prev, msg=msg, seq=seq) -> dict:
-            out = await area.run(compose_script(area, tag, head_ref, seq, prev, s, msg, date))
+            out = await area.run(compose_script(area, tag, head_ref, seq, prev, s, msg, date), mutation=True)
             return {"lines": out}
 
         out = (await ctx.step(f"compose.{seq}", compose, request={"seq": seq, "prev": prev, "src": s["pin"],
@@ -1131,7 +1139,7 @@ async def _run_apply(ctx: OpContext) -> dict:
     h12 = head[:12]
 
     async def check() -> dict:
-        return {"lines": await area.run(check_script(area, tag, head_ref, base, head, ranges, allowed, must))}
+        return {"lines": await area.run(check_script(area, tag, head_ref, base, head, ranges, allowed, must), mutation=True)}
 
     clines = (await ctx.step(f"check.{h12}", check, request={"base": base, "head": head}, reconcile=rerun))["lines"]
     for x in clines:
@@ -1214,7 +1222,7 @@ async def _resolution(ctx: OpContext, area: Area, tag: str, head_ref: str, src: 
                              "(one merge commit), then Resume")
 
     async def pin() -> dict:
-        lines = await area.run(resolve_script(area, tag, head_ref, seq, prev, src["pin"], head))
+        lines = await area.run(resolve_script(area, tag, head_ref, seq, prev, src["pin"], head), mutation=True)
         bad = next((x[8:] for x in lines if x.startswith("invalid ")), None)
         stat = next((x[5:] for x in lines if x.startswith("stat ")), "")
         return {"resolution": None if bad else head, "invalid": bad, "stat": stat}
@@ -1245,7 +1253,9 @@ async def _push(ctx: OpContext, area: Area, tag: str, head_ref: str, base: str, 
 
         async def push() -> dict:
             execution_sources.revalidate(ops, sources)
-            return parse_push(await area.run(push_script(area, tag, head_ref, base, head)), head, head_ref, base)
+            from .pm_delivery_lineage import record
+            record(ctx, head, "push_intent")
+            return parse_push(await area.run(push_script(area, tag, head_ref, base, head), mutation=True), head, head_ref, base)
 
         async def readback(_request: dict) -> dict | None:
             out = await area.run(readback_script(area, tag, head_ref, base, head))
@@ -1284,6 +1294,8 @@ async def _push(ctx: OpContext, area: Area, tag: str, head_ref: str, base: str, 
                                                                    "head": head}, reconcile=readback)
     outcome = landed.get("outcome")
     if outcome in {"pushed", "pushed_on_other_base", "pushed_recreated"}:
+        from .pm_delivery_lineage import record
+        record(ctx, head, "push_confirmed")
         with ops.journal.tx():
             cur = ops.db.execute("""UPDATE integration_receipts SET status='delivered', delivered_sha=?, delivered_at=?,
                 updated_at=? WHERE operation_id=? AND status IN ('composed', 'resolved')""",
@@ -1602,7 +1614,7 @@ async def _run_handoff(ctx: OpContext) -> dict:
 
     async def prepare() -> dict:
         ctx.require_controller()
-        return {"lines": await area.run(repair_script(area, r12, pv["head_ref"], wt, branch, prev, src["pin"]))}
+        return {"lines": await area.run(repair_script(area, r12, pv["head_ref"], wt, branch, prev, src["pin"]), mutation=True)}
 
     async def rerun(_request: dict) -> dict:
         return RERUN  # finds the worktree it made and reports it

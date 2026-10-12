@@ -155,6 +155,9 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
     submitted = _has_step(ctx, f"{prefix}.submit")
     preview = pr_delivery.get_preview(ctx.service.db, ctx.params["preview_id"])
     method = preview["method"]
+    if not submitted:
+        from .pm_delivery_lineage import require_target
+        require_target(ctx, provider=gh.cfg.api_url, repository_id=(pr.get("base", {}).get("repo") or {}).get("id"), pull_number=number)
     if pr.get("merged"):
         if (pr.get("head") or {}).get("sha") != sha:
             raise NeedsAttention("MERGED_DIFFERENT_HEAD",
@@ -191,6 +194,8 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
                 raise Wait("waiting_checks", "required checks are still running", 30)
 
     async def submit() -> dict:
+        from .pm_source_lineage import require_frame
+        require_frame()
         status, body = await gh.merge_async(repository, number, sha, method)
         return {"http_status": status, "status": body.get("status"), "details": body.get("details") or {},
                 "message": str(body.get("message") or "")[:300]}
@@ -219,6 +224,17 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
             except OperationError as exc:
                 # The earlier request still has an unknown outcome; block a resend without hiding it.
                 raise NeedsAttention(exc.code, exc.message) from None
+            if (ctx.admission_binding or {}).get("pm_delivery"):
+                # An open PR is not evidence that its original async merge was
+                # never accepted. Keep reading that request when current PM
+                # authority no longer permits a resend.
+                from .pm_lifecycle_gates import require_local
+                from .pm_source_lineage import require_new_effect
+                try:
+                    require_new_effect(ctx.service, ctx.operation_id)
+                    require_local(ctx.service.db, ctx.operation_id)
+                except OperationError:
+                    return None
             return RERUN
         return None
 
@@ -278,6 +294,9 @@ async def _merge(ctx: OpContext, repository: str, number: int, sha: str, prefix:
 
 async def _merged_result(ctx, pr, preview, submitted, repository, number, method):
     receipt = await pr_delivery.verify_merge(ctx, pr, preview)
+    if receipt.get("verified"):
+        from .pm_delivery_lineage import record
+        record(ctx, receipt["merged_sha"], "merge_verified")
     return {"merged": True, "repository": repository, "pull_number": number, "method": method,
             "html_url": pr.get("html_url"), **receipt,
             "via": "merge_queue" if (ctx.op.get("external_refs") or {}).get("merge_queue") else "direct",
@@ -353,6 +372,7 @@ async def pr_preview(ops: OperationService, repository: str, number: int, method
         raise OperationError("INVALID_PARAMS", "method is not enabled for this repository", 422)
     preview = await pr_delivery.card_preview(ops, repository, number, method, pr, from_event=from_event)
     return {"repository": repository, "pull_number": number, "title": pr.get("title"),
+            "provider_origin": gh.cfg.api_url, "repository_id": (pr.get("base", {}).get("repo") or {}).get("id"),
             "body": pr.get("body") or "", "metadata_digest": pr_delivery.digest(pr_delivery.metadata(pr)),
             "metadata_update": {"allowed": repo.allow_pr_update}, "merge_preview": preview, "state": pr.get("state"),
             "draft": pr.get("draft"), "merged": pr.get("merged"), "merge_commit_sha": pr.get("merge_commit_sha"),

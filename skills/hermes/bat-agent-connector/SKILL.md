@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "dced15d449910e90dd523b40c12fdf02bba45f694e15a03e850576734a61bf53"
+  canonical_sha256: "fff3b600d6baf3b2efbceae4938f1f4901cc17dde82c53045f6f196c0884e312"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -568,11 +568,54 @@ original key to recover; do not restart an interrupted traversal to replace its
 original observation time. Explicit observation may run while stopped, but a
 lifecycle change during the traversal refuses further pages and recording.
 
+When the adopted optional `observation.maintenance_sources` configures exact
+Issue labels or Dependabot identities/manifests, `pm_maintenance_findings_current_get`
+reads their saved occurrence and current freshness. Missing, incomplete, stale,
+context-changed or stopped coverage does not mean clean; disappearance does not
+mean resolved. Alerts do not prove released-version applicability. No finding
+or successful observation authorizes repairs. Preserve the original observation
+ID/digest and provider-native finding identity.
+
 Use `pm_github_observations_list`, `pm_github_observation_current_get` and
 `pm_github_observation_get` to read saved observations without provider refresh.
 Retain freshness, profile, outside-scope facts and source visibility. A saved
 observation may contribute to a later explicit workload capture. Neither action
 authorizes maintenance, repairs, publication, merge or deployment.
+
+### Prepare and discuss a fixed maintenance report
+
+Read `pm_maintenance_review_current_get`, `pm_maintenance_reviews_list`,
+`pm_maintenance_review_get` and `pm_maintenance_review_events_list` with observe.
+They return one genuine fixed DocumentSnapshot plus separate attributed discussion
+events. An empty filtered history can still have a forward cursor; keep paging.
+Neither reads nor Brief exports prepare a new report or complete a meeting.
+
+An authorized `pm.maintenance_review.prepare` targets `{workspace_id}`, takes
+`title`, `period_start`, `period_end`, and optional `previous_review_id`, with
+exact current `expected_plan_version`, `expected_review_revision`,
+`expected_policy_id`, `expected_policy_version`, `expected_baseline_id` and
+`expected_lifecycle_revision`. The period is past, half-open and at most 31 days.
+Use the existing operation endpoint, original key and exact envelope. The report
+only summarizes saved observations; no model or provider request is required.
+Point samples do not prove an event-free week. Unchecked, stale, incomplete and
+disabled sources remain distinct; no-longer-observed items are not resolved.
+
+`pm.maintenance_review.note`, `.candidate.record`, `.complete` and
+`.follow_up.record` target `{workspace_id, review_id}` and use `expected_version`.
+Every event needs its rationale and original report sources where required.
+Completion requires actual current owner membership, at least one saved note,
+explicit discussion acknowledgment, the discussion summary, proposed direction
+and reason, follow-up assignments and next observation focus. An unattended
+report stays prepared. Candidates and proposed Planning directions are not scope
+adoption or dispatch. Public research URLs are dated actor claims until separately
+verified. Follow-up `reported_done` remains unassessed quality.
+
+These five commands save local records while a project is paused or closed;
+they do not reopen investment. Original policy, release, observations and previous
+comparison sources gate the whole report, Snapshot metadata, export, operation
+and event. Never substitute a newer readable policy after withdrawal. The fixed
+report's Brief Markdown/HTML/SVG includes its maintenance facts in English or
+Traditional Chinese; later meeting decisions do not rewrite the old snapshot.
 
 ### Read and run bounded maintenance checks
 
@@ -1342,4 +1385,31 @@ of a historical verified deployment. Only explicit operation source bindings con
 - No store delete, standalone artifact_materialize tool or dirty directory snapshot. Do not scrape a folder or
   use arbitrary host shell to fill these gaps. Deployed Actions artifacts are separate. The shared UI has the
   manual remote-file chooser; managed capture/accept UI and native OS file pickers have separate delivery status.
+
+`pm.spec.materialize` freezes the selected engineering package in the workspace's
+owned PM Git carrier and one ordinary immutable artifact. Use its exact package
+digest and adopted scope revision; it does not execute engineering or adopt scope.
+For an explicit bounded selection, `pm.work_batch.start` composes 1–16 fixed
+`repository.continue` handoff envelopes under workspace/lifecycle CAS, absolute
+deadline, start/concurrency and proven-unsent retry limits. Reuse the original
+key. Read `pm_work_batches_list` / `pm_work_batch_get` for original children and
+blocked reasons. Source withdrawal, pause, cancellation or budget exhaustion
+stops new effects; unknown sent effects retain their original children/capacity.
+`pm.work_batch.evidence.record` attaches exact registered verifier receipts at
+the current batch version. Dispatch success is not engineering completion or
+semantic acceptance. Dependencies require the selected fixed result profile;
+batch evidence does not bypass intrinsic package readiness. Provider cost is
+unmeasured, never implied by the start budget.
+
+Read `pm_spec_materializations_list` / `pm_spec_materialization_get` for original
+receipts and stable task identities. An optional `repository.continue.pm_spec_ref`
+must match the fixed package and the explicitly included ordinary artifact ref;
+keep both in the original operation envelope. Unknown Git results retain the
+original writer and reconcile; never recreate a commit or repurpose a checkout.
+
+Read `pm_work_deliveries_list` for one explicitly associated workspace work item.
+It returns fixed original package references and saved integration, merge and
+deployment receipts without refreshing providers or creating operations. Preserve
+`next_after` through filtered pages. Push, merge, runtime verification and
+requirement acceptance are distinct; delivery does not mark a requirement Done.
 <!-- END CANONICAL WORKFLOW -->

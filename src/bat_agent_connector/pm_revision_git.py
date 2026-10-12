@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 
-from . import pm_worktree, repository_sync
+from . import pm_revision_paths, pm_worktree, repository_sync
 from .errors import ResourceReadOnly
 from .operations import RERUN, Cancelled, NeedsAttention, OpContext, OperationError, StepFailed, Uncertain
 
@@ -23,13 +23,20 @@ def step_receipt(value):
 
 
 def request(ctx, plan, revision, expected_parent):
-    if (not isinstance(revision, dict) or set(revision) != {"workspace_id", "revision_id", "files", "file_digests", "document_digest"}
+    spec = isinstance(revision, dict) and revision.get("artifact_kind") == "pm-spec"
+    fields = {"workspace_id", "revision_id", "files", "file_digests", "document_digest"}
+    if spec:
+        fields |= {"artifact_kind", "change_id", "package_id"}
+    if (not isinstance(revision, dict) or set(revision) != fields
             or revision["workspace_id"] != plan["pm_workspace_id"]
-            or not isinstance(revision["revision_id"], str) or not _REVISION.fullmatch(revision["revision_id"])
+            or not isinstance(revision["revision_id"], str) or not re.fullmatch(r"pmsp_[0-9a-f]{32}" if spec else _REVISION, revision["revision_id"])
             or not isinstance(expected_parent, str) or not repository_sync.SHA.fullmatch(expected_parent)):
         raise OperationError("PM_REVISION_INVALID", "Fixed revision files and parent commit are required", 422)
-    prefix = "docs/pm/revisions/" + revision["revision_id"] + "/"
-    if not isinstance(revision["files"], dict) or set(revision["files"]) != {prefix + "plan.json", prefix + "plan.md"}:
+    try:
+        paths = pm_revision_paths.rev_paths(revision)
+    except (KeyError, TypeError, ValueError):
+        raise OperationError("PM_REVISION_INVALID", "Only fixed owned revision paths can be committed", 422) from None
+    if not isinstance(revision["files"], dict) or set(revision["files"]) != paths:
         raise OperationError("PM_REVISION_INVALID", "Only the revision's fixed plan files can be committed", 422)
     try:
         encoded = {path: value.encode("utf-8") for path, value in revision["files"].items()}
@@ -44,12 +51,28 @@ def request(ctx, plan, revision, expected_parent):
             "timestamp": int(ctx.op["created_at"]), "binding_id": binding_id(plan)}
 
 
+def _spec_receipt(fixed, value):
+    if fixed.get("artifact_kind") != "pm-spec":
+        return value
+    expected = {key: fixed[key] for key in ("workspace_id", "revision_id", "operation_id", "document_digest",
+        "file_digests", "binding_id", "artifact_kind", "change_id", "package_id")}
+    expected["status"] = "verified"
+    if (not isinstance(value, dict) or set(value) != set(expected) | {"commit_sha", "tree_sha"}
+            or any(value.get(key) != item for key, item in expected.items())
+            or any(not isinstance(value.get(key), str) or not re.fullmatch(r"[0-9a-f]{40}", value[key])
+                   for key in ("commit_sha", "tree_sha"))):
+        raise NeedsAttention("PM_GIT_RECEIPT_INVALID", "The original exact spec Git receipt cannot yet be verified")
+    return value
+
+
 async def commit_revision(ctx, plan, revision_files, *, expected_parent, check):
     fixed = request(ctx, plan, revision_files, expected_parent)
+    async def commit():
+        return _spec_receipt(fixed, await pm_worktree._host_call(ctx, plan, "pm-revision", check=check, revision=fixed))
     async def reconcile(_):
         value = await pm_worktree._host_call(ctx, plan, "read.pm-revision", check=check, revision=fixed)
         if value.get("receipt"):
-            return value["receipt"]
+            return _spec_receipt(fixed, value["receipt"])
         if not value.get("resume_safe"):
             return None
         if value.get("effect_started") is False:
@@ -60,11 +83,11 @@ async def commit_revision(ctx, plan, revision_files, *, expected_parent, check):
         # only its exact deterministic intent under the original writer and
         # current gates, leaving the original step unresolved if stopped.
         try:
-            return await pm_worktree._host_call(ctx, plan, "pm-revision", check=check, revision=fixed)
+            return await commit()
         except (Cancelled, OperationError, StepFailed, ResourceReadOnly):
             raise Uncertain("pm.revision.commit", "The original partial Git transaction still needs reconciliation") from None
     result = await ctx.step("pm.revision.commit",
-        lambda: pm_worktree._host_call(ctx, plan, "pm-revision", check=check, revision=fixed),
+        commit,
         request={key: value for key, value in fixed.items() if key != "files"}, reconcile=reconcile)
     return step_receipt(result)
 

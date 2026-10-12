@@ -74,7 +74,7 @@ async def test_shared_read_parity_never_schedules_and_original_key_preserves_chi
         assert d.ops.context['github'].reads == reads
         assert d.ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_check_children').fetchone()[0] == 2
         status, caps = await http(port, 'GET', '/api/v1/capabilities', tok=auth)
-        assert status == 200 and caps['features']['pm_workspaces']['maintenance_checks'] == checks.capabilities()
+        assert status == 200 and caps['features']['pm_workspaces']['maintenance_checks'] == checks.capabilities(d.ops)
         assert caps['features']['pm_workspaces']['maintenance_policy']['scheduler_available'] is True
         assert not write_frames(mock)
     finally:

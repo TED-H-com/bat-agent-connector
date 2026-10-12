@@ -1,4 +1,42 @@
 /* Generated from desktop/src/app.css; npm run build:browser. Do not edit. */
+[data-pm-maintenance-review] .pm-review-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+[data-pm-maintenance-review] .pm-review-columns>section{min-width:0}
+[data-pm-maintenance-review] .pm-review-columns h4{margin-top:0}
+[data-pm-maintenance-review] [data-review-discussion]{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+[data-pm-maintenance-review] h5{font-size:14px;margin:8px 0}
+[data-pm-maintenance-review] .pm-review-selectors{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+[data-pm-maintenance-review] input[type=checkbox]{width:auto;min-height:0}
+[data-pm-maintenance-review] .pm-review-checks label{display:flex;gap:8px;align-items:start;margin:8px 0}
+[data-pm-maintenance-review] [data-review-event]{overflow-wrap:anywhere}
+@media(max-width:720px){[data-pm-maintenance-review] .pm-review-columns{grid-template-columns:1fr;gap:8px}}
+
+[data-pm-maintenance-review] .pm-review-assignment{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+[data-pm-maintenance-review] .pm-review-checks span{overflow-wrap:anywhere;min-width:0}
+[data-pm-maintenance-review] .pm-review-ack{display:flex;gap:8px;align-items:center}
+[data-pm-maintenance-review] [data-review-report] h3{margin-bottom:8px}
+[data-pm-maintenance-review] .pm-review-proof{overflow-wrap:anywhere}
+[data-pm-maintenance-review] .pm-review-count{margin-top:-8px}
+@media(max-width:640px){
+  [data-pm-maintenance-review] .pm-review-checks label,[data-pm-maintenance-review] .pm-review-ack{min-height:44px}
+  [data-pm-maintenance-review]>.pm-heading{flex-direction:column;align-items:start}
+}
+.pm-work-batches { min-width: 0; }
+.pm-work-batches .pm-fields { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.pm-work-batches select { min-width: 0; max-width: 100%; }
+.pm-batch-entry { padding: 12px 0; border-top: 1px solid var(--line); }
+.pm-batch-entry h4 { margin: 0 0 6px; }
+.pm-batch-entry details { margin: 8px 0; }
+.pm-batch-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pm-batch-dependencies label { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.pm-batch-dependencies input[type=checkbox] { width: auto; flex: 0 0 auto; }
+@media (max-width: 600px) {
+  .pm-work-batches > .pm-heading { flex-direction: column; align-items: start; gap: 8px; padding-bottom: 12px; }
+  .pm-work-batches > .pm-heading p { margin-bottom: 0; }
+  .pm-batch-limits { grid-template-columns: minmax(0, 1fr); }
+  .pm-batch-dependencies label { min-height: 44px; }
+}
+[data-pm-package-handoff] .pm-fields{grid-template-columns:minmax(0,1fr);min-width:0}
+[data-pm-package-handoff] select{min-width:0;max-width:100%;width:100%}
 [data-pm-maintenance-checks] { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; overflow-wrap: anywhere; }
 [data-pm-maintenance-checks] h4 { font-size: 14px; margin: 8px 0; }
 [data-pm-maintenance-checks] p { margin: 8px 0; }

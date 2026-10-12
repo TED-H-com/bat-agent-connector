@@ -49,6 +49,18 @@ def event_visible(db, principal, event):
         from .pm_maintenance_checks import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_work_batch" or event["kind"].startswith("pm.work_batch."):
+        from .pm_work_batches import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["kind"].startswith("pm.spec."):
+        from .pm_spec_materialization import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_maintenance_review" or event["kind"].startswith("pm.maintenance_review."):
+        from .pm_maintenance_review import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_github_observation" or event["kind"].startswith("pm.github."):
         from .pm_github_observation import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
@@ -83,6 +95,16 @@ def event_visible(db, principal, event):
         from .pm_meetings import operation_visible
         operation_id = event.get("body", {}).get("operation_id")
         return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
+    if event["resource_type"] == "pm_snapshot" or event["kind"].startswith("pm.snapshot."):
+        # A maintenance report emits the ordinary Snapshot event in the same
+        # transaction. Its metadata inherits the original preparing operation.
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_document_snapshots'").fetchone():
+            row = db.execute('''SELECT o.operation_id,o.action,o.actor,o.target,o.result
+                FROM pm_document_snapshots s JOIN operations o ON o.operation_id=s.operation_id
+                WHERE s.snapshot_id=?''', (event.get('body', {}).get('snapshot_id'),)).fetchone()
+            if row and row['action'] == 'pm.maintenance_review.prepare':
+                return visible(db, principal, {**dict(row), 'target': json.loads(row['target']),
+                    'result': json.loads(row['result']) if row['result'] else None})
     if event["resource_type"].startswith("pm_") or event["kind"].startswith("pm."):
         from .pm_workspace import require_member
         workspace_id = event.get("body", {}).get("workspace_id")

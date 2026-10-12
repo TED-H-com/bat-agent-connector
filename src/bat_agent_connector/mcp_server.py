@@ -71,6 +71,10 @@ READ_TOOLS = [
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
+    "pm_work_deliveries_list",
+    "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
+    "pm_spec_materializations_list", "pm_spec_materialization_get",
+    "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
@@ -654,6 +658,46 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
             project_binding_id=project_binding_id, repository=repository, kind=kind, release_id=release_id,
             deployment_id=deployment_id, maintenance_branch=maintenance_branch)
 
+    async def pm_work_deliveries_list(workspace_id: str, work_item_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read fixed original package and delivery receipts; never accept requirements or dispatch work."""
+        return await pm_daemon("pm_work_deliveries_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+
+    async def pm_work_batches_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read saved bounded engineering batches; never dispatch or refresh providers."""
+        return await pm_daemon("pm_work_batches_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_work_batch_get(workspace_id: str, batch_id: str) -> dict[str, Any]:
+        """Read one original selected batch with current source access."""
+        return await pm_daemon("pm_work_batch_get", workspace_id=workspace_id, batch_id=batch_id)
+
+    async def pm_maintenance_findings_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read configured immutable findings and current freshness; does not authorize repairs."""
+        return await pm_daemon("pm_maintenance_findings_current_get", workspace_id=workspace_id)
+
+    async def pm_spec_materializations_list(workspace_id: str, package_id: str | None = None, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read immutable owned spec receipts, optionally for one exact package; never write or execute."""
+        return await pm_daemon("pm_spec_materializations_list", workspace_id=workspace_id, package_id=package_id, after=after, limit=limit)
+
+    async def pm_spec_materialization_get(workspace_id: str, materialization_id: str) -> dict[str, Any]:
+        """Read one full original spec artifact and Git receipt with current source access."""
+        return await pm_daemon("pm_spec_materialization_get", workspace_id=workspace_id, materialization_id=materialization_id)
+
+    async def pm_maintenance_reviews_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read original maintenance reports with source filtering; never prepare or complete a meeting."""
+        return await pm_daemon("pm_maintenance_reviews_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_maintenance_review_current_get(workspace_id: str, history_limit: int = 20) -> dict[str, Any]:
+        """Read the current fixed report and separate discussion; do not fall back to older readable sources."""
+        return await pm_daemon("pm_maintenance_review_current_get", workspace_id=workspace_id, history_limit=history_limit)
+
+    async def pm_maintenance_review_get(workspace_id: str, review_id: str, history_limit: int = 20) -> dict[str, Any]:
+        """Read one genuine fixed Snapshot, original report and separate attributed decisions."""
+        return await pm_daemon("pm_maintenance_review_get", workspace_id=workspace_id, review_id=review_id, history_limit=history_limit)
+
+    async def pm_maintenance_review_events_list(workspace_id: str, review_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Page original discussion and follow-up records without mutating the report or executing work."""
+        return await pm_daemon("pm_maintenance_review_events_list", workspace_id=workspace_id, review_id=review_id, after=after, limit=limit)
+
     async def pm_maintenance_checks_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read bounded check history with original policy, child receipts and current source access."""
         return await pm_daemon("pm_maintenance_checks_list", workspace_id=workspace_id, after=after, limit=limit)
@@ -957,6 +1001,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 
+               pm_work_deliveries_list,
+               pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
+               pm_spec_materializations_list, pm_spec_materialization_get,
+               pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
@@ -983,13 +1031,15 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                                                 model: str | None = None, artifacts: list[dict] | None = None,
                                                 project_id: str | None = None, expected_project_version: int | None = None,
                                                 work_item_id: str | None = None, expected_work_item_fingerprint: str | None = None,
-                                                pm_package_ref: dict | None = None, pm_code_basis: dict | None = None) -> dict[str, Any]:
+                                                pm_package_ref: dict | None = None, pm_code_basis: dict | None = None,
+                                                pm_spec_ref: dict | None = None) -> dict[str, Any]:
             """WRITE: start from a published version in a NEW managed clone/worktree/session. Requires start scope
             and confirm=true. Use exact repository_preview values; only reviewed branch heads are supported.
             No push, pull, reset, manual checkout update or source session takeover. Keep the original key and
             operation ID after lost replies; a new key creates a separate session. No unpublished Git transfer.
             Optional fixed PM package needs explicit work/fingerprint and a code-basis rationale together;
-            readiness is not dispatch authority and different spec/code commits remain distinct."""
+            readiness is not dispatch authority and different spec/code commits remain distinct. A fixed
+            materialized PM specification must also be selected by its exact ordinary artifact reference."""
             return await principal_daemon("op_submit", confirm, action="repository.continue", idempotency_key=idempotency_key,
                 target={"repository": repository, "host": host, "workspace_id": workspace_id},
                 params={"source_ref": source_ref, "source_sha": source_sha, "prompt": prompt, "agent": agent,
@@ -998,7 +1048,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                         **({"project_id": project_id} if project_id is not None else {}),
                         **({"work_item_id": work_item_id} if work_item_id is not None else {}),
                         **({"pm_package_ref": pm_package_ref} if pm_package_ref is not None else {}),
-                        **({"pm_code_basis": pm_code_basis} if pm_code_basis is not None else {})},
+                        **({"pm_code_basis": pm_code_basis} if pm_code_basis is not None else {}),
+                        **({"pm_spec_ref": pm_spec_ref} if pm_spec_ref is not None else {})},
                 preconditions={"repository_id": repository_id, "binding_digest": binding_digest,
                     **({"expected_project_version": expected_project_version} if expected_project_version is not None else {}),
                     **({"expected_work_item_fingerprint": expected_work_item_fingerprint} if expected_work_item_fingerprint is not None else {})}, wait_s=wait_s)

@@ -59,7 +59,7 @@ async def test_brief_export_http_rpc_mcp_parity_fixed_identity_and_no_write(serv
         assert await d.call_api('pm_brief_export_get', fields.copy(), OWNER) == results['markdown', 'en']
         assert unpack(await server.call_tool('pm_brief_export_get', fields)) == results['markdown', 'en']
         capabilities = (await http(port, 'GET', '/api/v1/capabilities', tok=auth))[1]['features']['pm_workspaces']
-        assert capabilities['brief_export'] == {'formats': ['markdown', 'html', 'svg'], 'locales': ['en', 'zh-TW'], 'renderer_version': 1}
+        assert capabilities['brief_export'] == {'formats': ['markdown', 'html', 'svg'], 'locales': ['en', 'zh-TW'], 'renderer_version': 2}
         # New snapshots/captures cannot silently replace the selected version.
         await capture(d, target, binding)
         await snapshot(d, wid)

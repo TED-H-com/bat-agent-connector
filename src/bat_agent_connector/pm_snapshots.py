@@ -278,6 +278,29 @@ def _build(ctx, principal, workspace, current):
     return doc
 
 
+def _insert(ctx, workspace, document):
+    """Insert one already-built snapshot inside its caller's journal transaction.
+
+    Internal callers may add a source-gated maintenance extension before this
+    shared insertion. Public snapshot.create still accepts only its title.
+    """
+    ops = ctx.service
+    if not ops.db.in_transaction or document['snapshot_id'] != 'pmsnap_' + ctx.operation_id[3:]:
+        raise _bad('PM_SNAPSHOT_TRANSACTION_REQUIRED', 'Insert the original snapshot inside its journal transaction', 409)
+    if not _fits(document):
+        raise _bad('PM_SNAPSHOT_BASELINE_TOO_LARGE', 'The complete fixed snapshot exceeds its byte bound', 413)
+    digest = _digest(document)
+    sequence = ops.db.execute("""INSERT INTO pm_document_snapshots(snapshot_id,workspace_id,title,as_of,journal_cursor,
+        template_version,snapshot_digest,document,created_by,operation_id) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (document["snapshot_id"], workspace["workspace_id"], document["title"], document["as_of"], document["journal_cursor"],
+         TEMPLATE_VERSION, digest, _json(document), ctx.actor, ctx.operation_id)).lastrowid
+    result = {key: document[key] for key in ("snapshot_id", "workspace_id", "as_of", "journal_cursor", "template_version")}
+    result.update(sequence=sequence, snapshot_digest=digest, execution_authorized=False)
+    ops.db.execute("INSERT INTO pm_snapshot_applied VALUES(?,?)", (ctx.operation_id, _json(result)))
+    ops.journal.api_event("pm_snapshot", document["snapshot_id"], "pm.snapshot.created", result, actor=ctx.actor)
+    return result
+
+
 async def _run(ctx):
     ops = ctx.service
     with ops.journal.tx():
@@ -289,22 +312,16 @@ async def _run(ctx):
         principal = pm_workspace.admitted_principal(ctx)
         workspace, current = _check(ops, principal, ctx.target, ctx.params, ctx.preconditions)
         document = _build(ctx, principal, workspace, current)
-        digest = _digest(document)
-        sequence = ops.db.execute("""INSERT INTO pm_document_snapshots(snapshot_id,workspace_id,title,as_of,journal_cursor,
-            template_version,snapshot_digest,document,created_by,operation_id) VALUES(?,?,?,?,?,?,?,?,?,?)""",
-            (document["snapshot_id"], workspace["workspace_id"], document["title"], document["as_of"], document["journal_cursor"],
-             TEMPLATE_VERSION, digest, _json(document), ctx.actor, ctx.operation_id)).lastrowid
-        result = {key: document[key] for key in ("snapshot_id", "workspace_id", "as_of", "journal_cursor", "template_version")}
-        result.update(sequence=sequence, snapshot_digest=digest, execution_authorized=False)
-        ops.db.execute("INSERT INTO pm_snapshot_applied VALUES(?,?)", (ctx.operation_id, _json(result)))
-        ops.journal.api_event("pm_snapshot", document["snapshot_id"], "pm.snapshot.created", result, actor=ctx.actor)
-        return result
+        return _insert(ctx, workspace, document)
 
 
 def _out(ops, principal, row):
     document = json.loads(row["document"])
     if _digest(document) != row["snapshot_digest"] or document["template_version"] != TEMPLATE_VERSION:
         raise _bad("PM_SNAPSHOT_UNAVAILABLE", "The fixed snapshot or its template cannot be read", 409)
+    if 'maintenance' in document:
+        from . import pm_maintenance_review_sources
+        pm_maintenance_review_sources.access(ops, principal, document['workspace_id'], document['maintenance']['access_refs'])
     # Never use newly captured facts here. The evidence ID and digest must match
     # the original snapshot; current lookup only authorizes those fixed bytes.
     visible = []
@@ -333,8 +350,25 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=50):
         rows = ops.db.execute("""SELECT sequence,snapshot_id,workspace_id,title,as_of,journal_cursor,template_version,
             snapshot_digest,created_by,operation_id FROM pm_document_snapshots WHERE workspace_id=? AND sequence>?
             ORDER BY sequence LIMIT ?""", (workspace_id, after, limit + 1)).fetchall()
-        return {"version": 1, "workspace_id": workspace_id, "snapshots": [dict(row) for row in rows[:limit]],
-                "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
+        visible, filtered = [], False
+        for row in rows[:limit]:
+            # Maintenance titles/context metadata must not become an alternate
+            # read path after one of the report's original sources is withdrawn.
+            stored = ops.db.execute('SELECT document FROM pm_document_snapshots WHERE snapshot_id=?', (row['snapshot_id'],)).fetchone()
+            document = json.loads(stored['document'])
+            if 'maintenance' in document:
+                from . import pm_maintenance_review_sources
+                try:
+                    pm_maintenance_review_sources.access(ops, principal, workspace_id, document['maintenance']['access_refs'])
+                except OperationError as exc:
+                    if exc.status not in (403, 404):
+                        raise
+                    filtered = True
+                    continue
+            visible.append(dict(row))
+        return {"version": 1, "workspace_id": workspace_id, "snapshots": visible,
+                "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None,
+                "visibility_filtered": filtered}
 
 
 def get_snapshot(ops, principal, workspace_id, snapshot_id):

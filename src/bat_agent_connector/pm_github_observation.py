@@ -47,9 +47,10 @@ def install(ops):
 
 
 def capabilities():
+    from . import pm_maintenance_findings
     return {'version': 1, 'profiles': [provider.PROFILE], 'read_only': True, 'traversals': 2,
         'automatic_maintenance': False, 'full_github_repository_coverage': False,
-        'outside_scope': provider.OUTSIDE_SCOPE,
+        'outside_scope': provider.OUTSIDE_SCOPE, 'maintenance_findings': pm_maintenance_findings.capabilities(),
         'limits': {'pages': provider.MAX_PAGES, 'rows': provider.MAX_ROWS,
             'bytes': provider.MAX_BYTES, 'seconds': provider.MAX_SECONDS}}
 
@@ -91,6 +92,8 @@ def _record(db, wid, oid):
 
 def _access(ops, principal, wid, record):
     workload._intent_access(ops, principal, wid, record['source_binding'])
+    from . import pm_maintenance_findings
+    pm_maintenance_findings.require_sources(ops, principal, wid, record['document'].get('finding_work_sources', []))
 
 
 def operation_visible(db, principal, operation):
@@ -157,13 +160,23 @@ async def _run(ctx):
     def record():
         check()
         now, oid = time.time(), 'pmgh_' + ctx.operation_id[3:]
+        additions = {}
+        if 'maintenance_sources' in evidence:
+            from . import pm_maintenance_findings
+            refs = pm_maintenance_findings.attach_work(ctx.service, principal, ctx.target['workspace_id'], evidence['maintenance_sources'])
+            additions['finding_work_sources'] = refs
+            if evidence['status'] == 'complete' and any(source['status'] == 'incomplete' for source in evidence['maintenance_sources'].values()):
+                evidence.update(status='incomplete', reason='configured_source_incomplete')
         document = {'schema_version': 1, 'observation_id': oid, 'workspace_id': ctx.target['workspace_id'],
             'profile': provider.PROFILE, 'scope': intent['scope'], 'as_of': start['started_at'], 'finished_at': now,
             'expires_at': start['started_at'] + intent['observation']['max_age_seconds'],
             'source_binding_digest': sources.digest(intent), 'evidence': evidence,
-            'network_checked': evidence['pages'] > 0, 'automatic_maintenance_authorized': False}
+            'network_checked': evidence['pages'] > 0, 'automatic_maintenance_authorized': False, **additions}
         if now < start['started_at'] or now >= document['expires_at']:
             evidence.update(status='incomplete', reason='observation_expired_or_clock_changed')
+            for source in evidence.get('maintenance_sources', {}).values():
+                if source['status'] != 'disabled':
+                    source.update(status='incomplete', reason=evidence['reason'], result=None)
         doc_digest = sources.digest(document)
         row = {'sequence': 2**63 - 1, 'observation_id': oid, 'workspace_id': ctx.target['workspace_id'],
             'policy_id': intent['policy_id'], 'baseline_id': intent['baseline_id'], 'document': document,
