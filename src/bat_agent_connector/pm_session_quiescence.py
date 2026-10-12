@@ -378,10 +378,11 @@ async def _observe(ctx):
     final = await asyncio.wait_for(pm_runtime.sync_session(client, original['session_id'], replay['cursor']), 15)
     if final['gap'] or final['events'] or final['has_more']:
         raise Wait('waiting_external', 'Observe all current events before recording quiescence', 1)
-    _live(ops, op)
+    await _scope(ops, op, client, intent)
     meta = await asyncio.wait_for(client.invoke('claude:get-session-meta', {'sessionId': original['session_id']}), 15)
     _meta(original, meta)
-    await _scope(ops, op, client, intent)
+    # No provider await after the last native identity read. A scope/catalogue
+    # read may itself overlap a new human input and must precede this read.
     with ops.journal.tx():
         ctx.check_cancel()
         _live(ops, op)
