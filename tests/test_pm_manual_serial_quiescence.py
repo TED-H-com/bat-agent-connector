@@ -147,13 +147,15 @@ class ReadOnlyProvider:
     def __init__(self, host):
         self.host, self.auth_info, self.calls = host, {'authenticated': True}, []
         self.origin, self.events, self.meta = wire()
-        self.page_size, self.after_empty = 100, None
+        self.page_size, self.after_empty, self.after_final_scope = 100, None, None
         self.tab = {'id': SID, 'workspaceId': 'manual-workspace', 'agentPreset': 'codex-agent'}
 
     async def invoke(self, channel, params):
         self.calls.append((channel, copy.deepcopy(params)))
         assert channel in {'workspace:load', 'claude:sync-session', 'claude:get-session-meta'}, 'manual write forbidden'
         if channel == 'workspace:load':
+            if self.after_final_scope and sum(call[0] == channel for call in self.calls) >= 2:
+                self.after_final_scope()
             return {'terminals': [copy.deepcopy(self.tab)]}
         assert params['sessionId'] == SID
         if channel == 'claude:get-session-meta':
@@ -240,6 +242,7 @@ async def test_serial_pages_survive_journal_reopen_with_original_key_and_private
             if same['status'] == 'succeeded':
                 break
         assert same['status'] == 'succeeded', same
+        assert provider.calls[-1][0] == 'claude:get-session-meta'
         receipt = manual.proof(recovered, OWNER, same)
         assert receipt['schema'] == manual.SERIAL_RECEIPT and receipt['completed_turn_count'] == 2
         assert receipt['runtime_status'] == 'current_serial_inputs_quiescent'
@@ -284,6 +287,21 @@ async def test_final_read_changes_cannot_record_a_serial_receipt(linked, change)
         else:
             ops.db.execute('UPDATE work_item_links SET removed_at=1 WHERE work_item_id=?', (target['work_item_id'],))
     provider.after_empty = changed
+    result = await advance(ops, op)
+    assert result['status'] != 'succeeded'
+    assert manual.saved._saved(ops, op['operation_id'], manual.COMPLETE) is None
+
+
+@pytest.mark.parametrize('change', ['pending', 'received', 'epoch', 'sdk'])
+async def test_last_scope_read_cannot_hide_a_later_native_input(linked, change):
+    ops, target, provider = linked
+    op, _ = ops.create(OWNER, **request(ops, target))
+    def changed():
+        if change == 'sdk':
+            provider.meta['sdkSessionId'] = 'changed-during-final-workspace-read'
+        else:
+            provider.meta['inputState'][change] = {'pending': 1, 'received': 3, 'epoch': 'b' * 32}[change]
+    provider.after_final_scope = changed
     result = await advance(ops, op)
     assert result['status'] != 'succeeded'
     assert manual.saved._saved(ops, op['operation_id'], manual.COMPLETE) is None
