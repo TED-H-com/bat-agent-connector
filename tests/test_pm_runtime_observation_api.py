@@ -18,8 +18,7 @@ from tests.test_pm_run_api import unpack
 
 async def test_catalog_never_advertises_private_runtime_observers(world, monkeypatch):  # noqa: F811
     d, port = world['d'], world['port']
-    for scopes in [('observe',), ('admin',)]:
-        auth = token(d, 'observer-catalog', *scopes)
+    for auth in (token(d, 'observer-catalog', 'observe'), d._admin_token):
         monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
         monkeypatch.setenv('BATC_API_TOKEN', auth)
         server, fleet = mcp_server.build_server(d.fleet.config, read_only=True, principal_only=True)
