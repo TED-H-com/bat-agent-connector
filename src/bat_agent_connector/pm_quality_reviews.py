@@ -128,12 +128,12 @@ def _access(ops, principal, row):
     from .pm_maintenance_repairs import source_backedge
     from .pm_source_reads import check, scope
     with scope(ops.db, principal):
+        _member(ops, principal, row['workspace_id'])
         original = _review(ops, row['workspace_id'], row['review_id'])
         if row != original:
             raise sources.bad('Original quality context changed', 'NOT_FOUND', 404)
         history = _source_history(ops, original)
         def visible():
-            _member(ops, principal, original['workspace_id'])
             for current in history:
                 sources.access(ops, principal, original['workspace_id'], current['context'])
                 for record in _records(ops, current):
