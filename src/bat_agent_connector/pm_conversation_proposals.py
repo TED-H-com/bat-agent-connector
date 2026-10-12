@@ -5,7 +5,6 @@ import hashlib
 import json
 import re
 import time
-from contextvars import ContextVar
 
 from . import pm_conversation_format as fmt
 from . import (
@@ -22,7 +21,6 @@ from .operations import ActionDef, OperationError, OperationService
 ACTION = "pm.conversation.propose"
 ADOPT = "pm.conversation.adopt"
 ID = re.compile(r"pmcp_[0-9a-f]{32}")
-_ACCESS = ContextVar("pm_conversation_access", default=None)
 
 
 def error(message, code="PM_CONVERSATION_INVALID", status=422):
@@ -126,28 +124,8 @@ def _admit(ops, principal, target, params, pre):
 
 
 def _bounded_access(db, principal, kind, identity, check):
-    identity_key = (id(db), principal.actor, principal.scopes, principal.admin)
-    state = _ACCESS.get()
-    token = None
-    if state is None or state["identity"] != identity_key:
-        state = {"identity": identity_key, "active": set(), "memo": {}}
-        token = _ACCESS.set(state)
-    key = kind, identity
-    try:
-        if key in state["memo"]:
-            return state["memo"][key]
-        if key in state["active"] or len(state["active"]) >= 64 or len(state["memo"]) + len(state["active"]) >= 2048:
-            return False
-        state["active"].add(key)
-        try:
-            result = bool(check())
-            state["memo"][key] = result
-            return result
-        finally:
-            state["active"].remove(key)
-    finally:
-        if token is not None:
-            _ACCESS.reset(token)
+    from .pm_source_reads import check as check_source
+    return check_source(db, principal, 'conversation.' + kind, identity, check)
 
 
 def operation_visible(db, principal, operation):
