@@ -3,6 +3,7 @@ import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
 import {fixture as followUpFixture,snapshotId,intakeId,threadId as followUpThreadId} from './pm-follow-up-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {structuredCapability,BAT} from './pm-structured-analysis-fixture.ts';
 
 const assessmentId=(n:number)=>'pmfa_'+n.toString(16).padStart(32,'0');
 function assessment(n:number){
@@ -22,7 +23,7 @@ function fixture({analysisEnabled=false}={}){
   followUp.state.actor=base.state.actor;
   base.state.start=analysisEnabled;
   const analysis={enabled:analysisEnabled,rows:[assessment(1)],reads:[] as string[],writes:[] as any[],ops:new Map<string,any>(),
-    lost:false,pending:false,polls:0,eventType:'pm_follow_up'};
+    lost:false,pending:false,polls:0,eventType:'pm_follow_up',structured_analysis:null as any};
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),p=url.pathname;
     if(p==='/bootstrap'||p==='/capabilities'){
@@ -53,7 +54,7 @@ function fixture({analysisEnabled=false}={}){
     const operation=[...analysis.ops.values()].find(row=>p===`/operations/${row.operation_id}`);
     if(operation){analysis.polls++;operation.status='succeeded';return {status:200,data:{operation:structuredClone(operation)}};}
     if(p===prefix+'/capabilities'){
-      const result=await base.dispatch(input);result.data.follow_up_analysis={authorized:true,eligible_for_preflight:true};return result;
+      const result=await base.dispatch(input);result.data.follow_up_analysis={authorized:true,eligible_for_preflight:true};if(analysis.structured_analysis)result.data.structured_analysis=analysis.structured_analysis;return result;
     }
     if(p===prefix+'/threads/'+followUpThreadId&&analysis.enabled){
       const result=await followUp.dispatch(input);result.data.thread.mode='planning';result.data.capabilities={write:true};return result;
@@ -185,4 +186,16 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`wo
   const out=process.env.PM_FOLLOW_UP_WORKSPACE_SCREENSHOTS;
   if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}
   await context.close();
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`structured Follow-up ${native?'Tauri':'Web'} ${locale} keeps original BAT admission across reload`,async({page})=>{
+  const f=fixture({analysisEnabled:true});f.analysis.structured_analysis=structuredCapability();f.analysis.lost=true;
+  await page.addInitScript(locale=>localStorage.setItem('batc.lang',locale),locale);await mountConversation(page,native,f.dispatch);await page.goto(route);
+  const box=page.locator('[data-pm-follow-up-analyze]');await box.locator(':scope > summary').click();
+  const form=box.locator('form'),choice=form.locator('[data-pm-structured-analysis] select');
+  await choice.selectOption(BAT);await form.locator('textarea').fill('A fixed BAT Follow-up');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
+  f.analysis.structured_analysis=null;await page.reload();await box.locator(':scope > summary').click();
+  await expect(choice).toHaveValue(BAT);await expect(choice).toBeDisabled();await form.locator('button[type=submit]').click();
+  await expect.poll(()=>f.analysis.writes.length).toBe(2);expect(f.analysis.writes[1]).toEqual(original);expect(original.body.params.adapter).toBe(BAT);expect(f.analysis.ops.size).toBe(1);
 });

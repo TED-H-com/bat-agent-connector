@@ -8,7 +8,7 @@ export function proposalFixture(){
   const state:any={actor:'owner',role:'owner',available:true,eligible:true,deny:false,lost:false,conflict:false,reads:[],writes:[],ops:new Map(),gate:null,partial:false,
     head:{workspace_id:workspaceId,version:0,latest_revision_id:null,accepted_revision_id:null},thread:{thread:{workspace_id:workspaceId,thread_id:threadId,version:4,mode:'idea'},capabilities:{write:true,decide:true}},proposals:[]};
   const caps=()=>({actor:state.actor,scopes:state.role==='reader'?['observe']:['observe','manage','start'],actions:[PROPOSE,ADOPT].map(action=>({action,allowed:state.role!=='reader'})),features:{pm_workspaces:{version:1,conversation_proposals:state.available?{version:1}:null}}});
-  const capability=()=>({native_analysis:{eligible_for_preflight:state.eligible}});
+  const capability=()=>({native_analysis:{eligible_for_preflight:state.eligible},...(state.structured_analysis?{structured_analysis:state.structured_analysis}:{})});
   const save=()=>{const document={version:1,title:'Paid member access',summary:'Add paid member login and password reset. Keep referral codes outside this release.',
     candidates:[{key:'login',domain:'scope',text:'Paid members can log in',kind:'proposal',source_refs:['message.owner']},
       {key:'reset',domain:'quality',text:'Password reset links expire after one use',kind:'proposal',source_refs:['message.owner']},

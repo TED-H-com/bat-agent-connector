@@ -97,6 +97,7 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
     }else content.append(note('pm_fa_raw_review'),h('ul',{},...row.validation.errors.map(error=>h('li',{},String(error)))));
     content.append(fold('pm_fa_raw',h('pre',{class:'pm-note-text'},row.raw_reply)),
       fold('pm_fa_provenance',h('p',{},t('pm_fa_intake'),code(row.intake_id),code(row.intake_digest)),
+        h('p',{},t('pm_native_origin'),' ',row.provenance.adapter||t('pm_native_unknown_source')),
         h('p',{},t('pm_fa_model'),': ',row.provenance.actual_model||'—'),h('p',{},t('pm_fa_run'),code(row.run_id)),
         h('p',{},t('pm_fa_context'),code(row.context_digest)),h('p',{},t('pm_fa_reply_digest'),code(row.raw_reply_digest)),
         h('p',{},t('pm_fa_document_digest'),code(row.document_digest)),

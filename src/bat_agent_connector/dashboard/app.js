@@ -572,6 +572,60 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 	};
 }
 //#endregion
+//#region src/pm-structured-analysis.js
+var NATIVE = "codex-native-linux";
+var BAT = "bat-pm-linux-v1";
+function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible, authorized, readable = () => true }) {
+	const field = h("select", {
+		"aria-label": t("pm_analysis_adapter"),
+		"data-pm-default": NATIVE
+	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
+	field.value = NATIVE;
+	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
+		class: "muted",
+		"data-structured-analysis-reason": ""
+	}), binding = h("p", { class: "muted pm-note-text" });
+	const box = h("div", { "data-pm-structured-analysis": "" }, choice, reason, binding);
+	let activeRequest = null;
+	field.addEventListener("change", () => activeRequest?.update());
+	const supported = () => capability()?.structured_analysis?.version === 1;
+	const descriptor = () => {
+		const rows = supported() ? capability().structured_analysis.actions?.[action]?.adapters : null;
+		return Array.isArray(rows) ? rows.find((row) => row?.adapter === field.value) : null;
+	};
+	const eligible = () => supported() ? Boolean([NATIVE, BAT].includes(field.value) && descriptor()?.action_registered === true && descriptor()?.authorized === true && descriptor()?.eligible_for_preflight === true) : field.value === NATIVE && legacyEligible();
+	function update(request) {
+		activeRequest = request;
+		box.hidden = !readable();
+		choice.hidden = !supported() && field.value === NATIVE;
+		field.disabled = Boolean(request?.locked()) || !authorized();
+		const selected = descriptor(), legacy = action === "pm.conversation.propose" ? capability()?.native_analysis : capability()?.follow_up_analysis;
+		const code = selected?.reason || (!supported() && field.value === NATIVE ? legacy?.reason : null);
+		const key = !authorized() || selected?.authorized === false ? "pm_native_permissions" : eligible() ? field.value === BAT ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : field.value === BAT ? {
+			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
+			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
+			HOST_READ_ONLY: "pm_analysis_bat_readonly"
+		}[code] || "pm_analysis_bat_unavailable" : {
+			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
+			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
+			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
+			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
+			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
+		}[code] || "pm_native_unavailable";
+		reason.textContent = t(key);
+		const source = field.value === BAT && selected?.selected_binding;
+		binding.hidden = !source;
+		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
+	}
+	return {
+		field,
+		box,
+		eligible,
+		update,
+		params: (values) => supported() ? { adapter: values.adapter } : {}
+	};
+}
+//#endregion
 //#region src/pm-plan-proposals.js
 var PROPOSE = "pm.conversation.propose";
 var ADOPT = "pm.conversation.adopt";
@@ -655,27 +709,36 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	}), model = input("pcp_model", {
 		max: 128,
 		required: false
-	}), prepareReason = h("p", {
-		class: "muted",
-		"data-proposal-availability": ""
+	});
+	const runtime = structuredAnalysis({
+		h,
+		t,
+		labelled,
+		action: PROPOSE,
+		capability: () => capability,
+		readable: () => visible,
+		authorized: () => writing() && caps()?.scopes?.includes("start") && !adopt?.locked(),
+		legacyEligible: () => capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true
 	});
 	prepare = form({
 		action: PROPOSE,
 		target,
 		fields: {
 			purpose,
-			model
+			model,
+			adapter: runtime.field
 		},
 		params: (values) => ({
 			purpose: values.purpose,
-			...values.model.trim() ? { model: values.model.trim() } : {}
+			...values.model.trim() ? { model: values.model.trim() } : {},
+			...runtime.params(values)
 		}),
 		preconditions: () => ({
 			expected_version: thread().thread.version,
 			expected_plan_version: head.version,
 			expected_accepted_revision_id: head.accepted_revision_id
 		}),
-		permitted: () => writing() && head && caps()?.scopes?.includes("start") && capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true && !adopt?.locked(),
+		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && !adopt?.locked(),
 		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
 		label: "pcp_prepare",
 		onSaved: async (result) => {
@@ -687,7 +750,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		onStateChange: () => {
 			if (ready) updateControls();
 		},
-		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"), prepareReason)
+		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), runtime.box, h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"))
 	});
 	const review = hidden(), rationale = input("pcp_rationale", {
 		multiline: true,
@@ -812,9 +875,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		picker.disabled = loading || adopt.locked();
 		reload.disabled = loading;
 		more.disabled = loading;
-		const unavailable = capability?.native_analysis?.authorized === false || capability?.native_analysis?.eligible_for_preflight !== true || !caps()?.scopes?.includes("start");
-		prepareReason.hidden = !unavailable;
-		prepareReason.textContent = unavailable ? t("pcp_runtime") : "";
+		runtime.update(prepare);
 		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
 		if (active && active.validation.status === "format_valid") {
 			const reasons = content.querySelector("[data-proposal-reason]");
@@ -872,6 +933,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		detail.replaceChildren();
 		content.replaceChildren();
 		detail.append(h("h4", {}, t("pcp_review")));
+		if (p.provenance?.adapter) detail.append(h("p", { class: "muted" }, t("pm_native_origin"), " ", p.provenance.adapter));
 		if (p.validation.status !== "format_valid") {
 			detail.append(note("pcp_invalid"), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error)))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
 			return;
@@ -4704,7 +4766,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 				return [h("p", { class: "pm-note-text" }, item.text), item.proposed_owner ? h("p", {}, t("pm_fa_proposed_owner"), ": ", item.proposed_owner) : ""];
 			}));
 		} else content.append(note("pm_fa_raw_review"), h("ul", {}, ...row.validation.errors.map((error) => h("li", {}, String(error)))));
-		content.append(fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
+		content.append(fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_native_origin"), " ", row.provenance.adapter || t("pm_native_unknown_source")), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
 		detail.replaceChildren(content);
 	}
 	async function read(id) {
@@ -4869,6 +4931,15 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				type: "hidden",
 				value: String(thread.thread.version)
 			}), warning = note("pm_fa_thread_stale");
+			const runtime = structuredAnalysis({
+				h,
+				t,
+				labelled,
+				action: "pm.follow_up.analyze",
+				capability: () => capability,
+				authorized,
+				legacyEligible: () => capability?.follow_up_analysis?.authorized === true && capability?.follow_up_analysis?.eligible_for_preflight === true
+			});
 			const stale = () => version.value !== String(thread?.thread.version);
 			const rebase = h("button", {
 				type: "button",
@@ -4885,8 +4956,9 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				rebase.hidden = !stale();
 				rebase.disabled = Boolean(request?.locked()) || !authorized();
 				navigation();
+				runtime.update(request);
 			};
-			const eligible = () => authorized() && capability?.authorized === true && capability?.eligible_for_preflight === true && !stale();
+			const eligible = () => authorized() && runtime.eligible() && !stale();
 			request = form({
 				api: guardedApi,
 				namespace: `${namespace}.follow-up.${intake.intake_id}`,
@@ -4898,12 +4970,14 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				fields: {
 					purpose,
 					model,
-					_version: version
+					_version: version,
+					adapter: runtime.field
 				},
 				params: (values) => ({
 					intake_id: intake.intake_id,
 					purpose: values.purpose,
-					...values.model.trim() ? { model: values.model.trim() } : {}
+					...values.model.trim() ? { model: values.model.trim() } : {},
+					...runtime.params(values)
 				}),
 				preconditions: () => ({
 					expected_version: Number(version.value),
@@ -4914,16 +4988,9 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				label: "pm_fa_analyze",
 				onStateChange: sync,
 				onSaved,
-				extra: h("div", { class: "pm-fields" }, labelled("pm_fa_purpose", purpose), h("details", {}, h("summary", {}, t("pm_fa_model_optional")), labelled("pm_native_model", model)), version)
+				extra: h("div", { class: "pm-fields" }, labelled("pm_fa_purpose", purpose), runtime.box, h("details", {}, h("summary", {}, t("pm_fa_model_optional")), labelled("pm_native_model", model)), version)
 			});
-			const reason = !authorized() ? "pm_native_permissions" : capability?.eligible_for_preflight ? "pm_native_preflight_pending" : {
-				PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
-				PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
-				PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
-				PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
-				PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
-			}[capability?.reason] || "pm_native_unavailable";
-			body.append(note(reason), warning, rebase, request.box);
+			body.append(warning, rebase, request.box);
 			request.update();
 		} catch (error) {
 			if (ticket === serial) fail(error);
@@ -4949,7 +5016,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		try {
 			const data = check(await api("GET", `${endpoint}/capabilities`));
 			if (!current(ticket)) return;
-			capability = data.follow_up_analysis;
+			capability = data;
 			rows = [];
 			next = null;
 			if (intake.document.thread_ref) {
