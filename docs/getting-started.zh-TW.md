@@ -27,6 +27,8 @@ GitHub artifact 可能要求登入，也會到期。Windows 驗證包未正式�
 
 需要派工時，展開「允許管理工作」，選擇所需的對話／開工權限與專用「遠端管理目錄」。Git 同步、checkpoint 及成果操作使用「此電腦已設定的 SSH alias」。SSH 帳號、金鑰、已知主機與遠端權限須已可用，程式不會猜測或產生這些授權。
 
+SSH alias 由中央所在電腦的服務帳號解析。使用打包本機中央時，就是桌面電腦；若加入遠端中央，須在該中央主機準備 SSH 存取。瀏覽器或 Tauri client 不會將自己的本機 SSH 金鑰轉送給中央。
+
 直接 BAT 開工若需共用 Git metadata，須明確勾選「允許共享 clone 的 Git worktree」；沒有此需求就保持關閉，也不因此取得人工 session／worktree 控制權。按「驗證並儲存主機」會做唯讀連線／profile 檢查，儲存不會派工。
 
 ### 2. 連結 GitHub 儲存庫
@@ -118,7 +120,8 @@ BAT 分析需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime；
 ### 讀取 AHP 主機 catalog
 
 在 PM workspace 展開 **AHP 唯讀觀察**。操作者需先在中央為此 workspace 設定
-adapter、端點、憑證參照及協定 profile；詳見 [AHP 觀察契約](design/pm-ahp-observer.md)。
+adapter、端點、憑證參照及憑證傳輸方式；詳見 [AHP 觀察契約](design/pm-ahp-observer.md)。
+擷取時會協商支援的協定版本，已保存收據列出原版本與 decoder profile；設定檔沒有協定 profile 欄位。
 這裡不輸入主機網址或憑證，也不會變更分析 runtime 或將 writer 移到其他 adapter。
 
 選擇已設定的 adapter，按 **擷取主機 catalog**。從該份已保存 catalog 選取最多

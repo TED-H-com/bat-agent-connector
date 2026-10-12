@@ -47,6 +47,16 @@ try {
     assert.equal(await page.locator('#view-dispatch').isVisible(), true);
     await page.locator('#view-dispatch img:visible').evaluate(img => img.decode());
     await page.screenshot({ path: resolve(output, `dispatch-${lang}-${width}.png`) });
+    for (const view of ['pm-planning', 'pm-kanban']) {
+      await page.locator(`[data-view="${view}"]`).focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator(`#view-${view}`).isVisible(), true);
+      assert.equal(await page.locator('.product-shot:visible').count(), 1);
+      assert.equal(await page.locator(`[data-view="${view}"]`).getAttribute('aria-pressed'), 'true');
+      await page.locator(`#view-${view} img:visible`).evaluate(img => img.decode());
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await page.screenshot({ path: resolve(output, `${view}-${lang}-${width}.png`) });
+    }
     await page.locator('[data-view="workspace"]').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#view-workspace').isVisible(), true);
@@ -92,8 +102,10 @@ try {
   const noJS = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   const fallback = await noJS.newPage();
   await fallback.goto(base);
-  assert.equal(await fallback.locator('#view-workspace').isVisible(), true);
-  assert.equal(await fallback.locator('#view-dispatch').isVisible(), true);
+  for (const view of ['workspace', 'dispatch', 'pm-planning', 'pm-kanban']) {
+    assert.equal(await fallback.locator(`#view-${view}`).isVisible(), true);
+    await fallback.locator(`#view-${view} img:visible`).evaluate(img => img.decode());
+  }
   assert.equal(await fallback.locator('h1:visible').count(), 1);
   assert.equal(await fallback.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await fallback.screenshot({ path: resolve(output, 'no-js-390.png') });

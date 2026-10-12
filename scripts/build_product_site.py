@@ -1,3 +1,5 @@
+"""Generate the bilingual public introduction. Product data stays on the central."""
+
 import argparse
 from html import escape
 from pathlib import Path
@@ -11,23 +13,28 @@ def bi(en, zh, tag="span", cls=""):
     return f'<{tag}{attr}><span class="lang-en">{en}</span><span class="lang-zh" lang="zh-Hant">{zh}</span></{tag}>'
 
 
-def link(path, en, zh, cls=""):
-    return f'<a href="{path}"' + (f' class="{cls}"' if cls else "") + ">" + bi(en, zh) + "</a>"
+def link(url, en, zh, cls=""):
+    attr = f' class="{cls}"' if cls else ""
+    return f'<a href="{url}"{attr}>' + bi(en, zh) + "</a>"
 
 
-def heading(kicker, kicker_zh, en, zh, desc="", desc_zh=""):
+def doc(path, en, zh, cls="text-link"):
+    return link(repo + "/blob/main/" + path, en, zh, cls)
+
+
+def heading(kicker, kz, title, tz, desc="", dz=""):
     return (
         '<div class="section-heading">'
-        + bi(kicker, kicker_zh, "p", "eyebrow")
-        + bi(en, zh, "h2")
-        + (bi(desc, desc_zh, "p", "lede") if desc else "")
+        + bi(kicker, kz, "p", "eyebrow")
+        + bi(title, tz, "h2")
+        + (bi(desc, dz, "p", "lede") if desc else "")
         + "</div>"
     )
 
 
 nav = "".join(
-    link("#" + i, e, z)
-    for i, e, z in [
+    link("#" + key, en, zh)
+    for key, en, zh in [
         ("product", "Product", "產品"),
         ("workflow", "Workflow", "流程"),
         ("architecture", "Architecture", "架構"),
@@ -36,61 +43,58 @@ nav = "".join(
         ("docs", "Docs", "文件"),
     ]
 )
-header = f'''<a class="skip-link" href="#main">{bi("Skip to content", "跳到主要內容")}</a>
+parts = [
+    f'''<a class="skip-link" href="#main">{bi("Skip to content", "跳到主要內容")}</a>
 <header class="site-header"><div class="header-inner">
 <a class="brand" href="#top"><img src="logo.svg" width="32" height="32" alt=""><span>Better Agent<span class="brand-sub">Dashboard</span></span></a>
 <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-navigation">{bi("Menu", "選單")}</button>
 <nav class="site-nav" id="site-navigation" aria-label="Navigation / 導覽">{nav}
 <div class="language-switch" role="group" aria-label="Language / 語言"><button type="button" data-language="en" aria-pressed="true">EN</button><button type="button" data-language="zh" aria-pressed="false">繁中</button></div>
-<a href="{repo}" class="source-link">GitHub <span aria-hidden="true">↗</span></a></nav></div></header>'''
-parts = [header, '<main id="main">']
-parts.append('<section class="hero section" id="top"><div class="hero-grid"><div>')
-parts.append(bi("BAT connections, agents and delivery", "BAT 連線、Agent 與交付", "p", "eyebrow"))
-parts.append(bi("Many agents.<br>One path to delivery.", "多個 Agent，<br>一條交付流程。", "h1"))
-parts.append(
+<a href="{repo}" class="source-link">GitHub <span aria-hidden="true">↗</span></a></nav></div></header>
+<main id="main"><section class="hero section" id="top"><div class="hero-grid"><div>'''
+]
+parts += [
+    bi("Project management for agent work", "讓 Agent 工作接上專案管理", "p", "eyebrow"),
+    bi("Keep the plan.<br>Follow the result.", "記得原計畫，<br>追到真成果。", "h1"),
     bi(
-        "Connect the fleet, dispatch agents and follow their results. Windows manages local connections and BAT startup; the shared Web and Tauri Dashboard follows work on your BAT hosts.",
-        "連起主機、派出 Agent、追到成果。Windows 管理本機連線與 BAT 啟動，Web／Tauri 共用 Dashboard 追蹤 BAT 主機上的工作；你照常在 BAT 裡 coding。",
+        "Discuss the goal, review the plan and connect agent work to delivery evidence. A shared Web and desktop workspace keeps decisions, progress and maintenance in view.",
+        "討論目標、審閱計畫，把 Agent 工作接回交付證據。在共用的 Web 與桌面工作空間，掌握決策、進度與後續維護。",
         "p",
         "hero-description",
-    )
-)
-parts.append(
+    ),
     '<div class="actions">'
-    + link("#product", "Explore the Dashboard", "看看 Dashboard", "button primary")
-    + link("#start", "Installation &amp; first use", "安裝與首次使用", "text-link")
-    + "</div>"
-)
-parts.append(
+    + link("#product", "Explore the workspace", "看看工作空間", "button primary")
+    + link("#start", "Install and start", "安裝與開始使用", "text-link")
+    + "</div>",
     bi(
         "Open source · Web + Tauri · English / 繁體中文",
         "開源 · Web + Tauri · English / 繁體中文",
         "p",
         "hero-meta",
-    )
-)
-parts.append('</div><aside class="hero-aside" aria-label="Product focus / 產品重點">')
+    ),
+    '</div><aside class="hero-aside" aria-label="Product focus / 產品重點">',
+]
 for n, en, zh, desc, dz in [
     (
         "01",
-        "Connect & start",
-        "連線與啟動",
-        "Windows Fleet, SSH routes and selected BAT profiles.",
-        "Windows Fleet、SSH 路由與選定的 BAT profiles。",
+        "Make the agreement clear",
+        "把共識說清楚",
+        "Sourced discussion, reviewable proposals and an adopted plan.",
+        "有來源的討論、可審閱提案與正式採用的計畫。",
     ),
     (
         "02",
-        "Give work a destination",
-        "每份工作都有去向",
-        "Project → host → session → result.",
-        "專案 → 主機 → 工作階段 → 成果。",
+        "See what the evidence says",
+        "看懂成果的依據",
+        "Fixed requirements, responsible reviews and traceable delivery.",
+        "固定需求、負責任的審閱，以及可追溯的交付。",
     ),
     (
         "03",
-        "Follow through to delivery",
-        "追到實際交付",
-        "A commit, a PR, a deployed version and a history.",
-        "固定 commit、PR、部署版本與保留下來的歷史。",
+        "Keep the work connected",
+        "讓工作接續下去",
+        "Agent-owned workspaces, bounded maintenance and the next decision.",
+        "Agent 自有工作區、有界維護，以及下一個需要決定的事。",
     ),
 ]:
     parts.append(
@@ -103,384 +107,459 @@ parts.append(
     '</aside></div><div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "This source version includes bundled local central and guided setup. Choose a successful build from the current public main history and match its package source commit and validation records.",
-        "這版原始碼包含打包本機中央與引導設定；請選目前公開 main 歷史的成功建置，核對套件來源 commit 與驗證紀錄。",
+        "This tour shows merged main with demonstration data. PM v1.2 remains in integration; candidate features and validation are listed separately.",
+        "本頁展示已合併主線與展示資料。PM v1.2 仍在整合；候選功能及驗證另列，下載前請核對來源。",
     )
-    + link("#status", "See readiness", "查看交付現況")
+    + link("#status", "See current scope", "查看目前範圍")
     + "</div></section>"
 )
+
 parts.append(
     '<section class="section" id="product">'
     + heading(
-        "Inside the product",
+        "Inside the workspace",
         "介面導覽",
-        "Keep the work in view.",
-        "從專案一路看到工作成果。",
-        "A persistent project tree keeps conversations, controls and linked results together in Web and Tauri.",
-        "Web 與 Tauri 共用左側專案工作樹；選中工作，就能一起查看對話、操作與關聯成果。",
+        "From the conversation to the work.",
+        "從討論，看見工作怎麼前進。",
+        "The actual shared frontend, captured from main c0027daa on October 12, 2026. All examples use synthetic data.",
+        "以下為 2026 年 10 月 12 日從主線 c0027daa 拍攝的共用介面，全部使用合成展示資料。",
     )
 )
+shots = [
+    (
+        "workspace",
+        "Project workspace",
+        "專案工作空間",
+        "Select work to read its conversation, reply and inspect linked results.",
+        "選取工作，一起閱讀對話、回覆並查看關聯成果。",
+    ),
+    (
+        "pm-planning",
+        "PM planning",
+        "PM 計畫",
+        "Inspect a fixed plan draft and its sources before adoption.",
+        "先檢視固定計畫草稿與來源，再決定是否採用。",
+    ),
+    (
+        "pm-kanban",
+        "PM Kanban",
+        "PM 看板",
+        "Follow recorded work states and the evidence that is still missing.",
+        "跟進已記錄的工作狀態，也看見仍缺少的證據。",
+    ),
+    (
+        "dispatch",
+        "Project dispatch",
+        "專案派工",
+        "Choose the destination and fixed published revision for the agent's own work.",
+        "選擇目的地與固定已發布版本，開始 Agent 自有工作。",
+    ),
+]
 parts.append(
     '<div class="tour-controls" role="group" aria-label="Screenshot view / 介面展示">'
     + bi("View:", "檢視：", "span", "tour-label")
 )
-for k, en, zh in [
-    ("workspace", "Project workspace", "專案工作空間"),
-    ("dispatch", "Project dispatch", "專案派工"),
-]:
+for key, en, zh, _, _ in shots:
     parts.append(
-        f'<button type="button" data-view="{k}" aria-pressed="'
-        + ("true" if k == "workspace" else "false")
-        + '" aria-controls="view-'
-        + k
-        + '">'
+        f'<button type="button" data-view="{key}" aria-pressed="{str(key == "workspace").lower()}" aria-controls="view-{key}">'
         + bi(en, zh)
         + "</button>"
     )
 parts.append("</div>")
-for key, en, zh in [
-    (
-        "workspace",
-        "Select work in the project tree. Read the conversation, reply and follow results in one workspace.",
-        "從左側專案樹選工作，在同一畫面閱讀對話、回覆並追蹤成果。",
-    ),
-    (
-        "dispatch",
-        "Choose an explicit project destination and review the published source before starting work.",
-        "先選專案的明確目的地，檢視已發布來源，再開始工作。",
-    ),
-]:
+for key, _, _, en, zh in shots:
     parts.append(f'<figure class="product-shot" id="view-{key}">')
     for lang, alt in [("en", en), ("zh", zh)]:
         parts.append(
-            f'<a class="lang-{lang} image-link" href="images/{key}-{lang}.png" aria-label="{escape(alt)}"><img src="images/{key}-{lang}.png" width="1240" height="820" loading="lazy" alt="{escape(alt)}"></a>'
+            f'<a class="lang-{lang} image-link" href="images/{key}-{lang}.png" aria-label="{escape(alt)}"><img src="images/{key}-{lang}.png" width="1440" height="960" loading="lazy" alt="{escape(alt)}"></a>'
         )
     parts.append(
         "<figcaption>"
         + bi(en, zh)
         + bi(
-            "Actual UI · synthetic demo data · click image for full size",
-            "實際介面 · 合成展示資料 · 點圖看原尺寸",
+            "Actual UI · demonstration data · open image for full size",
+            "實際介面 · 展示資料 · 點圖看原尺寸",
             "span",
             "caption-meta",
         )
         + "</figcaption></figure>"
     )
-parts.append('<div class="principles">')
+parts.append(
+    doc("site/images/README.md", "Screenshot sources and reproduction →", "截圖來源與重拍方式 →")
+    + '<div class="principles">'
+)
 for en, zh, d, dz in [
     (
-        "Activity is not completion",
-        "活動不等於完成",
-        "No output may mean waiting, idle or missing observations.",
-        "沒有輸出可能是等待、閒置，或缺少觀測。",
+        "Activity has a source",
+        "活動要有來源",
+        "A session going quiet does not establish completion.",
+        "session 安靜下來，不能直接判斷已完成。",
     ),
     (
-        "Review is not deployment",
-        "審閱不等於部署",
-        "Accepting work, merging a PR and verifying a deployment have separate receipts.",
-        "接受成果、合併 PR 和驗證部署，各有自己的回執。",
+        "Acceptance has a reason",
+        "驗收要有理由",
+        "Record the criterion, result, evidence and responsible reviewer.",
+        "保留條件、結果、證據與負責審閱者。",
     ),
     (
-        "Reopen the same work",
-        "重開後找回原工作",
-        "Saved operation identities let you recover without guessing or dispatching twice.",
-        "保存操作身分，先查回結果，避免猜測或重複派工。",
+        "Recovery keeps the original",
+        "恢復沿用原紀錄",
+        "Read back an uncertain operation before starting another.",
+        "結果未知時先查回原操作，再決定下一步。",
     ),
 ]:
     parts.append("<div>" + bi(en, zh, "h3") + bi(d, dz, "p") + "</div>")
 parts.append("</div></section>")
+
 parts.append(
     '<section class="section" id="workflow">'
     + heading(
-        "From request to result",
-        "從需求到成果",
-        "Every step stays connected.",
-        "每一步，都接得回原來的工作。",
-        "Keep the intent, execution and delivery together. Work stays on the selected BAT host, whichever client you use.",
-        "需求、執行與交付保留關聯。無論從哪個入口操作，工作留在你選定的 BAT 主機。",
+        "One small project first",
+        "先從小專案開始",
+        "A workflow you can review at every step.",
+        "每一步，都知道該看什麼。",
+        "Try login and password reset as a first scope. Each decision and result retains its original project context.",
+        "以登入與忘記密碼作為第一段範圍，讓每次決策與成果都保留原專案脈絡。",
     )
     + '<ol class="workflow">'
 )
-steps = [
-    (
-        "Organize",
-        "整理專案",
-        "Record the original request, acceptance criteria and explicitly associated repository.",
-        "保留原始需求、驗收條件，明確連結 repository。",
-    ),
-    (
-        "Dispatch",
-        "派出工作",
-        "Choose the host and workspace. Review a fixed branch commit, then add instructions, a model and exact attachments.",
-        "選主機與工作區，檢視分支的固定 commit，加入指示、模型與精確附件版本。",
-    ),
-    (
-        "Observe",
-        "跟進狀況",
-        "Read the conversation, answer a pending question and find the session or worktree from its project.",
-        "讀取對話、回答待處理問題，從原專案找回 session 與 worktree。",
-    ),
-    (
-        "Integrate",
-        "整合成果",
-        "Review fixed candidate commits in a separate integration workspace and bring selected results into one PR.",
-        "在獨立整合工作區檢視固定候選 commit，把選定成果送進同一個 PR。",
-    ),
-    (
-        "Deliver",
-        "確認交付",
-        "Merge the reviewed PR scope. A configured deployment recipe checks the actual version and runtime evidence.",
-        "合併已檢視的 PR 範圍；有部署 recipe 時，核對實際版本與 runtime 證據。",
-    ),
-    (
-        "Retain & clean up",
-        "保留與整理",
-        "Preview eligible cleanup, see why resources are retained and keep their history available.",
-        "先預覽可整理的資源、了解保留原因，整理後仍可查歷史。",
-    ),
-]
-for i, (en, zh, d, dz) in enumerate(steps, 1):
+for i, (en, zh, d, dz) in enumerate(
+    [
+        (
+            "Discuss the idea",
+            "討論構想",
+            "Save the goal, constraints, sources and open questions in an Idea thread.",
+            "在 Idea 討論保存目標、限制、來源與未決問題。",
+        ),
+        (
+            "Adopt a plan",
+            "採用計畫",
+            "Prepare the PM's own worktree. Review a proposal and explicitly adopt its fixed requirements.",
+            "準備 PM 自有 worktree，審閱提案後明確採用固定需求。",
+        ),
+        (
+            "Dispatch bounded work",
+            "派出有界工作",
+            "Select engineering packages and destinations. Agents work in their own managed resources.",
+            "選工程包與目的地，讓 Agent 在自己的 managed 資源工作。",
+        ),
+        (
+            "Evaluate the result",
+            "評估成果",
+            "Use original verification evidence and a responsible quality review against acceptance criteria and DoD.",
+            "使用原驗證證據，由責任審閱者對照接受條件與 DoD 評估品質。",
+        ),
+        (
+            "Confirm delivery",
+            "確認交付",
+            "Review the integration and PR. Keep merge, deployment and release-baseline evidence distinct.",
+            "審閱整合及 PR，分開記錄 merge、部署與發布基準證據。",
+        ),
+        (
+            "Maintain and review",
+            "維護與回顧",
+            "Adopt repair bounds and a schedule. Review findings and results, then bring the next decision into Idea.",
+            "採用修復界線與排程，檢視發現及結果，再將下一個決策帶回 Idea。",
+        ),
+    ],
+    1,
+):
     parts.append(
         f'<li><span class="step-number">0{i}</span><div>' + bi(en, zh, "h3") + bi(d, dz, "p") + "</div></li>"
     )
 parts.append(
     "</ol>"
     + bi(
-        "Across hosts, code travels through an explicitly bound GitHub repository and a published commit. Human checkouts and unpublished workspaces are not silently moved.",
-        "跨主機程式碼透過明確綁定的 GitHub repository 與已發布 commit 取得；不默默搬動人的 checkout 或未發布工作區。",
+        "Passing tests does not automatically accept a requirement. A plan does not authorize execution, and a finding does not authorize repair. M4 is validating the joined lifecycle; follow the progress report for its current limits.",
+        "測試通過不會自動接受需求，計畫不直接授權執行，finding 也不直接授權修復。M4 正在驗證整條生命週期，現況與限制請看進度報告。",
         "p",
         "section-note",
     )
+    + doc(
+        "docs/getting-started.md#try-one-pm-workflow",
+        "Follow the PM guide →",
+        "閱讀 PM 使用指南 →",
+        "text-link lang-en",
+    )
+    + doc(
+        "docs/getting-started.zh-TW.md#試跑一條-pm-工作流程",
+        "Follow the PM guide →",
+        "閱讀 PM 使用指南 →",
+        "text-link lang-zh",
+    )
     + "</section>"
 )
+
 parts.append(
     '<section class="section" id="features">'
     + heading(
-        "The working surface",
-        "日常工作所需",
-        "More than a list of sessions.",
-        "把工作整理起來，不只列出 sessions。",
+        "The daily work", "日常工作", "Keep decisions close to their evidence.", "讓決策與證據放在一起。"
     )
     + '<div class="feature-list">'
 )
-features = [
+for en, zh, d, dz, path in [
     (
-        "Projects & work items",
-        "專案與工作項目",
-        "Hierarchy, pins, archive, original requests and acceptance criteria keep long-running work understandable.",
-        "以階層、釘選、封存、原始需求和驗收條件，整理持續進行的工作。",
-        "work-items.md",
+        "Plans and sources",
+        "計畫與來源",
+        "Versioned documents distinguish a suggestion, an adopted scope and later changes.",
+        "版本化文件分清建議、已採用範圍與後續變更。",
+        "pm-plans.md",
     ),
     (
-        "Conversation & control",
-        "對話與控制",
-        "Readable code and tables, copying, preserved reading position and authorized session actions.",
-        "閱讀程式碼與表格、複製原文、保留閱讀位置，並執行已授權的 session 操作。",
-        "shared-frontend.md",
+        "Roadmap, Sprint and Kanban",
+        "Roadmap、Sprint 與 Kanban",
+        "Organize goals, commitments and work. Selected assessments preserve the result they evaluated.",
+        "整理目標、承諾與工作；選定的評估保留它當時審閱的成果。",
+        "pm-sprints.md",
     ),
     (
-        "Artifacts & lineage",
-        "附件與來源",
-        "Capture and review immutable revisions; keep the operation or task that produced each result.",
-        "擷取、審閱不可變版本，保留每份成果的 operation 或 task 來源。",
-        "artifacts.md",
+        "Follow-up and decisions",
+        "Follow-up 與決策",
+        "Sourced analysis prepares candidate changes and focused questions for review.",
+        "有來源的分析整理候選變更與關鍵問題，供你審閱。",
+        "pm-follow-up.md",
     ),
     (
-        "Delivery & environments",
-        "交付與環境",
-        "Fixed integration previews, PR actions, deployment history, version checks and supported rollback recipes.",
-        "固定整合預覽、PR 操作、部署歷史、版本驗證與已支援的 rollback recipe。",
+        "Evidence and delivery",
+        "證據與交付",
+        "Connect fixed commits, original checks, quality reviews, PRs and deployment receipts.",
+        "串起固定 commit、原始 checks、品質審閱、PR 與部署回執。",
         "delivery.md",
     ),
     (
-        "History & recovery",
-        "歷史與復原",
-        "Stable IDs, resource relations and saved receipts retain context across refreshes and disconnects.",
-        "以穩定 ID、資源關聯及回執，在刷新與斷線後保留脈絡。",
-        "observation.md",
+        "Maintenance Review",
+        "維護 Review",
+        "Adopted policies bound observations and repairs; reports retain findings and original results.",
+        "已採用政策限制觀察與修復，報告保留發現與原始結果。",
+        "pm-maintenance-review.md",
     ),
     (
-        "Agent access",
-        "Agent 存取",
-        "CLI and MCP share central permissions. Hermes and Grokbot use adapters from the canonical skill.",
-        "CLI 與 MCP 共用中央權限；Hermes／Grokbot 使用由共用 skill 產生的配接。",
-        "../agent-skills.md",
+        "Project Brief exports",
+        "Project Brief 輸出",
+        "Read or export one fixed Brief as Markdown, HTML or SVG. Further document views and slides remain planned.",
+        "讀取或輸出同一份固定 Brief 的 Markdown、HTML 或 SVG；其他文件視圖與簡報仍待完成。",
+        "pm-brief-exports.md",
     ),
-]
-for en, zh, d, dz, path in features:
-    url = repo + "/blob/main/docs/" + ("agent-skills.md" if path.startswith("../") else "design/" + path)
+]:
     parts.append(
         "<article>"
         + bi(en, zh, "h3")
         + bi(d, dz, "p")
-        + link(url, "Read the guide →", "閱讀說明 →")
+        + doc("docs/design/" + path, "Read the contract →", "閱讀設計合約 →")
         + "</article>"
     )
 parts.append("</div></section>")
+
 parts.append(
     '<section class="section" id="architecture">'
     + heading(
-        "Connections, control and execution",
-        "連線、中央控制與執行",
-        "Fleet connects. Connector coordinates. BAT runs the work.",
-        "Fleet 管連線，Connector 管派工，BAT 執行工作。",
-        "Windows startup and native resources remain part of the product. Projects organize work across this system; they do not replace it.",
-        "Windows 啟動與原生資源一直是產品的一部分。專案管理把這些工作整理起來，並沒有取代底下的系統。",
+        "Clear responsibilities",
+        "清楚的分工",
+        "One central history. Work on the chosen host.",
+        "同一份中央歷史，工作留在選定主機。",
+        "Project management builds on Connector, BAT and Fleet. Web and Tauri share the same product surface.",
+        "專案管理建立在 Connector、BAT 與 Fleet 之上；Web 和 Tauri 使用同一份產品介面。",
     )
 )
 parts.append(
     '<figure class="architecture"><div class="native-lane">'
-    + bi("Windows Tauri → native Fleet", "Windows Tauri → 原生 Fleet", "h3")
+    + bi("Windows Fleet: connection and startup", "Windows Fleet：連線與啟動", "h3")
     + bi(
-        "Owns selected SSH tunnels, route/readiness checks, BAT profile windows and sign-in startup. Rust or the existing PowerShell backend; one proven owner. Provides connection paths to BAT / central and optional configured central bootstrap.",
-        "管理選定 SSH tunnels、路由／就緒檢查、BAT profile 視窗與登入啟動。Rust 或既有 PowerShell backend 共用唯一 owner 規則；提供 BAT／中央連線，並支援已配置的中央 bootstrap。",
+        "Manage selected SSH tunnels, route readiness, BAT profiles and sign-in choices. Rust and the existing PowerShell backend follow explicit ownership and migration rules.",
+        "管理選定 SSH tunnels、路由就緒、BAT profiles 及登入選項；Rust 與既有 PowerShell backend 遵守明確的歸屬與遷移規則。",
         "p",
     )
-    + '</div><div class="client-row"><div>'
-    + bi("Windows Tauri", "Windows Tauri", "strong")
-    + bi("Dashboard + native Fleet above", "Dashboard ＋ 上方原生 Fleet", "small")
-    + "</div><div>"
-    + bi("Web / Mac Tauri", "Web／Mac Tauri", "strong")
-    + bi("Same Dashboard; platform-specific native support", "同一 Dashboard；原生能力依平台提供", "small")
-    + "</div><div>"
-    + bi("Hermes / Grokbot", "Hermes／Grokbot", "strong")
-    + bi("Scoped MCP / CLI entry", "有獨立權限的 MCP／CLI 入口", "small")
-    + '</div></div><div class="central-node">'
+    + '</div><div class="client-row">'
+)
+for en, zh, d, dz in [
+    ("Web Dashboard", "Web Dashboard", "Authenticated browser entry", "已認證的瀏覽器入口"),
+    ("Tauri desktop", "Tauri 桌面", "Shared UI, native windows and credentials", "共用介面、原生視窗與憑證"),
+    (
+        "CLI / MCP / agents",
+        "CLI／MCP／Agents",
+        "Each client has its own principal",
+        "各 client 使用自己的身分",
+    ),
+]:
+    parts.append("<div>" + bi(en, zh, "strong") + bi(d, dz, "small") + "</div>")
+parts.append(
+    '</div><div class="central-node">'
     + bi("Python Connector / Task Service", "Python Connector／Task Service", "strong")
-    + bi("Dispatch · identity · permissions · operations · task journal", "派工 · 身分 · 權限 · operations · task journal", "span")
-    + '</div>'
-    + bi("↓ bat-remote/v2 and governed operations ↓", "↓ bat-remote/v2 與受控操作 ↓", "p", "flow-label")
-    + bi("BAT hosts / workspaces", "BAT 主機／workspaces", "h3", "bat-node")
-    + '<div class="resource-row"><div>'
-    + bi("Human sessions & worktrees", "人工 sessions／worktrees", "strong")
-    + bi("You code through BAT desktop / mobile. Connector reads; continuation creates separate managed resources.", "你透過 BAT desktop／mobile coding。Connector 保持唯讀；接續時建立另一份 managed 資源。", "p")
-    + "</div><div>"
-    + bi("Agent-owned sessions & worktrees", "Agent 自有 sessions／worktrees", "strong")
-    + bi("Central dispatches work into the selected host. Fixed results retain their session, worktree and operation links.", "中央派工到選定主機；固定成果保留 session、worktree 與 operation 關聯。", "p")
-    + '</div></div><div class="delivery-node">'
-    + bi("Managed results → GitHub PR → merge / deploy → reviewed cleanup", "Managed 成果 → GitHub PR → merge／deploy → 審閱後整理", "strong")
-    + bi("Central governs each delivery step and retains receipts.", "每個交付步驟由中央管理並保存回執。", "p")
-    + '</div><figcaption>'
     + bi(
-        "Fleet handles local connectivity; Python remains the sole business authority. BAT profile launch opens desktop windows; mobile remains an independent BAT client. Project Hub contributes interaction references, with no runtime, backend or importer dependency.",
-        "Fleet 負責本機連線，Python 仍是唯一中央業務後端。BAT profile 啟動開啟桌面視窗，mobile 是另一個 BAT client。Project Hub 僅供互動參考，沒有 runtime、後端或 importer 依賴。",
+        "Plans · permissions · dispatch · evidence · durable operations",
+        "計畫 · 權限 · 派工 · 證據 · 持久操作紀錄",
+    )
+    + "</div>"
+    + bi("↓ Governed BAT operations ↓", "↓ 受控 BAT 操作 ↓", "p", "flow-label")
+    + bi("Selected BAT host and workspace", "選定的 BAT 主機與 workspace", "h3", "bat-node")
+    + '<div class="resource-row">'
+)
+for en, zh, d, dz in [
+    (
+        "Your coding resources",
+        "人的開發資源",
+        "Keep using BAT desktop or mobile. Connector reads human sessions and worktrees; continuation creates new owned work.",
+        "照常使用 BAT desktop／mobile；Connector 唯讀人工 session 與 worktree，接續時建立新的自有工作。",
+    ),
+    (
+        "Agent-owned resources",
+        "Agent 自有資源",
+        "The PM and engineering agents retain their own workspaces, fixed source revisions and original operation links.",
+        "PM 與工程 Agent 保留各自工作區、固定來源版本及原操作關聯。",
+    ),
+]:
+    parts.append("<div>" + bi(en, zh, "strong") + bi(d, dz, "p") + "</div>")
+parts.append(
+    '</div><div class="delivery-node">'
+    + bi(
+        "Fixed result → GitHub PR → merge / deploy → maintenance",
+        "固定成果 → GitHub PR → merge／部署 → 維護",
+        "strong",
+    )
+    + bi(
+        "Cross-host code synchronization uses explicitly bound repositories and published commits.",
+        "跨主機程式碼同步使用明確綁定的 repository 與已發布 commit。",
+        "p",
+    )
+    + "</div><figcaption>"
+    + bi(
+        "Python is the sole business authority. Native code handles local facilities and transport. Project Hub is an interaction reference, with no importer or runtime dependency.",
+        "Python 是唯一中央業務後端，原生程式負責本機能力與傳輸；Project Hub 提供互動參考，沒有 importer 或 runtime 依賴。",
     )
     + "</figcaption></figure>"
 )
 parts.append(
     '<div class="two-column"><div>'
-    + bi("One shared Dashboard.", "共用一份 Dashboard。", "h3")
+    + bi("Keep the same central", "沿用同一個中央", "h3")
     + bi(
-        "Web and Tauri use desktop/src and the same central state. Windows-native Fleet stays on Windows; Mac Dashboard support is not a Fleet port. Drafts and conversation position remain local to each client.",
-        "Web 與 Tauri 使用 desktop/src 及同一中央資料。Windows 原生 Fleet 保留在 Windows；支援 Mac Dashboard 不等於 Fleet 已移植。草稿與對話位置仍各入口獨立保存。",
+        "Desktop prepares one private local central. Explicitly join an existing central when needed; connection failure never replaces its database.",
+        "桌面準備一套私人本機中央，需要時明確加入既有中央；連線失敗不會另造資料庫。",
         "p",
     )
     + "</div><div>"
-    + bi("Keep the existing central identity.", "保留既有中央身分與工作。", "h3")
+    + bi("Know where PM runs", "知道 PM 在哪裡執行", "h3")
     + bi(
-        "The candidate prepares one owned local central and personal identity. Reopen and safe upgrade preserve its journal; joining an existing central stays explicit, and connection failure never creates a replacement database.",
-        "候選版準備一套自有本機中央與個人身分，重開和安全升級沿用原帳本。加入既有中央仍須明確選擇，連線失敗不會另造資料庫。",
+        "Bounded PM analysis runs on an eligible Linux central or BAT host. A Windows/Mac client can use that route; installing its desktop app does not add a native coding adapter.",
+        "有界 PM 分析在合格 Linux 中央或 BAT 主機執行。Windows／Mac client 可使用該路徑，桌面安裝本身不會增加一般原生 coding adapter。",
         "p",
     )
     + "</div></div></section>"
 )
+
 parts.append(
     '<section class="section" id="windows">'
     + heading(
-        "Windows Fleet & resources",
-        "Windows Fleet 與資源",
-        "Choose what connects. Choose what opens.",
-        "選要連的主機，選要開的視窗。",
-        "Windows Fleet retains its connection, profile and startup controls alongside the candidate bundled central. Fleet configuration and central onboarding have separate responsibilities.",
-        "Windows Fleet 的連線、profile 與啟動控制，和候選打包中央一起保留。Fleet 配置與中央引導設定各有分工。",
+        "Windows Fleet",
+        "Windows Fleet",
+        "Choose what connects and what opens.",
+        "選要連的主機，也選要開的視窗。",
+        "Local connectivity and startup stay visible alongside project management.",
+        "專案管理之外，本機連線與啟動控制仍有清楚入口。",
     )
     + '<div class="feature-list">'
 )
-for en, zh, desc, dz, path in [
-    ("Connections & route recovery", "連線與路由復原",
-     "Selected SSH tunnels, Tailscale status, configured route fallbacks and bounded recovery. Readiness checks TLS / BAT / central, not just an open port.",
-     "選定 SSH tunnels、Tailscale 狀態、已配置的備援路由與有次數上限的復原；就緒檢查涵蓋 TLS／BAT／中央，不只看 port。", "fleet-routes.md"),
-    ("BAT windows & Windows sign-in", "BAT 視窗與 Windows 登入",
-     "Choose connections, BAT profiles and Dashboard independently. Preview prerequisites, keep the login picker or use saved launch choices.",
-     "背景連線、BAT profiles 與 Dashboard 獨立選擇；預覽必要連線，保留登入選擇器或使用已保存的啟動選項。", "desktop-fleet-native.md"),
-    ("Rust / PowerShell ownership", "Rust／PowerShell ownership",
-     "New Rust installations use public configuration examples without external Fleet scripts. Existing PowerShell owners retain explicit migration and stop proof.",
-     "新 Rust 安裝使用公開設定範例，不需外部 Fleet scripts。既有 PowerShell owner 仍須明確遷移並證明正常停止。", "fleet-configuration.md"),
-    ("Tailscale & central startup", "Tailscale 與中央啟動",
-     "Open the installed Tailscale app for sign-in. A separately configured fixed SSH bootstrap recipe can query / start the selected central service.",
-     "可開啟已安裝的 Tailscale 程式完成登入；另以已配置的固定 SSH bootstrap recipe 查詢／啟動指定中央服務。", "fleet-bootstrap.md"),
+for en, zh, d, dz, path in [
+    (
+        "Connections and readiness",
+        "連線與就緒",
+        "Maintain selected tunnels and configured route fallbacks. Check TLS, BAT identity and central access before work.",
+        "維持選定 tunnels 與已配置備援路由，工作前核對 TLS、BAT 身分及中央存取。",
+        "fleet-routes.md",
+    ),
+    (
+        "Windows sign-in",
+        "Windows 登入",
+        "Choose background connections, BAT profile windows and Dashboard independently; retain the login picker or saved choices.",
+        "背景連線、BAT profile 視窗、Dashboard 各自選擇，保留登入選擇器或已存選項。",
+        "desktop-fleet-native.md",
+    ),
+    (
+        "One connection owner",
+        "明確的連線 owner",
+        "Use public Rust configuration or explicitly migrate an existing PowerShell setup after proving the old owner stopped.",
+        "使用公開 Rust 設定，或證明舊 owner 已停止後明確遷移既有 PowerShell 配置。",
+        "fleet-migration.md",
+    ),
+    (
+        "Native resources",
+        "原生資源",
+        "Credential Manager, files and tray controls remain available. Tailscale sign-in and fixed central bootstrap use configured local facilities.",
+        "保留 Credential Manager、檔案及系統匣操作；Tailscale 登入與固定中央 bootstrap 使用已配置的本機能力。",
+        "fleet-bootstrap.md",
+    ),
 ]:
-    parts.append("<article>" + bi(en, zh, "h3") + bi(desc, dz, "p")
-                 + link(repo + "/blob/main/docs/design/" + path, "Implementation guide →", "實作說明 →") + "</article>")
+    parts.append(
+        "<article>"
+        + bi(en, zh, "h3")
+        + bi(d, dz, "p")
+        + doc("docs/design/" + path, "Read the guide →", "閱讀說明 →")
+        + "</article>"
+    )
 parts.append(
     '</div><div class="actions">'
-    + link(repo + "/blob/main/docs/windows.md", "Windows guide & resources", "Windows 使用與資源", "button secondary lang-en")
-    + link(repo + "/blob/main/docs/windows.zh-TW.md", "Windows guide & resources", "Windows 使用與資源", "button secondary lang-zh")
-    + link(repo + "/actions/workflows/desktop.yml?query=branch%3Amain", "NSIS validation packages →", "NSIS 驗證安裝包 →", "text-link")
-    + link(repo + "/blob/main/desktop/fleet.example.json", "Fleet configuration example →", "Fleet 設定範例 →", "text-link")
-    + "</div>"
-    + bi("Credential Manager, native files and tray controls also remain. No private inventory or host configuration is published here.",
-         "Credential Manager、原生檔案與系統匣控制也保留；這裡不公開私人 inventory 或主機設定。", "p", "section-note")
-    + "</section>"
+    + doc("docs/windows.md", "Windows guide and resources", "Windows 使用與資源", "button secondary lang-en")
+    + doc(
+        "docs/windows.zh-TW.md",
+        "Windows guide and resources",
+        "Windows 使用與資源",
+        "button secondary lang-zh",
+    )
+    + doc("desktop/fleet.example.json", "Configuration example →", "設定範例 →")
+    + "</div></section>"
 )
+
 parts.append(
     '<section class="installation-band" id="start"><div class="section">'
     + heading(
-        "Candidate installation",
-        "候選安裝流程",
-        "Install. Connect. Open Dashboard.",
-        "安裝、連接，打開就能管理。",
-        "Install the matching candidate package. It prepares the Python runtime, private local central and personal identity; you authorize BAT and GitHub in Settings.",
-        "安裝相符候選包後，程式準備 Python runtime、私人本機中央與個人身分，再由你於設定中授權 BAT 與 GitHub。",
+        "Start with a reviewed build",
+        "從核對過的版本開始",
+        "Install, connect, try a small project.",
+        "安裝、連線，先試一個小專案。",
+        "Desktop packages include Python and prepare the local central. Account trust and work destinations remain explicit choices.",
+        "桌面包包含 Python 並準備本機中央；帳號信任與工作目的地仍由你明確選擇。",
     )
     + '<ol class="install-steps">'
 )
 for en, zh, d, dz in [
     (
-        "Install the package",
-        "安裝桌面包",
-        "A matching runtime, private data and personal identity, managed by the application.",
-        "由程式管理相符 runtime、私人資料與個人身分。",
+        "Match the package",
+        "核對套件",
+        "Choose a successful main platform build and match the artifact to its source commit and validation records.",
+        "選成功的 main 平台建置，核對 artifact 的來源 commit 與驗證紀錄。",
     ),
     (
         "Connect your environment",
-        "接上你的環境",
-        "Guided BAT access and GitHub authorization, with clear host and workspace choices.",
-        "引導完成 BAT 存取與 GitHub 授權，明確選主機和工作區。",
+        "連接環境",
+        "Complete BAT trust, repository binding and verification setup. Advanced users can join an existing central.",
+        "完成 BAT 信任、repository 綁定與驗證設定；進階使用者可加入既有中央。",
     ),
     (
-        "Keep it running",
-        "讓它持續運作",
-        "A background Connector that reconnects, with one click from the tray / menu bar to open the Web Dashboard.",
-        "Connector 背景常駐並自動重連；從系統匣／選單列點一下開 Web Dashboard。",
+        "Follow one result",
+        "追完一份成果",
+        "Start a small PM scope, inspect its original evidence and record what still needs a decision.",
+        "從小範圍 PM 工作開始，檢視原始證據，記錄仍需決定的事項。",
     ),
 ]:
     parts.append("<li>" + bi(en, zh, "h3") + bi(d, dz, "p") + "</li>")
 parts.append(
     '</ol><div class="install-current">'
-    + bi("Choose a matching candidate artifact", "選擇相符的候選 artifact", "h3")
+    + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "Open the desktop workflow on main, choose a successful run from the current public history, and match the source commit and installed-fixture records. Wait if its platform job is still building. External central setup remains an advanced option.",
-        "開啟 main 的 desktop workflow，選目前公開歷史的成功 run，核對來源 commit 與安裝 fixture 紀錄；若平台 job 還在建置，請等成功。外部中央設定仍是進階選項。",
+        "GitHub Actions artifacts can expire and may require sign-in. These packages are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
+        "GitHub Actions artifacts 會到期，也可能要求登入。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
         "p",
     )
     + '<div class="actions">'
-    + link(
-        repo + "/blob/main/docs/getting-started.md",
-        "Read the first-use guide",
-        "閱讀首次使用指南",
-        "button light lang-en",
-    )
-    + link(
-        repo + "/blob/main/docs/getting-started.zh-TW.md",
-        "Read the first-use guide",
-        "閱讀首次使用指南",
+    + doc("docs/getting-started.md", "Installation and first use", "安裝與首次使用", "button light lang-en")
+    + doc(
+        "docs/getting-started.zh-TW.md",
+        "Installation and first use",
+        "安裝與首次使用",
         "button light lang-zh",
     )
     + link(
-        repo + "/blob/main/docs/design/managed-installation.md",
-        "Installation and recovery contract →",
-        "安裝與恢復合約 →",
+        repo + "/actions/workflows/desktop.yml?query=branch%3Amain",
+        "Find matching packages →",
+        "查找相符套件 →",
         "text-link",
     )
     + "</div></div></div></section>"
@@ -488,309 +567,296 @@ parts.append(
 parts.append(
     '<section class="section" id="platforms">'
     + heading(
-        "Choose your entry point",
-        "選擇使用入口",
-        "Windows. Mac. Your browser.",
-        "Windows、Mac，或你的瀏覽器。",
-        "Candidate packages bundle central; local Fleet capabilities and credential adapters still depend on platform.",
-        "候選包包含中央；本機 Fleet 能力與憑證 adapter 仍依平台提供。",
+        "Entry points", "使用入口", "One Dashboard across your screens.", "不同螢幕，同一份 Dashboard。"
     )
     + '<div class="table-wrap" role="region" aria-label="Platform support / 平台支援" tabindex="0"><table><thead><tr>'
-    + "".join(
-        bi(e, z, "th")
-        for e, z in [("Entry", "入口"), ("Available", "已有內容"), ("Current boundary", "目前界線")]
-    )
+    + bi("Entry", "入口", "th")
+    + bi("Local facilities", "本機能力", "th")
+    + bi("Current boundary", "目前界線", "th")
     + "</tr></thead><tbody>"
 )
-platforms = [
-    ("Web", "Web", "Shared Dashboard with managed browser sign-in", "共用 Dashboard 與 managed 瀏覽器登入",
-     "Trusted loopback / tunnel; external central login remains available.", "可信 loopback／tunnel；保留外部中央登入。"),
-    ("Windows x64", "Windows x64", "NSIS with bundled central, private storage, Fleet and Credential Manager", "NSIS 包含中央、私人儲存、Fleet 與 Credential Manager",
-     "Unsigned validation package; match its source commit to the successful platform job.", "未正式簽署的驗證包；來源 commit 須與成功的平台 job 相符。"),
-    ("Mac Apple Silicon / Intel", "Mac Apple Silicon／Intel", "DMGs with bundled central, menu bar and Keychain", "DMG 包含中央、選單列與 Keychain",
-     "Ad-hoc validation signing; notarization / production updates excluded; no Windows Fleet port.", "採 ad-hoc 驗證簽署；公證／正式更新已排除，沒有 Windows Fleet 移植。"),
-    ("Linux", "Linux", "Debian package with bundled central", "Debian 包含中央",
-     "External-central native credentials remain memory-only; persistent vault excluded.", "外部中央的原生憑證仍只留記憶體；持久 vault 已排除。"),
-    ("Central service", "中央服務", "Python authority with Windows and POSIX private storage / locks", "Python 中央權威，支援 Windows／POSIX 私人儲存與檔案鎖",
-     "Bundled with desktop; manual operator deployment remains available.", "隨桌面打包；仍可由操作者手動部署。"),
-]
-for e, z, a, az, c, cz in platforms:
-    parts.append("<tr>" + bi(e, z, "th") + bi(a, az, "td") + bi(c, cz, "td") + "</tr>")
+for en, zh, d, dz, bound, bz in [
+    (
+        "Browser",
+        "瀏覽器",
+        "Shared UI and authenticated central access",
+        "共用 UI 與中央認證存取",
+        "No native Fleet or credential vault.",
+        "沒有原生 Fleet 或 credential vault。",
+    ),
+    (
+        "Windows x64",
+        "Windows x64",
+        "NSIS, bundled central, tray, Fleet and Credential Manager",
+        "NSIS、打包中央、系統匣、Fleet 與 Credential Manager",
+        "Unsigned validation package.",
+        "未正式簽署的驗證包。",
+    ),
+    (
+        "Mac Apple Silicon / Intel",
+        "Mac Apple Silicon／Intel",
+        "DMG, bundled central, menu bar and Keychain",
+        "DMG、打包中央、選單列與 Keychain",
+        "Ad-hoc signing; Windows Fleet is not ported.",
+        "ad-hoc 簽署；Windows Fleet 未移植。",
+    ),
+    (
+        "Linux",
+        "Linux",
+        "Debian package and bundled central",
+        "Debian 套件及打包中央",
+        "External-central native credentials are memory-only.",
+        "外部中央的原生憑證只留記憶體。",
+    ),
+]:
+    parts.append("<tr>" + bi(en, zh, "th") + bi(d, dz, "td") + bi(bound, bz, "td") + "</tr>")
 parts.append(
-    '</tbody></table></div><div class="actions">'
-    + link(
-        repo + "/actions/workflows/desktop.yml?query=branch%3Amain",
-        "Find matching candidate packages",
-        "查找相符候選安裝包",
-        "button secondary",
-    )
-    + link(repo + "/releases", "Release history →", "正式發行紀錄 →", "text-link")
-    + "</div>"
+    "</tbody></table></div>"
     + bi(
-        "Packages are GitHub Actions artifacts: sign-in may be required and downloads expire. They are not a stable signed release / update channel. The setup guide explains how to identify the correct package and commit.",
-        "目前套件是 GitHub Actions artifacts，可能需要登入且下載會到期，不是穩定的簽章發行／更新通道。指南說明如何核對套件與 commit。",
+        "Formal signing, Mac notarization, production updates and Linux persistent native credential storage are outside the agreed delivery.",
+        "正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存，已排除於本次交付。",
         "p",
         "section-note",
     )
     + "</section>"
 )
+
 parts.append(
     '<section class="section" id="decisions">'
     + heading(
-        "Trust the information",
-        "讓資訊值得信任",
-        "Control follows ownership and evidence.",
-        "依據歸屬與證據，決定能做什麼。",
+        "Ownership and recovery",
+        "歸屬與恢復",
+        "Keep control and history intact.",
+        "保留控制邊界，也保留歷史。",
     )
     + '<div class="two-column">'
 )
 for en, zh, d, dz in [
     (
-        "Your own work stays yours",
-        "人的工作保持唯讀",
-        "Connector treats human-created sessions and worktrees as read-only. Continuation uses new managed resources; unknown ownership needs creation evidence.",
-        "Connector 對人工 session 和 worktree 保持唯讀；接續使用新的 managed 資源，unknown 歸屬須有建立證據。",
+        "Your workspace stays yours",
+        "人的工作區保持原樣",
+        "Human sessions and worktrees remain read-only through Connector. Reading a source does not grant control of it.",
+        "Connector 對人工 session 與 worktree 保持唯讀；能讀來源，不代表能控制來源。",
     ),
     (
-        "Every client has its own authority",
-        "每個入口都有明確權限",
-        "Host gates and API scopes both apply. MCP, CLI and Dashboard share central actions, version checks and audit records.",
-        "Host 開關與 API scopes 同時生效；MCP、CLI、Dashboard 共用中央操作、版本檢查及稽核。",
+        "Each action has authority",
+        "每個動作都有權限依據",
+        "The current principal, host policy, source access and original resource identity are checked before effects.",
+        "效果執行前核對目前身分、主機政策、來源存取及原資源身分。",
     ),
     (
-        "Lost replies keep their history",
-        "回覆遺失，原操作仍在",
-        "A timeout is not proof that nothing happened. Recover the original operation instead of clearing reservations or repeating an uncertain write.",
-        "逾時不表示什麼都沒發生。查回原操作，不清掉 reservation 或重送結果未知的寫入。",
+        "A lost reply is still traceable",
+        "遺失回覆仍可追查",
+        "Keep the original operation and key while a result is uncertain. Query its evidence instead of dispatching another copy.",
+        "結果未知時保留原 operation 與 key；查證據，避免再派一份工作。",
     ),
     (
-        "Host isolation is a separate layer",
-        "主機隔離是另一層保護",
-        "Connector policy does not sandbox an agent process. Unattended use also needs verified host accounts, directory protection and confinement.",
-        "Connector 政策不等於 Agent process 的 sandbox；無人值守還需驗證主機帳號、目錄保護與 confinement。",
+        "Host isolation still matters",
+        "主機隔離仍有自己的責任",
+        "Connector policy works with host accounts and confinement. It is not an operating-system sandbox.",
+        "Connector 政策與主機帳號、隔離機制一起運作，本身不是作業系統 sandbox。",
     ),
 ]:
     parts.append("<article>" + bi(en, zh, "h3") + bi(d, dz, "p") + "</article>")
-parts.append(
-    "</div>"
-    + link(repo + "/blob/main/SECURITY.md", "Read the security model →", "閱讀安全模型 →", "text-link")
-    + "</section>"
-)
+parts.append("</div>" + doc("SECURITY.md", "Security model →", "安全模型 →") + "</section>")
 parts.append(
     '<section class="section" id="status">'
     + heading(
-        "Readiness, with evidence",
-        "交付現況與證據",
-        "Implementation and evidence, kept separate.",
-        "實作、檢查與實際環境分開記錄。",
-        "Current public source · source, package validation and release assets are recorded separately.",
-        "目前公開原始碼 · 原始碼、套件驗證與 release 資產分開記錄。",
+        "Current scope",
+        "目前範圍",
+        "A working foundation. A lifecycle still in integration.",
+        "底座已能使用，完整流程仍在整合。",
+        "Read merged code, candidate checks and real-environment acceptance as separate records.",
+        "分開看已合併程式、候選驗證與實際環境驗收。",
     )
     + '<dl class="readiness">'
 )
 for label, lz, en, zh in [
     (
-        "Implemented",
-        "已實作",
-        "Bundled central and guided BAT / repository / verification setup; shared project tree, conversations, dispatch, skill selections, result links, repair work, delivery and cleanup.",
-        "打包中央與 BAT／儲存庫／驗證命令引導；共用專案樹、對話、派工、技能選取、成果連結、修復工作、交付與整理。",
+        "Merged main",
+        "已合併主線",
+        "Desktop and central foundation; PM plans, quality/dependency evidence, bounded dispatch, policy-bounded repairs, BAT proposals/Follow-up and AHP read-only observation.",
+        "桌面與中央底座、PM 計畫、品質／依賴證據、有界派工、政策內修復、BAT 提案／Follow-up 及 AHP 唯讀觀察。",
     ),
     (
-        "Validation records",
-        "驗證紀錄",
-        "Use current main checks for Python, shared UI and platform package validation. Match the exact source commit to your package; historical runs do not validate a new build. Controlled fixtures do not stand in for a real user environment.",
-        "請從目前 main 的檢查核對 Python、共用 UI 與各平台套件驗證。來源 commit 須與套件相同，歷史 run 不代表新建置已驗證；受控 fixture 不取代使用者實際環境。",
+        "Candidate work",
+        "候選工作",
+        "M4 joins the lifecycle and extends runtime completion, Roadmap quality and Brief deviations. M5 adds workspace analysis choice and serial manual-activity observation. Their current checks belong in the dated progress report.",
+        "M4 串接生命週期，補原執行完成、Roadmap 品質與 Brief 偏差；M5 補 workspace 分析選擇及人工循序活動觀察。最新檢查記錄於附日期的進度報告。",
     ),
     (
-        "Excluded from this delivery",
-        "本次排除範圍",
-        "Formal signing, Mac notarization, production update channels and Linux persistent native credential storage are excluded. The user owns the 46-item real-environment acceptance. These exclusions are not completed-feature or passed-test claims.",
-        "正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存已排除；46 項實際環境驗收由使用者負責。排除不等於功能或測試已完成。",
+        "Still ahead",
+        "仍待完成",
+        "General native coding, AHP create-own/write, remaining document views/slides, broader CLI support and usage/efficiency reporting. The full adopted PM v1.2 plan remains the scope.",
+        "一般原生 coding、AHP 自建／寫入、其餘文件視圖／簡報、更多 CLI 及用量／效率報告；範圍仍依完整 PM v1.2 計畫。",
+    ),
+    (
+        "Evidence limits",
+        "驗證界線",
+        "Package checks validate their exact source and fixtures. Screenshots use demonstration data. Owner installation and live acceptance are not claimed as passed.",
+        "套件檢查驗證精確來源與 fixture；截圖使用展示資料。未宣稱使用者已安裝或已通過實際環境驗收。",
     ),
 ]:
     parts.append("<div>" + bi(label, lz, "dt") + bi(en, zh, "dd") + "</div>")
 parts.append(
     '</dl><div class="evidence-links">'
+    + doc("docs/product/progress-2026-10-12.md", "Progress and evidence ↗", "進度與證據 ↗", "")
+    + doc("docs/product/pm-v1.2-plan.md", "Adopted plan ↗", "已採用計畫 ↗", "")
     + link(repo + "/actions?query=branch%3Amain", "Current main checks ↗", "目前 main 檢查 ↗")
-    + link(repo + "/actions/workflows/desktop.yml?query=branch%3Amain", "Matching desktop artifacts ↗", "核對桌面 artifacts ↗")
-    + link(repo + "/blob/main/docs/product/acceptance-v2.md", "Acceptance matrix ↗", "驗收矩陣 ↗")
     + "</div></section>"
 )
+
 parts.append(
     '<section class="section" id="docs">'
-    + heading(
-        "Read at the right depth",
-        "依需要深入",
-        "A guide for each part of the job.",
-        "每一段工作，都有對應說明。",
-    )
+    + heading("Documentation", "文件", "Find the next useful page.", "找到下一份用得上的說明。")
     + '<div class="doc-list">'
 )
-docs = [
-    (
-        "W",
-        "Windows Fleet & resources",
-        "Windows Fleet 與資源",
-        "Connections, BAT profiles, login, Tailscale, backend migration and native resources.",
-        "連線、BAT profiles、登入、Tailscale、backend 遷移與原生資源。",
-        "docs/windows.md",
-        "docs/windows.zh-TW.md",
-    ),
-    (
-        "01",
-        "Installation & first use",
-        "安裝與首次使用",
-        "First launch, BAT / repository setup, verification commands and recovery.",
-        "首次啟動、BAT／儲存庫設定、驗證命令與恢復。",
-        "docs/getting-started.md",
-        "docs/getting-started.zh-TW.md",
-    ),
-    (
-        "02",
-        "Product & architecture",
-        "產品與架構",
-        "Shared decisions, Web / Tauri and the managed installation requirement.",
-        "共用決策、Web／Tauri 與 managed 安裝要求。",
-        "docs/product/realignment-v2.md",
-        None,
-    ),
-    (
-        "03",
-        "Dispatch & results",
-        "派工與成果",
-        "Published commits, destinations, attachments and operation recovery.",
-        "已發布 commit、目的地、附件及操作復原。",
-        "docs/design/repository-sync.md",
-        None,
-    ),
-    (
-        "04",
-        "PR & deployment",
-        "PR 與部署",
-        "Integration previews, merge scope, deployed versions and rollback limits.",
-        "整合預覽、merge 範圍、部署版本與 rollback 限制。",
-        "docs/design/delivery.md",
-        None,
-    ),
-    (
-        "05",
-        "Agent integration",
-        "Agent 整合",
-        "Canonical skills and matching Hermes / Grokbot adapters.",
-        "共用 skills 與同版 Hermes／Grokbot 配接。",
-        "docs/agent-skills.md",
-        None,
-    ),
-    (
-        "06",
-        "Source & contribution",
-        "原始碼與參與開發",
-        "Build the shared frontend, run checks and understand the repository.",
-        "建置共用前端、執行檢查及了解 repo。",
-        "README.md",
-        "README.zh-TW.md",
-    ),
-]
-for n, e, z, d, dz, path, zpath in docs:
-    parts.append('<div><span class="index">' + n + "</span><div>")
-    if zpath:
-        parts.append(
-            f'<a class="lang-en" href="{repo}/blob/main/{path}">{e} ↗</a><a class="lang-zh" lang="zh-Hant" href="{repo}/blob/main/{zpath}">{z} ↗</a>'
+for i, (en, zh, d, dz, path, zpath) in enumerate(
+    [
+        (
+            "Installation and PM first use",
+            "安裝與 PM 首次使用",
+            "Packages, runtime prerequisites and one small project.",
+            "套件、runtime 前提及一個小專案。",
+            "docs/getting-started.md",
+            "docs/getting-started.zh-TW.md",
+        ),
+        (
+            "Windows Fleet and resources",
+            "Windows Fleet 與資源",
+            "Connections, profiles, startup and native facilities.",
+            "連線、profiles、啟動及原生能力。",
+            "docs/windows.md",
+            "docs/windows.zh-TW.md",
+        ),
+        (
+            "Progress report",
+            "進度報告",
+            "Merged, candidate, tested and remaining scope.",
+            "已合併、候選、已驗證及剩餘範圍。",
+            "docs/product/progress-2026-10-12.md",
+            None,
+        ),
+        (
+            "Development handoff",
+            "開發交接",
+            "Fixed versions, evidence, blockers and the next steps.",
+            "固定版本、證據、阻擋與接續步驟。",
+            "docs/handoff/2026-10-12-pm-v1.2.md",
+            None,
+        ),
+        (
+            "Agent integration",
+            "Agent 整合",
+            "Canonical skills, MCP/CLI and central operations.",
+            "共用 skills、MCP／CLI 及中央操作。",
+            "docs/agent-skills.md",
+            None,
+        ),
+        (
+            "Source and contribution",
+            "原始碼與參與開發",
+            "Build the shared frontend and run the relevant checks.",
+            "建置共用前端並執行相應檢查。",
+            "README.md",
+            "README.zh-TW.md",
+        ),
+    ],
+    1,
+):
+    parts.append(
+        f'<div><span class="index">0{i}</span><div>'
+        + (
+            doc(path, en + " ↗", zh + " ↗", "lang-en") + doc(zpath, en + " ↗", zh + " ↗", "lang-zh")
+            if zpath
+            else doc(path, en + " ↗", zh + " ↗", "")
         )
-    else:
-        parts.append(link(repo + "/blob/main/" + path, e + " ↗", z + " ↗"))
-    parts.append(bi(d, dz, "p") + "</div></div>")
-parts.append("</div></section>")
+        + bi(d, dz, "p")
+        + "</div></div>"
+    )
 parts.append(
-    '<section class="section faq" id="faq">'
-    + heading("A few practical questions", "常見問題", "Before you start.", "開始前，先說清楚。")
+    '</div></section><section class="section faq" id="faq">'
+    + heading("Practical questions", "使用前的問題", "Know what to expect.", "先了解可以期待什麼。")
 )
-faqs = [
+for q, qz, a, az in [
     (
-        "Do I need both BAT and Dashboard on this computer?",
-        "這台電腦必須同時裝 BAT 嗎？",
-        "No. Dashboard can manage work on a configured remote BAT host. BAT remains where the coding sessions run. Local BAT launch and Fleet controls are optional platform capabilities.",
-        "不必。Dashboard 可管理已配置遠端 BAT 主機的工作，coding sessions 留在 BAT。開本機 BAT 與 Fleet 控制是依平台提供的選用能力。",
+        "Does BAT have to run on this computer?",
+        "BAT 一定要在這台電腦執行嗎？",
+        "No. The Dashboard can connect to a configured central and BAT host. Coding work stays on the selected host; the browser's operating system does not determine runtime support.",
+        "不必。Dashboard 可連已配置的中央與 BAT 主機；開發工作留在選定主機，瀏覽器的作業系統不決定 runtime 支援。",
     ),
     (
-        "What does the candidate installer prepare?",
-        "候選安裝包會準備哪些內容？",
-        "A matching candidate package prepares its local runtime, background central, private data and personal identity. You still confirm BAT trust, account authorization and exact host/workspace bindings; SSH access must already be configured for Git work.",
-        "相符候選包準備本機 runtime、背景中央、私人資料與個人身分。BAT 信任、帳號授權及精確 host／workspace 綁定仍由你確認；Git 工作所需 SSH 存取須先配置。",
+        "Will PM act on everything I say?",
+        "跟 PM 說的每句話都會直接執行嗎？",
+        "Discussion creates records and proposals. Adoption, dispatch and maintenance policy are explicit product actions with their own authority and fixed scope.",
+        "討論形成紀錄與提案；採用、派工及維護政策是明確的產品操作，各有權限與固定範圍。",
     ),
     (
-        "Can Web and Tauri stay open together?",
-        "Web 和 Tauri 可以一起開著嗎？",
-        "Yes. They use the same central state and frontend source. Local drafts are independent; native credentials, Fleet and window controls are platform-specific.",
-        "可以。共用中央狀態與前端來源；草稿各自保存，原生憑證、Fleet 和視窗控制依平台提供。",
+        "Does it scan every CLI's tokens?",
+        "已經會掃每個 CLI 的 token 嗎？",
+        "No collector is implemented yet. The planned approach uses per-CLI local aggregation and coverage reporting, then relates usage to accepted work. Token traffic cannot be treated as subscription quota or a bill.",
+        "目前尚未實作 collector。規劃採各 CLI 的本機彙總與資料涵蓋說明，再把用量接回合格工作；token 流量不能直接當成訂閱配額或帳單。",
     ),
     (
-        "Will installing Dashboard give agents access to my own checkout?",
-        "裝上 Dashboard 就會讓 Agent 改我的 checkout 嗎？",
-        "Connector operations keep human resources read-only and use managed work for agents. OS-level access is a separate host-account and confinement concern; the Dashboard is not itself an OS sandbox.",
-        "Connector 操作對人工資源唯讀，Agent 使用 managed 工作區。OS 層的存取另由主機帳號與 confinement 決定，Dashboard 本身不是 OS sandbox。",
+        "Will optimization change my model automatically?",
+        "優化會自動換掉我的模型嗎？",
+        "No usage-driven model policy is active. Future recommendations need measured delivery quality; adopted policy should apply to new owned work while preserving existing and human sessions.",
+        "尚未啟用依用量自動改模型的政策。未來建議需要交付品質的實測，採用後應作用於新的自有工作，保留既有及人工 session。",
     ),
     (
-        "Is this ready to run unattended all day?",
-        "可以整天放著無人值守了嗎？",
-        "Automated fixtures cover controlled setups. The user decides readiness for their own hosts, accounts and deployment targets and performs real-environment acceptance. The candidate does not claim that those checks have already passed.",
-        "自動 fixture 驗證受控環境；使用者自行判斷其主機、帳號與部署目標的就緒程度並執行實際驗收。候選版不宣稱那些檢查已通過。",
+        "Can I leave it unattended all day?",
+        "可以整天放著無人值守嗎？",
+        "Only within verified capabilities and adopted bounds. Controlled fixtures do not establish readiness of your accounts, hosts or deployment targets; real-environment acceptance remains with the owner.",
+        "須在已驗證能力及採用界線內使用；受控 fixture 不代表你的帳號、主機或部署目標已就緒，實際環境驗收仍由使用者處理。",
     ),
     (
         "Is this an official BAT product?",
         "這是 BAT 官方產品嗎？",
-        "No. This is an unofficial MIT-licensed companion. Better Agent Terminal is by TonyQ and contributors. Project Hub informs selected UI patterns; no Hub importer or runtime dependency is included.",
-        "不是。這是 MIT 授權的非官方 companion；BAT 由 TonyQ 與貢獻者開發。部分 UI 參考 Project Hub，沒有 Hub importer 或 runtime 依賴。",
+        "It is an unofficial MIT-licensed companion. BAT is by TonyQ and contributors. Project Hub informs selected interaction patterns without a runtime or importer dependency.",
+        "這是 MIT 授權的非官方 companion。BAT 由 TonyQ 與貢獻者開發；部分互動參考 Project Hub，沒有 runtime 或 importer 依賴。",
     ),
-]
-for q, qz, a, az in faqs:
+]:
     parts.append("<details><summary>" + bi(q, qz) + "</summary>" + bi(a, az, "p") + "</details>")
-parts.append("</section></main>")
 parts.append(
-    '<footer class="site-footer"><div class="section footer-inner"><div><a class="brand" href="#top"><img src="logo.svg" width="32" height="32" alt=""><span>Better Agent Dashboard</span></a>'
+    '</section></main><footer class="site-footer"><div class="section footer-inner"><div><a class="brand" href="#top"><img src="logo.svg" width="32" height="32" alt=""><span>Better Agent Dashboard</span></a>'
     + bi(
-        "Built on bat-agent-connector. An unofficial companion to Better Agent Terminal.",
-        "由 bat-agent-connector 提供中央服務，Better Agent Terminal 的非官方 companion。",
+        "Project management on bat-agent-connector. An unofficial BAT companion.",
+        "以 bat-agent-connector 為中央的專案管理工具，BAT 的非官方 companion。",
         "p",
     )
     + '</div><div class="footer-links">'
     + link(repo, "Source", "原始碼")
     + link("https://github.com/tony1223/better-agent-terminal", "BAT by TonyQ", "BAT／TonyQ")
-    + link(repo + "/blob/main/LICENSE", "MIT license", "MIT 授權")
-    + link("https://teddashh.github.io/", "More from Ted Huang", "Ted Huang 的其他專案")
+    + doc("LICENSE", "MIT license", "MIT 授權", "")
+    + doc("THIRD_PARTY_NOTICES.md", "Credits", "第三方聲明", "")
     + "</div></div></footer>"
 )
-title = "Better Agent Dashboard · From agent work to reviewed delivery"
-zt = "Better Agent Dashboard · 從 Agent 工作到成果交付"
-desc = "Windows Fleet connects and starts BAT; Python Connector coordinates agents. Manage hosts, sessions, worktrees and GitHub delivery through the shared Web and Tauri Dashboard."
-zd = "Windows Fleet 管理連線與 BAT 啟動，Python Connector 負責 Agent 派工；Web／Tauri 共用 Dashboard 追蹤主機、sessions、worktrees 與 GitHub 交付。"
+
+title = "Better Agent Dashboard · Plans, agent work and delivery evidence"
+zt = "Better Agent Dashboard · 計畫、Agent 工作與交付證據"
+desc = "Discuss and adopt plans, follow agent work, evaluate results and review maintenance in a shared Web and Tauri workspace. Powered by Python Connector, BAT and Windows Fleet."
+zd = "在共用 Web 與 Tauri 工作空間討論及採用計畫、跟進 Agent 工作、評估成果與回顧維護；底層由 Python Connector、BAT 與 Windows Fleet 分工。"
 head = f'''<!doctype html>
-<!-- Generated by scripts/build_product_site.py. Edit the bilingual content there; see site/README.md. -->
+<!-- Generated by scripts/build_product_site.py. Edit the source; see site/README.md. -->
 <html lang="en" data-lang="en" data-title-en="{title}" data-title-zh="{zt}" data-desc-en="{desc}" data-desc-zh="{zd}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#eff2f6">
-<title>{title}</title>
-<meta name="description" content="{desc}">
+<title>{title}</title><meta name="description" content="{desc}">
 <link rel="canonical" href="https://teddashh.github.io/bat-agent-connector/">
 <link rel="alternate" hreflang="en" href="https://teddashh.github.io/bat-agent-connector/">
 <link rel="alternate" hreflang="zh-Hant" href="https://teddashh.github.io/bat-agent-connector/?lang=zh-TW">
 <link rel="alternate" hreflang="x-default" href="https://teddashh.github.io/bat-agent-connector/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="{title}">
-<meta property="og:description" content="{desc}">
-<meta property="og:url" content="https://teddashh.github.io/bat-agent-connector/">
+<meta property="og:type" content="website"><meta property="og:title" content="{title}">
+<meta property="og:description" content="{desc}"><meta property="og:url" content="https://teddashh.github.io/bat-agent-connector/">
 <meta property="og:image" content="https://teddashh.github.io/bat-agent-connector/images/workspace-en.png">
-<meta property="og:image:alt" content="Actual Dashboard UI with synthetic demonstration data">
+<meta property="og:image:alt" content="Actual shared Dashboard with synthetic demonstration data">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="styles.css">
-<script src="lang.js"></script>
-<script src="app.js" defer></script>
-</head>
-<body>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css">
+<script src="lang.js"></script><script src="app.js" defer></script>
+</head><body>
 '''
 output = head + "\n".join(parts) + "\n</body>\n</html>\n"
 parser = argparse.ArgumentParser(description="Build the bilingual static product website")

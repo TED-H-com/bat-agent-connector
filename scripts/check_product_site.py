@@ -1,5 +1,7 @@
 """Check static assets, fragment targets and repository documentation links offline."""
 
+import hashlib
+import json
 import re
 from html.parser import HTMLParser
 from pathlib import Path
@@ -99,12 +101,28 @@ for path in [
     ROOT / "docs/windows.md",
     ROOT / "docs/windows.zh-TW.md",
     ROOT / "docs/design/managed-installation.md",
+    ROOT / "docs/product/progress-2026-10-12.md",
+    ROOT / "docs/product/pm-v1.2-status.md",
+    ROOT / "docs/product/pm-v1.2-history-through-2026-10-12.md",
+    ROOT / "docs/handoff/2026-10-12-pm-v1.2.md",
     SITE / "README.md",
     SITE / "images/README.md",
 ]:
     for value in re.findall(r"\]\(([^\s)]+)\)", path.read_text()):
         check_link(path, value)
         links += 1
+manifest = json.loads((SITE / "images/manifest.json").read_text())
+expected_images = {
+    f"{view}-{lang}.png"
+    for view in ("workspace", "dispatch", "pm-planning", "pm-kanban")
+    for lang in ("en", "zh")
+}
+if {entry["file"] for entry in manifest["images"]} != expected_images:
+    errors.append("Screenshot manifest must describe all eight public images.")
+for entry in manifest["images"]:
+    path = SITE / "images" / entry["file"]
+    if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
+        errors.append(f"Screenshot does not match its capture manifest: {entry['file']}")
 if errors:
     raise SystemExit("\n".join(errors))
 print(f"Checked {links} links and static assets; no missing local targets, fragments or duplicate IDs.")
