@@ -38,6 +38,14 @@ Network recovery retries connections and reads, not a possibly accepted start, p
 
 A newer bundled runtime proves ownership and asks the current central to stop safely. Active/nonterminal work blocks this transition. The launcher holds its lock through shutdown and replacement, waits for the owned kernel lease, then starts and verifies the new runtime against the same journal and identity. It never kills a PID found in a pointer. Downgrades and unknown version ordering are refused. Interrupted upgrades recover the same saved installation.
 
+Each distributed core change requires a distinct increasing three-part Python
+package/runtime version (`pyproject.toml`, `__version__` and the lockfile). The
+bundled manifest must match the actual executable's version readback. The desktop
+package version also increases for a new distribution. Updating only the desktop
+version is insufficient: `ensure` deliberately reuses a verified running core of
+the same runtime version. Development commits do not each need a version bump;
+release preparation fixes the next package identity before final validation.
+
 Expired/revoked credentials, invalid manifests, changed identity or missing ready-state data are recovery failures. They do not cause automatic credential reissue, deletion of history or replacement ownership. Reinstallation reuses preserved application data; deliberately deleting that data is outside ordinary reopen/upgrade behavior.
 
 Explicit desktop Quit follows the existing Fleet shutdown guards and leaves the independent central service running. Stopping the managed service is separate and requires its own verified owner and safe-stop checks.
@@ -53,9 +61,20 @@ Candidate source and fixture locations:
 | Guided setup, read-only probes and revision recovery | `managed_setup.py`; `tests/test_managed_setup.py` |
 | Browser handoff and shared setup | `browser_sessions.py`; `tests/test_browser_sessions.py`, `desktop/tests/managed-setup-browser-integration.mjs` |
 | Bundled integrity, empty child PATH and concurrent clients | `desktop/scripts/build-managed-runtime.py`, `desktop/tests/managed-runtime-fixture.py` |
+| Distinct old/new packaged cores, retained workspace/history and busy refusal | `desktop/tests/managed-upgrade-fixture.py --previous-resources <old-bundle-directory> --current-resources <new-bundle-directory>` |
 | Native installation/login lifecycle | `desktop/src-tauri/src/managed.rs`, `managed_login.rs`; platform jobs in `.github/workflows/desktop.yml` |
 
 Use the [current main checks](https://github.com/teddashh/bat-agent-connector/actions?query=branch%3Amain) and [desktop workflow](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) for validation by source commit. Match the package to a successful run from the current public history; historical PR artifacts are not the download source. Package fixtures use controlled temporary resources; a successful job is evidence for its source commit and platform, not every user environment.
+
+The packaged upgrade fixture requires two original manifest/payload pairs with
+different binary digests and increasing actual versions. It verifies concurrent
+upgrade clients, original identity and PM workspace, original operation key and
+history, restart, and downgrade refusal. A separate synthetic uncertain operation
+must keep its old owner and original intent while blocking replacement. Its
+explicitly launched fixture process tree is reaped for teardown; the product never
+kills an owner to upgrade. Passing output includes both binary digests and cleanup.
+This supplements clean-profile installation evidence; it does not establish an
+in-place app installer upgrade or acceptance of an operator's existing data.
 
 The owner explicitly excluded formal signing, Mac notarization, production update channels and Linux persistent native credential enrollment from this delivery. Full human execution of the 46-item real-environment acceptance matrix is user-owned and is not an outstanding agent task. Exclusion does not mean these capabilities or checks were completed. Unknown native BAT merge acknowledgements preserve original work under the [merge contract](worktree-merge.md); its separate human-adjudication API is not a delivery gate.
 
