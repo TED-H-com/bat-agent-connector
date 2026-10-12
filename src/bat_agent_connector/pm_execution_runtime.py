@@ -37,9 +37,13 @@ def public_receipt(document):
         'pm_execution_runtime_completion_v1': ('execution_operation_id', 'registry_incarnation', 'result_digest',
             'candidate_commit', 'tree_hash'),
         'pm_manual_single_input_quiescence_v1': ('work_item_id', 'link_id', 'ownership', 'work_acceptance'),
+        'pm_manual_serial_inputs_quiescence_v1': ('work_item_id', 'link_id', 'ownership', 'work_acceptance',
+            'completed_turn_count', 'turns_digest'),
     }
     if document.get('schema') not in profiles:
         raise _bad('Unsupported original runtime receipt schema')
+    if document['schema'] == 'pm_manual_serial_inputs_quiescence_v1':
+        common = tuple(key for key in common if key != 'native_turn_id')
     projected = {key: document[key] for key in (*common, *profiles[document['schema']])}
     counters = document.get('input_state')
     if not isinstance(counters, dict):
@@ -48,6 +52,12 @@ def public_receipt(document):
         'inputState': {key: counters.get(key) for key in ('schema', 'epoch', 'received', 'pending')}})
     if projected['input_state'] is None:
         raise _bad('Original native counters unavailable')
+    if document['schema'] == 'pm_manual_serial_inputs_quiescence_v1':
+        count, digest = projected['completed_turn_count'], projected['turns_digest']
+        if (type(count) is not int or not 2 <= count <= 64 or count != projected['input_state']['received']
+                or projected['input_state']['pending'] != 0 or not isinstance(digest, str) or len(digest) != 64
+                or any(char not in '0123456789abcdef' for char in digest)):
+            raise _bad('Original serial completion shape unavailable')
     projected['completion_cursor'] = pm_runtime._cursor(document.get('completion_cursor'))
     for key, value in projected.items():
         if key not in {'input_state', 'completion_cursor'} and isinstance(value, (dict, list)):
