@@ -4,7 +4,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture, pmRoute, workspaceId} from './pm-fixture.ts';
 const pid='prj_'+'1'.repeat(20), wid='wi_'+'2'.repeat(20), rid='pmrev_'+'3'.repeat(32), eid='pme_'+'4'.repeat(32);
 function fixture() {
-  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any};
+  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, recoveryReads:0, recoveryWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any};
   const project={project_id:pid,name:'Reader experience',version:2};
   const binding=()=>({workspace_id:workspaceId,work_item_id:wid,binding_id:'pmwb_'+'5'.repeat(32),project_id:pid,plan_revision_id:null,requirement_ids:[]});
   let workBinding:any=null;
@@ -32,6 +32,7 @@ function fixture() {
     if(path===endpoint+'/evidence/'+eid)return {status:200,data:{evidence:{...summary,document:{facts:{state:'done',authority:'recorded_work_claim_and_approval',description:'<script>literal evidence</script>'}}}}};
     if(input.method==='GET'&&path.startsWith('/operations/'))return {status:200,data:{operation:[...state.ops.values()].find(op=>path.endsWith(op.operation_id))}};
     if(input.method==='POST'&&path==='/operations'&&['pm.project.bind','pm.work.bind','pm.evidence.capture'].includes(input.body.action)){
+      if(state.ops.has(input.idempotency_key)){state.recoveryReads++;await state.recoveryWait;}
       state.writes.push(structuredClone(input));let op=state.ops.get(input.idempotency_key);
       if(!op){const {action,params}=input.body;
         if(action==='pm.project.bind')state.associated=true;
@@ -99,9 +100,18 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     await expect(bind.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
     await expect(bind.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Keep original association');
     expect(f.state.writes).toHaveLength(1);
-    await page.reload();await selectProject(page);await bind.getByRole('button',{name:'Check original request',exact:true}).click();
+    await page.reload();await selectProject(page);
+    const recover=bind.getByRole('button',{name:'Check original request',exact:true});
+    let release!:()=>void;f.state.recoveryWait=new Promise<void>(resolve=>{release=resolve;});
+    try {
+      await recover.click();await expect.poll(()=>f.state.recoveryReads).toBe(1);
+      // Clicking submits asynchronously; the original receipt may still be in transit.
+      await expect(recover).toBeDisabled();expect(f.state.writes).toHaveLength(1);expect(f.state.ops.size).toBe(1);
+    }finally{f.state.recoveryWait=null;release();}
+    await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.ops.size).toBe(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
+    await expect(bind).toBeHidden();
   });
   test('saved claim and coverage do not become verified delivery, and missing reply keeps original capture',async({page})=>{
     const f=fixture();f.state.associated=true;f.state.tracked=true;
