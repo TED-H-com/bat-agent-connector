@@ -12,6 +12,7 @@ from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationError
 from tests import test_pm_bat_structured_analysis as structured_analysis
 from tests import test_pm_context_bundles as bundles
+from tests import test_pm_conversation_proposals as conversation
 from tests import test_pm_plan_operations as plans
 from tests.test_checkpoints import snapshot
 from tests.test_pm_native_operations import await_runtime
@@ -116,7 +117,7 @@ async def test_same_workspace_reader_cannot_discover_private_active_writer_id(ch
     message = await plans.act(w, 'pm.message.append', {'content': 'A separately protected original discussion source'})
     source = ops.db.execute('SELECT operation_id FROM pm_messages WHERE message_id=?', (message['message_id'],)).fetchone()[0]
     w['native_settings']['block_turn'] = True
-    op = bundles.request(w)
+    op = ops.create(plans.OWNER, **conversation.propose_request(w))[0]
     runtime = await await_runtime(ops, w['native_instances'], op)
     try:
         run = pm_runs.get_by_operation(ops.db, op['operation_id'])
