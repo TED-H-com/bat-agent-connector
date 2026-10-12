@@ -12193,6 +12193,51 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 		github_actions: ["github_nonterminal_actions"]
 	};
 	const reasonText = (reason) => t("pmo_reason_" + (Object.keys(reasonGroups).find((key) => reasonGroups[key].includes(reason.code)) || "unknown"));
+	const text = (value) => typeof value === "string" && value.length > 0 && value.length <= 4096;
+	const object = (value) => value && typeof value === "object" && !Array.isArray(value);
+	function sourceReference(source) {
+		if (source == null) return "";
+		if (!object(source) || !text(source.kind)) throw Error(t("pmo_invalid"));
+		const names = {
+			work: "work",
+			task: "task",
+			operation: "operation",
+			command: "command",
+			session: "session",
+			sprint: "sprint",
+			bat_workspace: "bat"
+		};
+		const row = h("p", { class: "pm-source" }, t("pmo_recorded_source"), ": ", names[source.kind] ? t("pmo_ref_" + names[source.kind]) : h("code", {}, source.kind));
+		for (const field of [
+			"id",
+			"host",
+			"workspace_id",
+			"profile_id",
+			"project_id"
+		]) if (source[field] != null) {
+			if (!text(source[field])) throw Error(t("pmo_invalid"));
+			row.append(" · ", h("code", {}, source[field]));
+		}
+		return row;
+	}
+	function exclusion(row) {
+		if (!object(row) || !text(row.reason)) throw Error(t("pmo_invalid"));
+		const reasons = [
+			"checkpoint_is_not_activity",
+			"failed_attempt_explicitly_deferred",
+			"unselected_backlog",
+			"pm_owned_session",
+			"verified_ended_session_retained",
+			"original_maintenance_attempt_completed"
+		];
+		const item = h("li", {}, t("pmo_exclusion_" + (reasons.includes(row.reason) ? row.reason : "unknown")), sourceReference(row));
+		if (!reasons.includes(row.reason)) item.append(h("code", { class: "pm-source" }, row.reason));
+		if (row.runtime_observation_id != null) {
+			if (!/^op_[0-9a-f]{32}$/.test(row.runtime_observation_id)) throw Error(t("pmo_invalid"));
+			item.append(h("a", { href: `#/op/${encodeURIComponent(row.runtime_observation_id)}` }, t("pmo_runtime_receipt")), " · ", h("code", { class: "pm-source" }, row.runtime_observation_id));
+		}
+		return item;
+	}
 	const editorsBox = h("div", { class: "pm-observation-actions" });
 	function update() {
 		for (const editor of editors) editor.update();
@@ -12269,11 +12314,11 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 				"development",
 				"unknown",
 				"idle_candidate"
-			].includes(doc.classification) || !Array.isArray(doc.source_coverage) || !Array.isArray(doc.blocking_reasons) || typeof doc.stability?.satisfied !== "boolean") throw Error(t("pmo_invalid"));
+			].includes(doc.classification) || !Array.isArray(doc.source_coverage) || !Array.isArray(doc.blocking_reasons) || typeof doc.stability?.satisfied !== "boolean" || doc.exclusions != null && !Array.isArray(doc.exclusions)) throw Error(t("pmo_invalid"));
 			box.append(line("pmo_classification", t(`pmo_${doc.classification}`)), line("pmo_stability", t(doc.stability.satisfied ? "pmo_stable" : "pmo_not_stable")));
 			const coverage = h("ul");
 			for (const source of doc.source_coverage) {
-				const label = [
+				const label = source.kind === "bat_workspace" ? "pmo_source_bat" : [
 					"central_project",
 					"github",
 					"bat"
@@ -12281,7 +12326,11 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 				coverage.append(h("li", {}, `${t(label)}: ${t(source.status === "complete" ? "pmo_complete" : "pmo_incomplete")}`));
 			}
 			box.append(coverage, line("pmo_blockers", doc.blocking_reasons.length), h("p", { class: "muted" }, t("pmo_capture_limits")));
-			if (doc.blocking_reasons.length) box.append(h("details", {}, h("summary", {}, t("pmo_blocker_details")), h("ul", {}, ...doc.blocking_reasons.map((reason) => h("li", {}, reasonText(reason))))));
+			if (doc.blocking_reasons.length) box.append(h("details", {}, h("summary", {}, t("pmo_blocker_details")), h("ul", {}, ...doc.blocking_reasons.map((reason) => {
+				if (!object(reason) || !text(reason.code)) throw Error(t("pmo_invalid"));
+				return h("li", {}, reasonText(reason), h("code", { class: "pm-source" }, " · " + reason.code), sourceReference(reason.source));
+			}))));
+			if (doc.exclusions?.length) box.append(h("details", { "data-workload-exclusions": "" }, h("summary", {}, t("pmo_exclusions") + ` (${doc.exclusions.length})`), h("p", { class: "muted" }, t("pmo_exclusion_boundary")), h("ul", {}, ...doc.exclusions.map(exclusion))));
 		}
 		box.append(h("details", {}, h("summary", {}, t("pmo_proof")), h("p", { class: "mono" }, row[id]), h("p", { class: "mono" }, row.document_digest), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
 		return box;
@@ -21374,7 +21423,25 @@ var maintenanceObservationStrings = {
 		pmo_source_bat: "BAT workspace",
 		pmo_source_other: "Additional source",
 		pmo_blockers: "Recorded blockers or coverage gaps",
-		pmo_capture_limits: "Quality remains unassessed. A saved observation does not change the project stage or authorize execution.",
+		pmo_capture_limits: "This workload observation does not assess quality. A saved observation does not change the project stage or authorize execution.",
+		pmo_recorded_source: "Source recorded in this observation",
+		pmo_ref_work: "Work item",
+		pmo_ref_task: "Task",
+		pmo_ref_operation: "Operation",
+		pmo_ref_command: "Command",
+		pmo_ref_session: "Session",
+		pmo_ref_sprint: "Sprint",
+		pmo_ref_bat: "BAT workspace",
+		pmo_exclusions: "Excluded from workload at capture",
+		pmo_exclusion_boundary: "These saved exclusions do not grant control, establish quality acceptance or prove a process has stopped. A retained worktree alone is not active work.",
+		pmo_runtime_receipt: "Original runtime observation",
+		pmo_exclusion_checkpoint_is_not_activity: "A saved checkpoint alone is not ongoing activity.",
+		pmo_exclusion_failed_attempt_explicitly_deferred: "The failed attempt was explicitly deferred.",
+		pmo_exclusion_unselected_backlog: "Unselected backlog is not an active commitment.",
+		pmo_exclusion_pm_owned_session: "A session bound to the PM role is excluded from development work.",
+		pmo_exclusion_verified_ended_session_retained: "A verified ended session is retained as history.",
+		pmo_exclusion_original_maintenance_attempt_completed: "The original maintenance attempt has recorded completion evidence.",
+		pmo_exclusion_unknown: "This source was excluded in the saved observation. Review its original evidence.",
 		pmo_blocker_details: "Review blockers and coverage gaps",
 		pmo_reason_source_limit: "The source exceeds the bounded observation size.",
 		pmo_reason_source_access: "An original source is currently unavailable.",
@@ -21430,7 +21497,25 @@ var maintenanceObservationStrings = {
 		pmo_source_bat: "BAT 工作區",
 		pmo_source_other: "其他來源",
 		pmo_blockers: "已記錄的阻止原因或涵蓋缺口",
-		pmo_capture_limits: "品質仍未評估。保存觀察不會變更管理階段，也不構成執行授權。",
+		pmo_capture_limits: "這份工作量觀察不做品質評估。保存觀察不會變更管理階段，也不構成執行授權。",
+		pmo_recorded_source: "本次觀察保存的來源",
+		pmo_ref_work: "工作項目",
+		pmo_ref_task: "任務",
+		pmo_ref_operation: "操作",
+		pmo_ref_command: "命令",
+		pmo_ref_session: "工作階段",
+		pmo_ref_sprint: "Sprint",
+		pmo_ref_bat: "BAT 工作區",
+		pmo_exclusions: "擷取時未計入工作量的來源",
+		pmo_exclusion_boundary: "這些保存的排除原因不授予控制權、不代表品質驗收，也不證明程序已停止。保留 worktree 本身不算進行中的工作。",
+		pmo_runtime_receipt: "原始執行觀察",
+		pmo_exclusion_checkpoint_is_not_activity: "單獨保存的 checkpoint 不代表活動仍在進行。",
+		pmo_exclusion_failed_attempt_explicitly_deferred: "失敗的嘗試已明確延後處理。",
+		pmo_exclusion_unselected_backlog: "尚未選入執行的待辦不算生效中的承諾。",
+		pmo_exclusion_pm_owned_session: "已綁定 PM 角色的工作階段不計入開發工作。",
+		pmo_exclusion_verified_ended_session_retained: "已驗證結束的工作階段保留為歷史。",
+		pmo_exclusion_original_maintenance_attempt_completed: "原始維護嘗試已有保存的完成證據。",
+		pmo_exclusion_unknown: "本次保存觀察未將此來源計入工作量，請核對其原始證據。",
 		pmo_blocker_details: "檢視阻止原因與涵蓋缺口",
 		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
 		pmo_reason_source_access: "目前無法讀取某項原始來源。",
