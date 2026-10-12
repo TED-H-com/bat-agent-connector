@@ -96,3 +96,46 @@ input, identity/confinement/candidate change, source/credential withdrawal,
 unknown derived effects and pause/reopen. Public sentinel tests cover operation,
 event, workload and Kanban projections. Existing repair-runtime completion keeps
 its original receipt semantics and does not acquire new ownership assumptions.
+
+## Registered selectors and existing views
+
+The private managed action is not a user action. The service creates its one
+original key during the first-send capture. Its observer may read original
+completion after investment is paused; a current observe credential and the
+original controller/source checks still apply. A successful dispatch by itself
+never produces a completion receipt.
+
+`pm.session.quiescence.observe` is an explicit read operation, with target
+`{workspace_id, work_item_id}`, params `{link_id}`, and preconditions
+`{expected_link_operation_id, expected_project_binding_id,
+expected_session_identity_digest}`. The last value is an opaque server digest of
+the observed host binding, BAT workspace/profile, SDK and native input identity.
+It prevents a stale selector from silently following a reused session ID or a
+later input. Admission requires observe scope and a current workspace writer;
+there is no new session control, ownership or manage-scope delegation.
+
+Existing Kanban detail advertises bounded
+`execution.manual_observation_sources` containing those exact original selector
+values plus host/session IDs and `available`/`reason`. A withdrawn source is
+omitted. Supported availability reasons are
+`manual_native_identity_unavailable`, `manual_multiple_inputs_unsupported`, and
+`manual_native_turn_active`. The UI copies the returned opaque selector; it does
+not derive IDs or accept a pasted proof. The advertised action catalog remains
+the capability gate on older servers. The existing operation endpoint and
+original durable key provide admission and result recovery.
+
+Each ordinary execution attempt may have `runtime_completion` containing only
+`observation_operation_id`, `execution_operation_id`, `document_digest`,
+`recorded_at`, `runtime_status`, and `process_death_proven`. It is a historical
+original-turn fact; current workload applicability and independent quality are
+not inferred from this display. Receipts expose an explicit schema projection,
+including nested input counters and replay cursor; unknown private diagnostics
+are not public fields.
+
+The bounded manual profile intentionally does not support ordinary multi-input
+human sessions yet. A future extension must prove all native inputs/unique
+terminals in the complete same-epoch bounded replay against the authenticated
+received counter, zero pending inputs and current final native state. A last
+assistant message, last terminal alone, or an incomplete retained window cannot
+satisfy that contract. This is an actual remaining daily-workflow limitation,
+not evidence that every manual ended session is covered.

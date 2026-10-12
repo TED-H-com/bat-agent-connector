@@ -147,6 +147,12 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.quality.review.'):
         from .pm_quality_reviews import operation_visible as quality_visible
         return quality_visible(db, principal, op)
+    if op['action'] == 'pm.session.quiescence.observe':
+        from .pm_session_quiescence import operation_visible as quiescence_visible
+        return quiescence_visible(db, principal, op)
+    if op['action'] == 'pm.execution.runtime.observe':
+        from .pm_execution_runtime import operation_visible as execution_runtime_visible
+        return execution_runtime_visible(db, principal, op)
     if op['action'] == 'pm.execution.verify':
         from .pm_execution_verification import operation_visible as verification_visible
         return verification_visible(db, principal, op)

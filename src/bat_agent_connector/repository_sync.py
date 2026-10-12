@@ -333,6 +333,7 @@ async def run(ctx):
         await artifacts.materialize(ctx, context, plan["clone_path"], plan["worktree_path"], plan["branch"], refs,
                                     published_binding=binding, before_transfer=lambda: frame(ctx, plan))
 
+    from . import pm_execution_runtime
     from . import pm_maintenance_repair_runtime as repair_runtime
 
     async def input_frame():
@@ -342,6 +343,11 @@ async def run(ctx):
                                                    plan["branch"], published_binding=binding)
         guard(ctx, plan)
         await repair_runtime.before_send_frame(ctx)
+        await pm_execution_runtime.before_send_frame(ctx)
+
+    async def capture_runtime(sid, text):
+        await repair_runtime.capture(ctx, sid, text)
+        await pm_execution_runtime.capture(ctx, sid, text)
     marker = "[batc:" + ctx.operation_id + "]"
     fields = {"start_operation_id": ctx.operation_id, "repository_binding": plan["binding_digest"],
               "repository": plan["config"]["repository"], "repository_id": plan["repository_id"],
@@ -352,7 +358,7 @@ async def run(ctx):
         text=marker + "\n" + checkpoints._input_instructions(ctx.service.db, _execution_prompt(ctx), refs),
         marker=marker, registry_fields={}, creation_fields=fields,
         frame_check=input_frame, final_check=lambda: guard(ctx, plan),
-        before_first_send=lambda sid, text: repair_runtime.capture(ctx, sid, text))
+        before_first_send=capture_runtime)
     return {**result, "host": ctx.target["host"], "workspace_id": ctx.target["workspace_id"],
             "repository": plan["config"]["repository"], "repository_id": plan["repository_id"],
             "source_ref": plan["source_ref"], "source_sha": plan["source_sha"], "worktree_path": plan["worktree_path"],

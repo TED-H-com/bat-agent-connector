@@ -251,6 +251,7 @@ async def develop_original_requirements(w, mock):
     selected = batch.view(w, parent)['entries']
     assert selected[0]['operation_id'] and selected[1]['operation_id'] is None
     child = ops.get(selected[0]['operation_id'])
+    assert child['status'] == 'succeeded', child
     await member.configure_verifier(login, child, 'login')
     failed = await producer.execute(login)
     assert failed['result']['status'] == 'blocked'
@@ -270,6 +271,7 @@ async def develop_original_requirements(w, mock):
     selected = batch.view(w, parent)['entries']
     assert selected[0]['state'] == 'requirements_accepted' and selected[1]['operation_id']
     second = ops.get(selected[1]['operation_id'])
+    assert second['status'] == 'succeeded', second
     assert second['params']['pm_requirement_quality_refs']['member.login']['reference'] == reference
     assert second['params']['source_sha'] == child['params']['source_sha'] == w['sha']
     await member.configure_verifier(recovery, second, 'recovery')
@@ -309,3 +311,23 @@ def assert_manual_preserved(w, mock):
     assert not [call for call in bat_writes(mock) if call['params'].get('sessionId') in w['original_manual_ids']]
     assert next(row for row in mock.ws_doc['terminals'] if row['id'] == MANUAL) == w['original_manual_tab']
     assert w['d'].ops.db.execute('SELECT COUNT(*) FROM tasks').fetchone()[0] == 0
+
+
+async def finish_original_readers(w):
+    from bat_agent_connector import pm_execution_runtime as runtime
+    ops = w['d'].ops
+    for oid in w['ledger'].references['execution_ids']:
+        child = ops.get(oid)
+        reader = runtime.observer(ops, child)
+        assert reader and runtime.origin(ops, child)['status'] == 'captured'
+        for _ in range(8):
+            ops.db.execute('UPDATE operations SET next_run_at=0 WHERE operation_id=?', (reader['operation_id'],))
+            await settle_operations(ops)
+            current = ops.get(reader['operation_id'])
+            assert current['error_code'] != 'INTERNAL', current
+            if current['status'] == 'succeeded':
+                break
+        assert current['status'] == 'succeeded', current
+        proof = runtime.proof(ops, OWNER, child)
+        assert proof['runtime_status'] == 'original_turn_completed' and proof['process_death_proven'] is False
+    return w

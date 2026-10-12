@@ -93,7 +93,10 @@ def schema(journal):
 
 
 def install(ops):
+    from . import pm_execution_runtime, pm_session_quiescence
     schema(ops.journal)
+    pm_execution_runtime.install(ops)
+    pm_session_quiescence.install(ops)
     for name, run, admit, targets in ((START, _run, _admit, ('workspace_id',)),
             (RECORD, _record_evidence, _admit_evidence, ('workspace_id', 'batch_id'))):
         if name not in ops.actions:
