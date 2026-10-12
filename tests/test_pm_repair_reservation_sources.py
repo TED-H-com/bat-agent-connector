@@ -70,7 +70,9 @@ def saved_sources(w, parent, recorded, monkeypatch, record_property):
     scoped = source_queries(ops, OWNER, parent, scoped=True)
     record_property('repair_direct_full_access_queries', direct)
     record_property('repair_scoped_full_access_queries', scoped)
-    assert scoped <= direct
+    # The historical entrypoint itself supplies the whole read scope; callers
+    # need not arrange an ambient scope to avoid repeated source traversal.
+    assert scoped == direct
     for op in originals:
         assert ops.get(op['operation_id'], principal=OWNER)['operation_id'] == op['operation_id']
     events = []
