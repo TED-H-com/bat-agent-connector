@@ -31,13 +31,23 @@ def condition(value):
     return value
 
 
+def batch_condition(value):
+    if isinstance(value, dict) and value.get('kind') == 'requirement_acceptance':
+        from . import pm_requirement_acceptance
+        return pm_requirement_acceptance.condition(value)
+    return condition(value)
+
+
 def evaluate(ops, principal, wid, child, selected, reference):
     """No external reads and no branch-to-execution inference."""
-    condition(selected)
+    batch_condition(selected)
     if not child or child['action'] != 'repository.continue':
         raise bad('An original admitted engineering child is required')
     from .pm_access import require_visible
     require_visible(ops.db, principal, child)
+    if selected['kind'] == 'requirement_acceptance':
+        from . import pm_requirement_acceptance
+        return pm_requirement_acceptance.evaluate(ops, principal, wid, child, selected, reference)
     base = {'condition': selected, 'source_operation_id': child['operation_id'],
         'semantic_acceptance': 'not_evaluated', 'operation_ids': [child['operation_id']]}
     if selected['profile'] == 'observed_runner_v1':
@@ -50,6 +60,9 @@ def require_sources(ops, principal, wid, proof):
     from .pm_access import require_visible
     for oid in proof.get('operation_ids', []):
         require_visible(ops.db, principal, ops.get(oid))
+    if proof.get('condition', {}).get('kind') == 'requirement_acceptance':
+        from . import pm_requirement_acceptance
+        pm_requirement_acceptance.require_sources(ops, principal, wid, proof)
     if proof.get('task_id'):
         from . import pm_evidence
         if not pm_evidence._task_visible(ops, principal, wid, proof['task_id']):
@@ -58,6 +71,9 @@ def require_sources(ops, principal, wid, proof):
 
 
 def _runner(ops, principal, wid, child, selected, ref):
+    if isinstance(ref, dict) and 'verification_operation_id' in ref:
+        from . import pm_execution_verification
+        return pm_execution_verification.evaluate(ops, principal, wid, child, selected, ref)
     if not isinstance(ref, dict) or set(ref) != {'verification_id', 'candidate_commit', 'tree_hash'}:
         raise bad('Select an exact observed verification and full candidate commit/tree')
     if type(ref['verification_id']) is not int or not 0 < ref['verification_id'] < 2**63 or any(not isinstance(ref[k], str) or not SHA.fullmatch(ref[k]) for k in ('candidate_commit', 'tree_hash')):

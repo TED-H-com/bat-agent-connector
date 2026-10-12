@@ -206,6 +206,8 @@ def compare(ops, principal, workspace_id, from_revision_id, to_revision_id, *, b
         if not principal.allows("observe"):
             raise _bad("FORBIDDEN", "Plan comparison requires observe scope", 403)
         pm_workspace.require_member(ops.db, principal, workspace_id)
+        for revision_id in (from_revision_id, to_revision_id):
+            pm_plans._require_revision_sources(ops.db, principal, workspace_id, revision_id)
         if (not isinstance(binding_ids, (list, tuple)) or len(binding_ids) > MAX_BINDINGS
                 or any(not isinstance(value, str) or not pm_evidence._BINDING.fullmatch(value) for value in binding_ids)
                 or len(set(binding_ids)) != len(binding_ids)):

@@ -19,6 +19,7 @@ import errno
 import msvcrt
 import os
 import secrets
+import time
 from ctypes import wintypes as w
 from dataclasses import dataclass
 from functools import lru_cache
@@ -29,6 +30,9 @@ advapi = c.WinDLL("advapi32", use_last_error=True)
 ntdll = c.WinDLL("ntdll", use_last_error=True)
 VOID = c.c_void_p
 ULONG_PTR = c.c_size_t
+ATOMIC_REPLACE_MAX_ATTEMPTS = 6
+ATOMIC_REPLACE_DEADLINE_S = 0.5
+ATOMIC_REPLACE_RETRY_S = 0.02
 
 
 class UnicodeString(c.Structure):
@@ -357,6 +361,34 @@ def _delete(handle):
         _error(_dos_error(result))
 
 
+def _atomic_replace(handle, parent, name):
+    # A legitimate private reader denies delete sharing. Retry only this
+    # replace collision, retaining the already-written temporary file and the
+    # pinned directory. Immutable artifact publication never calls this helper.
+    deadline = time.monotonic() + ATOMIC_REPLACE_DEADLINE_S
+    original_error = None
+    for attempt in range(ATOMIC_REPLACE_MAX_ATTEMPTS):
+        check_handle_private(parent.handle)
+        try:
+            _close(_open(name, parent=parent.handle))
+        except FileNotFoundError:
+            pass
+        if original_error is not None and time.monotonic() >= deadline:
+            raise original_error
+        try:
+            return _rename(handle, parent, name, replace=True)
+        except OSError as error:
+            if getattr(error, "winerror", None) not in {5, 32}:
+                raise
+            if original_error is None:
+                original_error = error
+            remaining = deadline - time.monotonic()
+            if attempt + 1 == ATOMIC_REPLACE_MAX_ATTEMPTS:
+                raise original_error from None
+            if remaining > 0:
+                time.sleep(min(ATOMIC_REPLACE_RETRY_S, remaining))
+
+
 def atomic_write(path, data, *, mode=0o600):
     parent = open_dir(path.parent)
     name = path.name + "." + secrets.token_hex(12) + ".tmp"
@@ -378,13 +410,16 @@ def atomic_write(path, data, *, mode=0o600):
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        _rename(handle, parent, path.name, replace=True)
+        _atomic_replace(handle, parent, path.name)
         published = True
         if not _flush(handle):
             _error()
-    except BaseException:
+    except BaseException as original_error:
         if handle is not None and not published:
-            _delete(handle)
+            try:
+                _delete(handle)
+            except OSError as cleanup_error:
+                raise original_error from cleanup_error
         raise
     finally:
         if handle is not None:

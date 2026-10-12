@@ -10,7 +10,7 @@ import re
 import time
 
 from . import pm_lifecycle_gates as gates
-from . import pm_workspace
+from . import pm_release_baselines, pm_workspace
 from .operations import TERMINAL, ActionDef, OperationError
 
 STAGES = ('idea', 'planning', 'development')
@@ -135,6 +135,14 @@ def operation_visible(db, principal, operation):
         pm_workspace.require_member(db, principal, json.loads(row['target'])['workspace_id'])
     except (OperationError, KeyError):
         return False
+    params = json.loads(row['params'])
+    if 'maintenance_ref' in params:
+        from . import pm_maintenance_lifecycle as maintenance
+        from .pm_workload import _Reader
+        try:
+            maintenance.sources(_Reader(db), principal, json.loads(row['target'])['workspace_id'], params['maintenance_ref'])
+        except (OperationError, KeyError, TypeError, ValueError):
+            return False
     if row['action'] != 'pm.lifecycle.retain_inflight':
         return True
     ids = json.loads(row['params']).get('operation_ids', [])
@@ -213,22 +221,27 @@ def capabilities(ops):
 
 
 def _transition_visible(db, principal, row):
-    return row['action'] != 'pm.lifecycle.retain_inflight' or operation_visible(db, principal, {'operation_id': row['operation_id']})
+    return operation_visible(db, principal, {'operation_id': row['operation_id']})
 
 
+@pm_release_baselines._snapshot_read
 def get_lifecycle(ops, principal, workspace_id):
     _member(ops, principal, workspace_id)
     current = gates.head(ops.db, workspace_id)
     tid = current['transition_id']
     transition = _transition(ops.db, workspace_id, tid) if tid else None
     shown = transition is None or _transition_visible(ops.db, principal, transition)
+    from . import pm_maintenance_lifecycle
+    maintenance = pm_maintenance_lifecycle.availability(ops, principal, workspace_id)
+    if not shown and transition['to_stage'] == 'maintain':
+        current = {**current, 'transition_id': None}
     return _bounded({'workspace_id': workspace_id, 'lifecycle': {**current, 'status': _status(ops.db, current)},
             'transition': _metadata(transition) if transition is not None and shown else None,
             'transition_visibility_filtered': not shown,
             'blocked_actions': capabilities(ops)['gated_actions'] if current['stage'] in gates.STOPPED else [],
             'record_actions': sorted(gates.RECORD_ACTIONS), 'record_variants': capabilities(ops)['record_variants'],
-            'available_stages': list(STAGES),
-            'maintenance': {'available': False, 'reason': 'release_baseline_and_policy_required'},
+            'available_stages': [*STAGES, *(['maintain'] if maintenance['available'] else [])],
+            'maintenance': maintenance,
             'inflight_summary': _summary(ops, principal, tid)})
 
 
@@ -243,6 +256,7 @@ def _bounded(result):
     return result
 
 
+@pm_release_baselines._snapshot_read
 def list_transitions(ops, principal, workspace_id, *, after=0, limit=20):
     _member(ops, principal, workspace_id)
     _page(after, limit)
@@ -266,6 +280,7 @@ def list_transitions(ops, principal, workspace_id, *, after=0, limit=20):
     return _bounded(result)
 
 
+@pm_release_baselines._snapshot_read
 def get_transition(ops, principal, workspace_id, transition_id):
     _member(ops, principal, workspace_id)
     row = _transition(ops.db, workspace_id, transition_id)
@@ -275,12 +290,17 @@ def get_transition(ops, principal, workspace_id, transition_id):
                      'inflight_summary': _summary(ops, principal, transition_id)})
 
 
+@pm_release_baselines._snapshot_read
 def list_inflight(ops, principal, workspace_id, *, transition_id=None, after=0, limit=20):
     _member(ops, principal, workspace_id)
     _page(after, limit)
     tid = gates.head(ops.db, workspace_id)['transition_id'] if transition_id is None else transition_id
     if tid is not None:
-        _transition(ops.db, workspace_id, tid)
+        transition = _transition(ops.db, workspace_id, tid)
+        if transition['to_stage'] == 'maintain' and not _transition_visible(ops.db, principal, transition):
+            if transition_id is not None:
+                raise _bad('NOT_FOUND', 'Lifecycle transition not found', 404)
+            return {'workspace_id': workspace_id, 'transition_id': None, 'inflight': [], 'next_cursor': None, 'visibility_filtered': True}
     rows = ops.db.execute('SELECT * FROM pm_lifecycle_inflight WHERE transition_id=? AND sequence>? ORDER BY sequence LIMIT ?',
                           (tid, after, limit + 1)).fetchall()
     result = {'workspace_id': workspace_id, 'transition_id': tid, 'inflight': [], 'next_cursor': None, 'visibility_filtered': False}
@@ -320,6 +340,8 @@ def _check(ops, principal, action, target, params, pre):
         raise _bad('VERSION_CONFLICT', 'Read the current lifecycle before deciding', 409)
     suffix = action.removeprefix('pm.lifecycle.')
     fields = {'stage', 'reason'} if suffix in ('set_stage', 'reopen') else {'transition_id', 'operation_ids', 'reason'} if suffix == 'retain_inflight' else {'reason'}
+    if suffix in ('set_stage', 'reopen') and params.get('stage') == 'maintain' and 'maintenance_ref' in params:
+        fields = fields | {'maintenance_ref'}
     if set(params) != fields:
         raise _bad('INVALID_PARAMS', 'Supply exactly the lifecycle decision fields')
     reason = params['reason']
@@ -331,8 +353,11 @@ def _check(ops, principal, action, target, params, pre):
         raise _bad('INVALID_PARAMS', 'The decision reason must be valid UTF-8') from None
     if suffix in ('set_stage', 'reopen'):
         if params['stage'] == 'maintain':
-            raise _bad('PM_MAINTENANCE_UNAVAILABLE', 'A release baseline and adopted maintenance policy are required', 409)
-        if params['stage'] not in STAGES:
+            from . import pm_maintenance_lifecycle
+            pm_maintenance_lifecycle.require(ops, principal, wid, params.get('maintenance_ref'), reopening=suffix == 'reopen')
+            if suffix == 'set_stage' and current['stage'] != 'development':
+                raise _bad('PM_LIFECYCLE_TRANSITION_INVALID', 'Enter maintenance from Development or explicitly reopen', 409)
+        elif params['stage'] not in STAGES:
             raise _bad('INVALID_PARAMS', 'Select Idea, Planning or Development')
         if (suffix == 'reopen') != (current['stage'] in gates.STOPPED):
             raise _bad('PM_LIFECYCLE_TRANSITION_INVALID', 'Use explicit reopen for a stopped workspace, or set_stage for active work', 409)
@@ -415,12 +440,16 @@ async def _run(ctx):
         ctx.check_cancel()
         principal = pm_workspace.admitted_principal(ctx)
         current, stage = _check(ops, principal, ctx.op['action'], ctx.target, ctx.params, ctx.preconditions)
+        from . import pm_maintenance_lifecycle
+        pm_maintenance_lifecycle.require_automatic_parent(ops, ctx.op)
         wid, now = current['workspace_id'], time.time()
         tid = 'pmlt_' + ctx.operation_id[3:]
         action = ctx.op['action']
         epoch = current['execution_epoch'] + int(action in ('pm.lifecycle.pause', 'pm.lifecycle.close', 'pm.lifecycle.reopen'))
         revision = current['revision'] + 1
         snapshot = _snapshot(ops.db, wid, now)
+        if 'maintenance_ref' in ctx.params:
+            snapshot['maintenance'] = ctx.params['maintenance_ref']
         if action == 'pm.lifecycle.retain_inflight':
             for oid in ctx.params['operation_ids']:
                 ops.db.execute('''INSERT INTO pm_lifecycle_retained(workspace_id,original_operation_id,transition_id,reason,actor,created_at,operation_id)

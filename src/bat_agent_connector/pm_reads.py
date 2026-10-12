@@ -1,10 +1,19 @@
 """Identical read contracts for the Dashboard, RPC and MCP PM entry points."""
 from __future__ import annotations
 
+import re
+
 from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_pr_publication_get": ("workspace_id", "publication_operation_id"),
+    "pm_maintenance_repairs_list": ("workspace_id", "after", "limit"),
+    "pm_maintenance_repair_current_get": ("workspace_id",),
+    "pm_maintenance_repair_get": ("workspace_id", "repair_id"),
+    "pm_quality_reviews_list": ("workspace_id", "after", "limit"),
+    "pm_quality_review_get": ("workspace_id", "review_id"),
+    "pm_work_quality_get": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_deliveries_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_batches_list": ("workspace_id", "after", "limit"),
     "pm_work_batch_get": ("workspace_id", "batch_id"),
@@ -40,7 +49,9 @@ FIELDS = {
     "pm_release_baseline_get": ("workspace_id", "baseline_id"),
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
-    "pm_work_package_readiness_get": ("workspace_id", "package_id"),
+    "pm_work_package_readiness_get": ("workspace_id", "package_id", "quality_refs"),
+    "pm_conversation_proposals_list": ("workspace_id", "thread_id", "after", "limit"),
+    "pm_conversation_proposal_get": ("workspace_id", "proposal_id"),
     "pm_follow_up_assessments_list": ("workspace_id", "intake_id", "after", "limit"),
     "pm_follow_up_assessment_get": ("workspace_id", "assessment_id"),
     "pm_follow_up_list": ("workspace_id", "after", "limit"),
@@ -69,6 +80,7 @@ FIELDS = {
     "pm_threads_list": ("workspace_id", "limit", "after"),
     "pm_thread_get": ("workspace_id", "thread_id", "limit", "before_message", "before_input"),
     "pm_context_get": ("workspace_id", "thread_id", "max_chars"),
+    "pm_context_bundle_preview": ("workspace_id", "thread_id", "max_chars"),
     "pm_profiles_get": (),
     "pm_runs_list": ("workspace_id", "thread_id", "limit", "after"),
     "pm_run_get": ("workspace_id", "run_id"),
@@ -96,6 +108,34 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_context_bundle_preview":
+        from .pm_context_bundles import preview
+        return preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))
+    if method == 'pm_pr_publication_get':
+        from . import pr_publication
+        pm_workspace.require_member(ops.db, principal, workspace_id)
+        oid = params.get('publication_operation_id')
+        if not isinstance(oid, str) or not re.fullmatch('op_[0-9a-f]{32}', oid):
+            raise OperationError('INVALID_PARAMS', 'Select an original publication operation ID', 422)
+        op = pr_publication._operation(ops.db, oid)
+        if op['target'].get('workspace_id') != workspace_id:
+            raise OperationError('NOT_FOUND', 'Publication not found', 404)
+        return {'workspace_id': workspace_id, **pr_publication.get_publication(ops, principal, oid)}
+    if method in {"pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get"}:
+        from . import pm_maintenance_repairs as repairs
+        if method == "pm_maintenance_repair_get":
+            return repairs.get_repair(ops, principal, workspace_id, params.get("repair_id"))
+        if method == "pm_maintenance_repair_current_get":
+            return repairs.current_repair(ops, principal, workspace_id)
+        return repairs.list_repairs(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
+    if method in {"pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get"}:
+        from . import pm_quality_reviews as quality
+        if method == "pm_quality_review_get":
+            return quality.get_review(ops, principal, workspace_id, params.get("review_id"))
+        if method == "pm_work_quality_get":
+            return quality.for_work(ops, principal, workspace_id, params.get("work_item_id"),
+                after=params.get("after", 0), limit=params.get("limit", 50))
+        return quality.list_reviews(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 50))
     if method == "pm_work_deliveries_list":
         from .pm_delivery_lineage import for_work
         return for_work(ops, principal, workspace_id, params.get("work_item_id"),
@@ -192,9 +232,15 @@ def read(ops, principal, method, params):
         if method == "pm_work_package_get":
             return pm_work_packages.get_package(ops, principal, workspace_id, params.get("package_id"))
         if method == "pm_work_package_readiness_get":
-            return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"))
+            return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"), quality_refs=params.get('quality_refs'))
         return pm_work_packages.list_packages(ops, principal, workspace_id, work_item_id=params.get("work_item_id"),
                                               after=params.get("after", 0), limit=params.get("limit", 50))
+    if method in {"pm_conversation_proposals_list", "pm_conversation_proposal_get"}:
+        from . import pm_conversation_proposals
+        if method == "pm_conversation_proposal_get":
+            return pm_conversation_proposals.get_proposal(ops, principal, workspace_id, params.get("proposal_id"))
+        return pm_conversation_proposals.list_proposals(ops, principal, workspace_id, thread_id=params.get("thread_id"),
+            after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_follow_up_assessments_list", "pm_follow_up_assessment_get"}:
         from . import pm_follow_up_analysis
         if method == "pm_follow_up_assessment_get":
@@ -292,7 +338,7 @@ def read(ops, principal, method, params):
             return pm_plans.get_plan(ops, principal, workspace_id, params.get("revision_id"))
         if method == "pm_plan_accepted_get":
             return pm_plans.accepted_plan(ops, principal, workspace_id)
-        return {"version": 1, "head": pm_plans.head(ops.db, workspace_id)}
+        return {"version": 1, "head": pm_plans.public_head(ops, principal, workspace_id)}
     if method == "pm_runs_list":
         from . import pm_runs
         return pm_runs.list_runs(ops, principal, workspace_id, thread_id=thread_id,
@@ -301,7 +347,7 @@ def read(ops, principal, method, params):
         from . import pm_runs
         return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
     if method == "pm_capabilities_get":
-        from . import pm_native_capabilities, pm_runs, pm_runtime, pm_worktree
+        from . import pm_bat_operations, pm_native_capabilities, pm_runs, pm_runtime, pm_worktree
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
         repositories = {repository.lower() for repository in workspace["repositories"]}
         binding = pm_runs.workspace_worktree(ops.db, workspace_id)
@@ -331,7 +377,10 @@ def read(ops, principal, method, params):
                                        if binding else None),
                 "runtime": pm_runtime.capability_report(),
                 "native_analysis": native,
+                "bat_analysis": pm_bat_operations.capabilities(ops, principal, workspace),
                 "follow_up_analysis": follow_up,
+                "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
+                    "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},
                 "worktrees": [entry for entry in pm_worktree.capabilities(ops)
                               if entry["repository"].lower() in repositories]}
     if method == "pm_workspaces_list":

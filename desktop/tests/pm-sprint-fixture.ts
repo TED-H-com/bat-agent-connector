@@ -13,7 +13,7 @@ export function fixture() {
       starts_at:new Date(Date.now()-3600000).toISOString(),ends_at:new Date(Date.now()+604800000).toISOString(),capacity_note:'One focused delivery, two developers'},
       goal:{sprint_id:sprintId,text:'A returning member can sign in',revision_id:'pmsg_'+'1'.repeat(32),sequence:1,actor:'owner',rationale:'Keep this round focused'},
       selected:[{...bindings[0],assignee:'owner',how:'Verify login in my own environment'}],history:[]}]};
-  const config=()=>({caps:{actor:state.actor,scopes:['observe',...(state.manage?['manage']:[])],actions:actions.map(action=>({action,allowed:state.manage}))},
+  const config=()=>({qualitySelection:state.qualitySelection||null,caps:{actor:state.actor,scopes:['observe',...(state.manage?['manage']:[])],actions:actions.map(action=>({action,allowed:state.manage}))},
     workspace:{workspace_id:workspaceId,version:4,membership:{actor:state.actor,role:state.role},
       members:[{actor:'owner',role:state.actor==='owner'?state.role:'owner'},{actor:'developer',role:'contributor'},{actor:'reader',role:'reader'}]}});
   const detail=(s:any)=>({version:1,sprint:{...s,workspace_id:state.wrongScope?'ws_'+'9'.repeat(32):workspaceId},goal:s.goal,selected_items:s.selected,
@@ -24,6 +24,7 @@ export function fixture() {
     if(input.method==='GET'){
       if(pathname.startsWith('/operations/'))return response({operation:[...state.ops.values()].find((op:any)=>pathname.endsWith(op.operation_id))});
       if(state.failRead)return response({error:{code:state.failRead==='revoked'?'FORBIDDEN':'UNAVAILABLE',message:state.failRead==='revoked'?'Workspace access removed':'Sprint read unavailable'}},state.failRead==='revoked'?403:503);
+      if(pathname.startsWith(base+'/quality-reviews/'))return response({workspace_id:workspaceId,review:state.qualityReview});
       if(pathname===base+'/sprint-artifacts')return response(state.artifacts);
       if(pathname.startsWith(base+'/sprint-artifacts/')&&pathname.split('/').length===6)return response({revisions:[state.artifacts[pathname.split('/').at(-1)!]],next_cursor:null});
       if(pathname.startsWith(base+'/sprint-artifacts/'))return response({artifact:all.get(pathname.split('/').at(-1)!)});

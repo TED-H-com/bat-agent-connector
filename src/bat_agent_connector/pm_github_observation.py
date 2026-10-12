@@ -47,10 +47,10 @@ def install(ops):
 
 
 def capabilities():
-    from . import pm_maintenance_findings
+    from . import pm_maintenance_findings, pm_required_ci
     return {'version': 1, 'profiles': [provider.PROFILE], 'read_only': True, 'traversals': 2,
         'automatic_maintenance': False, 'full_github_repository_coverage': False,
-        'outside_scope': provider.OUTSIDE_SCOPE, 'maintenance_findings': pm_maintenance_findings.capabilities(),
+        'outside_scope': provider.OUTSIDE_SCOPE, 'maintenance_findings': pm_maintenance_findings.capabilities(), 'required_ci': pm_required_ci.capabilities(),
         'limits': {'pages': provider.MAX_PAGES, 'rows': provider.MAX_ROWS,
             'bytes': provider.MAX_BYTES, 'seconds': provider.MAX_SECONDS}}
 
@@ -148,6 +148,8 @@ async def _run(ctx):
         ctx.check_cancel()
         from . import pm_maintenance_checks
         pm_maintenance_checks.require_child(ctx.service, ctx.op)
+        from . import pm_maintenance_repairs
+        pm_maintenance_repairs.require_delivery_child(ctx.service, ctx.op)
         current = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         if current != intent or sources.digest(current) != binding.get('github_observation_intent_digest'):
             raise _bad('PM_GITHUB_CONTEXT_CHANGED', 'Original GitHub observation scope changed')

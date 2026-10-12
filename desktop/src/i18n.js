@@ -1,3 +1,6 @@
+import {pmMaintenanceRepairsStrings} from './pm-maintenance-repairs-strings.js';
+import {pmQualityReviewsStrings} from './pm-quality-reviews-strings.js';
+import {qualityProjectionStrings} from './pm-quality-projection-strings.js';
 import {workDeliveryStrings} from './pm-work-deliveries-strings.js';
 import {pmWorkBatchesStrings} from './pm-work-batches-strings.js';
 import {maintenanceFindingStrings} from './pm-maintenance-findings-strings.js';
@@ -14,6 +17,9 @@ import {instructionReceiptStrings} from './instruction-receipts.js';
 const STRINGS = {
   "zh-TW": {
     ...pmStrings["zh-TW"],
+    ...qualityProjectionStrings["zh-TW"],
+    ...pmQualityReviewsStrings["zh-TW"],
+    ...pmMaintenanceRepairsStrings["zh-TW"],
     ...pmReleaseBaselineStrings["zh-TW"],
     ...pmPackageHandoffStrings["zh-TW"],
     ...workDeliveryStrings["zh-TW"],
@@ -898,6 +904,9 @@ const STRINGS = {
   },
   en: {
     ...pmStrings.en,
+    ...qualityProjectionStrings.en,
+    ...pmQualityReviewsStrings.en,
+    ...pmMaintenanceRepairsStrings.en,
     ...pmReleaseBaselineStrings.en,
     ...pmPackageHandoffStrings.en,
     ...workDeliveryStrings.en,

@@ -72,7 +72,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "checkpoint_get": "observe", "checkpoint_preview": "observe", "integration_candidates": "observe",
            "integration_preview_get": "observe", "integration_get": "observe", "integrations_list": "observe",
            "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
-           "pm_thread_get": "observe", "pm_context_get": "observe", "pm_profiles_get": "observe",
+           "pm_thread_get": "observe", "pm_context_get": "observe", "pm_context_bundle_preview": "observe", "pm_profiles_get": "observe",
            "pm_runs_list": "observe", "pm_run_get": "observe", "pm_capabilities_get": "observe",
            "pm_spec_sources_get": "observe", "pm_spec_source_capabilities_get": "observe",
            "pm_plans_list": "observe", "pm_plan_get": "observe", "pm_plan_accepted_get": "observe", "pm_plan_head_get": "observe",
@@ -80,6 +80,8 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_evidence_get": "observe", "pm_capture_get": "observe", "pm_capture_latest_get": "observe",
            "pm_governance_list": "observe", "pm_governance_get": "observe", "pm_governance_history_list": "observe",
            "pm_work_deliveries_list": "observe",
+           "pm_execution_verification_configuration": "observe", "pm_execution_verification_get": "observe",
+           "pm_maintenance_repairs_list": "observe", "pm_maintenance_repair_current_get": "observe", "pm_maintenance_repair_get": "observe", "pm_quality_reviews_list": "observe", "pm_quality_review_get": "observe", "pm_work_quality_get": "observe", "pm_pr_publication_get": "observe",
            "pm_work_batches_list": "observe", "pm_work_batch_get": "observe", "pm_maintenance_findings_current_get": "observe",
            "pm_spec_materializations_list": "observe", "pm_spec_materialization_get": "observe",
            "pm_maintenance_reviews_list": "observe", "pm_maintenance_review_current_get": "observe",
@@ -95,6 +97,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_work_packages_list": "observe", "pm_work_package_get": "observe", "pm_work_package_readiness_get": "observe",
            "pm_issue_mappings_list": "observe", "pm_issue_mapping_get": "observe",
            "pm_follow_up_assessments_list": "observe", "pm_follow_up_assessment_get": "observe",
+           "pm_conversation_proposals_list": "observe", "pm_conversation_proposal_get": "observe",
            "pm_brief_export_get": "observe",
            "pm_lifecycle_get": "observe", "pm_lifecycle_transitions_list": "observe",
            "pm_lifecycle_transition_get": "observe", "pm_lifecycle_inflight_list": "observe",
@@ -314,6 +317,9 @@ class TaskDaemon:
             return await read(self.ops, principal, method, params)
         if method in {"pm_spec_sources_get", "pm_spec_source_capabilities_get"}:
             from .pm_spec_reads import read
+            return await read(self.ops, principal, method, params)
+        if method in {"pm_execution_verification_configuration", "pm_execution_verification_get"}:
+            from .pm_execution_reads import read
             return await read(self.ops, principal, method, params)
         if method.startswith("pm_"):
             from .pm_reads import read
@@ -833,11 +839,17 @@ class TaskDaemon:
             if not peer or peer[0] not in {"127.0.0.1", "::1"}:
                 raise ValueError("loopback client required")
             head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), 5)
-            if len(head) > 16_384:
-                raise ValueError("request headers too large")
             lines = head.decode("ascii").split("\r\n")
             request_line = lines[0].split(" ")
             path = request_line[1].split("?", 1)[0] if len(request_line) == 3 else ""
+            # This one read accepts a bounded encoded selector map. Keep the
+            # ordinary header budget and every other request's existing bound.
+            import re
+            extended_readiness = (len(request_line) == 3 and request_line[0] == "GET"
+                and re.fullmatch(r"/api/v1/pm/workspaces/ws_[0-9a-f]{32}/work-packages/pmwp_[0-9a-f]{32}/readiness", path))
+            if (len(head) > 65_536 or len(head) - len(lines[0]) - 2 > 16_384
+                    or len(head) > 16_384 and not extended_readiness):
+                raise ValueError("request headers too large")
             dashboard = is_dashboard_path(path)
             if (len(request_line) == 3 and request_line[2] in {"HTTP/1.0", "HTTP/1.1"}
                     and (dashboard or path.rstrip("/").startswith("/api/v1"))):
@@ -953,6 +965,11 @@ class TaskDaemon:
                     pm_maintenance_checks.tick(self.ops)
                 except Exception as exc:  # a malformed record must not stop task coordination
                     logging.warning("maintenance scheduling error: %s", type(exc).__name__)
+                try:
+                    from . import pm_maintenance_repairs
+                    pm_maintenance_repairs.tick(self.ops)
+                except Exception as exc:
+                    logging.warning("maintenance repair scheduling error: %s", type(exc).__name__)
             for task in self.journal.list_active() + self.journal.list_cleanup_pending():
                 tid = task["task_id"]
                 if time.monotonic() < self._cleanup_retry_after.get(tid, 0):

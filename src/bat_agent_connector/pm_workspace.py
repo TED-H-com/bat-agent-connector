@@ -125,15 +125,31 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'] in {'pm.run.analyze', 'pm.run.bat.analyze'}:
+        from .pm_context_bundles import operation_visible as bundle_visible
+        if not bundle_visible(db, principal, op):
+            return False
     if op['action'].startswith('pm.lifecycle.'):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         return lifecycle_visible(db, principal, op)
     if op['action'].startswith('pm.issue.'):
         from .pm_issue_mappings import operation_visible as issue_operation_visible
         return issue_operation_visible(db, principal, op)
+    if op['action'] == 'pm.maintenance.repair.runtime.observe':
+        from .pm_maintenance_repair_runtime import operation_visible as runtime_visible
+        return runtime_visible(db, principal, op)
     if op['action'] == 'pm.maintenance.check':
         from .pm_maintenance_checks import operation_visible as maintenance_visible
         return maintenance_visible(db, principal, op)
+    if op['action'].startswith('pm.maintenance.repair'):
+        from .pm_maintenance_repairs import operation_visible as repair_visible
+        return repair_visible(db, principal, op)
+    if op['action'].startswith('pm.quality.review.'):
+        from .pm_quality_reviews import operation_visible as quality_visible
+        return quality_visible(db, principal, op)
+    if op['action'] == 'pm.execution.verify':
+        from .pm_execution_verification import operation_visible as verification_visible
+        return verification_visible(db, principal, op)
     if op['action'].startswith('pm.work_batch.'):
         from .pm_work_batches import operation_visible as batch_visible
         return batch_visible(db, principal, op)
@@ -158,6 +174,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.work_package.'):
         from .pm_work_packages import operation_visible as package_operation_visible
         return package_operation_visible(db, principal, op)
+    if op['action'].startswith('pm.conversation.'):
+        from .pm_conversation_proposals import operation_visible as conversation_visible
+        return conversation_visible(db, principal, op)
     if op['action'] == 'pm.follow_up.analyze':
         from .pm_follow_up_analysis import operation_visible as assessment_operation_visible
         return assessment_operation_visible(db, principal, op)
@@ -170,6 +189,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
     if op['action'].startswith('pm.meeting.'):
         from .pm_meetings import operation_visible as meeting_operation_visible
         return meeting_operation_visible(db, principal, op)
+    if op['action'] in {'pm.sprint.close', 'pm.sprint.cancel', 'pm.evidence.capture'}:
+        from .pm_quality_projections import operation_visible as quality_selection_visible
+        return quality_selection_visible(db, principal, op)
     return True
 
 

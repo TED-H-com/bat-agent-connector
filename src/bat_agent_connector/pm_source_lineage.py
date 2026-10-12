@@ -16,7 +16,7 @@ from .operations import OperationError, OperationService
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
 # Other derived writes must first implement fixed lineage and original recovery.
-DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept",
+DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept", "github.pr.publish", "pm.execution.verify",
     "session.send", "session.answer", "session.interrupt", "session.read", "session.position",
     "session.labels.set", "session.record_verification", "work_item.update", "work_item.pin",
     "work_item.order", "work_item.approve", "work_item.continue"})
@@ -183,9 +183,30 @@ def visible_roots(db, principal, original_ids):
         if row is None:
             return False
         operation = OperationService._decode(row)
-        if operation["action"] == "pm.spec.materialize":
+        if operation['action'] == 'pm.input.record' and (operation.get('external_refs') or {}).get('admission_binding', {}).get('pm_review_candidate'):
+            from .pm_review_candidate_sources import operation_visible as candidate_visible
+            if not candidate_visible(db, principal, operation):
+                return False
+        elif operation["action"] in {"pm.conversation.propose", "pm.conversation.adopt"}:
+            from .pm_conversation_proposals import operation_visible as conversation_visible
+            if not conversation_visible(db, principal, operation):
+                return False
+        elif operation["action"] == "pm.spec.materialize":
             from .pm_spec_materialization import source_visible as spec_visible
             if not spec_visible(db, principal, operation):
+                return False
+        elif operation["action"] == "pm.maintenance.repair":
+            from .pm_maintenance_repairs import source_visible as repair_visible
+            if not repair_visible(db, principal, operation):
+                return False
+        elif operation["action"] == "pm.run.bat.analyze":
+            from .pm_context_bundles import operation_visible as bundle_visible
+            from .pm_workspace import require_member
+            try:
+                require_member(db, principal, operation["target"]["workspace_id"])
+            except OperationError:
+                return False
+            if not bundle_visible(db, principal, operation):
                 return False
         elif not source_visible(db, principal, operation):
             return False
@@ -254,7 +275,12 @@ def bind_operation(db, operation_id, target, params, binding):
         return
     original_ids = binding.get("pm_source_roots", [])
     resources = [("operation", operation_id)]
-    if binding.get("pm_spec_materialization") is not None:
+    if binding.get("pm_bat_binding") is not None:
+        from .session_start_operations import NAMESPACE
+        original_ids = [operation_id, *original_ids]
+        resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
+    if (binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
+            or binding.get('pm_review_candidate') is not None):
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
         from .checkpoints import _SESSION_NS
@@ -277,10 +303,14 @@ def bind_operation(db, operation_id, target, params, binding):
 
 
 def require_new_effect(ops, operation_id):
+    from .pm_conversation_adoption import require_child as require_conversation_child
+    require_conversation_child(ops.db, operation_id)
     from .pm_delivery_lineage import require_admitted_sources
     op = ops._row(operation_id)
     from .pm_work_batches import require_child
     require_child(ops, op)
+    from .pm_maintenance_repairs import require_new_effect as require_repair_effect
+    require_repair_effect(ops, op)
     require_admitted_sources(ops, op)
     originals = roots(ops.db, "operation", operation_id)
     if not originals:
@@ -309,8 +339,12 @@ def require_frame():
     if current is None:
         return
     ops, operation_id = current
+    from .pm_conversation_adoption import require_child as require_conversation_child
+    require_conversation_child(ops.db, operation_id)
     from .pm_work_batches import require_child
     require_child(ops, ops._row(operation_id))
+    from .pm_maintenance_repairs import require_child as require_repair_child
+    require_repair_child(ops, ops._row(operation_id))
     from .pm_delivery_lineage import require_admitted_sources
     require_admitted_sources(ops, ops._row(operation_id))
     if not roots(ops.db, "operation", operation_id):

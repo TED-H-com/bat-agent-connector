@@ -12,6 +12,10 @@ _TEXT = {
         'release': 'Original release baseline', 'policy': 'Original maintenance policy',
         'coverage': 'Source coverage', 'github': 'GitHub PRs and Actions', 'workload': 'Central workload',
         'checks': 'Maintenance checks', 'issues': 'Issue contents', 'dependencies': 'Dependency contents',
+        'repairs': 'Maintenance repair outcomes', 'repair_capacity': 'Original execution capacity remains reserved',
+        'repair_released': 'Original execution capacity released', 'repair_unknown': 'Delivery outcome not yet proven',
+        'published_for_review': 'Published for review', 'merged': 'Merged', 'deployed': 'Deployed',
+        'repair_limit': 'These are saved original receipts. Publication, native execution completion and a verified release are separate facts.',
         'research': 'Research', 'quality': 'Quality assessment', 'model_analysis': 'Model analysis',
         'changes': 'Compared observations', 'added': 'Newly observed', 'changed': 'Changed observations',
         'no_longer_observed': 'No longer observed · resolution unassessed', 'none': 'None in this fixed selection',
@@ -39,6 +43,10 @@ _TEXT = {
         'release': '原發布基準', 'policy': '原維護政策',
         'coverage': '來源涵蓋', 'github': 'GitHub PR 與 Actions', 'workload': '中央工作量',
         'checks': '維護檢查', 'issues': 'Issue 內容', 'dependencies': '依賴內容',
+        'repairs': '維護修復成果', 'repair_capacity': '原執行工作仍占用容量',
+        'repair_released': '原執行容量已釋放', 'repair_unknown': '交付結果尚未證實',
+        'published_for_review': '已發布供審查', 'merged': '已合併', 'deployed': '已部署',
+        'repair_limit': '這些是已保存的原始回執。發布、原生執行完成與已查證發布版本分別記錄。',
         'research': '研究', 'quality': '品質判斷', 'model_analysis': '模型分析',
         'changes': '觀察比較', 'added': '新觀察到', 'changed': '觀察有變化',
         'no_longer_observed': '未再觀察到 · 尚未判定已解決', 'none': '本次固定選取沒有項目',
@@ -104,7 +112,16 @@ def blocks(extension, locale):
     result.append(('subheading', text['effort']))
     for key in ('completed_checks', 'pending_checks'):
         result.append(('body', text[key] + ': ' + str(report['effort'][key])))
-    result.extend([('note', text['effort_limit']), ('subheading', text['focus'])])
+    result.append(('note', text['effort_limit']))
+    if 'repairs' in report:
+        result.extend([('subheading', text['repairs']), ('note', text['repair_limit'])])
+        if not report['repairs']:
+            result.append(('body', text['none']))
+        for repair in report['repairs']:
+            result.extend([('body', repair['repair_id'] + ': ' + label(repair['outcome'] or 'repair_unknown')),
+                ('body', text['repair_capacity' if repair['capacity_held'] else 'repair_released']),
+                ('source', json.dumps(repair, ensure_ascii=False, allow_nan=False, sort_keys=True, indent=2))])
+    result.append(('subheading', text['focus']))
     result.extend(('body', label(value)) for value in report['next_observation_focus'])
     result.extend([('note', text['schedule']), ('subheading', text['sources']),
         ('source', json.dumps(extension, ensure_ascii=False, allow_nan=False, sort_keys=True, indent=2))])

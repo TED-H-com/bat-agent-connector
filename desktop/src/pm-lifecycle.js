@@ -34,22 +34,29 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   const chosen=()=>{try{const ids=JSON.parse(retained.value||'[]');return Array.isArray(ids)&&ids.every(id=>typeof id==='string')?ids:[];}catch{return [];}};
   function makeEditor(kind,{stage=false,extra=null,fields={},params=()=>({}),eligible=()=>true}={}){
     const reason=input('pm_lifecycle_reason',{max:4000,multiline:true}),version=hidden();
-    const choice=stage?h('select',{'aria-label':t('pm_lifecycle_stage'),required:true},...['idea','planning','development'].map(value=>h('option',{value},stageName(value)))):null;
+    const choice=stage?h('select',{'aria-label':t('pm_lifecycle_stage'),required:true},...['idea','planning','development','maintain'].map(value=>h('option',{value},stageName(value)))):null;
     if(choice)choice.dataset.pmDefault='idea';
-    const values={reason,version,...(choice?{stage:choice}:{}),...fields};
+    const maintenance=stage?hidden():null;
+    const values={reason,version,...(choice?{stage:choice,maintenance}:{}),...fields};
+    const selectedMaintenance=()=>{try{return JSON.parse(maintenance?.value||'null');}catch{return null;}};
+    const maintenanceReady=()=>!choice||choice.value!=='maintain'||current?.maintenance?.available===true
+      &&JSON.stringify(selectedMaintenance())===JSON.stringify(current.maintenance.reference);
+    const captureMaintenance=()=>{if(maintenance)editor.set('maintenance',choice.value==='maintain'&&current?.maintenance?.available?JSON.stringify(current.maintenance.reference):'');};
     let editor;
     editor=form({action:`pm.lifecycle.${kind}`,target:{workspace_id:workspaceId},fields:values,
-      params:data=>({reason:data.reason,...(choice?{stage:data.stage}:{}),...params(data)}),
+      params:data=>({reason:data.reason,...(choice?{stage:data.stage}:{}),...(choice&&data.stage==='maintain'?{maintenance_ref:JSON.parse(data.maintenance)}:{}),...params(data)}),
       preconditions:()=>({expected_lifecycle_revision:Number(version.value)}),
-      permitted:()=>Boolean(gate()&&eligible()&&version.value!==''&&Number(version.value)===current.lifecycle.revision),
+      permitted:()=>Boolean(gate()&&eligible()&&maintenanceReady()&&version.value!==''&&Number(version.value)===current.lifecycle.revision),
       recoverPermitted:()=>permitted(true),label:kind==='retain_inflight'?'pm_lifecycle_retain':'pm_lifecycle_'+kind,
       onStateChange:()=>{if(kind==='retain_inflight')for(const check of retentionChoices.querySelectorAll('input'))check.disabled=retentionLocked();},
       onSaved:()=>refresh(),extra:h('div',{},choice?labelled('pm_lifecycle_stage',choice):'',extra,
-        labelled('pm_lifecycle_reason',reason),version,...Object.values(fields))});
+        labelled('pm_lifecycle_reason',reason),version,maintenance,...Object.values(fields))});
     const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{
       if(!gate()||editor.locked())return;editor.set('version',String(current.lifecycle.revision));
+      captureMaintenance();
       if(kind==='retain_inflight')editor.set('transition',current.lifecycle.transition_id||'');editor.update();
     }},t('pm_lifecycle_review_version'));
+    if(choice)choice.addEventListener('change',()=>{if(!editor.locked()){captureMaintenance();editor.update();}});
     const warning=h('p',{class:'muted',hidden:true},t('pm_lifecycle_stale'));
     editor.box.append(warning,rebase);
     const originalUpdate=editor.update;
@@ -58,7 +65,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
       if(current&&!editor.locked()&&(version.value===''||empty))editor.set('version',String(current.lifecycle.revision));
       if(kind==='retain_inflight'&&current&&!editor.locked()&&(!fields.transition.value||empty))editor.set('transition',current.lifecycle.transition_id||'');
       originalUpdate();
-      const stale=Boolean(current&&version.value!==''&&Number(version.value)!==current.lifecycle.revision);
+      const stale=Boolean(current&&version.value!==''&&(Number(version.value)!==current.lifecycle.revision||!maintenanceReady()));
       warning.hidden=!stale;rebase.hidden=!stale;rebase.disabled=!gate()||editor.locked();
       if(choice)for(const option of choice.options)option.disabled=Boolean(current&&!current.available_stages.includes(option.value));
     };
@@ -72,7 +79,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     eligible:()=>['paused','closed'].includes(current.lifecycle.stage)});
   for(const [kind,editor] of [['set_stage',stage],['pause',pause],['close',close],['reopen',reopen]])controls.append(
     h('details',{'data-pm-lifecycle-intent':kind},h('summary',{},t('pm_lifecycle_'+kind)),editor.box));
-  controls.append(h('p',{class:'muted'},t('pm_lifecycle_maintenance_unavailable')));
+  const maintenanceNote=h('p',{class:'muted'});controls.append(maintenanceNote);
   const retained=hidden(),transition=hidden(),retentionChoices=h('div');
   const retain=makeEditor('retain_inflight',{fields:{operations:retained,transition},
     params:values=>({transition_id:values.transition,operation_ids:JSON.parse(values.operations||'[]')}),
@@ -128,13 +135,14 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     const state=current.lifecycle,stopped=['paused','closed'].includes(state.stage);
     summary.replaceChildren(h('p',{class:'pm-lifecycle-stage'},h('strong',{},stageName(['pausing','closing'].includes(state.status)?state.status:state.stage))),
       h('p',{class:'muted'},t(state.stage===null?'pm_lifecycle_legacy_help':stopped?'pm_lifecycle_stopped_help':'pm_lifecycle_active_help')));
+    maintenanceNote.textContent=t(state.stage==='maintain'?'pm_lifecycle_maintenance_active':current.maintenance?.available?'pm_lifecycle_maintenance_ready':'pm_lifecycle_maintenance_unavailable');
     if(current.transition?.reason)summary.append(h('p',{},current.transition.reason));
     if(!permitted(true))summary.append(h('p',{class:'muted'},t('pm_lifecycle_reader')));
     if(current.inflight_summary.visibility_filtered||current.transition_visibility_filtered)summary.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
     renderWork();notify();renderRetention();
   }
   function withdraw(){++serial;ready=false;current=null;rows=[];cursor=null;historyCursor=null;historyLoaded=false;historyRequest=null;workFiltered=false;
-    summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
+    maintenanceNote.textContent='';summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('pm_lifecycle_unknown')));}
   async function refresh(){
     withdraw();const ticket=serial;status.replaceChildren(h('p',{class:'muted'},t('pm_lifecycle_loading')));

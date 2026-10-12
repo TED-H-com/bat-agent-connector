@@ -1,3 +1,4 @@
+import {planProposals} from './pm-plan-proposals.js';
 import {workspaceWorkDeliveries} from './pm-work-deliveries.js';
 import {workspaceSpecMaterialization} from './pm-spec-materialization.js';
 import {workspaceWorkBatches} from './pm-work-batches.js';
@@ -10,11 +11,14 @@ import {specSources} from './pm-spec-sources.js';
 import {workspaceFollowUp} from './pm-follow-up.js';
 import {workspaceWorkPackages} from './pm-work-packages.js';
 import {workspaceSprints} from './pm-sprints.js';
+import {workspaceQualityReviews} from './pm-quality-reviews.js';
 import {workspaceKanban} from './pm-kanban.js';
 import {workspaceMeetings} from './pm-meetings.js';
 import {workspaceRoadmap} from './pm-roadmap.js';
 import {projectBrief} from './pm-brief.js';
 import {workspaceMaintenanceReview} from './pm-maintenance-review.js';
+import {reviewCandidateProof} from './pm-review-candidate.js';
+import {workspaceMaintenanceRepairs} from './pm-maintenance-repairs.js';
 import {workspaceMaintenancePolicy} from './pm-maintenance-policy.js';
 import {workspaceReleaseBaselines} from './pm-release-baselines.js';
 import {workspaceEvidence} from './pm-evidence.js';
@@ -31,12 +35,12 @@ const receiptSubscribers = new Map();
 // Only disclosure preferences survive a same-principal remount. Facts are always
 // removed and reread after an access reset; drafts retain their existing namespace.
 const threadDisclosures = new Map();
-const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]'];
+const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]', '[data-pm-revision-editor]'];
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage'}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -67,7 +71,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     input.value = value;
     input.addEventListener('input', changed); input.addEventListener('change', changed);
   }
-  const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes('manage')
+  const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope)
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
   const receiveReceipt = () => {
     if (disposed || damaged || !saved.intent) return;
@@ -193,7 +197,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, onEvents, errorBox}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
-  let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+  let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
   const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
   const permitted = decide => loaded && Boolean(workspace) && (caps()?.scopes?.includes('admin')
@@ -205,8 +209,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const labelled = (label, field) => h('label', {}, t(label), field);
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, ...options,
-      permitted:()=>options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
-      recoverPermitted:options.recoverPermitted||options.permitted}); forms.push(value); return value;
+      permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
+      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)()}); forms.push(value); return value;
   };
   const status = h('div', {role: 'status', class: 'pm-status'}), workspaceList = h('div', {class: 'pm-workspace-list'});
   const name = input('pm_workspace_name', {max: 120}), repositories = input('pm_repositories', {required: false});
@@ -230,12 +234,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   main.append(h('div', {class: 'pm-shell'}, h('aside', {}, nav), body));
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
-    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, discussionHint = null;
+    packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
   lifecycle = workspaceId && caps()?.features?.pm_workspaces?.lifecycle?.version === 1
     ? workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted:()=>loaded&&workspace?.membership?.role==='owner',form,input,labelled,errorBox,onChange:()=>updateForms()}) : null;
   if(lifecycle&&!threadId)body.insertBefore(lifecycle.element,content);
+  const qualitySelections = new Map();
+  const qualitySelection = !threadId && caps()?.features?.pm_workspaces?.quality_reviews?.version === 1
+    ? id => qualitySelections.get(id) || null : null;
   const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
-    ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox}) : null;
+    ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox, qualitySelection}) : null;
   if (evidence) body.append(evidence.box);
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
     ? projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
@@ -243,11 +250,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines
     ? workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace}) : null;
   if(releaseBaselines)body.insertBefore(releaseBaselines.element,content);
+  let handoff = null;
   const maintenancePolicy = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_policy?.version === 1
-    ? workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox}) : null;
+    ? workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,reviewedHandoff:()=>handoff?.batchSelection()}) : null;
   if(maintenancePolicy)body.insertBefore(maintenancePolicy.element,content);
+  const maintenanceRepairs = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1
+    ? workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,labelled,errorBox,namespace}) : null;
+  if(maintenanceRepairs)body.insertBefore(maintenanceRepairs.element,content);
   const maintenanceReview = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_review?.version === 1
-    ? workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox}) : null;
+    ? workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace}) : null;
   if(maintenanceReview)body.insertBefore(maintenanceReview.element,content);
   const roadmap = workspaceId && !threadId && caps()?.features?.pm_workspaces?.roadmap
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
@@ -256,7 +267,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceKanban({h,t,api,alive,workspaceId,errorBox}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
-    ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+    ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
   const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
     ? workspaceMeetings({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
@@ -278,8 +289,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let workBatches = null;
   const materialization = workspaceId && !threadId && caps()?.features?.pm_workspaces?.spec_materialization?.version === 1
     ? workspaceSpecMaterialization({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,errorBox,namespace,onSourceFailure:()=>{engineering?.withdraw();handoff?.withdraw();workBatches?.withdraw();}}) : null;
-  const handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available
-    ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onReviewChange:()=>workBatches?.update(),onSourceFailure:()=>{engineering?.withdraw();materialization?.withdraw();workBatches?.withdraw();}}) : null;
+  handoff = workspaceId && !threadId && caps()?.features?.pm_workspaces?.package_handoff?.available
+    ? workspacePackageHandoff({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,onReviewChange:()=>{workBatches?.update();maintenancePolicy?.update();},onSourceFailure:()=>{engineering?.withdraw();materialization?.withdraw();workBatches?.withdraw();}}) : null;
   workBatches = workspaceId && !threadId && caps()?.features?.pm_workspaces?.work_batches?.version === 1
     ? workspaceWorkBatches({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,reviewedHandoff:()=>handoff?.batchSelection()}) : null;
   const deliveries = workspaceId && !threadId && caps()?.features?.pm_workspaces?.engineering_delivery?.contract === 'pm-engineering-delivery/v1'
@@ -292,7 +303,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   if(handoff)body.insertBefore(handoff.element,specifications?.element||content);
   if(workBatches)body.insertBefore(workBatches.element,specifications?.element||content);
   if(issues)body.insertBefore(issues.element,specifications?.element||content);
-  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceReview?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  const qualityReviews = workspaceId && qualitySelection
+    ? workspaceQualityReviews({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,
+      onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
+  if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
+  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -301,7 +316,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const checkbox of facts?.querySelectorAll('input[type=checkbox]') || [])
       checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
   };
-  const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (!forms[i].box.isConnected) forms.splice(i, 1); else forms[i].update();}};
+  // Initial section constructors can register forms before the thread attaches them.
+  const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (forms[i].box.isConnected) forms[i].update(); else if (initialReadComplete) forms.splice(i, 1);}};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
   const sourceText = item => {
@@ -310,6 +326,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const message = threadData?.messages?.find(row => row.message_id === source.message_id);
       return message ? t('pm_note_source', {author: message.actor, time: time(message.created_at)}) : t('pm_saved_note_source');
     }
+    if(source.kind==='maintenance_review_candidate')return t('pmrv_idea_original')+' · '+source.event_id;
     return [source.ref, source.revision, source.path].filter(Boolean).join(' · ');
   };
   function renderThread(data) {
@@ -336,12 +353,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       discussionHint = h('p', {class: 'muted'});
       const column = h('section', {class: 'pm-discussion'},
         h('div', {class: 'pm-thread-heading'}, threadTitle, mode), discussionHint, earlier, notes, coverage);
-      if (caps()?.features?.pm_workspaces?.native_analysis) {
-        nativeAnalysis = pmNativeAnalysis({h, t, form, input, labelled, caps,
+      if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
+        nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, guard: alive,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
         column.append(nativeAnalysis.box, h('details', {class: 'pm-package-preparation', 'data-pm-note-only': ''},
           h('summary', {}, t('pm_native_note_only')), noteForm.box));
       } else column.append(noteForm.box);
+      if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
+        proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
+          thread:()=>threadData,permitted,refresh:load,errorBox});
+        column.append(proposalReview.box);
+      }
       if (caps()?.features?.pm_workspaces?.plan_drafting) {
         revisions = planRevisions({h, t, api, alive, workspaceId, threadId, thread: () => threadData,
           form, input, labelled, permitted, refresh: load, errorBox});
@@ -460,6 +482,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           h('span', {class: `chip ${item.status === 'user_confirmed' ? 'ok' : ['unresolved', 'conflicting', 'agent_assumption'].includes(item.status) ? 'warn' : ''}`}, t('pm_status_' + item.status))),
         h('p', {class: 'pm-note-text'}, item.value), h('p', {class: 'muted pm-source'}, sourceText(item)),
         h('p', {class: 'muted'}, item.status === 'user_confirmed' ? t('pm_confirmed_by', {actor: item.confirmed_by || item.recorded_by}) : t('pm_unverified')));
+      if(item.source_candidate)row.append(reviewCandidateProof({h,t,source:item.source_candidate}));
       if (data.capabilities?.decide && item.status !== 'user_confirmed') {
         const rationale = input('pm_confirm_rationale', {max: 2000});
         const confirm = form({action: 'pm.input.confirm', target: {workspace_id: workspaceId, thread_id: threadId},
@@ -561,13 +584,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId) throw Error(t('pm_scope_mismatch'));
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
-      if (!retired(error) && ticket === sequence) {loaded = false; brief?.withdraw();lifecycle?.withdraw();updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));}
+      if (!retired(error) && ticket === sequence) {
+        loaded = false; brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
+        for (const section of sourceSections()) section.hidden = true;
+        updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
+      }
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}}
   }
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
-    releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceReview?.withdraw();
+    releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -581,7 +608,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
           threadId && caps()?.features?.pm_workspaces?.plan_drafting
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-          threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis)
+          threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -619,8 +646,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         renderPackages(runs);
       }
       if (plans && revisions) revisions.update(plans, accepted, workspaceCaps);
+      if (proposalReview) {
+        proposalReview.update({head: plans?.head, capabilities: workspaceCaps});
+        await proposalReview.refresh();
+        alive(); if (ticket !== sequence) return;
+      }
       worktreeChoice?.update();
-      for (const section of [lifecycle, evidence, brief, releaseBaselines, maintenancePolicy, maintenanceReview, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,workBatches,issues]) {
+      for (const section of [lifecycle, evidence, brief, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,workBatches,issues]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -630,8 +662,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
-        brief?.withdraw();
-        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceReview?.withdraw();
+        brief?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
+        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -639,9 +671,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false;}}
   }
   await load();
+  // The router admits POSTs only after this complete initial snapshot returns.
+  // Do not expose forms that would freeze an unsent intent while that gate is closed.
+  initialReadComplete = true; updateForms();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
@@ -649,11 +684,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if(handoff&&['project','work_item'].includes(event.resource_type)) {
       eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
     }
-    if ((deliveries||workBatches) && ['operation','deployment','integration'].includes(event.resource_type)) {
-      eventReads=eventReads.catch(()=>{}).then(async()=>{await deliveries?.refresh();await workBatches?.refresh();await kanban?.refresh();});return eventReads;
+    if ((deliveries||workBatches||qualityReviews||maintenanceRepairs) && ['operation','deployment','integration'].includes(event.resource_type)) {
+      eventReads=eventReads.catch(()=>{}).then(async()=>{await deliveries?.refresh();await workBatches?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();});return eventReads;
     }
-    if (kanban && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
-      eventReads = eventReads.catch(() => {}).then(() => kanban.refresh());
+    if ((kanban||qualityReviews||maintenanceRepairs) && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
+      eventReads = eventReads.catch(() => {}).then(async () => {await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();});
       return eventReads;
     }
   });
@@ -668,6 +703,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
+    proposalReview?.dispose();
     for (const value of forms) value.dispose();
   };
 }

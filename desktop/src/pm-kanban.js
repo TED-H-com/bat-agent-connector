@@ -1,4 +1,5 @@
 // A shared, read-only work list. Status, send acceptance and saved quality evidence remain distinct.
+import {qualityFact} from './pm-quality-projections.js';
 export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projectId = null, pageSize = 20}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/kanban`;
   const integer = value => Number.isSafeInteger(value) && value >= 0;
@@ -124,7 +125,7 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
     const node = h('div', {},
       h('div', {class: 'pm-kanban-overview'}, h('div', {class: 'pm-kanban-work'},
         h('h3', {}, h('a', {href: `#/work/${encodeURIComponent(card.work_item_id)}`}, card.work.title)),
-        note('pm_kanban_quality_unknown')),
+        card.quality?.selected_assessment ? qualityFact({h,t,fact:card.quality,current:true}) : note('pm_kanban_quality_unknown')),
       h('div', {class: 'pm-kanban-metric'}, h('strong', {}, card.column === 'accepted' ? t('pm_kanban_content_approved') : state(card.column)),
         h('p', {}, t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age'), ': ', elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)),
         card.work.state === 'waiting' ? h('p', {}, t('pm_kanban_wait'), ': ', elapsed(flow.waiting_seconds)) : ''),

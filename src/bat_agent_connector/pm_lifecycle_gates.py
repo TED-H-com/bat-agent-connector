@@ -19,6 +19,9 @@ from .operations import OperationError
 # selects new development work. Their existing scope/source/owner checks still run.
 RECORD_ACTIONS = frozenset({
     'pm.work_batch.evidence.record',
+    'pm.maintenance.repair.evidence.record',
+    'pm.quality.review.create', 'pm.quality.review.record', 'pm.quality.review.revoke',
+    'pm.maintenance.repair.runtime.observe',
     'pm.workspace.member.set', 'pm.message.append', 'pm.input.record',
     'pm.evidence.capture', 'pm.snapshot.create', 'pm.roadmap.observe', 'pm.workload.capture', 'pm.github.observe',
     'pm.meeting.note', 'pm.meeting.complete', 'pm.meeting.follow_up.record',
@@ -111,6 +114,9 @@ def operation_binding(db, operation_id):
 
 def require_local(db, operation_id, *, bookkeeping=False):
     """Invoke after receipt lookup, INSIDE the local mutation transaction."""
+    if not bookkeeping:
+        from .pm_conversation_adoption import require_child
+        require_child(db, operation_id)
     binding = operation_binding(db, operation_id)
     if binding and binding['kind'] == 'investment' and not bookkeeping:
         _require(head(db, binding['workspace_id']), binding['execution_epoch'])

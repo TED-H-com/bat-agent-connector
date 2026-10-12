@@ -82,6 +82,15 @@ def _row(db, wid, intake_id):
 
 
 def _visible(db, principal, wid, refs):
+    try:
+        return _visible_sources(db, principal, wid, refs)
+    except OperationError as error:
+        if error.status not in (403, 404):
+            raise
+        return False
+
+
+def _visible_sources(db, principal, wid, refs):
     """Flattened original authority, including any explicitly compared intake."""
     reader = pm_meetings._SourceReader(db)
     for ref in refs:
@@ -90,6 +99,14 @@ def _visible(db, principal, wid, refs):
             if row is None or row['snapshot_digest'] != ref['digest']:
                 return False
             if pm_snapshots._out(reader, principal, row)['snapshot']['visibility']['filtered']:
+                return False
+        elif ref['kind'] == 'input_operation':
+            row = db.execute('SELECT action,target FROM operations WHERE operation_id=?', (ref['id'],)).fetchone()
+            if (row is None or row['action'] not in {'pm.input.record', 'pm.input.confirm'}
+                    or json.loads(row['target']).get('workspace_id') != wid):
+                return False
+            from .pm_access import operation_source_visible
+            if not operation_source_visible(db, principal, ref['id']):
                 return False
         elif ref['kind'] in {'governance', 'meeting'}:
             row = db.execute('SELECT * FROM operations WHERE operation_id=?', (ref['id'],)).fetchone()
@@ -109,6 +126,31 @@ def _visible(db, principal, wid, refs):
 def _access(ops, principal, wid, refs):
     if not _visible(ops.db, principal, wid, refs):
         raise _bad('PM_FOLLOW_UP_SOURCE_UNAVAILABLE', 'Original Follow-up sources are unavailable to this reader', 404)
+
+
+def _original_access(db, value):
+    """Old intakes already saved exact input operations in their fixed bytes."""
+    from .pm_source_lineage import roots
+    document = value['document']
+    refs = list(document['access_refs'])
+    inputs = list(document.get('unmapped_inputs', []))
+    for domain in document.get('knowledge', {}).values():
+        inputs.extend(domain.get('baseline_inputs', []))
+        inputs.extend(domain.get('supplemental_inputs', []))
+    for source in inputs:
+        identity = source.get('operation_id')
+        if identity and roots(db, 'operation', identity):
+            refs.append({'kind': 'input_operation', 'id': identity})
+    return list({_json(ref): ref for ref in refs}.values())
+
+
+def _head_projection(ops, principal, wid):
+    current = head(ops.db, wid)
+    if current['intake_id']:
+        original = _row(ops.db, wid, current['intake_id'])
+        if not _visible(ops.db, principal, wid, _original_access(ops.db, original)):
+            return {'head_version': None, 'head_unavailable': True}
+    return {'head_version': current['version']}
 
 
 def _ref(snapshot):
@@ -193,17 +235,30 @@ def _input_chain(db, wid, value):
     return chain, not current.get('supersedes_input_id')
 
 
-def _thread_inputs(ops, wid, thread_id):
+def _thread_inputs(ops, principal, wid, thread_id):
     if thread_id is None:
-        return None, [], {'selected': False, 'truncated': False, 'messages': 'not_interpreted'}
+        return None, [], {'selected': False, 'truncated': False, 'messages': 'not_interpreted'}, []
     thread = pm_discussions._thread(ops.db, wid, thread_id)
+    if not pm_discussions._thread_sources_visible(ops.db, principal, thread_id):
+        raise _bad('PM_FOLLOW_UP_SOURCE_UNAVAILABLE', 'Original discussion sources are unavailable', 404)
     rows = ops.db.execute('''SELECT * FROM pm_inputs i WHERE i.workspace_id=? AND i.thread_id=?
         AND NOT EXISTS(SELECT 1 FROM pm_inputs n WHERE n.supersedes_input_id=i.input_id)
         ORDER BY sequence DESC LIMIT ?''', (wid, thread_id, MAX_INPUTS + 1)).fetchall()
-    values = [pm_discussions._input_out(row) for row in rows[:MAX_INPUTS]]
+    values = [pm_discussions._input_out(row, db=ops.db) for row in rows[:MAX_INPUTS]]
+    original_operations = set()
+    for value in values:
+        chain, _ = _input_chain(ops.db, wid, value)
+        for identifier in chain:
+            source = pm_discussions._input(ops.db, thread_id, identifier)
+            original_operations.add(source['operation_id'])
+            if len(original_operations) > MAX_ACCESS_REFS:
+                raise _bad('PM_FOLLOW_UP_TOO_LARGE', 'Selected input history exceeds 200 original sources', 413)
+    refs = [{'kind': 'input_operation', 'id': identity} for identity in sorted(original_operations)]
+    if refs:
+        _access(ops, principal, wid, refs)
     return {'thread_id': thread_id, 'version': thread['version']}, values, {
         'selected': True, 'truncated': len(rows) > MAX_INPUTS, 'returned': len(values),
-        'selection': 'latest_current_input_records_by_sequence', 'messages': 'not_interpreted'}
+        'selection': 'latest_current_input_records_by_sequence', 'messages': 'not_interpreted'}, refs
 
 
 def _issue(wid, kind, identity, text, status, refs, *, basis=None, tier=None, **details):
@@ -337,16 +392,17 @@ def _check(ops, principal, target, params, pre):
     snapshot = pm_governance._snapshot(ops, principal, wid, params.get('snapshot_id'))
     if 'thread_id' in params and not isinstance(params['thread_id'], str):
         raise _bad('INVALID_PARAMS', 'thread_id must identify one selected discussion')
-    thread, inputs, input_coverage = _thread_inputs(ops, wid, params.get('thread_id'))
+    thread, inputs, input_coverage, input_access = _thread_inputs(ops, principal, wid, params.get('thread_id'))
     if thread and thread['version'] != pre['expected_thread_version']:
         raise _bad('VERSION_CONFLICT', 'Read the exact thread version before selecting its InputRecords', 409)
     governance, gov_access = _governance(ops, principal, wid, params.get('governance_revision_ids', []))
     meetings, meeting_access = _meetings(ops, principal, wid, params.get('meeting_follow_up_refs', []))
-    access = [{'kind': 'snapshot', 'id': snapshot['snapshot_id'], 'digest': snapshot['snapshot_digest']}, *gov_access, *meeting_access]
+    access = [{'kind': 'snapshot', 'id': snapshot['snapshot_id'], 'digest': snapshot['snapshot_digest']},
+              *gov_access, *meeting_access, *input_access]
     previous = None
     if 'previous_intake_id' in params:
         previous = _row(ops.db, wid, params['previous_intake_id'])
-        access.extend(previous['document']['access_refs'])
+        access.extend(_original_access(ops.db, previous))
     access = list({_json(ref): ref for ref in access}.values())
     if len(access) > MAX_ACCESS_REFS:
         raise _bad('PM_FOLLOW_UP_TOO_LARGE', 'Select a shorter comparison chain with at most 200 original authority references', 413)
@@ -356,7 +412,8 @@ def _check(ops, principal, target, params, pre):
 
 def _admit(ops, principal, target, params, pre):
     *_, access, _ = _check(ops, principal, target, params, pre)
-    return {'principal': pm_workspace.principal_binding(principal), 'follow_up_access_refs': access}
+    return {'principal': pm_workspace.principal_binding(principal), 'follow_up_access_refs': access,
+            'follow_up_input_sources': {'operation_ids': [ref['id'] for ref in access if ref['kind'] == 'input_operation']}}
 
 
 def _authorize_existing(ops, principal, op, verb):
@@ -434,6 +491,9 @@ def operation_visible(db, principal, operation):
         wid = op['target']['workspace_id']
         pm_workspace.require_member(db, principal, wid)
         refs = ((op['external_refs'] or {}).get('admission_binding') or {}).get('follow_up_access_refs')
+        saved = db.execute('SELECT intake_id FROM pm_follow_up_intakes WHERE operation_id=?', (op['operation_id'],)).fetchone()
+        if saved:
+            refs = _original_access(db, _row(db, wid, saved['intake_id']))
         return isinstance(refs, list) and _visible(db, principal, wid, refs)
     except (OperationError, KeyError, TypeError, ValueError):
         return False
@@ -446,14 +506,14 @@ def event_visible(db, principal, event):
 
 def _view(ops, principal, wid, identifier):
     value = _row(ops.db, wid, identifier)
-    _access(ops, principal, wid, value['document']['access_refs'])
+    _access(ops, principal, wid, _original_access(ops.db, value))
     return value
 
 
 def get_intake(ops, principal, workspace_id, intake_id):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
-        return _checked({'version': 1, 'workspace_id': workspace_id, 'head_version': head(ops.db, workspace_id)['version'],
+        return _checked({'version': 1, 'workspace_id': workspace_id, **_head_projection(ops, principal, workspace_id),
                          'intake': _view(ops, principal, workspace_id, intake_id)})
 
 
@@ -471,11 +531,11 @@ def list_intakes(ops, principal, workspace_id, *, after=0, limit=50):
         pm_sprints._page(after, limit)
         rows = ops.db.execute('SELECT * FROM pm_follow_up_intakes WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT ?',
                               (workspace_id, after, limit + 1)).fetchall()
-        result = {'version': 1, 'workspace_id': workspace_id, 'head_version': head(ops.db, workspace_id)['version'],
+        result = {'version': 1, 'workspace_id': workspace_id, **_head_projection(ops, principal, workspace_id),
                   'intakes': [], 'next_cursor': None, 'coverage': {'visibility_filtered': False, 'scanned': 0, 'max_bytes': MAX_READ_BYTES}}
         for row in rows[:limit]:
             value = _row(ops.db, workspace_id, row['intake_id'])
-            if _visible(ops.db, principal, workspace_id, value['document']['access_refs']):
+            if _visible(ops.db, principal, workspace_id, _original_access(ops.db, value)):
                 result['intakes'].append({key: value[key] for key in value if key != 'document'})
             else:
                 result['coverage']['visibility_filtered'] = True

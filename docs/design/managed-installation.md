@@ -24,6 +24,14 @@ Existing external-central configuration stays selected. **Advanced: join an exis
 - Browser handoff is short-lived and single-use. The resulting session uses an HttpOnly SameSite cookie plus origin/CSRF checks; this is not a public unauthenticated hosting mode.
 - Setup mutations use central durable actions, opaque staged credential references and the reviewed configuration revision. Publication is atomic. Recovery reads the original revision/receipt rather than inventing a new intent; live configuration changes wait for a safe point.
 
+On Windows, a private reader can temporarily block replacement of a manifest or
+endpoint pointer. Atomic replacement retries only native rename errors 5 and 32,
+with at most six attempts and a 500 ms retry deadline. Every attempt checks the
+private parent and target again, retaining the same pinned directory and flushed
+temporary file. Persistent contention preserves the original error and target;
+cleanup cannot hide the original failure. ACL, reparse and hard-link checks,
+handle sharing and immutable artifact publication keep their existing rules.
+
 ## Background recovery and upgrades
 
 Network recovery retries connections and reads, not a possibly accepted start, prompt, integration, merge or deployment. Original operation IDs, request keys, reservations and receipts remain authoritative. Manual and unknown resources remain read-only unless existing creation evidence proves the managed identity.

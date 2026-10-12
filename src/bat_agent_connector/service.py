@@ -364,9 +364,17 @@ async def _host_sessions(
             "loaded": None if isinstance(m, Exception) else meta is not None,
             "streaming": meta.get("isStreaming") if meta else None,
             "provider_native_id": (meta or {}).get("sdkSessionId") or t.get("sdkSessionId"),
+            # These proof fields come only from this authenticated metadata read;
+            # never backfill native identity from a tab or previous observation.
+            "sdk_session_id": (meta or {}).get("sdkSessionId"),
+            "native_input_state": (meta or {}).get("inputState"),
+            "registry_origin": next(({key: e.get(key) for key in
+                ("controller_incarnation", "created_at", "start_operation_id")}
+                for e in entries if e.get("session_id") == t.get("id")), None),
             "field_evidence": {"loaded": "meta_failed" if isinstance(m, Exception) else "session_meta",
                                "streaming": "session_meta" if meta else "not_observed",
-                               "has_tab": "workspace_document"},
+                               "has_tab": "workspace_document",
+                               "native_input": "session_meta" if meta else "not_observed"},
             "runtime_status": (meta or {}).get("runtimeStatus"),
             "num_turns": (meta or {}).get("numTurns"),
             "worktree_branch": t.get("worktreeBranch"),

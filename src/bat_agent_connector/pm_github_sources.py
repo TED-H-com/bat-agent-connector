@@ -149,6 +149,8 @@ class Traversal:
             from . import pm_maintenance_checks
             timeout_s = pm_maintenance_checks.child_timeout(self.ctx.service, self.ctx.op,
                 max(0.001, min(30, self.deadline - time.monotonic())))
+            from . import pm_maintenance_repairs
+            timeout_s = pm_maintenance_repairs.delivery_child_timeout(self.ctx.service, self.ctx.op, timeout_s)
             try:
                 answer = await self.gh.bounded_get(path, query=query,
                     max_bytes=min(PAGE_BYTES, MAX_BYTES - self.bytes),
@@ -165,12 +167,13 @@ class Traversal:
                 payload = answer['payload']
                 total = None
                 from . import pm_maintenance_findings as findings
-                if kind == 'repository' or kind in findings.OBJECT_KINDS:
+                from . import pm_required_ci as required
+                if kind == 'repository' or kind in (*findings.OBJECT_KINDS, *required.OBJECT_KINDS):
                     items = [payload]
-                elif kind in ('pulls', 'statuses', *findings.LIST_KINDS):
+                elif kind in ('pulls', 'statuses', *findings.LIST_KINDS, *required.LIST_KINDS):
                     items = payload
                 else:
-                    field = {'suites': 'check_suites', 'checks': 'check_runs', 'actions': 'workflow_runs'}[kind]
+                    field = {'suites': 'check_suites', 'checks': 'check_runs', 'required_checks': 'check_runs', 'actions': 'workflow_runs'}[kind]
                     if not isinstance(payload, dict):
                         raise Incomplete('provider_shape_unproven')
                     items, total = payload.get(field), payload.get('total_count')
@@ -178,15 +181,16 @@ class Traversal:
                         raise Incomplete('provider_row_limit')
                     if kind == 'actions' and total >= 1000:
                         raise Incomplete('provider_search_limit')
-                if not isinstance(items, list) or len(items) > (1 if kind == 'repository' or kind in findings.OBJECT_KINDS else 100):
+                if not isinstance(items, list) or len(items) > (1 if kind == 'repository' or kind in (*findings.OBJECT_KINDS, *required.OBJECT_KINDS) else 100):
                     raise Incomplete('provider_page_shape_unproven')
                 if self.rows + len(items) > MAX_ROWS:
                     raise Incomplete('observation_row_limit')
                 pager = findings.cursor_next if kind == 'finding_alerts' else next_page
                 following = pager(meta.get('link', ''), self.gh.cfg.api_url, path, query) if query else None
-                if kind in ('pulls', 'statuses', *findings.LIST_KINDS) and len(items) == 100 and following is None:
+                if kind in ('pulls', 'statuses', *findings.LIST_KINDS, *required.LIST_KINDS) and len(items) == 100 and following is None:
                     raise Incomplete('pagination_full_page_without_continuation')
-                projected = [findings.project(item, kind, self.scope) if kind.startswith('finding_')
+                projected = [required.project(item, kind, self.scope, sha) if kind.startswith('required_')
+                             else findings.project(item, kind, self.scope) if kind.startswith('finding_')
                              else project(item, kind, self.scope, sha) for item in items]
                 return {'request_digest': digest(request), 'status': 200, 'received_at': time.time(),
                     'body_sha256': meta['body_sha256'], 'bytes': meta['bytes'], 'rows': projected,
@@ -286,6 +290,9 @@ class Traversal:
         configured = {}
         if findings.configuration(self.intent) is not None:
             configured['maintenance_sources'] = await findings.traverse(self, number)
+        from . import pm_required_ci
+        if pm_required_ci.configuration(self.intent) is not None:
+            configured['required_ci'] = await pm_required_ci.traverse(self, number, pulls)
         await self.read(number, self.root, {}, 'repository')
         return {'pulls': pulls, 'heads': heads, 'actions': sorted(actions, key=lambda row: row['id']), **configured}
 

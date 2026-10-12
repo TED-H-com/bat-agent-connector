@@ -49,6 +49,16 @@ def visible(ops, principal, wid, ref):
             return True
         except pm_github_observation.OperationError:
             return False
+    if kind == 'repair_runtime_completion':
+        from . import pm_maintenance_repair_runtime as runtime
+        try:
+            op = runtime.repairs._operation(ops, ident)
+            parent = runtime._original(ops, op)
+            value = runtime.proof(ops, principal, parent)
+            return bool(parent['target']['workspace_id'] == wid and value
+                and value['observation_operation_id'] == ident and value['document_digest'] == ref.get('document_digest'))
+        except (runtime.OperationError, KeyError, ValueError, TypeError):
+            return False
     if kind == 'operation':
         return pm_evidence._read_operation(ops, principal, wid, ident) is not None
     if kind == 'task':
@@ -74,6 +84,7 @@ class Collector:
         self.coverage, self.reasons, self.exclusions, self.refs, self.tokens = [], [], [], {}, []
         self.expiries = [now + self.max_age]
         self.verified_sessions = set()
+        self.repair_sessions, self.repair_executions, self.repair_work = {}, {}, {}
         self.projects = self.scope['project_binding']['project_id']
 
     def reason(self, code, severity='unknown', source=None):
@@ -210,13 +221,90 @@ class Collector:
         if len(ids) > MAX_ROWS:
             self.reason('source_row_limit', source={'kind': 'tasks'})
 
+    def completed_repairs(self):
+        # Every exclusion keeps the full immutable source chain in the snapshot.
+        # No Task identity or work-item approval is synthesized from completion.
+        if not has_table(self.db, 'pm_repair_runtime_proofs'):
+            return
+        from . import pm_maintenance_repair_runtime as runtime
+        from . import pm_package_handoff
+        rows = self.rows('''SELECT p.* FROM pm_repair_runtime_proofs p
+            JOIN pm_maintenance_repairs r ON r.operation_id=p.parent_id
+            WHERE r.workspace_id=? ORDER BY p.parent_id''', (self.wid,), 'repair_completions')
+        for row in rows:
+            if not self.ref('repair_runtime_completion', row['operation_id'], document_digest=row['document_digest']):
+                continue
+            parent = runtime.repairs._operation(self.ops, row['parent_id'])
+            proof = runtime.proof(self.ops, self.principal, parent)
+            origin = runtime.origin(self.ops, parent)
+            self.record('repair_runtime_completion', row['operation_id'], proof)
+            session = self.db.execute('SELECT * FROM sessions_observed WHERE host=? AND session_id=?',
+                (proof['host'], proof['session_id'])).fetchone()
+            if not self.current_repair_session(session, proof, origin):
+                continue
+            child = runtime.repairs._child(self.ops, parent)
+            if child['operation_id'] != proof['execution_operation_id']:
+                continue
+            self.repair_sessions[(proof['host'], proof['session_id'])] = proof
+            self.repair_executions[child['operation_id']] = proof
+            binding = pm_package_handoff.binding(child)
+            if binding:
+                work = binding['contract']['package']['context']['work_ref']
+                self.repair_work[work['work_item_id']] = (work, proof)
+
+    def current_repair_session(self, row, proof, origin):
+        from . import pm_maintenance_repair_runtime as runtime
+        if row is None or row['missing_count'] or row['gone_at']:
+            return False
+        data = body(row['body'])
+        pair = next((p for p in self.scope['bat_workspaces'] if p['host'] == row['host']
+            and p['workspace_id'] == data.get('workspace_id') and p['profile_id'] == data.get('profile_id')), None)
+        at = epoch(row['last_seen_at'])
+        fleet = self.ops.context.get('fleet')
+        hc = fleet.config.hosts.get(row['host']) if fleet else None
+        if not pair or hc is None or digest([hc.url, hc.fingerprint, hc.profile_id]) != pair['binding_digest']:
+            return False
+        # Native counters are provided only by current authenticated metadata;
+        # the inventory must not substitute a tab SDK or a retained stale field.
+        if (pair is None or at is None or not proof['recorded_at'] <= at <= self.now < at + self.max_age
+                or data.get('fields_stale') or data.get('specific_stale_reason')
+                or data.get('loaded') is not True or data.get('streaming') is not False or data.get('pending')
+                or data.get('runtime_status') not in {None, 'idle', 'completed', 'stopped', 'exited'}
+                or data.get('provenance') != 'connector_managed' or data.get('api_access') != 'managed'
+                or body(data.get('field_evidence')).get('native_input') != 'session_meta'
+                or data.get('sdk_session_id') != proof['sdk_session_id']
+                or data.get('native_input_state') != proof.get('input_state')
+                or not runtime.same_original_input(origin, runtime.input_state({'inputState': data.get('native_input_state')}))
+                or data.get('registry_origin') != {'controller_incarnation': proof['registry_incarnation'],
+                    'created_at': origin['registry_created_at'], 'start_operation_id': proof['execution_operation_id']}):
+            return False
+        host = self.db.execute('SELECT * FROM hosts_observed WHERE host=?', (row['host'],)).fetchone()
+        discovery = self.db.execute('SELECT * FROM discovery_latest WHERE host=? AND profile_id=?',
+            (row['host'], pair['profile_id'])).fetchone()
+        if not host or not host['reachable'] or not discovery:
+            return False
+        observed, scan = epoch(host['last_success_at']), body(discovery['body'])
+        finished = epoch(scan.get('finished_at'))
+        return (observed is not None and finished is not None and proof['recorded_at'] <= observed <= self.now < observed + self.max_age
+            and proof['recorded_at'] <= finished <= self.now < finished + self.max_age
+            and discovery['binding'] == scan.get('binding_version') == pair['binding_digest']
+            and scan.get('status') == 'succeeded' and scan.get('complete_enumeration') is True
+            and body(scan.get('authority')).get('verified') is True
+            and data['workspace_id'] in body(scan.get('coverage')).get('workspace_ids', []))
+
     def work(self):
         rows = self.rows('SELECT * FROM work_items WHERE project_id=? ORDER BY work_item_id', (self.projects,), 'work')
         for row in rows:
             if not self.ref('work', row['work_item_id'], project_id=self.projects):
                 continue
             self.record('work', row['work_item_id'], dict(row))
-            if row['state'] == 'todo':
+            completed = self.repair_work.get(row['work_item_id'])
+            item = work_items._item(row)
+            if (completed and item['version'] == completed[0]['work_version']
+                    and work_items.fingerprint(item) == completed[0]['work_fingerprint']):
+                self.exclusions.append({'kind': 'work', 'id': row['work_item_id'], 'reason': 'original_maintenance_attempt_completed',
+                    'runtime_observation_id': completed[1]['observation_operation_id']})
+            elif row['state'] == 'todo':
                 self.exclusions.append({'kind': 'work', 'id': row['work_item_id'], 'reason': 'unselected_backlog'})
             else:
                 # Approving a work-item content fingerprint is not a DoD assessment.
@@ -285,7 +373,12 @@ class Collector:
             elif row['action'] in {'repository.continue', 'session.start', 'checkpoint.continue'} and row['status'] == 'succeeded':
                 result, target = body(row['result']), body(row['target'])
                 host, sid = result.get('host') or target.get('host'), result.get('session_id')
-                if not host or not sid or (host, sid) not in self.verified_sessions:
+                completed = self.repair_executions.get(oid)
+                if (completed and row['action'] == 'repository.continue'
+                        and (host, sid) == (completed['host'], completed['session_id'])):
+                    self.exclusions.append({'kind': 'operation', 'id': oid, 'reason': 'original_maintenance_attempt_completed',
+                        'runtime_observation_id': completed['observation_operation_id']})
+                elif not host or not sid or (host, sid) not in self.verified_sessions:
                     self.reason('started_attempt_result_unverified', 'development', {'kind': 'operation', 'id': oid})
         for deployment in deployments:
             oid = deployment['operation_id']
@@ -371,6 +464,9 @@ class Collector:
             self.reason('coding_active', 'development', ref)
         elif data.get('pending'):
             self.reason('session_waiting', 'development', ref)
+        elif (host, sid) in self.repair_sessions:
+            self.exclusions.append({**ref, 'reason': 'original_maintenance_attempt_completed',
+                'runtime_observation_id': self.repair_sessions[(host, sid)]['observation_operation_id']})
         elif verified and data.get('loaded') is False and data.get('streaming') is False:
             self.exclusions.append({**ref, 'reason': 'verified_ended_session_retained'})
         else:
@@ -395,6 +491,7 @@ class Collector:
 
     def collect(self):
         self.tasks()
+        self.completed_repairs()
         self.work()
         self.sprints()
         self.operations()

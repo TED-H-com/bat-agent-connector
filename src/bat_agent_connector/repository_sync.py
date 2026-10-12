@@ -16,7 +16,7 @@ from .operations import RERUN, ActionDef, AmbiguousOutcome, NeedsAttention, Oper
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 FIELDS = {"source_ref", "source_sha", "agent", "prompt", "title", "model", "artifacts", "project_id", "work_item_id",
-          "pm_package_ref", "pm_code_basis", "pm_spec_ref"}
+          "pm_package_ref", "pm_code_basis", "pm_spec_ref", "pm_requirement_quality_refs"}
 
 
 def project_context(ops, target, params, pre, *, operation_id=None):
@@ -333,12 +333,15 @@ async def run(ctx):
         await artifacts.materialize(ctx, context, plan["clone_path"], plan["worktree_path"], plan["branch"], refs,
                                     published_binding=binding, before_transfer=lambda: frame(ctx, plan))
 
+    from . import pm_maintenance_repair_runtime as repair_runtime
+
     async def input_frame():
         await frame(ctx, plan, at_frame=True)
         if refs:
             await artifacts.verify_materializations(ctx, context, plan["clone_path"], plan["worktree_path"],
                                                    plan["branch"], published_binding=binding)
         guard(ctx, plan)
+        await repair_runtime.before_send_frame(ctx)
     marker = "[batc:" + ctx.operation_id + "]"
     fields = {"start_operation_id": ctx.operation_id, "repository_binding": plan["binding_digest"],
               "repository": plan["config"]["repository"], "repository_id": plan["repository_id"],
@@ -348,7 +351,8 @@ async def run(ctx):
         title=ctx.params.get("title") or "Published " + plan["source_sha"][:12], model=ctx.params.get("model"),
         text=marker + "\n" + checkpoints._input_instructions(ctx.service.db, _execution_prompt(ctx), refs),
         marker=marker, registry_fields={}, creation_fields=fields,
-        frame_check=input_frame, final_check=lambda: guard(ctx, plan))
+        frame_check=input_frame, final_check=lambda: guard(ctx, plan),
+        before_first_send=lambda sid, text: repair_runtime.capture(ctx, sid, text))
     return {**result, "host": ctx.target["host"], "workspace_id": ctx.target["workspace_id"],
             "repository": plan["config"]["repository"], "repository_id": plan["repository_id"],
             "source_ref": plan["source_ref"], "source_sha": plan["source_sha"], "worktree_path": plan["worktree_path"],

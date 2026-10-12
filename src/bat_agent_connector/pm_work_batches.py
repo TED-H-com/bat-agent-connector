@@ -11,8 +11,10 @@ from . import (
     controller_authority,
     pm_lifecycle_gates,
     pm_package_handoff,
+    pm_requirement_acceptance,
     pm_source_lineage,
     pm_spec_format,
+    pm_work_packages,
     pm_workspace,
 )
 from . import pm_release_baselines as snapshots
@@ -100,9 +102,9 @@ def install(ops):
 
 
 def capabilities(ops=None):
-    return {'version': 1, 'actions': [START, RECORD], 'profiles': sorted(evidence.PROFILES),
+    return {'version': 1, 'actions': [START, RECORD], 'profiles': sorted(evidence.PROFILES | {pm_requirement_acceptance.PROFILE}),
         'max_entries': MAX_ENTRIES, 'max_parallel': 8, 'max_retries': 3, 'max_deadline_seconds': 86400,
-        'semantic_acceptance': False, 'intrinsic_requirement_dependencies': 'remain_unassessed',
+        'semantic_acceptance': 'explicit_original_qualified_assessment', 'intrinsic_requirement_dependencies': 'explicit_original_refs_required',
         'execution_engine': 'repository.continue', 'cost_coverage': 'start_count_only_model_provider_cost_unmeasured'}
 
 
@@ -142,7 +144,7 @@ def _selection(ops, principal, wid, params):
         if (not isinstance(entry, dict) or set(entry) - {'key', 'handoff', 'depends_on', 'result_condition'}
                 or not {'key', 'handoff', 'depends_on'} <= set(entry) or not KEY.fullmatch(str(entry['key'])) or entry['key'] in keys):
             raise _bad('INVALID_PARAMS', 'Distinct stable entry keys are required', 422)
-        normalized.append({**entry, 'result_condition': evidence.condition(entry.get('result_condition', dict(DEFAULT_CONDITION)))})
+        normalized.append({**entry, 'result_condition': evidence.batch_condition(entry.get('result_condition', dict(DEFAULT_CONDITION)))})
         keys.add(entry['key'])
         handoff = entry['handoff']
         if not isinstance(handoff, dict) or set(handoff) != {'target', 'params', 'preconditions'} or any(not isinstance(handoff[key], dict) for key in handoff):
@@ -151,6 +153,8 @@ def _selection(ops, principal, wid, params):
         if ref['workspace_id'] != wid:
             raise _bad('PM_BATCH_WORKSPACE_CHANGED', 'Every fixed package must belong to the selected workspace')
         package = pm_package_handoff._package(ops, principal, ref, write=True)
+        if normalized[-1]['result_condition']['kind'] == pm_requirement_acceptance.KIND:
+            pm_requirement_acceptance.require_package(package, normalized[-1]['result_condition'])
         pm_package_handoff._basis(handoff['params'].get('pm_code_basis'))
         pm_package_handoff._matches(package['document'], handoff['target'], handoff['params'], handoff['preconditions'])
         from . import repository_sync
@@ -175,7 +179,7 @@ def _selection(ops, principal, wid, params):
                     or not isinstance(edge['entry_key'], str) or not KEY.fullmatch(edge['entry_key']) or edge['entry_key'] in seen):
                 raise _bad('INVALID_PARAMS', 'Each prerequisite selects one distinct original entry', 422)
             seen.add(edge['entry_key'])
-            evidence.condition(edge['condition'])
+            evidence.batch_condition(edge['condition'])
     graph = {entry['key']: {edge['entry_key'] for edge in entry['depends_on']} for entry in params['entries']}
     selected = {entry['key']: entry for entry in normalized}
     for entry in normalized:
@@ -299,8 +303,11 @@ def _guard(ops, op):
     return principal
 
 
-def _request(parent, entry):
-    return {'action': 'repository.continue', **entry['handoff'],
+def _request(parent, entry, refs=None):
+    params = entry['handoff']['params']
+    if refs is not None:
+        params = {**params, pm_requirement_acceptance.PARAM: refs}
+    return {'action': 'repository.continue', **entry['handoff'], 'params': params,
         'idempotency_key': 'pm-batch:' + parent['operation_id'] + ':' + entry['key']}
 
 
@@ -309,8 +316,16 @@ def _child(ops, parent, entry):
         (parent['operation_id'], entry['key'])).fetchone()
     if link is None:
         return None
-    child, request = _op(ops, link['operation_id']), json.loads(link['request'])
-    if (evidence.digest(request) != link['request_digest'] or request != _request(parent, entry)
+    child, stored = _op(ops, link['operation_id']), json.loads(link['request'])
+    proofs = stored.get('_acceptance', {})
+    request = {key: value for key, value in stored.items() if key != '_acceptance'}
+    semantic = {edge['entry_key']: edge for edge in entry['depends_on'] if edge['condition']['kind'] == pm_requirement_acceptance.KIND}
+    if not isinstance(proofs, dict) or set(proofs) != set(semantic):
+        raise _bad('PM_BATCH_CHILD_CHANGED', 'Original acceptance prerequisite bindings changed')
+    for key, proof in proofs.items():
+        if proof['condition'] != semantic[key]['condition'] or proof not in _proofs(ops, parent, key):
+            raise _bad('PM_BATCH_CHILD_CHANGED', 'Original acceptance proof is outside the fixed batch history')
+    if (evidence.digest(stored) != link['request_digest'] or request != _request(parent, entry, _dependency_refs(ops, entry, proofs))
             or any(child[key] != value for key, value in request.items()) or child['actor'] != parent['actor']
             or (child.get('external_refs') or {}).get('pm_work_batch_parent') != {'operation_id': parent['operation_id'], 'entry_key': entry['key']}
             or not controller_authority.same_controller(controller_authority.operation_binding(child), _intent(parent)['controller'])):
@@ -337,7 +352,7 @@ def _proofs(ops, parent, key):
     return result
 
 
-def _verified(ops, principal, parent, entry, condition=None):
+def _verified_proof(ops, principal, parent, entry, condition=None):
     child = _child(ops, parent, entry)
     if child is None:
         return False
@@ -348,8 +363,32 @@ def _verified(ops, principal, parent, entry, condition=None):
         current = evidence.evaluate(ops, principal, parent['target']['workspace_id'], child,
             proof['condition'], proof['reference'])
         if current['status'] == 'passed' and current['receipt_digest'] == proof['receipt_digest']:
-            return True
-    return False
+            return proof
+    return None
+
+
+def _verified(ops, principal, parent, entry, condition=None):
+    return bool(_verified_proof(ops, principal, parent, entry, condition))
+
+
+def _dependency_refs(ops, entry, proofs):
+    if not proofs:
+        return None
+    ref = entry['handoff']['params']['pm_package_ref']
+    package = pm_work_packages._record(ops.db, ref['workspace_id'], ref['package_id'])
+    if package['document_digest'] != ref['document_digest']:
+        raise _bad('PM_BATCH_CHILD_CHANGED', 'Original dependent package changed')
+    needed = {rid for row in package['document']['requirements'] for rid in row['depends_on']}
+    refs = dict(entry['handoff']['params'].get(pm_requirement_acceptance.PARAM, {}))
+    for proof in proofs.values():
+        for rid in proof['requirement_ids']:
+            if rid not in needed:
+                continue
+            value = {'condition': proof['condition'], 'reference': proof['reference'], 'execution_operation_id': proof['source_operation_id']}
+            if rid in refs and refs[rid] != value:
+                raise _bad('PM_BATCH_DEPENDENCY_CONFLICT', 'Two original acceptance references compete for one prerequisite')
+            refs[rid] = value
+    return refs or None
 
 
 def _active(ops, principal, parent):
@@ -384,6 +423,18 @@ def require_child(ops, operation):
     if entry is None or _child(ops, parent, entry)['operation_id'] != operation['operation_id']:
         raise _bad('PM_BATCH_CHILD_CHANGED', 'The child is outside the original explicit selection')
     principal = _guard(ops, parent)
+    selected = {value['key']: value for value in _intent(parent)['entries']}
+    stored = ops.db.execute('SELECT request FROM pm_work_batch_children WHERE operation_id=?', (operation['operation_id'],)).fetchone()
+    proofs = json.loads(stored['request']).get('_acceptance', {})
+    for edge in entry['depends_on']:
+        if edge['condition']['kind'] == pm_requirement_acceptance.KIND:
+            proof = proofs[edge['entry_key']]
+            current = evidence.evaluate(ops, principal, parent['target']['workspace_id'], _child(ops, parent, selected[edge['entry_key']]), proof['condition'], proof['reference'])
+            proven = current['status'] == 'passed' and current['receipt_digest'] == proof['receipt_digest']
+        else:
+            proven = _verified(ops, principal, parent, selected[edge['entry_key']], edge['condition'])
+        if not proven:
+            raise _bad('PM_BATCH_DEPENDENCY_EVIDENCE_UNAVAILABLE', 'The original prerequisite no longer qualifies this new child frame')
     limits = _intent(parent)['limits']
     if _active(ops, principal, parent) > limits['max_parallel']:
         raise _bad('PM_BATCH_PARALLEL_LIMIT', 'Original batch parallel capacity is unavailable')
@@ -451,15 +502,22 @@ def _admit_child(ctx, entry):
         if _active(ctx.service, principal, parent) >= limits['max_parallel']:
             raise _bad('PM_BATCH_PARALLEL_LIMIT', 'Original child result capacity is still reserved')
         selected = {entry['key']: entry for entry in _intent(parent)['entries']}
+        acceptance = {}
         for edge in entry['depends_on']:
-            if not _verified(ctx.service, principal, parent, selected[edge['entry_key']], edge['condition']):
+            proof = _verified_proof(ctx.service, principal, parent, selected[edge['entry_key']], edge['condition'])
+            if not proof:
                 raise _bad('PM_BATCH_DEPENDENCY_EVIDENCE_UNAVAILABLE', 'The original prerequisite result is not verified')
-        request = _request(parent, entry)
+            if edge['condition']['kind'] == pm_requirement_acceptance.KIND:
+                acceptance[edge['entry_key']] = proof
+        request = _request(parent, entry, _dependency_refs(ctx.service, entry, acceptance))
+        stored = {**request, **({'_acceptance': acceptance} if acceptance else {})}
+        if _size(stored) > MAX_REQUEST_BYTES:
+            raise _bad('PM_BATCH_REQUEST_TOO_LARGE', 'The whole original child and prerequisite binding exceed the request bound', 413)
         child, fresh = ctx.service.create(principal, **request, entry='pm-batch')
         if not fresh:
             raise _bad('PM_BATCH_CHILD_CHANGED', 'A child key already exists without its exact original relation')
         ctx.service.db.execute('INSERT INTO pm_work_batch_children VALUES(?,?,?,?,?,?)',
-            (ctx.operation_id, entry['key'], child['operation_id'], _json(request), evidence.digest(request), _now()))
+            (ctx.operation_id, entry['key'], child['operation_id'], _json(stored), evidence.digest(stored), _now()))
         ctx.service._merge_refs(child['operation_id'], {'pm_work_batch_parent': {'operation_id': ctx.operation_id, 'entry_key': entry['key']}})
         return {'operation_id': child['operation_id']}
     return ctx.effect('pm.batch.child.' + entry['key'], admit)
@@ -498,7 +556,8 @@ async def _run(ctx):
         if child['status'] in {'failed', 'cancelled'} and not _uncertain(ctx.service, child):
             _state(ctx, entry['key'], 'dispatch_failed', child['error_code'] or child['status'])
         elif child['status'] == 'succeeded':
-            _state(ctx, entry['key'], 'fixed_revision_verified' if _verified(ctx.service, principal, ctx.op, entry) else 'dispatched_awaiting_result')
+            _state(ctx, entry['key'], ('requirements_accepted' if entry['result_condition']['kind'] == pm_requirement_acceptance.KIND else 'fixed_revision_verified')
+                if _verified(ctx.service, principal, ctx.op, entry) else 'dispatched_awaiting_result')
         else:
             unsettled = True
             _state(ctx, entry['key'], 'original_dispatch_unsettled', child['error_code'])
@@ -628,7 +687,7 @@ def _view(ops, row):
             'verification_evidence': _proofs(ops, parent, entry['key'])})
     return {key: row[key] for key in ('sequence', 'batch_id', 'operation_id', 'workspace_id', 'created_at', 'version')} | {
         'operation_status': parent['status'], 'limits': row['context']['limits'], 'entries': entries,
-        'result': parent['result'], 'requirement_acceptance': 'not_evaluated', 'model_provider_cost': 'unmeasured'}
+        'result': parent['result'], 'requirement_acceptance': 'see_explicit_original_evidence' if any(entry['result_condition']['kind'] == pm_requirement_acceptance.KIND for entry in entries) else 'not_evaluated', 'model_provider_cost': 'unmeasured'}
 
 
 @snapshots._snapshot_read

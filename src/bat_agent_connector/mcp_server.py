@@ -61,7 +61,7 @@ READ_TOOLS = [
     "integration_get",
     "integrations_list",
     "projects_list",
-    "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_profiles_get",
+    "pm_workspaces_list", "pm_workspace_get", "pm_threads_list", "pm_thread_get", "pm_context_get", "pm_context_bundle_preview", "pm_profiles_get",
     "pm_runs_list", "pm_run_get", "pm_capabilities_get",
     "pm_spec_sources_get", "pm_spec_source_capabilities_get",
     "pm_plans_list", "pm_plan_get", "pm_plan_accepted_get", "pm_plan_head_get",
@@ -72,6 +72,8 @@ READ_TOOLS = [
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
     "pm_work_deliveries_list",
+    "pm_execution_verification_configuration", "pm_execution_verification_get",
+    "pm_maintenance_repairs_list", "pm_maintenance_repair_current_get", "pm_maintenance_repair_get", "pm_quality_reviews_list", "pm_quality_review_get", "pm_work_quality_get", "pm_pr_publication_get",
     "pm_work_batches_list", "pm_work_batch_get", "pm_maintenance_findings_current_get",
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
@@ -83,6 +85,7 @@ READ_TOOLS = [
     "pm_release_baseline_sources_list", "pm_release_baseline_releases_list",
     "pm_release_baseline_deployments_list", "pm_release_baseline_preview",
     "pm_follow_up_assessments_list", "pm_follow_up_assessment_get",
+    "pm_conversation_proposals_list", "pm_conversation_proposal_get",
     "pm_brief_export_get",
     "pm_lifecycle_get", "pm_lifecycle_transitions_list", "pm_lifecycle_transition_get", "pm_lifecycle_inflight_list",
     "pm_follow_up_list", "pm_follow_up_get", "pm_follow_up_latest_get",
@@ -567,6 +570,12 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         read grants no execution authority and does not start an LLM runner."""
         return await pm_daemon("pm_context_get", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
 
+    async def pm_context_bundle_preview(workspace_id: str, thread_id: str, max_chars: int = 32000) -> dict[str, Any]:
+        """Preview the exact accepted revision, original Git receipt and complete-file coverage.
+        Explicitly select its context_bundle_ref in pm.run.analyze or pm.run.bat.analyze;
+        partial coverage never authorizes adoption or execution."""
+        return await pm_daemon("pm_context_bundle_preview", workspace_id=workspace_id, thread_id=thread_id, max_chars=max_chars)
+
     async def pm_profiles_get() -> dict[str, Any]:
         """Versioned discussion purposes, inputs, question policies and outputs; check executable_modes."""
         return await pm_daemon("pm_profiles_get")
@@ -661,6 +670,42 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
     async def pm_work_deliveries_list(workspace_id: str, work_item_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """Read fixed original package and delivery receipts; never accept requirements or dispatch work."""
         return await pm_daemon("pm_work_deliveries_list", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
+
+    async def pm_maintenance_repairs_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Read original source-gated maintenance repair receipts."""
+        return await pm_daemon("pm_maintenance_repairs_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_maintenance_repair_current_get(workspace_id: str) -> dict[str, Any]:
+        """Read original source-gated maintenance repair receipts."""
+        return await pm_daemon("pm_maintenance_repair_current_get", workspace_id=workspace_id)
+
+    async def pm_maintenance_repair_get(workspace_id: str, repair_id: str) -> dict[str, Any]:
+        """Read original source-gated maintenance repair receipts."""
+        return await pm_daemon("pm_maintenance_repair_get", workspace_id=workspace_id, repair_id=repair_id)
+
+    async def pm_execution_verification_configuration(workspace_id: str, execution_operation_id: str) -> dict[str, Any]:
+        """Read the original owned execution's configured verifier and fixed current candidate; runs no command."""
+        return await pm_daemon('pm_execution_verification_configuration', workspace_id=workspace_id, execution_operation_id=execution_operation_id)
+
+    async def pm_execution_verification_get(workspace_id: str, verification_operation_id: str) -> dict[str, Any]:
+        """Read the original verifier receipt without rerunning an uncertain process."""
+        return await pm_daemon('pm_execution_verification_get', workspace_id=workspace_id, verification_operation_id=verification_operation_id)
+
+    async def pm_pr_publication_get(workspace_id: str, publication_operation_id: str) -> dict[str, Any]:
+        """Read original native PR creation proof without refreshing or resending."""
+        return await pm_daemon('pm_pr_publication_get', workspace_id=workspace_id, publication_operation_id=publication_operation_id)
+
+    async def pm_quality_reviews_list(workspace_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read original source-gated acceptance and DoD review evidence."""
+        return await pm_daemon("pm_quality_reviews_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_quality_review_get(workspace_id: str, review_id: str) -> dict[str, Any]:
+        """Read original source-gated acceptance and DoD review evidence."""
+        return await pm_daemon("pm_quality_review_get", workspace_id=workspace_id, review_id=review_id)
+
+    async def pm_work_quality_get(workspace_id: str, work_item_id: str, after: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Read original source-gated acceptance and DoD review evidence."""
+        return await pm_daemon("pm_work_quality_get", workspace_id=workspace_id, work_item_id=work_item_id, after=after, limit=limit)
 
     async def pm_work_batches_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read saved bounded engineering batches; never dispatch or refresh providers."""
@@ -770,9 +815,18 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read one immutable engineering package and its original provenance."""
         return await pm_daemon("pm_work_package_get", workspace_id=workspace_id, package_id=package_id)
 
-    async def pm_work_package_readiness_get(workspace_id: str, package_id: str) -> dict[str, Any]:
+    async def pm_work_package_readiness_get(workspace_id: str, package_id: str, quality_refs: dict[str, Any] | None = None) -> dict[str, Any]:
         """Check engineering handoff review readiness only; never execution authorization."""
-        return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id)
+        return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id,
+                               **({'quality_refs': quality_refs} if quality_refs is not None else {}))
+
+    async def pm_conversation_proposals_list(workspace_id: str, thread_id: str | None = None, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
+        """List sourced conversation proposal metadata; no adoption or execution."""
+        return await pm_daemon("pm_conversation_proposals_list", workspace_id=workspace_id, thread_id=thread_id, after=after, limit=limit)
+
+    async def pm_conversation_proposal_get(workspace_id: str, proposal_id: str) -> dict[str, Any]:
+        """Read one fixed proposal, original quotes, raw reply and baseline for owner review."""
+        return await pm_daemon("pm_conversation_proposal_get", workspace_id=workspace_id, proposal_id=proposal_id)
 
     async def pm_follow_up_assessments_list(workspace_id: str, intake_id: str | None = None, after: int = 0, limit: int = 50) -> dict[str, Any]:
         """List fixed Follow-up assessment metadata; source filtering retains the original cursor."""
@@ -991,7 +1045,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                github_pr_preview, github_merge_preview_get, deployment_preview, deployment_status, deployments_list,
                deployment_environment_get, checkpoints_list, checkpoint_preview, repository_preview, integration_candidates, integration_get,
                integrations_list, projects_list, project_get, work_items_list, work_item_get,
-               pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_profiles_get,
+               pm_workspaces_list, pm_workspace_get, pm_threads_list, pm_thread_get, pm_context_get, pm_context_bundle_preview, pm_profiles_get,
                pm_runs_list, pm_run_get, pm_capabilities_get,
                pm_spec_sources_get, pm_spec_source_capabilities_get,
                pm_plans_list, pm_plan_get, pm_plan_accepted_get, pm_plan_head_get,
@@ -1002,6 +1056,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_issue_mappings_list, pm_issue_mapping_get,
 
                pm_work_deliveries_list,
+               pm_execution_verification_configuration, pm_execution_verification_get,
+               pm_maintenance_repairs_list, pm_maintenance_repair_current_get, pm_maintenance_repair_get, pm_quality_reviews_list, pm_quality_review_get, pm_work_quality_get, pm_pr_publication_get,
                pm_work_batches_list, pm_work_batch_get, pm_maintenance_findings_current_get,
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
@@ -1013,6 +1069,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_release_baseline_sources_list, pm_release_baseline_releases_list,
                pm_release_baseline_deployments_list, pm_release_baseline_preview,
                pm_follow_up_assessments_list, pm_follow_up_assessment_get,
+               pm_conversation_proposals_list, pm_conversation_proposal_get,
                pm_brief_export_get,
                pm_lifecycle_get, pm_lifecycle_transitions_list, pm_lifecycle_transition_get, pm_lifecycle_inflight_list,
                pm_follow_up_list, pm_follow_up_get, pm_follow_up_latest_get,

@@ -84,8 +84,14 @@ def _check(ops, principal, target, params, pre):
 
 
 def _admit(ops, principal, target, params, pre):
-    _check(ops, principal, target, params, pre)
-    return {"principal": pm_workspace.principal_binding(principal)}
+    workspace, current = _check(ops, principal, target, params, pre)
+    sources = set()
+    for revision_id in {current["latest_revision_id"], current["accepted_revision_id"]} - {None}:
+        sources.update(pm_plans.source_operation_ids(ops.db, workspace["workspace_id"], revision_id))
+    from .pm_access import require_operation_sources
+    require_operation_sources(ops.db, principal, sources)
+    return {"principal": pm_workspace.principal_binding(principal),
+            "pm_snapshot_sources": {"operation_ids": sorted(sources)}}
 
 
 def _authorize_existing(ops, principal, op, control):
@@ -120,9 +126,56 @@ def _item(kind, text, status, source, details=None):
     return value
 
 
+def _quality_summary(document):
+    """Count each original scope requirement once, across explicitly selected work."""
+    baseline = document['baseline']
+    facts = {entry['evidence_id']: entry['document']['facts'] for entry in document['evidence']
+             if entry['source_kind'] == 'quality_assessment'}
+    if not facts:
+        return None
+    requirements = {item['id']: [] for item in (baseline['document'] or {}).get('requirements', [])}
+    qualified_work = set()
+    for work in document['work']:
+        binding = work['binding']
+        selected = [facts[eid] for eid in work['evidence_ids'] if eid in facts]
+        quality = selected[0] if len(selected) == 1 else None
+        matching = bool(quality and quality['work_item_id'] == work['work_item_id']
+            and quality['binding_id'] == binding['binding_id']
+            and quality['scope_revision'] == baseline['scope_revision']
+            and quality['applicable_at_selection'])
+        if matching and quality['qualified']:
+            qualified_work.add(work['work_item_id'])
+        statuses = {item['requirement_id']: item['status'] for item in quality['requirements']} if matching else {}
+        for rid in binding['requirement_ids']:
+            if rid not in requirements:
+                continue
+            status = statuses.get(rid, 'unassessed')
+            requirements[rid].append({'work_item_id': work['work_item_id'], 'acceptance': status,
+                'dod': quality['dod'] if matching else 'unassessed'})
+    values = []
+    for rid, contributions in requirements.items():
+        def combined(key, rows=contributions):
+            states = [item[key] for item in rows]
+            return 'rejected' if 'rejected' in states else 'accepted' if states and all(v == 'accepted' for v in states) else 'unassessed'
+        acceptance, dod = combined('acceptance'), combined('dod')
+        values.append({'requirement_id': rid, 'acceptance': acceptance, 'dod': dod,
+            'qualified': acceptance == dod == 'accepted', 'contributions': contributions})
+    # A truncated page cannot establish that every contribution was accounted for.
+    complete = not any(document['coverage'][key] for key in ('work_truncated', 'evidence_truncated', 'bytes_truncated'))
+    if not complete:
+        for value in values:
+            value['qualified'] = False
+    return {'scope_revision': baseline['scope_revision'], 'requirements': values,
+        'total_requirements': len(values), 'qualified_requirements': sum(v['qualified'] for v in values),
+        'qualified_deliverables': len(qualified_work), 'contribution_coverage_complete': complete,
+        'basis': 'explicit_fixed_assessments_all_selected_work_contributions',
+        'current_applicability': 'not_evaluated', 'current_environment': 'not_assessed'}
+
+
 def _brief(document):
     """Version-one deterministic projection; no narrative or quality inference."""
     baseline, work, evidence = document["baseline"], document["work"], document["evidence"]
+    quality = _quality_summary(document)
     accepted = baseline["document"]
     goals, deliveries, attention, decisions = [], [], [], []
     if accepted:
@@ -160,7 +213,11 @@ def _brief(document):
             text = f"Integration {fact['delivery']}; PR state remains unknown"
             deliveries.append(_item(kind, text, fact["delivery"], source, fact))
         elif kind == "work_claim":
-            deliveries.append(_item(kind, f"Work state recorded as {state}; quality unassessed", state or "unknown", source, fact))
+            text = f"Work state recorded as {state}" + ('; quality unassessed' if quality is None else '')
+            deliveries.append(_item(kind, text, state or "unknown", source, fact))
+        elif kind == 'quality_assessment':
+            deliveries.append(_item(kind, f"Original acceptance {fact['acceptance']}; DoD {fact['dod']}",
+                'qualified' if fact['qualified'] else 'not_qualified', source, fact))
         if kind in {"work_claim", "execution_state", "execution_command", "operation_status"} and state in {
                 "waiting", "blocked", "failed", "needs_attention", "needs_ted", "uncertain"}:
             attention.append(_item("recorded_attention_state", f"Recorded {kind} state: {state}", state, source))
@@ -168,7 +225,7 @@ def _brief(document):
         if entry["capture"] is None:
             attention.append(_item("missing_capture", "No saved evidence capture is selected for this work", "unknown",
                 {"kind": "work_binding", "work_item_id": entry["work_item_id"], "binding_id": entry["binding"]["binding_id"]}))
-    return {
+    result = {
         "goals": {"status": "accepted_sources" if accepted else "unavailable", "items": goals,
                   "coverage": {"basis": "accepted_governance_and_scope_inputs", "source_statuses_preserved": True}},
         "delivery": {"status": "quality_unassessed", "items": deliveries,
@@ -181,6 +238,12 @@ def _brief(document):
         "decisions": {"status": "recorded_sources" if accepted else "unavailable", "items": decisions,
                       "coverage": {"basis": "accepted_adoption_and_fixed_open_inputs", "prioritization": "not_assessed"}},
     }
+    if quality is not None:
+        result['delivery'].update(status='fixed_quality_assessments', quality=quality)
+        result['delivery']['coverage'].update(dod='per_selected_original_revision',
+            qualified_deliverables=quality['qualified_deliverables'],
+            requirement_denominator='distinct_original_scope_requirement', current_applicability='not_evaluated')
+    return result
 
 
 def _response(document, sequence, snapshot_digest, *, filtered=False):
@@ -278,6 +341,31 @@ def _build(ctx, principal, workspace, current):
     return doc
 
 
+def _plan_source_operations(db, document, *, freeze=False):
+    """Use only revision and adoption identities saved in this snapshot."""
+    sources = set()
+    wid = document["workspace_id"]
+    baseline = document["baseline"]
+    candidate = document.get("candidate_document") or {}
+    for revision_id in {baseline.get("document_revision"), candidate.get("revision_id")} - {None}:
+        sources.update(pm_plans.source_operation_ids(db, wid, revision_id,
+            include_adoption=freeze and revision_id == candidate.get("revision_id")))
+    adoption = baseline.get("adoption") or {}
+    if adoption.get("decision_id"):
+        original = db.execute("SELECT operation_id FROM pm_plan_adoptions WHERE workspace_id=? AND decision_id=?",
+                              (wid, adoption["decision_id"])).fetchone()
+        if original:
+            sources.add(original["operation_id"])
+    if adoption.get("commit_operation_id"):
+        sources.add(adoption["commit_operation_id"])
+    return sorted(sources)
+
+
+def _require_original_sources(db, principal, row, document):
+    from .pm_access import require_operation_sources
+    require_operation_sources(db, principal, [row["operation_id"], *_plan_source_operations(db, document)])
+
+
 def _insert(ctx, workspace, document):
     """Insert one already-built snapshot inside its caller's journal transaction.
 
@@ -289,6 +377,10 @@ def _insert(ctx, workspace, document):
         raise _bad('PM_SNAPSHOT_TRANSACTION_REQUIRED', 'Insert the original snapshot inside its journal transaction', 409)
     if not _fits(document):
         raise _bad('PM_SNAPSHOT_BASELINE_TOO_LARGE', 'The complete fixed snapshot exceeds its byte bound', 413)
+    from .pm_access import inherit_operation_sources, require_operation_sources
+    sources = _plan_source_operations(ops.db, document, freeze=True)
+    require_operation_sources(ops.db, pm_workspace.admitted_principal(ctx), sources)
+    inherit_operation_sources(ops.db, ctx.operation_id, sources)
     digest = _digest(document)
     sequence = ops.db.execute("""INSERT INTO pm_document_snapshots(snapshot_id,workspace_id,title,as_of,journal_cursor,
         template_version,snapshot_digest,document,created_by,operation_id) VALUES(?,?,?,?,?,?,?,?,?,?)""",
@@ -317,6 +409,7 @@ async def _run(ctx):
 
 def _out(ops, principal, row):
     document = json.loads(row["document"])
+    _require_original_sources(ops.db, principal, row, document)
     if _digest(document) != row["snapshot_digest"] or document["template_version"] != TEMPLATE_VERSION:
         raise _bad("PM_SNAPSHOT_UNAVAILABLE", "The fixed snapshot or its template cannot be read", 409)
     if 'maintenance' in document:
@@ -356,6 +449,13 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=50):
             # read path after one of the report's original sources is withdrawn.
             stored = ops.db.execute('SELECT document FROM pm_document_snapshots WHERE snapshot_id=?', (row['snapshot_id'],)).fetchone()
             document = json.loads(stored['document'])
+            try:
+                _require_original_sources(ops.db, principal, row, document)
+            except OperationError as exc:
+                if exc.status != 404:
+                    raise
+                filtered = True
+                continue
             if 'maintenance' in document:
                 from . import pm_maintenance_review_sources
                 try:

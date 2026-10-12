@@ -322,12 +322,13 @@ class ObservedVerifier:
         log_path = artifacts / (str(task["task_id"]) + kind + "-" + uuid.uuid4().hex + ".log")
         return log_path, platform_files.open_private_file(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
 
-    async def observe(self, task: dict, cwd: str, *, before_run=None) -> dict | None:
+    async def observe(self, task: dict, cwd: str, *, before_run=None, expected_identity=None) -> dict | None:
         argv = self.settings.commands.get(task["project"])
         if not argv:
             return None
         before = await self.identity(task, cwd)
-        if not before or not before["clean"]:
+        if (not before or not before["clean"] or expected_identity is not None
+                and any(before.get(key) != value for key, value in expected_identity.items())):
             return None
         log_path, fd = self._log(task)
         digest = hashlib.sha256()

@@ -125,6 +125,11 @@ MUTATIONS: tuple[Mutation, ...] = (
              "PR whose [[github.repos]] entry has integrate, sent to integrate.remote_url with the host's git "
              "credentials; never a +refspec, an empty source, --force, --force-with-lease, --mirror, --all, "
              "--tags, --delete or --prune; never the base, default or a protected branch"),
+    Mutation("github.pr.publish", "github", "remote", frozenset(), ("operation_submit",),
+             "observe/manage/integrate principal; exact owned PM handoff result, registered bare integration area, "
+             "one generated refs/heads/batc/pr-<operation> branch with an exact empty-ref create-only lease; "
+             "never replace an existing remote ref; explicit bounded public text; original native HTTP 201 receipt "
+             "is the only creation proof; an unknown POST is never resent or adopted from a matching remote PR"),
     Mutation("github.pr.merge", "github", "remote", frozenset(),
              ("github_pr_merge", "operation_submit", "batc delivery merge", "Delivery merge preview"),
              "merge principal and configured repository/method; immutable reviewed head/base/scope checked "
@@ -190,6 +195,9 @@ def check_grant(grant: WriteGrant | None, host: str, channel: str, params: dict 
         for other in registry.list_entries(host):
             if other.get("session_id") != grant.session_id and carrier in {
                     other.get("worktree_path"), None if registry.is_pending_worktree_source(other) else other.get("cwd")}:
+                from .pm_bat_operations import permits_completed_carrier
+                if permits_completed_carrier(host, row, other):
+                    continue
                 controller_authority.require_entry(other)
     from .failover_operations import check_writer
     check_writer(host, grant.session_id, channel, workdir=grant.workdir)

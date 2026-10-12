@@ -68,3 +68,49 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`mount
   const directory=process.env.BATC_PM_SPRINT_WORKSPACE_SCREENSHOTS;if(directory){await mkdir(directory,{recursive:true});await page.screenshot({path:`${directory}/sprint-${locale}-${width}.png`,fullPage:true});}
   await context.close();
 });
+
+// Exercise the shared quality-to-Sprint selector in the actual browser/IPC mount.
+import {qualityFixture,workspaceId as qualityWorkspaceId,workId as qualityWorkId,dodId as qualityDodId} from './pm-quality-reviews-fixture.ts';
+function withQuality(){
+  const sprint=fullFixture(),quality=qualityFixture();quality.state.actor='owner';
+  const row=quality.save(true);sprint.state.sprints[0].status='active';sprint.state.elapsed=true;
+  const replacements=[[qualityWorkspaceId,workspaceId],[qualityWorkId,sprint.bindings[0].work_item_id],
+    [qualityDodId,sprint.state.artifacts.dod.revision_id],[row.context.work_ref.binding_id,sprint.bindings[0].binding_id]];
+  const map=(value:any)=>JSON.parse(replacements.reduce((text,[from,to])=>text.split(from).join(to),JSON.stringify(value)));
+  const originalDispatch=sprint.dispatch;
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    if(path==='/bootstrap'||path==='/capabilities'){
+      const result=await originalDispatch(input),caps=path==='/bootstrap'?result.data.capabilities:result.data;
+      caps.features.pm_workspaces.quality_reviews={version:1};caps.actions.push(...["pm.quality.review.create","pm.quality.review.record","pm.quality.review.revoke"].map(action=>({action,allowed:true})));return result;
+    }
+    if(path.startsWith(`/pm/workspaces/${workspaceId}/quality-reviews/`))return quality.state.deny
+      ?{status:404,data:{error:{code:'NOT_FOUND',message:'Original sources withdrawn'}}}
+      :{status:200,data:{workspace_id:workspaceId,review:map(row)}};
+    if(path==='/operations'||path.endsWith('/work-packages')||path.endsWith('/quality')||path.endsWith('/sprint-artifacts/dod')||path.endsWith('/evidence')||path.includes('/evidence/')||path.endsWith('/deliveries')||path.endsWith('/github-observations')){
+      if(input.method==='POST')return originalDispatch(input);
+      let translated=input.path;for(const[from,to]of replacements)translated=translated.split(to).join(from);
+      return map(await quality.dispatch({...input,path:translated}));
+    }
+    return originalDispatch(input);
+  };
+  return {...sprint,dispatch,quality,row};
+}
+for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounted original quality enters Sprint ${native?'IPC':'browser'} ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:locale==='en'?1440:390,height:900}}),page=await context.newPage(),f=withQuality();
+  await mountWorkspace(page,native,f.dispatch);await page.goto(route);const quality=page.locator('[data-pm-quality-reviews]');
+  await quality.getByLabel(locale==='en'?'Work item for review':'審查工作項目',{exact:true}).selectOption(f.bindings[0].work_item_id);
+  await quality.locator('select').filter({has:page.locator(`option[value="${f.row.review_id}"]`)}).selectOption(f.row.review_id);
+  await quality.getByRole('button',{name:locale==='en'?'Use this assessment':'使用這份評估',exact:true}).click();
+  const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的 Sprint$/}).click();
+  const form=region.locator('[data-pm-action="pm.sprint.close"]');
+  await form.getByRole('button',{name:locale==='en'?'Include chosen assessment':'納入已選評估',exact:true}).click();
+  await expect(form.locator('[data-pm-quality-picker]')).toContainText(f.row.context.native_result.candidate_commit);
+  await form.getByLabel(locale==='en'?'Reason for this decision':'這項決定的理由',{exact:true}).fill('Preserve selected original review');
+  await form.locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.quality_refs).toEqual({[f.bindings[0].work_item_id]:{
+    review_id:f.row.review_id,operation_id:f.row.assessment.operation_id,version:f.row.assessment.version,
+    document_digest:f.row.assessment.document_digest,candidate_commit:f.row.context.native_result.candidate_commit}});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await context.close();
+});

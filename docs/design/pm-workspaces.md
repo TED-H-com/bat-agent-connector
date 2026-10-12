@@ -252,3 +252,11 @@ read-only options do not restrict externally configured MCP tools. It therefore
 offers context preparation without automatic Idea/Planning execution. Internal
 native-event import and replay checks are implemented for the bounded runner;
 they do not advertise a usable autonomous adapter. See [runtime evidence](pm-runtime.md).
+
+### Initial shared-view readiness
+
+Durable PM forms remain disabled until the complete initial workspace read has
+finished, including its registered section reads. Rendering a discussion form is
+not sufficient readiness for the router's POST gate. Existing drafts and uncertain
+original intents remain intact during that read; recovery then uses the same
+original key or acknowledged operation ID under current authority.

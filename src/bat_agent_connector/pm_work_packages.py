@@ -121,6 +121,11 @@ def _plan_ref(plan):
 
 def _original_plan(ops, principal, wid, ref):
     pm_plans._read(ops, principal, wid)
+    from .pm_access import require_operation_sources
+    require_operation_sources(ops.db, principal, [
+        *pm_plans.source_operation_ids(ops.db, wid, ref["revision_id"], include_adoption=False),
+        ref["adoption_operation_id"],
+    ])
     plan = pm_plans._revision(ops.db, wid, ref["revision_id"])
     pm_plans.revision_files(ops.db, wid, ref["revision_id"])
     row = ops.db.execute("SELECT result FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=? AND operation_id=?",
@@ -472,11 +477,13 @@ def list_packages(ops, principal, workspace_id, *, work_item_id=None, after=0, l
         return _checked(result)
 
 
-def readiness(ops, principal, workspace_id, package_id):
+def readiness(ops, principal, workspace_id, package_id, *, quality_refs=None):
     """Current local handoff checks; never a runtime or delivery authorization."""
     with ops.journal.tx():
         package = get_package(ops, principal, workspace_id, package_id)["package"]
         doc, checks = package["document"], []
+        from .pm_requirement_acceptance import require_dependencies
+        accepted_dependencies = set(require_dependencies(ops, principal, package, quality_refs))
 
         def check(name, passed, detail):
             checks.append({"check": name, "status": "passed" if passed else "blocked", "detail": detail})
@@ -522,9 +529,10 @@ def readiness(ops, principal, workspace_id, package_id):
                   and all(entry["source_status"] == "user_confirmed" for entry in requirement["acceptance"]),
                   "Unconfirmed, assumed or conflicting source statements are preserved; adoption alone does not confirm them.")
             if requirement["depends_on"]:
-                checks.append({"check": "dependency:" + rid, "status": "blocked", "assessment": "unknown",
+                qualified = set(requirement["depends_on"]) <= accepted_dependencies
+                checks.append({"check": "dependency:" + rid, "status": "passed" if qualified else "blocked", "assessment": "accepted" if qualified else "unknown",
                                "requirement_ids": requirement["depends_on"],
-                               "detail": "Required outcomes have not been evaluated; work claims and checkboxes do not prove readiness."})
+                               "detail": "Declared prerequisites have explicit original qualified assessments." if qualified else "Required outcomes have not been evaluated; work claims and checkboxes do not prove readiness."})
         return _checked({"version": 1, "workspace_id": workspace_id, "package_id": package_id,
             "document_digest": package["document_digest"], "status": "ready" if all(c["status"] == "passed" for c in checks) else "blocked",
             "ready_for": "engineering_handoff_review", "checks": checks,

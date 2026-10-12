@@ -30,6 +30,7 @@ READ_CHANNELS = frozenset(
         "claude:get-session-state",
         # Bounded read-only replay, BAT b7419892; see docs/design/pm-runtime.md.
         "claude:sync-session",
+        "claude:get-pm-runtime",
         "claude:load-archived",
         "claude:list-sessions",
         "claude:is-resting",

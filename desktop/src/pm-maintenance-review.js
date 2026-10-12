@@ -1,11 +1,12 @@
 import {maintenanceReviewView} from './pm-maintenance-review-view.js';
+import {reviewCandidateToIdea} from './pm-review-candidate.js';
 
 // The central retains report facts and decides authority. Forms keep exact original requests.
-export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox}) {
+export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,prefix='pm.maintenance_review.';
   const navigationKey=`batc.pm.review-navigation.${workspaceId}.${caps()?.actor}`;
   let selected='';try{const value=JSON.parse(localStorage.getItem(navigationKey)||'{}');if(typeof value.review_id==='string')selected=value.review_id;}catch{}
-  let model=null,ready=false,ticket=0,forms=[],widgets=[],signature='',dirty=false,editorId=null,output=null;
+  let model=null,ready=false,ticket=0,forms=[],widgets=[],signature='',dirty=false,editorId=null,output=null,imports=[];
   const status=h('div',{role:'status'}),scheduleView=h('div'),view=h('div'),editors=h('div'),warning=h('p',{class:'muted',hidden:true},t('pmrv_stale'));
   const text=key=>h('p',{class:'muted pm-note-text'},t(key));
   const fold=(key,contents,open=false)=>h('details',{'data-review-fold':key,open},h('summary',{},t(key)),contents);
@@ -39,8 +40,9 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     let stale=false;for(const entry of forms){stale ||= !entry.editor.locked()&&entry.stale();entry.editor.update();}
     widgets.forEach(widget=>widget.sync());warning.hidden=rebase.hidden=!stale;rebase.disabled=!ready;choose.disabled=!ready;
     output?.update();
+    imports.forEach(item=>item.update());
   }
-  function withdraw(){ticket++;ready=false;model=null;view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();editors.hidden=true;status.replaceChildren();output=null;update();}
+  function withdraw(){ticket++;ready=false;model=null;imports.forEach(item=>item.dispose());imports=[];view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();editors.hidden=true;status.replaceChildren();output=null;update();}
   function failure(error){withdraw();status.replaceChildren(text('pmrv_unavailable'),errorBox(error));}
   function localForm(config){
     const expected=()=>JSON.stringify({preconditions:config.preconditions(),context:config.context?.()??null});
@@ -206,9 +208,10 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     return data;
   }
   function renderView(){
-    view.replaceChildren();output=null;
+    imports.forEach(item=>item.dispose());imports=[];view.replaceChildren();output=null;
     if(!model.detail){view.append(text(model.current.visibility_filtered?'pmrv_hidden':'pmrv_empty'));return;}
-    output=maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable:failure,detail:model.detail});view.append(output.element);
+    const candidateInput=event=>{const entry=reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,labelled,event,errorBox,namespace});imports.push(entry);return entry.element;};
+    output=maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable:failure,detail:model.detail,candidateInput});view.append(output.element);
     const detail=model.detail;
     if(detail.visibility_filtered)view.append(text('pmrv_history_filtered'));
     if(detail.next_cursor!==null){

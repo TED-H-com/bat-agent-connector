@@ -1,3 +1,5 @@
+import {pmPlanProposalStrings} from './pm-plan-proposal-strings.js';
+import {pmContextBundleStrings} from './pm-context-bundle-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
 import {pmLifecycleStrings} from './pm-lifecycle-strings.js';
 import {pmIssueStrings} from './pm-issue-strings.js';
@@ -12,6 +14,7 @@ import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
+    ...pmPlanProposalStrings.en,
     ...pmIssueStrings.en,
     ...pmLifecycleStrings.en,
     ...pmSprintStrings.en,
@@ -21,6 +24,7 @@ export const pmStrings = {
     ...specSourceStrings.en,
     ...pmFollowUpStrings.en,
     ...followUpAnalysisStrings.en,
+    ...pmContextBundleStrings.en,
     ...briefExportStrings.en,
     ...workPackageStrings.en,
     pm_roadmap_historical_work: "Previously selected work association",
@@ -145,6 +149,15 @@ export const pmStrings = {
     pm_evidence_kind_pr_observation: "PR observation",
     pm_evidence_kind_deployment: "Deployment evidence",
 
+    pm_analysis_adapter: 'Run analysis with', pm_analysis_local: 'Central service · native Codex',
+    pm_analysis_bat: 'Selected BAT workspace · dedicated Codex', pm_analysis_original: 'Original request',
+    pm_analysis_recover_other: 'Check the original request before starting another analysis. Select:',
+    pm_analysis_bat_preflight: 'Uses one new, isolated Codex session on the selected BAT host. Each request checks the runtime first; sign-in and model availability are not yet verified.',
+    pm_analysis_bat_worktree: 'Prepare discussion context with the intended repository binding first to establish this workspace’s PM worktree.',
+    pm_analysis_bat_binding_changed: 'The saved PM worktree binding changed. Review the repository selection before requesting analysis.',
+    pm_analysis_bat_readonly: 'The selected BAT host does not allow managed work.',
+    pm_analysis_bat_unavailable: 'Dedicated BAT analysis eligibility is unavailable. Refresh to check the selected workspace.',
+    pm_analysis_selected_binding: 'Selected host / workspace / repository:',
     pm_native_title: 'Ask the PM', pm_native_purpose: 'What should the PM help you work through?',
     pm_native_model: 'Model (optional)', pm_native_default_model: 'Use the native runtime default',
     pm_native_analyze: 'Request PM analysis', pm_native_discussion: 'Saved notes and bounded PM analysis',
@@ -236,6 +249,7 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    ...pmPlanProposalStrings['zh-TW'],
     ...pmIssueStrings['zh-TW'],
     ...pmLifecycleStrings['zh-TW'],
     ...pmSprintStrings['zh-TW'],
@@ -245,6 +259,7 @@ export const pmStrings = {
     ...specSourceStrings['zh-TW'],
     ...pmFollowUpStrings['zh-TW'],
     ...followUpAnalysisStrings['zh-TW'],
+    ...pmContextBundleStrings['zh-TW'],
     ...briefExportStrings['zh-TW'],
     ...workPackageStrings['zh-TW'],
     pm_roadmap_historical_work: "先前選定的工作關聯",
@@ -369,6 +384,15 @@ export const pmStrings = {
     pm_evidence_kind_pr_observation: "PR 觀察",
     pm_evidence_kind_deployment: "部署證據",
 
+    pm_analysis_adapter: '分析執行方式', pm_analysis_local: '中央服務・原生 Codex',
+    pm_analysis_bat: '所選 BAT 工作區・獨立 Codex', pm_analysis_original: '原始請求',
+    pm_analysis_recover_other: '開始另一個分析前，請先查回原始請求。請選擇：',
+    pm_analysis_bat_preflight: '在所選 BAT 主機使用一個全新的隔離 Codex session。每次請求都會先檢查執行環境；登入有效性與模型可用性尚未驗證。',
+    pm_analysis_bat_worktree: '請先以預定的 repository 綁定準備討論脈絡，建立此工作區的 PM worktree。',
+    pm_analysis_bat_binding_changed: '已保存的 PM worktree 綁定已變更，請先檢視 repository 選擇再請求分析。',
+    pm_analysis_bat_readonly: '所選 BAT 主機未開放受管理工作。',
+    pm_analysis_bat_unavailable: '目前無法確認獨立 BAT 分析資格，請重新整理所選工作區狀態。',
+    pm_analysis_selected_binding: '所選主機／工作區／repository：',
     pm_native_title: '邀請 PM 分析', pm_native_purpose: '這次希望 PM 協助釐清什麼？',
     pm_native_model: '模型（選填）', pm_native_default_model: '使用原生執行環境預設模型',
     pm_native_analyze: '請 PM 分析', pm_native_discussion: '已儲存筆記與有界 PM 分析',

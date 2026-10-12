@@ -115,6 +115,9 @@ def read(ops, principal, workspace_id, run_id):
         run = get(ops.db, run_id)
         if run["workspace_id"] != workspace_id or not source_visible(ops.db, principal, run):
             raise _error("PM run not found", "PM_RUN_NOT_FOUND", 404)
+        from . import pm_bat_runtime
+        if run["adapter"] == pm_bat_runtime.ADAPTER:
+            run["bat_runtime_provenance"] = pm_bat_runtime.provenance(ops.db, run)
         _read_bound({"run": run})
         return run
 
@@ -170,14 +173,61 @@ def _read_bound(value):
 
 def source_visible(db, principal, run):
     """Follow-up derives access from its original admission, including raw output."""
+    from .pm_access import operation_source_visible
+    if not operation_source_visible(db, principal, run["operation_id"]):
+        return False
     row = db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()
+    if run['context'].get('version') == 2 and 'context_bundle' in run['context']:
+        from .pm_context_bundles import operation_visible
+        if not operation_visible(db, principal, {'operation_id': run['operation_id']}):
+            return False
     if run["context"].get("output_destination") == "follow_up_assessment" or row and row[0] == "pm.follow_up.analyze":
         from .pm_follow_up_analysis import operation_visible
+        return operation_visible(db, principal, {"operation_id": run["operation_id"]})
+    if run["context"].get("output_destination") == "conversation_proposal" or row and row[0] == "pm.conversation.propose":
+        from .pm_conversation_proposals import operation_visible
         return operation_visible(db, principal, {"operation_id": run["operation_id"]})
     if row and row[0] == "pm.spec.materialize":
         from .pm_spec_materialization import source_visible as spec_visible
         return spec_visible(db, principal, {"operation_id": run["operation_id"]})
     return True
+
+
+def message_source_visible(db, principal, row):
+    """Imported prose retains the original run's access, not just membership."""
+    from .pm_access import operation_source_visible
+    if not operation_source_visible(db, principal, row["operation_id"]):
+        return False
+    installed = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_assistant_provenance'").fetchone()
+    provenance = db.execute("SELECT run_id FROM pm_assistant_provenance WHERE message_id=?", (row["message_id"],)).fetchone() if installed else None
+    if provenance is None:
+        return True
+    run = get(db, provenance["run_id"])
+    return (run["operation_id"] == row["operation_id"] and run["thread_id"] == row["thread_id"]
+            and source_visible(db, principal, run))
+
+
+def _context_source_operations(db, context):
+    """Only central identifiers from the frozen projection, never text claims."""
+    result = set(context.get("source_operation_ids", []))
+    rows = [*context.get("messages", []), *context.get("inputs", [])]
+    for values in context.get("inputs_by_status", {}).values():
+        rows.extend(values)
+    result.update(row["operation_id"] for row in rows if row.get("operation_id"))
+    coverage = context.get("coverage", {})
+    for table, field, identities in (
+        ("pm_inputs", "input_id", [*context.get("selected_input_ids", []), *coverage.get("omitted_input_ids", [])]),
+        ("pm_messages", "message_id", coverage.get("omitted_message_ids", [])),
+    ):
+        for identity in identities:
+            row = db.execute(f"SELECT operation_id FROM {table} WHERE thread_id=? AND {field}=?",  # noqa: S608 - fixed tables/columns
+                             (context["thread_id"], identity)).fetchone()
+            if row:
+                result.add(row["operation_id"])
+    if context.get("draft_id"):
+        thread = {"workspace_id": context["workspace_id"], "thread_id": context["thread_id"], "draft_id": context["draft_id"]}
+        result.add(pm_discussions._draft_row(db, thread)["operation_id"])
+    return sorted(result)
 
 
 def _summary(run):
@@ -240,16 +290,26 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
         if slot and slot["run_id"]:
             raise _error("A PM turn still owns this workspace writer", "PM_WRITER_BUSY")
         generation = slot["generation"] + 1 if slot else 1
-        context = (_context_factory() if _context_factory else
-                   pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars))
+        if _context_factory:
+            context = _context_factory()
+        else:
+            from .pm_context_bundles import for_operation
+            context = for_operation(ops, principal, operation_id, max_chars=max_chars, purpose=purpose)
+            if context is None:
+                context = pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars)
         if _context_factory:
             row = ops.db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
-            if (not row or row[0] != "pm.follow_up.analyze" or adapter != "codex-native-linux"
-                    or context.get("output_destination") != "follow_up_assessment"
+            destinations = {"pm.follow_up.analyze": "follow_up_assessment", "pm.conversation.propose": "conversation_proposal"}
+            if (not row or row[0] not in destinations or adapter != "codex-native-linux"
+                    or context.get("output_destination") != destinations[row[0]]
                     or context.get("workspace_id") != workspace_id or context.get("thread_id") != thread_id
                     or context.get("thread_version") != expected_version or context.get("coverage", {}).get("max_chars") != max_chars):
-                raise _error("A fixed context requires its original Follow-up admission", "PM_CONTEXT_REFUSED")
+                raise _error("A fixed context requires its original structured-analysis admission", "PM_CONTEXT_REFUSED")
         context["purpose"] = purpose
+        from .pm_access import inherit_operation_sources, require_operation_sources
+        sources = _context_source_operations(ops.db, context)
+        require_operation_sources(ops.db, principal, sources)
+        inherit_operation_sources(ops.db, operation_id, sources)
         # Keep the profile, sources, omitted coverage, and exact words, not a mutable pointer.
         digest = _digest(context)
         run_id = "pmr_" + uuid.uuid5(uuid.UUID(pm_workspace.server_id(ops.db)), operation_id).hex
@@ -501,7 +561,7 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
         if value is not None:
             pm_discussions._text(value, label, 300)
     with journal.tx():
-        if get(journal.db, run_id)["context"].get("output_destination") == "follow_up_assessment":
+        if get(journal.db, run_id)["context"].get("output_destination") in {"follow_up_assessment", "conversation_proposal"}:
             raise _error("Follow-up output cannot enter ordinary discussion history", "PM_OUTPUT_DESTINATION_REFUSED")
         saved = journal.db.execute("""SELECT p.*,m.content FROM pm_assistant_provenance p
             JOIN pm_messages m USING(message_id) WHERE p.run_id=?""", (run_id,)).fetchone()
@@ -518,16 +578,24 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
             raise _error("The native turn did not complete successfully", "PM_COMPLETION_UNPROVEN")
         if run["session_binding"].get("sdk_session_id") != sdk_session_id:
             raise _error("The reply differs from the originally observed native session", "PM_COMPLETION_UNPROVEN")
+        from . import pm_bat_runtime
         from .pm_runtime import assess_turn
+        bat_run = run["adapter"] == pm_bat_runtime.ADAPTER
+        launch = next((item["data"] for item in run["receipts"]
+                       if item["phase"] == "prepare" and item["status"] == "prepared"), {}) if bat_run else {}
         assessment = assess_turn(run["session_binding"]["session_id"], run["send_cursor"], events(journal.db, run_id),
                                  run["cursor"], expected_sdk_session_id=sdk_session_id,
-                                 gap=bool(run["gaps"]), has_more=run["has_more"], actual_model=run["session_binding"]["actual_model"])
+                                 gap=bool(run["gaps"]), has_more=run["has_more"], actual_model=run["session_binding"]["actual_model"],
+                                 expected_prompt_digest=launch.get("prompt_digest"))
         if (not assessment.get("complete") or assessment.get("content") != content
                 or assessment.get("native_turn_id") != native_turn_id
                 or assessment.get("sdk_session_id") != sdk_session_id
                 or assessment.get("actual_model") != model
                 or assessment.get("native_message_id") != native_message_id):
             raise _error("Assistant content or identity differs from native evidence", "PM_IMPORT_CONFLICT")
+        if bat_run:
+            pm_bat_runtime.require_completed(journal.db, run, assessment,
+                prompt_digest=launch.get("prompt_digest"), message_id="batc-pm-" + run["run_id"])
         message_id = "pmm_" + uuid.uuid5(uuid.UUID(pm_workspace.server_id(journal.db)), run_id + ":assistant").hex
         now = time.time()
         journal.db.execute("INSERT INTO pm_messages(message_id,workspace_id,thread_id,actor,content,created_at,operation_id) VALUES(?,?,?,?,?,?,?)",
@@ -540,6 +608,8 @@ def import_reply(journal, run_id, generation, *, content, native_turn_id, sdk_se
                 "input_ids": [item["input_id"] for group in run["context"]["inputs_by_status"].values() for item in group],
                 "message_ids": [item["message_id"] for item in run["context"]["messages"]],
                 "coverage": run["context"]["coverage"]}
+        if bat_run:
+            refs["bat_runtime"] = pm_bat_runtime.provenance(journal.db, run)
         journal.db.execute("INSERT INTO pm_assistant_provenance VALUES(?,?,?,?,?,?,?,?,?,?)",
                            (message_id, run_id, native_turn_id, native_message_id, sdk_session_id, model,
                             "complete", _json(refs), run["context_digest"], now))
@@ -568,12 +638,20 @@ def fail(journal, run_id, generation, reason, *, before_send=False):
             return run
         run = _active(journal.db, run_id, generation)
         if before_send:
+            from . import pm_bat_runtime
+            if run["adapter"] == pm_bat_runtime.ADAPTER and journal.db.execute(
+                    "SELECT 1 FROM operation_steps WHERE operation_id=? AND name='session.start'",
+                    (run["operation_id"],)).fetchone():
+                raise _error("BAT may have started; preserve the original writer", "PM_EFFECT_UNKNOWN")
             uncertain = any(r["phase"] in {"start", "send"} for r in run["receipts"])
             if uncertain:
                 raise _error("PM may have started or sent; preserve its writer", "PM_EFFECT_UNKNOWN")
             status = "failed"
             outcome = {"reason": reason, "effect": "not_started"}
         else:
+            from . import pm_bat_runtime
+            if run["adapter"] == pm_bat_runtime.ADAPTER and not pm_bat_runtime.death_proof(journal.db, run):
+                raise _error("Dedicated BAT process exit remains unproven", "PM_EFFECT_UNKNOWN")
             native, payload = _terminal(journal.db, run)
             if payload.get("reason") not in {"error", "aborted"}:
                 raise _error("PM failure needs a native error or abort", "PM_COMPLETION_UNPROVEN")

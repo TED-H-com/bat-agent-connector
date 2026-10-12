@@ -1,5 +1,6 @@
 // All five Brief sections render one immutable snapshot, filtered for current source access.
 import {briefExport} from './pm-brief-export.js';
+import {qualityFact} from './pm-quality-projections.js';
 export function projectBrief({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, canRead=()=>true}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let head = null, snapshot = null, signature = '', serial = 0, selectedSnapshotId = null;
@@ -35,9 +36,12 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       const section = snapshot.brief?.[name] || {status:'unavailable', items:[]};
       const values = h('div', {class: 'pm-brief-values'});
       values.append(h('p', {class: 'muted'}, readable('pm_brief_status_', section.status)));
+      if (section.quality) values.append(h('p',{},h('strong',{},t('pq_count',{
+        qualified:section.quality.qualified_requirements,total:section.quality.total_requirements}))),h('p',{class:'muted'},t('pq_coverage')));
       for (const item of section.items || []) {
         const source = item.source || {}, details = h('div'), row = h('details', {'data-pm-brief-fact': item.kind || name},
-          h('summary', {}, item.text), details);
+          h('summary', {}, item.kind==='quality_assessment' ? t(item.details?.qualified?'pq_qualified':'pq_not_qualified') : item.text), details);
+        if(item.kind==='quality_assessment')details.append(qualityFact({h,t,fact:item.details}));
         if (item.status) details.append(h('p', {class: 'muted'}, readable('pm_status_', item.status)));
         if (source.kind === 'plan_input') details.append(h('p', {class: 'muted'}, t('pm_brief_plan_source')),
           h('code', {}, source.revision_id), h('p', {}, source.source_ref?.ref || source.source_ref?.message_id || ''));
@@ -86,7 +90,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   }
   async function refresh(selectedId = null) {
     const selected=selectedId||selectedSnapshotId||'latest';if(selectedId)selectedSnapshotId=selectedId;
-    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();exports?.update();
+    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();
     try {
       const [latest, listing, current]=await Promise.all([api('GET',`${endpoint}/snapshots/${selected}`),
         api('GET',`${endpoint}/snapshots?limit=20`),api('GET',`${endpoint}/plans/head`)]);alive();if(ticket!==serial)return;

@@ -4,12 +4,13 @@ import path from 'node:path';
 import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
 
 export const wid='ws_'+'1'.repeat(32),pid='pmmp_'+'2'.repeat(32),bid='pmrb_'+'3'.repeat(32),sid='pmsnap_'+'4'.repeat(32);
-const actions=['prepare','note','candidate.record','complete','follow_up.record'].map(key=>'pm.maintenance_review.'+key);
+const actions=[...['prepare','note','candidate.record','complete','follow_up.record'].map(key=>'pm.maintenance_review.'+key),'pm.input.record'];
 const now=1791716400;
 export const action=(page:Page,name:string)=>page.locator(`[data-pm-action="pm.maintenance_review.${name}"]`);
 export function reviewFixture(){
   const state:any={actor:'owner',role:'owner',manage:true,writes:[],reads:[],ops:new Map(),reviews:[],snapshots:[],lost:false,
-    hidden:false,failRead:false,wrongScope:false,paged:false,badCursor:false,eventPages:false,zeroCursor:false,delayed:false,lifecycle:2,epoch:0};
+    hidden:false,failRead:false,wrongScope:false,paged:false,badCursor:false,eventPages:false,zeroCursor:false,delayed:false,lifecycle:2,epoch:0,
+    threads:[{workspace_id:wid,thread_id:'pmt_'+'6'.repeat(32),title:'Possible recovery improvements',mode:'idea',version:2}]};
   const policy={workspace_id:wid,policy_id:pid,revision:3,document:{workspace_id:wid,policy_id:pid,revision:3,baseline_id:bid}},baseline={workspace_id:wid,baseline_id:bid,version:1};
   const addReview=(title='Membership service maintenance')=>{
     const n=state.reviews.length+1,rid='pmrevw_'+n.toString(16).padStart(32,'0'),snapshotId='pmsnap_'+n.toString(16).padStart(32,'0');
@@ -32,7 +33,7 @@ export function reviewFixture(){
   };
   const initial=addReview();addEvent(initial,'note',{content:'We discussed the incomplete workload evidence.',source_refs:[]},'developer');
   const config=()=>({caps:{actor:state.actor,scopes:['observe',...(state.manage?['manage']:[])],actions:actions.map(action=>({action,allowed:state.manage})),
-      features:{pm_workspaces:{maintenance_review:{version:1},maintenance_checks:{version:1,weekly_review_execution:true},brief_export:{formats:['markdown','html','svg'],locales:['en','zh-TW']}}}},
+      features:{pm_workspaces:{maintenance_review:{version:1,planning_candidate_source:{version:1}},maintenance_checks:{version:1,weekly_review_execution:true},brief_export:{formats:['markdown','html','svg'],locales:['en','zh-TW']}}}},
     workspace:{workspace_id:wid,version:3,membership:{actor:state.actor,role:state.role},members:[{actor:'owner',role:state.actor==='owner'?state.role:'owner'},
       {actor:'developer',role:state.actor==='developer'?state.role:'contributor'},{actor:'reader',role:state.actor==='reader'?state.role:'reader'}]}});
   const response=(data:any,status=200)=>({data,status});
@@ -42,6 +43,9 @@ export function reviewFixture(){
       state.reads.push(input.path);
       if(pathname.startsWith('/operations/'))return response({operation:[...state.ops.values()].find((op:any)=>pathname.endsWith(op.operation_id))});
       if(state.failRead)return response({error:{code:'FORBIDDEN',message:'Original sources unavailable'}},403);
+      if(pathname===base+'/threads')return response({workspace_id:wid,threads:state.threads,next_cursor:null});
+      if(pathname.startsWith(base+'/threads/')){const thread=state.threads.find((row:any)=>pathname.endsWith(row.thread_id));
+        return thread?response({thread,capabilities:{write:state.manage&&['owner','contributor'].includes(state.role)}}):response({error:{code:'NOT_FOUND',message:'Idea unavailable'}},404);}
       if(pathname===base+'/maintenance-policies/current')return response({workspace_id:wid,policy,head:{policy_id:pid,revision:3},visibility_filtered:false});
       if(pathname===base+'/release-baselines/current')return response({workspace_id:wid,baseline,head:{baseline_id:bid,version:1},visibility_filtered:false});
       if(pathname===base+'/lifecycle')return response({workspace_id:wid,lifecycle:{revision:state.lifecycle,execution_epoch:state.epoch,stage:state.stage||'development'}});
@@ -76,7 +80,10 @@ export function reviewFixture(){
     state.writes.push(structuredClone(input));let op=state.ops.get(input.idempotency_key);
     if(!op){
       const {action,target,params}=input.body;let detail=state.reviews.find((row:any)=>row.review.review_id===target.review_id),result:any={workspace_id:wid,execution_authorized:false};
-      if(action==='pm.maintenance_review.prepare'){
+      if(action==='pm.input.record'){
+        const thread=state.threads.find((row:any)=>row.thread_id===target.thread_id);thread.version++;
+        result={...result,thread_id:thread.thread_id,input_id:'pmi_'+'7'.repeat(32),version:thread.version,mode:thread.mode};
+      }else if(action==='pm.maintenance_review.prepare'){
         detail=addReview(params.title);detail.snapshot.maintenance.report.period={start:params.period_start,end:params.period_end};
         result={...result,review_id:detail.review.review_id,revision:detail.review.revision,version:1,snapshot_id:detail.snapshot.snapshot_id,meeting_completed:false};
       }else{
@@ -123,7 +130,7 @@ export async function boot(page:Page,locale='en'){
     },labelled=(key:string,field:any)=>h('label',{},t(key),field),caps=()=>config.caps,alive=()=>{};
     const form=(options:any)=>durableForm({h,t,api,caps,guard:alive,namespace:'review-ui.'+config.caps.actor,errorBox,...options});
     const ui=workspaceMaintenanceReview({h,t,api,alive,workspaceId:config.workspace.workspace_id,workspace:()=>config.workspace,caps,
-      permitted:(decide:boolean)=>config.caps.scopes.includes('manage')&&(decide?config.workspace.membership.role==='owner':['owner','contributor'].includes(config.workspace.membership.role)),form,input,labelled,errorBox});
+      permitted:(decide:boolean)=>config.caps.scopes.includes('manage')&&(decide?config.workspace.membership.role==='owner':['owner','contributor'].includes(config.workspace.membership.role)),form,input,labelled,errorBox,namespace:'review-ui.'+config.caps.actor});
     document.getElementById('mount')!.append(ui.element);win.refreshReviews=async()=>{config=await win.reviewFixtureConfig();await ui.refresh();};win.withdrawReviews=ui.withdraw;await ui.refresh();
   },locale);
   await expect(page.locator('[data-pm-maintenance-review]')).toBeVisible();
