@@ -3,38 +3,59 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
-## 目前整合狀態（2026-10-12 14:12 UTC）
+## 本分支的 M5 接續候選
 
-主線仍為 #115 的 `c0027daa`；M4 [#116](https://github.com/teddashh/bat-agent-connector/pull/116)
-固定候選為 `15752e1`（core `0.2.6`／desktop `0.1.2`），尚未合併。
-該來源的 desktop 五個 jobs、Pages 驗證與 secret scan 已通過，Linux 共享 UI 為
-2,013 項通過、3 項跳過；四個 Python 版本的完整 CI 仍在執行。
-四平台 core `0.2.5` → `0.2.6` 升級、Windows／兩種 macOS 的安裝 fixture，
-以及 Linux DEB 解包後的 WebView fixture，共八份原始回執及 GitHub artifact 雜湊已核對。
-Linux 解包驗證不代表 OS 套件安裝，CI 也不代表 owner 已安裝或 live 驗收。
+本分支包含 workspace native／BAT PM 討論選擇、人工 2–64 次序列輸入唯讀觀察，
+並接入 M4 `755f126` 的原維修來源重用修正。版本為 core `0.2.7`／desktop `0.1.3`；
+工具選擇保留原文件、CAS 與未知 writer，人工活動證據不取得控制權或替代品質驗收。
 
-本機 `3b27301` 的 Python src/tests 與該 M4 候選相同。完整同帳本流程在 Python 3.12
-通過（254.16 秒），但 Python 3.10 仍於最後 PM 接續送出超過原 60 秒 wave
-（整例 367.40 秒）；原送出不確定，尚未完成該次 lost-ACK 恢復。原 repair observer
-已成功。失敗帳本與 IO 壓力記錄保留，不以起始低負載或單次通過掩蓋失敗。
+先前整合來源 `a7716ca` 的 80 項與人工觀察來源 `b58b29d` 的雙版各 155 項回歸，
+以及相同前端來源的 44 項 UI 檢查，僅代表各固定來源的結果。加入新修正後的完整
+M5 檢查尚未執行；尚未推送、合併或安裝。套件升級基準須在 M4 最終來源確定後同步。
+一般 native coding、AHP create-own 與完整 M5／M6 仍有未完工作。
 
-下一批本機候選已整合以下範圍，尚未推送或合併；最終整合驗證仍在執行：
+## 目前整合狀態（2026-10-12 15:14 UTC）
 
-| 範圍 | 使用行為與限制 | 已有來源證據 |
-| --- | --- | --- |
-| W24 workspace PM 選擇 | 保存 native／BAT 有界討論 runtime，沿原文件與 CAS 建立新自有 run；佔用或不確定 writer 不清除，恢復先查原 key | `2dd2151` Python 3.12／3.10 各 39 項；共享 UI 與原 W24 來源相同 |
-| 人工序列活動觀察 | 只讀 2–64 次完整、不交錯的原生輸入；缺 replay、排隊或身分改變仍未知；回執之後的完整 inventory 必須符合原 workspace／SDK／counter | `b58b29d` 新 56 項 Python 3.12 通過；相關雙版回歸待完成；UI `7ec49f3` 44 項通過及英／繁中窄畫面檢視 |
-| BAT PM 每次查核 | 同步範圍內共用歷史來源讀取，保留兩次目前 requester／writer 查核；跨 I/O 或新 frame 重新檢查 | `a99a8f2` Python 3.12／3.10 各 22 項；小 fixture SELECT 103 → 69，原完整流程仍待核對 |
+主線仍為 #115 的 `c0027daa`。[M4 #116](https://github.com/teddashh/bat-agent-connector/pull/116)
+尚未合併；遠端 `15752e1`（core `0.2.6`／desktop `0.1.2`）的 desktop 五個 jobs、
+Pages 驗證與 secret scan 已通過，Linux 共享 UI 為 2,013 項通過、3 項跳過。
+四平台 core `0.2.5` → `0.2.6` 升級、Windows／兩種 macOS 安裝 fixture 及 Linux DEB
+解包 WebView fixture，共八份原始回執與 GitHub artifact 雜湊已核對。Linux 解包不等於
+OS 安裝，這些證據也不代表 owner 安裝或 live 驗收。
 
-下一批準備 core `0.2.7`／desktop `0.1.3`，其升級 baseline 暫固定為上述 M4 候選；
-若 M4 來源再修正，須同步基準後重新收齊下一批實包證據。原生工具不提供原子 workspace／
-input 快照，人工觀察不能控制未來活動；詳見[原回合與人工活動契約](../design/pm-execution-runtime-completion.md)。
-這批不宣稱完成一般 native coding、AHP create-own、完整 M5／M6、owner 安裝或 live 模型驗收。
-跨 CLI 用量／效率機制保留於 W30 規劃，尚未實作 collector，也沒有更改模型政策。
+該遠端來源的 Python 3.11／3.12／3.13 完整 CI 各為 5,774 項通過、1 項失敗、51 項跳過；
+3.10 仍在執行。原維修觀察、發布、Review 與 pause／close／reopen 已完成，
+唯一失敗是後續 PM 提案超過測試的 60 秒等待（`pm_joined_recovery_helpers.py:80`）。
+因此不能將先前本機超時僅歸因於本機 IO，該失敗仍阻擋合併。
+
+本機接續修正共用每次 BAT 查核內的完整歷史來源結果，並避免同一次 Review 讀取重複
+展開已完整查核的原維修 DAG。只重用固定原操作的完成布林值；每次重查 membership、
+canonical target／context，任何 active repair 的部分回邊不重用。跨 await、修改、
+憑證或新 frame 均重新查核，維持原 deadline、取消及最終送出守衛。
+
+- 每次 BAT 查核修正 `a99a8f2` 的 Python 3.12／3.10 各 22 項通過，整合為 `1cb829f`。
+  但該來源的完整 Python 3.10 流程仍失敗（303.42 秒），3.12 未執行，不能當成交付通過。
+- 維修 DAG 修正 `e5db549` 及測試 owner 修正 `15f3c46` 整合為 `807f424`；
+  來源範圍／深度／憑證回邊的 Python 3.12／3.10 各 20 項快檢通過。真實 Review 圖
+  於 3.12 通過（340.68 秒），原 repair 完整遍歷 5 → 1，SELECT 26,028 → 16,080；
+  竄改投影、部分回邊、憑證隔離及來源撤回後的 run／操作／事件隱藏皆有斷言。
+  直接 verifier-first／ambient scope 的 publication 回歸另通過（71.08 秒）。
+  最終完整流程仍待完成；獨立唯讀審查未發現存取限制放寬。
+- 保存失敗圖的純來源片段為 52,147 → 26,089 次 SELECT；進一步唯讀原型為 16,141 次。
+  兩者結果相同且 `total_changes=0`；這是片段成本，不是完整流程通過或整次延遲數字。
+
+獨立 M5 本機 `a7716ca` 已整合 workspace native／BAT PM 選擇與人工 2–64 次不交錯
+輸入的唯讀觀察；80 項 Python 3.12 整合檢查及靜態檢查通過。人工觀察來源 `b58b29d`
+的七個相關模組於 Python 3.12／3.10 各 155 項通過；UI `7ec49f3` 的 44 項及英／繁中
+窄畫面檢視通過。完整 M5 檢查未完成、未推送或合併；core `0.2.7`／desktop `0.1.3`
+升級基準須隨 M4 最終來源同步。人工歷史觀察不控制未來活動或替代品質驗收。
+
+W30 跨 CLI 用量／效率僅完成規劃，沒有 collector、私有紀錄掃描或模型政策變更。
+一般 native coding、AHP create-own 與其餘 M5／M6 未完範圍保留，不將本批視為完整 v1.2。
 
 ## 前次整合紀錄（2026-10-12 13:27 UTC）
 
-以下保留各固定來源當時的結果與失敗；目前狀態以上節為準。
+以下保留固定來源當時的結果與失敗；目前狀態以上節為準。
 
 #98–#115 已合併，主線為 `c0027daa`。下列分開記錄已合併來源與本機接續候選；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
