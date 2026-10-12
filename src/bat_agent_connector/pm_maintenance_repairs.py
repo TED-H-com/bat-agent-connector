@@ -145,11 +145,20 @@ def _access(ops, principal, op):
         raise _bad('NOT_FOUND', 'Original workload source changed', 404)
 
 
+def _source_read_key(db, principal, operation_id):
+    return (id(db), principal.actor, principal.scopes, principal.admin,
+        principal.credential_id, operation_id)
+
+
+def source_backedge(db, principal, operation_id):
+    """Only an existing full-source traversal may suppress its own backedge."""
+    return _source_read_key(db, principal, operation_id) in _READING.get()
+
+
 def _full_access(ops, principal, op):
     # A receipt may refer to this repair through its owned child. Check every
     # source on the outer traversal, while suppressing only that same back edge.
-    key = (id(ops.db), principal.actor, principal.scopes, principal.admin,
-        principal.credential_id, op['operation_id'])
+    key = _source_read_key(ops.db, principal, op['operation_id'])
     checking = _READING.get()
     if key in checking:
         return

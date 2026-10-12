@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_source_lineage
+from bat_agent_connector import pm_access
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector.api_auth import Principal
@@ -14,6 +14,7 @@ from tests import pm_joined_maintenance_helpers as maintenance
 from tests.pm_joined_lifecycle_helpers import OWNER
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
 from tests.test_pm_joined_lifecycle import test_same_ledger_development_and_semantic_dependency as run_story
+from tests.test_pm_source_reads_joined import measured
 
 
 @contextmanager
@@ -28,15 +29,21 @@ def journal_change(db):
         db.execute('RELEASE fixture_reservation_negative')
 
 
-def saved_sources(w, parent, recorded, monkeypatch):
+def saved_sources(w, parent, recorded, monkeypatch, record_property):
     """Actual daemon operations/events retain whole original quality sources."""
     ops = w['d'].ops
     child = repairs._child(ops, parent)
     originals = (parent, child, recorded)
-    # Preserve parity with the pre-memo traversal of the same immutable graph.
-    with monkeypatch.context() as old:
-        old.setattr(pm_source_lineage, 'visible_roots', pm_source_lineage._visible_roots)
-        assert all(pm_access.visible(ops.db, OWNER, op) for op in originals)
+    # Compare the same immutable saved-repair graph with the original traversal.
+    old, old_queries, old_roots = measured(ops.db, parent, monkeypatch, legacy=True)
+    new, new_queries, new_roots = measured(ops.db, parent, monkeypatch, legacy=False)
+    assert old is new is True
+    assert new_queries < old_queries
+    assert sum(new_roots.values()) < sum(old_roots.values())
+    record_property('repair_original_source_queries', old_queries)
+    record_property('repair_scoped_source_queries', new_queries)
+    record_property('repair_original_root_visits', sum(old_roots.values()))
+    record_property('repair_scoped_root_visits', sum(new_roots.values()))
     for op in originals:
         assert ops.get(op['operation_id'], principal=OWNER)['operation_id'] == op['operation_id']
     events = []
@@ -70,13 +77,20 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
     original_check, inspected, failures = repairs._check, [], []
     original_settle, source_reads = maintenance.settle, []
     async def settle(w, request):
-        result = await original_settle(w, request)
         if request['action'] == repairs.RECORD and request['params']['evidence']['kind'] == 'quality':
+            # Wait for this local receipt, then inspect it before the story's
+            # next explicit parent advance admits publication/delivery work.
+            # run_due() here would also wait on unrelated scheduled children.
+            ops = w['d'].ops
+            created = ops.create(OWNER, **request)[0]
+            await ops._execute(created['operation_id'])
+            result = ops.get(created['operation_id'])
             assert result['status'] == 'succeeded', result
             parent_id = repairs._row(w['d'].ops, w['workspace_id'], request['target']['repair_id'])['operation_id']
-            saved_sources(w, w['d'].ops.get(parent_id), result, monkeypatch)
+            saved_sources(w, w['d'].ops.get(parent_id), result, monkeypatch, record_property)
             source_reads.append(parent_id)
-        return result
+            return result
+        return await original_settle(w, request)
     monkeypatch.setattr(maintenance, 'settle', settle)
     def check(ops, principal, target, params, pre, *, reserving=False):
         if reserving:

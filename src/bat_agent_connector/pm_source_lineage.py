@@ -177,16 +177,16 @@ def document_roots(db, value):
 
 
 def visible_roots(db, principal, original_ids):
+    from .pm_maintenance_repairs import source_backedge
     from .pm_source_reads import check, scope
     with scope(db, principal):
         for identity in original_ids:
             row = db.execute('SELECT action FROM operations WHERE operation_id=?', (identity,)).fetchone()
-            # A repair's saved evidence refers back through its owned child.
-            # Its existing full-source guard checks that complete graph and
-            # suppresses only its same-principal repair backedge. A generic
-            # active-root refusal would hide every saved quality receipt.
-            # Do not memoize a partial repair authorization as a completed one.
-            if row and row[0] == 'pm.maintenance.repair':
+            # Only the exact repair traversal already proving the entire graph
+            # may visit its saved receipt -> owned child -> same repair edge.
+            # Never memoize that partial grant. Completed outer authorizations
+            # retain the shared memo and bounds like every other original root.
+            if row and row[0] == 'pm.maintenance.repair' and source_backedge(db, principal, identity):
                 visible = _visible_roots(db, principal, (identity,))
             else:
                 visible = check(db, principal, 'original_root', identity,
