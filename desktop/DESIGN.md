@@ -35,6 +35,15 @@ successful effect without central evidence. Never render agent-provided markup.
 
 ## Agent guide
 
+The owner's October 12 references prioritize a column board, compact work lists
+and readable plans. Default views show work, state and the next action. Put
+source IDs, timestamps, accounting definitions and general instructions in
+labelled disclosures. Keep actionable errors, missing permission and uncertain
+outcomes beside their controls. Do not repeat implementation caveats on every
+row or add a help sidebar. Planning sources and version comparisons expand on
+demand; a checklist is not evidence that acceptance criteria passed. Board
+columns follow central state, and content approval is not renamed delivery Done.
+
 Extract existing CSS tokens before adding UI. Use a compact selection panel and
 instruction section for a new action; use receipt links for multi-effect outcomes.
 Avoid decorative cards, oversized headings, extra primary buttons or a second font.

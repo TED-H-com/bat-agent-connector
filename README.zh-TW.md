@@ -8,7 +8,7 @@ Better Agent Dashboard 是人與 coding agents 一起工作的專案工作空間
 
 **Web 與 Tauri 桌面版共用介面及 Python 後端。**你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
-> **開發預覽。** 本頁介紹已合併的功能，截圖來自 `c0027daa`（2026 年 10 月 12 日）。PM v1.2 仍在整合；[進度報告](docs/product/progress-2026-10-12.md)分開列出主線、M4／M5 候選與剩餘工作。下載時請核對精確來源及成功的套件驗證，較新的草稿 PR 不等於已發布版本。
+> **開發預覽。** 本頁介紹已合併的功能，截圖來自 `7d7f21f0`（2026 年 10 月 12 日）。PM v1.2 仍在整合；[進度報告](docs/product/progress-2026-10-12.md)分開列出主線、M4／M5 候選與剩餘工作。下載時請核對精確來源及成功的套件驗證，較新的草稿 PR 不等於已發布版本。
 
 ![專案工作空間：專案樹、對話、回覆與關聯成果。](site/images/workspace-zh.png)
 

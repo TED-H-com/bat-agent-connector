@@ -1,8 +1,8 @@
 {
   "schema": "public_ui_screenshots_v1",
-  "frontend_source_commit": "c0027daa61827bd2e505331012b7916bcf71ce9a",
-  "frontend_source_tree": "d3e8e2ce49ee128be9328b3f92009f6acc463574",
-  "captured_at": "2026-10-12T15:48:14.571Z",
+  "frontend_source_commit": "7d7f21f04ed955c41d5ddc584c7c1d6668e29cda",
+  "frontend_source_tree": "79f469fb5227a86617a10e1c1ffd289c29e64249",
+  "captured_at": "2026-10-12T17:06:19.021Z",
   "fixture_clock": "2026-10-12T12:00:00Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -41,15 +41,15 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "9aff85cd7cea58966bc2c75efd28858ec58e1daa4a772907b2b9467725e8f055"
+      "sha256": "8bf85466f2e85ab68e4bf166305aa718b481f42b3546b9f1ad813867fac8c56b"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
-      "sha256": "010448d2906ece757781e6c44e28280e1c9e0e003045855285d920df16c0f5d8"
+      "sha256": "93aa697bd5b06378168bff7c0e0e94dfeaff534b5715f6464c6defcd6bb8899e"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.js",
-      "sha256": "771ce60cc2063d20c644d55de85732087792fa27342944da8447900bb458bcaa"
+      "sha256": "5b1bd81f59bf0e81b99e179411bdf4141fca078ca52f49b18797c98b75d04470"
     },
     {
       "file": "src/bat_agent_connector/dashboard/i18n.js",
@@ -96,7 +96,7 @@
     },
     {
       "file": "dispatch-en.png",
-      "sha256": "5eb2972e5e2289318b699fce544c3b75b5bf180f254bd8a3a28d1c549647ddd7",
+      "sha256": "f9decafb27ef2b2ff659c2978909f70bd24667f081f09d3c3e4a68e78b2127f8",
       "scenario": "dispatch",
       "locale": "en-US",
       "viewport": {
@@ -129,7 +129,7 @@
     },
     {
       "file": "pm-planning-en.png",
-      "sha256": "046662dc90b97c74164718a2e53e6fafb52a59a237a3c30ae9541f725cef8fb1",
+      "sha256": "3e254cd79e06eecc88ea6ac79b5ef7dc1988870c3e5b91508bd45e703e42c5f4",
       "scenario": "pm-planning",
       "locale": "en-US",
       "viewport": {
@@ -162,7 +162,7 @@
     },
     {
       "file": "pm-kanban-en.png",
-      "sha256": "77f39ef11ace53a58c158b98a4daa3ad9dd4121d27ef4d37ce376b4bf5ec4996",
+      "sha256": "f84ac61369b3adfc2cbcc9497eff25531678bab2341c52564ec52c31e2995bf3",
       "scenario": "pm-kanban",
       "locale": "en-US",
       "viewport": {
@@ -175,7 +175,7 @@
         "desktop/tests/pm-fixture.ts",
         "desktop/tests/pm-kanban-fixture.ts"
       ],
-      "composition": "Original workspace work-flow panel, in-progress and review rows; quality remains unassessed, partial sources explicit.",
+      "composition": "Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -229,7 +229,7 @@
     },
     {
       "file": "dispatch-zh.png",
-      "sha256": "98c13c9886a5d63d6efed58167d036550135b7801d846ce23e81dc5677af6066",
+      "sha256": "ace7f8089e6cfee7fe9d5f2fe7f71c9d77410c427fa5423364ce08030f2ede06",
       "scenario": "dispatch",
       "locale": "zh-TW",
       "viewport": {
@@ -262,7 +262,7 @@
     },
     {
       "file": "pm-planning-zh.png",
-      "sha256": "cf9ca2ecca7f47da1a2345bf3c074b193297d8adf28d855ca14236bf52ca6df3",
+      "sha256": "225633b26282137e3e61d61f146f34f4d9573d5d0560a3a559d7bde903ac51ae",
       "scenario": "pm-planning",
       "locale": "zh-TW",
       "viewport": {
@@ -295,7 +295,7 @@
     },
     {
       "file": "pm-kanban-zh.png",
-      "sha256": "16ec11bb3c8b0d86aee092c0f6e0b6997d012ce1b943450f26c2cda74098442b",
+      "sha256": "8cc6de7d990280c4ff6dbc3e23fb297c56499b7a5e39bbc607b819c7c9c6a2bb",
       "scenario": "pm-kanban",
       "locale": "zh-TW",
       "viewport": {
@@ -308,7 +308,7 @@
         "desktop/tests/pm-fixture.ts",
         "desktop/tests/pm-kanban-fixture.ts"
       ],
-      "composition": "Original workspace work-flow panel, in-progress and review rows; quality remains unassessed, partial sources explicit.",
+      "composition": "Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.",
       "responsive_checks": [
         {
           "viewport": 390,

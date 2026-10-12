@@ -36,7 +36,7 @@ const receiptSubscribers = new Map();
 // Only disclosure preferences survive a same-principal remount. Facts are always
 // removed and reread after an access reset; drafts retain their existing namespace.
 const threadDisclosures = new Map();
-const threadDisclosureSelectors = ['[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]', '[data-pm-revision-editor]'];
+const threadDisclosureSelectors = ['[data-pm-information]', '[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]', '[data-pm-revision-editor]'];
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
@@ -228,9 +228,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       h('a', {class: 'pm-projects-link', href: '#/projects'}, t('pm_back_projects'))));
   const resizeNavigation = () => {nav.open = navigationMedia.matches;};
   navigationMedia.addEventListener('change', resizeNavigation);
-  const title = h('h1', {}, t('pm_title')), subtitle = h('p', {class: 'muted'}, t('pm_intro'));
+  const title = h('h1', {}, t('pm_title'));
   const refresh = h('button', {type: 'button', class: 'secondary', onclick: () => void load()}, t('pm_refresh'));
-  const heading = h('header', {class: 'pm-heading'}, h('div', {}, title, subtitle), refresh);
+  const heading = h('header', {class: 'pm-heading'}, title, refresh);
   const content = h('div', {class: 'pm-content'}), body = h('section', {class: 'pm-main'}, heading, status, content);
   main.append(h('div', {class: 'pm-shell'}, h('aside', {}, nav), body));
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
@@ -431,11 +431,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           label: 'pm_planning_revision_save', onSaved: () => load(), onStateChange: updateSourceControls,
           extra: h('div', {}, selected, draftId, labelled('pm_planning_revision_rationale', rationale), h('p', {class: 'muted'}, t('pm_planning_revision_help')))});
       }
-      const inspector = h('aside', {class: 'pm-inspector', 'aria-label': t('pm_inputs')},
-        h('h2', {}, t('pm_inputs')), h('p', {class: 'muted'}, t('pm_inputs_help')), permissions, facts,
+      const information = h('details', {'data-pm-information': '', open: thread.mode !== 'planning'}, h('summary', {}, t('pm_information')), permissions, facts,
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
         draft, h('section', {'data-pm-plan': ''}, h('h2', {}, t('pm_direction')), planForm.box),
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '');
+      const inspector = h('aside', {class: 'pm-inspector', 'aria-label': t('pm_inputs')}, information);
       if (brief) inspector.prepend(brief.box);
       if (lifecycle) inspector.prepend(lifecycle.element);
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
@@ -446,7 +446,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
     }
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
-    discussionHint.textContent = t(nativeAnalysis || data.messages?.some(message => message.role === 'assistant') ? 'pm_native_discussion' : 'pm_manual');
+    // A pending original request stays discoverable after a reload or mode change.
+    if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector('[data-pm-information]').open = true;
+    discussionHint.textContent = nativeAnalysis || data.messages?.some(message => message.role === 'assistant') ? '' : t('pm_manual');
     const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
     notes.replaceChildren(...(data.messages || []).map(message => pmDiscussionMessage({h, t, message, time, timestamp})));
     if (!data.messages?.length) notes.append(h('p', {class: 'muted pm-empty'}, t('pm_no_notes')));
@@ -642,7 +644,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             permitted: () => permitted(false), label: 'pm_create_thread',
             onSaved: result => {alive(); location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${encodeURIComponent(result.thread_id)}`;},
             extra: labelled('pm_thread_title', title)});
-          content.append(h('section', {class: 'pm-start panel'}, h('h2', {}, t('pm_new_thread')), h('p', {class: 'muted'}, t('pm_thread_help')), create.box));
+          content.append(h('section', {class: 'pm-start panel'}, h('h2', {}, t('pm_new_thread')), create.box));
         }
       }
       if (runs) {

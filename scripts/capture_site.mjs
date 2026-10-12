@@ -14,7 +14,7 @@ import {pmFixture, pmRoute, workspaceId, threadId} from '../desktop/tests/pm-fix
 import {fixture as kanbanFixture} from '../desktop/tests/pm-kanban-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const source = 'c0027daa61827bd2e505331012b7916bcf71ce9a';
+const source = '7d7f21f04ed955c41d5ddc584c7c1d6668e29cda';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = '2026-10-12T12:00:00Z';
@@ -117,9 +117,9 @@ async function prepare(page, scenario, language, locale) {
   const route = '/dashboard/#/pm/' + workspaceId;
   await page.goto(origin + route);
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
-  await expect(page.locator('[data-pm-kanban] h2')).toHaveText(zh ? '工作流' : 'Work flow');
+  await expect(page.locator('[data-pm-kanban] h2')).toHaveText(zh ? '工作看板' : 'Work board');
   return {route, fixtures: ['desktop/tests/pm-fixture.ts', 'desktop/tests/pm-kanban-fixture.ts'],
-    composition: 'Original workspace work-flow panel, in-progress and review rows; quality remains unassessed, partial sources explicit.',
+    composition: 'Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.',
     check: () => {assert.equal(board.state.writes.length, 0); assert.equal(f.state.writes.length, 0);}};
 }
 

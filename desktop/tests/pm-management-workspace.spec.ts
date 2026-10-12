@@ -54,7 +54,10 @@ for(const native of [false,true])test.describe(native?'native management workspa
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(page.locator('[data-pm-kanban]')).toHaveCount(1);await expect(page.locator('[data-pm-sprints]')).toHaveCount(1);await expect(page.locator('[data-pm-meetings]')).toHaveCount(1);
     await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
-    await expect(page.locator(`[data-pm-kanban-work="${workId(1)}"]`)).toContainText('3 accepted sends');
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await expect(card).not.toContainText('3 accepted sends');
+    await card.getByText('Execution and sources',{exact:true}).click();
+    await expect(card).toContainText('3 accepted sends');
     await expect(page.locator('[data-pm-sprints]')).toContainText('A returning member can sign in');
     await expect(page.getByRole('tab')).toHaveCount(0);expect(f.kanban.state.writes).toHaveLength(0);
   });

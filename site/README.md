@@ -11,7 +11,7 @@ agent-owned work, quality evidence, delivery and maintenance. It retains Windows
 Fleet, central authority, platform differences and installation guidance.
 
 Public feature descriptions and all eight screenshots use merged main
-`c0027daa61827bd2e505331012b7916bcf71ce9a`. M4/M5 appear only as clearly labelled
+`7d7f21f04ed955c41d5ddc584c7c1d6668e29cda`. M4/M5 appear only as clearly labelled
 candidate work. Keep transient CI outcomes in the dated
 [progress report](../docs/product/progress-2026-10-12.md); link it from the site.
 The [handoff](../docs/handoff/2026-10-12-pm-v1.2.md) has development continuation

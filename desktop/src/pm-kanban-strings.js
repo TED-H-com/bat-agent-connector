@@ -1,6 +1,6 @@
 export const pmKanbanStrings = {
   en: {
-    pm_kanban_title: 'Work flow', pm_kanban_intro: 'One work item per row, with its current activity and recorded evidence.',
+    pm_kanban_title: 'Work board', pm_kanban_board_details: 'Board details', pm_kanban_partial_sources: 'Sources incomplete',
     pm_kanban_refresh: 'Refresh work flow', pm_kanban_retry: 'Retry work flow', pm_kanban_loading: 'Reading work flow…',
     pm_kanban_empty: 'No work has been explicitly associated with this workspace.', pm_kanban_more: 'Load more work',
     pm_kanban_partial: 'More work remains outside this page.', pm_kanban_bounded: 'This read was shortened to fit the response limit.',
@@ -53,7 +53,7 @@ export const pmKanbanStrings = {
     pm_kanban_yes: 'Yes', pm_kanban_no: 'No',
   },
   'zh-TW': {
-    pm_kanban_title: '工作流', pm_kanban_intro: '一項工作一列，同時查看目前活動與已記錄證據。',
+    pm_kanban_title: '工作看板', pm_kanban_board_details: '看板資料', pm_kanban_partial_sources: '來源不完整',
     pm_kanban_refresh: '重新整理工作流', pm_kanban_retry: '重試工作流', pm_kanban_loading: '正在讀取工作流…',
     pm_kanban_empty: '這個工作區尚未明確關聯任何工作。', pm_kanban_more: '載入更多工作',
     pm_kanban_partial: '這一頁以外還有其他工作。', pm_kanban_bounded: '本次讀取因回應大小限制而縮短。',
