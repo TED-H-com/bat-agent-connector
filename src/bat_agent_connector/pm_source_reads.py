@@ -124,7 +124,7 @@ def check(db, principal, kind, identity, predicate):
         # original-root or conversation depth. All share the same node budget.
         def group(value):
             return ('conversation' if value.startswith('conversation.') else value
-                    if value in {'execution_verifier', 'quality_sources'} else 'original')
+                    if value in {'execution_verifier', 'quality_sources', 'workload_sources'} else 'original')
         depth = sum(group(active_kind) == group(kind) for active_kind, _ in state['active'])
         if key in state['active'] or depth >= MAX_DEPTH or state['budget']['nodes'] >= MAX_NODES:
             return False

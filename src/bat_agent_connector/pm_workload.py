@@ -158,6 +158,26 @@ def _intent_access(ops, principal, wid, intent):
 
 
 def _access(ops, principal, wid, row):
+    from .pm_maintenance_repairs import source_read_active
+    from .pm_source_reads import check, scope
+    with scope(ops.db, principal):
+        pm_workspace.require_member(ops.db, principal, wid)
+        original = _record(ops.db, wid, row['snapshot_id'])
+        if row != original:
+            raise _bad('NOT_FOUND', 'Original workload context changed', 404)
+        def visible():
+            _source_access(ops, principal, wid, original)
+            return True
+        # An owned repair proof can return through its parent before that
+        # parent's full traversal is complete. Never cache such a partial grant,
+        # even when a workload's flat references do not expose the parent ID.
+        if source_read_active(ops.db, principal):
+            visible()
+        elif not check(ops.db, principal, 'workload_sources', original['snapshot_id'], visible):
+            raise _bad('NOT_FOUND', 'Original workload source unavailable', 404)
+
+
+def _source_access(ops, principal, wid, row):
     binding = row['source_binding']
     _intent_access(ops, principal, wid, binding['intent'])
     for ref in binding['source_refs']:
