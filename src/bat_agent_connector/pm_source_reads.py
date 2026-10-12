@@ -46,7 +46,7 @@ def _changed():
 def scope(db, principal):
     """Join only a live same-caller synchronous scope; otherwise open a new one.
 
-The four callers perform source reads only. No await, transaction boundary or
+Callers perform source reads only. No await, transaction boundary or
 write belongs inside this scope. A loop turn, mutation, closed transaction or
 copied asynchronous context invalidates reuse rather than granting access.
 """
