@@ -212,7 +212,7 @@ async def repair_original_release(w, mock):
     proof = runtime.proof(ops, OWNER, parent)
     assert proof and not proof['capacity_held'], ops.get(observer['operation_id'])
     final = view(w, parent)
-    assert final['repair_fixed'] and not final['capacity_held'], final
+    assert final['outcome'] == 'deployed' and not final['repair_fixed'] and not final['capacity_held'], final
     w['ledger'].record('original_maintenance_repair', repair_operation_id=parent['operation_id'],
         repair_failed_verification_id=failed['operation_id'], repair_passed_verification_id=passed['operation_id'],
         repair_quality_ref=reference, repair_baseline_id=parent['result']['baseline_update']['baseline_id'],
