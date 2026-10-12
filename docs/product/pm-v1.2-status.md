@@ -3,25 +3,32 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
-## 目前整合狀態（2026-10-12 04:06 UTC）
+## 目前整合狀態（2026-10-12 04:35 UTC）
 
 #98–#112 已合併。下列是接續候選的固定證據；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
 
 - [#113](https://github.com/teddashh/bat-agent-connector/pull/113) `de30795`：成果評估、
   依賴解鎖、自然對話採用與維護修復整合。精確來源的 desktop 五個 jobs 已通過，
-  Linux 共享 UI 1,873 項通過／3 項跳過；後端四版本完整矩陣仍在執行，尚未合併。
+  Linux 共享 UI 1,873 項通過／3 項跳過；Python 3.12／3.13 完整 CI 各 5,523 項通過、
+  51 項跳過，3.10／3.11 仍在執行，尚未合併。
 - [#114](https://github.com/teddashh/bat-agent-connector/pull/114) `50dbb7e`：AHP 唯讀
   觀察與 core 0.2.4 → 0.2.5 實包升級。先前 `fca7dae` 四平台升級 fixture 均通過；
   Windows 安裝 fixture 的首個 HTTP 讀取逾時後，清理錯誤蓋過原始失敗。
-  新版只修測試的有界重試及失敗保存，PowerShell helper／語法檢查通過；完整 CI 重新執行。
+  新版只修測試的有界重試及失敗保存；精確 `50dbb7e` 的 Windows 安裝及兩種 macOS
+  jobs 已通過，四平台實包升級的原始回執與下載雜湊已核對。Linux 及完整後端 CI 仍在執行。
 - BAT owner fork [#3](https://github.com/teddashh/better-agent-terminal/pull/3) 已合併至
   `737f6fb`，內容與通過 CI 的 `4be316e` 相同。固定 Linux server 套件的 59 個 payload
   檔案、來源及雜湊已核對，實包啟動／認證／重啟／清理 fixture 通過。安裝方式見
   [固定版本部署說明](https://github.com/teddashh/better-agent-terminal/blob/737f6fb256716e190f34795dc27d6341ba0bc345/docs/pm-server-candidate.md)。
 - 接續分支已整合 BAT 計畫提案及 Follow-up 分析；沿用原操作、固定來源與既有採用流程，
   可按操作明確選 native 或 BAT。UI `4126fbb` 的 98 項與 Node 34 項通過；
-  後端 `2286575` 的完整受影響模組仍在驗證。未公開為已合併能力。
+  後端 `2286575` 的 11 個受影響模組在 Python 3.12／3.10 各 265 項通過。
+  Follow-up 重開後恢復原討論／操作的修正 `0e70a3c` 有 69 項 UI 通過；提案語系修正
+  `a3c332b` 有 15 項相關 UI 通過，兩者使用真正 browser locale 驗證英／繁中。
+  原 98 項中的八個 workspace 案例曾使用未生效的語系儲存鍵，保留為功能測試證據，
+  不當成繁中驗證。工作量原因與來源說明 `8dda3ff` 另有 66 項 UI 及 34 項 Node 通過。
+  這些接續修正尚未合併主線。
 
 M4 的同一 workspace、同一份 ID 紀錄完整流程正在串接。一般工程工作包的原執行完成
 與閒置判斷仍需補齊；不刪除人工 session 或保留的 worktree 來製造閒置。
@@ -115,7 +122,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W22 | P1 | AHP observer 與 create-own | 開發分支已接明確設定的 AHP 有界唯讀觀察、原始來源權限、API／MCP／Web／Tauri；固定 1.0 canonical subset 與 VS Code 0.10 profiles 已有 fixture，完整 CI／合併待完成；create-own、寫入及 live host 尚未驗證 |
 | W23 | P1 | 第一個 native CLI adapter | 獨立 coding sandbox spike `1d80743` 的外層探針通過；內層 namespace 被主機拒絕，coding／隔離 canaries 未驗證，未註冊為產品 adapter；Python 3.12／3.10 各 6 項通過、1 項明確跳過 |
 | W24 | P1 | PM adapter 切換 | 單次 PM 分析已有明確 adapter selector 與獨立原操作查回；長期 workspace adapter／PM 文件接續與 writer 切換尚待完成 |
-| W25 | P1 | Fleet readiness 與安裝版 | 沿用既有 managed installation；core 0.2.5／desktop 0.1.1 候選 `fca7dae` 四平台實包升級 fixture 通過，Windows 安裝 fixture 修正後的新提交 CI 仍在跑；完整 Fleet 矩陣另行追蹤，尚未發布或安裝 |
+| W25 | P1 | Fleet readiness 與安裝版 | 沿用既有 managed installation；core 0.2.5／desktop 0.1.1 候選 `50dbb7e` 四平台實包升級、Windows 安裝及雙 macOS jobs 通過，完整 CI 仍在跑；完整 Fleet 矩陣另行追蹤，尚未發布或安裝 |
 | W26 | P1 | Canonical MCP skills | 本批：PM read tools 與共用 operations；其他 v1.2 契約逐批加入 |
 | W27 | P1 | 端到端實機驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W28 | P2 | 其餘具名 CLI 能力 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -202,7 +209,9 @@ M4 第 13 步的 followup 已接入本批整合：固定 Maintenance Review 候�
 上述身分／歷史／並行／重啟／拒絕降版與未知效果防護均已核對，測試服務及目錄已清除。
 這次使用 child PATH 無 Python 的打包程式；較早 package pair 的結果分開保留。
 CI 由固定 `56d1bf5`／0.2.4 建立 baseline，`fca7dae` 已在 Windows、兩種 macOS 及 Linux
-通過上述 core 升級；Windows 安裝 fixture 修正後的 `50dbb7e` 仍待精確來源 CI。
+通過上述 core 升級；Windows 安裝 fixture 修正後的 `50dbb7e` 四平台 core 升級也各自通過，
+原回執均確認前後為不同 binary。新來源的 Windows 安裝及雙 macOS jobs 已通過，
+其餘精確來源 CI 仍在執行；舊 Windows 失敗保留為獨立紀錄。
 這是 core 升級 fixture，不代表應用程式 installer 原地升級或使用者環境驗收。
 
 W22 的 create-own、W23 的一般 coding adapter、W24 的持久 adapter 切換仍未完成。
