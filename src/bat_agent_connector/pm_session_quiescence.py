@@ -162,8 +162,9 @@ def _live(ops, op):
 
 async def _scope(ops, op, client, intent):
     """Read the original manual tab relation, without claiming tab ownership."""
+    from .service import _workspace
     _live(ops, op)
-    catalogue = await asyncio.wait_for(client.invoke('workspace:load', {}), 15)
+    catalogue = await asyncio.wait_for(_workspace(client), 15)
     if not isinstance(catalogue, dict) or not isinstance(catalogue.get('terminals'), list):
         raise _bad('Original manual tab scope is unavailable')
     matches = [row for row in catalogue['terminals'] if isinstance(row, dict) and row.get('id') == intent['session_id']]

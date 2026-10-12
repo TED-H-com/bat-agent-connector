@@ -56,12 +56,14 @@ async def test_original_manual_workspace_is_rechecked_before_each_new_record(lin
     def moved(channel, params):
         value = dispatch(channel, params)
         if channel == 'workspace:load':
+            assert params == {'profileId': ops.context['fleet'].config.host('h1').profile_id}
             reads.append(channel)
             if not at_final_frame or len(reads) >= 2:
-                value = copy.deepcopy(value)
-                for tab in value['terminals']:
+                document = json.loads(value) if isinstance(value, str) else copy.deepcopy(value)
+                for tab in document['terminals']:
                     if tab['id'] == MANUAL:
                         tab['workspaceId'] = 'different-original-bat-workspace'
+                value = json.dumps(document) if isinstance(value, str) else document
         return value
     monkeypatch.setattr(mock, 'dispatch', moved)
     await ops._execute(operation['operation_id'])
