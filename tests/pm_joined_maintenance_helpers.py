@@ -169,7 +169,7 @@ async def repair_original_release(w, mock):
         'finding_id': finding['finding_id']})
     parent = await advance(w, ops.create(OWNER, **request)[0])
     child = repairs._child(ops, parent)
-    assert child and child['status'] == 'succeeded', view(w, parent)
+    assert child and child['status'] == 'succeeded', {'parent': parent, 'child': child}
     original = ops.create(OWNER, **request)
     assert not original[1] and original[0]['operation_id'] == parent['operation_id']
     duplicate = copy.deepcopy(request)
