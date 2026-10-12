@@ -237,14 +237,22 @@ All changes use the existing operations service and original request key:
   original schedule; missing predictions stay unknown.
 - `pm.roadmap.observe`: same target, params `{baseline_revision_id, snapshot_id}`,
   precondition `{expected_roadmap_version}`. Contributors can attach an existing
-  fixed snapshot's exact work/capture evidence. This does not refresh providers
-  or assess milestone acceptance, DoD or an actual finish date.
+  fixed snapshot's exact work/capture evidence. New observations project the
+  original quality assessments already selected in that snapshot onto the exact
+  milestone requirements and bindings. This does not refresh providers, create
+  a review, substitute a newer assessment or infer an actual finish date.
 
 Keep original and current baselines, explicit forecasts and observed results
 separate. An observation records the baseline/forecast applicable when saved;
 a later forecast does not rewrite that historical context. Follow sequence
 cursors and current source visibility. Re-baselining resets the current forecast
 and observation pointers, while their immutable history remains readable.
+When `actual.quality` is present, report its fixed qualified/total requirement
+counts and contribution coverage, retaining original assessment references.
+`actual.completion=qualified` requires all selected requirements and DoD with
+complete evidence; rejection is distinct from missing evidence. Current
+applicability, runtime completion and deployment remain separate. Legacy
+observations without the quality profile keep their original unassessed result.
 
 ## Sprint commitments and iteration periods
 
