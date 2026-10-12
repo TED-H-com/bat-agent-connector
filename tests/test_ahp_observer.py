@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 from websockets.asyncio.server import serve
@@ -35,6 +35,7 @@ class Host:
         self.on_request = None
         self.reconnect = {'type': 'replay', 'actions': [], 'missing': []}
         self.version = '1.0.0'
+        self.token = TOKEN
         self.session, self.changeset = SESSION, CHANGESET
         self.session_state = copy.deepcopy(STATE)
         self.catalog = [copy.deepcopy(SUMMARY)]
@@ -44,7 +45,7 @@ class Host:
     async def handler(self, ws):
         self.connections += 1
         connection = self.connections
-        assert parse_qs(urlsplit(ws.request.path).query) == {'tkn': [TOKEN]}
+        assert parse_qs(urlsplit(ws.request.path).query) == {'tkn': [self.token]}
         try:
             async for raw in ws:
                 request = json.loads(raw)
@@ -106,6 +107,113 @@ def stable_010(host):
         {'label': 'Session Changes', 'uriTemplate': host.changeset, 'changeKind': 'session'}]}
     host.session_state.pop('createdAt')
     host.session_state.pop('modifiedAt')
+
+
+def unproven_reconnect(host, *, mode, catalog):
+    """Deliver new-incarnation metadata before its reconnect catalog is known."""
+    first = host.connections + 1
+    original = {'channel': host.session, 'serverSeq': 13, 'action': {'type': 'session/original-proven'}}
+    replay = {'channel': host.session, 'serverSeq': 21, 'action': {'type': 'session/unconfirmed-replay'}}
+    interleaved = {'channel': host.session, 'serverSeq': 22, 'action': {'type': 'session/unconfirmed-interleaved'}}
+    new_state = {**host.session_state, 'title': 'Unconfirmed reconnect snapshot title'}
+    # The actual stable SessionState need not carry catalog creation timestamps.
+    assert 'createdAt' not in new_state
+    host.reconnect = ({'type': 'snapshot', 'snapshots': [snapshot(ahp.ROOT, {}, 20),
+        snapshot(host.session, new_state, 20)]} if mode == 'snapshot' else
+        {'type': 'replay', 'actions': [replay], 'missing': []})
+    async def change(ws, req, connection):
+        if connection == first and req['method'] == 'subscribe' and req['params']['channel'] == host.changeset:
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'method': 'action', 'params': original}))
+            await ws.close()
+            return True
+        if connection > first and req['method'] == 'listSessions':
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'method': 'action', 'params': interleaved}))
+            reply = {'jsonrpc': '2.0', 'id': req['id']}
+            if catalog == 'failed':
+                reply['error'] = {'code': -32603, 'message': 'offline fixture unavailable'}
+            else:
+                reply['result'] = {'items': [] if catalog == 'empty' else [
+                    {**host.catalog[0], **({'createdAt': '2026-10-12T00:00:00Z'} if catalog == 'reused_uri' else {})}]}
+            await ws.send(json.dumps(reply))
+            return True
+        if connection > first and req['method'] == 'subscribe' and req['params']['channel'] == host.session:
+            # Reconnect already owns this subscription; preserve its exact receipt.
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'id': req['id'], 'result': {}}))
+            return True
+        return False
+    host.on_request = change
+    return original, replay, interleaved
+
+
+@pytest.mark.parametrize('catalog', ['failed', 'empty', 'reused_uri'])
+@pytest.mark.parametrize('mode', ['snapshot', 'replay'])
+async def test_reconnect_cannot_bind_unproven_new_metadata_to_old_catalog(host, catalog, mode):
+    stable_010(host)
+    original, _, _ = unproven_reconnect(host, mode=mode, catalog=catalog)
+    result = await observer(host).collect()
+    assert result['status'] == 'incomplete' and result['reconnect_evidence'] == 'unverified'
+    assert result['reason'] == {'failed': 'peer_read_refused', 'empty': 'selected_source_unavailable',
+        'reused_uri': 'session_identity_changed'}[catalog]
+    assert result['gaps'][0] == {'reason': 'reconnect_source_unverified', 'after_server_seq': 13}
+    assert [event['original_digest'] for event in result['events']] == [ahp.digest(original)]
+    assert result['last_server_seq'] == 13 and result['positive_snapshots'] == []
+    assert 'unconfirmed' not in json.dumps(result).lower()
+    if catalog != 'empty':
+        saved = next(s for s in result['snapshots'] if s['resource'] == host.session)
+        assert saved['state']['title'] == host.session_state['title'] and saved['from_seq'] == 10
+    assert not any(c == 2 and r['method'] == 'subscribe' for c, r in host.requests)
+
+
+@pytest.mark.parametrize('mode', ['snapshot', 'replay'])
+async def test_reconnect_applies_staged_receipts_only_after_same_original_identity(host, mode):
+    stable_010(host)
+    original, replay, interleaved = unproven_reconnect(host, mode=mode, catalog='same_identity')
+    result = await observer(host).collect()
+    assert result['status'] == 'observed' and result['reconnect_evidence'] == 'applied'
+    assert [e['original_digest'] for e in result['events']] == [ahp.digest(e) for e in (
+        [original, interleaved] if mode == 'snapshot' else [original, replay, interleaved])]
+    assert all(e['original_sources'][0]['source_identity'] == result['catalog'][0]['source_identity']
+        for e in result['events'])
+    assert result['last_server_seq'] == 22
+    if mode == 'snapshot':
+        session = next(s for s in result['snapshots'] if s['resource'] == host.session)
+        assert session['state']['title'] == 'Unconfirmed reconnect snapshot title' and session['from_seq'] == 20
+        assert result['gaps'] == [{'reason': 'snapshot_fallback', 'after_server_seq': 13}]
+    else:
+        assert result['gaps'] == []
+
+
+async def test_peer_echo_redacts_raw_and_actual_query_encoded_tokens_only_in_display_text(host, monkeypatch):
+    host.token = 'synthetic +/token=with%space 測試'
+    monkeypatch.setenv('AHP_FIXTURE_TOKEN', host.token)
+    encoded = urlencode({'tkn': host.token})[4:]
+    seen_paths = []
+    async def echo(ws, req, connection):
+        seen_paths.append(ws.request.path)
+        host.catalog[0]['title'] = host.token + ' ' + ws.request.path
+        host.session_state['title'] = ws.request.path
+        host.session_state['changesets'][0]['label'] = host.token
+        return False
+    host.on_request = echo
+    value = await observer(host).collect()
+    assert value['status'] == 'observed' and encoded in seen_paths[0]
+    assert host.token not in json.dumps(value, ensure_ascii=False) and encoded not in json.dumps(value)
+    assert value['catalog'][0]['title'] == '<redacted> /ahp?tkn=<redacted>'
+    assert value['catalog'][0]['resource'] == SESSION
+    assert value['catalog'][0]['source_identity'] == ahp.digest({key: SUMMARY[key]
+        for key in ('resource', 'provider', 'createdAt')})
+    session = next(s for s in value['snapshots'] if s['resource'] == SESSION)
+    assert session['state']['title'] == '/ahp?tkn=<redacted>'
+    assert session['state']['changesets'][0]['label'] == '<redacted>'
+
+
+@pytest.mark.parametrize('token', ['one', 'id'])
+async def test_short_token_in_structural_identity_is_refused_not_rewritten(host, monkeypatch, token):
+    host.token = token
+    monkeypatch.setenv('AHP_FIXTURE_TOKEN', token)
+    with pytest.raises(ahp.ObserverError, match='^credential_in_identity$'):
+        await observer(host, selected=[]).collect()
+    assert [r['method'] for _, r in host.requests] == ['initialize', 'listSessions']
 
 
 async def test_actual_catalog_selected_static_changesets_and_secret_minimization(host):

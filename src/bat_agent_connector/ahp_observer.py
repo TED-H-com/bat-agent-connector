@@ -169,6 +169,8 @@ class Observer:
         self.positive_catalog, self.positive_snapshots = [], []
         self.catalog_changed, self.notifications = False, []
         self.negotiated_version = self.decoder_profile = None
+        self.pending_events = None
+        self.reconnect_evidence = 'not_needed'
 
     def sources(self, resource):
         if resource == ROOT:
@@ -199,6 +201,11 @@ class Observer:
         seq, channel = integer(envelope.get('serverSeq')), text(envelope.get('channel'))
         if channel not in self.subscriptions:
             raise ObserverError('unsubscribed_event')
+        if self.pending_events is not None:
+            if len(self.pending_events) >= MAX_FRAMES:
+                raise ObserverError('event_limit')
+            self.pending_events.append(envelope)
+            return
         original = digest(envelope)
         if seq in self.event_digests:
             if self.event_digests[seq] != original:
@@ -341,7 +348,12 @@ class Observer:
                 open_timeout=5, close_timeout=0.2, max_size=MAX_FRAME, max_queue=4,
                 ping_interval=None, logger=_LOGGER) as ws:
             self.ws = ws
+            pending_snapshots = None
             if reconnect:
+                self.pending_events = []
+                self.reconnect_evidence = 'unverified'
+                pending_gap = {'reason': 'reconnect_source_unverified', 'after_server_seq': self.sequence}
+                self.gaps.append(pending_gap)
                 if self.negotiated_version not in PROFILES or self.decoder_profile != PROFILES[self.negotiated_version]:
                     raise ObserverError('protocol_version_unsupported')
                 result = await self.request('reconnect', {'channel': ROOT, 'clientId': self.client_id,
@@ -364,12 +376,10 @@ class Observer:
                         self.subscriptions.remove(resource)
                 elif self.reconnect_mode == 'snapshot':
                     self.gaps.append({'reason': 'snapshot_fallback', 'after_server_seq': self.sequence})
-                    self.snapshots = {}
                     values = result.get('snapshots')
                     if not isinstance(values, list) or len(values) > 1 + MAX_SELECTED + MAX_CHANGESETS:
                         raise ObserverError('invalid_reconnect')
-                    for value in values:
-                        self.snapshot(value)
+                    pending_snapshots = values
                 else:
                     raise ObserverError('invalid_reconnect')
             else:
@@ -392,6 +402,31 @@ class Observer:
             # Catalog cursors never survive a connection; root catalog events are
             # not replayed by AHP. Always read a new catalog after reconnect.
             resources = await self.catalog_read()
+            if reconnect:
+                # A fresh SessionState may omit createdAt. Never attach it (or
+                # replay metadata) to the previous incarnation before the new
+                # catalog positively proves every original parent identity.
+                current = {row['resource']: row for row in self.catalog}
+                unavailable = False
+                for resource, original in self.session_sources.items():
+                    if resource not in resources or resource in self.missing:
+                        self.withdraw(resource)
+                        unavailable = True
+                    elif current[resource]['source_identity'] != original['source_identity']:
+                        raise ObserverError('session_identity_changed')
+                if unavailable:
+                    # Do not resume subscribed event delivery under a partially
+                    # proven reconnect. The original gap and receipts survive.
+                    return
+                pending_events, self.pending_events = self.pending_events, None
+                if pending_snapshots is not None:
+                    self.snapshots = {}
+                    for value in pending_snapshots:
+                        self.snapshot(value)
+                for envelope in pending_events:
+                    self.event(envelope)
+                self.reconnect_evidence = 'applied'
+                self.gaps.remove(pending_gap)
             for resource in self.selected:
                 if resource not in resources or resource in self.missing:
                     self.withdraw(resource)
@@ -469,6 +504,7 @@ class Observer:
             'catalog': self.catalog, 'catalog_complete': self.catalog_complete,
             'snapshots': list(self.snapshots.values()), 'events': self.events,
             'last_server_seq': self.sequence, 'reconnect': self.reconnect_mode,
+            'reconnect_evidence': self.reconnect_evidence,
             'gaps': self.gaps, 'missing': self.missing, 'bytes': self.bytes, 'frames': self.frames,
             'pages': self.pages, 'coverage': 'bounded_advertised_catalog_and_selected_point_snapshots',
             'extension_host_sessions': 'not_assumed_exposed', 'completion': 'not_inferred',
@@ -477,17 +513,30 @@ class Observer:
         result['positive_catalog'] = self.positive_catalog
         result['positive_snapshots'] = self.positive_snapshots
         result['changeset_owners'] = self.changeset_owners
-        # A peer may echo the upgrade token in an otherwise allowed text field.
-        # Keep raw envelope digests, but never persist the transport credential.
-        def scrub(value):
+        # A peer can echo the actual query-encoded upgrade credential. Redact
+        # display text only; altering native URIs, hashes or structural fields
+        # would manufacture a different positive source/receipt identity.
+        variants = set(self.tokens)
+        if self.adapter.credential_transport == 'connection_token_query':
+            variants.update(urlencode({'tkn': token})[4:] for token in self.tokens)
+        variants = sorted(variants, key=len, reverse=True)
+        def contains_secret(value):
+            return any(token in value for token in variants)
+        def scrub(value, path=()):
             if isinstance(value, str):
-                for token in self.tokens:
+                display = (path[-1:] in [('title',), ('label',)]
+                    or 'workingDirectories' in path or path[:1] == ('server_info',))
+                if not display and contains_secret(value):
+                    raise ObserverError('credential_in_identity')
+                for token in variants:
                     value = value.replace(token, '<redacted>')
                 return value
             if isinstance(value, list):
-                return [scrub(item) for item in value]
+                return [scrub(item, path) for item in value]
             if isinstance(value, dict):
-                return {scrub(key): scrub(item) for key, item in value.items()}
+                if any(contains_secret(key) for key in value):
+                    raise ObserverError('credential_in_identity')
+                return {key: scrub(item, (*path, key)) for key, item in value.items()}
             return value
         result['catalog'] = [row for row in result['catalog'] if row['resource'] not in self.missing]
         return scrub(result)
