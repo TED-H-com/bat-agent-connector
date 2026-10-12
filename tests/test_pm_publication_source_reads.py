@@ -8,11 +8,13 @@ from bat_agent_connector import pm_access, pm_source_reads, pr_publication
 from bat_agent_connector import pm_execution_verification as verifier
 from bat_agent_connector import pm_maintenance_repair_publication as publication
 from bat_agent_connector import pm_maintenance_repairs as repairs
+from bat_agent_connector import pm_quality_reviews as quality
 from bat_agent_connector.operations import OperationError
 from tests import pm_joined_maintenance_helpers as maintenance
 from tests.pm_joined_lifecycle_helpers import OWNER
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
 from tests.test_pm_joined_lifecycle import test_same_ledger_development_and_semantic_dependency as run_story
+from tests.test_pm_quality_source_reads import prior_quality_access
 
 
 class PublicationChecked(Exception):
@@ -60,6 +62,10 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
         _, old_repair_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
     new, new_queries = measured(ops.db, read)
     _, new_repair_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
+    with monkeypatch.context() as prior_quality:
+        prior_quality.setattr(quality, '_access', prior_quality_access)
+        _, prior_quality_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
+    assert new_repair_queries * 3 < prior_quality_queries * 2
     assert old == new and new['status'] == 'succeeded'
     receipt = new['creation_receipt']
     assert receipt['target_verified'] and receipt['http_status'] == 201
@@ -69,6 +75,7 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
     for key, value in (('publication_prior_queries', old_queries), ('publication_scoped_queries', new_queries),
             ('repair_prior_queries', old_repair_queries), ('repair_verifier_scoped_queries', new_repair_queries)):
         record_property(key, value)
+    record_property('repair_before_quality_source_queries', prior_quality_queries)
 
     originals = [parent, child, published, ops.get(intent['quality_ref']['operation_id'])]
     verifying = ops.get(ops.db.execute("SELECT operation_id FROM operations WHERE action=? "

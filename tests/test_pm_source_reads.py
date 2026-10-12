@@ -41,12 +41,24 @@ def test_only_one_synchronous_snapshot_reuses_original_decision(db):
     assert len(calls) == 2
 
 
-def test_verifier_wrappers_preserve_original_depth_and_keep_their_own_bound(db):
+@pytest.mark.parametrize('kind', ['execution_verifier', 'quality_sources'])
+def test_typed_wrappers_preserve_original_depth_and_keep_their_own_bound(db, kind):
     def descend(level, maximum):
         if level == maximum:
             return True
         return reads.check(db, OWNER, 'original_root', level, lambda:
-            reads.check(db, OWNER, 'execution_verifier', level, lambda: descend(level + 1, maximum)))
+            reads.check(db, OWNER, kind, level, lambda: descend(level + 1, maximum)))
+    assert descend(0, reads.MAX_DEPTH)
+    assert not descend(0, reads.MAX_DEPTH + 1)
+
+
+def test_quality_verifier_and_original_wrappers_coexist_at_supported_depth(db):
+    def descend(level, maximum):
+        if level == maximum:
+            return True
+        return reads.check(db, OWNER, 'original_root', level, lambda:
+            reads.check(db, OWNER, 'execution_verifier', level, lambda:
+                reads.check(db, OWNER, 'quality_sources', level, lambda: descend(level + 1, maximum))))
     assert descend(0, reads.MAX_DEPTH)
     assert not descend(0, reads.MAX_DEPTH + 1)
 
