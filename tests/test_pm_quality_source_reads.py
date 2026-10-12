@@ -5,9 +5,10 @@ from dataclasses import replace
 
 import pytest
 
+from bat_agent_connector import pm_access, pm_plans, pm_source_reads
 from bat_agent_connector import pm_quality_reviews as quality
-from bat_agent_connector import pm_source_reads
 from bat_agent_connector.operations import OperationError
+from tests import test_pm_plan_operations as plans
 from tests.test_pm_quality_reviews import (  # noqa: F401
     OWNER,
     REVIEWER,
@@ -97,3 +98,56 @@ async def test_later_original_proof_withdrawal_hides_complete_quality_history(re
     assert not quality.operation_visible(ops.db, OWNER, saved)
     current = quality.list_reviews(ops, OWNER, w['workspace_id'])
     assert current['visibility_filtered'] and current['reviews'] == []
+
+
+async def test_original_quality_dod_does_not_traverse_a_later_plan_head(reviewed, monkeypatch):  # noqa: F811
+    w, ops = reviewed, reviewed['d'].ops
+    first = await new_review(w)
+    saved = await execute(w, assessment(w, first), actor=REVIEWER)
+    original = copy.deepcopy(quality.get_review(ops, OWNER, w['workspace_id'], first['review_id']))
+    original_revision = first['context']['plan_ref']['revision_id']
+    later = await plans.draft(w, markdown='# Later planning\nDiscuss the original assessment.\n')
+    latest = pm_plans._revision(ops.db, w['workspace_id'], later['revision_id'])
+    assert latest['revision_id'] != original_revision
+    assert pm_plans.head(ops.db, w['workspace_id'])['latest_revision_id'] == latest['revision_id']
+
+    # A real newer draft exists. Its display projection is optional and must
+    # not enter the original DoD source graph (which can itself feed that draft).
+    project, calls = pm_plans._public_head_projection, []
+    def projected(*args):
+        calls.append(args[2])
+        return project(*args)
+    monkeypatch.setattr(pm_plans, '_public_head_projection', projected)
+    changes = ops.db.total_changes
+    for ambient in (False, True):
+        def read_original():
+            assert quality.get_review(ops, OWNER, w['workspace_id'], first['review_id']) == original
+            assert quality.operation_visible(ops.db, OWNER, saved)
+        if ambient:
+            with pm_source_reads.scope(ops.db, OWNER):
+                read_original()
+        else:
+            read_original()
+    assert calls == []
+    assert ops.db.total_changes == changes
+
+    # Current public UI reads still project the real head. Hiding only the new
+    # draft preserves original quality; hiding original plan sources does not.
+    visible = pm_access.operation_source_visible
+    hidden = {latest['operation_id']}
+    def available(db, principal, operation_id):
+        return operation_id not in hidden and visible(db, principal, operation_id)
+    monkeypatch.setattr(pm_access, 'operation_source_visible', available)
+    historical = pm_plans.get_plan(ops, OWNER, w['workspace_id'], original_revision)
+    assert historical['head'] is None and historical['head_unavailable']
+    assert historical['plan']['is_current_accepted'] is None
+    assert quality.get_review(ops, OWNER, w['workspace_id'], first['review_id']) == original
+    original_sources = pm_plans.source_operation_ids(ops.db, w['workspace_id'], original_revision)
+    hidden.add(original_sources[0])
+    with pytest.raises(OperationError) as withdrawn:
+        quality.get_review(ops, OWNER, w['workspace_id'], first['review_id'])
+    assert withdrawn.value.status == 404
+    assert not quality.operation_visible(ops.db, OWNER, saved)
+    events = ops.journal.api_events(resource_id=saved['operation_id'])['events']
+    assert events and not any(pm_access.event_visible(ops.db, OWNER, event) for event in events)
+    assert ops.db.total_changes == changes
