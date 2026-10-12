@@ -103,6 +103,13 @@ The existing API, RPC, MCP and native bridge use these exact reads:
 GET never refreshes the host. History returns summaries, a signed-64-bit
 `next_cursor`, and `visibility_filtered`; preserve cursors even for empty filtered
 pages. Limit is 1–50. Detail returns the original immutable document and digest.
+The complete public response is bounded to 2,000,000 UTF-8 bytes using the actual
+HTTP JSON spacing. Before publishing a new receipt or source-access projection,
+admission checks the larger current-read envelope, including all public metadata
+and room for the maximum signed-64-bit SQLite sequence. An accepted document can
+therefore be returned by both detail and current reads under that same bound.
+Oversized captures fail without a new observation or access change; content is not
+truncated and historical document bytes are not rewritten.
 `features.pm_workspaces.ahp_observation` describes the implemented subset. Adapter
 listing returns configured IDs and that contract without connection secrets.
 There is no second daemon, queue, journal, model engine or new authority tier.

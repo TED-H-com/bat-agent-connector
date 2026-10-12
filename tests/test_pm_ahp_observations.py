@@ -15,7 +15,7 @@ from bat_agent_connector import pm_ahp_observations as ahp
 from bat_agent_connector.operations import OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
-from tests.test_ahp_observer import SESSION, TOKEN, stable_010, unproven_reconnect
+from tests.test_ahp_observer import SESSION, SUMMARY, TOKEN, stable_010, unproven_reconnect
 from tests.test_ahp_observer import host as ahp_host
 from tests.test_pm_workspace import OWNER, create, member
 from tests.test_pm_workspace import ops as workspace_ops
@@ -71,6 +71,100 @@ async def test_reader_observes_manual_source_once_and_all_receipts_are_immutable
     dump = '\n'.join(ops.db.iterdump())
     assert TOKEN not in dump and host.adapter.endpoint not in dump and host.adapter.credential_ref not in dump
     assert ahp.capabilities()['create_own'] == 'unsupported'
+
+
+@pytest.mark.parametrize('boundary_delta', [-1, 1])
+async def test_full_utf8_current_envelope_bound_precedes_record_and_access_projection(ready, monkeypatch, boundary_delta):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    assert original['status'] == 'succeeded', original
+    template = ahp.current_observation(ops, principal, wid)
+    old_document = template['observation']['document']
+    access = [tuple(row) for row in ops.db.execute('SELECT * FROM pm_ahp_resource_access ORDER BY resource')]
+    with ops.journal.tx():
+        # Exercise the widest real SQLite sequence, not a small-ID estimate.
+        ops.db.execute("UPDATE sqlite_sequence SET seq=? WHERE name='pm_ahp_observations'", (2**63 - 2,))
+    operation, _ = ops.create(principal, **request(wid, params={}, idempotency_key='full-wire-boundary'))
+    fixed_time = 2_000_000_000.0
+    # Replace only these modules' clock references, never the shared time module.
+    monkeypatch.setattr(ahp, 'time', SimpleNamespace(time=lambda: fixed_time))
+    monkeypatch.setattr(ahp.provider, 'time', SimpleNamespace(time=lambda: fixed_time))
+
+    def catalog(padding):
+        host.catalog = []
+        for index in range(32):
+            directories = []
+            for _ in range(32):
+                take = min(2000, padding)
+                directories.append('file:///fixture/' + 'x' * take)
+                padding -= take
+            host.catalog.append({**SUMMARY, 'resource': f'ahp-session:/wire-{index}',
+                'title': '中文資料界線', 'workingDirectories': directories})
+        assert padding == 0
+
+    async def paginate(ws, req, connection):
+        if req['method'] != 'listSessions':
+            return False
+        offset = int(req['params'].get('cursor', 0))
+        page = {'items': host.catalog[offset:offset + 8]}
+        if offset + 8 < len(host.catalog):
+            page['nextCursor'] = str(offset + 8)
+        await ws.send(json.dumps({'jsonrpc': '2.0', 'id': req['id'], 'result': page}))
+        return True
+    host.on_request = paginate
+    padding = 1_900_000
+    candidate = None
+    for _ in range(3):
+        catalog(padding)
+        observed = await ahp.provider.Observer(host.adapter, client_id='batc-' + operation['operation_id'],
+            selected=[], changesets=False, check=lambda: None).collect()
+        assert observed['status'] == 'observed', observed['reason']
+        candidate = copy.deepcopy(template)
+        row = candidate['observation']
+        row.update(sequence=2**63 - 1, observation_id='pmah_' + operation['operation_id'][3:],
+            operation_id=operation['operation_id'], created_at=fixed_time)
+        document = row['document']
+        document.update(observation_id=row['observation_id'], started_at=fixed_time,
+            finished_at=fixed_time, evidence=observed, original_sources=[
+                {key: item[key] for key in ('resource', 'source_identity', 'source_kind')}
+                for item in sorted(observed['catalog'], key=lambda item: item['resource'])])
+        row['document_digest'] = ahp.provider.digest(document)
+        size = len(json.dumps(candidate, ensure_ascii=False).encode('utf-8'))
+        difference = ahp.MAX_READ_BYTES + boundary_delta - size
+        if not difference:
+            break
+        padding += difference
+    assert size == ahp.MAX_READ_BYTES + boundary_delta
+    # Both cases would pass the old compact-document-only admission check.
+    assert len(ahp._json(candidate['observation']['document']).encode()) < ahp.MAX_READ_BYTES
+    before_reads = len(host.requests)
+    await settle_operations(ops)
+    done = ops.get(operation['operation_id'])
+    assert len(host.requests) > before_reads
+    if boundary_delta < 0:
+        assert done['status'] == 'succeeded', done
+        current = ahp.current_observation(ops, principal, wid)
+        detail = ahp.get_observation(ops, principal, wid, done['result']['observation_id'])
+        assert current == candidate
+        assert detail == {key: value for key, value in current.items() if key != 'visibility_filtered'}
+        assert len(json.dumps(current, ensure_ascii=False).encode('utf-8')) == ahp.MAX_READ_BYTES - 1
+        assert len(json.dumps(detail, ensure_ascii=False).encode('utf-8')) < ahp.MAX_READ_BYTES
+        assert ops.db.execute('SELECT count(*) FROM pm_ahp_observations').fetchone()[0] == 2
+        assert not ahp.operation_visible(ops.db, principal, original)  # Complete new catalog withdrew it.
+        count = len(host.requests)
+        assert (await run(ready, params={}, idempotency_key='full-wire-boundary'))['result'] == done['result']
+        assert len(host.requests) == count
+    else:
+        assert done['status'] == 'failed' and done['error_code'] == 'AHP_READ_TOO_LARGE', done
+        assert ops.db.execute('SELECT count(*) FROM pm_ahp_observations').fetchone()[0] == 1
+        assert ops.db.execute("SELECT seq FROM sqlite_sequence WHERE name='pm_ahp_observations'").fetchone()[0] == 2**63 - 2
+        assert [tuple(row) for row in ops.db.execute('SELECT * FROM pm_ahp_resource_access ORDER BY resource')] == access
+        assert ahp.current_observation(ops, principal, wid) == template
+        assert ahp.operation_visible(ops.db, principal, original)
+        assert not any(event['kind'] == 'pm.ahp.observed' and event['body'].get('operation_id') == done['operation_id']
+            for event in ops.journal.api_events(0, 500)['events'])
+    assert json.loads(ops.db.execute('SELECT document FROM pm_ahp_observations WHERE operation_id=?',
+        (original['operation_id'],)).fetchone()[0]) == old_document
 
 
 async def test_actual_query_credential_echo_never_reaches_saved_document_or_events(ready, monkeypatch):
