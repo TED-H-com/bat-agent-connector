@@ -7610,12 +7610,136 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	};
 }
 //#endregion
+//#region src/pm-kanban-observation.js
+function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permitted, form, errorBox, onSourceFailure }) {
+	const action = "pm.session.quiescence.observe", sources = new Map();
+	let ready = false, generation = 0, editor = null;
+	const select = h("select", {
+		"aria-label": t("pm_kanban_manual_source"),
+		required: true
+	}), context = h("p", { class: "pm-kanban-note" }), result = h("div");
+	const key = (row) => JSON.stringify([
+		row.link_id,
+		row.expected_link_operation_id,
+		row.expected_project_binding_id,
+		row.expected_session_identity_digest
+	]);
+	const selected = () => sources.get(select.value);
+	const reader = () => ready && caps()?.scopes?.includes("observe");
+	const writer = () => reader() && permitted(false);
+	const source = () => {
+		const row = selected();
+		if (!row?.available) throw Error(t("pm_kanban_manual_unavailable"));
+		return row;
+	};
+	const reason = (row) => t("pm_kanban_" + ({
+		manual_native_identity_unavailable: "manual_identity",
+		manual_multiple_inputs_unsupported: "manual_multiple",
+		manual_native_turn_active: "manual_active"
+	}[row?.reason] || "manual_unavailable"));
+	function describe() {
+		select.disabled = Boolean(editor?.locked()) || !writer() || !caps()?.actions?.some((row) => row.action === action && row.allowed);
+		context.replaceChildren(t(!permitted(false) || !caps()?.scopes?.includes("observe") || !caps()?.actions?.some((row) => row.action === action && row.allowed) ? "pm_kanban_manual_authority" : !ready || !selected() ? "pm_kanban_manual_unavailable" : selected().available ? "pm_kanban_manual_ready" : "pm_kanban_manual_unavailable"));
+		if (selected()?.reason) context.append(" ", reason(selected()));
+	}
+	editor = form({
+		action,
+		target: {
+			workspace_id: workspaceId,
+			work_item_id: workId
+		},
+		fields: { source: select },
+		requiredScope: "observe",
+		params: () => ({ link_id: source().link_id }),
+		preconditions: () => {
+			const row = source();
+			return {
+				expected_link_operation_id: row.expected_link_operation_id,
+				expected_project_binding_id: row.expected_project_binding_id,
+				expected_session_identity_digest: row.expected_session_identity_digest
+			};
+		},
+		permitted: () => writer() && selected()?.available === true,
+		recoverPermitted: reader,
+		label: "pm_kanban_manual_observe",
+		extra: h("div", {}, h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_help")), h("label", {}, t("pm_kanban_manual_source"), select), context),
+		onStateChange: describe,
+		onSaved: (receipt) => {
+			if (receipt?.schema !== "pm_manual_single_input_quiescence_v1" || receipt.workspace_id !== workspaceId || receipt.work_item_id !== workId || receipt.runtime_status !== "current_single_input_quiescent" || receipt.process_death_proven !== false || receipt.ownership !== "manual_read_only" || receipt.work_acceptance !== "not_evaluated" || !/^op_[0-9a-f]{32}$/.test(receipt.observation_operation_id || "") || !/^[0-9a-f]{64}$/.test(receipt.document_digest || "") || !Number.isFinite(receipt.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+			const recorded = new Date(receipt.recorded_at * 1e3).toISOString();
+			result.replaceChildren(h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_recorded")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_runtime_limits")), h("p", {}, t("pm_kanban_source_time"), ": ", h("time", { datetime: recorded }, recorded)), h("code", { class: "pm-source" }, receipt.document_digest));
+		},
+		api: async (...args) => {
+			const ticket = generation;
+			try {
+				const data = await api(...args);
+				alive();
+				if (ticket !== generation) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+				return data;
+			} catch (error) {
+				alive();
+				if (ticket === generation && [
+					401,
+					403,
+					404
+				].includes(error.status)) onSourceFailure(error);
+				throw error;
+			}
+		},
+		errorBox
+	});
+	editor.box.querySelector("button[type=submit]").className = "secondary";
+	select.addEventListener("change", () => {
+		result.replaceChildren();
+		editor.update();
+	});
+	const box = h("div", { "data-pm-manual-observation": workId }, h("h4", {}, t("pm_kanban_manual_title")), editor.box, result);
+	function update(rows) {
+		++generation;
+		if (!Array.isArray(rows) || rows.length > 64) throw Error(t("pm_kanban_scope_error"));
+		const value = select.value;
+		sources.clear();
+		select.replaceChildren(h("option", { value: "" }, t("pm_kanban_manual_choose")));
+		for (const row of rows) {
+			if (!Number.isSafeInteger(row.link_id) || row.link_id <= 0 || !/^op_[0-9a-f]{32}$/.test(row.expected_link_operation_id || "") || !/^pmpb_[0-9a-f]{32}$/.test(row.expected_project_binding_id || "") || !/^[0-9a-f]{64}$/.test(row.expected_session_identity_digest || "") || !["host", "session_id"].every((field) => typeof row[field] === "string" && row[field].length > 0 && row[field].length <= 4096) || typeof row.available !== "boolean" || row.reason != null && typeof row.reason !== "string" || row.available && row.reason != null || sources.has(key(row))) throw Error(t("pm_kanban_scope_error"));
+			sources.set(key(row), row);
+			select.append(h("option", { value: key(row) }, `${row.host} / ${row.session_id}${row.available ? "" : ` · ${reason(row)}`}`));
+		}
+		if (value && !sources.has(value)) select.append(h("option", { value }, t("pm_kanban_manual_original_missing")));
+		select.value = value;
+		ready = true;
+		editor.update();
+	}
+	function withdraw() {
+		++generation;
+		ready = false;
+		sources.clear();
+		const value = select.value;
+		select.replaceChildren(h("option", { value }, t("pm_kanban_manual_original_missing")));
+		result.replaceChildren();
+		editor.box.querySelector(".pm-receipt")?.replaceChildren();
+		editor.update();
+	}
+	return {
+		box,
+		update,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = null, pageSize = 20 }) {
+function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permitted, form, projectId = null, pageSize = 20 }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/kanban`;
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, next = null, reading = false, rows = new Map(), page = null;
+	const observers = new Map(), operationId = (value) => /^op_[0-9a-f]{32}$/.test(value || "");
+	function completion(attempt) {
+		const value = attempt.runtime_completion;
+		if (value == null) return null;
+		if (value.runtime_status !== "original_turn_completed" || value.process_death_proven !== false || !operationId(value.observation_operation_id) || !operationId(value.execution_operation_id) || value.execution_operation_id !== attempt.operation_id || !/^[0-9a-f]{64}$/.test(value.document_digest || "") || !Number.isFinite(value.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+		return value;
+	}
 	const status = h("div", { role: "status" }), metrics = h("div", { class: "pm-kanban-summary" }), list = h("div", { class: "pm-kanban-list" });
 	const more = h("button", {
 		type: "button",
@@ -7658,6 +7782,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 	function checkCard(card, expectedId = null) {
 		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
 		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
+		for (const attempt of card.execution?.attempts || []) completion(attempt);
 		return card;
 	}
 	function checkPage(data, after) {
@@ -7688,6 +7813,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		rows.clear();
 		page = null;
 		next = null;
+		for (const observer of observers.values()) observer.withdraw();
 		list.replaceChildren();
 		metrics.replaceChildren();
 		more.hidden = true;
@@ -7711,7 +7837,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 	function detailsFor(card, observedAt) {
 		const execution = card.execution || {}, capture = card.latest_capture;
 		const lines = (kind, records, content) => records?.length ? h("ul", {}, ...records.map((value) => h("li", {}, h("strong", {}, t(kind)), " · ", content(value)))) : "";
-		const detail = h("div", { class: "pm-kanban-detail" }, h("h4", {}, t("pm_kanban_execution")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), h("h4", {}, t("pm_kanban_capture")));
+		const detail = h("div", { class: "pm-kanban-detail" }, h("h4", {}, t("pm_kanban_execution")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)), runtimeReceipt(value))), h("h4", {}, t("pm_kanban_capture")));
 		if (!capture) detail.append(note("pm_kanban_no_capture"));
 		else {
 			if (capture.workspace_id !== workspaceId || capture.work_item_id !== card.work_item_id) throw Error(t("pm_kanban_scope_error"));
@@ -7733,7 +7859,33 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 			["pm_kanban_work_version", card.work.version],
 			["pm_kanban_bound_version", card.binding.work_version]
 		].flatMap(([key, value]) => [h("dt", {}, t(key)), h("dd", {}, code(value))])), note("pm_kanban_assignment"), note("pm_kanban_dependencies"));
+		if (form && caps?.()?.actions?.some((row) => row.action === "pm.session.quiescence.observe")) {
+			let observer = observers.get(card.work_item_id);
+			if (!observer) {
+				observer = kanbanObservation({
+					h,
+					t,
+					api,
+					alive,
+					workspaceId,
+					workId: card.work_item_id,
+					caps,
+					permitted,
+					form,
+					errorBox,
+					onSourceFailure: unavailable
+				});
+				observers.set(card.work_item_id, observer);
+			}
+			observer.update(execution.manual_observation_sources ?? []);
+			detail.append(observer.box);
+		}
 		return detail;
+	}
+	function runtimeReceipt(attempt) {
+		const value = completion(attempt);
+		if (!value) return "";
+		return h("div", { "data-runtime-completion": value.execution_operation_id }, h("p", {}, t("pm_kanban_runtime_completed")), note("pm_kanban_runtime_limits"), h("p", {}, t("pm_kanban_runtime_recorded_at"), ": ", stamp(value.recorded_at)), h("a", { href: `#/op/${encodeURIComponent(value.observation_operation_id)}` }, t("pm_kanban_runtime_receipt")), code(value.observation_operation_id), code(value.document_digest));
 	}
 	function previewFor(card, observedAt) {
 		const execution = card.execution || {}, flow = card.flow || {};
@@ -7744,7 +7896,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 			t,
 			fact: card.quality,
 			current: true
-		}) : note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")))), ...notices(execution.coverage));
+		}) : note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")), execution.attempts?.some((attempt) => completion(attempt)) ? note("pm_kanban_runtime_recorded") : "")), ...notices(execution.coverage));
 		if (flow.history !== "available_central_events") node.append(note("pm_kanban_history_unknown"));
 		node.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt), " · ", t(card.latest_capture ? "pm_kanban_capture_time" : "pm_kanban_no_capture"), card.latest_capture ? ": " : "", card.latest_capture ? stamp(card.latest_capture.captured_at) : ""));
 		return node;
@@ -7761,6 +7913,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 			const request = ++detailRequest;
 			if (!fold.open) {
 				body.replaceChildren();
+				observers.get(card.work_item_id)?.withdraw();
 				return;
 			}
 			body.replaceChildren(note("pm_kanban_detail_loading"));
@@ -7814,6 +7967,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		list.replaceChildren();
 		metrics.replaceChildren();
 		more.hidden = true;
+		for (const observer of observers.values()) observer.withdraw();
 		status.replaceChildren(note("pm_kanban_loading"));
 		element.setAttribute("aria-busy", "true");
 		try {
@@ -12257,7 +12411,9 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 			"unselected_backlog",
 			"pm_owned_session",
 			"verified_ended_session_retained",
-			"original_maintenance_attempt_completed"
+			"original_maintenance_attempt_completed",
+			"original_batch_attempt_completed",
+			"manual_session_currently_quiescent"
 		];
 		const item = h("li", {}, t("pmo_exclusion_" + (reasons.includes(row.reason) ? row.reason : "unknown")), sourceReference(row));
 		if (!reasons.includes(row.reason)) item.append(h("code", { class: "pm-source" }, row.reason));
@@ -15378,7 +15534,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		api,
 		alive,
 		workspaceId,
-		errorBox
+		errorBox,
+		caps,
+		permitted,
+		form
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
@@ -21470,6 +21629,8 @@ var maintenanceObservationStrings = {
 		pmo_exclusion_pm_owned_session: "A session bound to the PM role is excluded from development work.",
 		pmo_exclusion_verified_ended_session_retained: "A verified ended session is retained as history.",
 		pmo_exclusion_original_maintenance_attempt_completed: "The original maintenance attempt has recorded completion evidence.",
+		pmo_exclusion_original_batch_attempt_completed: "The original batch attempt has recorded completion evidence; its retained session alone is not active work.",
+		pmo_exclusion_manual_session_currently_quiescent: "The linked manual session was quiescent for its single original input. Ownership and work acceptance are unchanged.",
 		pmo_exclusion_unknown: "This source was excluded in the saved observation. Review its original evidence.",
 		pmo_blocker_details: "Review blockers and coverage gaps",
 		pmo_reason_source_limit: "The source exceeds the bounded observation size.",
@@ -21544,6 +21705,8 @@ var maintenanceObservationStrings = {
 		pmo_exclusion_pm_owned_session: "已綁定 PM 角色的工作階段不計入開發工作。",
 		pmo_exclusion_verified_ended_session_retained: "已驗證結束的工作階段保留為歷史。",
 		pmo_exclusion_original_maintenance_attempt_completed: "原始維護嘗試已有保存的完成證據。",
+		pmo_exclusion_original_batch_attempt_completed: "原始批次嘗試已有保存的完成證據；保留該工作階段本身不算進行中的工作。",
+		pmo_exclusion_manual_session_currently_quiescent: "觀察時，已關聯人工工作階段的原始單次輸入已無活動；控制權與工作驗收不變。",
 		pmo_exclusion_unknown: "本次保存觀察未將此來源計入工作量，請核對其原始證據。",
 		pmo_blocker_details: "檢視阻止原因與涵蓋缺口",
 		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
@@ -23404,6 +23567,24 @@ var pmKanbanStrings = {
 		pm_kanban_truncated: "Source coverage is limited.",
 		pm_kanban_unsupported: "Some linked source types are not projected in this view.",
 		pm_kanban_saved_only: "Saved central records; hosts and providers were not checked by this read.",
+		pm_kanban_runtime_recorded: "Original turn completion recorded",
+		pm_kanban_runtime_completed: "The original execution turn completed.",
+		pm_kanban_runtime_limits: "Historical activity evidence only. Quality acceptance, current workload eligibility and process termination are not established by this receipt.",
+		pm_kanban_runtime_recorded_at: "Completion recorded at",
+		pm_kanban_runtime_receipt: "Original activity receipt",
+		pm_kanban_manual_title: "Linked manual session",
+		pm_kanban_manual_source: "Session to observe",
+		pm_kanban_manual_choose: "Select a linked manual session",
+		pm_kanban_manual_observe: "Check current activity",
+		pm_kanban_manual_help: "Read one linked session’s original single input. This does not send, stop, take control of the session or accept the work.",
+		pm_kanban_manual_ready: "The selected source can be checked. Native identity and current authority are rechecked when the request runs.",
+		pm_kanban_manual_unavailable: "Select an available source from the current work details. An original pending request keeps its fixed source.",
+		pm_kanban_manual_authority: "New observations require observe access and a current workspace writer role. Original receipts remain readable with source access.",
+		pm_kanban_manual_original_missing: "Previously selected source is unavailable",
+		pm_kanban_manual_identity: "Authenticated native identity is unavailable or stale.",
+		pm_kanban_manual_multiple: "Only a single original input is supported; multiple inputs remain unproven.",
+		pm_kanban_manual_active: "The native turn is active or has pending input.",
+		pm_kanban_manual_recorded: "The selected single input was quiescent at observation time. The manual session remains under its existing control.",
 		pm_kanban_history_unknown: "Recorded flow history cannot establish reliable timing.",
 		pm_kanban_versions: "Fixed work association",
 		pm_kanban_binding: "Binding",
@@ -23518,6 +23699,24 @@ var pmKanbanStrings = {
 		pm_kanban_truncated: "來源涵蓋範圍有限。",
 		pm_kanban_unsupported: "這個畫面尚未呈現部分關聯來源類型。",
 		pm_kanban_saved_only: "內容來自中央已保存紀錄；本次讀取未查詢主機或服務供應者。",
+		pm_kanban_runtime_recorded: "已記錄原回合完成",
+		pm_kanban_runtime_completed: "原始執行回合已完成。",
+		pm_kanban_runtime_limits: "這是當時的活動證據；這份收據不代表品質已驗收、目前符合工作量排除條件，或程序已終止。",
+		pm_kanban_runtime_recorded_at: "完成記錄時間",
+		pm_kanban_runtime_receipt: "原始活動收據",
+		pm_kanban_manual_title: "已關聯的人工工作階段",
+		pm_kanban_manual_source: "要觀察的工作階段",
+		pm_kanban_manual_choose: "選擇已關聯的人工工作階段",
+		pm_kanban_manual_observe: "查核目前活動",
+		pm_kanban_manual_help: "唯讀查核已關聯工作階段的原始單次輸入。不會發送、停止、接管工作階段或核可工作。",
+		pm_kanban_manual_ready: "可以查核此來源；執行請求時會重新核對原生身分與目前權限。",
+		pm_kanban_manual_unavailable: "請從目前工作詳情選擇可用來源。尚待查回的原請求仍保留固定來源。",
+		pm_kanban_manual_authority: "新觀察需要 observe 權限及目前工作區的寫入角色；仍有來源存取權時，可查回原收據。",
+		pm_kanban_manual_original_missing: "先前選定的來源目前不可用",
+		pm_kanban_manual_identity: "已驗證的原生身分不可用或已過期。",
+		pm_kanban_manual_multiple: "只支援原始單次輸入；多次輸入仍無法證明。",
+		pm_kanban_manual_active: "原生回合仍有活動或待處理輸入。",
+		pm_kanban_manual_recorded: "觀察當時，選定的單次輸入已無活動。人工工作階段仍維持原控制權。",
 		pm_kanban_history_unknown: "現有工作流歷史不足以確認可靠時間。",
 		pm_kanban_versions: "固定工作關聯",
 		pm_kanban_binding: "關聯",
