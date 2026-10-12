@@ -30,6 +30,8 @@ def error(message, code="PM_CONVERSATION_INVALID", status=422):
 
 
 def schema(journal):
+    from . import pm_bat_runtime
+    pm_bat_runtime.schema(journal)
     pm_native_journal.schema(journal)
     pm_plans.schema(journal)
     from .pm_source_lineage import schema as lineage_schema
@@ -58,10 +60,11 @@ def install(ops):
 
 def _base(ops, principal, target, params, pre):
     if (set(target) != {"workspace_id", "thread_id"}
-            or set(params) - {"purpose", "model", "max_chars", "timeout_s"}
+            or set(params) - {"purpose", "model", "max_chars", "timeout_s", "adapter"}
             or set(pre) != {"expected_version", "expected_plan_version", "expected_accepted_revision_id"}):
         raise error("Supply one discussion, bounded purpose and exact discussion/plan versions")
-    pm_native_operations._values(ops, principal, target, params, {"expected_version": pre["expected_version"]})
+    from .pm_analysis_adapters import ordinary_params
+    pm_native_operations._values(ops, principal, target, ordinary_params(params), {"expected_version": pre["expected_version"]})
     head = pm_plans.head(ops.db, target["workspace_id"])
     if (type(pre["expected_plan_version"]) is not int or head["version"] != pre["expected_plan_version"]
             or head["accepted_revision_id"] != pre["expected_accepted_revision_id"]):
@@ -115,9 +118,10 @@ def _context(ops, principal, target, params, pre, head):
 
 
 def _admit(ops, principal, target, params, pre):
+    from .pm_analysis_adapters import admission
     head = _base(ops, principal, target, params, pre)
     context = _context(ops, principal, target, params, pre, head)
-    return {"principal": pm_workspace.principal_binding(principal), "pm_lineage": {"workspace_id": target["workspace_id"]},
+    return {**admission(ops, principal, target, params, pre),
         "conversation_proposal": {"context": context, "context_digest": pm_runs._digest(context)}}
 
 
@@ -191,6 +195,7 @@ def _authorize_existing(ops, principal, op, verb):
 
 
 def _freeze(ctx, principal, authority):
+    from . import pm_analysis_adapters
     require_visible(ctx.service.db, principal, ctx.op)
     _base(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
     original = ctx.admission_binding["conversation_proposal"]
@@ -198,24 +203,19 @@ def _freeze(ctx, principal, authority):
     if pm_runs._digest(context) != original["context_digest"]:
         raise error("Original proposal context changed", "PM_CONVERSATION_CHANGED", 409)
     run = pm_runs.create(ctx.service, principal, operation_id=ctx.operation_id, **ctx.target,
-        expected_version=ctx.preconditions["expected_version"], adapter=pm_native_journal.ADAPTER,
+        expected_version=ctx.preconditions["expected_version"], adapter=pm_analysis_adapters.selection(ctx.params),
         purpose=ctx.params["purpose"], execution_authority=authority, max_chars=ctx.params.get("max_chars", 64000),
         _context_factory=lambda: context)
-    prompt = fmt.prompt(run)
-    launch = {"kind": "launch_intent", "run_id": run["run_id"], "context_digest": run["context_digest"],
-        "prompt": prompt, "prompt_digest": hashlib.sha256(prompt.encode()).hexdigest(),
-        "model": ctx.params.get("model"), "timeout_s": ctx.params.get("timeout_s", 300)}
-    pm_native_journal.record(ctx.service.journal, run["run_id"], run["generation"], launch)
-    pm_runs.receipt(ctx.service.journal, run["run_id"], run["generation"], "start", "prepared",
-        {"adapter": run["adapter"], "prompt_digest": launch["prompt_digest"]})
-    return {"run_id": run["run_id"], "generation": run["generation"]}
+    return pm_analysis_adapters.prepare(ctx, run, fmt.prompt(run))
 
 
 async def _run(ctx):
-    return await pm_native_operations.run_analysis(ctx, prepare=_freeze, import_reply=_import)
+    from .pm_analysis_adapters import run_analysis
+    return await run_analysis(ctx, prepare=_freeze, import_reply=_import)
 
 
 def _import(journal, run_id, generation):
+    from .pm_analysis_adapters import verified_reply
     from .pm_follow_up_analysis import _checked, _public_proof
     with journal.tx():
         run = pm_runs.get(journal.db, run_id)
@@ -225,7 +225,7 @@ def _import(journal, run_id, generation):
             if not journal.db.execute("SELECT 1 FROM pm_conversation_proposals WHERE run_id=?", (run_id,)).fetchone():
                 raise error("Original proposal receipt is missing", "PM_CONVERSATION_CHANGED", 409)
             return run
-        run, observed, proof = pm_native_journal.verified_reply(journal, run_id, generation)
+        run, observed, proof = verified_reply(journal, run_id, generation)
         raw = pm_discussions._text(observed["content"], "assistant content", fmt.MAX_REPLY_CHARS)
         document, validation = fmt.validate(raw, run["context"]["source_references"], baseline_ids(run["context"]))
         provenance = {**_public_proof(proof), "native_turn_id": observed["native_turn_id"],

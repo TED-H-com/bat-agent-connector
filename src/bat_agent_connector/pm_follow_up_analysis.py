@@ -29,6 +29,8 @@ def _error(message, code="PM_FOLLOW_UP_ANALYSIS_INVALID", status=422):
 
 
 def schema(journal):
+    from . import pm_bat_runtime
+    pm_bat_runtime.schema(journal)
     pm_follow_up.schema(journal)
     pm_native_journal.schema(journal)
     with journal.tx():
@@ -53,15 +55,16 @@ def install(ops):
 
 
 def _selection(ops, principal, target, params, pre):
+    from .pm_analysis_adapters import ordinary_params
     pm_native_operations._scopes(principal)
     if (set(target) != {"workspace_id", "thread_id"}
-            or set(params) - {"intake_id", "purpose", "model", "max_chars", "timeout_s"}
+            or set(params) - {"intake_id", "purpose", "model", "max_chars", "timeout_s", "adapter"}
             or set(pre) != {"expected_version", "expected_intake_digest"}):
         raise _error("Supply exactly a workspace, thread, fixed intake, bounded purpose and original digest/version")
     # Reuse the ordinary analysis budget and caller contract; the thread mode is
     # unchanged, and no caller-supplied profile, path or runtime setting is accepted.
     pm_native_operations._values(ops, principal, target,
-        {key: value for key, value in params.items() if key != "intake_id"}, {"expected_version": pre["expected_version"]})
+        ordinary_params(params), {"expected_version": pre["expected_version"]})
     thread = pm_discussions._thread(ops.db, target["workspace_id"], target["thread_id"])
     if thread["mode"] not in {"idea", "planning"}:
         raise _error("Select an existing Idea or Planning discussion without changing its mode", "PM_MODE_REFUSED", 409)
@@ -79,8 +82,9 @@ def _selection(ops, principal, target, params, pre):
 
 
 def _admit(ops, principal, target, params, pre):
+    from .pm_analysis_adapters import admission
     intake, context = _selection(ops, principal, target, params, pre)
-    return {"principal": pm_workspace.principal_binding(principal),
+    return {**admission(ops, principal, target, params, pre),
         "follow_up_analysis": {"intake_id": intake["intake_id"], "intake_digest": intake["document_digest"],
             "access_refs": intake["document"]["access_refs"], "context": context, "context_digest": pm_runs._digest(context)}}
 
@@ -119,31 +123,26 @@ def _authorize_existing(ops, principal, op, verb):
 
 
 def _freeze(ctx, principal, authority):
+    from . import pm_analysis_adapters
     _require_visible(ctx.service.db, principal, {"operation_id": ctx.operation_id})
     # Recheck permission and literal request version, but never rebuild the
     # admitted profile/context from current files, later answers or latest heads.
     pm_native_operations._values(ctx.service, principal, ctx.target,
-        {key: value for key, value in ctx.params.items() if key != "intake_id"}, {"expected_version": ctx.preconditions["expected_version"]})
+        pm_analysis_adapters.ordinary_params(ctx.params), {"expected_version": ctx.preconditions["expected_version"]})
     binding = ctx.admission_binding["follow_up_analysis"]
     context = binding["context"]
     if pm_runs._digest(context) != binding["context_digest"]:
         raise _error("Original analysis context cannot be verified", "PM_FOLLOW_UP_ANALYSIS_UNAVAILABLE", 409)
     run = pm_runs.create(ctx.service, principal, operation_id=ctx.operation_id, **ctx.target,
-        expected_version=ctx.preconditions["expected_version"], adapter=pm_native_journal.ADAPTER,
+        expected_version=ctx.preconditions["expected_version"], adapter=pm_analysis_adapters.selection(ctx.params),
         purpose=ctx.params["purpose"], execution_authority=authority, max_chars=ctx.params.get("max_chars", 64000),
         _context_factory=lambda: context)
-    prompt = pm_follow_up_format.prompt(run)
-    launch = {"kind": "launch_intent", "run_id": run["run_id"], "context_digest": run["context_digest"],
-        "prompt": prompt, "prompt_digest": hashlib.sha256(prompt.encode()).hexdigest(),
-        "model": ctx.params.get("model"), "timeout_s": ctx.params.get("timeout_s", 300)}
-    pm_native_journal.record(ctx.service.journal, run["run_id"], run["generation"], launch)
-    pm_runs.receipt(ctx.service.journal, run["run_id"], run["generation"], "start", "prepared",
-                    {"adapter": run["adapter"], "prompt_digest": launch["prompt_digest"]})
-    return {"run_id": run["run_id"], "generation": run["generation"]}
+    return pm_analysis_adapters.prepare(ctx, run, pm_follow_up_format.prompt(run))
 
 
 async def _run(ctx):
-    return await pm_native_operations.run_analysis(ctx, prepare=_freeze, import_reply=_import)
+    from .pm_analysis_adapters import run_analysis
+    return await run_analysis(ctx, prepare=_freeze, import_reply=_import)
 
 
 def _checked(value):
@@ -153,6 +152,13 @@ def _checked(value):
 
 
 def _public_proof(proof):
+    from .pm_bat_runtime import ADAPTER
+    if proof.get('adapter') == ADAPTER:
+        # The verifier projects nested BAT facts. Keep an explicit outer schema
+        # as well; future journal diagnostics are never public by default.
+        fields = ('adapter', 'contract', 'run_id', 'context_digest', 'prompt_digest', 'native_thread_id',
+            'client_message_id', 'send_cursor', 'observed_cursor', 'native_event_seqs', 'terminal', 'bat_runtime', 'coverage')
+        return {key: proof[key] for key in fields}
     # Keep the original raw lifecycle in the private journal. The public proof
     # has an explicit schema, so future runtime diagnostic fields cannot expose
     # a configuration path, environment, stderr or a private spool location.
@@ -163,6 +169,7 @@ def _public_proof(proof):
 
 
 def _import(journal, run_id, generation):
+    from .pm_analysis_adapters import verified_reply
     with journal.tx():
         run = pm_runs.get(journal.db, run_id)
         if run["generation"] != generation or run["context"].get("output_destination") != pm_follow_up_format.DESTINATION:
@@ -172,7 +179,7 @@ def _import(journal, run_id, generation):
             if not row:
                 raise _error("Original assessment receipt is missing", "PM_FOLLOW_UP_ANALYSIS_UNAVAILABLE", 409)
             return run  # Internal committed receipt recovery survives later source withdrawal.
-        run, observed, proof = pm_native_journal.verified_reply(journal, run_id, generation)
+        run, observed, proof = verified_reply(journal, run_id, generation)
         raw = pm_discussions._text(observed["content"], "assistant content", pm_follow_up_format.MAX_REPLY_CHARS)
         context = run["context"]
         document, validation = pm_follow_up_format.validate(raw, context["source_references"])

@@ -91,13 +91,14 @@ def bat_world(daemon, mock, monkeypatch):
             value["send"] = {"attempted": True, "promptDigest": pm_runtime.prompt_digest(params["prompt"]),
                 "clientMessageId": params["clientMessageId"], "turnId": "original-turn", "acknowledged": True,
                 "nativeStarted": True, "observedClientMessageId": params["clientMessageId"]}
+            content = settings.get("raw_reply", "Discuss the original evidence.")
             if not settings.get("ack_only"):
                 def event(seq, channel, **data):
                     return {"seq": seq, "channel": channel, "params": {"sessionId": sid, **data}}
                 events[sid] = [event(1, "claude:message", message={"id": params["clientMessageId"], "role": "user", "content": params["prompt"]}),
-                    event(2, "claude:message", message={"id": "answer-1", "role": "assistant", "content": "Discuss the original evidence."}),
+                    event(2, "claude:message", message={"id": "answer-1", "role": "assistant", "content": content}),
                     event(3, "claude:turn-end", payload={"reason": "completed", "turnId": "original-turn",
-                        "sdkSessionId": value["threadId"], "result": "Discuss the original evidence."})]
+                        "sdkSessionId": value["threadId"], "result": content})]
                 if settings.get('page_size'):
                     for item in events[sid]:
                         item['seq'] += 9
@@ -105,10 +106,10 @@ def bat_world(daemon, mock, monkeypatch):
                         'model': 'observed-model', **pm_runtime.readonly_start_options()}) for i in range(1, 10)] + events[sid]
                 native = {"method": "turn/completed", "params": {"threadId": value["threadId"],
                     "turn": {"id": "original-turn", "status": "completed", "items": [{"type": "agentMessage",
-                        "id": "native-answer", "text": "Discuss the original evidence."}], "itemsView": "summary"}}}
+                        "id": "native-answer", "text": content}], "itemsView": "summary"}}}
                 value["terminal"] = {"native": True, "threadId": value["threadId"], "turnId": "original-turn",
                     "status": "completed", "eventDigest": pm_runs._digest(native), "event": native,
-                    "nativeMessageId": "native-answer", "outputDigest": pm_runtime.prompt_digest("Discuss the original evidence.")}
+                    "nativeMessageId": "native-answer", "outputDigest": pm_runtime.prompt_digest(content)}
             if not settings.get("missing_exit"):
                 value["exit"] = {"confirmedDead": True, "exitCode": 0, "signal": None,
                     "action": "native_terminal", "process": copy.deepcopy(value["process"])}

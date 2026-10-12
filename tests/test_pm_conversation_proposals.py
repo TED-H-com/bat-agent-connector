@@ -67,9 +67,12 @@ def propose_request(w):
             "expected_accepted_revision_id": head["accepted_revision_id"]}, "idempotency_key": uuid.uuid4().hex}
 
 
-async def proposed(w):
+async def proposed(w, *, adapter=None):
     ops = w["d"].ops
-    op = ops.create(OWNER, **propose_request(w))[0]
+    request = propose_request(w)
+    if adapter is not None:
+        request['params']['adapter'] = adapter
+    op = ops.create(OWNER, **request)[0]
     await settle_operations(ops)
     done = ops.get(op["operation_id"])
     assert done["status"] == "succeeded", done
@@ -99,10 +102,11 @@ async def complete(w, op):
     pytest.fail("Original review did not settle")
 
 
-async def test_conversation_one_review_adopts_actual_requirements_without_referral(proposal_world):
+@pytest.mark.parametrize('adapter', [None, pm_native_journal.ADAPTER])
+async def test_conversation_one_review_adopts_actual_requirements_without_referral(proposal_world, adapter):
     w, ops = proposal_world, proposal_world["d"].ops
     before = git(w["plan"]["worktree_path"], "rev-parse", "HEAD")
-    proposal = await proposed(w)
+    proposal = await proposed(w, adapter=adapter)
     assert proposal["validation"]["status"] == "format_valid"
     assert pm_plans.head(ops.db, w["workspace_id"])["accepted_revision_id"] is None
     request = adoption_request(w, proposal)

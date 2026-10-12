@@ -191,6 +191,10 @@ def visible_roots(db, principal, original_ids):
             from .pm_conversation_proposals import operation_visible as conversation_visible
             if not conversation_visible(db, principal, operation):
                 return False
+        elif operation['action'] == 'pm.follow_up.analyze':
+            from .pm_follow_up_analysis import operation_visible as follow_up_visible
+            if not follow_up_visible(db, principal, operation):
+                return False
         elif operation["action"] == "pm.spec.materialize":
             from .pm_spec_materialization import source_visible as spec_visible
             if not spec_visible(db, principal, operation):

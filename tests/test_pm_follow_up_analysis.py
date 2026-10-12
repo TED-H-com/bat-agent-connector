@@ -109,13 +109,16 @@ def withdraw(ops, data):
 
 
 @pytest.mark.parametrize("summary", [False, True])
-async def test_fixed_intake_imports_one_assessment_raw_proof_and_no_chat_or_adoption(world, summary):
+@pytest.mark.parametrize("adapter", [None, pm_native_journal.ADAPTER])
+async def test_fixed_intake_imports_one_assessment_raw_proof_and_no_chat_or_adoption(world, summary, adapter):
     ops, settings, instances = world
     data = await setup(ops)
     settings["summary_terminal"] = summary
     before = execution_state(ops)
     thread_before = pm_discussions.get_thread(ops, OWNER, **data["target"])
     original = request(ops, data)
+    if adapter is not None:
+        original['params']['adapter'] = adapter
     op = await finish(ops, ops.create(OWNER, **original)[0])
     assert op["status"] == "succeeded", op
     result = read(ops, op)
