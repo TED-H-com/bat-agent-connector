@@ -205,7 +205,7 @@ async def linked(ops, tmp_path):  # noqa: F811
 
 
 def request(ops, target):
-    selected = manual.sources(ops, OWNER, **target)[0]
+    selected = manual.sources(ops, OWNER, target['workspace_id'], target['work_item_id'])[0]
     assert selected['available']
     return {'action': manual.ACTION, 'target': target, 'params': {'link_id': selected['link_id']},
         'preconditions': {key: selected[key] for key in ('expected_link_operation_id',
