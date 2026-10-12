@@ -40,6 +40,18 @@ function fixture(){
   };
   return {parent,state,add,dispatch};
 }
+const runtimeReceipt='op_'+'7'.repeat(32),completedExecution='op_'+'6'.repeat(32);
+function explanations(f:ReturnType<typeof fixture>){
+  const row=f.add('workload');Object.assign(row.document,{classification:'unknown',
+    source_coverage:[{kind:'central_project',project_id:'fixture-project',status:'complete'},
+      {kind:'bat_workspace',host:'fixture-bat',workspace_id:'fixture-workspace',profile_id:'fixture-profile',status:'complete'},
+      {kind:'github',status:'incomplete'}],
+    blocking_reasons:[{code:'session_end_unproven',severity:'unknown',source:{kind:'session',id:'fixture-bat/manual-retained'}},
+      {code:'source_not_visible',severity:'unknown'}],
+    exclusions:[{kind:'operation',id:completedExecution,reason:'original_maintenance_attempt_completed',runtime_observation_id:runtimeReceipt},
+      {kind:'session',id:'fixture-bat/verified-retained',reason:'verified_ended_session_retained'},
+      {kind:'work',id:'wi_'+'8'.repeat(20),reason:'checkpoint_is_not_activity'}]});return row;
+}
 for(const native of [false,true])test.describe(native?'Native maintenance evidence':'Web maintenance evidence',()=>{
   test('incomplete zero counts never claim idle and actions use exact current versions',async({page})=>{
     const f=fixture();f.add();f.add('workload');await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
@@ -61,13 +73,14 @@ for(const native of [false,true])test.describe(native?'Native maintenance eviden
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);expect(f.state.ops.size).toBe(1);
   });
   test('source revocation clears evidence and a late read cannot restore it',async({page})=>{
-    const f=fixture();f.add();f.add('workload');await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();f.add();explanations(f);await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
     await expect(section(page)).toContainText('Incomplete coverage');let release!:()=>void;f.state.defer=new Promise(resolve=>{release=resolve;});
     const before=f.state.reads.length;await section(page).getByRole('button',{name:'Refresh saved observations',exact:true}).click();
     await expect.poll(()=>f.state.reads.length).toBeGreaterThan(before);
     f.parent.state.fail=403;await page.getByRole('button',{name:'Refresh maintenance policy',exact:true}).click();
     await expect(page.locator('[data-pm-maintenance-policy]')).toContainText('Policy sources could not be verified');release();
     await expect(section(page).locator('[data-observation-kind]')).toHaveCount(0);
+    await expect(section(page)).not.toContainText(completedExecution);await expect(section(page)).not.toContainText('fixture-bat/manual-retained');
     await expect(section(page).getByRole('button',{name:'Read GitHub workload',exact:true})).toBeDisabled();
   });
   test('hidden latest evidence differs from no observation and readers cannot create evidence',async({page})=>{
@@ -83,10 +96,42 @@ for(const native of [false,true])test.describe(native?'Native maintenance eviden
     await expect(section(page).locator('[data-observation-kind]')).toHaveCount(0);await expect(section(page).getByRole('button',{name:'Capture saved workload',exact:true})).toBeDisabled();
   });
 });
+for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`workload explanations ${native?'Tauri':'Web'} ${locale} keep completion and manual blockers distinct`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
+    const f=fixture();explanations(f);await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const box=section(page),exclusions=box.locator('[data-workload-exclusions]');
+    await expect(box).toContainText(locale==='en'?'This workload observation does not assess quality.':'這份工作量觀察不做品質評估。');
+    await expect(box).toContainText(locale==='en'?'Not enough evidence to determine workload':'證據不足，無法判定工作量');
+    await expect(box).toContainText(locale==='en'?'BAT workspace: Complete within the selected scope':'BAT 工作區: 在選定範圍內完整');
+    await box.getByText(locale==='en'?'Review blockers and coverage gaps':'檢視阻止原因與涵蓋缺口',{exact:true}).click();
+    await exclusions.locator('summary').click();await expect(exclusions).toContainText(completedExecution);
+    await expect(exclusions).toContainText(locale==='en'?'A verified ended session is retained as history.':'已驗證結束的工作階段保留為歷史。');
+    await expect(box).toContainText('fixture-bat/manual-retained');await expect(exclusions).not.toContainText('fixture-bat/manual-retained');
+    await expect(exclusions.locator('a')).toHaveAttribute('href',`#/op/${runtimeReceipt}`);
+    await expect(exclusions).toContainText(locale==='en'?'A retained worktree alone is not active work.':'保留 worktree 本身不算進行中的工作。');
+    const hidden=box.locator('li').filter({hasText:'source_not_visible'});await expect(hidden).not.toContainText('fixture-bat');
+    expect(f.state.writes).toEqual([]);expect(f.parent.base.state.writes).toEqual([]);
+  }finally{await context.close();}
+});
+test('unknown public exclusion reasons remain literal and do not infer completed work',async({page})=>{
+  const f=fixture(),row=explanations(f);row.document.exclusions=[{kind:'session',id:'fixture-bat/<img src=x onerror=alert(1)>',reason:'future_observation_reason'}];
+  await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);const box=section(page),excluded=box.locator('[data-workload-exclusions]');await excluded.locator('summary').click();
+  await expect(excluded).toContainText('future_observation_reason');await expect(excluded).toContainText('fixture-bat/<img src=x onerror=alert(1)>');await expect(excluded.locator('img')).toHaveCount(0);
+  await expect(excluded).not.toContainText('recorded completion evidence');await expect(box).toContainText('Not enough evidence to determine workload');expect(f.state.writes).toEqual([]);
+});
+test('malformed exclusion source clears the whole saved projection instead of hiding only that fact',async({page})=>{
+  const f=fixture(),row=explanations(f);await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);
+  await expect(section(page).locator('[data-workload-exclusions]')).toHaveCount(1);row.document.exclusions[0].id={unknown:'not an original source identity'};
+  await section(page).getByRole('button',{name:'Refresh saved observations',exact:true}).click();
+  await expect(section(page)).toContainText('Observation evidence does not match this workspace');await expect(section(page).locator('[data-observation-kind]')).toHaveCount(0);
+  await expect(section(page).getByRole('button',{name:'Capture saved workload',exact:true})).toBeDisabled();expect(f.state.writes).toEqual([]);
+});
 for(const language of ['en','zh-TW'])for(const width of [390,768,1440])test(`maintenance evidence ${language} ${width}`,async({browser,baseURL},testInfo)=>{
-  const context=await browser.newContext({baseURL,locale:language,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();f.add();f.add('workload');
+  const context=await browser.newContext({baseURL,locale:language,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();f.add();explanations(f);
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);
   await expect(section(page)).toContainText(language==='en'?'These counts are partial':'這些數量只有部分涵蓋');
+  await section(page).locator('[data-workload-exclusions] > summary').click();
+  await section(page).getByText(language==='en'?'Review blockers and coverage gaps':'檢視阻止原因與涵蓋缺口',{exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
   const folder=process.env.PM_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
   // Remove only the sticky masthead for this section crop; keep the app's CSP.

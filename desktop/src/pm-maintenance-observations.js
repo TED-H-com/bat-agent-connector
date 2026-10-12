@@ -21,6 +21,32 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
     github_gap:['github_repository_coverage_unavailable','linked_pr_current_state_unproven','github_observation_missing','github_observation_context_changed','github_observation_incomplete'],
     github_prs:['github_open_pull_requests'],github_actions:['github_nonterminal_actions']};
   const reasonText=reason=>t('pmo_reason_'+(Object.keys(reasonGroups).find(key=>reasonGroups[key].includes(reason.code))||'unknown'));
+  const text=value=>typeof value==='string'&&value.length>0&&value.length<=4096;
+  const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
+  function sourceReference(source){
+    if(source==null)return '';
+    if(!object(source)||!text(source.kind))throw Error(t('pmo_invalid'));
+    const names={work:'work',task:'task',operation:'operation',command:'command',session:'session',sprint:'sprint',bat_workspace:'bat'};
+    const row=h('p',{class:'pm-source'},t('pmo_recorded_source'),': ',names[source.kind]?t('pmo_ref_'+names[source.kind]):h('code',{},source.kind));
+    for(const field of ['id','host','workspace_id','profile_id','project_id'])if(source[field]!=null){
+      if(!text(source[field]))throw Error(t('pmo_invalid'));
+      row.append(' · ',h('code',{},source[field]));
+    }
+    return row;
+  }
+  function exclusion(row){
+    if(!object(row)||!text(row.reason))throw Error(t('pmo_invalid'));
+    const reasons=['checkpoint_is_not_activity','failed_attempt_explicitly_deferred','unselected_backlog',
+      'pm_owned_session','verified_ended_session_retained','original_maintenance_attempt_completed'];
+    const item=h('li',{},t('pmo_exclusion_'+(reasons.includes(row.reason)?row.reason:'unknown')),sourceReference(row));
+    if(!reasons.includes(row.reason))item.append(h('code',{class:'pm-source'},row.reason));
+    if(row.runtime_observation_id!=null){
+      if(!/^op_[0-9a-f]{32}$/.test(row.runtime_observation_id))throw Error(t('pmo_invalid'));
+      item.append(h('a',{href:`#/op/${encodeURIComponent(row.runtime_observation_id)}`},t('pmo_runtime_receipt')),
+        ' · ',h('code',{class:'pm-source'},row.runtime_observation_id));
+    }
+    return item;
+  }
   const editorsBox=h('div',{class:'pm-observation-actions'});
   function update(){for(const editor of editors)editor.update();}
   const request=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){
@@ -59,16 +85,22 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
       if(evidence.status==='incomplete')box.append(h('p',{},t('pmo_partial_counts')));
     }else{
       if(!['development','unknown','idle_candidate'].includes(doc.classification)||!Array.isArray(doc.source_coverage)
-        ||!Array.isArray(doc.blocking_reasons)||typeof doc.stability?.satisfied!=='boolean')throw Error(t('pmo_invalid'));
+        ||!Array.isArray(doc.blocking_reasons)||typeof doc.stability?.satisfied!=='boolean'
+        ||doc.exclusions!=null&&!Array.isArray(doc.exclusions))throw Error(t('pmo_invalid'));
       box.append(line('pmo_classification',t(`pmo_${doc.classification}`)),line('pmo_stability',t(doc.stability.satisfied?'pmo_stable':'pmo_not_stable')));
       const coverage=h('ul');
       for(const source of doc.source_coverage){
-        const label=['central_project','github','bat'].includes(source.kind)?`pmo_source_${source.kind}`:'pmo_source_other';
+        const label=source.kind==='bat_workspace'?'pmo_source_bat':['central_project','github','bat'].includes(source.kind)?`pmo_source_${source.kind}`:'pmo_source_other';
         coverage.append(h('li',{},`${t(label)}: ${t(source.status==='complete'?'pmo_complete':'pmo_incomplete')}`));
       }
       box.append(coverage,line('pmo_blockers',doc.blocking_reasons.length),h('p',{class:'muted'},t('pmo_capture_limits')));
       if(doc.blocking_reasons.length)box.append(h('details',{},h('summary',{},t('pmo_blocker_details')),
-        h('ul',{},...doc.blocking_reasons.map(reason=>h('li',{},reasonText(reason))))));
+        h('ul',{},...doc.blocking_reasons.map(reason=>{
+          if(!object(reason)||!text(reason.code))throw Error(t('pmo_invalid'));
+          return h('li',{},reasonText(reason),h('code',{class:'pm-source'},' · '+reason.code),sourceReference(reason.source));
+        }))));
+      if(doc.exclusions?.length)box.append(h('details',{'data-workload-exclusions':''},h('summary',{},t('pmo_exclusions')+` (${doc.exclusions.length})`),
+        h('p',{class:'muted'},t('pmo_exclusion_boundary')),h('ul',{},...doc.exclusions.map(exclusion))));
     }
     box.append(h('details',{},h('summary',{},t('pmo_proof')),h('p',{class:'mono'},row[id]),h('p',{class:'mono'},row.document_digest),
       h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation'))));return box;
