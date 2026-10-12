@@ -5937,7 +5937,7 @@ function qualityFact({ h, t, fact, current = false }) {
 		class: "pm-note-text"
 	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
 }
-function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, requireQualified = true, errorBox }) {
 	let editor = null, pending = false;
 	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
 	const read = () => {
@@ -5973,7 +5973,7 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 				alive();
 				if (!element.isConnected || editor.locked()) return;
 				const row = data.review, context = row?.context, assessment = row?.assessment;
-				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || (requireQualified ? row.qualified !== true : row.applicable !== true) || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
 					"operation_id",
 					"version",
 					"document_digest"
@@ -7276,9 +7276,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		const use = h("button", {
 			type: "button",
 			class: "secondary",
-			disabled: !row.qualified,
+			disabled: !selectable(row),
 			onclick: () => {
-				if (!ready || !current()?.qualified) return;
+				if (!ready || !selectable(current())) return;
 				emit(reference(current()));
 				renderReview();
 			}
@@ -7312,6 +7312,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			document_digest: a.document_digest,
 			candidate_commit: row.context.native_result.candidate_commit
 		} : null;
+	}
+	function selectable(row) {
+		return Boolean(row?.assessment && row.applicable === true && !row.revocation);
 	}
 	function proofChoices(row, item) {
 		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$5(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
@@ -7560,7 +7563,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && current()?.qualified && same$5(previous, reference(current()))) emit(previous);
+			if (previous && selectable(current()) && same$5(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -9613,7 +9616,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		try {
 			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
 			live(expected);
-			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.deviations?.version === 1 ? 4 : source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
 			const bytes = new TextEncoder().encode(report.content);
 			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
 			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
@@ -9787,14 +9790,16 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				qualified: section.quality.qualified_requirements,
 				total: section.quality.total_requirements
 			}))), h("p", { class: "muted" }, t("pq_coverage")));
+			if (name === "deviations" && section.version === 1) values.append(h("p", { class: "muted" }, t("pq_deviations_boundary")), h("details", { "data-pm-deviation-coverage": "" }, h("summary", {}, t("pq_deviations_coverage")), h("p", {}, t(section.coverage?.selected_source_coverage_complete ? "pq_deviations_selected" : "pq_deviations_partial")), ...(section.coverage?.selections || []).map((selection) => h("div", {}, h("a", { href: `#/work/${selection.work_item_id}` }, t("pm_evidence_open_work")), h("p", {}, selection.reason ? t("pq_deviation_reason_" + selection.reason) : `${t("pq_acceptance")}: ${t("pq_" + selection.acceptance)} · ${t("pq_dod")}: ${t("pq_" + selection.dod)}`))), h("pre", { class: "pm-brief-proof" }, JSON.stringify(section.coverage, null, 2))));
 			for (const item of section.items || []) {
-				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.text), details);
+				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.kind === "quality_rejection" ? `${t("pq_rejected_" + item.details.criterion.criterion.kind)}: ${item.text}` : item.text), details);
 				if (item.kind === "quality_assessment") details.append(qualityFact({
 					h,
 					t,
 					fact: item.details
 				}));
-				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
+				if (item.kind === "quality_rejection") details.append(h("p", {}, t("pq_recorded_by", { actor: item.details.assessed_by })), h("p", {}, item.details.assessment.rationale), h("p", { class: "muted" }, t("pq_fixed")));
+				if (item.status) details.append(h("p", { class: "muted" }, item.kind === "quality_rejection" ? t("pq_rejected") : readable("pm_status_", item.status)));
 				if (source.kind === "plan_input") details.append(h("p", { class: "muted" }, t("pm_brief_plan_source")), h("code", {}, source.revision_id), h("p", {}, source.source_ref?.ref || source.source_ref?.message_id || ""));
 				else if (source.kind === "plan_adoption") details.append(h("p", { class: "muted" }, t("pm_brief_decision_source")), h("code", {}, source.revision_id));
 				else if (source.kind === "work_binding") details.append(h("a", { href: `#/work/${source.work_item_id}` }, t("pm_evidence_open_work")));
@@ -9808,7 +9813,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				if (item.details) details.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(item.details, null, 2)));
 				values.append(row);
 			}
-			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
+			if (!section.items?.length) values.append(h("p", {}, t(name === "deviations" && section.version === 1 ? "pq_deviations_empty" : "pm_brief_empty_" + name)));
 			sections.append(h("section", {
 				class: "pm-brief-row",
 				"data-pm-brief-section": name
@@ -13912,6 +13917,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				readSelection: qualitySelection,
 				field: selectedQuality,
 				constraints: { binding_id: binding.binding_id },
+				requireQualified: false,
 				errorBox
 			}) : null;
 			const capture = track(form({
@@ -20673,7 +20679,7 @@ var pmQualityReviewsStrings = {
 		pmq_assessment: "Assessment",
 		pmq_revocation: "Revocation",
 		pmq_selected: "This exact assessment is selected for the work.",
-		pmq_selection_help: "Select a currently qualified assessment explicitly. Later conclusions do not replace this selection.",
+		pmq_selection_help: "Explicitly select an original assessment for evidence. Rejected or unassessed conclusions do not qualify work; later conclusions do not replace this selection.",
 		pmq_assess_heading: "Record criterion conclusions",
 		pmq_assessment_reason: "Reason for this assessment",
 		pmq_verdict: "Reviewer conclusion",
@@ -20765,7 +20771,7 @@ var pmQualityReviewsStrings = {
 		pmq_assessment: "評估",
 		pmq_revocation: "撤銷",
 		pmq_selected: "已為這項工作選定這份確切評估。",
-		pmq_selection_help: "請明確選擇目前適用且合格的評估。後續結論不會取代原本選擇。",
+		pmq_selection_help: "請明確選取要納入證據的原始評估；不符合或未評估的結論不代表工作合格，後續結論也不會取代原本選擇。",
 		pmq_assess_heading: "記錄條件結論",
 		pmq_assessment_reason: "這次評估的理由",
 		pmq_verdict: "審查者結論",
@@ -20811,6 +20817,19 @@ var qualityProjectionStrings = {
 		pq_coverage: "Each original requirement is counted once. Unreviewed work remains unassessed.",
 		pq_increment: "Qualified Increment",
 		pq_recorded_by: "Assessed by {actor}",
+		pq_rejected_acceptance: "Reviewer rejected acceptance criterion",
+		pq_rejected_dod: "Reviewer rejected Definition of Done criterion",
+		pq_deviations_boundary: "Selected reviewer judgments about original criteria. They do not independently prove semantic failure; current applicability and other deviation dimensions are unassessed.",
+		pq_deviations_coverage: "Selected assessments and coverage",
+		pq_deviations_selected: "The saved selection is complete; unlinked activity remains unassessed.",
+		pq_deviations_partial: "Saved source coverage is incomplete. Missing assessments do not establish acceptance or resolution.",
+		pq_deviations_empty: "No rejection is projected from the applicable selected criteria. This does not establish that the project has no deviations.",
+		pq_deviation_reason_single_original_assessment_missing: "No single original assessment selected",
+		pq_deviation_reason_criterion_provenance_unavailable: "This older capture has no fixed criterion provenance",
+		pq_deviation_reason_binding_mismatch: "Assessment belongs to a different work binding",
+		pq_deviation_reason_scope_mismatch: "Assessment belongs to a different scope",
+		pq_deviation_reason_not_applicable_at_selection: "Assessment was not applicable when selected",
+		pm_brief_status_fixed_quality_deviations: "Selected original quality judgments",
 		pm_brief_status_fixed_quality_assessments: "Explicit original quality assessments",
 		pm_evidence_kind_quality_assessment: "Original quality assessment"
 	},
@@ -20834,6 +20853,19 @@ var qualityProjectionStrings = {
 		pq_coverage: "每個原始需求只計入一次；尚未審查的工作仍標示未評估。",
 		pq_increment: "符合品質條件的 Increment",
 		pq_recorded_by: "評估者：{actor}",
+		pq_rejected_acceptance: "審查者否決驗收條件",
+		pq_rejected_dod: "審查者否決完成定義條件",
+		pq_deviations_boundary: "這是對原始條件的選定審查判斷，不代表獨立驗證已證明語意缺陷；目前適用性與其他偏差面向尚未評估。",
+		pq_deviations_coverage: "選定評估與涵蓋範圍",
+		pq_deviations_selected: "已保存的選取範圍完整；未關聯的活動仍未評估。",
+		pq_deviations_partial: "已保存來源涵蓋不完整；缺少評估不代表符合條件或已解決。",
+		pq_deviations_empty: "所選適用條件未產生否決項目；這不代表專案沒有偏差。",
+		pq_deviation_reason_single_original_assessment_missing: "尚未選取單一原始評估",
+		pq_deviation_reason_criterion_provenance_unavailable: "這份舊擷取沒有固定的條件來源",
+		pq_deviation_reason_binding_mismatch: "評估屬於不同工作關聯",
+		pq_deviation_reason_scope_mismatch: "評估屬於不同範疇",
+		pq_deviation_reason_not_applicable_at_selection: "評估在選取當時不適用",
+		pm_brief_status_fixed_quality_deviations: "選定的原始品質判斷",
 		pm_brief_status_fixed_quality_assessments: "明確選取的原始品質評估",
 		pm_evidence_kind_quality_assessment: "原始品質評估"
 	}

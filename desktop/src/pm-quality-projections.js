@@ -13,7 +13,7 @@ export function qualityFact({h,t,fact,current=false}) {
       h('p', {}, h('code', {class: 'pm-source'}, reference.operation_id)), h('p', {}, h('code', {class: 'pm-source'}, reference.document_digest))) : '');
 }
 
-export function fixedQualityPicker({h,t,api,alive,workspaceId,workItemId,readSelection,field,multiple=false,constraints={},errorBox}) {
+export function fixedQualityPicker({h,t,api,alive,workspaceId,workItemId,readSelection,field,multiple=false,constraints={},requireQualified=true,errorBox}) {
   let editor = null, pending = false;
   const status = h('div', {role: 'status'}), chosen = h('p', {class: 'muted'});
   const read = () => {const value = JSON.parse(field.value || (multiple ? '{}' : 'null')); return multiple ? value[workItemId] : value;};
@@ -32,7 +32,7 @@ export function fixedQualityPicker({h,t,api,alive,workspaceId,workItemId,readSel
       const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`); alive();
       if (!element.isConnected || editor.locked()) return;
       const row = data.review, context = row?.context, assessment = row?.assessment;
-      if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true
+      if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || (requireQualified ? row.qualified !== true : row.applicable !== true)
           || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit
           || ['operation_id','version','document_digest'].some(key => assessment?.[key] !== selected[key])
           || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id
