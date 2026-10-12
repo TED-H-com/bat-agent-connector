@@ -69,7 +69,8 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
                 statement.source_ref?.path, statement.source_ref?.revision].filter(Boolean).join(' · ')))),
             section.coverage === 'unresolved' ? h('p', {class: 'muted'}, t('pm_plan_domain_unknown')) : ''));
         }
-        detail.replaceChildren(h('h4', {}, document.title), planDocument(h, document.markdown),
+        const titleInDocument = document.markdown?.split(/\r?\n/, 1)[0] === '# ' + document.title;
+        detail.replaceChildren(titleInDocument ? '' : h('h4', {}, document.title), planDocument(h, document.markdown),
           h('details', {}, h('summary', {}, t('pm_plan_sources')), source));
         if (document.requirements?.length) detail.append(h('section', {class: 'pm-plan-requirements'},
           h('h4', {}, t('pm_plan_acceptance')), ...document.requirements.map(requirement => h('details', {},

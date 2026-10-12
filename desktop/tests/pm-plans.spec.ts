@@ -18,6 +18,7 @@ async function savePlan(page:any, text = '# First visit\n\nKeep <script>literal 
   await page.getByRole('button',{name:'Save plan revision',exact:true}).click();
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
   await page.locator('[data-pm-revision] > summary').click();
+  await expect(page.locator('[data-pm-revision] .pm-plan-document')).toBeVisible();
   const adoption = page.locator('[data-pm-plan-adopt]');
   if (await adoption.count()) await adoption.locator(':scope > summary').click();
 }
@@ -97,6 +98,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await prepare.getByRole('button',{name:'Save context package',exact:true}).click();
     await expect.poll(()=>f.state.bound).toBe(true);
     await page.locator('[data-pm-revision] > summary').click();
+    await page.locator('[data-pm-plan-adopt] > summary').click();
     await expect(action(page,'pm.plan.adopt').getByRole('button',{name:'Adopt this plan',exact:true})).toBeEnabled();
     expect(f.state.writes.at(-1).body.params.repository_binding).toEqual({...target,source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)});
   });

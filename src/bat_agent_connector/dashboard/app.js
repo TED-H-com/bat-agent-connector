@@ -14507,7 +14507,8 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 					statement.source_ref?.path,
 					statement.source_ref?.revision
 				].filter(Boolean).join(" · ")))), section.coverage === "unresolved" ? h("p", { class: "muted" }, t("pm_plan_domain_unknown")) : ""));
-				detail.replaceChildren(h("h4", {}, document.title), planDocument(h, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source));
+				const titleInDocument = document.markdown?.split(/\r?\n/, 1)[0] === "# " + document.title;
+				detail.replaceChildren(titleInDocument ? "" : h("h4", {}, document.title), planDocument(h, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source));
 				if (document.requirements?.length) detail.append(h("section", { class: "pm-plan-requirements" }, h("h4", {}, t("pm_plan_acceptance")), ...document.requirements.map((requirement) => h("details", {}, h("summary", {}, requirement.text || requirement.id), h("ul", {}, ...(requirement.acceptance || []).map((criterion) => h("li", {}, criterion.text))), h("code", { class: "pm-source" }, requirement.id)))));
 				if (plan.adoption) detail.append(h("p", {}, t("pm_plan_adoption_evidence", { actor: plan.adoption.adopted_by }), h("code", {}, plan.adoption.commit_sha)), h("p", { class: "pm-note-text" }, plan.adoption.rationale));
 				if (plan.thread_id === threadId) detail.append(h("button", {
