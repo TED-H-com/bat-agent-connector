@@ -16,7 +16,9 @@ page headings 20px and section headings 16px. Supporting orchestration text is 1
 
 Reuse `.panel` (14px padding, 10px radius, 1px border), `.capture-fields` (8px gap,
 wrapping 220px field basis), `.actions` (8px gap) and the primary/secondary/danger
-button variants (8px radius, 8px 14px padding). One primary submission per form.
+button variants (6px radius, 6px 12px padding; 36px desktop / 44px mobile height).
+Secondary buttons use neutral text and borders; reserve the action fill for the
+primary submission. One primary submission per form.
 Authenticated views use a persistent 260px project/work sidebar (230px below 1200px)
 and a flexible content area. The selected session puts conversation and reply first,
 with a 280px work/results inspector beside it at 1200px and above. Narrower screens
@@ -48,3 +50,10 @@ Extract existing CSS tokens before adding UI. Use a compact selection panel and
 instruction section for a new action; use receipt links for multi-effect outcomes.
 Avoid decorative cards, oversized headings, extra primary buttons or a second font.
 Check both locales and 390/768/1440 widths with real screenshots before delivery.
+
+The October 12 visual review keeps light and dark as complete system themes.
+Public tours use light consistently across scenes. The work board sits directly
+on the page, with quiet lane surfaces and white cards, without an enclosing panel.
+PM navigation stays visible while reading a long plan on desktop. Dispatch and
+plan reading use an 820px maximum width; buttons and disclosure links should not
+compete visually with work titles.

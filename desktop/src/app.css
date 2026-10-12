@@ -2,6 +2,9 @@
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5d6676; --line: #dfe3ea;
   --accent: #2f5bd3; --accent-text: #ffffff; --ok: #1f8a4c; --warn: #b26a00; --bad: #c0392b; --info: #3f6ad8;
   --chip: #eef1f6; --readonly: #6b4fa0;
+  --type-label: 12px; --type-small: 13px; --type-body: 14px; --type-title: 24px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
+  --radius-small: 6px; --radius-panel: 8px; --form-width: 820px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -66,10 +69,13 @@ details.row-details ul { margin: 4px 0 4px 18px; padding: 0; overflow-wrap: anyw
 .status-succeeded { color: var(--ok); } .status-failed, .status-needs_attention { color: var(--bad); }
 .status-uncertain, .status-waiting_checks, .status-waiting_external { color: var(--warn); }
 .status-running, .status-accepted { color: var(--info); }
-button.primary, button.secondary, button.danger { border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer;
+button.primary, button.secondary, button.danger { border-radius: var(--radius-small); padding: 6px 12px; min-height: 36px; font: inherit; cursor: pointer;
   border: 1px solid var(--accent); }
 button.primary { background: var(--accent); color: var(--accent-text); }
-button.secondary { background: transparent; color: var(--accent); }
+button.secondary { background: var(--panel); color: var(--text); border-color: var(--line); }
+button.secondary:hover:not(:disabled) { background: var(--chip); border-color: var(--muted); }
+button.primary:hover:not(:disabled) { filter: brightness(.95); }
+:is(button, input, select, textarea, summary, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
 button:disabled { opacity: .45; cursor: not-allowed; }
 input, select, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
@@ -157,6 +163,7 @@ button.mini.on { color: var(--warn); border-color: var(--warn); }
 .step label { overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   main { padding: 10px; }
+  button.primary, button.secondary, button.danger { min-height: 44px; }
   .top { gap: 8px; }
   .row { align-items: flex-start; }
   .row.tree { padding-left: calc(var(--depth, 0) * 12px); }
@@ -497,7 +504,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-mode #workspace > .workspace-nav, .pm-mode .workspace-resizer { display: none; }
 .has-workspace main.pm-view { padding: 0; }
 .pm-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: calc(100dvh - 57px); }
-.pm-shell > aside { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px; }
+.pm-shell > aside { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px;
+  position: sticky; top: 57px; align-self: start; height: calc(100dvh - 57px); overflow-y: auto; }
 .pm-navigation > summary { font-weight: 600; padding: 8px; }
 .pm-navigation-body { display: grid; gap: 16px; }
 .pm-workspace-list { display: grid; gap: 12px; }
@@ -510,7 +518,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-create-workspace summary, .pm-inspector summary { cursor: pointer; padding-block: 6px; }
 .pm-main { padding: 20px 24px; min-width: 0; }
 .pm-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
-.pm-heading h1 { margin-bottom: 4px; }
+.pm-heading h1 { font-size: var(--type-title); margin-bottom: var(--space-3); font-weight: 650; }
 .pm-heading p { margin: 0 0 16px; }
 .pm-heading > button { flex-shrink: 0; }
 .pm-thread-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -531,6 +539,14 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-inspector > details[data-pm-information] { margin-top: 0; border-top: 0; padding-top: 8px; }
 .pm-discussion > .muted:empty { display: none; }
 .dispatch-instructions > label { margin-bottom: 16px; }
+.published-start { max-width: var(--form-width); }
+.published-start .panel { padding: var(--space-6); }
+.dispatch-destination .capture-fields { gap: var(--space-4); }
+.dispatch-instructions > .capture-fields { max-width: 360px; }
+.published-start :is(label, summary) { font-size: var(--type-body); }
+.published-start > .actions { padding-block: var(--space-2); }
+.dispatch-attachments input[type="file"]::file-selector-button { font: inherit; color: var(--text); background: var(--chip);
+  border: 0; border-radius: var(--radius-small); padding: var(--space-2) var(--space-3); margin-right: var(--space-3); cursor: pointer; }
 .pm-inspector h2 { margin-top: 0; }
 .pm-inspector h3 { font-size: 14px; margin-block: 12px 4px; }
 .pm-inspector > section, .pm-inspector > details { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
@@ -552,13 +568,20 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-plans summary { cursor: pointer; padding-block: 6px; overflow-wrap: anywhere; }
 .pm-plans p, .pm-plans code, .pm-plan-document { overflow-wrap: anywhere; }
 .pm-plan-document { white-space: pre-wrap; margin-block: 8px 12px; }
-.pm-plan-reading { white-space: normal; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px 24px; }
+.pm-plan-reading { white-space: normal; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--space-8); max-width: var(--form-width); }
 .pm-plan-reading p { white-space: pre-wrap; max-width: 75ch; }
 .pm-plan-reading > :first-child { margin-top: 0; }
 .pm-plan-reading h4 { font-size: 16px; margin-block: 24px 8px; }
 .pm-plan-reading li { margin-block: 4px; }
 .pm-plan-reading pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .pm-plan-requirements { border-top: 1px solid var(--line); margin-block: 16px; }
+@media (max-width: 800px) {
+  .pm-shell > aside { position: static; height: auto; overflow: visible; }
+}
+@media (max-width: 640px) {
+  .published-start .panel { padding: var(--space-4); }
+  .dispatch-instructions > .capture-fields { max-width: none; }
+}
 .pm-sprint-work-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .pm-sprint-work-heading a { font-weight: 600; }
 .pm-sprint-work-list .pm-fact { padding-block: 12px; }
