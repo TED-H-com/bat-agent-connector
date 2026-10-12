@@ -51,7 +51,7 @@ def saved_sources(w, parent, recorded, monkeypatch, record_property):
         events.extend(ops.journal.api_events(resource_id=identity, limit=500)['events'])
     assert events and all(pm_access.event_visible(ops.db, OWNER, event) for event in events)
     saved = repairs.get_repair(ops, OWNER, w['workspace_id'], 'pmrp_' + parent['operation_id'][3:])
-    assert saved['repair']['quality'], saved
+    assert saved['repair']['progress']['quality'], saved
     # Withdraw only one original discussion source, not the caller's membership
     # or any saved repair record. Every derivative must disappear together.
     first = ops.db.execute('''SELECT m.operation_id FROM pm_messages m JOIN operations o ON o.operation_id=m.operation_id
