@@ -13,6 +13,7 @@ from bat_agent_connector import (
     pm_follow_up,
     pm_lifecycle_gates,
     pm_plans,
+    pm_snapshots,
     pm_source_lineage,
     pm_workspace,
 )
@@ -92,6 +93,7 @@ async def test_original_candidate_confirmation_planning_and_followup_preserve_so
     # Follow-up needs a separately adopted plan snapshot. The original maintenance
     # report was prepared without one and cannot silently become that baseline.
     adopt(adoption(ops, {'workspace_id': wid}, draft['result']['revision_id']))
+    pm_snapshots.install(ops)
     snapshot = await execute(ops, {'action': 'pm.snapshot.create', 'target': {'workspace_id': wid},
         'params': {}, 'preconditions': {'expected_plan_version': pm_plans.head(ops.db, wid)['version']},
         'idempotency_key': uuid.uuid4().hex})
