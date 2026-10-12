@@ -94,8 +94,9 @@ saved receipts and their whole original source boundary remain unchanged.
 Maintenance repair roots retain their existing bounded full-source traversal:
 saved quality/delivery evidence may refer back through the same owned repair
 child. That domain guard includes the complete principal and credential identity;
-the generic root memo does not cache a partial repair authorization or preempt
-its same-parent backedge. Other original roots keep the shared read-scope bounds.
+only that exact in-progress same-parent backedge bypasses the generic root memo,
+without caching a partial authorization. Completed outer repair authorizations
+and all other original roots keep the shared memo and read-scope bounds.
 
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.
