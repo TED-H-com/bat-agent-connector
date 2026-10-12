@@ -70,6 +70,13 @@ reads the original native receipt and replay. Cancellation, source withdrawal,
 membership changes and lifecycle stops block a new frame. Original read-back
 does not select a newer context or adopt another native thread.
 
+One synchronous PM start guard shares completed historical source decisions
+between its profile and carrier checks. Both original controller checks still
+run, including current writer, membership, cancellation, deadline and binding
+checks. This read-only snapshot ends before any await or write; each subsequent
+guard and final transport frame starts fresh. The ordinary session-start guard
+and its resource, policy, registry and cleanup checks remain outside this scope.
+
 Assistant import requires contiguous original replay, exactly one original
 input and completed turn, matching native terminal JSON digest/output digest,
 and confirmed death of the original dedicated process. A native message ID in

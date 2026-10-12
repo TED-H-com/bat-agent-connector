@@ -260,7 +260,17 @@ def guard_start(ctx, plan):
     profile = plan.get("pm_runtime_profile")
     if profile is None and not isinstance(ctx, _StartContext) and 'pm_carrier' not in plan:
         return
-    if (not isinstance(ctx, _StartContext) or profile != start_profile(ctx)
+    if not isinstance(ctx, _StartContext):
+        raise StepFailed("PM_BAT_BINDING_CHANGED", "The original dedicated PM start profile changed")
+    from .pm_source_reads import scope
+    # Both checks still run. Only completed historical source decisions share
+    # this synchronous read snapshot; the next transport frame opens a new one.
+    with scope(ctx.service.db, pm_workspace.admitted_principal(ctx)):
+        _guard_start(ctx, plan)
+
+
+def _guard_start(ctx, plan):
+    if (plan.get("pm_runtime_profile") != start_profile(ctx)
             or plan["workspace_id"] != ctx.target["workspace"]
             or plan["permission_options"] != pm_runtime.readonly_start_options()):
         raise StepFailed("PM_BAT_BINDING_CHANGED", "The original dedicated PM start profile changed")
