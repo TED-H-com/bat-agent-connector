@@ -97,6 +97,10 @@ child. That domain guard includes the complete principal and credential identity
 only that exact in-progress same-parent backedge bypasses the generic root memo,
 without caching a partial authorization. Completed outer repair authorizations
 and all other original roots keep the shared memo and read-scope bounds.
+The repair's complete historical source reader supplies one such scope even
+when called directly by an execution guard. Current credentials, policy,
+lifecycle, deadline and effect eligibility remain outside that reader; subsequent
+frames and independent reads never reuse its completed permissions.
 
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.
