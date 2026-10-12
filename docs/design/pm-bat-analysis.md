@@ -53,6 +53,15 @@ The capability descriptor is configuration eligibility; actual attestation,
 authentication and model execution remain separate per-run evidence. The
 ordinary BAT profile's external-tool limitation remains unchanged.
 
+The owner fork's [server package change](https://github.com/teddashh/better-agent-terminal/pull/3)
+provides a fixed Linux x86_64 candidate and a
+[deployment guide](https://github.com/teddashh/better-agent-terminal/blob/737f6fb256716e190f34795dc27d6341ba0bc345/docs/pm-server-candidate.md).
+Its manifest and smoke receipt identify the exact source and payload hashes.
+The ordinary bundled Codex is separate from the required PM Codex 0.160.0;
+operators configure that PM executable explicitly. Package tests prove bounded
+offline startup, authentication and restart behavior, not model execution or an
+installation on an owner's host.
+
 Start and send have distinct durable receipts. The send requires an authenticated
 fresh `claude:sync-session` cursor, original runtime/context IDs and a fixed
 `clientMessageId`. That cursor, prompt digest and transport fence are persisted

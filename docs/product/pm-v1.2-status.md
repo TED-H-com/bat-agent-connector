@@ -3,6 +3,30 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
+## 目前整合狀態（2026-10-12 04:06 UTC）
+
+#98–#112 已合併。下列是接續候選的固定證據；後面的分批紀錄保留當時範圍，
+不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
+
+- [#113](https://github.com/teddashh/bat-agent-connector/pull/113) `de30795`：成果評估、
+  依賴解鎖、自然對話採用與維護修復整合。精確來源的 desktop 五個 jobs 已通過，
+  Linux 共享 UI 1,873 項通過／3 項跳過；後端四版本完整矩陣仍在執行，尚未合併。
+- [#114](https://github.com/teddashh/bat-agent-connector/pull/114) `50dbb7e`：AHP 唯讀
+  觀察與 core 0.2.4 → 0.2.5 實包升級。先前 `fca7dae` 四平台升級 fixture 均通過；
+  Windows 安裝 fixture 的首個 HTTP 讀取逾時後，清理錯誤蓋過原始失敗。
+  新版只修測試的有界重試及失敗保存，PowerShell helper／語法檢查通過；完整 CI 重新執行。
+- BAT owner fork [#3](https://github.com/teddashh/better-agent-terminal/pull/3) 已合併至
+  `737f6fb`，內容與通過 CI 的 `4be316e` 相同。固定 Linux server 套件的 59 個 payload
+  檔案、來源及雜湊已核對，實包啟動／認證／重啟／清理 fixture 通過。安裝方式見
+  [固定版本部署說明](https://github.com/teddashh/better-agent-terminal/blob/737f6fb256716e190f34795dc27d6341ba0bc345/docs/pm-server-candidate.md)。
+- 接續分支已整合 BAT 計畫提案及 Follow-up 分析；沿用原操作、固定來源與既有採用流程，
+  可按操作明確選 native 或 BAT。UI `4126fbb` 的 98 項與 Node 34 項通過；
+  後端 `2286575` 的完整受影響模組仍在驗證。未公開為已合併能力。
+
+M4 的同一 workspace、同一份 ID 紀錄完整流程正在串接。一般工程工作包的原執行完成
+與閒置判斷仍需補齊；不刪除人工 session 或保留的 worktree 來製造閒置。
+本批未安裝到使用者環境、未發布穩定版，也沒有新增 live 模型／主機驗收宣稱。
+
 ## 第一批：workspace、Idea 與 Planning 草稿
 
 追蹤 [#84](https://github.com/teddashh/bat-agent-connector/issues/84)，基底 `05396b1a`。
@@ -75,7 +99,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W06 | P0 | Session worktree work 關聯 | #95 已合併：原 project／work 明確綁定、固定已採用 plan／需求引用、既有來源關聯；不轉移 session 控制權 |
 | W07 | P0 | PM worktree bootstrap | 第三、四批：設定綁定、固定來源、自有 worktree、不可覆寫草稿與計畫 commit；不夾帶程式或其他 index 修改 |
 | W08 | P0 | Plan revision 與採用流程 | #93 已合併：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；不是執行授權 |
-| W09 | P1 | PM runner 與 adapter selection | 開發分支：中央原生與所選 BAT 的單次分析可明確切換，各自保存原請求與未知結果查回；長期工作 adapter 接續仍見 W24 |
+| W09 | P1 | PM runner 與 adapter selection | 開發分支：中央原生與所選 BAT 的單次分析、計畫提案及 Follow-up 可按操作明確選擇，保留原請求與未知結果查回；長期工作 adapter 接續仍見 W24 |
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | #95／#96／#97 已合併：固定工作證據快照與 Idea／Planning 原生分析；完整 Follow-up／會議引導與品質判斷待做 |
 | W11 | P1 | Plan diff 與影響分析 | 開發分支：固定版本／來源／接受條件比較、明確工作關聯的影響候選；語意判讀與採用變更流程仍待做 |
 | W12 | P1 | Project Brief | #96 已合併：五項來源總覽、固定計畫／證據快照、來源查閱；完整偏差與品質判讀仍待實作 |
@@ -89,9 +113,9 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W20 | P1 | 現有 integration 與 merge 接入 | #112 已合併既有 integration preview／apply／conflict handoff／PR merge 的固定工作包與來源 lineage，最後 frame 與已送出結果查回分開；Web／Tauri／API／MCP 可讀原推送／合併 receipt，不據此接受需求 |
 | W21 | P1 | 現有 deploy 與 receipt 接入 | #112 已合併既有 deploy／rollback／merge-and-deploy 的原來源權限與固定 release receipt，交付投影分開顯示合併、部署驗證與目前部署；未安裝或 live-tested |
 | W22 | P1 | AHP observer 與 create-own | 開發分支已接明確設定的 AHP 有界唯讀觀察、原始來源權限、API／MCP／Web／Tauri；固定 1.0 canonical subset 與 VS Code 0.10 profiles 已有 fixture，完整 CI／合併待完成；create-own、寫入及 live host 尚未驗證 |
-| W23 | P1 | 第一個 native CLI adapter | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W23 | P1 | 第一個 native CLI adapter | 獨立 coding sandbox spike `1d80743` 的外層探針通過；內層 namespace 被主機拒絕，coding／隔離 canaries 未驗證，未註冊為產品 adapter；Python 3.12／3.10 各 6 項通過、1 項明確跳過 |
 | W24 | P1 | PM adapter 切換 | 單次 PM 分析已有明確 adapter selector 與獨立原操作查回；長期 workspace adapter／PM 文件接續與 writer 切換尚待完成 |
-| W25 | P1 | Fleet readiness 與安裝版 | 沿用既有 managed installation；開發分支準備 core 0.2.5／desktop 0.1.1 及固定舊版實包升級 fixture，跨平台升級 CI 與完整 Fleet 矩陣仍待完成，尚未發布或安裝 |
+| W25 | P1 | Fleet readiness 與安裝版 | 沿用既有 managed installation；core 0.2.5／desktop 0.1.1 候選 `fca7dae` 四平台實包升級 fixture 通過，Windows 安裝 fixture 修正後的新提交 CI 仍在跑；完整 Fleet 矩陣另行追蹤，尚未發布或安裝 |
 | W26 | P1 | Canonical MCP skills | 本批：PM read tools 與共用 operations；其他 v1.2 契約逐批加入 |
 | W27 | P1 | 端到端實機驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
 | W28 | P2 | 其餘具名 CLI 能力 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -177,7 +201,8 @@ M4 第 13 步的 followup 已接入本批整合：固定 Maintenance Review 候�
 加入完整回應大小防護後，最後整合 `f00070f` 的 Linux 0.2.5 core 已從成功 desktop CI 的 `56d1bf5`／0.2.4 實包升級通過，
 上述身分／歷史／並行／重啟／拒絕降版與未知效果防護均已核對，測試服務及目錄已清除。
 這次使用 child PATH 無 Python 的打包程式；較早 package pair 的結果分開保留。
-CI 將由固定 `56d1bf5`／0.2.4 建立 baseline，在各桌面平台驗證新 core；目前尚未跑完。
+CI 由固定 `56d1bf5`／0.2.4 建立 baseline，`fca7dae` 已在 Windows、兩種 macOS 及 Linux
+通過上述 core 升級；Windows 安裝 fixture 修正後的 `50dbb7e` 仍待精確來源 CI。
 這是 core 升級 fixture，不代表應用程式 installer 原地升級或使用者環境驗收。
 
 W22 的 create-own、W23 的一般 coding adapter、W24 的持久 adapter 切換仍未完成。

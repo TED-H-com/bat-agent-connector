@@ -171,7 +171,8 @@ MCP／CLI 寫入保留明確確認、主機權限及稽核；UI 已檢視的操�
 ## 文件索引
 
 [已採用的 PM v1.2 計畫](docs/product/pm-v1.2-plan.md)將產品延伸到專業專案管理與維護。
-第一批開發加入 workspace 討論記憶及初步 Planning 草稿；自動 PM runner 與完整生命週期
+目前正在串接有來源的討論、計畫採用、需求、成果評估與維護。使用方式見
+[PM 工作流程](docs/getting-started.zh-TW.md#試跑一條-pm-工作流程)；已合併能力、整合候選與剩餘生命週期工作
 仍列在 [PM 開發狀態](docs/product/pm-v1.2-status.md)。API／MCP 使用方式見
 [PM workspace 契約](docs/design/pm-workspaces.md)。
 

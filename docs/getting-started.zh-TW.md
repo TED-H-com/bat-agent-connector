@@ -60,15 +60,17 @@ Repository 與 host／workspace 必須明確綁定，不能用相似的專案名
 使用同一個已審閱 PM 候選版本的中央與 client。功能依中央回報的能力顯示，舊安裝版
 可能只提供其中部分步驟。已合併、候選與剩餘範圍見 [PM 實作狀態](product/pm-v1.2-status.md)。
 
-**PM runtime 前提：**計畫提案與 Follow-up 分析目前在已設定的 **Linux 中央服務**執行，
-與 client 的作業系統分開。服務帳號需要 Codex CLI **0.160.0**、bubblewrap，以及
+**PM runtime 前提：**討論分析、計畫提案與 Follow-up 分析可分別明確選擇已設定的
+Linux 中央 runtime 或所選 Linux BAT 主機。Windows/macOS client 也能使用中央回報可用的
+路徑。中央 runtime 的服務帳號需要 Codex CLI **0.160.0**、bubblewrap，以及
 `CODEX_HOME`（通常是 `~/.codex/auth.json`）中的可讀一般登入檔。目前不導入自訂 provider
 設定或環境變數中的 API key，也不支援系統受管理的 Codex 設定；不要移除管理政策來啟用。
-Windows/macOS client 可連到已設定的 Linux 中央，詳見 [原生 runtime 邊界](design/pm-native-runtime.md)。
-選擇 BAT 做一般討論分析，不會把計畫提案或 Follow-up 的生成移到 BAT。
-BAT 分析還需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime；一般 BAT 檔案唯讀設定
+詳見 [原生 runtime 邊界](design/pm-native-runtime.md)。
+BAT 分析需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime；一般 BAT 檔案唯讀設定
 不足以啟用，詳見 [BAT 分析前提](design/pm-bat-analysis.md)。能力回報只說明安裝是否適合進一步
-檢查；每次執行仍會核對實際 runtime、登入與原回合完成證據。
+檢查；每次執行仍會核對實際 runtime、登入與原回合完成證據。已保存的請求會保留原 adapter
+和 key，回覆遺失時也沿用原請求查回。所選 adapter 不可用時不會自動改走另一條路徑。
+舊中央的計畫提案與 Follow-up 保留原生分析行為。
 
 1. 開啟 **PM**，建立 workspace 並開始 Idea 討論。先用一般筆記寫下目標與限制，
    例如會員登入與忘記密碼，第一版排除推薦碼。
@@ -77,7 +79,7 @@ BAT 分析還需要在所選 Linux BAT 主機安裝已審閱的專用 PM runtime
    **儲存討論脈絡**。此步驟需要前述 repository 綁定、managed Git 與 start 權限。
    **只保留討論紀錄** 不會建立採用計畫或 BAT 分析需要的 Git 工作區；後續可選
    **沿用既有 PM 工作目錄**。
-3. 在討論的計畫更新區準備提案；這需要可用的原生分析 runtime。核對來源引文、
+3. 在討論的計畫更新區選擇可用的分析 adapter，再準備提案。核對來源引文、
    保留需求、排除項目、提議刪除的需求與未決問題，必要時修改文字，再一次採用整組更新。
    採用需要 workspace owner 權限及已準備的 PM 自有 Git 工作區。
 4. 把正式需求關聯到工作，準備工程套件並檢視明確 repository／commit 目的地。
