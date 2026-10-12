@@ -87,6 +87,28 @@ jobs:
         working-directory: .
         timeout-minutes: 8
         run: uv run --locked --extra desktop-build python desktop/tests/managed-runtime-fixture.py
+      - name: Check out the fixed earlier core upgrade baseline (0.2.4)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 56d1bf5a23cd6d8d6003fa508c1bfd2603770bc4
+          path: .upgrade-baseline
+          persist-credentials: false
+      - name: Build the original earlier core from its own locked environment
+        working-directory: .upgrade-baseline
+        timeout-minutes: 8
+        run: uv run --python 3.13 --locked --extra desktop-build python desktop/scripts/build-managed-runtime.py
+      - name: Distinct packaged core upgrade retains identity, workspace and original intents
+        working-directory: .
+        timeout-minutes: 8
+        run: uv run --locked --extra desktop-build python desktop/tests/managed-upgrade-fixture.py --previous-resources .upgrade-baseline/desktop/managed-runtime --current-resources desktop/managed-runtime --receipt desktop/test-results/packaged-core-upgrade.json
+      - name: Preserve packaged core upgrade evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: packaged-core-upgrade-${{ matrix.os }}
+          path: desktop/test-results/packaged-core-upgrade.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Packaged managed setup with real browser and MockBAT
         if: runner.os == 'Linux'
         timeout-minutes: 5

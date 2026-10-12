@@ -210,6 +210,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--previous-resources', type=Path, required=True)
     parser.add_argument('--current-resources', type=Path, required=True)
+    parser.add_argument('--receipt', type=Path)
     args = parser.parse_args()
     temp_root = Path(os.environ.get('RUNNER_TEMP', Path.home() / 'agent-work/tmp/managed-runtime'))
     temp_root.mkdir(parents=True, exist_ok=True)
@@ -244,7 +245,11 @@ def main():
                 if (data / 'installation.json').exists():
                     assert command(current, data, env, action='stop')['stopped'] is True
         remove(root)
-    print(json.dumps(receipt))
+    output = json.dumps(receipt)
+    if args.receipt:
+        args.receipt.parent.mkdir(parents=True, exist_ok=True)
+        args.receipt.write_text(output + '\n')
+    print(output)
 
 
 if __name__ == '__main__':
