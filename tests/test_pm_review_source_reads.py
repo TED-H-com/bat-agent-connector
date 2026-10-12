@@ -5,7 +5,14 @@ from dataclasses import replace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_runs, pm_source_lineage, pm_source_reads, pm_workspace
+from bat_agent_connector import (
+    pm_access,
+    pm_runs,
+    pm_source_lineage,
+    pm_source_reads,
+    pm_workload,
+    pm_workspace,
+)
 from bat_agent_connector import pm_maintenance_review as review
 from bat_agent_connector import pm_maintenance_review_sources as sources
 from bat_agent_connector.operations import OperationError
@@ -97,3 +104,26 @@ async def test_original_review_candidate_and_frozen_run_reads_share_no_later_aut
         assert hidden.value.status in (403, 404)
     assert stored_bytes(ops, run, candidate) == original_bytes
     assert pm_runs.get(ops.db, run['run_id'])['context'] == run['context']
+
+
+async def test_review_original_workload_graph_reuses_complete_sources(ops, monkeypatch, record_property):  # noqa: F811
+    data = await planning.prepared(ops, monkeypatch)
+    candidate = ops.get(data['event']['operation_id'])
+    original, calls = pm_workload._source_access, []
+    def counted(*args):
+        calls.append(args[3]['snapshot_id'])
+        return original(*args)
+    monkeypatch.setattr(pm_workload, '_source_access', counted)
+    changes = ops.db.total_changes
+    with monkeypatch.context() as prior:
+        prior.setattr(pm_workload, '_access', counted)
+        assert review.operation_visible(ops.db, READER, candidate)
+    old = len(calls)
+    calls.clear()
+    assert review.operation_visible(ops.db, READER, candidate)
+    new = len(calls)
+    assert new == len(set(calls)) > 0
+    assert new < old
+    assert ops.db.total_changes == changes
+    record_property('review_workload_prior_traversals', old)
+    record_property('review_workload_canonical_traversals', new)
