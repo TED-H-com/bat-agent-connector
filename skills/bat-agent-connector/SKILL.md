@@ -1521,3 +1521,17 @@ For declared requirement prerequisites, select original qualified quality assess
 Maintain uses the existing `pm.lifecycle.set_stage` or explicit `reopen` with `stage: maintain` and exact `maintenance_ref` from current lifecycle availability. Preserve its policy/version/baseline/snapshot/digest and expected lifecycle revision. A complete policy check may admit the same fixed decision automatically from Development; new execution rechecks original controller authority, deadline and all workload sources. Never reuse pre-stop evidence to reopen, infer idleness from session count, or rewrite an unknown original request to the newest observation.
 
 For a configured dedicated BAT PM runtime, read `pm_capabilities_get.bat_analysis` and use the registered `pm.run.bat.analyze` action with the original discussion target, purpose and expected thread version. Prepare the fixed PM worktree binding first. Configuration eligibility does not prove runtime attestation or authentication. Preserve the original operation on an unknown reply; never replace it with another start/send. Assistant import requires original native completion and original dedicated-process death. Ordinary BAT sessions without the dedicated profile remain context-only observers.
+
+For an administrator-configured AHP source, read `pm_ahp_adapters_list(workspace_id)`
+and choose an advertised adapter ID. `pm.ahp.observe` uses observe scope with target
+`{workspace_id,adapter_id}`, params `{session_uris:[],include_changesets:false}` and
+empty preconditions; keep its original operation key. Select at most eight original
+session URIs from the saved catalog. Read `pm_ahp_observations_list`,
+`pm_ahp_observation_current_get` or `pm_ahp_observation_get` for immutable receipts;
+GET never refreshes the host. Preserve `next_cursor` through empty filtered pages.
+Only bounded catalog, selected session metadata and advertised static changeset
+snapshots are implemented. Reconnect snapshot fallback is a visible history gap;
+missing/withdrawn sources hide affected original records. Manual/foreign sources
+stay read-only. Do not supply URLs/tokens, launch or sign in a host, send/interrupt/
+resume/dispose a session, infer completion/cost from status, or treat this observer
+as create-own, a PM writer, a general native CLI adapter or an adapter switch.

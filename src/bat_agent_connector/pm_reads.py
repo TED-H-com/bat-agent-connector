@@ -7,6 +7,10 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_ahp_adapters_list": ("workspace_id",),
+    "pm_ahp_observations_list": ("workspace_id", "after", "limit"),
+    "pm_ahp_observation_current_get": ("workspace_id",),
+    "pm_ahp_observation_get": ("workspace_id", "observation_id"),
     "pm_pr_publication_get": ("workspace_id", "publication_operation_id"),
     "pm_maintenance_repairs_list": ("workspace_id", "after", "limit"),
     "pm_maintenance_repair_current_get": ("workspace_id",),
@@ -111,6 +115,15 @@ def read(ops, principal, method, params):
     if method == "pm_context_bundle_preview":
         from .pm_context_bundles import preview
         return preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))
+    if method in {"pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get"}:
+        from . import pm_ahp_observations as ahp
+        if method == "pm_ahp_adapters_list":
+            return ahp.adapters(ops, principal, workspace_id)
+        if method == "pm_ahp_observation_get":
+            return ahp.get_observation(ops, principal, workspace_id, params.get("observation_id"))
+        if method == "pm_ahp_observation_current_get":
+            return ahp.current_observation(ops, principal, workspace_id)
+        return ahp.list_observations(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
     if method == 'pm_pr_publication_get':
         from . import pr_publication
         pm_workspace.require_member(ops.db, principal, workspace_id)
