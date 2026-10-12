@@ -62,20 +62,24 @@ comes from that central's capabilities; an older installation may expose fewer
 steps. See the [current PM implementation status](product/pm-v1.2-status.md) for
 merged, candidate and remaining work.
 
-**PM runtime prerequisite:** plan proposals and Follow-up analysis currently run
-on a configured **Linux central service**, independently of the client OS. Its
+**PM runtime prerequisite:** discussion analysis, plan proposals and Follow-up
+analysis can explicitly select the configured Linux central runtime or the
+selected Linux BAT host. Each action has its own choice; Windows/macOS clients
+can use either route when its capability is available. The central runtime's
 service account needs Codex CLI **0.160.0**, bubblewrap, and a readable regular
 native sign-in file in its configured `CODEX_HOME` (normally `~/.codex/auth.json`).
 The current adapter does not import custom provider configuration or API-key
 environment variables, and does not support administrator-managed Codex
-configuration. Do not remove managed policy to enable it. Windows/macOS clients
-can join that configured central. See the [native runtime boundary](design/pm-native-runtime.md).
-Selecting BAT for ordinary discussion analysis does not move plan-proposal or
-Follow-up generation to BAT. BAT analysis additionally requires the reviewed
+configuration. Do not remove managed policy to enable it. See the
+[native runtime boundary](design/pm-native-runtime.md).
+BAT analysis requires the reviewed
 dedicated PM runtime on the selected Linux BAT host; ordinary read-only BAT
 settings are insufficient. See [BAT analysis prerequisites](design/pm-bat-analysis.md).
 Capabilities show installation eligibility; each run still checks the actual
-runtime, authentication and original completion evidence.
+runtime, authentication and original completion evidence. A saved request keeps
+its original adapter and key, including after a lost reply. An unavailable
+adapter does not silently fall back to another. Older servers retain their
+original native proposal and Follow-up behavior.
 
 1. Open **PM**, create a workspace and start an Idea discussion. Save the project
    goal and constraints in ordinary notes—for example, member login and password
@@ -87,8 +91,8 @@ runtime, authentication and original completion evidence.
    binding and managed Git/start prerequisites described above. **Discussion
    record only** does not prepare the Git worktree needed for adoption or BAT
    analysis. Later requests can select **Use the existing PM worktree**.
-3. Under **Plan update from this discussion**, prepare a proposal. The configured
-   native analysis runtime must be available. Review its source quotes, retained
+3. Under **Plan update from this discussion**, choose an available analysis
+   adapter and prepare a proposal. Review its source quotes, retained
    requirements, exclusions, proposed removals and open questions. Edit the
    wording as needed, then adopt the whole update once. Adoption needs workspace
    owner authority and the prepared PM-owned Git worktree.

@@ -1,7 +1,7 @@
 # Fixed Follow-up PM assessment
 
 This slice extends the [fixed Follow-up intake](pm-follow-up.md) with one bounded
-native PM analysis. It supports v1.2 W33 and W41: use the information already
+PM analysis on the explicitly selected runtime. It supports v1.2 W33 and W41: use the information already
 collected, explain material problems and deviations, compare tradeoffs, and ask
 zero to three consequential questions. This is an unadopted PM assessment. It
 does not confirm inputs, change scope, adopt a plan, complete a Review, dispatch
@@ -46,7 +46,9 @@ Workspace members retain the existing shared discussion authorization rules.
 
 Purpose is 1–4,000 characters. Optional `model` is 1–128 characters. Optional
 `max_chars` is an integer 2,000–64,000, default 64,000; `timeout_s` is 1–3,600,
-default 300. Unknown fields, extra preconditions, paths, auth sources, tools,
+default 300. Optional `adapter` is exactly `codex-native-linux` or
+`bat-pm-linux-v1`; omission keeps the existing native behavior and request bytes.
+Unknown fields, extra preconditions, paths, auth sources, tools,
 runtime profiles and caller-supplied output are rejected.
 
 Admission freezes the complete intake document, original source access refs,
@@ -60,9 +62,19 @@ included. The Follow-up profile remains contract-only in the ordinary discussion
 mode registry; this action supplies the bounded analysis implementation without
 adding `follow_up` to `EXECUTABLE_MODES`.
 
-## Shared native execution and receipt recovery
+## Selected execution and receipt recovery
 
-The action uses the existing native PM execution, generation writer, durable
+Workspace `structured_analysis.version: 1` exposes per-action native and BAT
+descriptors, separately from the retained native-only `follow_up_analysis`
+capability. Selection is explicit and saved with the original operation. For
+BAT, admission also freezes the existing PM host/workspace/repository binding.
+The [BAT PM executor](pm-bat-analysis.md) uses its existing managed start, send
+fence, replay, native completion and original process-death proof. It receives
+only trusted prepare/import callbacks for this fixed assessment destination.
+No raw caller output, caller-selected sink, second queue or automatic fallback
+is introduced. The original operation key cannot change its selected runtime.
+
+For native selection, the action uses the existing native PM execution, generation writer, durable
 operation steps, process identity and native journal. There is one original
 launch intent and at most one native send. It requires the pinned runtime's
 isolated context-only capability with no external tools, MCP servers, skills,
@@ -70,7 +82,7 @@ repository reads or environment access. Raw native events are stored unchanged;
 they are never parsed as BAT events. No second engine or background queue is
 created.
 
-The same native reducer must prove the original user echo, request/client IDs,
+The selected runtime's reducer must prove the original user echo, request/client IDs,
 native thread/turn/message, terminal assistant content and complete event stream.
 The original process must also be proven dead before releasing the writer or
 importing a reply. ACK, process exit and valid JSON alone are insufficient.
@@ -131,6 +143,11 @@ proof. Public process identity is only PID, start ticks and a boot identity
 digest; config is only its digest. Public process proof selects explicit receipt
 fields and excludes future diagnostic paths, environment, stderr or spool data.
 The untouched native records remain in the internal journal.
+BAT proof separately retains replay message and native app-server item identity,
+the original send/observed cursor, runtime observation sequence/digest, and
+source/binary identities. Its nested process-completion proof is also projected
+onto explicit public fields; diagnostic paths and environment fields from raw
+runtime observations cannot enter the assessment or public run provenance.
 
 ## Read and authorization boundaries
 
@@ -176,6 +193,10 @@ string cursors. Draft storage includes the original actor namespace, intake and
 thread target. A new discussion version requires an explicit draft rebase;
 ambiguous or acknowledged operations keep their original body, key and receipt.
 Analysis submission shares the same durable form used by other PM commands.
+With the versioned structured capability, this form also saves the selected
+adapter. Recovery locks the original selection; capability withdrawal leaves
+the draft blocked and does not silently switch it to another runtime. An older
+server retains the absent-adapter wire format.
 
 Source or workspace authority withdrawal observed by either child clears the
 parent's quoted intake facts and both children. Drafts and original operation

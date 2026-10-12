@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {fixture,mount,intakeId,workspaceId,threadId} from './pm-follow-up-fixture.ts';
+import {structuredCapability} from './pm-structured-analysis-fixture.ts';
 
 const assessmentId=(n:number)=>'pmfa_'+n.toString(16).padStart(32,'0');
 function assessment(n:number,intake=3) {
@@ -40,7 +41,7 @@ function assessedFixture() {
       f.state.analysisPolls++;const operation=[...f.state.ops.values()].find((row:any)=>row.action==='pm.follow_up.analyze');operation.status='succeeded';
       return {status:200,data:{operation}};
     }
-    if(url.pathname===`/pm/workspaces/${workspaceId}/capabilities`)return {status:200,data:{workspace_id:workspaceId,follow_up_analysis:{authorized:f.state.manage&&f.state.start,eligible_for_preflight:f.state.runtimeEligible,reason:'PM_NATIVE_EXECUTABLE_UNAVAILABLE'}}};
+    if(url.pathname===`/pm/workspaces/${workspaceId}/capabilities`)return {status:200,data:{workspace_id:workspaceId,follow_up_analysis:{authorized:f.state.manage&&f.state.start,eligible_for_preflight:f.state.runtimeEligible,reason:'PM_NATIVE_EXECUTABLE_UNAVAILABLE'},...(f.state.structured_analysis?{structured_analysis:f.state.structured_analysis}:{})}};
     if(url.pathname===`/pm/workspaces/${workspaceId}/threads/${threadId}`){
       const response=await baseDispatch(input);if(response.status===200){response.data.thread.mode='planning';response.data.capabilities={write:f.state.manage&&['owner','contributor'].includes(f.state.role)};}return response;
     }
@@ -249,4 +250,25 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`asses
   await page.screenshot({path:`${out}/assessment-${locale}-${width}.png`,fullPage:true});
   if(width===1440){await page.evaluate(()=>document.documentElement.dataset.theme='dark');await page.screenshot({path:`${out}/assessment-${locale}-${width}-dark.png`,fullPage:true});}
   await expect(section(page)).not.toContainText('pm_fa_');
+});
+
+for(const locale of ['en','zh-TW'])test(`structured Follow-up explicitly selects BAT and restores its unsent draft, ${locale}`,async({page},info)=>{
+  const f=assessedFixture();f.state.runtimeEligible=false;f.state.structured_analysis=structuredCapability();await mount(page,f,{locale});
+  await page.locator('[data-pm-follow-up-analyze] > summary').click();
+  const form=page.locator('[data-pm-action="pm.follow_up.analyze"]'),runtime=form.locator('[data-pm-structured-analysis]'),choice=runtime.locator('select');
+  await expect(choice).toHaveValue('codex-native-linux');await expect(form.locator('button[type=submit]')).toBeDisabled();
+  await choice.selectOption('bat-pm-linux-v1');await form.locator('textarea').fill('Assess the exact fixed recovery evidence.');
+  await refresh(page);await expect(choice).toHaveValue('bat-pm-linux-v1');await expect(form.locator('textarea')).toHaveValue('Assess the exact fixed recovery evidence.');
+  for(const width of [390,768,1440]){await page.setViewportSize({width,height:900});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`follow-up-runtime-${locale}-${width}.png`),fullPage:true});}
+  await form.locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.adapter).toBe('bat-pm-linux-v1');
+});
+
+test('structured Follow-up unknown request preserves original BAT key after capability withdrawal',async({page})=>{
+  const f=assessedFixture();f.state.structured_analysis=structuredCapability();f.state.loseAnalysisReply=true;await mount(page,f);await openAnalysis(page);
+  const form=page.locator('[data-pm-action="pm.follow_up.analyze"]'),choice=form.locator('[data-pm-structured-analysis] select');
+  await choice.selectOption('bat-pm-linux-v1');await form.locator('textarea').fill('One original assessment');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original analysis reply lost');const original=structuredClone(f.state.writes[0]);
+  f.state.structured_analysis=null;await refresh(page);await expect(choice).toHaveValue('bat-pm-linux-v1');await expect(choice).toBeDisabled();
+  await form.getByRole('button',{name:'Check original request',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
+  expect(f.state.writes[1]).toEqual(original);expect(f.state.ops.size).toBe(1);
 });

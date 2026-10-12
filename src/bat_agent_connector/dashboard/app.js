@@ -572,6 +572,60 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 	};
 }
 //#endregion
+//#region src/pm-structured-analysis.js
+var NATIVE = "codex-native-linux";
+var BAT = "bat-pm-linux-v1";
+function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible, authorized, readable = () => true }) {
+	const field = h("select", {
+		"aria-label": t("pm_analysis_adapter"),
+		"data-pm-default": NATIVE
+	}, h("option", { value: NATIVE }, t("pm_analysis_local")), h("option", { value: BAT }, t("pm_analysis_bat")));
+	field.value = NATIVE;
+	const choice = labelled("pm_analysis_adapter", field), reason = h("p", {
+		class: "muted",
+		"data-structured-analysis-reason": ""
+	}), binding = h("p", { class: "muted pm-note-text" });
+	const box = h("div", { "data-pm-structured-analysis": "" }, choice, reason, binding);
+	let activeRequest = null;
+	field.addEventListener("change", () => activeRequest?.update());
+	const supported = () => capability()?.structured_analysis?.version === 1;
+	const descriptor = () => {
+		const rows = supported() ? capability().structured_analysis.actions?.[action]?.adapters : null;
+		return Array.isArray(rows) ? rows.find((row) => row?.adapter === field.value) : null;
+	};
+	const eligible = () => supported() ? Boolean([NATIVE, BAT].includes(field.value) && descriptor()?.action_registered === true && descriptor()?.authorized === true && descriptor()?.eligible_for_preflight === true) : field.value === NATIVE && legacyEligible();
+	function update(request) {
+		activeRequest = request;
+		box.hidden = !readable();
+		choice.hidden = !supported() && field.value === NATIVE;
+		field.disabled = Boolean(request?.locked()) || !authorized();
+		const selected = descriptor(), legacy = action === "pm.conversation.propose" ? capability()?.native_analysis : capability()?.follow_up_analysis;
+		const code = selected?.reason || (!supported() && field.value === NATIVE ? legacy?.reason : null);
+		const key = !authorized() || selected?.authorized === false ? "pm_native_permissions" : eligible() ? field.value === BAT ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : field.value === BAT ? {
+			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
+			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
+			HOST_READ_ONLY: "pm_analysis_bat_readonly"
+		}[code] || "pm_analysis_bat_unavailable" : {
+			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
+			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
+			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
+			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
+			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
+		}[code] || "pm_native_unavailable";
+		reason.textContent = t(key);
+		const source = field.value === BAT && selected?.selected_binding;
+		binding.hidden = !source;
+		binding.textContent = source ? `${t("pm_analysis_selected_binding")} ${source.host} / ${source.workspace_id} / ${source.repository}` : "";
+	}
+	return {
+		field,
+		box,
+		eligible,
+		update,
+		params: (values) => supported() ? { adapter: values.adapter } : {}
+	};
+}
+//#endregion
 //#region src/pm-plan-proposals.js
 var PROPOSE = "pm.conversation.propose";
 var ADOPT = "pm.conversation.adopt";
@@ -655,27 +709,36 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	}), model = input("pcp_model", {
 		max: 128,
 		required: false
-	}), prepareReason = h("p", {
-		class: "muted",
-		"data-proposal-availability": ""
+	});
+	const runtime = structuredAnalysis({
+		h,
+		t,
+		labelled,
+		action: PROPOSE,
+		capability: () => capability,
+		readable: () => visible,
+		authorized: () => writing() && caps()?.scopes?.includes("start") && !adopt?.locked(),
+		legacyEligible: () => capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true
 	});
 	prepare = form({
 		action: PROPOSE,
 		target,
 		fields: {
 			purpose,
-			model
+			model,
+			adapter: runtime.field
 		},
 		params: (values) => ({
 			purpose: values.purpose,
-			...values.model.trim() ? { model: values.model.trim() } : {}
+			...values.model.trim() ? { model: values.model.trim() } : {},
+			...runtime.params(values)
 		}),
 		preconditions: () => ({
 			expected_version: thread().thread.version,
 			expected_plan_version: head.version,
 			expected_accepted_revision_id: head.accepted_revision_id
 		}),
-		permitted: () => writing() && head && caps()?.scopes?.includes("start") && capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true && !adopt?.locked(),
+		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && !adopt?.locked(),
 		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
 		label: "pcp_prepare",
 		onSaved: async (result) => {
@@ -687,7 +750,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		onStateChange: () => {
 			if (ready) updateControls();
 		},
-		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"), prepareReason)
+		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), runtime.box, h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"))
 	});
 	const review = hidden(), rationale = input("pcp_rationale", {
 		multiline: true,
@@ -812,9 +875,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		picker.disabled = loading || adopt.locked();
 		reload.disabled = loading;
 		more.disabled = loading;
-		const unavailable = capability?.native_analysis?.authorized === false || capability?.native_analysis?.eligible_for_preflight !== true || !caps()?.scopes?.includes("start");
-		prepareReason.hidden = !unavailable;
-		prepareReason.textContent = unavailable ? t("pcp_runtime") : "";
+		runtime.update(prepare);
 		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
 		if (active && active.validation.status === "format_valid") {
 			const reasons = content.querySelector("[data-proposal-reason]");
@@ -872,6 +933,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		detail.replaceChildren();
 		content.replaceChildren();
 		detail.append(h("h4", {}, t("pcp_review")));
+		if (p.provenance?.adapter) detail.append(h("p", { class: "muted" }, t("pm_native_origin"), " ", p.provenance.adapter));
 		if (p.validation.status !== "format_valid") {
 			detail.append(note("pcp_invalid"), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error)))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
 			return;
@@ -4704,7 +4766,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 				return [h("p", { class: "pm-note-text" }, item.text), item.proposed_owner ? h("p", {}, t("pm_fa_proposed_owner"), ": ", item.proposed_owner) : ""];
 			}));
 		} else content.append(note("pm_fa_raw_review"), h("ul", {}, ...row.validation.errors.map((error) => h("li", {}, String(error)))));
-		content.append(fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
+		content.append(fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_native_origin"), " ", row.provenance.adapter || t("pm_native_unknown_source")), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
 		detail.replaceChildren(content);
 	}
 	async function read(id) {
@@ -4781,7 +4843,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 //#region src/pm-follow-up-request.js
 function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespace, form, input, labelled, permitted, errorBox, onSaved, onAccessFailure = () => {} }) {
 	const actor = caps()?.actor, endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let serial = 0, intake = null, capability = null, thread = null, request = null, retired = false, next = null, rows = [];
+	let serial = 0, intake = null, capability = null, thread = null, request = null, retired = false, next = null, rows = [], targetLocked = false;
 	const choices = new Map(), status = h("div", { role: "status" }), body = h("div"), chooser = h("select", { "aria-label": t("pm_fa_thread") });
 	const note = (key) => h("p", { class: "muted" }, t(key));
 	const element = h("details", { "data-pm-follow-up-analyze": "" }, h("summary", {}, t("pm_fa_analyze_prepare")), note("pm_fa_analyze_help"), status, body);
@@ -4798,6 +4860,58 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		return data;
 	};
 	const authorized = () => Boolean(intake) && !retired && actor === caps()?.actor && permitted(false) && caps()?.scopes?.includes("start") && thread?.capabilities?.write === true;
+	const targetKey = () => `batc.pm.${namespace}.follow-up-target.${JSON.stringify({
+		actor,
+		workspace_id: workspaceId,
+		intake_id: intake.intake_id
+	})}`;
+	const validThread = (id) => typeof id === "string" && /^pmt_[0-9a-f]{32}$/.test(id);
+	function saveTarget(id) {
+		current(serial);
+		localStorage.setItem(targetKey(), JSON.stringify({
+			version: 1,
+			actor,
+			workspace_id: workspaceId,
+			intake_id: intake.intake_id,
+			thread_id: id
+		}));
+		choices.set(intake.intake_id, id);
+	}
+	function savedTarget() {
+		const prefix = `batc.pm.${namespace}.follow-up.${intake.intake_id}.pm.follow_up.analyze.`, pending = new Set(), drafts = new Set();
+		let pointer = null, count = 0;
+		try {
+			const raw = localStorage.getItem(targetKey());
+			if (raw !== null) {
+				pointer = JSON.parse(raw);
+				if (pointer?.version !== 1 || pointer.actor !== actor || pointer.workspace_id !== workspaceId || pointer.intake_id !== intake.intake_id || pointer.thread_id !== "" && !validThread(pointer.thread_id)) throw Error();
+			}
+			for (let index = 0; index < localStorage.length; index++) {
+				const key = localStorage.key(index);
+				if (!key?.startsWith(prefix)) continue;
+				if (++count > 64) throw Error();
+				const target = JSON.parse(key.slice(prefix.length)), raw = localStorage.getItem(key);
+				if (!raw || raw.length > 65536) throw Error();
+				const value = JSON.parse(raw), id = target?.thread_id;
+				if (!validThread(id) || key !== prefix + JSON.stringify({
+					workspace_id: workspaceId,
+					thread_id: id
+				}) || value?.version !== 1 || !value.values || typeof value.values !== "object" || Array.isArray(value.values) || Object.values(value.values).some((item) => typeof item !== "string")) throw Error();
+				if (value.intent) {
+					const original = value.intent;
+					if (typeof original.key !== "string" || !original.key || original.request?.action !== "pm.follow_up.analyze" || JSON.stringify(original.request.target) !== JSON.stringify(target) || original.request.params?.intake_id !== intake.intake_id) throw Error();
+					pending.add(id);
+				} else if (Object.keys(value.values).length) drafts.add(id);
+			}
+		} catch {
+			throw Error(t("pm_fa_target_damaged"));
+		}
+		if (pending.size > 1) throw Error(t("pm_fa_target_ambiguous"));
+		return {
+			id: [...pending][0] ?? pointer?.thread_id ?? (drafts.size === 1 ? [...drafts][0] : ""),
+			locked: pending.size === 1
+		};
+	}
 	function clear() {
 		++serial;
 		intake = null;
@@ -4807,6 +4921,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		request = null;
 		rows = [];
 		next = null;
+		targetLocked = false;
 		body.replaceChildren();
 		status.replaceChildren();
 	}
@@ -4825,7 +4940,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		chooser.replaceChildren(h("option", { value: "" }, t("pm_fa_thread_choose")), ...rows.map((row) => h("option", { value: row.thread_id }, row.title)));
 		if (selected && !rows.some((row) => row.thread_id === selected)) chooser.append(h("option", { value: selected }, selected));
 		chooser.value = selected;
-		chooser.disabled = Boolean(intake.document.thread_ref) || Boolean(request?.locked());
+		chooser.disabled = Boolean(intake.document.thread_ref) || targetLocked || Boolean(request?.locked());
 	}
 	async function readThread() {
 		const ticket = ++serial;
@@ -4869,6 +4984,15 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				type: "hidden",
 				value: String(thread.thread.version)
 			}), warning = note("pm_fa_thread_stale");
+			const runtime = structuredAnalysis({
+				h,
+				t,
+				labelled,
+				action: "pm.follow_up.analyze",
+				capability: () => capability,
+				authorized,
+				legacyEligible: () => capability?.follow_up_analysis?.authorized === true && capability?.follow_up_analysis?.eligible_for_preflight === true
+			});
 			const stale = () => version.value !== String(thread?.thread.version);
 			const rebase = h("button", {
 				type: "button",
@@ -4881,12 +5005,14 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				}
 			}, t("pm_fa_use_thread_version"));
 			const sync = () => {
+				if (request) targetLocked = request.locked();
 				warning.hidden = !stale();
 				rebase.hidden = !stale();
 				rebase.disabled = Boolean(request?.locked()) || !authorized();
 				navigation();
+				runtime.update(request);
 			};
-			const eligible = () => authorized() && capability?.authorized === true && capability?.eligible_for_preflight === true && !stale();
+			const eligible = () => authorized() && runtime.eligible() && !stale();
 			request = form({
 				api: guardedApi,
 				namespace: `${namespace}.follow-up.${intake.intake_id}`,
@@ -4898,12 +5024,14 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				fields: {
 					purpose,
 					model,
-					_version: version
+					_version: version,
+					adapter: runtime.field
 				},
 				params: (values) => ({
 					intake_id: intake.intake_id,
 					purpose: values.purpose,
-					...values.model.trim() ? { model: values.model.trim() } : {}
+					...values.model.trim() ? { model: values.model.trim() } : {},
+					...runtime.params(values)
 				}),
 				preconditions: () => ({
 					expected_version: Number(version.value),
@@ -4914,16 +5042,9 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				label: "pm_fa_analyze",
 				onStateChange: sync,
 				onSaved,
-				extra: h("div", { class: "pm-fields" }, labelled("pm_fa_purpose", purpose), h("details", {}, h("summary", {}, t("pm_fa_model_optional")), labelled("pm_native_model", model)), version)
+				extra: h("div", { class: "pm-fields" }, labelled("pm_fa_purpose", purpose), runtime.box, h("details", {}, h("summary", {}, t("pm_fa_model_optional")), labelled("pm_native_model", model)), version)
 			});
-			const reason = !authorized() ? "pm_native_permissions" : capability?.eligible_for_preflight ? "pm_native_preflight_pending" : {
-				PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
-				PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
-				PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
-				PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
-				PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
-			}[capability?.reason] || "pm_native_unavailable";
-			body.append(note(reason), warning, rebase, request.box);
+			body.append(warning, rebase, request.box);
 			request.update();
 		} catch (error) {
 			if (ticket === serial) fail(error);
@@ -4949,21 +5070,41 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		try {
 			const data = check(await api("GET", `${endpoint}/capabilities`));
 			if (!current(ticket)) return;
-			capability = data.follow_up_analysis;
+			capability = data;
 			rows = [];
 			next = null;
 			if (intake.document.thread_ref) {
 				choices.set(intake.intake_id, intake.document.thread_ref.thread_id);
 				await readThread();
-			} else await readThreads();
+			} else {
+				const saved = savedTarget();
+				targetLocked = saved.locked;
+				saveTarget(saved.id);
+				await readThreads();
+			}
 		} catch (error) {
 			if (ticket === serial) fail(error);
 		}
 	}
 	chooser.addEventListener("change", () => {
-		if (!intake || request?.locked()) return;
-		choices.set(intake.intake_id, chooser.value);
-		readThread();
+		if (!intake || targetLocked || request?.locked()) {
+			if (intake) navigation();
+			return;
+		}
+		try {
+			const saved = savedTarget();
+			if (saved.locked) {
+				targetLocked = true;
+				saveTarget(saved.id);
+				navigation();
+			} else {
+				if (chooser.value && !validThread(chooser.value)) throw Error(t("pm_fa_mismatch"));
+				saveTarget(chooser.value);
+			}
+			readThread();
+		} catch (error) {
+			fail(error);
+		}
 	});
 	element.addEventListener("toggle", () => {
 		if (element.open && intake && !request) prepare();
@@ -12052,6 +12193,51 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 		github_actions: ["github_nonterminal_actions"]
 	};
 	const reasonText = (reason) => t("pmo_reason_" + (Object.keys(reasonGroups).find((key) => reasonGroups[key].includes(reason.code)) || "unknown"));
+	const text = (value) => typeof value === "string" && value.length > 0 && value.length <= 4096;
+	const object = (value) => value && typeof value === "object" && !Array.isArray(value);
+	function sourceReference(source) {
+		if (source == null) return "";
+		if (!object(source) || !text(source.kind)) throw Error(t("pmo_invalid"));
+		const names = {
+			work: "work",
+			task: "task",
+			operation: "operation",
+			command: "command",
+			session: "session",
+			sprint: "sprint",
+			bat_workspace: "bat"
+		};
+		const row = h("p", { class: "pm-source" }, t("pmo_recorded_source"), ": ", names[source.kind] ? t("pmo_ref_" + names[source.kind]) : h("code", {}, source.kind));
+		for (const field of [
+			"id",
+			"host",
+			"workspace_id",
+			"profile_id",
+			"project_id"
+		]) if (source[field] != null) {
+			if (!text(source[field])) throw Error(t("pmo_invalid"));
+			row.append(" · ", h("code", {}, source[field]));
+		}
+		return row;
+	}
+	function exclusion(row) {
+		if (!object(row) || !text(row.reason)) throw Error(t("pmo_invalid"));
+		const reasons = [
+			"checkpoint_is_not_activity",
+			"failed_attempt_explicitly_deferred",
+			"unselected_backlog",
+			"pm_owned_session",
+			"verified_ended_session_retained",
+			"original_maintenance_attempt_completed"
+		];
+		const item = h("li", {}, t("pmo_exclusion_" + (reasons.includes(row.reason) ? row.reason : "unknown")), sourceReference(row));
+		if (!reasons.includes(row.reason)) item.append(h("code", { class: "pm-source" }, row.reason));
+		if (row.runtime_observation_id != null) {
+			if (!/^op_[0-9a-f]{32}$/.test(row.runtime_observation_id)) throw Error(t("pmo_invalid"));
+			item.append(h("a", { href: `#/op/${encodeURIComponent(row.runtime_observation_id)}` }, t("pmo_runtime_receipt")), " · ", h("code", { class: "pm-source" }, row.runtime_observation_id));
+		}
+		return item;
+	}
 	const editorsBox = h("div", { class: "pm-observation-actions" });
 	function update() {
 		for (const editor of editors) editor.update();
@@ -12128,11 +12314,11 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 				"development",
 				"unknown",
 				"idle_candidate"
-			].includes(doc.classification) || !Array.isArray(doc.source_coverage) || !Array.isArray(doc.blocking_reasons) || typeof doc.stability?.satisfied !== "boolean") throw Error(t("pmo_invalid"));
+			].includes(doc.classification) || !Array.isArray(doc.source_coverage) || !Array.isArray(doc.blocking_reasons) || typeof doc.stability?.satisfied !== "boolean" || doc.exclusions != null && !Array.isArray(doc.exclusions)) throw Error(t("pmo_invalid"));
 			box.append(line("pmo_classification", t(`pmo_${doc.classification}`)), line("pmo_stability", t(doc.stability.satisfied ? "pmo_stable" : "pmo_not_stable")));
 			const coverage = h("ul");
 			for (const source of doc.source_coverage) {
-				const label = [
+				const label = source.kind === "bat_workspace" ? "pmo_source_bat" : [
 					"central_project",
 					"github",
 					"bat"
@@ -12140,7 +12326,11 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 				coverage.append(h("li", {}, `${t(label)}: ${t(source.status === "complete" ? "pmo_complete" : "pmo_incomplete")}`));
 			}
 			box.append(coverage, line("pmo_blockers", doc.blocking_reasons.length), h("p", { class: "muted" }, t("pmo_capture_limits")));
-			if (doc.blocking_reasons.length) box.append(h("details", {}, h("summary", {}, t("pmo_blocker_details")), h("ul", {}, ...doc.blocking_reasons.map((reason) => h("li", {}, reasonText(reason))))));
+			if (doc.blocking_reasons.length) box.append(h("details", {}, h("summary", {}, t("pmo_blocker_details")), h("ul", {}, ...doc.blocking_reasons.map((reason) => {
+				if (!object(reason) || !text(reason.code)) throw Error(t("pmo_invalid"));
+				return h("li", {}, reasonText(reason), h("code", { class: "pm-source" }, " · " + reason.code), sourceReference(reason.source));
+			}))));
+			if (doc.exclusions?.length) box.append(h("details", { "data-workload-exclusions": "" }, h("summary", {}, t("pmo_exclusions") + ` (${doc.exclusions.length})`), h("p", { class: "muted" }, t("pmo_exclusion_boundary")), h("ul", {}, ...doc.exclusions.map(exclusion))));
 		}
 		box.append(h("details", {}, h("summary", {}, t("pmo_proof")), h("p", { class: "mono" }, row[id]), h("p", { class: "mono" }, row.document_digest), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
 		return box;
@@ -21233,7 +21423,25 @@ var maintenanceObservationStrings = {
 		pmo_source_bat: "BAT workspace",
 		pmo_source_other: "Additional source",
 		pmo_blockers: "Recorded blockers or coverage gaps",
-		pmo_capture_limits: "Quality remains unassessed. A saved observation does not change the project stage or authorize execution.",
+		pmo_capture_limits: "This workload observation does not assess quality. A saved observation does not change the project stage or authorize execution.",
+		pmo_recorded_source: "Source recorded in this observation",
+		pmo_ref_work: "Work item",
+		pmo_ref_task: "Task",
+		pmo_ref_operation: "Operation",
+		pmo_ref_command: "Command",
+		pmo_ref_session: "Session",
+		pmo_ref_sprint: "Sprint",
+		pmo_ref_bat: "BAT workspace",
+		pmo_exclusions: "Excluded from workload at capture",
+		pmo_exclusion_boundary: "These saved exclusions do not grant control, establish quality acceptance or prove a process has stopped. A retained worktree alone is not active work.",
+		pmo_runtime_receipt: "Original runtime observation",
+		pmo_exclusion_checkpoint_is_not_activity: "A saved checkpoint alone is not ongoing activity.",
+		pmo_exclusion_failed_attempt_explicitly_deferred: "The failed attempt was explicitly deferred.",
+		pmo_exclusion_unselected_backlog: "Unselected backlog is not an active commitment.",
+		pmo_exclusion_pm_owned_session: "A session bound to the PM role is excluded from development work.",
+		pmo_exclusion_verified_ended_session_retained: "A verified ended session is retained as history.",
+		pmo_exclusion_original_maintenance_attempt_completed: "The original maintenance attempt has recorded completion evidence.",
+		pmo_exclusion_unknown: "This source was excluded in the saved observation. Review its original evidence.",
 		pmo_blocker_details: "Review blockers and coverage gaps",
 		pmo_reason_source_limit: "The source exceeds the bounded observation size.",
 		pmo_reason_source_access: "An original source is currently unavailable.",
@@ -21289,7 +21497,25 @@ var maintenanceObservationStrings = {
 		pmo_source_bat: "BAT 工作區",
 		pmo_source_other: "其他來源",
 		pmo_blockers: "已記錄的阻止原因或涵蓋缺口",
-		pmo_capture_limits: "品質仍未評估。保存觀察不會變更管理階段，也不構成執行授權。",
+		pmo_capture_limits: "這份工作量觀察不做品質評估。保存觀察不會變更管理階段，也不構成執行授權。",
+		pmo_recorded_source: "本次觀察保存的來源",
+		pmo_ref_work: "工作項目",
+		pmo_ref_task: "任務",
+		pmo_ref_operation: "操作",
+		pmo_ref_command: "命令",
+		pmo_ref_session: "工作階段",
+		pmo_ref_sprint: "Sprint",
+		pmo_ref_bat: "BAT 工作區",
+		pmo_exclusions: "擷取時未計入工作量的來源",
+		pmo_exclusion_boundary: "這些保存的排除原因不授予控制權、不代表品質驗收，也不證明程序已停止。保留 worktree 本身不算進行中的工作。",
+		pmo_runtime_receipt: "原始執行觀察",
+		pmo_exclusion_checkpoint_is_not_activity: "單獨保存的 checkpoint 不代表活動仍在進行。",
+		pmo_exclusion_failed_attempt_explicitly_deferred: "失敗的嘗試已明確延後處理。",
+		pmo_exclusion_unselected_backlog: "尚未選入執行的待辦不算生效中的承諾。",
+		pmo_exclusion_pm_owned_session: "已綁定 PM 角色的工作階段不計入開發工作。",
+		pmo_exclusion_verified_ended_session_retained: "已驗證結束的工作階段保留為歷史。",
+		pmo_exclusion_original_maintenance_attempt_completed: "原始維護嘗試已有保存的完成證據。",
+		pmo_exclusion_unknown: "本次保存觀察未將此來源計入工作量，請核對其原始證據。",
 		pmo_blocker_details: "檢視阻止原因與涵蓋缺口",
 		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
 		pmo_reason_source_access: "目前無法讀取某項原始來源。",
@@ -22584,6 +22810,8 @@ var followUpAnalysisStrings = {
 		pm_fa_boundary: "Saved analysis of this preparation. Recommendations remain proposals until explicitly adopted.",
 		pm_fa_actor_changed: "The signed-in actor changed. Reopen this workspace.",
 		pm_fa_mismatch: "The assessment does not match its fixed source. Refresh this preparation.",
+		pm_fa_target_damaged: "The saved discussion target cannot be verified. Original drafts and requests remain saved; no replacement analysis will start.",
+		pm_fa_target_ambiguous: "More than one original discussion request is saved for this preparation. Resolve the original requests before choosing another discussion.",
 		pm_fa_more: "Load more assessments",
 		pm_fa_unavailable: "The previous assessment has been cleared. Refresh to check current source access.",
 		pm_fa_record: "Assessment {sequence}",
@@ -22635,6 +22863,8 @@ var followUpAnalysisStrings = {
 		pm_fa_boundary: "依這份討論準備保存的分析。建議需經明確採用，才會成為決定。",
 		pm_fa_actor_changed: "登入身分已變更，請重新開啟工作空間。",
 		pm_fa_mismatch: "評估與固定來源不符，請重新讀取這份討論準備。",
+		pm_fa_target_damaged: "無法核對已保存的討論目標。原草稿與請求仍保留，不會另開分析取代。",
+		pm_fa_target_ambiguous: "這份討論準備保留了不只一個原始討論請求。請先處理原請求，再選擇其他討論。",
 		pm_fa_more: "載入更多評估",
 		pm_fa_unavailable: "已清除先前評估。重新整理後會再次核對來源權限。",
 		pm_fa_record: "評估 {sequence}",

@@ -3,6 +3,7 @@ import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
 import {fixture as followUpFixture,snapshotId,intakeId,threadId as followUpThreadId} from './pm-follow-up-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {structuredCapability,BAT,NATIVE} from './pm-structured-analysis-fixture.ts';
 
 const assessmentId=(n:number)=>'pmfa_'+n.toString(16).padStart(32,'0');
 function assessment(n:number){
@@ -22,7 +23,7 @@ function fixture({analysisEnabled=false}={}){
   followUp.state.actor=base.state.actor;
   base.state.start=analysisEnabled;
   const analysis={enabled:analysisEnabled,rows:[assessment(1)],reads:[] as string[],writes:[] as any[],ops:new Map<string,any>(),
-    lost:false,pending:false,polls:0,eventType:'pm_follow_up'};
+    lost:false,pending:false,polls:0,eventType:'pm_follow_up',structured_analysis:null as any};
   const dispatch=async(input:any)=>{
     const url=new URL(input.path,'http://fixture'),p=url.pathname;
     if(p==='/bootstrap'||p==='/capabilities'){
@@ -53,10 +54,10 @@ function fixture({analysisEnabled=false}={}){
     const operation=[...analysis.ops.values()].find(row=>p===`/operations/${row.operation_id}`);
     if(operation){analysis.polls++;operation.status='succeeded';return {status:200,data:{operation:structuredClone(operation)}};}
     if(p===prefix+'/capabilities'){
-      const result=await base.dispatch(input);result.data.follow_up_analysis={authorized:true,eligible_for_preflight:true};return result;
+      const result=await base.dispatch(input);result.data.follow_up_analysis={authorized:true,eligible_for_preflight:true};if(analysis.structured_analysis)result.data.structured_analysis=analysis.structured_analysis;return result;
     }
     if(p===prefix+'/threads/'+followUpThreadId&&analysis.enabled){
-      const result=await followUp.dispatch(input);result.data.thread.mode='planning';result.data.capabilities={write:true};return result;
+      const result=await followUp.dispatch(input);if(result.status===200){result.data.thread.mode='planning';result.data.capabilities={write:true};}return result;
     }
     if(p.startsWith(prefix+'/follow-up-assessments')){
       analysis.reads.push(input.path);
@@ -185,4 +186,83 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`wo
   const out=process.env.PM_FOLLOW_UP_WORKSPACE_SCREENSHOTS;
   if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}
   await context.close();
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`structured Follow-up ${native?'Tauri':'Web'} ${locale} keeps original BAT admission across reload`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
+  const f=fixture({analysisEnabled:true});f.analysis.structured_analysis=structuredCapability();f.analysis.lost=true;
+  await mountConversation(page,native,f.dispatch);await page.goto(route);
+  const box=page.locator('[data-pm-follow-up-analyze]');await expect(box.locator(':scope > summary')).toHaveText(locale==='zh-TW'?'請 PM 評估這份討論準備':'Ask PM to assess this preparation');await box.locator(':scope > summary').click();
+  const form=box.locator('form'),choice=form.locator('[data-pm-structured-analysis] select');
+  await choice.selectOption(BAT);await form.locator('textarea').fill('A fixed BAT Follow-up');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
+  f.analysis.structured_analysis=null;await page.reload();await box.locator(':scope > summary').click();
+  await expect(choice).toHaveValue(BAT);await expect(choice).toBeDisabled();await form.locator('button[type=submit]').click();
+  await expect.poll(()=>f.analysis.writes.length).toBe(2);expect(f.analysis.writes[1]).toEqual(original);expect(original.body.params.adapter).toBe(BAT);expect(f.analysis.ops.size).toBe(1);
+  }finally{await context.close();}
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'])for(const adapter of [BAT,NATIVE])test(`unbound Follow-up ${native?'Tauri':'Web'} ${locale} restores original ${adapter} target and key`,async({browser,baseURL},info)=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
+  const f=fixture({analysisEnabled:true});f.followUp.state.rows.at(-1).document.thread_ref=null;f.analysis.structured_analysis=structuredCapability({native:true});f.analysis.lost=true;
+  await mountConversation(page,native,f.dispatch);await page.goto(route);
+  const box=page.locator('[data-pm-follow-up-analyze]'),target=box.locator('select').first(),form=box.locator('form'),runtime=form.locator('[data-pm-structured-analysis] select');
+  await expect(box.locator(':scope > summary')).toHaveText(locale==='zh-TW'?'請 PM 評估這份討論準備':'Ask PM to assess this preparation');
+  await box.locator(':scope > summary').click();await target.selectOption(followUpThreadId);await runtime.selectOption(adapter);
+  await form.locator('textarea').fill('Retain my selected discussion and runtime.');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
+  await page.reload();await box.locator(':scope > summary').click();await expect(target).toHaveValue(followUpThreadId);await expect(target).toBeDisabled();
+  await expect(runtime).toHaveValue(adapter);await expect(runtime).toBeDisabled();await expect(form.locator('textarea')).toHaveValue(original.body.params.purpose);
+  if(!native&&adapter===BAT)for(const width of [390,768,1440]){await page.setViewportSize({width,height:900});await box.scrollIntoViewIfNeeded();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath(`target-recovery-${locale}-${width}.png`)});}
+  await form.locator('button[type=submit]').click();await expect.poll(()=>f.analysis.writes.length).toBe(2);expect(f.analysis.writes[1]).toEqual(original);expect(f.analysis.ops.size).toBe(1);
+  }finally{await context.close();}
+});
+
+test('pre-fix unbound native pending draft recovers exact target after a server capability upgrade',async({page})=>{
+  const f=fixture({analysisEnabled:true});f.followUp.state.rows.at(-1).document.thread_ref=null;f.analysis.lost=true;await mountConversation(page,false,f.dispatch);await page.goto(route);
+  const box=page.locator('[data-pm-follow-up-analyze]'),target=box.locator('select').first(),form=box.locator('form');
+  await box.locator(':scope > summary').click();await target.selectOption(followUpThreadId);await form.locator('textarea').fill('Legacy original native request');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);expect(original.body.params.adapter).toBeUndefined();
+  await page.evaluate(()=>{for(const key of Object.keys(localStorage))if(key.includes('.follow-up-target.'))localStorage.removeItem(key);});
+  f.analysis.structured_analysis=structuredCapability();await page.reload();await box.locator(':scope > summary').click();
+  await expect(target).toHaveValue(followUpThreadId);await expect(target).toBeDisabled();await expect(form.locator('[data-pm-structured-analysis] select')).toHaveValue(NATIVE);
+  await form.locator('button[type=submit]').click();await expect.poll(()=>f.analysis.writes.length).toBe(2);expect(f.analysis.writes[1]).toEqual(original);
+});
+
+test('pre-fix unique unsent draft restores selected discussion without creating an intent',async({page})=>{
+  const f=fixture({analysisEnabled:true});f.followUp.state.rows.at(-1).document.thread_ref=null;f.analysis.structured_analysis=structuredCapability();await mountConversation(page,false,f.dispatch);await page.goto(route);
+  const box=page.locator('[data-pm-follow-up-analyze]'),target=box.locator('select').first(),form=box.locator('form');
+  await box.locator(':scope > summary').click();await target.selectOption(followUpThreadId);await form.locator('[data-pm-structured-analysis] select').selectOption(BAT);await form.locator('textarea').fill('An older unsent draft');
+  await page.evaluate(()=>{for(const key of Object.keys(localStorage))if(key.includes('.follow-up-target.'))localStorage.removeItem(key);});
+  await page.reload();await box.locator(':scope > summary').click();await expect(target).toHaveValue(followUpThreadId);await expect(target).toBeEnabled();await expect(form.locator('textarea')).toHaveValue('An older unsent draft');
+  await expect(form.locator('[data-pm-structured-analysis] select')).toHaveValue(BAT);expect(f.analysis.writes).toEqual([]);
+});
+
+test('withdrawn original target retains its unknown intent and never substitutes a catalog discussion',async({page})=>{
+  const f=fixture({analysisEnabled:true});f.followUp.state.rows.at(-1).document.thread_ref=null;f.analysis.structured_analysis=structuredCapability();f.analysis.lost=true;
+  let withdrawn=false;const other='pmt_'+'9'.repeat(32),reads:string[]=[];
+  const dispatch=async(input:any)=>{reads.push(input.path);
+    if(withdrawn&&input.path===`/pm/workspaces/${workspaceId}/threads?limit=20`)return {status:200,data:{workspace_id:workspaceId,threads:[{workspace_id:workspaceId,thread_id:other,title:'Another discussion',mode:'idea',version:1}],next_cursor:null}};
+    return f.dispatch(input);
+  };
+  await mountConversation(page,false,dispatch);await page.goto(route);const box=page.locator('[data-pm-follow-up-analyze]'),form=box.locator('form');
+  await box.locator(':scope > summary').click();await box.locator('select').first().selectOption(followUpThreadId);await form.locator('[data-pm-structured-analysis] select').selectOption(BAT);await form.locator('textarea').fill('Original private discussion');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
+  withdrawn=true;f.followUp.state.failSource='/threads/'+followUpThreadId;await page.reload();await box.locator(':scope > summary').click();
+  await expect(page.locator('[data-pm-follow-up]')).toContainText('Your token lacks this scope.');await expect(form).toHaveCount(0);
+  expect(f.analysis.writes).toHaveLength(1);expect(reads.some(path=>path.endsWith('/threads/'+other))).toBe(false);
+  expect(await page.evaluate(key=>Object.values(localStorage).some(value=>value.includes(key)),original.idempotency_key)).toBe(true);
+  withdrawn=false;f.followUp.state.failSource=null;await page.reload();await box.locator(':scope > summary').click();await expect(box.locator('select').first()).toHaveValue(followUpThreadId);await expect(box.locator('select').first()).toBeDisabled();
+  await form.locator('button[type=submit]').click();await expect.poll(()=>f.analysis.writes.length).toBe(2);expect(f.analysis.writes[1]).toEqual(original);
+});
+
+test('multiple older original targets block a new analysis instead of selecting a newest target',async({page})=>{
+  const f=fixture({analysisEnabled:true});f.followUp.state.rows.at(-1).document.thread_ref=null;f.analysis.lost=true;await mountConversation(page,false,f.dispatch);await page.goto(route);
+  const box=page.locator('[data-pm-follow-up-analyze]'),form=box.locator('form');await box.locator(':scope > summary').click();await box.locator('select').first().selectOption(followUpThreadId);await form.locator('textarea').fill('First original request');await form.locator('button[type=submit]').click();
+  await expect(form).toContainText('Original assessment reply lost');await page.evaluate(({wid,other})=>{
+    const key=Object.keys(localStorage).find(key=>key.includes('.follow-up.')&&key.includes('.pm.follow_up.analyze.'))!,value=JSON.parse(localStorage.getItem(key)!);
+    value.intent.key='another-original-key';value.intent.request.target={workspace_id:wid,thread_id:other};
+    const prefix=key.slice(0,key.indexOf('.pm.follow_up.analyze.')+'.pm.follow_up.analyze.'.length);localStorage.setItem(prefix+JSON.stringify(value.intent.request.target),JSON.stringify(value));
+  },{wid:workspaceId,other:'pmt_'+'9'.repeat(32)});
+  await page.reload();await box.locator(':scope > summary').click();await expect(box).toContainText('More than one original discussion request');await expect(form).toHaveCount(0);expect(f.analysis.writes).toHaveLength(1);
 });

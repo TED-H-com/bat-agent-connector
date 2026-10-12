@@ -454,6 +454,12 @@ and tool-boundary verification. No runtime starts while reading capabilities.
 Submit `pm.follow_up.analyze` to `{workspace_id,thread_id}` with `intake_id`, a
 bounded `purpose`, optional `model`, `max_chars` and `timeout_s`. Preconditions are
 the original `expected_version` of that discussion and `expected_intake_digest`.
+If workspace `pm_capabilities_get.structured_analysis.version` is 1, read the
+descriptor for this exact action and explicitly select optional `adapter` as
+`codex-native-linux` or `bat-pm-linux-v1`. BAT requires the existing fixed PM
+host/workspace binding. Without this versioned capability, omit `adapter` and
+preserve the native contract. Keep the selected adapter in the original request
+and key; unavailable or uncertain execution never authorizes automatic fallback.
 The existing Idea or Planning discussion keeps its mode. This requests one
 context-only analysis of the complete selected intake; it cannot read a live repo,
 execute work, adopt scope or turn a source quotation into an instruction.
@@ -477,10 +483,13 @@ through the raw response, an older event or a newer readable intake.
 
 When `features.pm_workspaces.conversation_proposals.version` is 1, an explicit
 request to organize a discussion can use `pm.conversation.propose`. Target the
-workspace/thread with bounded `purpose` and optional native analysis budgets;
+workspace/thread with bounded `purpose` and optional analysis budgets;
 freeze `expected_version`, `expected_plan_version` and
-`expected_accepted_revision_id`. This is one context-only native analysis, with
-the same per-run capability proof as ordinary analysis. Normal Idea messages
+`expected_accepted_revision_id`. When workspace `structured_analysis.version`
+is 1, select optional `adapter` from this action's advertised descriptors using
+the same explicit native/BAT rules as Follow-up. Omission retains native. This
+is one context-only analysis, with the selected runtime's original completion
+and process-death proof. Normal Idea messages
 never automatically adopt a plan.
 
 Read `pm_conversation_proposals_list` (optional `thread_id`, `after`, `limit`) and

@@ -1,7 +1,8 @@
-// The UI selects a fixed intake; only the central native runner performs analysis.
+// The central service checks the explicitly selected runtime against a fixed intake.
+import {structuredAnalysis} from './pm-structured-analysis.js';
 export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,permitted,errorBox,onSaved,onAccessFailure=()=>{}}) {
   const actor=caps()?.actor,endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let serial=0,intake=null,capability=null,thread=null,request=null,retired=false,next=null,rows=[];
+  let serial=0,intake=null,capability=null,thread=null,request=null,retired=false,next=null,rows=[],targetLocked=false;
   const choices=new Map(),status=h('div',{role:'status'}),body=h('div'),chooser=h('select',{'aria-label':t('pm_fa_thread')});
   const note=key=>h('p',{class:'muted'},t(key));
   const element=h('details',{'data-pm-follow-up-analyze':''},h('summary',{},t('pm_fa_analyze_prepare')),note('pm_fa_analyze_help'),status,body);
@@ -9,13 +10,45 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
   const check=data=>{if(data?.workspace_id!==workspaceId)throw Error(t('pm_fa_mismatch'));return data;};
   const authorized=()=>Boolean(intake)&&!retired&&actor===caps()?.actor&&permitted(false)&&caps()?.scopes?.includes('start')
     &&thread?.capabilities?.write===true;
-  function clear(){++serial;intake=null;thread=null;capability=null;request?.dispose();request=null;rows=[];next=null;body.replaceChildren();status.replaceChildren();}
+  const targetKey=()=>`batc.pm.${namespace}.follow-up-target.${JSON.stringify({actor,workspace_id:workspaceId,intake_id:intake.intake_id})}`;
+  const validThread=id=>typeof id==='string'&&/^pmt_[0-9a-f]{32}$/.test(id);
+  function saveTarget(id){
+    current(serial);
+    localStorage.setItem(targetKey(),JSON.stringify({version:1,actor,workspace_id:workspaceId,intake_id:intake.intake_id,thread_id:id}));
+    choices.set(intake.intake_id,id);
+  }
+  function savedTarget(){
+    const prefix=`batc.pm.${namespace}.follow-up.${intake.intake_id}.pm.follow_up.analyze.`,pending=new Set(),drafts=new Set();
+    let pointer=null,count=0;
+    try{
+      const raw=localStorage.getItem(targetKey());if(raw!==null){pointer=JSON.parse(raw);
+        if(pointer?.version!==1||pointer.actor!==actor||pointer.workspace_id!==workspaceId||pointer.intake_id!==intake.intake_id
+          ||pointer.thread_id!==''&&!validThread(pointer.thread_id))throw Error();}
+      // Pre-fix drafts already contain an exact target in this same durable namespace.
+      // Recover only that original target; never select a latest discussion or another intake.
+      for(let index=0;index<localStorage.length;index++){
+        const key=localStorage.key(index);if(!key?.startsWith(prefix))continue;if(++count>64)throw Error();
+        const target=JSON.parse(key.slice(prefix.length)),raw=localStorage.getItem(key);if(!raw||raw.length>65536)throw Error();
+        const value=JSON.parse(raw),id=target?.thread_id;
+        if(!validThread(id)||key!==prefix+JSON.stringify({workspace_id:workspaceId,thread_id:id})||value?.version!==1
+          ||!value.values||typeof value.values!=='object'||Array.isArray(value.values)||Object.values(value.values).some(item=>typeof item!=='string'))throw Error();
+        if(value.intent){const original=value.intent;
+          if(typeof original.key!=='string'||!original.key||original.request?.action!=='pm.follow_up.analyze'
+            ||JSON.stringify(original.request.target)!==JSON.stringify(target)||original.request.params?.intake_id!==intake.intake_id)throw Error();
+          pending.add(id);
+        }else if(Object.keys(value.values).length)drafts.add(id);
+      }
+    }catch{throw Error(t('pm_fa_target_damaged'));}
+    if(pending.size>1)throw Error(t('pm_fa_target_ambiguous'));
+    return {id:[...pending][0]??pointer?.thread_id??(drafts.size===1?[...drafts][0]:''),locked:pending.size===1};
+  }
+  function clear(){++serial;intake=null;thread=null;capability=null;request?.dispose();request=null;rows=[];next=null;targetLocked=false;body.replaceChildren();status.replaceChildren();}
   function fail(error){++serial;thread=null;capability=null;request?.dispose();request=null;body.replaceChildren();status.replaceChildren(errorBox(error));onAccessFailure(error);}
   function navigation(){
     const selected=choices.get(intake.intake_id)||intake.document.thread_ref?.thread_id||'';
     chooser.replaceChildren(h('option',{value:''},t('pm_fa_thread_choose')),...rows.map(row=>h('option',{value:row.thread_id},row.title)));
     if(selected&&!rows.some(row=>row.thread_id===selected))chooser.append(h('option',{value:selected},selected));
-    chooser.value=selected;chooser.disabled=Boolean(intake.document.thread_ref)||Boolean(request?.locked());
+    chooser.value=selected;chooser.disabled=Boolean(intake.document.thread_ref)||targetLocked||Boolean(request?.locked());
   }
   async function readThread() {
     const ticket=++serial;request?.dispose();request=null;thread=null;body.replaceChildren(labelled('pm_fa_thread',chooser));navigation();
@@ -31,20 +64,18 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       }};
       const purpose=input('pm_fa_purpose',{multiline:true,max:4000}),model=input('pm_native_model',{required:false,max:128});model.placeholder=t('pm_native_default_model');
       const version=h('input',{type:'hidden',value:String(thread.thread.version)}),warning=note('pm_fa_thread_stale');
+      const runtime=structuredAnalysis({h,t,labelled,action:'pm.follow_up.analyze',capability:()=>capability,authorized,
+        legacyEligible:()=>capability?.follow_up_analysis?.authorized===true&&capability?.follow_up_analysis?.eligible_for_preflight===true});
       const stale=()=>version.value!==String(thread?.thread.version);
       const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{if(request&&!request.locked()&&authorized()){request.set('_version',String(thread.thread.version));request.update();}}},t('pm_fa_use_thread_version'));
-      const sync=()=>{warning.hidden=!stale();rebase.hidden=!stale();rebase.disabled=Boolean(request?.locked())||!authorized();navigation();};
-      const eligible=()=>authorized()&&capability?.authorized===true&&capability?.eligible_for_preflight===true&&!stale();
+      const sync=()=>{if(request)targetLocked=request.locked();warning.hidden=!stale();rebase.hidden=!stale();rebase.disabled=Boolean(request?.locked())||!authorized();navigation();runtime.update(request);};
+      const eligible=()=>authorized()&&runtime.eligible()&&!stale();
       request=form({api:guardedApi,namespace:`${namespace}.follow-up.${intake.intake_id}`,action:'pm.follow_up.analyze',target:{workspace_id:workspaceId,thread_id:thread.thread.thread_id},
-        fields:{purpose,model,_version:version},params:values=>({intake_id:intake.intake_id,purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{})}),
+        fields:{purpose,model,_version:version,adapter:runtime.field},params:values=>({intake_id:intake.intake_id,purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{}),...runtime.params(values)}),
         preconditions:()=>({expected_version:Number(version.value),expected_intake_digest:intake.document_digest}),
         permitted:eligible,recoverPermitted:authorized,label:'pm_fa_analyze',onStateChange:sync,onSaved,
-        extra:h('div',{class:'pm-fields'},labelled('pm_fa_purpose',purpose),h('details',{},h('summary',{},t('pm_fa_model_optional')),labelled('pm_native_model',model)),version)});
-      const reason=!authorized()?'pm_native_permissions':capability?.eligible_for_preflight?'pm_native_preflight_pending':{
-        PM_NATIVE_PLATFORM_UNSUPPORTED:'pm_native_platform',PM_NATIVE_EXECUTABLE_UNAVAILABLE:'pm_native_install',
-        PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED:'pm_native_managed',PM_NATIVE_AUTH_UNAVAILABLE:'pm_native_auth',PM_NATIVE_HOME_UNAVAILABLE:'pm_native_auth',
-      }[capability?.reason]||'pm_native_unavailable';
-      body.append(note(reason),warning,rebase,request.box);request.update();
+        extra:h('div',{class:'pm-fields'},labelled('pm_fa_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pm_fa_model_optional')),labelled('pm_native_model',model)),version)});
+      body.append(warning,rebase,request.box);request.update();
     }catch(error){if(ticket===serial)fail(error);}
   }
   async function readThreads(after=null){
@@ -60,12 +91,20 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
     if(!intake||retired)return;const ticket=++serial;status.replaceChildren(note('pm_fa_loading_thread'));
     try{
       const data=check(await api('GET',`${endpoint}/capabilities`));if(!current(ticket))return;
-      capability=data.follow_up_analysis;rows=[];next=null;
+      capability=data;rows=[];next=null;
       if(intake.document.thread_ref){choices.set(intake.intake_id,intake.document.thread_ref.thread_id);await readThread();}
-      else await readThreads();
+      else {const saved=savedTarget();targetLocked=saved.locked;saveTarget(saved.id);await readThreads();}
     }catch(error){if(ticket===serial)fail(error);}
   }
-  chooser.addEventListener('change',()=>{if(!intake||request?.locked())return;choices.set(intake.intake_id,chooser.value);void readThread();});
+  chooser.addEventListener('change',()=>{
+    if(!intake||targetLocked||request?.locked()){if(intake)navigation();return;}
+    try{
+      const saved=savedTarget();
+      if(saved.locked){targetLocked=true;saveTarget(saved.id);navigation();}
+      else {if(chooser.value&&!validThread(chooser.value))throw Error(t('pm_fa_mismatch'));saveTarget(chooser.value);}
+      void readThread();
+    }catch(error){fail(error);}
+  });
   element.addEventListener('toggle',()=>{if(element.open&&intake&&!request)void prepare();});
   async function load(row){clear();intake=row;if(element.open)await prepare();}
   return {element,clear,load};

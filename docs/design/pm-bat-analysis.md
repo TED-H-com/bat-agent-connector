@@ -53,6 +53,15 @@ The capability descriptor is configuration eligibility; actual attestation,
 authentication and model execution remain separate per-run evidence. The
 ordinary BAT profile's external-tool limitation remains unchanged.
 
+The owner fork's [server package change](https://github.com/teddashh/better-agent-terminal/pull/3)
+provides a fixed Linux x86_64 candidate and a
+[deployment guide](https://github.com/teddashh/better-agent-terminal/blob/737f6fb256716e190f34795dc27d6341ba0bc345/docs/pm-server-candidate.md).
+Its manifest and smoke receipt identify the exact source and payload hashes.
+The ordinary bundled Codex is separate from the required PM Codex 0.160.0;
+operators configure that PM executable explicitly. Package tests prove bounded
+offline startup, authentication and restart behavior, not model execution or an
+installation on an owner's host.
+
 Start and send have distinct durable receipts. The send requires an authenticated
 fresh `claude:sync-session` cursor, original runtime/context IDs and a fixed
 `clientMessageId`. That cursor, prompt digest and transport fence are persisted
@@ -66,8 +75,26 @@ input and completed turn, matching native terminal JSON digest/output digest,
 and confirmed death of the original dedicated process. A native message ID in
 BAT's replay and the underlying app-server item ID are distinct; both remain in
 their original evidence. ACK, idle state and synthetic abort do not satisfy this
-contract. The existing assistant provenance import is still the sole discussion
-write path; analysis never adopts a plan or launches engineering work.
+contract. For ordinary analysis, the existing assistant provenance import is
+the sole discussion write path; analysis never adopts a plan or launches
+engineering work.
+
+The same executor also serves `pm.conversation.propose` and
+`pm.follow_up.analyze` when their original request explicitly selects
+`adapter: bat-pm-linux-v1`. Trusted callbacks freeze each action's context and
+import only its fixed proposal/assessment destination; the ordinary discussion
+importers refuse those destinations. Workspace `structured_analysis.version: 1`
+advertises per-action descriptors. Native remains the absent-adapter default,
+and the original key cannot change adapters. This adds no automatic fallback,
+second start engine, caller-supplied proof or general runtime selection policy.
+
+Structured import recomputes the original replay, runtime completion and
+process-death proof inside its journal transaction. Local receipt failure keeps
+the original operation recoverable; a committed import is read before admitting
+new work or retiring its original runtime. Public provenance has an explicit
+nested schema, including original process identity, exit/observation and source
+digests. Raw diagnostic fields remain private, including on ordinary run reads.
+The complete immutable runtime observations are preserved for reconciliation.
 
 Failed preflight has a separate abort-only proof: the original persisted failed
 record can positively prove no launch, or the original process identity can
