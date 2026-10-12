@@ -148,7 +148,8 @@ def _access(ops, principal, op):
 def _full_access(ops, principal, op):
     # A receipt may refer to this repair through its owned child. Check every
     # source on the outer traversal, while suppressing only that same back edge.
-    key = (id(ops.db), principal.actor, principal.scopes, principal.admin, op['operation_id'])
+    key = (id(ops.db), principal.actor, principal.scopes, principal.admin,
+        principal.credential_id, op['operation_id'])
     checking = _READING.get()
     if key in checking:
         return

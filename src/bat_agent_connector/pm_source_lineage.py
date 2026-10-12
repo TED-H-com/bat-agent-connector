@@ -179,8 +179,21 @@ def document_roots(db, value):
 def visible_roots(db, principal, original_ids):
     from .pm_source_reads import check, scope
     with scope(db, principal):
-        return all(check(db, principal, 'original_root', identity,
-            lambda identity=identity: _visible_roots(db, principal, (identity,))) for identity in original_ids)
+        for identity in original_ids:
+            row = db.execute('SELECT action FROM operations WHERE operation_id=?', (identity,)).fetchone()
+            # A repair's saved evidence refers back through its owned child.
+            # Its existing full-source guard checks that complete graph and
+            # suppresses only its same-principal repair backedge. A generic
+            # active-root refusal would hide every saved quality receipt.
+            # Do not memoize a partial repair authorization as a completed one.
+            if row and row[0] == 'pm.maintenance.repair':
+                visible = _visible_roots(db, principal, (identity,))
+            else:
+                visible = check(db, principal, 'original_root', identity,
+                    lambda identity=identity: _visible_roots(db, principal, (identity,)))
+            if not visible:
+                return False
+        return True
 
 
 def _visible_roots(db, principal, original_ids):

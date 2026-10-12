@@ -91,6 +91,11 @@ conversation recursion have separate 64-node depth limits, with a shared
 exhausted bounds fail closed. Each later independent read rechecks withdrawal,
 and checks after awaits or at final effect frames use fresh scopes. Existing
 saved receipts and their whole original source boundary remain unchanged.
+Maintenance repair roots retain their existing bounded full-source traversal:
+saved quality/delivery evidence may refer back through the same owned repair
+child. That domain guard includes the complete principal and credential identity;
+the generic root memo does not cache a partial repair authorization or preempt
+its same-parent backedge. Other original roots keep the shared read-scope bounds.
 
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.
