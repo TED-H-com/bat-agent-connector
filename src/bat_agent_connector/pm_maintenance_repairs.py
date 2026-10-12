@@ -23,6 +23,7 @@ REQUIRED = frozenset({'observe', 'manage', 'start'})
 MAX_READ_BYTES = 384_000
 TERMINAL = frozenset({'succeeded', 'failed', 'cancelled'})
 _READING = ContextVar('pm_maintenance_repair_reading', default=frozenset())
+_RESERVING_WORKLOAD = ContextVar('pm_maintenance_repair_reserving_workload', default=None)
 
 
 def _bad(code, message, status=409):
@@ -384,10 +385,38 @@ def capacity_counts(ops, wid, policy_id, period):
     return concurrent, count
 
 
+def _only_current_local_reservation(ops, operation):
+    """The exact reserve callback is not an unresolved effect on its baseline.
+
+    This private synchronous scope never applies to an ordinary workload read,
+    another operation, a committed reservation or any unknown/external step.
+    The enclosing _check still proves current authority, sources and workload.
+    """
+    ctx = _RESERVING_WORKLOAD.get()
+    if (ctx is None or ctx.service is not ops or not ops.db.in_transaction
+            or ctx.operation_id != operation['operation_id']):
+        return False
+    current = ops._row(ctx.operation_id)
+    if (current['action'] != ACTION or current['status'] != 'running' or current['cancel_requested']
+            or _intent(current) != _intent(ctx.op)
+            or ops.db.execute('SELECT 1 FROM pm_maintenance_repairs WHERE operation_id=?', (ctx.operation_id,)).fetchone()
+            or ops.db.execute('SELECT 1 FROM pm_maintenance_repair_children WHERE parent_id=?', (ctx.operation_id,)).fetchone()):
+        return False
+    steps = ops.db.execute('''SELECT s.*,l.kind FROM operation_steps s LEFT JOIN pm_lifecycle_steps l
+        ON l.operation_id=s.operation_id AND l.name=s.name WHERE s.operation_id=? LIMIT 2''', (ctx.operation_id,)).fetchall()
+    return (len(steps) == 1 and steps[0]['name'] == 'pm.repair.reserve' and steps[0]['status'] == 'started'
+        and steps[0]['kind'] == 'local' and steps[0]['request'] == '{}'
+        and steps[0]['response'] is None and steps[0]['external_ref'] is None and steps[0]['error'] is None)
+
+
 def _reserve(ctx):
     def reserve():
         principal = pm_workspace.admitted_principal(ctx)
-        intent = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions, reserving=True)
+        token = _RESERVING_WORKLOAD.set(ctx)
+        try:
+            intent = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions, reserving=True)
+        finally:
+            _RESERVING_WORKLOAD.reset(token)
         if intent != _intent(ctx.op):
             raise _bad('PM_REPAIR_CONTEXT_CHANGED', 'The original repair selection changed before reservation')
         now = time.time()

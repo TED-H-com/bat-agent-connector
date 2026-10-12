@@ -147,3 +147,13 @@ received counter, zero pending inputs and current final native state. A last
 assistant message, last terminal alone, or an incomplete retained window cannot
 satisfy that contract. This is an actual remaining daily-workflow limitation,
 not evidence that every manual ended session is covered.
+
+Source lineage also contains authorization dependencies. During the exact
+synchronous `pm.repair.reserve` callback, the service may disregard that same
+parent's pending local reservation when rechecking completion of its original
+baseline execution. It must still have no reservation, child or other step;
+the sole started step must be registered as local with no result or external
+reference. The private scope ends before the reservation is inserted. Ordinary
+workload reads, other parents and unknown or external effects keep their usual
+blocking behavior. Current authority, lifecycle, complete source and workload
+checks still run in the original reservation transaction.
