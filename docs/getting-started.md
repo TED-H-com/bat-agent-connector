@@ -27,6 +27,8 @@ In **Connection / Fleet → Get ready to work → Connect BAT**, select a **BAT 
 
 Expand **Allow managed work** when enabling dispatch. Choose the intended conversation / start permissions and dedicated **Remote managed directories**. For Git synchronization, checkpoint and artifact operations, provide the existing trusted **SSH alias configured on this computer**. The SSH account, keys, known host and remote permissions must already be usable; the app does not invent them.
 
+The SSH alias is resolved by the central service account on the central computer. For the bundled local central this is the desktop computer; when joining a remote central, prepare SSH access on that central host. The browser or Tauri client does not forward its local SSH keys to central.
+
 **Allow Git worktrees sharing a clone** is an explicit opt-in when a direct BAT start needs shared Git metadata. Leave it off when that is not intended. It does not grant control over manual sessions or worktrees. Click **Verify and save host**; the connection/profile checks are read-only and saving does not dispatch work.
 
 ### 2. Bind a GitHub repository
@@ -151,7 +153,9 @@ delivery receipts separately from offline tests and CI.
 
 In a PM workspace, expand **AHP observations**. An operator must first configure an
 adapter for this workspace on central, including its endpoint, credential reference
-and protocol profile; see the [AHP observation contract](design/pm-ahp-observer.md).
+and credential transport; see the [AHP observation contract](design/pm-ahp-observer.md).
+The capture negotiates a supported protocol version, and its saved receipt identifies
+that version and decoder profile. There is no protocol-profile configuration field.
 The client does not accept host URLs or credentials here. This is separate from
 selecting an analysis runtime or moving a writer to another adapter.
 
