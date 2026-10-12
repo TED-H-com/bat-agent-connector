@@ -9,6 +9,7 @@ import pytest
 
 from bat_agent_connector import pm_session_quiescence
 from tests.pm_joined_delivery_helpers import observe_release_workload, publish_release
+from tests.pm_joined_discussion_helpers import assert_original_discussion
 from tests.pm_joined_lifecycle_helpers import (
     OWNER,
     assert_manual_preserved,
@@ -40,11 +41,13 @@ async def joined(world, bat_world, mock, monkeypatch):  # noqa: F811
 
 async def test_same_ledger_development_and_semantic_dependency(joined, mock, monkeypatch, record_property):
     w = await develop_original_requirements(joined, mock)
-    assert w['ledger'].phases == ['idea_to_adopted_planning', 'development_and_quality']
+    assert w['ledger'].phases == ['idea_to_adopted_planning', 'original_package_issue_publication',
+        'original_quality_deviation_discussion', 'development_and_quality']
     assert len(w['ledger'].references['execution_ids']) == 2
     assert_manual_preserved(w, mock)
     await finish_original_readers(w)
     await shared_outcomes(w, monkeypatch)
+    assert_original_discussion(w)
     await publish_release(w, mock)
     complete_native_turn(w, mock, MANUAL)
     ops = w['d'].ops
@@ -63,6 +66,7 @@ async def test_same_ledger_development_and_semantic_dependency(joined, mock, mon
     await repair_original_release(w, mock)
     await review_and_reopen(w, mock)
     await reconnect_and_replan(w, mock, monkeypatch)
+    assert_original_discussion(w)
     w['ledger'].assert_original(w)
     record_property('joined_workspace_id', w['ledger'].workspace_id)
     record_property('joined_phases', json.dumps(w['ledger'].phases))

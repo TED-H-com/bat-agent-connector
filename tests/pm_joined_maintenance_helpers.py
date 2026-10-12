@@ -246,6 +246,7 @@ async def review_and_reopen(w, mock):
     source = repair['source_id']
     note = await settle(w, mutation(ops, w, rid, 'note', {'content':
         'The original recovery regression now rejects non-text passwords; the deployed revision and runtime evidence are recorded.',
+        'source_refs': [source],
         'rationale': 'Review the fixed result and its declared offline evidence limits'}))
     candidate = await settle(w, mutation(ops, w, rid, 'candidate.record', {
         'title': 'Discuss accessible recovery instructions', 'problem': 'The original scope did not evaluate recovery guidance accessibility.',
@@ -255,6 +256,10 @@ async def review_and_reopen(w, mock):
     assert note['status'] == candidate['status'] == 'succeeded'
     done = await settle(w, mutation(ops, w, rid, 'complete', completion([note['result']['event_id']],
         candidate_ids=[candidate['result']['event_id']], discussion_summary='Reviewed original repair, deployment and runtime evidence.',
+        follow_ups=[{'id': 'repair-evidence', 'text': 'Capture the original repaired requirement assessment for the next Review.',
+            'owner_actor': OWNER.actor, 'expected_effect': 'Make the original quality result available to the next discussion.',
+            'verification': 'Select the original quality reference in a new fixed Project Brief snapshot.',
+            'source_refs': [source]}],
         direction_rationale='Keep the adopted release under maintenance; discuss the separate candidate in Idea.')))
     assert done['status'] == 'succeeded' and done['result']['meeting_completed'], done
     reviewed = reviews.get_review(ops, OWNER, wid, rid)
@@ -275,6 +280,32 @@ async def review_and_reopen(w, mock):
     w['ledger'].record('maintenance_review_to_idea', maintenance_review_id=rid,
         maintenance_review_snapshot_digest=snapshot_digest, next_idea_thread_id=tid,
         next_idea_input_id=imported['result']['input_id'])
+    from tests import test_pm_quality_projections as projections
+    await projections.capture(w['maintenance_repair_world'], w['ledger'].references['repair_quality_ref'])
+    later_snapshot = await projections.snapshot(w)
+    updated = await settle(w, mutation(ops, w, rid, 'follow_up.record', {
+        'follow_up_id': 'repair-evidence', 'status': 'reported_done',
+        'result': 'The original repair quality assessment is selected in this later snapshot.',
+        'snapshot_id': later_snapshot['snapshot_id'], 'rationale': 'Accountable report linked to the exact original evidence.'}))
+    assert updated['status'] == 'succeeded', updated
+    prior_review = reviews.get_review(ops, OWNER, wid, rid)
+    next_base = shared_request(w, reviews.PREFIX + 'prepare')
+    next_review = await settle(w, {**next_base, 'params': {'title': 'Follow-up on the original repair Review',
+        'period_start': prepared['created_at'], 'period_end': time.time(), 'previous_review_id': rid},
+        'preconditions': {**next_base['preconditions'], 'expected_policy_id': next_base['params']['policy_id'],
+            'expected_plan_version': original_plan['version'], 'expected_review_revision': reviews.head(ops.db, wid)['revision']}})
+    assert next_review['status'] == 'succeeded', next_review
+    following = reviews.get_review(ops, OWNER, wid, next_review['result']['review_id'])
+    previous = following['snapshot']['maintenance']['report']['previous_review']
+    assert previous['completion'] == prior_review['completion']
+    result = next(row for row in previous['follow_up_results'] if row['operation_id'] == updated['operation_id'])
+    assert result['document']['snapshot_ref']['snapshot_digest'] == later_snapshot['snapshot_digest']
+    assert result['document']['verification_status'] == 'unassessed'
+    assert reviews.get_review(ops, OWNER, wid, rid)['snapshot']['snapshot_digest'] == snapshot_digest
+    assert pm_plans.head(ops.db, wid) == original_plan
+    w['ledger'].record('next_review_preserves_original_decision',
+        maintenance_follow_up_operation_id=updated['operation_id'],
+        maintenance_follow_up_snapshot_id=later_snapshot['snapshot_id'], next_maintenance_review_id=next_review['result']['review_id'])
     # A queued old-epoch observation cannot come back to life after reopening.
     queued = ops.create(OWNER, **shared_request(w, checks.ACTION))[0]
     before_calls = len(w['gh'].requests)
