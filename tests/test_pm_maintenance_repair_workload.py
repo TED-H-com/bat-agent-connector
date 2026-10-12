@@ -36,8 +36,9 @@ publishing = publishing_fixture
 
 
 @pytest.fixture
-async def completed(observed, mock, monkeypatch):
+async def completed(observed, native_replay, mock, monkeypatch):  # noqa: F811
     w = observed
+    native_replay['reason'] = 'completed'
     done = await observe(w)
     assert done['status'] == 'succeeded', json.dumps(done, indent=2)
     w['runtime_proof'] = runtime.proof(w['d'].ops, OWNER, w['parent'])
@@ -203,6 +204,7 @@ async def test_original_missing_input_counter_cannot_upgrade_later(identity_unav
 
 
 async def test_queued_input_counter_keeps_original_capacity(observed, native_replay):  # noqa: F811
+    native_replay['reason'] = 'completed'
     native_replay['input_pending'] = 1
     reader = await observe(observed)
     assert reader['status'] != 'succeeded', reader

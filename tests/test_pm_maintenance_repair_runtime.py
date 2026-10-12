@@ -94,9 +94,15 @@ def native_replay(mock):
 async def observed(publishing, native_replay, monkeypatch):
     w = publishing
     monkeypatch.setattr(runtime, 'time', SimpleNamespace(time=lambda: w['clock'][0]))
-    native_replay['reason'] = 'completed'
+    # Publication settles through the real scheduler, which also runs the
+    # original observer. Keep its turn incomplete until the test can inject its
+    # condition; a slow setup must not freeze a successful proof beforehand.
     w['parent'] = await advance(w, w['parent'], rounds=5)
     assert w['parent']['result']['outcome'] == 'published_for_review'
+    reader = await observe(w)
+    assert reader['status'] == 'waiting_external', reader
+    assert runtime.proof(w['d'].ops, OWNER, w['parent']) is None
+    assert view(w, w['parent'])['capacity_held']
     return w
 
 
@@ -110,8 +116,9 @@ async def observe(w):
     return ops.get(reader['operation_id'])
 
 
-async def test_actual_original_cursor_native_completion_and_quality_release(observed, mock):
+async def test_actual_original_cursor_native_completion_and_quality_release(observed, native_replay, mock):
     w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
     origin = runtime.origin(ops, w['parent'])
     assert origin['status'] == 'captured'
     assert origin['prompt_normalization'] == 'rust_codex_trim_v1'
@@ -141,6 +148,7 @@ async def test_actual_original_cursor_native_completion_and_quality_release(obse
 @pytest.mark.parametrize('failure', ['idle', 'abort', 'gap', 'input', 'drift', 'incarnation'])
 async def test_idle_abort_gap_later_input_or_changed_identity_never_release(observed, native_replay, failure, monkeypatch):
     w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
     if failure == 'idle':
         native_replay['reason'] = None
     elif failure == 'abort':
@@ -173,18 +181,21 @@ async def one_event_pages(native_replay):
     native_replay['page_size'] = 1
 
 
-async def test_contiguous_pages_survive_reexecution_and_late_terminal(one_event_pages, observed):
+async def test_contiguous_pages_survive_reexecution_and_late_terminal(one_event_pages, observed, native_replay):
     w = observed
     first = await observe(w)
-    assert first['status'] in {'waiting_external', 'succeeded'}, first
+    assert first['status'] == 'waiting_external', first
+    assert runtime.proof(w['d'].ops, OWNER, w['parent']) is None
+    native_replay['reason'] = 'completed'
     for _ in range(4):
         reader = await observe(w)
     assert reader['status'] == 'succeeded', reader
     assert w['d'].ops.db.execute('SELECT COUNT(*) FROM pm_repair_runtime_pages').fetchone()[0] == 4
 
 
-async def test_pause_deadline_and_read_only_credential_keep_original_observation(observed):
+async def test_pause_deadline_and_read_only_credential_keep_original_observation(observed, native_replay):
     w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
     await decide(ops, w['workspace_id'], who=OWNER)
     w['clock'][0] += 10000
     api_auth.revoke(ops.db, OWNER.actor)
@@ -194,8 +205,9 @@ async def test_pause_deadline_and_read_only_credential_keep_original_observation
     assert not view(w, w['parent'])['capacity_held']
 
 
-async def test_revoked_credential_then_rotation_reads_without_resend(observed, mock):
+async def test_revoked_credential_then_rotation_reads_without_resend(observed, native_replay, mock):
     w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
     api_auth.revoke(ops.db, OWNER.actor)
     first = await observe(w)
     assert first['status'] != 'succeeded'
@@ -208,9 +220,48 @@ async def test_revoked_credential_then_rotation_reads_without_resend(observed, m
     assert mock.channels().count('claude:send-message') == 1
 
 
-async def test_source_withdrawal_blocks_both_replay_and_historical_proof(observed, monkeypatch):
+@pytest.mark.parametrize('change', ['credential', 'incarnation', 'pending_input'])
+async def test_final_replay_rechecks_authority_identity_and_pending_input(observed, native_replay, monkeypatch, mock, change):
+    from bat_agent_connector import pm_execution_verification
+    w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
+    original_configuration = pm_execution_verification.configuration
+    original_get = registry.get
+    sid = w['child']['result']['session_id']
+    injected = []
+
+    def withdraw():
+        injected.append(change)
+        if change == 'credential':
+            api_auth.revoke(ops.db, OWNER.actor)
+        elif change == 'incarnation':
+            def foreign(host, selected):
+                value = original_get(host, selected)
+                return {**value, 'controller_incarnation': 'f' * 32} if host == 'h1' and selected == sid else value
+            monkeypatch.setattr(registry, 'get', foreign)
+        else:
+            # This counter changes after the final native replay response was
+            # assembled, so the following metadata read must reject it too.
+            mock.metas[sid]['inputState']['pending'] = 1
+
+    async def configuration(*args, **kwargs):
+        value = await original_configuration(*args, **kwargs)
+        native_replay['after'] = withdraw
+        return value
+
+    monkeypatch.setattr(pm_execution_verification, 'configuration', configuration)
+    reader = await observe(w)
+    assert injected == [change]
+    assert reader['status'] != 'succeeded', reader
+    assert runtime.proof(ops, OWNER, w['parent']) is None
+    assert view(w, w['parent'])['capacity_held']
+    assert len(w['posts']) == 1 and mock.channels().count('claude:send-message') == 1
+
+
+async def test_source_withdrawal_blocks_both_replay_and_historical_proof(observed, native_replay, monkeypatch):
     from bat_agent_connector import pm_quality_sources
     w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
     await observe(w)
     original = pm_quality_sources.proof_access
     def hidden(*args, **kwargs):
@@ -264,13 +315,34 @@ async def test_native_completion_does_not_free_unknown_original_publication(publ
     assert len(w['posts']) == 1
 
 
-async def test_changed_actual_candidate_after_verifier_and_publication_stays_held(observed):
+async def test_changed_actual_candidate_after_verifier_and_publication_stays_held(observed, native_replay):
     from tests.test_integration import commit
     w = observed
+    native_replay['reason'] = 'completed'
     commit(w['child']['result']['worktree_path'], 'later.txt', 'Later model change', 'Changed after publication')
     reader = await observe(w)
     assert reader['status'] == 'needs_attention' and reader['error_code'] == 'PM_REPAIR_RUNTIME_CANDIDATE_CHANGED'
     assert view(w, w['parent'])['capacity_held']
+
+
+async def test_committed_runtime_receipt_replays_after_later_signal_change(observed, native_replay, mock):
+    from tests.test_integration import commit
+    w, ops = observed, observed['d'].ops
+    native_replay['reason'] = 'completed'
+    original = await observe(w)
+    assert original['status'] == 'succeeded', original
+    proof = runtime.proof(ops, OWNER, w['parent'])
+    assert proof is not None
+    native_replay.update(reason=None, extra_input=True, input_pending=1)
+    api_auth.revoke(ops.db, OWNER.actor)
+    commit(w['child']['result']['worktree_path'], 'later.txt', 'Later separate work', 'After original completion')
+    calls = mock.channels()
+    replay = await observe(w)
+    assert replay['operation_id'] == original['operation_id']
+    assert replay['status'] == 'succeeded' and replay['result'] == original['result']
+    assert runtime.proof(ops, OWNER, w['parent']) == proof
+    assert mock.channels() == calls
+    assert len(w['posts']) == 1 and calls.count('claude:send-message') == 1
 
 
 async def test_unavailable_origin_is_never_upgraded_from_later_idle_snapshot(repair_ready, mock, native_replay):
