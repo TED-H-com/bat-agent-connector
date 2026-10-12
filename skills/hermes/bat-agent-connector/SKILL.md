@@ -1,7 +1,7 @@
 ---
 name: bat-agent-connector
 description: Use this when you need to check on, read, wait for, or (only when explicitly enabled and asked) nudge Claude Code / Codex agent sessions running in Better Agent Terminal (BAT), or fan a project plan out into parallel BAT worktree sessions.
-version: 0.2.5
+version: 0.2.6
 license: MIT
 metadata:
   workflow_version: "2026-10-11.7"
@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "242312584419a69e0cc1cd86fd47b6aaada0ffe3fff9dd5e09341697ccd947ad"
+  canonical_sha256: "5c09c0bc341578eceaac84e13f81c4b316121992a5952b01d9b17cb64931acfd"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1543,6 +1543,35 @@ the current batch version. Dispatch success is not engineering completion or
 semantic acceptance. Dependencies require the selected fixed result profile;
 batch evidence does not bypass intrinsic package readiness. Provider cost is
 unmeasured, never implied by the start budget.
+
+The existing `pm_kanban_get` / `pm_kanban_card_get` reads keep an original
+`execution.attempts[].runtime_completion` receipt separate from quality acceptance
+and current workload eligibility. `original_turn_completed` is a fixed historical
+turn, not process death or permission to clear capacity. The service privately
+admits `pm.execution.runtime.observe` and
+`pm.maintenance.repair.runtime.observe`; their action catalog entries have
+`allowed: false` even for administrators. Do not submit them or construct their
+private origin references.
+
+For an explicitly linked manual session, choose one current
+`execution.manual_observation_sources[]` entry from the same Kanban work detail.
+When `available: true`, a current workspace writer with `observe` may submit
+`pm.session.quiescence.observe` to `{workspace_id, work_item_id}` with
+`params={link_id}`. Copy the entry's exact `expected_link_operation_id`,
+`expected_project_binding_id` and `expected_session_identity_digest` into
+preconditions. Never compute these values from a path, session title or newer
+observation. Unavailable, active or multiple-input sources remain unproven.
+Use the ordinary HTTP `POST /operations` or MCP `operation_submit` envelope and
+original idempotency key (`confirm=true` for that MCP tool); no extra confirmation
+is needed after the user authorized the observation. This action only reads the
+linked original single input and records its bounded evidence. It never sends,
+stops, adopts session ownership or accepts work. Read the original receipt through
+`operation_get` / `GET /operations/{operation_id}`. A writer downgraded to reader
+can still recover that original receipt while current membership and original
+source access remain valid; new observations require a writer. Missing replies
+retain the original key and complete envelope, including native identity digest.
+`current_single_input_quiescent` describes the observation time; later input or
+source changes can prevent current workload exclusion without erasing history.
 
 Read `pm_spec_materializations_list` / `pm_spec_materialization_get` for original
 receipts and stable task identities. An optional `repository.continue.pm_spec_ref`
