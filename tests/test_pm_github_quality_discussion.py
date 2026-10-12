@@ -15,6 +15,7 @@ from bat_agent_connector import (
     pm_snapshots,
     pm_sprints,
     pm_work_batch_evidence,
+    work_items,
 )
 from bat_agent_connector import pm_github_observation as github
 from bat_agent_connector import pm_lifecycle_gates as lifecycle
@@ -27,7 +28,6 @@ from tests import test_pm_quality_projections as projections
 from tests import test_pm_quality_reviews as reviews
 from tests.test_pm_maintenance_repairs import shared_request
 from tests.test_pm_plan_operations import OWNER
-from tests.test_pm_release_baselines import remove_repo
 from tests.test_pm_release_baselines import request as baseline_request
 from tests.test_pm_work_packages import action, member
 from tests.test_pm_workload import settings
@@ -131,7 +131,7 @@ async def test_original_github_quality_reaches_followup_and_withdrawal_hides_who
     assert ops.db.total_changes == before and len(w['gh'].requests) == provider_calls
     data = {'wid': w['workspace_id'], 'snapshot': frozen}
     intake = await reviews.execute(w, follow.request(ops, data))
-    view = follow.read(ops, intake['result'])
+    view = follow.read(ops, intake['result'], who=OWNER)
     assert view['document']['snapshot_ref']['snapshot_digest'] == frozen['snapshot_digest']
     # A PM assessment is not generic delivery evidence. The intake referring
     # back to this same snapshot must likewise stop before recursive reads.
@@ -141,7 +141,9 @@ async def test_original_github_quality_reaches_followup_and_withdrawal_hides_who
         assert pm_evidence._read_operation(reader, OWNER, w['workspace_id'], forbidden['operation_id']) is None
     with pytest.raises(OperationError, match='NOT_FOUND'):
         reader.get('op_' + 'f' * 32, principal=OWNER)
-    await remove_repo(ops, project_id)
+    project = work_items._get_project(ops.db, project_id)
+    await action(w, 'project.update', {'project_id': project_id},
+        {'repositories': ['other/product']}, {'expected_version': project['version']})
     before, provider_calls = ops.db.total_changes, len(w['gh'].requests)
     with pytest.raises(OperationError, match='NOT_FOUND'):
         pm_work_batch_evidence.require_sources(reader, OWNER, w['workspace_id'], proof)
@@ -152,6 +154,6 @@ async def test_original_github_quality_reaches_followup_and_withdrawal_hides_who
     assert reference['review_id'] not in json.dumps(filtered)
     assert not pm_access.visible(ops.db, OWNER, intake)
     with pytest.raises(OperationError) as hidden:
-        follow.read(ops, intake['result'])
+        follow.read(ops, intake['result'], who=OWNER)
     assert hidden.value.status == 404
     assert ops.db.total_changes == before and len(w['gh'].requests) == provider_calls
