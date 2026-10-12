@@ -143,14 +143,17 @@ Public reads continue to require the complete original source chain.
 Publication completion and runtime capacity are separate. The original
 `repository.continue` success proves session start, not runtime termination. The
 parent therefore retains `capacity_held=true` and leaves `finished_at` unset until
-authoritative original runtime termination can be reconciled. Idle inventory,
+the [original coding-turn completion contract](pm-repair-runtime-completion.md)
+can be reconciled with its exact verification and delivery. It proves completion
+of the original input, not death of BAT's shared runtime process. Idle inventory,
 an interrupt ACK, synthetic aborted turn-end, disappearance or a stop/unload ACK
 cannot replace that proof. In the audited BAT Codex adapter, interrupt updates
 local running state after ACK and shared-runtime session removal does not kill
-that shared process. The current adapter has no such standalone execution
-terminal receipt; this boundary is exposed as
-`PM_REPAIR_RUNTIME_TERMINATION_UNPROVEN`. It neither fabricates a terminal receipt
-nor sends an ineffective interrupt solely to release capacity.
+that shared process. Without an original first-send origin, complete native replay
+and unchanged authenticated input identity, the execution remains unproven and
+capacity stays held. Older executions cannot acquire that origin retrospectively.
+The reconciler neither fabricates a terminal receipt nor sends an ineffective
+interrupt solely to release capacity.
 
 ## Actual receipt progress and delivery limits
 
