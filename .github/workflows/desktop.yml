@@ -90,7 +90,7 @@ jobs:
       - name: Check out the fixed earlier core upgrade baseline (0.2.6)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 15752e1505d16cc93f3849cd89d02634b92435ac
+          ref: 755f126330aded27b4685bdd9be7409d9248df5d
           path: .upgrade-baseline
           persist-credentials: false
       - name: Build the original earlier core from its own locked environment
