@@ -7696,6 +7696,50 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 	const selected = () => sources.get(select.value);
 	const reader = () => ready && caps()?.scopes?.includes("observe");
 	const writer = () => reader() && permitted(false);
+	function receiptCount(receipt, operation) {
+		const serial = receipt?.schema === "pm_manual_serial_inputs_quiescence_v1", counter = receipt?.input_state, cursor = receipt?.completion_cursor;
+		const fields = [
+			"schema",
+			"workspace_id",
+			"work_item_id",
+			"link_id",
+			"observation_operation_id",
+			"host",
+			"session_id",
+			"sdk_session_id",
+			"origin_digest",
+			"event_digest",
+			"event_count",
+			"input_state",
+			"completion_cursor",
+			"runtime_status",
+			"process_death_proven",
+			"ownership",
+			"work_acceptance",
+			"recorded_at",
+			"document_digest",
+			...serial ? ["completed_turn_count", "turns_digest"] : ["native_turn_id"]
+		];
+		const exact = (value, keys) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+		const text = (value) => typeof value === "string" && value.trim().length > 0 && value.length <= 4096;
+		const digest = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+		const count = serial ? receipt.completed_turn_count : 1;
+		if (!exact(receipt, fields) || !serial && receipt.schema !== "pm_manual_single_input_quiescence_v1" || receipt.workspace_id !== workspaceId || receipt.work_item_id !== workId || receipt.runtime_status !== (serial ? "current_serial_inputs_quiescent" : "current_single_input_quiescent") || receipt.process_death_proven !== false || receipt.ownership !== "manual_read_only" || receipt.work_acceptance !== "not_evaluated" || !/^op_[0-9a-f]{32}$/.test(receipt.observation_operation_id || "") || !Number.isSafeInteger(receipt.link_id) || receipt.link_id <= 0 || ![
+			"host",
+			"session_id",
+			"sdk_session_id"
+		].every((key) => text(receipt[key])) || ![
+			"document_digest",
+			"origin_digest",
+			"event_digest"
+		].every((key) => digest(receipt[key])) || !Number.isSafeInteger(receipt.event_count) || receipt.event_count < 1 || !exact(counter, [
+			"schema",
+			"epoch",
+			"received",
+			"pending"
+		]) || counter.schema !== "bat_input_state_v1" || !/^[0-9a-f]{32}$/.test(counter.epoch || "") || !Number.isSafeInteger(count) || serial && (count < 2 || count > 64 || !digest(receipt.turns_digest)) || counter.received !== count || counter.pending !== 0 || !serial && !text(receipt.native_turn_id) || !exact(cursor, ["epoch", "seq"]) || !text(cursor.epoch) || cursor.epoch.length > 256 || !Number.isSafeInteger(cursor.seq) || cursor.seq < 0 || !Number.isFinite(receipt.recorded_at) || !Number.isFinite(new Date(receipt.recorded_at * 1e3).getTime()) || operation && (receipt.observation_operation_id !== operation.operation_id || receipt.link_id !== operation.params?.link_id)) throw Error(t("pm_kanban_scope_error"));
+		return count;
+	}
 	const source = () => {
 		const row = selected();
 		if (!row?.available) throw Error(t("pm_kanban_manual_unavailable"));
@@ -7734,9 +7778,9 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 		extra: h("div", {}, h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_help")), h("label", {}, t("pm_kanban_manual_source"), select), context),
 		onStateChange: describe,
 		onSaved: (receipt) => {
-			if (receipt?.schema !== "pm_manual_single_input_quiescence_v1" || receipt.workspace_id !== workspaceId || receipt.work_item_id !== workId || receipt.runtime_status !== "current_single_input_quiescent" || receipt.process_death_proven !== false || receipt.ownership !== "manual_read_only" || receipt.work_acceptance !== "not_evaluated" || !/^op_[0-9a-f]{32}$/.test(receipt.observation_operation_id || "") || !/^[0-9a-f]{64}$/.test(receipt.document_digest || "") || !Number.isFinite(receipt.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+			const count = receiptCount(receipt);
 			const recorded = new Date(receipt.recorded_at * 1e3).toISOString();
-			result.replaceChildren(h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_recorded")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_runtime_limits")), h("p", {}, t("pm_kanban_source_time"), ": ", h("time", { datetime: recorded }, recorded)), h("code", { class: "pm-source" }, receipt.document_digest));
+			result.replaceChildren(h("p", { class: "pm-kanban-note" }, t(count === 1 ? "pm_kanban_manual_recorded" : "pm_kanban_manual_serial_recorded", { count })), h("p", { class: "pm-kanban-note" }, t("pm_kanban_runtime_limits")), h("p", {}, t("pm_kanban_source_time"), ": ", h("time", { datetime: recorded }, recorded)), h("code", { class: "pm-source" }, receipt.document_digest));
 		},
 		api: async (...args) => {
 			const ticket = generation;
@@ -7744,6 +7788,7 @@ function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permit
 				const data = await api(...args);
 				alive();
 				if (ticket !== generation) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+				if (data?.operation?.status === "succeeded") receiptCount(data.operation.result, data.operation);
 				return data;
 			} catch (error) {
 				alive();
@@ -23695,15 +23740,16 @@ var pmKanbanStrings = {
 		pm_kanban_manual_source: "Session to observe",
 		pm_kanban_manual_choose: "Select a linked manual session",
 		pm_kanban_manual_observe: "Check current activity",
-		pm_kanban_manual_help: "Read one linked session’s original single input. This does not send, stop, take control of the session or accept the work.",
+		pm_kanban_manual_help: "Read one linked session’s recorded input history. This does not send, stop, take control of the session or accept the work.",
 		pm_kanban_manual_ready: "The selected source can be checked. Native identity and current authority are rechecked when the request runs.",
 		pm_kanban_manual_unavailable: "Select an available source from the current work details. An original pending request keeps its fixed source.",
 		pm_kanban_manual_authority: "New observations require observe access and a current workspace writer role. Original receipts remain readable with source access.",
 		pm_kanban_manual_original_missing: "Previously selected source is unavailable",
 		pm_kanban_manual_identity: "Authenticated native identity is unavailable or stale.",
-		pm_kanban_manual_multiple: "Only a single original input is supported; multiple inputs remain unproven.",
+		pm_kanban_manual_multiple: "This server cannot prove the selected input history within its supported bounds.",
 		pm_kanban_manual_active: "The native turn is active or has pending input.",
 		pm_kanban_manual_recorded: "The selected single input was quiescent at observation time. The manual session remains under its existing control.",
+		pm_kanban_manual_serial_recorded: "At observation time, all {count} recorded inputs had completed and no input was pending. The manual session remains under its existing control.",
 		pm_kanban_history_unknown: "Recorded flow history cannot establish reliable timing.",
 		pm_kanban_versions: "Fixed work association",
 		pm_kanban_binding: "Binding",
@@ -23827,15 +23873,16 @@ var pmKanbanStrings = {
 		pm_kanban_manual_source: "要觀察的工作階段",
 		pm_kanban_manual_choose: "選擇已關聯的人工工作階段",
 		pm_kanban_manual_observe: "查核目前活動",
-		pm_kanban_manual_help: "唯讀查核已關聯工作階段的原始單次輸入。不會發送、停止、接管工作階段或核可工作。",
+		pm_kanban_manual_help: "唯讀查核已關聯工作階段的輸入歷史紀錄。不會發送、停止、接管工作階段或核可工作。",
 		pm_kanban_manual_ready: "可以查核此來源；執行請求時會重新核對原生身分與目前權限。",
 		pm_kanban_manual_unavailable: "請從目前工作詳情選擇可用來源。尚待查回的原請求仍保留固定來源。",
 		pm_kanban_manual_authority: "新觀察需要 observe 權限及目前工作區的寫入角色；仍有來源存取權時，可查回原收據。",
 		pm_kanban_manual_original_missing: "先前選定的來源目前不可用",
 		pm_kanban_manual_identity: "已驗證的原生身分不可用或已過期。",
-		pm_kanban_manual_multiple: "只支援原始單次輸入；多次輸入仍無法證明。",
+		pm_kanban_manual_multiple: "這台中央無法在支援範圍內證明選定的輸入歷史。",
 		pm_kanban_manual_active: "原生回合仍有活動或待處理輸入。",
 		pm_kanban_manual_recorded: "觀察當時，選定的單次輸入已無活動。人工工作階段仍維持原控制權。",
+		pm_kanban_manual_serial_recorded: "觀察當時，全部 {count} 次已記錄輸入均已完成，沒有待處理輸入。人工工作階段仍維持原控制權。",
 		pm_kanban_history_unknown: "現有工作流歷史不足以確認可靠時間。",
 		pm_kanban_versions: "固定工作關聯",
 		pm_kanban_binding: "關聯",
