@@ -314,15 +314,20 @@ def _guard(ops, parent, *, scopes=REQUIRED):
     intent, wid = _intent(parent), parent['target']['workspace_id']
     record = policies._record(ops.db, wid, intent['check']['workload']['policy_id'])
     live = _principal(ops, record, scopes=scopes)
-    current = checks._check(ops, live, parent['target'], {'policy_id': record['policy_id']}, parent['preconditions'])
-    if current != intent['check']:
-        raise _bad('PM_REPAIR_CONTEXT_CHANGED', 'The original policy, baseline or lifecycle epoch changed')
-    _full_access(ops, live, parent)
-    baseline = baselines._record(ops.db, wid, intent['check']['workload']['baseline_id'])
-    rules.sources(ops, live, wid, intent['rule'], baseline)
-    row = _record_for(ops, parent)
-    if row['finished_at'] is not None or not row['created_at'] <= time.time() < row['deadline_at']:
-        raise _bad('PM_REPAIR_DEADLINE', 'This repair cannot admit another effect after its original deadline')
+    from .pm_source_reads import scope
+    # Every frame still obtains current credentials and executes every current
+    # check. Only shared historical source booleans survive between the reads
+    # within this one synchronous guard; no guard result or eligibility is cached.
+    with scope(ops.db, live):
+        current = checks._check(ops, live, parent['target'], {'policy_id': record['policy_id']}, parent['preconditions'])
+        if current != intent['check']:
+            raise _bad('PM_REPAIR_CONTEXT_CHANGED', 'The original policy, baseline or lifecycle epoch changed')
+        _full_access(ops, live, parent)
+        baseline = baselines._record(ops.db, wid, intent['check']['workload']['baseline_id'])
+        rules.sources(ops, live, wid, intent['rule'], baseline)
+        row = _record_for(ops, parent)
+        if row['finished_at'] is not None or not row['created_at'] <= time.time() < row['deadline_at']:
+            raise _bad('PM_REPAIR_DEADLINE', 'This repair cannot admit another effect after its original deadline')
     return live
 
 
