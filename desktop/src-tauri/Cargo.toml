@@ -1,6 +1,6 @@
 [package]
 name = "better-agent-dashboard"
-version = "0.1.1"
+version = "0.1.2"
 description = "Better Agent Dashboard desktop client"
 authors = ["Better Agent Dashboard contributors"]
 edition = "2021"
