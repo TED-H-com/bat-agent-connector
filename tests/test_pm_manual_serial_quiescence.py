@@ -148,6 +148,7 @@ class ReadOnlyProvider:
         self.host, self.auth_info, self.calls = host, {'authenticated': True}, []
         self.origin, self.events, self.meta = wire()
         self.page_size, self.after_empty, self.after_final_scope = 100, None, None
+        self.before_last_metadata = None
         self.tab = {'id': SID, 'workspaceId': 'manual-workspace', 'agentPreset': 'codex-agent'}
 
     async def invoke(self, channel, params):
@@ -159,6 +160,8 @@ class ReadOnlyProvider:
             return {'terminals': [copy.deepcopy(self.tab)]}
         assert params['sessionId'] == SID
         if channel == 'claude:get-session-meta':
+            if self.before_last_metadata:
+                self.before_last_metadata()
             return copy.deepcopy(self.meta)
         if 'cursor' not in params:
             return {'mode': 'snapshot', 'sessionId': SID, 'cursor': {'epoch': REPLAY, 'seq': len(self.events)},
@@ -175,7 +178,7 @@ class ReadOnlyProvider:
 
 def inventory(ops, provider, *, at=None):
     at = time.time() if at is None else at
-    data = {'session_id': SID, 'workspace_id': 'manual-workspace', 'profile_id': provider.host.profile_id,
+    data = {'session_id': SID, 'workspace_id': provider.tab['workspaceId'], 'profile_id': provider.host.profile_id,
         'provenance': 'manual', 'loaded': True, 'streaming': False, 'pending': False,
         'sdk_session_id': SDK, 'native_input_state': copy.deepcopy(provider.meta['inputState']),
         'field_evidence': {'native_input': 'session_meta'}}
@@ -293,8 +296,11 @@ async def test_final_read_changes_cannot_record_a_serial_receipt(linked, change)
 
 
 @pytest.mark.parametrize('change', ['pending', 'received', 'epoch', 'sdk'])
-async def test_last_scope_read_cannot_hide_a_later_native_input(linked, change):
+@pytest.mark.parametrize('count', [1, 2])
+async def test_last_scope_read_cannot_hide_a_later_native_input(linked, change, count):
     ops, target, provider = linked
+    provider.origin, provider.events, provider.meta = wire(count)
+    inventory(ops, provider)
     op, _ = ops.create(OWNER, **request(ops, target))
     def changed():
         if change == 'sdk':
@@ -307,8 +313,13 @@ async def test_last_scope_read_cannot_hide_a_later_native_input(linked, change):
     assert manual.saved._saved(ops, op['operation_id'], manual.COMPLETE) is None
 
 
-async def test_current_workload_needs_same_original_counter_and_withdrawal_hides_whole_receipt(linked):
+@pytest.mark.parametrize('change', ['received', 'scope_during_last_metadata'])
+async def test_current_workload_needs_same_original_counter_and_withdrawal_hides_whole_receipt(linked, change):
     ops, target, provider = linked
+    if change == 'scope_during_last_metadata':
+        def moved():
+            provider.tab['workspaceId'] = 'another-workspace'
+        provider.before_last_metadata = moved
     op, _ = ops.create(OWNER, **request(ops, target))
     op = await advance(ops, op)
     assert op['status'] == 'succeeded', op
@@ -321,18 +332,25 @@ async def test_current_workload_needs_same_original_counter_and_withdrawal_hides
         return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat()
     scan = {'scan_id': f'scan_{int(at * 1000000)}', 'started_at': iso(int(at)), 'finished_at': iso(at),
         'status': 'succeeded', 'complete_enumeration': True, 'authority': {'verified': True},
-        'binding_version': digest, 'coverage': {'workspace_ids': ['manual-workspace']}}
+        'binding_version': digest, 'coverage': {'workspace_ids': ['manual-workspace', 'another-workspace']}}
     ops.db.execute('INSERT INTO hosts_observed(host,reachable,last_attempt_at,last_success_at) VALUES(?,?,?,?)',
         ('mock-host', True, at, at))
     ops.db.execute('INSERT INTO discovery_latest VALUES(?,?,?,?)',
         ('mock-host', provider.host.profile_id, digest, json.dumps(scan)))
-    policy = {'scope': {'bat_workspaces': [{'host': 'mock-host', 'workspace_id': 'manual-workspace',
-        'profile_id': provider.host.profile_id, 'binding_digest': digest}], 'project_binding': {'project_id': 'unused'}},
+    policy = {'scope': {'bat_workspaces': [{'host': 'mock-host', 'workspace_id': wid,
+        'profile_id': provider.host.profile_id, 'binding_digest': digest}
+        for wid in ('manual-workspace', 'another-workspace')], 'project_binding': {'project_id': 'unused'}},
         'observation': {'max_age_seconds': 300}}
     collector = workload.Collector(ops, OWNER, target['workspace_id'], policy, at + .1)
     def current():
         return ops.db.execute('SELECT * FROM sessions_observed WHERE host=? AND session_id=?', ('mock-host', SID)).fetchone()
-    assert collector.current_repair_session(current(), proof, original, manual=True)
+    # Separate scope/native reads cannot atomically detect a tab move during
+    # the last native reply. Even when the new workspace is itself allowed,
+    # fresh complete inventory must reject applying the historical proof.
+    assert collector.current_repair_session(current(), proof, original, manual=True) is (change == 'received')
+    if change == 'scope_during_last_metadata':
+        assert proof['input_state'] == provider.meta['inputState']
+        assert proof['sdk_session_id'] == provider.meta['sdkSessionId']
     provider.meta['inputState']['received'] += 1
     inventory(ops, provider, at=at)
     assert not collector.current_repair_session(current(), proof, original, manual=True)

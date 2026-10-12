@@ -95,6 +95,20 @@ retains normal native terminal/message validation; a last assistant message,
 last terminal or count equality alone is insufficient. Final empty delta, exact
 metadata and original scope/current authority are rechecked before recording.
 
+These are observed read points, not an atomic remote snapshot or a lease on a
+human session. The final scope read precedes the final native metadata read;
+there is no provider await between that metadata validation and the local
+receipt transaction. This catches inputs or SDK changes during the scope read.
+Pinned BAT metadata and replay have no shared workspace/profile generation:
+an authenticated workspace save can move a tab during the final metadata read
+without changing its native SDK or counter. Repeating separate reads cannot
+eliminate this limitation. The historical receipt alone therefore cannot prove
+current workload quiescence. Its consumer requires a complete authenticated
+inventory scan begun after the receipt, with the exact original workspace,
+profile, SDK and input counter; a moved tab fails even if its new workspace is
+also in the allowed policy. Future human activity still requires fresh
+observation. Neither profile freezes or controls that activity.
+
 This is supported by the ordinary Rust Codex producer in BAT
 [`c397fd7`](https://github.com/teddashh/better-agent-terminal/blob/c397fd7/src-tauri/src/codex_app_server.rs#L637):
 metadata includes `inputState`; `send_message` emits user echo then metadata
