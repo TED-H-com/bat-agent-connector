@@ -365,6 +365,10 @@ async def test_single_input_original_receipt_bytes_and_digest_are_unchanged(link
         'origin_digest', 'sdk_session_id', 'native_turn_id', 'event_digest', 'event_count', 'runtime_status',
         'process_death_proven', 'recorded_at', 'work_item_id', 'link_id', 'ownership', 'work_acceptance',
         'input_state', 'completion_cursor')}
+    # The original public v1 projection normalizes nested field order; the
+    # durable JSON ledger sorts keys independently of that public projection.
+    expected['input_state'] = {key: private['input_state'][key] for key in ('schema', 'epoch', 'received', 'pending')}
+    expected['completion_cursor'] = {key: private['completion_cursor'][key] for key in ('epoch', 'seq')}
     expected['document_digest'] = manual.evidence.digest(private)
     assert json.dumps(proof) == json.dumps(expected)
     provider.origin, provider.events, provider.meta = wire(2)
