@@ -67,7 +67,7 @@ The returned `brief` always has five keys. Each has `status`, `items`, and expli
 | Key | Source and behavior | Explicit limit |
 | --- | --- | --- |
 | `goals` | Fixed accepted governance/scope InputRecords; original wording, status and source references | An assumption stays an assumption; no accepted plan means unavailable goals |
-| `delivery` | Selected runner-verification, merge, integration, deployment facts and clearly labeled work claims | `quality_unassessed`; no qualified-deliverable count or completion ratio |
+| `delivery` | Selected runner-verification, merge, integration, deployment and original quality-assessment facts, plus clearly labeled work claims | `quality_unassessed` without selected assessments; otherwise fixed assessed counts, with current applicability and environment unassessed |
 | `blockers` | Saved waiting/blocked/failed/needs-attention/uncertain source states and explicitly missing work captures | Partial states, not a complete diagnosis, dependency graph or inferred cause |
 | `deviations` | `unassessed`, with no findings generated | No baseline/result assessment has occurred; older work bindings are not drift findings |
 | `decisions` | Fixed adoption rationale and unresolved/conflicting inputs from that accepted document | No prioritization, new agent recommendation, or later thread input is silently included |
@@ -84,6 +84,16 @@ does not establish the current environment's health. Work state and approval rem
 claims rather than DoD evaluations. Missing costs remain unknown. The projection
 does not invent milestone, Sprint, risk, resource or forecast conclusions from
 missing fields; the accepted document's existing domain statements stay available.
+
+Explicitly selected [quality assessments](pm-quality-review.md) produce
+`delivery.status: fixed_quality_assessments`. Its quality summary counts distinct
+requirements in the original accepted scope and qualified work deliverables,
+retaining each work contribution's acceptance and DoD result. A contribution must
+match the exact work, binding and scope and have been applicable at selection.
+All selected contributions must accept both requirement and DoD before that
+requirement qualifies. Truncated work/evidence/byte coverage prevents requirement
+qualification. `completion_ratio` remains null; these fixed counts do not establish
+current applicability, environmental health or inferred scope deviations.
 
 ## Bounds and immutable recovery
 
@@ -143,11 +153,12 @@ All functions take `(ops, principal, workspace_id, …)` and return `version: 1`
 Get/latest return `workspace_id` and a `snapshot` containing identity, sequence,
 time/cursor, template/digests, baseline, candidate document, `projects`, `work`,
 `evidence`, `coverage`, `brief`, and `visibility`. No read performs a new capture or
-provider call. Future Dashboard, five views and exports should select one snapshot
-ID and use these same facts and revisions.
+provider call. Dashboard, downstream views and [Brief exports](pm-brief-exports.md)
+select one snapshot ID and use these same facts and revisions.
 
-This increment implements saved context and factual Brief projection. Full PM
-interpretation, quality evaluation, milestone/Sprint/risk domain behavior,
-five-view SVGs, Markdown/HTML reports and presentation renderers remain separate
-work. Generating a snapshot neither completes a Review nor shares/publishes a
+Saved context, factual Brief projection and Markdown/HTML/SVG Brief exports are
+implemented. Explicit quality assessments also feed [Sprints](pm-sprints.md) and
+[Roadmap observations](pm-roadmap.md) through their own fixed-source contracts.
+Full semantic deviation interpretation, remaining view renderers and presentation
+renderers remain separate work. Generating a snapshot neither completes a Review nor shares/publishes a
 document or authorizes development, merge or deployment.

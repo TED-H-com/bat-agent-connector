@@ -23,7 +23,7 @@ allows contributors. A reader can inspect accessible evidence but cannot capture
 | --- | --- | --- | --- |
 | `pm.project.bind` | `workspace_id`, `project_id` | `rationale` | `expected_workspace_version`, `expected_project_version` |
 | `pm.work.bind` | `workspace_id`, `work_item_id` | `rationale`, optional `plan_revision_id`, optional `requirement_ids` | `expected_work_version`, `expected_binding_id` |
-| `pm.evidence.capture` | `workspace_id`, `work_item_id` | Empty object | `expected_binding_id` |
+| `pm.evidence.capture` | `workspace_id`, `work_item_id` | Optional `quality_ref` selecting an original assessment | `expected_binding_id` |
 
 `expected_binding_id` is explicitly `null` only for the first work association.
 Project binding is immutable and unique per workspace/project. Revising a work
@@ -65,6 +65,7 @@ session logs, checkout paths, deployment recipes and credentials are omitted.
 | `pr_merge` | Successful central `merge.verify` steps | Verified merged SHA and reviewed head/base when retained. Missing preview leaves reviewed-head coverage unknown. A merge is not deployment or DoD. |
 | `integration_delivery` | `integration_receipts` | Fixed execution/task-command source and delivered SHA. `delivered` means pushed into the integration target, not PR merged or deployed. |
 | `deployment` | `deployments` and saved verification evidence | Historical verification of a fixed source/artifact identity. Provider success without verification evidence stays unverified. Current environment health is not assessed by this capture. |
+| `quality_assessment` | Explicitly selected original quality review assessment | Fixed requirement/DoD criteria, candidate, proof references and accountable conclusions. Applicability is checked at selection; current applicability is not inferred from the historical fact. |
 
 The initial projection does not expand checkpoint links, checkpoint/branch
 integration sources, artifacts, arbitrary unlinked activity, or removed links.
@@ -73,10 +74,13 @@ coverage. Resource projection is partial; observed verification is limited to
 linked Task Service runner records, and deployments to linked operations.
 Additional source adapters can extend this contract without changing work IDs.
 
-Every fact and capture reports `dod: "unassessed"`; fact/capture coverage reports
-cost as unknown. Acceptance criteria and DoD need a future explicit quality
-evaluation, including the applicable baseline. No task count or PR state substitutes
-for that evaluation.
+Generic execution facts and capture coverage do not themselves assess DoD;
+cost remains unknown. An optional `quality_ref` uses the
+[quality review service](pm-quality-review.md) to select an explicit original
+assessment against its fixed baseline. The additional `quality_assessment` fact
+preserves that assessment and passes its original-source access checks. Consumers
+must use its exact work, binding, scope, DoD and proof references; no task count or
+PR state substitutes for that evaluation.
 
 ## Identity, immutability and time
 

@@ -243,6 +243,7 @@ def _forecast(ops, wid, params, current, baseline):
 
 
 def _observation(ops, principal, wid, params, current, baseline):
+    from . import pm_roadmap_quality
     _only(params, ("baseline_revision_id", "snapshot_id"))
     snapshot = pm_snapshots.get_snapshot(ops, principal, wid, params.get("snapshot_id"))["snapshot"]
     work = {entry["work_item_id"]: entry for entry in snapshot["work"]}
@@ -270,8 +271,9 @@ def _observation(ops, principal, wid, params, current, baseline):
                                     evidence_ids.append(eid)
                                     total_refs += 1
             matches.append({"work_binding_id": binding_id, "work_item_id": binding["work_item_id"],
-                            "capture_id": capture_id, "match_status": status})
+                            "capture_id": capture_id, "match_status": status, "requirement_ids": binding['requirement_ids']})
         milestones.append({"milestone_id": milestone["milestone_id"], "work": matches, "evidence_ids": evidence_ids,
+                           "quality_context": pm_roadmap_quality.context(milestone),
                            "coverage": {"evidence_truncated": partial, "scope_assessment": "unassessed",
                                         "work_mapping": "explicit_bindings" if matches else "unmapped"}})
     document = {"baseline_revision_id": current["baseline_revision_id"], "forecast_revision_id": current["forecast_revision_id"],
@@ -365,6 +367,7 @@ def _fact_summary(evidence):
 
 
 def _project_observation(document, snapshot):
+    from . import pm_roadmap_quality
     doc = copy.deepcopy(document)
     facts = {entry["evidence_id"]: entry for entry in snapshot["evidence"]}
     filtered = False
@@ -376,6 +379,9 @@ def _project_observation(document, snapshot):
         milestone["coverage"]["inaccessible_sources"] = hidden
         milestone["actual"] = {"completion": "unassessed", "dod": "unassessed", "actual_finish_date": None,
                                "facts": [_fact_summary(facts[eid]) for eid in milestone["evidence_ids"]]}
+        quality = pm_roadmap_quality.project(milestone, snapshot, doc['coverage'])
+        if quality is not None:
+            milestone['actual'].update(pm_roadmap_quality.outcome(quality))
     doc["coverage"]["inaccessible_sources"] = filtered
     return doc
 

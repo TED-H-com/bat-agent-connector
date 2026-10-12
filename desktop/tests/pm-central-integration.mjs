@@ -138,10 +138,10 @@ try {
   assert.equal(newRevision.plan.document.sections.scope.statements[0].input_id, confirmed.input_id);
   const unchanged = await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans/${plans.revisions[0].revision_id}`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.deepEqual(unchanged.plan.document, revision.plan.document);
-  const submit = async (action, target, params) => {
+  const submit = async (action, target, params, preconditions={}) => {
     const response = await fetch(`${origin}/api/v1/operations?wait=3`, {method:'POST',
       headers:{Authorization:'Bearer '+fixture.token, 'Content-Type':'application/json', 'Idempotency-Key':crypto.randomUUID()},
-      body:JSON.stringify({action,target,params,preconditions:{}})});
+      body:JSON.stringify({action,target,params,preconditions})});
     assert.ok([200,202].includes(response.status)); let {operation} = await response.json();
     for (let attempt=0; attempt<100 && ['queued','running','pending'].includes(operation.status); attempt++) {
       await new Promise(resolve=>setTimeout(resolve,100));
@@ -155,16 +155,30 @@ try {
   await page.getByLabel('Connector project',{exact:true}).selectOption(project.project_id);
   const projectForm=page.locator('[data-pm-action="pm.project.bind"]');
   await projectForm.getByLabel('Why associate this work?',{exact:true}).fill('Track this existing project in the PM workspace');
-  // A background refresh can start between filling a form and clicking it. Keep
-  // its visible controls in step with the read gate instead of swallowing a click.
+  // Force a real PM event to start the background refresh before the click.
+  // Waiting for a disabled Refresh button before releasing this request would
+  // deadlock the fixture. Observe the read gate independently of click completion.
   let releaseCatalog, markCatalogRead;
   const catalogBlocked=new Promise(resolve=>{releaseCatalog=resolve;}),catalogRead=new Promise(resolve=>{markCatalogRead=resolve;});
-  await page.route(origin+'/api/v1/projects',async route=>{markCatalogRead();await catalogBlocked;await route.continue();},{times:1});
+  const catalogUrl=origin+'/api/v1/projects';
+  const blockCatalog=async route=>{markCatalogRead();await catalogBlocked;await route.continue();};
+  // Hold every overlapping refresh until this gate is released. A one-shot
+  // route lets a later load enable Refresh while the first read is still held.
+  await page.route(catalogUrl,blockCatalog);
+  let refreshClick;
   try {
-    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await submit('pm.message.append', {workspace_id:workspaceId,thread_id:threadId},
+      {content:'A second client retained this note while the first client was editing the project association.'},
+      {expected_version:(await read()).thread.version});
     await bounded(catalogRead,30000,'Project catalog refresh was not requested');
+    const refreshButton=page.getByRole('button',{name:'Refresh',exact:true});
+    await expect(refreshButton).toBeDisabled();
+    refreshClick=refreshButton.click().then(()=>null,error=>error);
     await expect(projectForm.getByRole('button',{name:'Associate project',exact:true})).toBeDisabled();
-  }finally{releaseCatalog();}
+  }finally{releaseCatalog();await page.unroute(catalogUrl,blockCatalog);}
+  const refreshFailure=await refreshClick;
+  if(refreshFailure)throw refreshFailure;
+  console.log('PM fixture recovered the Refresh click after a deliberately earlier background catalog read.');
   await expect(projectForm.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Track this existing project in the PM workspace');
   await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
   await page.locator('[data-pm-work] > summary').click();
@@ -275,7 +289,7 @@ try {
   const history=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/lifecycle/transitions`,{headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.deepEqual(history.transitions.map(row=>row.to_stage),['paused','closed','development']);
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
-  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
+  assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.message.append','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
   assert.deepEqual(errors, []);
   console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen; zero hosts or tasks.');
 } catch(error) {
