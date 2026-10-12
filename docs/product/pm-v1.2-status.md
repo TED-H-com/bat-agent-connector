@@ -3,11 +3,30 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
-## 目前整合狀態（2026-10-12 09:40 UTC）
+## 目前整合狀態（2026-10-12 13:27 UTC）
 
 #98–#115 已合併，主線為 `c0027daa`。下列分開記錄已合併來源與本機接續候選；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
 
+- [#116](https://github.com/teddashh/bat-agent-connector/pull/116) 的 `64c848a` 仍是未合併
+  候選。四個 Python 完整 CI 均為 5,770 項通過、3 項失敗、51 項跳過；失敗是公開
+  版本查詢的兩項 API 測試，以及原維修 GitHub 觀察超過完整流程的 60 秒 wave。
+  本機 `1964b7b` Python 3.10 整合回歸亦為 413 項通過、1 項相同 observer 失敗，
+  耗時 2,626.73 秒；失敗後關閉帳本的背景例外不是第一個失敗原因。
+  Windows、Mac Intel、Apple Silicon 與 Windows endpoint jobs 通過，三平台安裝／
+  0.2.5 → 0.2.6 升級的六份 artifacts 已核對原始回執與下載雜湊。Linux 共享 UI 為
+  2,012 項通過、1 項失敗、3 項跳過，後續 Linux 套件驗證尚未執行。
+  UI 的原 key 恢復測試缺少等待：`ff37e62` 以受控背景請求在 Web／Tauri 各重現
+  原錯誤，修正後相關 16 項通過，保留完整 body、key 與唯一操作斷言；產品碼未變。
+  API 修正 `ed8ac46` 保留匿名公開版本讀取，拒絕匿名讀非空來源；兩項原失敗在修正前
+  重現，修正後 API／同步來源／交付 lineage 三模組於 Python 3.12／3.10 各 74 項通過，
+  分別 67.50／69.22 秒。後續 observer 修正 `3b27301` 整合為 `eb6848c`，只讓
+  workload 歷史來源與單次同步 repair guard 共用已完成的來源布林結果，不快取目前
+  權限或整個 guard。真實帳本的完整 `delivery.require_child` 查核 SELECT 由
+  8,705 降為 4,449（48.9%），Python 3.12 回歸 1 項通過、181.45 秒；跨回合的
+  credential 撤銷、member 降權、取消、deadline、來源撤回及操作／事件隱藏均有斷言。
+  此數字不包括完整 observer 網路與其他查核；原完整流程及最終整合 CI 仍待驗證，
+  未放寬 60 秒 wave 時限。先前單例通過與舊版三平台 artifacts 不代表新候選通過。
 - [#113](https://github.com/teddashh/bat-agent-connector/pull/113) `de30795`：成果評估、
   依賴解鎖、自然對話採用與維護修復整合，已合併為 `7954b726`。精確來源的 desktop
   五個 jobs 已通過，Linux 共享 UI 1,873 項通過／3 項跳過；Python 3.10–3.13 完整 CI
@@ -207,13 +226,13 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W21 | P1 | 現有 deploy 與 receipt 接入 | #112 已合併既有 deploy／rollback／merge-and-deploy 的原來源權限與固定 release receipt，交付投影分開顯示合併、部署驗證與目前部署；未安裝或 live-tested |
 | W22 | P1 | AHP observer 與 create-own | #114 已合併明確設定的有界唯讀觀察、原來源權限與 API／MCP／Web／Tauri；固定 1.0 canonical subset／VS Code 0.10 profiles 已通過完整 CI；create-own、寫入及 live host 尚未驗證 |
 | W23 | P1 | 第一個 native CLI adapter | 獨立 coding sandbox spike `1d80743` 的外層探針通過；內層 namespace 被主機拒絕，coding／隔離 canaries 未驗證，未註冊為產品 adapter；Python 3.12／3.10 各 6 項通過、1 項明確跳過 |
-| W24 | P1 | PM adapter 切換 | #113／#115 已合併單次分析選擇與原操作查回；獨立 `736b2a2` 候選加入 workspace 固定 native／BAT 分析選擇、原 CAS／文件接續及 occupied writer 拒絕，尚未合併；一般 coding adapter 與完整 M5 仍待完成 |
+| W24 | P1 | PM adapter 切換 | #113／#115 已合併單次分析選擇與原操作查回；獨立 `c18c346` 候選加入 workspace 固定 native／BAT 分析選擇、原 CAS／文件接續及 occupied writer 拒絕，Python 3.12／3.10 各 181 項通過，尚未合併；一般 coding adapter 與完整 M5 仍待完成 |
 | W25 | P1 | Fleet readiness 與安裝版 | #114 的 core 0.2.5／desktop 0.1.1 已通過四平台 0.2.4→0.2.5 實包升級、全部 desktop jobs 與四個 Python 完整 CI 並合併；本機另準備 0.2.6／0.1.2，該新版實包驗收待做；完整 Fleet 矩陣另行追蹤，未發布穩定版或安裝 |
 | W26 | P1 | Canonical MCP skills | 本批：PM read tools 與共用 operations；其他 v1.2 契約逐批加入 |
 | W27 | P1 | 端到端實機驗收 | 分段 fixture、四平台實包及 CI 證據已具備；M4 同帳本完整流程已在 `c31a54a` 通過；完整整合 CI／實包證據仍按候選精確來源核對；真人實機部分由使用者處理 |
 | W28 | P2 | 其餘具名 CLI 能力 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W29 | P2 | 額外 reviewer 與討論模板 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
-| W30 | P2 | 成本與較完整預測 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
+| W30 | P2 | 跨 CLI 用量、效率與較完整預測 | 已補共同採集／涵蓋度／成果關聯與改善驗證方向；採集器、Dashboard 診斷及策略尚未實作，未掃描私人紀錄或調整模型政策 |
 | W31 | P0 | Idea thread 與明確轉 Planning | 本批：持久 Idea 與指定輸入轉 Planning 草稿 |
 | W32 | P0 | PhaseProfile 與 command policy | 本批：九種 profile 契約；Idea／Planning 可用，runtime 限制待接 adapter |
 | W33 | P0 | InputRecord 與循序資訊取得 | #103／#105 已合併有來源的資訊續接及固定 Follow-up 單次分析，保留影響／選項及零至三個問題；#113 新增自然對話候選與整組採用，語意品質驗證及其他階段引導／研究 runner 待做 |

@@ -82,6 +82,9 @@ operation keys; no automatic rebase or latest-baseline substitution occurs.
 
 Original-source booleans may be reused only within one synchronous SQLite read
 snapshot, keyed by connection, actor, scopes, admin authority and credential ID.
+Public metadata with an empty original-source set does not create an authority
+scope. An anonymous caller cannot read a nonempty original-source set, including
+inside another caller's active scope; ordinary route authentication remains in force.
 No parsed document, live eligibility, freshness or final-effect decision is
 cached. A write, transaction replacement, event-loop yield or foreign task
 invalidates the scope with `PM_SOURCE_READ_CHANGED`; callers must start a fresh
