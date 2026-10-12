@@ -20,6 +20,7 @@ from bat_agent_connector import pm_review_candidate_sources as sources
 from bat_agent_connector.operations import OpContext, OperationError
 from tests import test_pm_maintenance_review as reviews
 from tests.test_pm_evidence import CONTRIBUTOR, OWNER, READER
+from tests.test_pm_plans import adopt, adoption
 from tests.test_pm_release_baselines import execute, remove_repo
 
 base_ops, release_ops, workload_ops, github_ops, ops = (
@@ -88,10 +89,15 @@ async def test_original_candidate_confirmation_planning_and_followup_preserve_so
         'idempotency_key': uuid.uuid4().hex})
     plan = pm_plans.get_plan(ops, OWNER, wid, draft['result']['revision_id'])['plan']
     assert plan['document']['selected_inputs'][0]['source_candidate']['document'] == original['document']
+    # Follow-up needs a separately adopted plan snapshot. The original maintenance
+    # report was prepared without one and cannot silently become that baseline.
+    adopt(adoption(ops, {'workspace_id': wid}, draft['result']['revision_id']))
+    snapshot = await execute(ops, {'action': 'pm.snapshot.create', 'target': {'workspace_id': wid},
+        'params': {}, 'preconditions': {'expected_plan_version': pm_plans.head(ops.db, wid)['version']},
+        'idempotency_key': uuid.uuid4().hex})
     pm_follow_up.install(ops)
-    snapshot_id = reviews.review.get_review(ops, OWNER, wid, original['review_id'])['snapshot']['snapshot_id']
     intake = await execute(ops, {'action': 'pm.follow_up.prepare', 'target': {'workspace_id': wid},
-        'params': {'snapshot_id': snapshot_id, 'thread_id': tid}, 'preconditions': {
+        'params': {'snapshot_id': snapshot['result']['snapshot_id'], 'thread_id': tid}, 'preconditions': {
             'expected_plan_version': pm_plans.head(ops.db, wid)['version'], 'expected_version': 0,
             'expected_thread_version': pm_discussions._thread(ops.db, wid, tid)['version']},
         'idempotency_key': uuid.uuid4().hex})
