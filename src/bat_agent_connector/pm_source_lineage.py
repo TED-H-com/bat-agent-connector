@@ -177,6 +177,13 @@ def document_roots(db, value):
 
 
 def visible_roots(db, principal, original_ids):
+    from .pm_source_reads import check, scope
+    with scope(db, principal):
+        return all(check(db, principal, 'original_root', identity,
+            lambda identity=identity: _visible_roots(db, principal, (identity,))) for identity in original_ids)
+
+
+def _visible_roots(db, principal, original_ids):
     from .pm_package_handoff import source_visible
     for original_id in original_ids:
         row = db.execute("SELECT * FROM operations WHERE operation_id=?", (original_id,)).fetchone()
