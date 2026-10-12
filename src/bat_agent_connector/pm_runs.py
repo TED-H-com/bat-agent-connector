@@ -176,6 +176,12 @@ def _read_bound(value):
 
 def source_visible(db, principal, run):
     """Follow-up derives access from its original admission, including raw output."""
+    from .pm_source_reads import scope
+    with scope(db, principal):
+        return _source_visible(db, principal, run)
+
+
+def _source_visible(db, principal, run):
     from .pm_access import operation_source_visible
     if not operation_source_visible(db, principal, run["operation_id"]):
         return False

@@ -46,6 +46,12 @@ def snapshot_refs(document, snapshot_digest):
 
 def access(ops, principal, wid, references):
     """Authorize exact original identities without substituting current source data."""
+    from .pm_source_reads import scope
+    with scope(ops.db, principal):
+        _sources(ops, principal, wid, references)
+
+
+def _sources(ops, principal, wid, references):
     for source in references:
         kind, ident, expected = source['kind'], source['id'], source['digest']
         if kind == 'policy':
