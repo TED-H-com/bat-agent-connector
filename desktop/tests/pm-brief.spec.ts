@@ -51,6 +51,29 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
     expect(f.state.snapshots).toHaveLength(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
+  test('refreshing the plan head disables new snapshot submission and preserves its draft',async({page})=>{
+    const f=fixture();let hold=false,held=false,release:()=>void=()=>{};
+    const gate=new Promise<void>(resolve=>release=resolve);
+    const dispatch=async(input:any)=>{
+      const result=await f.dispatch(input);
+      if(new URL(input.path,'http://fixture').pathname===`/pm/workspaces/${workspaceId}/plans/head`&&hold){held=true;await gate;}
+      return result;
+    };
+    await mountConversation(page,native,dispatch);await page.goto(pmRoute);
+    const editor=form(page),button=editor.getByRole('button',{name:'Save project snapshot',exact:true});
+    await expect(button).toBeEnabled();await editor.locator('summary').click();
+    const title=editor.getByLabel('Snapshot title',{exact:true});await title.fill('Original review title');
+    hold=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    try{
+      await expect.poll(()=>held).toBe(true);await expect(button).toBeDisabled();
+      await expect(title).toBeDisabled();await expect(title).toHaveValue('Original review title');
+      await editor.evaluate((node:HTMLFormElement)=>node.requestSubmit());
+      expect(f.state.writes).toHaveLength(0);
+    }finally{release();}
+    await button.click();await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+    expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.params).toEqual({title:'Original review title'});
+    expect(f.state.writes[0].body.preconditions).toEqual({expected_plan_version:2});
+  });
   test('reader sees fixed Brief without permission to save a new snapshot',async({page})=>{
     const f=fixture();f.state.snapshots.push(f.make());f.base.state.role='reader';f.base.state.manage=false;
     await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
