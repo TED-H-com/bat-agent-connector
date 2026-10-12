@@ -1,4 +1,5 @@
 """A real reserve may recheck its baseline without excusing another effect."""
+import traceback
 from contextlib import contextmanager
 
 from bat_agent_connector import pm_execution_runtime as runtime
@@ -19,13 +20,20 @@ def journal_change(db):
         db.execute('RELEASE fixture_reservation_negative')
 
 
+<<<<<<< HEAD
 async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blocking(joined, mock, monkeypatch, record_property):  # noqa: F811
     original_check, inspected = repairs._check, []
+=======
+async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blocking(joined, mock, monkeypatch):  # noqa: F811
+    original_check, inspected, failures = repairs._check, [], []
+>>>>>>> 3c8eb8d (Select actual original repair dependency in reserve regression)
     def check(ops, principal, target, params, pre, *, reserving=False):
         if reserving:
             ctx = repairs._RESERVING_WORKLOAD.get()
             parent = ops.get(ctx.operation_id)
-            original_id = joined['ledger'].references['execution_ids'][-1]
+            roots = {row[0] for row in ops.db.execute(
+                "SELECT original_operation_id FROM pm_source_lineage WHERE resource_type='operation' AND resource_id=?", (ctx.operation_id,))}
+            original_id = next(oid for oid in joined['ledger'].references['execution_ids'] if oid in roots)
             child = ops.get(original_id)
             reader = runtime.observer(ops, child)
             assert repairs._only_current_local_reservation(ops, parent)
@@ -42,7 +50,8 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
 
             # A real original verifier is a different derivative of this same
             # baseline. Its uncertain status cannot borrow the reserve scope.
-            verifier_id = joined['ledger'].references['passing_verification_ids'][-1]
+            original_index = joined['ledger'].references['execution_ids'].index(original_id)
+            verifier_id = joined['ledger'].references['passing_verification_ids'][original_index]
             assert original_id in {row[0] for row in ops.db.execute(
                 "SELECT original_operation_id FROM pm_source_lineage WHERE resource_type='operation' AND resource_id=?", (verifier_id,))}
             with journal_change(ops.db):
@@ -60,7 +69,18 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
                 assert not runtime._settled(ops, child, reader['operation_id'])
             inspected.append(ctx.operation_id)
         return original_check(ops, principal, target, params, pre, reserving=reserving)
-    monkeypatch.setattr(repairs, '_check', check)
-    await run_story(joined, mock, monkeypatch, record_property)
+    def guarded_check(*args, **kwargs):
+        try:
+            return check(*args, **kwargs)
+        except AssertionError:
+            failures.append(traceback.format_exc())
+            raise
+    monkeypatch.setattr(repairs, '_check', guarded_check)
+    try:
+        await run_story(joined, mock, monkeypatch, record_property)
+    except BaseException:
+        if failures:
+            raise AssertionError(failures[0]) from None
+        raise
     assert len(inspected) == 1
     assert repairs._RESERVING_WORKLOAD.get() is None
