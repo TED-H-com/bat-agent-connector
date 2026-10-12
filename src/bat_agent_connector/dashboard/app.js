@@ -4843,7 +4843,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 //#region src/pm-follow-up-request.js
 function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespace, form, input, labelled, permitted, errorBox, onSaved, onAccessFailure = () => {} }) {
 	const actor = caps()?.actor, endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let serial = 0, intake = null, capability = null, thread = null, request = null, retired = false, next = null, rows = [];
+	let serial = 0, intake = null, capability = null, thread = null, request = null, retired = false, next = null, rows = [], targetLocked = false;
 	const choices = new Map(), status = h("div", { role: "status" }), body = h("div"), chooser = h("select", { "aria-label": t("pm_fa_thread") });
 	const note = (key) => h("p", { class: "muted" }, t(key));
 	const element = h("details", { "data-pm-follow-up-analyze": "" }, h("summary", {}, t("pm_fa_analyze_prepare")), note("pm_fa_analyze_help"), status, body);
@@ -4860,6 +4860,58 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		return data;
 	};
 	const authorized = () => Boolean(intake) && !retired && actor === caps()?.actor && permitted(false) && caps()?.scopes?.includes("start") && thread?.capabilities?.write === true;
+	const targetKey = () => `batc.pm.${namespace}.follow-up-target.${JSON.stringify({
+		actor,
+		workspace_id: workspaceId,
+		intake_id: intake.intake_id
+	})}`;
+	const validThread = (id) => typeof id === "string" && /^pmt_[0-9a-f]{32}$/.test(id);
+	function saveTarget(id) {
+		current(serial);
+		localStorage.setItem(targetKey(), JSON.stringify({
+			version: 1,
+			actor,
+			workspace_id: workspaceId,
+			intake_id: intake.intake_id,
+			thread_id: id
+		}));
+		choices.set(intake.intake_id, id);
+	}
+	function savedTarget() {
+		const prefix = `batc.pm.${namespace}.follow-up.${intake.intake_id}.pm.follow_up.analyze.`, pending = new Set(), drafts = new Set();
+		let pointer = null, count = 0;
+		try {
+			const raw = localStorage.getItem(targetKey());
+			if (raw !== null) {
+				pointer = JSON.parse(raw);
+				if (pointer?.version !== 1 || pointer.actor !== actor || pointer.workspace_id !== workspaceId || pointer.intake_id !== intake.intake_id || pointer.thread_id !== "" && !validThread(pointer.thread_id)) throw Error();
+			}
+			for (let index = 0; index < localStorage.length; index++) {
+				const key = localStorage.key(index);
+				if (!key?.startsWith(prefix)) continue;
+				if (++count > 64) throw Error();
+				const target = JSON.parse(key.slice(prefix.length)), raw = localStorage.getItem(key);
+				if (!raw || raw.length > 65536) throw Error();
+				const value = JSON.parse(raw), id = target?.thread_id;
+				if (!validThread(id) || key !== prefix + JSON.stringify({
+					workspace_id: workspaceId,
+					thread_id: id
+				}) || value?.version !== 1 || !value.values || typeof value.values !== "object" || Array.isArray(value.values) || Object.values(value.values).some((item) => typeof item !== "string")) throw Error();
+				if (value.intent) {
+					const original = value.intent;
+					if (typeof original.key !== "string" || !original.key || original.request?.action !== "pm.follow_up.analyze" || JSON.stringify(original.request.target) !== JSON.stringify(target) || original.request.params?.intake_id !== intake.intake_id) throw Error();
+					pending.add(id);
+				} else if (Object.keys(value.values).length) drafts.add(id);
+			}
+		} catch {
+			throw Error(t("pm_fa_target_damaged"));
+		}
+		if (pending.size > 1) throw Error(t("pm_fa_target_ambiguous"));
+		return {
+			id: [...pending][0] ?? pointer?.thread_id ?? (drafts.size === 1 ? [...drafts][0] : ""),
+			locked: pending.size === 1
+		};
+	}
 	function clear() {
 		++serial;
 		intake = null;
@@ -4869,6 +4921,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		request = null;
 		rows = [];
 		next = null;
+		targetLocked = false;
 		body.replaceChildren();
 		status.replaceChildren();
 	}
@@ -4887,7 +4940,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		chooser.replaceChildren(h("option", { value: "" }, t("pm_fa_thread_choose")), ...rows.map((row) => h("option", { value: row.thread_id }, row.title)));
 		if (selected && !rows.some((row) => row.thread_id === selected)) chooser.append(h("option", { value: selected }, selected));
 		chooser.value = selected;
-		chooser.disabled = Boolean(intake.document.thread_ref) || Boolean(request?.locked());
+		chooser.disabled = Boolean(intake.document.thread_ref) || targetLocked || Boolean(request?.locked());
 	}
 	async function readThread() {
 		const ticket = ++serial;
@@ -4952,6 +5005,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 				}
 			}, t("pm_fa_use_thread_version"));
 			const sync = () => {
+				if (request) targetLocked = request.locked();
 				warning.hidden = !stale();
 				rebase.hidden = !stale();
 				rebase.disabled = Boolean(request?.locked()) || !authorized();
@@ -5022,15 +5076,35 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			if (intake.document.thread_ref) {
 				choices.set(intake.intake_id, intake.document.thread_ref.thread_id);
 				await readThread();
-			} else await readThreads();
+			} else {
+				const saved = savedTarget();
+				targetLocked = saved.locked;
+				saveTarget(saved.id);
+				await readThreads();
+			}
 		} catch (error) {
 			if (ticket === serial) fail(error);
 		}
 	}
 	chooser.addEventListener("change", () => {
-		if (!intake || request?.locked()) return;
-		choices.set(intake.intake_id, chooser.value);
-		readThread();
+		if (!intake || targetLocked || request?.locked()) {
+			if (intake) navigation();
+			return;
+		}
+		try {
+			const saved = savedTarget();
+			if (saved.locked) {
+				targetLocked = true;
+				saveTarget(saved.id);
+				navigation();
+			} else {
+				if (chooser.value && !validThread(chooser.value)) throw Error(t("pm_fa_mismatch"));
+				saveTarget(chooser.value);
+			}
+			readThread();
+		} catch (error) {
+			fail(error);
+		}
 	});
 	element.addEventListener("toggle", () => {
 		if (element.open && intake && !request) prepare();
@@ -22651,6 +22725,8 @@ var followUpAnalysisStrings = {
 		pm_fa_boundary: "Saved analysis of this preparation. Recommendations remain proposals until explicitly adopted.",
 		pm_fa_actor_changed: "The signed-in actor changed. Reopen this workspace.",
 		pm_fa_mismatch: "The assessment does not match its fixed source. Refresh this preparation.",
+		pm_fa_target_damaged: "The saved discussion target cannot be verified. Original drafts and requests remain saved; no replacement analysis will start.",
+		pm_fa_target_ambiguous: "More than one original discussion request is saved for this preparation. Resolve the original requests before choosing another discussion.",
 		pm_fa_more: "Load more assessments",
 		pm_fa_unavailable: "The previous assessment has been cleared. Refresh to check current source access.",
 		pm_fa_record: "Assessment {sequence}",
@@ -22702,6 +22778,8 @@ var followUpAnalysisStrings = {
 		pm_fa_boundary: "依這份討論準備保存的分析。建議需經明確採用，才會成為決定。",
 		pm_fa_actor_changed: "登入身分已變更，請重新開啟工作空間。",
 		pm_fa_mismatch: "評估與固定來源不符，請重新讀取這份討論準備。",
+		pm_fa_target_damaged: "無法核對已保存的討論目標。原草稿與請求仍保留，不會另開分析取代。",
+		pm_fa_target_ambiguous: "這份討論準備保留了不只一個原始討論請求。請先處理原請求，再選擇其他討論。",
 		pm_fa_more: "載入更多評估",
 		pm_fa_unavailable: "已清除先前評估。重新整理後會再次核對來源權限。",
 		pm_fa_record: "評估 {sequence}",
