@@ -59,7 +59,12 @@ async def test_each_pm_frame_rechecks_writer_and_requester_with_one_source_read(
         if pm_source_reads._READ.get() is not None:
             return check(ctx, run, **kwargs)
         if not observed:
-            previous, old_queries = measured(ops.db, lambda: prior_check(ctx, run, **kwargs))
+            old = {'operation_id': ctx.operation_id, 'requester': 0, 'sources': 0}
+            active.append(old)
+            try:
+                previous, old_queries = measured(ops.db, lambda: prior_check(ctx, run, **kwargs))
+            finally:
+                active.pop()
         before = ops.db.total_changes
         row = {'operation_id': ctx.operation_id, 'requester': 0, 'sources': 0}
         active.append(row)
@@ -72,7 +77,12 @@ async def test_each_pm_frame_rechecks_writer_and_requester_with_one_source_read(
             assert row['requester'] == 2 and row['sources'] == 1, row
             if not observed:
                 assert value == previous is None
-                assert new_queries * 3 < old_queries * 2, (old_queries, new_queries)
+                # Prove an entire original-source traversal disappeared while
+                # both live checks remain. Fixed scope bookkeeping is material
+                # in this small graph; a percentage threshold would conflate it
+                # with source fan-out in the separately measured joined graph.
+                assert old['requester'] == old['sources'] == 2, old
+                assert new_queries < old_queries, (old_queries, new_queries)
                 record_property('pm_frame_prior_selects', old_queries)
                 record_property('pm_frame_scoped_selects', new_queries)
         except AssertionError as error:
