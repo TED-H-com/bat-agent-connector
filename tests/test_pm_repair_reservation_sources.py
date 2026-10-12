@@ -1,4 +1,5 @@
 """A real reserve may recheck its baseline without excusing another effect."""
+import sqlite3
 import traceback
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -189,8 +190,9 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
     assert repairs._RESERVING_WORKLOAD.get() is None
 
 
-def test_repair_backedge_does_not_reuse_another_credential(monkeypatch):
-    ops, op, seen = SimpleNamespace(db=object()), {'operation_id': 'original-repair'}, []
+def test_repair_backedge_does_not_reuse_another_credential(monkeypatch, tmp_path):
+    db = sqlite3.connect(tmp_path / 'source-reader.db')
+    ops, op, seen = SimpleNamespace(db=db), {'operation_id': 'original-repair'}, []
     first = Principal('same-actor', frozenset({'observe'}), credential_id='first')
     other = Principal('same-actor', frozenset({'observe'}), credential_id='other')
     def access(ops, principal, op):
@@ -201,7 +203,10 @@ def test_repair_backedge_does_not_reuse_another_credential(monkeypatch):
         else:
             raise OperationError('NOT_FOUND', 'Other original credential is unavailable', 404)
     monkeypatch.setattr(repairs, '_access', access)
-    with pytest.raises(OperationError, match='Other original credential'):
-        repairs._full_access(ops, first, op)
-    assert seen == ['first', 'other']
-    assert not repairs._READING.get()
+    try:
+        with pytest.raises(OperationError, match='Other original credential'):
+            repairs._full_access(ops, first, op)
+        assert seen == ['first', 'other']
+        assert not repairs._READING.get()
+    finally:
+        db.close()
