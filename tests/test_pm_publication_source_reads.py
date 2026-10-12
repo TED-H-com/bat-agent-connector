@@ -56,6 +56,7 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
         return pr_publication.get_publication(ops, OWNER, published['operation_id'])
     with monkeypatch.context() as prior:
         prior.setattr(verifier, 'operation_visible', prior_verifier_visible)
+        prior.setattr(quality, '_access', prior_quality_access)
         prior.setattr(pr_publication, '_quality_access', pr_publication._quality_sources)
         prior.setattr(pr_publication, 'operation_visible', pr_publication._operation_visible)
         old, old_queries = measured(ops.db, read)
