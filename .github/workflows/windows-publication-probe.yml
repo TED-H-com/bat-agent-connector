@@ -1,0 +1,24 @@
+name: Windows private publication probe
+
+on:
+  push:
+    branches: [ci/pm-windows-publication-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-storage:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - name: Install the exact locked fixture dependencies
+        run: uv sync --locked --extra dev
+      - name: Actual private NTFS handles and publication contention
+        run: uv run --locked --extra dev python desktop/tests/windows-central-fixture.py
