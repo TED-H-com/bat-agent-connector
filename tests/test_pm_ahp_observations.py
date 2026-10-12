@@ -339,13 +339,13 @@ async def test_stable_over_limit_catalog_cannot_revoke_original_identity(ready):
     stable_010(host)
     params = {'session_uris': [host.session], 'include_changesets': True}
     original = await run(ready, params=params)
-    host.catalog = [{**host.catalog[0], 'resource': f'copilot:/large-{i}'} for i in range(201)]
+    host.catalog = [{**host.catalog[0], 'resource': f'copilotcli:/large-{i}'} for i in range(201)]
     refreshed = await run(ready, params=params, idempotency_key='oversized-catalog')
     assert refreshed['status'] == 'succeeded' and refreshed['result']['coverage_status'] == 'incomplete'
     assert ahp.operation_visible(ops.db, principal, original)
 
 
-async def test_legacy_projection_upgrade_uses_frozen_relations_and_preserves_document_bytes(ready, tmp_path):
+async def test_7a_projection_upgrade_uses_frozen_relations_and_preserves_document_bytes(ready, tmp_path):
     ops, host, wid, principal = ready
     original = await run(ready)
     row = dict(ops.db.execute('SELECT * FROM pm_ahp_observations WHERE operation_id=?', (original['operation_id'],)).fetchone())
@@ -373,7 +373,7 @@ async def test_legacy_projection_upgrade_uses_frozen_relations_and_preserves_doc
         legacy.db.executemany('INSERT INTO pm_ahp_resource_access VALUES(?,?,?,?,?)',
             [tuple(r) for r in ops.db.execute('SELECT adapter_id,binding_digest,resource,source_identity,available FROM pm_ahp_resource_access')])
         legacy.db.execute('INSERT INTO pm_ahp_resource_access VALUES(?,?,?,?,?)',
-            ('local', host.adapter.binding_digest(), 'copilot:/unproven', 'f' * 64, 1))
+            ('local', host.adapter.binding_digest(), 'copilotcli:/unproven', 'f' * 64, 1))
         version = legacy.db.execute('PRAGMA user_version').fetchone()[0]
         ahp.schema(legacy)
         ahp.schema(legacy)
@@ -385,3 +385,144 @@ async def test_legacy_projection_upgrade_uses_frozen_relations_and_preserves_doc
         ahp._sources_access(legacy.db, 'local', host.adapter.binding_digest(), document['original_sources'])
     finally:
         legacy.close()
+
+
+def earlier_document(document, generation):
+    value = copy.deepcopy(document)
+    if generation == 'modern':
+        return value
+    def strip_kind(item):
+        if isinstance(item, dict):
+            item.pop('source_kind', None)
+            for child in item.values():
+                strip_kind(child)
+        elif isinstance(item, list):
+            for child in item:
+                strip_kind(child)
+    strip_kind(value)
+    evidence = value['evidence']
+    evidence.pop('negotiated_version')
+    evidence.pop('decoder_profile')
+    if generation == '40f':
+        for receipt in [*evidence['snapshots'], *evidence['events']]:
+            receipt.pop('original_sources')
+    return value
+
+
+def historical_copy(ops, original, document, path):
+    """Seed an independent pre-upgrade database; production receipts stay immutable."""
+    journal = Journal(path)
+    ops.db.backup(journal.db)
+    row = dict(journal.db.execute('SELECT * FROM pm_ahp_observations WHERE operation_id=?', (original['operation_id'],)).fetchone())
+    row['document'], row['document_digest'] = json.dumps(document), ahp.provider.digest(document)
+    definition = journal.db.execute("SELECT sql FROM sqlite_master WHERE name='pm_ahp_observations'").fetchone()[0]
+    access = [tuple(r) for r in journal.db.execute(
+        'SELECT adapter_id,binding_digest,resource,source_identity,available FROM pm_ahp_resource_access')]
+    with journal.tx():
+        # This fixture represents the earlier persisted format, including its
+        # original operation receipt. No UPDATE bypass exists in production.
+        journal.db.execute('DROP TABLE pm_ahp_observations')
+        journal.db.execute(definition)
+        journal.db.execute('INSERT INTO pm_ahp_observations VALUES(' + ','.join('?' for _ in row) + ')', tuple(row.values()))
+        journal.db.execute('DROP TABLE pm_ahp_resource_access')
+        journal.db.execute('''CREATE TABLE pm_ahp_resource_access (
+            adapter_id TEXT NOT NULL, binding_digest TEXT NOT NULL, resource TEXT NOT NULL,
+            source_identity TEXT NOT NULL, available INTEGER NOT NULL,
+            PRIMARY KEY(adapter_id,binding_digest,resource,source_identity))''')
+        journal.db.executemany('INSERT INTO pm_ahp_resource_access VALUES(?,?,?,?,?)', access)
+        result = {**original['result'], 'document_digest': row['document_digest']}
+        journal.db.execute('UPDATE operations SET result=? WHERE operation_id=?',
+            (json.dumps(result), original['operation_id']))
+    recovered = OperationService(journal)
+    recovered.context['fleet'] = ops.context['fleet']
+    ahp.install(recovered)
+    return recovered, row
+
+
+@pytest.mark.parametrize('generation', ['40f', '7a'])
+@pytest.mark.parametrize('available', [True, False])
+async def test_earlier_complete_receipts_keep_original_bytes_and_existing_access_only(ready, tmp_path, generation, available):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    original_doc = ahp.get_observation(ops, principal, wid, original['result']['observation_id'])['observation']['document']
+    document = earlier_document(original_doc, generation)
+    if not available:
+        ops.db.execute('UPDATE pm_ahp_resource_access SET available=0')
+    historical, frozen = historical_copy(ops, original, document, tmp_path / 'earlier.sqlite')
+    try:
+        count = len(host.requests)
+        assert ahp.operation_visible(historical.db, principal, original) is available
+        assert {r[0] for r in historical.db.execute('SELECT available FROM pm_ahp_resource_access')} == {int(available)}
+        oid = original['result']['observation_id']
+        if available:
+            assert ahp.get_observation(historical, principal, wid, oid)['observation']['document'] == document
+            replay, created = historical.create(principal, **request(wid))
+            assert not created and replay['result']['document_digest'] == frozen['document_digest']
+        else:
+            with pytest.raises(OperationError, match='NOT_FOUND'):
+                ahp.get_observation(historical, principal, wid, oid)
+        ahp.schema(historical.journal)
+        assert dict(historical.db.execute('SELECT * FROM pm_ahp_observations').fetchone()) == frozen
+        assert len(host.requests) == count
+    finally:
+        historical.journal.close()
+
+
+@pytest.mark.parametrize('failure', ['orphan_reconnect', 'reconnect', 'gap', 'missing_timestamp',
+    'changed_incarnation', 'unadvertised_changeset', 'missing_original_reference', 'empty_original_references',
+    'modern_empty_receipt_references'])
+async def test_unproven_historical_coverage_hides_every_read_even_after_new_positive_capture(ready, tmp_path, failure):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    oid = original['result']['observation_id']
+    original_doc = ahp.get_observation(ops, principal, wid, oid)['observation']['document']
+    modern = failure in {'missing_original_reference', 'empty_original_references', 'modern_empty_receipt_references'}
+    document = earlier_document(original_doc, 'modern' if modern else '40f')
+    evidence = document['evidence']
+    session = next(item for item in evidence['snapshots'] if item['resource'] == SESSION)
+    if failure == 'orphan_reconnect':
+        evidence.update(catalog=[], positive_catalog=[], catalog_complete=False,
+            reconnect='replay', status='incomplete', reason='peer_read_refused')
+        document['original_sources'] = []
+        evidence['events'].append({'channel': SESSION, 'server_seq': 13,
+            'action_type': 'session/titleChanged', 'original_digest': 'a' * 64,
+            'received_at': 1, 'payload': 'not_retained'})
+    elif failure == 'reconnect':
+        evidence['reconnect'] = 'replay'
+    elif failure == 'gap':
+        evidence['gaps'] = [{'reason': 'snapshot_fallback', 'after_server_seq': 10}]
+    elif failure == 'missing_timestamp':
+        session['state'].pop('createdAt')
+    elif failure == 'changed_incarnation':
+        session['state']['createdAt'] = '2026-10-12T00:00:00Z'
+    elif failure == 'unadvertised_changeset':
+        session['state']['changesets'] = []
+    elif failure == 'missing_original_reference':
+        document['original_sources'].pop()
+    elif failure == 'empty_original_references':
+        document['original_sources'] = []
+    else:
+        session['original_sources'] = []
+    historical, frozen = historical_copy(ops, original, document, tmp_path / 'unproven.sqlite')
+    try:
+        assert not pm_access.visible(historical.db, principal, original)
+        assert ahp.current_observation(historical, principal, wid) == {
+            'workspace_id': wid, 'observation': None, 'visibility_filtered': True}
+        newer = await run((historical, host, wid, principal), idempotency_key='new-positive-original-identities')
+        assert newer['status'] == 'succeeded', newer
+        assert {r[0] for r in historical.db.execute('SELECT available FROM pm_ahp_resource_access')} == {1}
+        count = len(host.requests)
+        assert not pm_access.visible(historical.db, principal, original)
+        with pytest.raises(OperationError, match='NOT_FOUND'):
+            ahp.get_observation(historical, principal, wid, oid)
+        with pytest.raises(OperationError, match='NOT_FOUND'):
+            historical.create(principal, **request(wid))
+        page = ahp.list_observations(historical, principal, wid)
+        assert page['visibility_filtered'] and [item['observation_id'] for item in page['observations']] == [newer['result']['observation_id']]
+        assert not any(pm_access.event_visible(historical.db, principal, event)
+            for event in historical.journal.api_events(0, 500)['events']
+            if event['body'].get('operation_id') == original['operation_id'] or event['resource_id'] == original['operation_id'])
+        assert dict(historical.db.execute('SELECT * FROM pm_ahp_observations WHERE observation_id=?', (oid,)).fetchone()) == frozen
+        assert len(host.requests) == count
+    finally:
+        historical.journal.close()

@@ -52,7 +52,7 @@ def schema(journal):
                     document = json.loads(row[2])
                     if provider.digest(document) != row[3]:
                         continue
-                    sources = _document_sources(document['evidence'])
+                    sources = _covered_sources(document)
                 except (ValueError, KeyError, TypeError, OperationError):
                     continue
                 for source in sources:
@@ -166,14 +166,25 @@ def _project_access(db, adapter_id, binding_digest, evidence):
 
 
 def _document_sources(evidence):
+    receipts = [*evidence['snapshots'], *evidence['events']]
+    if any('original_sources' not in receipt for receipt in receipts):
+        return _early_sources(evidence)
     sources = [{key: item[key] for key in ('resource', 'source_identity')} | {'source_kind': 'session'}
         for item in evidence['catalog']]
     # Reconnect can fail before a fresh catalog arrives. Retained snapshots and
     # event metadata still belong to their original identities, independently of
     # the final (possibly empty or replaced) catalog. Never orphan those sources.
-    for receipt in [*evidence['snapshots'], *evidence['events']]:
+    for receipt in receipts:
         resource = receipt.get('resource', receipt.get('channel'))
         parent = evidence['changeset_owners'].get(resource, resource)
+        refs = receipt['original_sources']
+        expected = set() if resource == provider.ROOT else {resource, parent}
+        if len(refs) != len(expected) or {source['resource'] for source in refs} != expected:
+            raise _bad('AHP_OBSERVATION_CORRUPT')
+        identities = {source['resource']: source['source_identity'] for source in refs}
+        if resource != parent and identities[resource] != provider.digest({
+                'resource': resource, 'session_identity': identities[parent]}):
+            raise _bad('AHP_OBSERVATION_CORRUPT')
         for source in receipt['original_sources']:
             # Also reconstruct pre-profile records without modifying their bytes.
             # A source is the original receipt channel or its advertised parent,
@@ -185,6 +196,70 @@ def _document_sources(evidence):
             sources.append({**source, 'source_kind': kind})
     return [dict(resource=resource, source_identity=identity, source_kind=kind) for resource, identity, kind in
         sorted({(source['resource'], source['source_identity'], source['source_kind']) for source in sources})]
+
+
+def _early_sources(evidence):
+    """Narrow reconstruction of pre-7a receipts, solely from their frozen facts."""
+    receipts = [*evidence['snapshots'], *evidence['events']]
+    if (evidence['protocol_version'] != '1.0.0' or evidence['reconnect'] != 'not_needed'
+            or 'negotiated_version' in evidence or 'decoder_profile' in evidence
+            or evidence['gaps'] or evidence['missing'] or evidence['notifications']
+            or evidence['status'] != 'observed' or evidence['catalog_complete'] is not True
+            or any('original_sources' in receipt for receipt in receipts)):
+        raise _bad('AHP_OBSERVATION_CORRUPT')
+    catalog = {item['resource']: item for item in evidence['catalog']}
+    snapshots = {item['resource']: item for item in evidence['snapshots']}
+    if len(catalog) != len(evidence['catalog']) or len(snapshots) != len(evidence['snapshots']):
+        raise _bad('AHP_OBSERVATION_CORRUPT')
+    sources = {}
+    for resource, item in catalog.items():
+        identity = provider.digest({key: item[key] for key in ('resource', 'provider', 'createdAt')})
+        if identity != item['source_identity']:
+            raise _bad('AHP_OBSERVATION_CORRUPT')
+        sources[resource] = {'resource': resource, 'source_identity': identity, 'source_kind': 'session'}
+    for receipt in receipts:
+        resource = receipt.get('resource', receipt.get('channel'))
+        if resource == provider.ROOT:
+            continue
+        parent = evidence['changeset_owners'].get(resource, resource)
+        state, item = snapshots[parent]['state'], catalog[parent]
+        # Earliest records did not bind each receipt to a catalog incarnation.
+        # Only a saved state that independently carries that identity can recover.
+        if any(state.get(key) != item[key] for key in ('provider', 'createdAt')):
+            raise _bad('AHP_OBSERVATION_CORRUPT')
+        if resource != parent:
+            if (resource not in snapshots or not any(entry['uriTemplate'] == resource
+                    and entry['read_supported'] is True for entry in state['changesets'])):
+                raise _bad('AHP_OBSERVATION_CORRUPT')
+            sources[resource] = {'resource': resource, 'source_kind': 'changeset',
+                'source_identity': provider.digest({'resource': resource,
+                    'session_identity': sources[parent]['source_identity']})}
+    return [sources[key] for key in sorted(sources)]
+
+
+def _covered_sources(document):
+    """An empty/incomplete saved reference list must never orphan private facts.
+
+    This gate precedes every historical read, including db-only global visibility.
+    It neither changes old bytes nor obtains replacement identities from live state.
+    """
+    try:
+        required = _document_sources(document['evidence'])
+        kinds = {(item['resource'], item['source_identity']): item['source_kind'] for item in required}
+        original = document['original_sources']
+        if len(original) != len(kinds) or len(required) != len(kinds):
+            raise ValueError('source coverage differs')
+        actual = set()
+        for source in original:
+            key = (source['resource'], source['source_identity'])
+            if key not in kinds or source.get('source_kind', kinds[key]) != kinds[key]:
+                raise ValueError('source identity differs')
+            actual.add(key)
+        if actual != set(kinds):
+            raise ValueError('source coverage differs')
+        return required
+    except (KeyError, TypeError, ValueError, AttributeError, OperationError):
+        raise _bad('NOT_FOUND', 404) from None
 
 
 def _live(ops, binding):
@@ -245,7 +320,7 @@ def operation_visible(db, principal, operation):
                 document = json.loads(saved['document'])
                 if provider.digest(document) != saved['document_digest']:
                     return False
-                _sources_access(db, op['target']['adapter_id'], binding['ahp_binding_digest'], document['original_sources'])
+                _sources_access(db, op['target']['adapter_id'], binding['ahp_binding_digest'], _covered_sources(document))
             else:
                 for resource in op['params'].get('session_uris', []):
                     rows = db.execute('SELECT available FROM pm_ahp_resource_access WHERE adapter_id=? AND binding_digest=? AND resource=?',
@@ -352,7 +427,7 @@ def _view(ops, principal, wid, row, *, detail):
     if (provider.digest(doc) != row['document_digest'] or doc['workspace_id'] != wid
             or doc['observation_id'] != row['observation_id'] or doc['binding_digest'] != row['binding_digest']):
         raise _bad('AHP_OBSERVATION_CORRUPT')
-    _sources_access(ops.db, row['adapter_id'], row['binding_digest'], doc['original_sources'])
+    _sources_access(ops.db, row['adapter_id'], row['binding_digest'], _covered_sources(doc))
     out = {key: row[key] for key in ('sequence', 'observation_id', 'workspace_id', 'adapter_id',
         'document_digest', 'created_at', 'actor', 'operation_id')}
     out['coverage_status'] = doc['evidence']['status']
