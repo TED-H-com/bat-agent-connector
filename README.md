@@ -8,7 +8,7 @@ Better Agent Dashboard is a project workspace for people working with coding age
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** This introduction describes merged source, with screenshots captured from `c0027daa` (October 12, 2026). PM v1.2 is still being integrated. The [progress report](docs/product/progress-2026-10-12.md) separates the public baseline, M4/M5 candidates and remaining work. Choose a successful package for an exact source commit; a newer draft PR is not a released build.
+> **Development preview.** This introduction describes merged source, with screenshots captured from `7d7f21f0` (October 12, 2026). PM v1.2 is still being integrated. The [progress report](docs/product/progress-2026-10-12.md) separates the public baseline, M4/M5 candidates and remaining work. Choose a successful package for an exact source commit; a newer draft PR is not a released build.
 
 ![Project workspace: project tree, conversation, reply and linked results.](site/images/workspace-en.png)
 

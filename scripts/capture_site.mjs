@@ -14,7 +14,7 @@ import {pmFixture, pmRoute, workspaceId, threadId} from '../desktop/tests/pm-fix
 import {fixture as kanbanFixture} from '../desktop/tests/pm-kanban-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const source = 'c0027daa61827bd2e505331012b7916bcf71ce9a';
+const source = '7d7f21f04ed955c41d5ddc584c7c1d6668e29cda';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = '2026-10-12T12:00:00Z';

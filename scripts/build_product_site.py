@@ -121,8 +121,8 @@ parts.append(
         "介面導覽",
         "From the conversation to the work.",
         "從討論，看見工作怎麼前進。",
-        "The actual shared frontend, captured from main c0027daa on October 12, 2026. All examples use synthetic data.",
-        "以下為 2026 年 10 月 12 日從主線 c0027daa 拍攝的共用介面，全部使用合成展示資料。",
+        "The actual shared frontend, captured from 7d7f21f0 on October 12, 2026. All examples use synthetic data.",
+        "以下為 2026 年 10 月 12 日從 7d7f21f0 拍攝的共用介面，全部使用合成展示資料。",
     )
 )
 shots = [
@@ -144,8 +144,8 @@ shots = [
         "pm-kanban",
         "PM Kanban",
         "PM 看板",
-        "Follow recorded work states and the evidence that is still missing.",
-        "跟進已記錄的工作狀態，也看見仍缺少的證據。",
+        "Scan work by stage; open a card for execution and evidence.",
+        "按階段掃視工作，需要時再展開執行與證據。",
     ),
     (
         "dispatch",
