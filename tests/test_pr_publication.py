@@ -205,9 +205,15 @@ async def test_foreign_branch_race_cannot_fast_forward_or_create_pr(pub, existin
             w['original']['result']['worktree_path'], foreign)
     w["runner"].inject["publication-push"] = f'git --git-dir="{w["remote"]}" update-ref {ref} {foreign}'
     done = await settle(w, op)
-    assert done["status"] == "failed" and done["error_code"] == "PR_BRANCH_CREATE_REFUSED", done
+    if existing == 'ancestor':
+        assert done["status"] == "failed" and done["error_code"] == "PR_BRANCH_CREATE_REFUSED", done
+    else:
+        # Git can report an already matching ref as up-to-date. That is no
+        # original creation receipt; keep it unresolved without adopting it.
+        assert done['status'] == 'needs_attention', done
+        assert publication.get_publication(w['d'].ops, DELIVERER, op['operation_id'])['creation_receipt'] is None
     assert git(w["remote"], "rev-parse", ref) == foreign
-    assert w["posts"] == []
+    assert w['runner'].ran['publication-push'] == 1 and w["posts"] == []
 
 
 async def test_live_credential_revocation_stops_unsent_branch(pub):
