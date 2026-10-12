@@ -4,24 +4,25 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import uuid
 
 from bat_agent_connector import pm_bat_runtime as bat_runtime
 from bat_agent_connector import pm_conversation_proposals as proposals
-from bat_agent_connector import pm_plans, pm_runs, pm_snapshots, pm_sprints, registry
+from bat_agent_connector import pm_discussions, pm_plans, pm_runs, pm_snapshots, pm_sprints, registry
 from bat_agent_connector.config import parse_config
 from bat_agent_connector.errors import InvokeTimeout
 from bat_agent_connector.task_daemon import TaskDaemon
 from tests import test_pm_conversation_proposals as conversation
 from tests.operation_helpers import settle_operations
-from tests.pm_joined_lifecycle_helpers import OWNER, assert_manual_preserved
+from tests.pm_joined_lifecycle_helpers import OWNER, assert_manual_preserved, execute
 from tests.test_api_v1 import http, token
-from tests.test_pm_plan_operations import act as thread_action
 
 
 async def reconnect_and_replan(w, mock, monkeypatch):
     old, wid = w['d'], w['workspace_id']
     ops = old.ops
     original_plan = copy.deepcopy(pm_plans.accepted_plan(ops, OWNER, wid)['plan'])
+    assert original_plan['is_current_accepted'] is True
     original_runs = [pm_runs.get_by_operation(ops.db, row[0]) for row in ops.db.execute(
         'SELECT operation_id FROM pm_runs WHERE workspace_id=?', (wid,))]
     original_bindings = [dict(row) for row in ops.db.execute('SELECT * FROM pm_work_bindings WHERE workspace_id=?', (wid,))]
@@ -37,22 +38,31 @@ async def reconnect_and_replan(w, mock, monkeypatch):
     assert clients[0][1]['snapshot']['view_digest'] == w['joined_snapshot']['view_digest']
 
     next_world = {**w, 'thread_id': w['ledger'].references['next_idea_thread_id']}
-    message = await thread_action(next_world, 'pm.message.append', {'content':
-        '請保留原登入與重設需求，另把 Review 的復原操作說明整理成可審閱的下一版計畫；推薦碼仍未採用。'})
+    target = {'workspace_id': wid, 'thread_id': next_world['thread_id']}
+    assert target['thread_id'] != w['thread_id']
+    original_thread = pm_discussions.get_thread(ops, OWNER, wid, w['thread_id'])['thread']
+    message = await execute(w, 'pm.message.append', target, {'content':
+        '請保留原登入與重設需求，另把 Review 的復原操作說明整理成可審閱的下一版計畫；推薦碼仍未採用。'},
+        {'expected_version': pm_discussions.get_thread(ops, OWNER, **target)['thread']['version']})
+    assert pm_discussions.get_thread(ops, OWNER, wid, w['thread_id'])['thread'] == original_thread
     doc = conversation.envelope('accepted_plan')
     source = 'input.' + w['ledger'].references['next_idea_input_id']
     doc['title'] = 'Member recovery guidance after the original release'
     doc['candidates'].extend([
         {'key': 'guidance', 'domain': 'scope', 'text': 'Provide accessible recovery instructions',
-            'kind': 'proposal', 'source_refs': [source, 'message.' + message['message_id']]},
+            'kind': 'proposal', 'source_refs': [source, 'message.' + message['result']['message_id']]},
         {'key': 'guidance_test', 'domain': 'quality', 'text': 'Recovery instructions can be completed using keyboard navigation',
             'kind': 'proposal', 'source_refs': [source]},
     ])
     doc['requirements'].append({'id': 'member.guidance', 'source_key': 'guidance', 'acceptance_keys': ['guidance_test'],
         'priority': 'should', 'depends_on': ['member.recovery']})
     w['pm_settings']['raw_reply'] = json.dumps(doc, ensure_ascii=False)
-    request = conversation.propose_request(next_world)
-    request['params']['adapter'] = bat_runtime.ADAPTER
+    head = pm_plans.head(ops.db, wid)
+    request = {'action': proposals.ACTION, 'target': target,
+        'params': {'purpose': '整理原 Review 候選成為可審閱的計畫更新', 'adapter': bat_runtime.ADAPTER},
+        'preconditions': {'expected_version': pm_discussions.get_thread(ops, OWNER, **target)['thread']['version'],
+            'expected_plan_version': head['version'], 'expected_accepted_revision_id': head['accepted_revision_id']},
+        'idempotency_key': uuid.uuid4().hex}
     client = old.fleet.client('h1')
     invoke, dropped = client.invoke, False
 
@@ -93,6 +103,7 @@ async def reconnect_and_replan(w, mock, monkeypatch):
         assert recovered['status'] == 'succeeded', recovered
         assert mock.channels().count('claude:send-message') == count
         run = pm_runs.get_by_operation(ops.db, created['operation_id'])
+        assert run['thread_id'] == target['thread_id']
         assert run['generation'] > max(row['generation'] for row in original_runs)
         assert run['session_binding']['session_id'] not in before_registry
         assert run['context']['accepted_plan']['revision_id'] == original_plan['revision_id']
@@ -103,12 +114,17 @@ async def reconnect_and_replan(w, mock, monkeypatch):
         proposal = proposals.get_proposal(ops, OWNER, wid, recovered['result']['outcome']['proposal_id'])['proposal']
         assert proposal['validation']['status'] == 'format_valid', proposal['validation']
         assert pm_plans.accepted_plan(ops, OWNER, wid)['plan'] == original_plan
-        adopted = await conversation.complete(next_world, ops.create(OWNER, **conversation.adoption_request(next_world, proposal))[0])
+        adoption = conversation.adoption_request(next_world, proposal)
+        adoption['target'] = target
+        assert proposal['context']['thread_id'] == target['thread_id']
+        adopted = await conversation.complete(next_world, ops.create(OWNER, **adoption)[0])
         assert adopted['status'] == 'succeeded', adopted
         revised = pm_plans.accepted_plan(ops, OWNER, wid)['plan']
+        assert revised['is_current_accepted'] is True
         assert revised['revision_id'] != original_plan['revision_id']
         assert {row['id'] for row in revised['document']['requirements']} == {'member.login', 'member.recovery', 'member.guidance'}
-        assert pm_plans.get_plan(ops, OWNER, wid, original_plan['revision_id'])['plan'] == original_plan
+        assert pm_plans.get_plan(ops, OWNER, wid, original_plan['revision_id'])['plan'] == {
+            **original_plan, 'is_current_accepted': False}
         assert [dict(row) for row in ops.db.execute('SELECT * FROM pm_work_bindings WHERE workspace_id=?', (wid,))] == original_bindings
         assert [dict(row) for row in ops.db.execute('SELECT * FROM pm_work_packages WHERE workspace_id=?', (wid,))] == original_packages
         assert pm_sprints.get_sprint(ops, OWNER, **w['joined_sprint']['target']) == w['joined_sprint']['closed']
