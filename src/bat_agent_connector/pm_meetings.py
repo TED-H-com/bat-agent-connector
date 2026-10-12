@@ -367,10 +367,10 @@ class _SourceReader:
 
     def get(self, operation_id, *, steps=False, principal=None):
         row = self.db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
-        # The exact engineering verifier can be a quality-assessment proof.
+        # Engineering verifiers and GitHub observations can be quality proofs.
         # Other PM operations remain excluded before recursive source checks;
         # the evidence collector separately rejects all PM delivery claims.
-        if row is None or (row['action'].startswith('pm.') and row['action'] != 'pm.execution.verify'):
+        if row is None or (row['action'].startswith('pm.') and row['action'] not in {'pm.execution.verify', 'pm.github.observe'}):
             raise _bad('NOT_FOUND', 'Source operation not found', 404)
         operation = OperationService._decode(row)
         if principal is not None:
