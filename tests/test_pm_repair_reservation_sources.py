@@ -197,15 +197,15 @@ def test_repair_backedge_does_not_reuse_another_credential(monkeypatch, tmp_path
     other = Principal('same-actor', frozenset({'observe'}), credential_id='other')
     def access(ops, principal, op):
         seen.append(principal.credential_id)
-        repairs._full_access(ops, principal, op)  # The same original backedge is bounded.
+        repairs._full_access_sources(ops, principal, op)  # The same original backedge is bounded.
         if principal.credential_id == 'first':
-            repairs._full_access(ops, other, op)
+            repairs._full_access_sources(ops, other, op)
         else:
             raise OperationError('NOT_FOUND', 'Other original credential is unavailable', 404)
     monkeypatch.setattr(repairs, '_access', access)
     try:
         with pytest.raises(OperationError, match='Other original credential'):
-            repairs._full_access(ops, first, op)
+            repairs._full_access_sources(ops, first, op)
         assert seen == ['first', 'other']
         assert not repairs._READING.get()
     finally:

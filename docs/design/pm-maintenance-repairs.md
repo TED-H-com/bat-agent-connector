@@ -12,6 +12,16 @@ Scopes end before any provider await or journal mutation, and every subsequent
 page/effect obtains a fresh scope. Credential identity, source withdrawal and
 the existing cycle/depth/node bounds remain unchanged.
 
+Within that synchronous snapshot, complete repair-source decisions may be reused
+by canonical original operation ID and the full principal/credential identity.
+Every call still checks membership and the original target/admission context;
+no caller projection can replace the canonical operation. A traversal underneath
+any active repair for that same principal remains uncached, including the exact
+owned-child backedge. Failed predicates propagate their original error and never
+become a positive decision. Repair depth has its own existing 64-node allowance
+while sharing the 2048-node read budget. This memo contains only booleans, never
+repair documents, current eligibility, live credentials or final-frame results.
+
 ## Explicit executable policy
 
 An optional `repair_rules` list in MaintenancePolicy preserves old canonical

@@ -162,6 +162,25 @@ def source_read_active(db, principal):
 
 
 def _full_access(ops, principal, op):
+    from .pm_source_reads import check, scope
+    with scope(ops.db, principal):
+        pm_workspace.require_member(ops.db, principal, op['target']['workspace_id'])
+        original = _operation(ops, op['operation_id'])
+        if (original['action'] != ACTION or original['action'] != op['action']
+                or original['target'] != op['target'] or _intent(original) != _intent(op)):
+            raise _bad('NOT_FOUND', 'Original repair context changed', 404)
+        def visible():
+            _full_access_sources(ops, principal, original)
+            return True
+        # A nested repair can depend on the outer repair's partial backedge.
+        # Only an outer, fully completed source decision may enter the memo.
+        if source_read_active(ops.db, principal):
+            visible()
+        elif not check(ops.db, principal, 'repair_sources', original['operation_id'], visible):
+            raise _bad('NOT_FOUND', 'Original repair sources unavailable', 404)
+
+
+def _full_access_sources(ops, principal, op):
     # A receipt may refer to this repair through its owned child. Check every
     # source on the outer traversal, while suppressing only that same back edge.
     key = _source_read_key(ops.db, principal, op['operation_id'])
