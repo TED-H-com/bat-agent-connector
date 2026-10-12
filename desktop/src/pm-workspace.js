@@ -334,6 +334,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ].map(group => ({...group, sections: group.sections.filter(Boolean)})),
     onSelect: id => {if (id === 'rtm') void traceability?.activate();}});
     body.insertBefore(workbench.element, status);
+    body.insertBefore(content, status.nextSibling);
     workbench.apply();
   }
   const sourceSections = () => [content, workbench?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
@@ -659,6 +660,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!list.workspaces?.length) {workspaceList.append(h('p', {class: 'muted'}, t('pm_no_workspaces'))); nav.querySelector('.pm-create-workspace').open = true;}
       if (workspace) workspaceList.append(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}`, onclick: () => {
         rememberProjectView(namespace, workspaceId, 'workspace'); workbench?.select('workspace');
+        if (workbench) content.querySelector('input')?.focus();
       }}, t('pm_new_thread')));
       if (threadList?.next_cursor) workspaceList.append(h('button', {type: 'button', class: 'secondary', onclick: () => {threadPages++; void load();}}, t('pm_more_threads')));
       if (data) renderThread(data);

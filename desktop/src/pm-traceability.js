@@ -15,7 +15,7 @@ export function requirementReviews(plan, requirement, reviews) {
 export function workspaceTraceability({h, t, api, alive, workspaceId, caps, errorBox}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
-  let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = '', deliveryPages = 1;
+  let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = '', renderedDetail = '', deliveryPages = 1;
   const pages = {work: 1, issues: 1, reviews: 1}, cursors = {}, expanded = new Set(), order = [];
   const status = h('div', {role: 'status'}), count = h('p', {class: 'muted'}), tableBody = h('tbody');
   const filter = h('input', {type: 'search', 'aria-label': t('wb_filter'), placeholder: t('wb_filter'), oninput: () => renderTable()});
@@ -42,12 +42,15 @@ export function workspaceTraceability({h, t, api, alive, workspaceId, caps, erro
   };
   const issuesFor = card => issues.filter(row => row.work_item_id === card.work_item_id
     && row.document.relation?.binding_id === card.binding.binding_id);
+  const detailSignature = () => JSON.stringify([detailCard && [detailCard.work.title, detailCard.column,
+    detailCard.binding, detailCard.quality, detailCard.execution, detailCard.latest_capture, issuesFor(detailCard)],
+    plan?.revision_id, plan?.adoption, deliveryRows, deliveryCursor]);
   function controls() {refreshButton.disabled = busy; for (const [kind, button] of Object.entries(moreButtons)) {
     button.disabled = busy; button.hidden = cursors[kind] == null;
   }}
   function withdraw() {
     serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; signature = '';
-    detailCard = null; deliveryRows = []; deliveryCursor = null; detailBusy = false;
+    detailCard = null; deliveryRows = []; deliveryCursor = null; detailBusy = false; renderedDetail = '';
     tableBody.replaceChildren(); detail.replaceChildren(); detail.hidden = true; count.replaceChildren(); status.replaceChildren();
     for (const kind of Object.keys(pages)) cursors[kind] = null; controls();
   }
@@ -137,12 +140,13 @@ export function workspaceTraceability({h, t, api, alive, workspaceId, caps, erro
       plan = accepted.plan; cards = work.rows; issues = mappings?.rows || []; reviews = quality?.rows || [];
       milestones = roadmap?.baseline?.document?.milestones || [];
       for (const [kind, data] of Object.entries({work, issues: mappings, reviews: quality})) cursors[kind] = data?.next ?? null;
-      const next = JSON.stringify([plan, cards, issues, reviews, milestones]);
+      // Volatile flow ages are not table content and must not replace reading rows.
+      const next = JSON.stringify([plan, cards.map(card => [card.work_item_id, card.binding, card.work.title, card.column]), issues, reviews, milestones]);
       if (next !== signature) {signature = next; renderTable();}
       count.textContent = t('wb_catalogue', {requirements: plan?.document?.requirements?.length || 0, work: cards.length});
       status.replaceChildren(...([work, mappings, quality].some(row => row?.filtered || row?.next != null) ? [h('p', {class: 'muted'}, t('wb_partial'))] : []));
       if (selected && cards.some(card => card.work_item_id === selected)) await select(selected, false, true);
-      else {detailCard = null; deliveryRows = []; detail.replaceChildren(); detail.hidden = true; detailBusy = false;}
+      else {detailCard = null; deliveryRows = []; detail.replaceChildren(); detail.hidden = true; detailBusy = false; renderedDetail = '';}
     } catch (error) {fail(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   function deliveryCheck(data, id, after) {
@@ -156,7 +160,7 @@ export function workspaceTraceability({h, t, api, alive, workspaceId, caps, erro
     const card = detailCard; if (!card) return;
     const close = h('button', {type: 'button', class: 'secondary', onclick: () => {
       const id = selected;
-      detailSerial++; selected = null; detailCard = null; deliveryRows = []; detail.replaceChildren(); detail.hidden = true; renderTable();
+      detailSerial++; selected = null; detailCard = null; deliveryRows = []; renderedDetail = ''; detail.replaceChildren(); detail.hidden = true; renderTable();
       tableBody.querySelector(`[data-rtm-select="${CSS.escape(id)}"]`)?.focus({preventScroll: true});
     }}, t('wb_close'));
     detail.replaceChildren(h('header', {class: 'pm-heading'}, h('h3', {tabindex: '-1'}, card.work.title), close),
@@ -192,14 +196,15 @@ export function workspaceTraceability({h, t, api, alive, workspaceId, caps, erro
     if (deliveryCursor !== null) detail.append(h('button', {type: 'button', class: 'secondary', disabled: detailBusy, onclick: () => void moreDeliveries()}, t('wb_receipts_more')));
     detail.append(h('details', {}, h('summary', {}, t('wb_sources')), h('pre', {class: 'pm-brief-proof'}, JSON.stringify({binding: card.binding,
       coverage: card.execution?.coverage, capture: card.latest_capture, issues: issuesFor(card), deliveries: deliveryRows}, null, 2))));
+    renderedDetail = detailSignature();
   }
   async function select(id, focus = false, retain = false) {
     const card = cards.find(row => row.work_item_id === id); if (!card) return;
     if (selected !== id) deliveryPages = 1;
-    const previous = retain ? JSON.stringify([detailCard, deliveryRows, deliveryCursor]) : null;
+    const previous = retain ? renderedDetail : null;
     const ticket = ++detailSerial, generation = serial; selected = id; detailBusy = true;
     if (!retain) {
-      detailCard = null; deliveryRows = []; deliveryCursor = null;
+      detailCard = null; deliveryRows = []; deliveryCursor = null; renderedDetail = '';
       detail.hidden = false; detail.replaceChildren(h('p', {role: 'status'}, t('wb_detail_loading'))); renderTable();
     }
     try {
@@ -211,7 +216,7 @@ export function workspaceTraceability({h, t, api, alive, workspaceId, caps, erro
       detailCard = data.card;
       deliveryRows = deliveries?.deliveries || []; deliveryCursor = deliveries?.next_after ?? null;
       detailBusy = false; detail.hidden = false;
-      if (previous !== JSON.stringify([detailCard, deliveryRows, deliveryCursor])) renderDetail();
+      if (previous !== detailSignature()) renderDetail();
       detail.querySelector('[data-rtm-filtered]')?.remove();
       if (deliveries?.source_visibility_filtered) detail.append(h('p', {class: 'muted', 'data-rtm-filtered': ''}, t('wb_partial')));
       if (focus) detail.querySelector('h3')?.focus({preventScroll: true});

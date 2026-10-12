@@ -119,11 +119,14 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const heading=rtm(page).locator('[data-rtm-detail] h3');await expect(heading).toBeFocused();
     await heading.evaluate(element=>element.setAttribute('data-reading-marker','detail'));
     await rtm(page).locator('[data-rtm-requirement="membership.login"]').evaluate(element=>element.setAttribute('data-reading-marker','row'));
-    const reads=f.state.reads.filter(path=>path.includes('/deliveries?')).length;f.base.state.cursor++;
+    const reads=f.state.reads.filter(path=>path.includes('/deliveries?')).length;
+    f.board.state.time++;f.board.state.cards[0].flow.age_seconds++;f.base.state.cursor++;
     await expect.poll(()=>f.state.reads.filter(path=>path.includes('/deliveries?')).length).toBeGreaterThan(reads);
     await expect(rtm(page).getByRole('button',{name:'Refresh records',exact:true})).toBeEnabled();
     await expect(heading).toHaveAttribute('data-reading-marker','detail');await expect(heading).toBeFocused();
     await expect(rtm(page).locator('[data-reading-marker="row"]')).toHaveCount(1);
+    f.state.issues[0].document.issue.number=84;f.base.state.cursor++;
+    await expect(rtm(page).locator('[data-rtm-detail] pre')).toContainText('"number": 84');
     await page.locator('[data-pm-view="charter"]').click();
     await expect(charter(page).locator('[data-charter-plan]')).toHaveAttribute('open','');
   });

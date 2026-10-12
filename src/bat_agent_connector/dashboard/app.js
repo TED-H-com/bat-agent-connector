@@ -1662,7 +1662,7 @@ function requirementReviews(plan, requirement, reviews) {
 function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
-	let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", deliveryPages = 1;
+	let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", renderedDetail = "", deliveryPages = 1;
 	const pages = {
 		work: 1,
 		issues: 1,
@@ -1727,6 +1727,21 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 		return row;
 	};
 	const issuesFor = (card) => issues.filter((row) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
+	const detailSignature = () => JSON.stringify([
+		detailCard && [
+			detailCard.work.title,
+			detailCard.column,
+			detailCard.binding,
+			detailCard.quality,
+			detailCard.execution,
+			detailCard.latest_capture,
+			issuesFor(detailCard)
+		],
+		plan?.revision_id,
+		plan?.adoption,
+		deliveryRows,
+		deliveryCursor
+	]);
 	function controls() {
 		refreshButton.disabled = busy;
 		for (const [kind, button] of Object.entries(moreButtons)) {
@@ -1748,6 +1763,7 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 		deliveryRows = [];
 		deliveryCursor = null;
 		detailBusy = false;
+		renderedDetail = "";
 		tableBody.replaceChildren();
 		detail.replaceChildren();
 		detail.hidden = true;
@@ -1892,7 +1908,12 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 			})) cursors[kind] = data?.next ?? null;
 			const next = JSON.stringify([
 				plan,
-				cards,
+				cards.map((card) => [
+					card.work_item_id,
+					card.binding,
+					card.work.title,
+					card.column
+				]),
 				issues,
 				reviews,
 				milestones
@@ -1917,6 +1938,7 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 				detail.replaceChildren();
 				detail.hidden = true;
 				detailBusy = false;
+				renderedDetail = "";
 			}
 		} catch (error) {
 			fail(error, ticket);
@@ -1944,6 +1966,7 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 				selected = null;
 				detailCard = null;
 				deliveryRows = [];
+				renderedDetail = "";
 				detail.replaceChildren();
 				detail.hidden = true;
 				renderTable();
@@ -1991,16 +2014,13 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 			issues: issuesFor(card),
 			deliveries: deliveryRows
 		}, null, 2))));
+		renderedDetail = detailSignature();
 	}
 	async function select(id, focus = false, retain = false) {
 		const card = cards.find((row) => row.work_item_id === id);
 		if (!card) return;
 		if (selected !== id) deliveryPages = 1;
-		const previous = retain ? JSON.stringify([
-			detailCard,
-			deliveryRows,
-			deliveryCursor
-		]) : null;
+		const previous = retain ? renderedDetail : null;
 		const ticket = ++detailSerial, generation = serial;
 		selected = id;
 		detailBusy = true;
@@ -2008,6 +2028,7 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 			detailCard = null;
 			deliveryRows = [];
 			deliveryCursor = null;
+			renderedDetail = "";
 			detail.hidden = false;
 			detail.replaceChildren(h("p", { role: "status" }, t("wb_detail_loading")));
 			renderTable();
@@ -2024,11 +2045,7 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 			deliveryCursor = deliveries?.next_after ?? null;
 			detailBusy = false;
 			detail.hidden = false;
-			if (previous !== JSON.stringify([
-				detailCard,
-				deliveryRows,
-				deliveryCursor
-			])) renderDetail();
+			if (previous !== detailSignature()) renderDetail();
 			detail.querySelector("[data-rtm-filtered]")?.remove();
 			if (deliveries?.source_visibility_filtered) detail.append(h("p", {
 				class: "muted",
@@ -16662,6 +16679,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		});
 		body.insertBefore(workbench.element, status);
+		body.insertBefore(content, status.nextSibling);
 		workbench.apply();
 	}
 	const sourceSections = () => [
@@ -17301,6 +17319,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				onclick: () => {
 					rememberProjectView(namespace, workspaceId, "workspace");
 					workbench?.select("workspace");
+					if (workbench) content.querySelector("input")?.focus();
 				}
 			}, t("pm_new_thread")));
 			if (threadList?.next_cursor) workspaceList.append(h("button", {
