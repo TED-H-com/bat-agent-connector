@@ -126,6 +126,16 @@ sequence/envelope digests and rejects conflicting identities. Sequences can have
 gaps due to channel filtering; the observer never invents contiguous event history.
 Snapshot fallback records an explicit gap, not a replay claim.
 
+Reconnect snapshots, replay actions and actions interleaved while rereading the
+catalog are staged within the original byte/frame bounds. They cannot become
+receipts until that fresh catalog proves every previously subscribed session's
+original URI, provider and native creation identity. A failed/empty catalog or
+reused URI never attaches new metadata to the old identity. The capture preserves
+already proved receipts and a `reconnect_source_unverified` gap, and marks
+`reconnect_evidence` as `unverified`; source withdrawal still hides unavailable
+original facts. A fully verified reconnect applies the staged receipts and marks
+it `applied`. This does not substitute later data into an older saved document.
+
 VS Code 1.141.0 ignores the `listSessions` limit/cursor hint and returns the whole
 catalog. Its profile accepts one page up to the unchanged 200-session total limit;
 an oversized result remains incomplete and establishes no absence. The 1.0 profile
@@ -138,8 +148,14 @@ Limits: 30 seconds total from the first durable start receipt (not reset by retr
 eight selected sessions, sixteen static changesets and 500 files per changeset.
 At most sixteen observers run per service, two per actor and four per adapter.
 Cancellation/deadline closes only this observer's socket. Exceptions and WebSocket
-logging cannot expose the private credential URL. Echoed transport tokens are
-removed from retained text; raw envelope digests remain available.
+logging cannot expose the private credential URL. Display titles, labels,
+working-directory text and informational server metadata redact both raw transport
+tokens and the actual query-encoded token used for the upgrade. Native identities,
+reference fields, digests, structural keys and enums are never rewritten: a token
+collision there refuses publication with `AHP_PRIVATE_IDENTITY_REFUSED`, without
+creating an observation or changing source access. This also applies to short
+tokens; no altered URI can become positive native evidence. Original envelope
+digests remain available in accepted captures.
 
 Each snapshot retains original URI, sequence, envelope digest and receipt time,
 plus selected metadata. Event receipts retain original channel, sequence, action

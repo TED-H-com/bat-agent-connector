@@ -383,6 +383,10 @@ async def _run(ctx):
             evidence = await asyncio.wait_for(observer.collect(), remaining)
         except asyncio.TimeoutError:
             raise _bad('AHP_ORIGINAL_DEADLINE_EXPIRED') from None
+        except provider.ObserverError:
+            # Final secret minimization must refuse a structural/identity echo,
+            # not publish a redacted URI as positive native-source evidence.
+            raise _bad('AHP_PRIVATE_IDENTITY_REFUSED') from None
     finally:
         for key in ('total', actor_key, adapter_key):
             active[key] -= 1

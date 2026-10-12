@@ -6,6 +6,7 @@ import json
 import sqlite3
 from dataclasses import replace
 from types import SimpleNamespace
+from urllib.parse import urlencode
 
 import pytest
 
@@ -14,7 +15,7 @@ from bat_agent_connector import pm_ahp_observations as ahp
 from bat_agent_connector.operations import OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
-from tests.test_ahp_observer import SESSION, TOKEN, stable_010
+from tests.test_ahp_observer import SESSION, TOKEN, stable_010, unproven_reconnect
 from tests.test_ahp_observer import host as ahp_host
 from tests.test_pm_workspace import OWNER, create, member
 from tests.test_pm_workspace import ops as workspace_ops
@@ -70,6 +71,52 @@ async def test_reader_observes_manual_source_once_and_all_receipts_are_immutable
     dump = '\n'.join(ops.db.iterdump())
     assert TOKEN not in dump and host.adapter.endpoint not in dump and host.adapter.credential_ref not in dump
     assert ahp.capabilities()['create_own'] == 'unsupported'
+
+
+async def test_actual_query_credential_echo_never_reaches_saved_document_or_events(ready, monkeypatch):
+    ops, host, wid, principal = ready
+    host.token = 'synthetic +/encoded=credential%測試'
+    monkeypatch.setenv('AHP_FIXTURE_TOKEN', host.token)
+    encoded = urlencode({'tkn': host.token})[4:]
+    async def echo(ws, req, connection):
+        host.catalog[0]['title'] = host.token + ' ' + ws.request.path
+        host.session_state['title'] = ws.request.path
+        return False
+    host.on_request = echo
+    done = await run(ready)
+    assert done['status'] == 'succeeded', done
+    read = ahp.get_observation(ops, principal, wid, done['result']['observation_id'])['observation']
+    assert read['document']['evidence']['catalog'][0]['title'] == '<redacted> /ahp?tkn=<redacted>'
+    assert ahp.operation_visible(ops.db, principal, done)
+    dump = '\n'.join(ops.db.iterdump())
+    assert host.token not in dump and encoded not in dump
+    assert all('<redacted>' not in row[0] for row in ops.db.execute('SELECT resource FROM pm_ahp_resource_access'))
+    before = len(host.requests)
+    assert (await run(ready))['result'] == done['result']
+    assert len(host.requests) == before
+
+
+@pytest.mark.parametrize('identity_echo', ['short_token', 'encoded_token'])
+async def test_credential_identity_collision_never_publishes_synthetic_source(ready, monkeypatch, identity_echo):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    assert original['status'] == 'succeeded', original
+    access = [tuple(row) for row in ops.db.execute('SELECT * FROM pm_ahp_resource_access ORDER BY resource')]
+    saved = tuple(ops.db.execute('SELECT document,document_digest FROM pm_ahp_observations').fetchone())
+    host.token = 'one' if identity_echo == 'short_token' else 'synthetic +/identity=credential%測試'
+    monkeypatch.setenv('AHP_FIXTURE_TOKEN', host.token)
+    if identity_echo == 'encoded_token':
+        host.catalog[0]['resource'] = 'ahp-session:/' + urlencode({'tkn': host.token})[4:]
+    done = await run(ready, params={}, idempotency_key='private-identity-refusal')
+    assert done['status'] == 'failed' and done['error_code'] == 'AHP_PRIVATE_IDENTITY_REFUSED', done
+    assert ops.db.execute('SELECT count(*) FROM pm_ahp_observations').fetchone()[0] == 1
+    assert [tuple(row) for row in ops.db.execute('SELECT * FROM pm_ahp_resource_access ORDER BY resource')] == access
+    assert tuple(ops.db.execute('SELECT document,document_digest FROM pm_ahp_observations').fetchone()) == saved
+    assert ahp.operation_visible(ops.db, principal, original)
+    assert ahp.get_observation(ops, principal, wid, original['result']['observation_id'])['observation']['document_digest'] == saved[1]
+    assert not ops.context['ahp_active']
+    assert not any(event['kind'] == 'pm.ahp.observed' and event['body'].get('operation_id') == done['operation_id']
+        for event in ops.journal.api_events(0, 500)['events'])
 
 
 async def test_crash_after_local_receipt_preserves_original_result_without_reopening_socket(ready, monkeypatch):
@@ -238,6 +285,43 @@ async def test_replacing_revoked_credential_does_not_upgrade_original_pending_au
 
 
 @pytest.mark.parametrize('catalog', ['failed', 'empty', 'reused_uri'])
+async def test_reconnect_unverified_metadata_never_becomes_old_source_visible_receipt(ready, catalog):
+    ops, host, wid, principal = ready
+    stable_010(host)
+    params = {'session_uris': [host.session], 'include_changesets': True}
+    original = await run(ready, params=params)
+    assert original['status'] == 'succeeded', original
+    original_row = tuple(ops.db.execute('SELECT document,document_digest FROM pm_ahp_observations').fetchone())
+    proven, _, _ = unproven_reconnect(host, mode='snapshot', catalog=catalog)
+    done = await run(ready, params=params, idempotency_key='unverified-incarnation')
+    assert done['status'] == 'succeeded' and done['result']['coverage_status'] == 'incomplete', done
+    oid = done['result']['observation_id']
+    document = json.loads(ops.db.execute('SELECT document FROM pm_ahp_observations WHERE observation_id=?', (oid,)).fetchone()[0])
+    evidence = document['evidence']
+    assert evidence['reconnect_evidence'] == 'unverified'
+    assert [e['original_digest'] for e in evidence['events']] == [ahp.provider.digest(proven)]
+    assert 'unconfirmed' not in '\n'.join(ops.db.iterdump()).lower()
+    assert tuple(ops.db.execute('SELECT document,document_digest FROM pm_ahp_observations WHERE operation_id=?',
+        (original['operation_id'],)).fetchone()) == original_row
+    if catalog == 'failed':
+        assert ahp.operation_visible(ops.db, principal, done)
+        assert ahp.get_observation(ops, principal, wid, oid)['observation']['document'] == document
+        before = len(host.requests)
+        assert (await run(ready, params=params, idempotency_key='unverified-incarnation'))['result'] == done['result']
+        assert len(host.requests) == before
+    else:
+        assert not ahp.operation_visible(ops.db, principal, done)
+        with pytest.raises(OperationError, match='NOT_FOUND'):
+            ahp.get_observation(ops, principal, wid, oid)
+        with pytest.raises(OperationError, match='NOT_FOUND'):
+            ops.create(principal, **request(wid, params=params, idempotency_key='unverified-incarnation'))
+        assert oid not in {item['observation_id'] for item in ahp.list_observations(ops, principal, wid)['observations']}
+        assert not any(pm_access.event_visible(ops.db, principal, event)
+            for event in ops.journal.api_events(0, 500)['events']
+            if event['body'].get('operation_id') == done['operation_id'] or event['resource_id'] == done['operation_id'])
+
+
+@pytest.mark.parametrize('catalog', ['failed', 'empty', 'reused_uri'])
 async def test_reconnect_cannot_orphan_retained_snapshots_or_events_from_original_source(ready, catalog):
     from tests.test_ahp_observer import CHANGESET, SUMMARY
     ops, host, wid, principal = ready
@@ -359,7 +443,7 @@ async def test_7a_projection_upgrade_uses_frozen_relations_and_preserves_documen
             for item in value:
                 old_shape(item)
     old_shape(document)
-    for key in ('negotiated_version', 'decoder_profile'):
+    for key in ('negotiated_version', 'decoder_profile', 'reconnect_evidence'):
         document['evidence'].pop(key)
     row['document'], row['document_digest'] = json.dumps(document), ahp.provider.digest(document)
     legacy = Journal(tmp_path / 'legacy-ahp.sqlite')
@@ -403,6 +487,7 @@ def earlier_document(document, generation):
     evidence = value['evidence']
     evidence.pop('negotiated_version')
     evidence.pop('decoder_profile')
+    evidence.pop('reconnect_evidence')
     if generation == '40f':
         for receipt in [*evidence['snapshots'], *evidence['events']]:
             receipt.pop('original_sources')
