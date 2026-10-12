@@ -9082,7 +9082,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						if (!detail.isConnected) return;
 						if (value.workspace_id !== workspaceId || value.revision.revision_id !== entry.revision_id) throw Error(t("pm_scope_mismatch"));
 						const doc = value.revision.document;
-						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
+						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
 						content.replaceChildren(errorBox(error));
 						fetched = false;
@@ -9119,6 +9119,34 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		}
 		return false;
 	}
+	function qualityResult(observed) {
+		const actual = observed?.actual, quality = actual?.quality, context = observed?.quality_context;
+		if (!quality) return t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation");
+		const states = [
+			"accepted",
+			"rejected",
+			"unassessed"
+		], status = (value) => t("pm_roadmap_quality_" + value);
+		if (quality.profile !== "fixed_milestone_assessments_v1" || context?.profile !== quality.profile || [
+			"plan_revision_id",
+			"plan_document_digest",
+			"scope_revision"
+		].some((key) => quality[key] !== context[key]) || quality.current_applicability !== "not_evaluated" || typeof quality.contribution_coverage_complete !== "boolean" || ![
+			"qualified",
+			"not_qualified",
+			"unassessed"
+		].includes(actual.completion) || !states.includes(actual.dod) || !Number.isSafeInteger(quality.total_requirements) || quality.total_requirements < 0 || !Number.isSafeInteger(quality.qualified_requirements) || quality.qualified_requirements < 0 || quality.qualified_requirements > quality.total_requirements || !Array.isArray(quality.requirements) || quality.requirements.length !== quality.total_requirements || !Array.isArray(context.requirement_ids) || !Array.isArray(quality.assessments) || quality.requirements.some((row) => !context.requirement_ids.includes(row.requirement_id) || !states.includes(row.acceptance) || !states.includes(row.dod))) throw Error(t("pm_scope_mismatch"));
+		const sources = h("details", {}, h("summary", {}, t("pm_roadmap_quality_details")), h("ul", {}, ...quality.requirements.map((row) => h("li", {}, h("code", { class: "pm-source" }, row.requirement_id), h("p", {}, t("pm_roadmap_quality_acceptance"), ": ", status(row.acceptance), " · DoD: ", status(row.dod))))));
+		for (const assessment of quality.assessments) {
+			const ref = assessment.reference;
+			if (!/^pmqr_[0-9a-f]{32}$/.test(ref?.review_id) || !/^op_[0-9a-f]{32}$/.test(ref?.operation_id) || !Number.isSafeInteger(ref.version) || ref.version < 1 || !/^([0-9a-f]{64})$/.test(ref.document_digest) || !/^([0-9a-f]{40})$/.test(ref.candidate_commit) || assessment.candidate_commit !== ref.candidate_commit) throw Error(t("pm_scope_mismatch"));
+			sources.append(h("p", { class: "pm-source" }, t("pm_roadmap_quality_original"), ": ", h("code", {}, ref.review_id), " · ", t("pm_roadmap_quality_version"), ": ", String(ref.version), h("span", { class: "pm-source" }, t("pm_roadmap_quality_candidate"), ": ", h("code", {}, ref.candidate_commit)), h("span", { class: "pm-source" }, t("pm_roadmap_quality_digest"), ": ", h("code", {}, ref.document_digest)), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, ref.operation_id)));
+		}
+		return h("div", { "data-pm-roadmap-quality": "" }, h("strong", {}, status(actual.completion)), h("p", {}, "DoD: ", status(actual.dod)), h("p", {}, t("pm_roadmap_quality_count", {
+			qualified: quality.qualified_requirements,
+			total: quality.total_requirements
+		})), h("p", { class: "muted" }, t(quality.contribution_coverage_complete ? "pm_roadmap_quality_coverage_complete" : "pm_roadmap_quality_coverage_incomplete")), h("p", { class: "muted" }, t("pm_roadmap_quality_fixed")), sources);
+	}
 	function render() {
 		const base = current.baseline?.document;
 		if (!base) {
@@ -9137,7 +9165,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			const predicted = current.forecast?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
 			const observed = current.observation?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
 			const dependencies = milestone.depends_on.map((id) => base.milestones.find((item) => item.milestone_id === id)?.title || id);
-			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t(observed?.actual?.quality ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
 				plan_revision_id: milestone.plan_revision_id,
 				requirement_ids: milestone.requirement_ids,
 				work_binding_ids: milestone.work_binding_ids,
@@ -9155,7 +9183,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				].map((key) => [key, current.observation.document[key]])) : null,
 				observation: observed || null
 			}, null, 2)));
-			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation"), source)));
+			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, qualityResult(observed), source)));
 		}
 		view.replaceChildren(h("p", {}, h("strong", {}, base.title), h("small", { class: "muted pm-source" }, base.rationale)), h("div", { class: "pm-roadmap-scroll" }, table));
 	}
@@ -9219,6 +9247,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		} catch (error) {
 			if (ticket === serial) {
 				current = null;
+				signature = "";
 				view.replaceChildren();
 				historyBody.replaceChildren();
 				historyLoaded = false;
@@ -23835,6 +23864,21 @@ var pmStrings = {
 		pm_roadmap_update_observation: "Review saved results",
 		pm_roadmap_observation_help: "Use a fixed snapshot. Matching work and evidence do not by themselves satisfy the Definition of Done.",
 		pm_roadmap_quality_unknown: "Completion has not been assessed",
+		pm_roadmap_quality_qualified: "Qualified by the selected assessments",
+		pm_roadmap_quality_not_qualified: "Not qualified by the selected assessments",
+		pm_roadmap_quality_unassessed: "Unassessed",
+		pm_roadmap_quality_accepted: "Accepted",
+		pm_roadmap_quality_rejected: "Rejected",
+		pm_roadmap_quality_count: "{qualified} of {total} requirements qualified",
+		pm_roadmap_quality_acceptance: "Acceptance criteria",
+		pm_roadmap_quality_coverage_complete: "All selected work contributions are covered.",
+		pm_roadmap_quality_coverage_incomplete: "Work contribution coverage is incomplete; this does not establish completion.",
+		pm_roadmap_quality_fixed: "Original selected assessments; current applicability has not been evaluated. This does not establish a finish date, stopped runtime, deployment or scope change.",
+		pm_roadmap_quality_details: "Requirements and original assessments",
+		pm_roadmap_quality_original: "Original assessment",
+		pm_roadmap_quality_version: "Version",
+		pm_roadmap_quality_candidate: "Candidate commit",
+		pm_roadmap_quality_digest: "Assessment digest",
 		pm_roadmap_no_observation: "No result snapshot selected",
 		pm_roadmap_sources: "View linked sources",
 		pm_roadmap_after: "After: {items}",
@@ -24175,6 +24219,21 @@ var pmStrings = {
 		pm_roadmap_update_observation: "查核已保存成果",
 		pm_roadmap_observation_help: "引用固定快照。工作與證據關聯吻合，本身不代表已符合完成定義。",
 		pm_roadmap_quality_unknown: "尚未評估是否完成",
+		pm_roadmap_quality_qualified: "所選評估判定合格",
+		pm_roadmap_quality_not_qualified: "所選評估判定未合格",
+		pm_roadmap_quality_unassessed: "尚未評估",
+		pm_roadmap_quality_accepted: "已接受",
+		pm_roadmap_quality_rejected: "未接受",
+		pm_roadmap_quality_count: "{total} 項需求中有 {qualified} 項合格",
+		pm_roadmap_quality_acceptance: "驗收條件",
+		pm_roadmap_quality_coverage_complete: "已涵蓋所有選定工作的貢獻。",
+		pm_roadmap_quality_coverage_incomplete: "工作貢獻涵蓋不完整，尚不足以證明完成。",
+		pm_roadmap_quality_fixed: "這是原先選定的評估，目前適用性尚未核對；不代表完成日期、執行程序已停止、已部署或範圍已變更。",
+		pm_roadmap_quality_details: "需求與原始評估",
+		pm_roadmap_quality_original: "原始評估",
+		pm_roadmap_quality_version: "版本",
+		pm_roadmap_quality_candidate: "候選 commit",
+		pm_roadmap_quality_digest: "評估摘要雜湊",
 		pm_roadmap_no_observation: "尚未選定成果快照",
 		pm_roadmap_sources: "查看關聯來源",
 		pm_roadmap_after: "依賴：{items}",

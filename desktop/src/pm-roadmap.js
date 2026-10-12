@@ -140,7 +140,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
           if(!detail.open||fetched)return;fetched=true;
           try{const value=await api('GET',`${endpoint}/roadmap/revisions/${entry.revision_id}`);alive();if(!detail.isConnected)return;
             if(value.workspace_id!==workspaceId||value.revision.revision_id!==entry.revision_id)throw Error(t('pm_scope_mismatch'));
-            const doc=value.revision.document;content.replaceChildren(h('p',{},doc.rationale||t('pm_roadmap_quality_unknown')),
+            const doc=value.revision.document;content.replaceChildren(h('p',{},doc.rationale||t(doc.milestones?.some(row=>row.actual?.quality)?'pm_roadmap_quality_fixed':'pm_roadmap_quality_unknown')),
               h('pre',{class:'pm-brief-proof'},JSON.stringify(value.revision,null,2)));
           }catch(error){content.replaceChildren(errorBox(error));fetched=false;}
         });historyBody.append(detail);
@@ -157,6 +157,36 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
       editor.set('baseline',current.head.baseline_revision_id);editor.set('version',String(current.head.version));return true;
     }return false;
   }
+  function qualityResult(observed){
+    const actual=observed?.actual,quality=actual?.quality,context=observed?.quality_context;
+    if(!quality)return t(observed?'pm_roadmap_quality_unknown':'pm_roadmap_no_observation');
+    const states=['accepted','rejected','unassessed'],status=value=>t('pm_roadmap_quality_'+value);
+    if(quality.profile!=='fixed_milestone_assessments_v1'||context?.profile!==quality.profile
+      ||['plan_revision_id','plan_document_digest','scope_revision'].some(key=>quality[key]!==context[key])
+      ||quality.current_applicability!=='not_evaluated'||typeof quality.contribution_coverage_complete!=='boolean'
+      ||!['qualified','not_qualified','unassessed'].includes(actual.completion)||!states.includes(actual.dod)
+      ||!Number.isSafeInteger(quality.total_requirements)||quality.total_requirements<0
+      ||!Number.isSafeInteger(quality.qualified_requirements)||quality.qualified_requirements<0||quality.qualified_requirements>quality.total_requirements
+      ||!Array.isArray(quality.requirements)||quality.requirements.length!==quality.total_requirements
+      ||!Array.isArray(context.requirement_ids)||!Array.isArray(quality.assessments)
+      ||quality.requirements.some(row=>!context.requirement_ids.includes(row.requirement_id)||!states.includes(row.acceptance)||!states.includes(row.dod)))throw Error(t('pm_scope_mismatch'));
+    const sources=h('details',{},h('summary',{},t('pm_roadmap_quality_details')),
+      h('ul',{},...quality.requirements.map(row=>h('li',{},h('code',{class:'pm-source'},row.requirement_id),
+        h('p',{},t('pm_roadmap_quality_acceptance'),': ',status(row.acceptance),' · DoD: ',status(row.dod))))));
+    for(const assessment of quality.assessments){
+      const ref=assessment.reference;
+      if(!/^pmqr_[0-9a-f]{32}$/.test(ref?.review_id)||!/^op_[0-9a-f]{32}$/.test(ref?.operation_id)
+        ||!Number.isSafeInteger(ref.version)||ref.version<1||!/^([0-9a-f]{64})$/.test(ref.document_digest)
+        ||!/^([0-9a-f]{40})$/.test(ref.candidate_commit)||assessment.candidate_commit!==ref.candidate_commit)throw Error(t('pm_scope_mismatch'));
+      sources.append(h('p',{class:'pm-source'},t('pm_roadmap_quality_original'),': ',h('code',{},ref.review_id),
+        ' · ',t('pm_roadmap_quality_version'),': ',String(ref.version),h('span',{class:'pm-source'},t('pm_roadmap_quality_candidate'),': ',h('code',{},ref.candidate_commit)),
+        h('span',{class:'pm-source'},t('pm_roadmap_quality_digest'),': ',h('code',{},ref.document_digest)),h('a',{href:`#/op/${encodeURIComponent(ref.operation_id)}`},ref.operation_id)));
+    }
+    return h('div',{'data-pm-roadmap-quality':''},h('strong',{},status(actual.completion)),
+      h('p',{},'DoD: ',status(actual.dod)),h('p',{},t('pm_roadmap_quality_count',{qualified:quality.qualified_requirements,total:quality.total_requirements})),
+      h('p',{class:'muted'},t(quality.contribution_coverage_complete?'pm_roadmap_quality_coverage_complete':'pm_roadmap_quality_coverage_incomplete')),
+      h('p',{class:'muted'},t('pm_roadmap_quality_fixed')),sources);
+  }
   function render(){
     const base=current.baseline?.document;
     if(!base){view.replaceChildren(h('p',{class:'muted'},t('pm_roadmap_empty')));return;}
@@ -167,7 +197,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
       const observed=current.observation?.document.milestones.find(row=>row.milestone_id===milestone.milestone_id);
       const dependencies=milestone.depends_on.map(id=>base.milestones.find(item=>item.milestone_id===id)?.title||id);
       const source=h('details',{},h('summary',{},t('pm_roadmap_sources')),
-        h('p',{class:'muted'},t('pm_roadmap_quality_unknown')),h('pre',{class:'pm-brief-proof'},JSON.stringify({plan_revision_id:milestone.plan_revision_id,
+        h('p',{class:'muted'},t(observed?.actual?.quality?'pm_roadmap_quality_fixed':'pm_roadmap_quality_unknown')),h('pre',{class:'pm-brief-proof'},JSON.stringify({plan_revision_id:milestone.plan_revision_id,
           requirement_ids:milestone.requirement_ids,work_binding_ids:milestone.work_binding_ids,
           current_baseline_revision_id:current.head.baseline_revision_id,current_forecast_revision_id:current.head.forecast_revision_id,
           original_baseline_date:milestone.original_baseline_date,first_baseline_revision_id:milestone.first_baseline_revision_id,
@@ -176,7 +206,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
       body.append(h('tr',{'data-pm-milestone':milestone.milestone_id},h('th',{scope:'row'},milestone.title,
         dependencies.length?h('small',{class:'muted pm-source'},t('pm_roadmap_after',{items:dependencies.join(', ')})):''),
         h('td',{},textDate(milestone.baseline_date)),h('td',{},textDate(predicted?.forecast_date)),
-        h('td',{},t(observed?'pm_roadmap_quality_unknown':'pm_roadmap_no_observation'),source)));
+        h('td',{},qualityResult(observed),source)));
     }
     view.replaceChildren(h('p',{},h('strong',{},base.title),h('small',{class:'muted pm-source'},base.rationale)),h('div',{class:'pm-roadmap-scroll'},table));
   }
@@ -206,7 +236,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
         options(snapshot,(snapshots.snapshots||[]).map(row=>[row.snapshot_id,row.title]));initializeEditor();}
       baselineForm.update();forecast.update();observe.update();
       if(historyVersion!==data.head.version){historyLoaded=false;if(history.open)void loadHistory();}
-    }catch(error){if(ticket===serial){current=null;view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error));baselineForm.update();forecast.update();observe.update();}}
+    }catch(error){if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error));baselineForm.update();forecast.update();observe.update();}}
   }
   return{box,refresh};
 }

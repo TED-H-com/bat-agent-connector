@@ -1,5 +1,17 @@
 import {pmFixture,workspaceId} from './pm-fixture.ts';
 export const rid='pmrev_'+'a'.repeat(32),bid='pmrb_'+'b'.repeat(32),sid='pmsnap_'+'c'.repeat(32),path=`/dashboard/#/pm/${workspaceId}`;
+export const qualityRef={review_id:'pmqr_'+'4'.repeat(32),operation_id:'op_'+'5'.repeat(32),version:2,document_digest:'6'.repeat(64),candidate_commit:'7'.repeat(40)};
+export function qualityObservation(completion='qualified',complete=true){
+  const accepted=completion==='qualified'||!complete,state=accepted?'accepted':'rejected',qualified=completion==='qualified';
+  const context={profile:'fixed_milestone_assessments_v1',plan_revision_id:rid,plan_document_digest:'8'.repeat(64),scope_revision:3,requirement_ids:['login']};
+  return {revision_id:'pmro_'+'9'.repeat(32),document_digest:'a'.repeat(64),view_digest:'b'.repeat(64),document:{baseline_revision_id:bid,snapshot_id:sid,
+    milestones:[{milestone_id:'first_release',quality_context:context,coverage:{inaccessible_sources:false,scope_assessment:'unassessed'},
+      actual:{completion,dod:qualified?'accepted':complete?'rejected':'unassessed',actual_finish_date:null,facts:[],quality:{profile:context.profile,plan_revision_id:rid,plan_document_digest:context.plan_document_digest,scope_revision:3,
+        requirements:[{requirement_id:'login',acceptance:state,dod:state,qualified,contributions:[{work_item_id:'wi_'+'1'.repeat(20),acceptance:state,dod:state}]}],
+        total_requirements:1,qualified_requirements:qualified?1:0,qualified_deliverables:accepted?1:0,contribution_coverage_complete:complete,
+        basis:'explicit_fixed_assessments_all_selected_work_contributions',current_applicability:'not_evaluated',current_environment:'not_assessed',
+        assessments:[{evidence_id:'pmev_'+'2'.repeat(32),reference:qualityRef,work_item_id:'wi_'+'1'.repeat(20),candidate_commit:qualityRef.candidate_commit,dod_revision_id:'pmdod_'+'3'.repeat(32)}]}}}]}};
+}
 export function fixture(existing=true){
   const base=pmFixture(),milestone={milestone_id:'first_release',title:'First useful release',plan_revision_id:rid,requirement_ids:['login'],work_binding_ids:[],baseline_date:'2026-11-01',depends_on:[]};
   const state={lost:false,writes:[] as any[],ops:new Map<string,any>(),version:existing?1:0,baseline:existing?{revision_id:bid,document:{title:'Next release',rationale:'One usable outcome',milestones:[milestone]}}:null as any,forecast:null as any,observation:null as any,bindings:[] as any[]};
@@ -14,6 +26,8 @@ export function fixture(existing=true){
     if(route==='/work-items')return {status:200,data:{work_items:[{work_item_id:'wi_'+'1'.repeat(20),title:'Login implementation'}]}};
     if(route===endpoint+'/snapshots')return {status:200,data:{workspace_id:workspaceId,snapshots:[{snapshot_id:sid,title:'Saved review'}],next_cursor:null}};
     if(route===endpoint+'/roadmap')return {status:200,data:{workspace_id:workspaceId,head:{workspace_id:workspaceId,version:state.version,baseline_revision_id:state.baseline?.revision_id||null},baseline:structuredClone(state.baseline),forecast:structuredClone(state.forecast),observation:structuredClone(state.observation)}};
+    if(route===endpoint+'/roadmap/revisions')return {status:200,data:{workspace_id:workspaceId,revisions:state.observation?[{revision_id:state.observation.revision_id,kind:'observation',created_at:1791705700}]:[],next_cursor:null}};
+    if(state.observation&&route===endpoint+'/roadmap/revisions/'+state.observation.revision_id)return {status:200,data:{workspace_id:workspaceId,revision:structuredClone(state.observation)}};
     if(input.method==='GET'&&route.startsWith('/operations/'))return {status:200,data:{operation:[...state.ops.values()].find(op=>route.endsWith(op.operation_id))}};
     if(input.method==='POST'&&route==='/operations'&&input.body.action.startsWith('pm.roadmap.')){
       state.writes.push(structuredClone(input));let op=state.ops.get(input.idempotency_key);
