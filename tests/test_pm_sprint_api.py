@@ -1,5 +1,7 @@
 """The same fixed Sprint commitments and current authority at HTTP/RPC/MCP."""
 import asyncio
+import datetime as dt
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +14,7 @@ from tests.test_pm_discussions import CONTRIBUTOR, OWNER, READER, member
 from tests.test_pm_evidence import bind_project, bind_work, item, project
 from tests.test_pm_plan_api import draft_body, select_planning
 from tests.test_pm_run_api import unpack
-from tests.test_pm_sprints import NOW, create, create_request, request, revise, selections
+from tests.test_pm_sprints import END, NOW, create, create_request, request, revise, selections
 from tests.test_pm_worktree import pm as pm_fixture
 from tests.test_pm_worktree import world as repository_world
 from tests.test_work_items import act
@@ -95,7 +97,8 @@ async def test_sprint_read_parity_fixed_artifacts_and_bounded_history(served, mo
         await fleet.close()
 
 
-async def test_http_sprint_start_and_cancel_replay_do_not_modify_execution(served, mock):
+@pytest.mark.parametrize('end_action', ['cancel', 'close'])
+async def test_http_sprint_end_replay_and_revoked_feed_privacy(served, mock, monkeypatch, end_action):
     d, port, selection = served
     data = await prepared(d, selection)
     auth = token(d, OWNER.actor, *OWNER.scopes)
@@ -115,17 +118,28 @@ async def test_http_sprint_start_and_cancel_replay_do_not_modify_execution(serve
     await send(request(d.ops, target, 'select', items=selections(data)))
     await send(request(d.ops, target, 'start'))
     original = pm_sprints.get_sprint(d.ops, OWNER, **target)
-    cancel = request(d.ops, target, 'cancel')
-    ended = await send(cancel)
-    assert (await send(cancel))['operation_id'] == ended['operation_id']
+    if end_action == 'close':
+        end_time = dt.datetime.fromisoformat(END.replace('Z', '+00:00')).timestamp()
+        monkeypatch.setattr(pm_sprints, 'time', SimpleNamespace(time=lambda: end_time))
+    finish = request(d.ops, target, end_action)
+    ended = await send(finish)
+    assert (await send(finish))['operation_id'] == ended['operation_id']
     after = pm_sprints.get_sprint(d.ops, OWNER, **target)
-    assert after['sprint']['status'] == 'cancelled'
+    assert after['sprint']['status'] == ('cancelled' if end_action == 'cancel' else 'closed')
     assert after['goal'] == original['goal'] and after['selected_items'] == original['selected_items']
     assert after['history'][-1]['document']['automatic_carryover'] is False
     assert after['history'][-1]['document']['items'][0]['counts_as_done'] is False
     assert not after['execution_authorized'] and after['quality'] == 'unassessed'
     assert d.ops.db.execute('SELECT count(*) FROM tasks').fetchone()[0] == 0
     assert not write_frames(mock)
+    # No optional quality ref is needed to keep the original workspace private.
+    reader = token(d, READER.actor, 'observe')
+    for role in ('reader', None, 'reader'):
+        await member(d.ops, {'workspace_id': target['workspace_id']}, READER.actor, role)
+        status, events = await http(port, 'GET', '/api/v1/events?after=0&limit=500', tok=reader)
+        assert status == 200
+        assert (ended['operation_id'] in json.dumps(events)) == (role is not None)
+        assert (any(event['kind'] == 'pm.sprint.' + end_action for event in events['events'])) == (role is not None)
 
 
 async def test_sprint_membership_rechecked_and_foreign_sources_stay_private(served):

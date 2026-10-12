@@ -91,14 +91,16 @@ def card_quality(ops, principal, wid, binding, capture):
 
 
 def operation_visible(db, principal, operation):
-    """Original quality refs in close/capture envelopes retain source privacy."""
+    """Close/capture envelopes retain membership and optional source privacy."""
     from .operations import OperationError
     from .pm_release_baselines import _snapshot
+    from .pm_workspace import require_member
     with _snapshot(db):
         try:
             ops = reviews._Reader(db)
             op = reviews._op(ops, operation['operation_id'])
             wid, params = op['target']['workspace_id'], op['params']
+            require_member(db, principal, wid)
             refs = params.get('quality_refs', {}).values() if op['action'].startswith('pm.sprint.') else [params['quality_ref']] if 'quality_ref' in params else []
             for reference in refs:
                 original(ops, principal, wid, reference)

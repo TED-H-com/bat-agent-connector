@@ -97,10 +97,18 @@ async def test_capture_replay_and_private_global_feed(served):
         assert cid not in json.dumps(body) and binding not in json.dumps(body)
     await grant(d, target['workspace_id'], OTHER.actor, 'reader')
     assert (await http(port, 'GET', prefix + '/evidence', tok=outsider))[0] == 200
+    for path in ('/api/v1/operations', '/api/v1/events', '/api/v1/bootstrap'):
+        status, body = await http(port, 'GET', path, tok=outsider)
+        assert status == 200
+        assert cid in json.dumps(body) and binding in json.dumps(body)
     with pytest.raises(OperationError, match='FORBIDDEN'):
         d.ops.create(OTHER, **request, idempotency_key='reader-capture')
     await grant(d, target['workspace_id'], OTHER.actor, None)
     assert (await http(port, 'GET', prefix + '/evidence', tok=outsider))[0] == 404
+    for path in ('/api/v1/operations', '/api/v1/events', '/api/v1/bootstrap'):
+        status, body = await http(port, 'GET', path, tok=outsider)
+        assert status == 200
+        assert cid not in json.dumps(body) and binding not in json.dumps(body)
 
 
 @pytest.mark.parametrize('suffix', ['/projects?after=-1', '/work?project_id=unknown', '/work?after=0&after=1',
