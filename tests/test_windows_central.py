@@ -11,6 +11,7 @@ import hashlib
 import os
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -188,6 +189,195 @@ def test_windows_directory_chain_cannot_be_replaced_while_open(tmp_path):
     finally:
         held.close()
     root.rename(tmp_path / "swapped")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows private-reader rename contract")
+@pytest.mark.parametrize("name", ["installation.json", "task-service.json"])
+def test_windows_atomic_publication_preserves_target_while_reader_stays_open(tmp_path, monkeypatch, name):
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    path = root / name
+    platform_files.atomic_write(path, b'{"state":"original"}\n')
+    fd = platform_files.open_private_file(path, os.O_RDONLY)
+    original_rename, refusals = platform_files.native._rename, []
+
+    def rename(*args, **kwargs):
+        try:
+            return original_rename(*args, **kwargs)
+        except PermissionError as error:
+            refusals.append(error)
+            raise
+
+    monkeypatch.setattr(platform_files.native, "_rename", rename)
+    try:
+        with pytest.raises(PermissionError) as error:
+            platform_files.atomic_write(path, b'{"state":"replacement"}\n')
+        assert error.value.winerror in {5, 32}
+        assert 1 <= len(refusals) <= platform_files.native.ATOMIC_REPLACE_MAX_ATTEMPTS
+        assert error.value is refusals[0]
+        assert os.read(fd, 4096) == b'{"state":"original"}\n'
+        assert platform_files.read_private(path) == b'{"state":"original"}\n'
+        assert list(root.iterdir()) == [path]
+    finally:
+        os.close(fd)
+    platform_files.atomic_write(path, b'{"state":"replacement"}\n')
+    assert platform_files.read_private(path) == b'{"state":"replacement"}\n'
+    platform_files.check_private(path)
+    assert list(root.iterdir()) == [path]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows transient private-reader rename contract")
+@pytest.mark.parametrize("name", ["installation.json", "task-service.json"])
+def test_windows_atomic_publication_waits_for_reader_after_real_rename_refusal(tmp_path, monkeypatch, name):
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    path = root / name
+    old, new = b'{"state":"original"}\n', b'{"state":"replacement"}\n'
+    platform_files.atomic_write(path, old)
+    opened, attempted, closed = (threading.Event() for _ in range(3))
+    read_errors, refusals, attempts = [], [], []
+
+    def reader():
+        try:
+            fd = platform_files.open_private_file(path, os.O_RDONLY)
+            try:
+                assert os.read(fd, 4096) == old
+                opened.set()
+                assert attempted.wait(10), "writer never attempted the original native rename"
+            finally:
+                os.close(fd)
+        except BaseException as error:  # Report worker assertions in this test, after cleanup.
+            read_errors.append(error)
+        finally:
+            closed.set()
+
+    original_rename = platform_files.native._rename
+
+    def rename(*args, **kwargs):
+        attempts.append((args[0], args[1].handle, args[2]))
+        try:
+            return original_rename(*args, **kwargs)
+        except PermissionError as error:
+            # This is the actual NT refusal, not an injected permission error.
+            refusals.append(error.winerror)
+            assert refusals == [5] or refusals == [32]
+            attempted.set()
+            assert closed.wait(10), "reader did not close after the native rename attempt"
+            raise
+
+    monkeypatch.setattr(platform_files.native, "_rename", rename)
+    worker = threading.Thread(target=reader)
+    worker.start()
+    try:
+        assert opened.wait(10), read_errors
+        try:
+            platform_files.atomic_write(path, new)
+        except PermissionError:
+            assert platform_files.read_private(path) == old
+            assert list(root.iterdir()) == [path]
+            raise  # Current implementation aborts here despite the reader having closed.
+        assert refusals in ([5], [32])
+        assert len(attempts) == 2 and attempts[0] == attempts[1]
+        assert platform_files.read_private(path) == new
+        platform_files.check_private(path)
+        assert list(root.iterdir()) == [path]
+    finally:
+        attempted.set()
+        worker.join(10)
+        assert not worker.is_alive()
+        assert not read_errors
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows retry must retain private ACL checks")
+@pytest.mark.parametrize("changed", ["target", "parent"])
+def test_windows_atomic_retry_rejects_permission_change_after_reader_closes(tmp_path, monkeypatch, changed):
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    path = root / "installation.json"
+    platform_files.atomic_write(path, b"original")
+    fd = platform_files.open_private_file(path, os.O_RDONLY)
+    original_rename, refusals = platform_files.native._rename, []
+    altered = path if changed == "target" else root
+    modified = False
+
+    def rename(*args, **kwargs):
+        nonlocal fd, modified
+        try:
+            return original_rename(*args, **kwargs)
+        except PermissionError as error:
+            refusals.append(error.winerror)
+            assert refusals in ([5], [32])
+            os.close(fd)
+            fd = None
+            subprocess.run(["icacls.exe", str(altered), "/grant", "*S-1-1-0:(R)"],
+                check=True, capture_output=True, timeout=10)  # noqa: S603,S607
+            modified = True
+            raise
+
+    monkeypatch.setattr(platform_files.native, "_rename", rename)
+    try:
+        with pytest.raises(ValueError, match="another principal"):
+            platform_files.atomic_write(path, b"must-not-replace")
+        assert refusals in ([5], [32])
+        assert path.read_bytes() == b"original"
+        assert list(root.iterdir()) == [path]
+        with pytest.raises(ValueError, match="another principal"):
+            platform_files.check_private(altered, directory=changed == "parent")
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if modified:
+            subprocess.run(["icacls.exe", str(altered), "/remove:g", "*S-1-1-0"],
+                check=True, capture_output=True, timeout=10)  # noqa: S603,S607 - restore only this test's ACL change
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows atomic rename error classification")
+@pytest.mark.parametrize("code", [2, 112], ids=["missing-source", "disk-full"])
+def test_windows_atomic_replace_does_not_retry_other_native_errors(tmp_path, monkeypatch, code):
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    path = root / "task-service.json"
+    platform_files.atomic_write(path, b"original")
+    calls = []
+
+    def rename(*args, **kwargs):
+        calls.append(code)
+        platform_files.native._error(code)
+
+    monkeypatch.setattr(platform_files.native, "_rename", rename)
+    with pytest.raises(OSError) as error:
+        platform_files.atomic_write(path, b"must-not-replace")
+    assert error.value.winerror == code and calls == [code]
+    assert platform_files.read_private(path) == b"original"
+    assert list(root.iterdir()) == [path]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows rename error survives cleanup failure")
+def test_windows_atomic_cleanup_failure_does_not_mask_original_native_refusal(tmp_path, monkeypatch):
+    root = tmp_path / "owned"
+    platform_files.ensure_private_directory(root)
+    path = root / "task-service.json"
+    platform_files.atomic_write(path, b"original")
+    fd = platform_files.open_private_file(path, os.O_RDONLY)
+    native = platform_files.native
+    original_delete, cleanup_calls = native._delete, []
+    cleanup_error = OSError("fixture cleanup unavailable")
+
+    def unavailable(handle):
+        cleanup_calls.append(handle)
+        raise cleanup_error
+
+    monkeypatch.setattr(native, "_delete", unavailable)
+    try:
+        with pytest.raises(PermissionError) as error:
+            platform_files.atomic_write(path, b"must-not-replace")
+        assert error.value.winerror in {5, 32}
+        assert error.value.__cause__ is cleanup_error and len(cleanup_calls) == 1
+        assert platform_files.read_private(path) == b"original"
+    finally:
+        os.close(fd)
+        monkeypatch.setattr(native, "_delete", original_delete)
+        native.remove_tree(root)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows verification process-tree contract")
