@@ -23,9 +23,20 @@ export async function serviceFailure(dataRoot) {
     const classes = ['PermissionError', 'FileNotFoundError', 'OSError', 'ValueError', 'KeyError',
       'RuntimeError', 'ImportError', 'ModuleNotFoundError', 'TimeoutError'];
     const kind = classes.find(name => value.message === `${name}: managed installation needs recovery`);
+    // Mirror only the runtime's existing finite traceback-location projection.
+    // Never copy arbitrary location keys, filenames, exception text or locals.
+    const phases = ['root', 'launcher_lock', 'prepare', 'manifest', 'service_lease', 'spawn',
+      'endpoint', 'verify', 'ensure', 'serve', 'stop', 'unknown'];
+    const storage = ['directory', 'open', 'read', 'write', 'lock', 'none'];
+    const location = value.location && typeof value.location === 'object' && !Array.isArray(value.location)
+      ? value.location : {};
     return { state: 'reported', error: 'MANAGED_RUNTIME_UNAVAILABLE', exception: kind || 'other',
       errno: Number.isSafeInteger(value.errno) ? value.errno : null,
-      winerror: Number.isSafeInteger(value.winerror) ? value.winerror : null };
+      winerror: Number.isSafeInteger(value.winerror) ? value.winerror : null,
+      ...(value.location === undefined ? {} : { location: {
+        phase: phases.includes(location.phase) ? location.phase : 'unknown',
+        storage: storage.includes(location.storage) ? location.storage : 'unknown',
+      } }) };
   } catch (error) {
     return { state: error.code === 'ENOENT' ? 'absent' : 'unavailable' };
   } finally { await file?.close(); }
