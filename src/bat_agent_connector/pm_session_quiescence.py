@@ -153,10 +153,25 @@ def _live(ops, op):
                 controller_authority.operation_binding(op))):
         raise _bad('Original controller lacks current read authority', 'FORBIDDEN', 403)
     intent = _access(ops, live, op)
+    pm_workspace.require_member(ops.db, live, op['target']['workspace_id'], write=True)
     if registry.get(intent['host'], intent['session_id']) or native._host_binding(ops, intent['host']) != intent['host_binding_digest']:
         raise _bad('Original manual source identity changed')
     return live, intent
 
+
+
+async def _scope(ops, op, client, intent):
+    """Read the original manual tab relation, without claiming tab ownership."""
+    _live(ops, op)
+    catalogue = await asyncio.wait_for(client.invoke('workspace:load', {}), 15)
+    if not isinstance(catalogue, dict) or not isinstance(catalogue.get('terminals'), list):
+        raise _bad('Original manual tab scope is unavailable')
+    matches = [row for row in catalogue['terminals'] if isinstance(row, dict) and row.get('id') == intent['session_id']]
+    if (len(matches) != 1 or matches[0].get('workspaceId') != intent['bat_workspace_id']
+            or ops.context['fleet'].config.host(intent['host']).profile_id != intent['profile_id']
+            or not getattr(client, 'auth_info', None)):
+        raise _bad('Original manual session moved outside its fixed scope')
+    _live(ops, op)
 
 def operation_visible(db, principal, operation):
     from .pm_workload import _Reader
@@ -207,6 +222,7 @@ async def _observe(ctx):
         return saved.public_receipt(completed)
     principal, intent = _live(ops, op)
     client = ops.context['fleet'].client(intent['host'])
+    await _scope(ops, op, client, intent)
     original = saved._saved(ops, ctx.operation_id, ORIGIN)
     if original is None:
         initial = await asyncio.wait_for(pm_runtime.sync_session(client, intent['session_id']), 15)
@@ -219,6 +235,7 @@ async def _observe(ctx):
                 or counter is None or counter['received'] != 1 or counter['pending'] != 0):
             raise NeedsAttention('PM_SESSION_QUIESCENCE_PROFILE_UNAVAILABLE', 'A current unqueued single input and original native identity are required')
         original = {'schema': 'pm_manual_single_input_v1', 'host': intent['host'], 'session_id': intent['session_id'],
+            'bat_workspace_id': intent['bat_workspace_id'], 'profile_id': intent['profile_id'],
             'host_binding_digest': intent['host_binding_digest'], 'sdk_session_id': meta['sdkSessionId'],
             'input_state': counter, 'send_cursor': {'epoch': initial['cursor']['epoch'], 'seq': 0},
             'initial_cursor': initial['cursor'], 'captured_at': time.time()}
@@ -251,6 +268,7 @@ async def _observe(ctx):
         raise Wait('waiting_external', 'Observe all current events before recording quiescence', 1)
     meta = await asyncio.wait_for(client.invoke('claude:get-session-meta', {'sessionId': original['session_id']}), 15)
     _meta(original, meta)
+    await _scope(ops, op, client, intent)
     with ops.journal.tx():
         ctx.check_cancel()
         _live(ops, op)

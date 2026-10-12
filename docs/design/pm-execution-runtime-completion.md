@@ -44,7 +44,10 @@ The completion fact means `runtime_status: original_turn_completed` and
 shared app-server exited, publish a release or upgrade verification into quality.
 Workload exclusion additionally requires a current complete authenticated
 inventory agreeing with the original SDK, input counter, registry incarnation,
-host binding and source/freshness limits. Later input or a changed work commitment
+BAT workspace/profile, host binding and source/freshness limits. The exact saved
+scan ID and host/session timestamps must identify the same complete scan begun
+after the completion receipt; whole-second display timestamps do not replace
+that identity or introduce a freshness tolerance. Later input or a changed work commitment
 invalidates current applicability without changing the historical receipt.
 
 ## Existing manual session
@@ -53,6 +56,11 @@ A separate explicit read-only observation selects an existing work-item/session
 link in the same workspace. The link must predate this observation and remain
 accessible; a path or session title cannot create that relation. The observation
 records its original link and source identities, never a managed creation claim.
+Before each new read and final record, the original controller must still have
+observe scope and workspace writer membership. The authenticated current tab
+catalogue must retain the original BAT workspace/profile relation. A downgrade
+to reader prevents a new observation but does not alter an already saved,
+source-authorized historical receipt.
 
 The bounded supported case is one independently completed native input in a
 currently authenticated session: `bat_input_state_v1`, exactly one received input,

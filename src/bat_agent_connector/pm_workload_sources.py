@@ -336,6 +336,16 @@ class Collector:
         if (not pair or hc is None or digest([hc.url, hc.fingerprint, hc.profile_id]) != pair['binding_digest']
                 or origin['host_binding_digest'] != pair['binding_digest']):
             return False
+        original_workspace = origin.get('bat_workspace_id')
+        if not original_workspace and not manual:
+            # Existing repair receipts predate the additive scope fields. Their
+            # exact original execution target already pins the BAT workspace.
+            original = self.db.execute("SELECT json_extract(target,'$.workspace_id') FROM operations WHERE operation_id=?",
+                (proof['execution_operation_id'],)).fetchone()
+            original_workspace = original[0] if original else None
+        if (not original_workspace or pair['workspace_id'] != original_workspace
+                or origin.get('profile_id', hc.profile_id) != pair['profile_id']):
+            return False
         # Native counters are provided only by current authenticated metadata;
         # the inventory must not substitute a tab SDK or a retained stale field.
         if (pair is None or at is None or not proof['recorded_at'] <= at <= self.now < at + self.max_age
@@ -364,8 +374,15 @@ class Collector:
             return False
         observed, scan = epoch(host['last_success_at']), body(discovery['body'])
         finished = epoch(scan.get('finished_at'))
-        return (observed is not None and finished is not None and proof['recorded_at'] <= observed <= self.now < observed + self.max_age
-            and proof['recorded_at'] <= finished <= self.now < finished + self.max_age
+        # Inventory's displayed timestamps intentionally have whole-second
+        # precision. Bind the scan to its exact saved start, not a tolerance:
+        # both the host and session rows carry that same original float, and
+        # scan_id carries the corresponding microsecond identity.
+        exact_scan = (observed is not None and at == observed
+            and scan.get('scan_id') == f'scan_{int(observed * 1000000)}'
+            and epoch(scan.get('started_at')) == math.floor(observed))
+        return (exact_scan and finished is not None and proof['recorded_at'] <= observed <= self.now < observed + self.max_age
+            and math.floor(observed) <= finished <= self.now < finished + self.max_age
             and discovery['binding'] == scan.get('binding_version') == pair['binding_digest']
             and scan.get('status') == 'succeeded' and scan.get('complete_enumeration') is True
             and body(scan.get('authority')).get('verified') is True
