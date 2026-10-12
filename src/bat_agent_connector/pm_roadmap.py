@@ -379,7 +379,7 @@ def _project_observation(document, snapshot):
         milestone["coverage"]["inaccessible_sources"] = hidden
         milestone["actual"] = {"completion": "unassessed", "dod": "unassessed", "actual_finish_date": None,
                                "facts": [_fact_summary(facts[eid]) for eid in milestone["evidence_ids"]]}
-        quality = pm_roadmap_quality.project(milestone, snapshot)
+        quality = pm_roadmap_quality.project(milestone, snapshot, doc['coverage'])
         if quality is not None:
             milestone['actual'].update(pm_roadmap_quality.outcome(quality))
     doc["coverage"]["inaccessible_sources"] = filtered

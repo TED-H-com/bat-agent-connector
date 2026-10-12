@@ -11,7 +11,7 @@ def context(milestone):
         ('plan_revision_id', 'plan_document_digest', 'scope_revision', 'requirement_ids')}}
 
 
-def project(milestone, snapshot):
+def project(milestone, snapshot, observation_coverage):
     """Reuse the Brief's criterion aggregation, with the original milestone scope.
 
     Old observations have no selected quality profile and retain their original
@@ -49,8 +49,9 @@ def project(milestone, snapshot):
             'document': {'requirements': [{'id': rid} for rid in selected['requirement_ids']]}},
         'work': work, 'evidence': evidence,
         'coverage': {'work_truncated': not complete or gaps.get('work_truncated', False),
-            'evidence_truncated': milestone['coverage']['evidence_truncated'] or gaps.get('evidence_truncated', False),
-            'bytes_truncated': gaps.get('bytes_truncated', False)}})
+            'evidence_truncated': milestone['coverage']['evidence_truncated'] or gaps.get('evidence_truncated', False)
+                or observation_coverage.get('evidence_truncated', False),
+            'bytes_truncated': gaps.get('bytes_truncated', False) or observation_coverage.get('bytes_truncated', False)}})
     if summary is None:
         return None
     summary.update(profile=PROFILE, plan_revision_id=selected['plan_revision_id'],
