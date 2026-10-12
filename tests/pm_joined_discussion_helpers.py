@@ -98,6 +98,17 @@ async def discuss_original_failure(w, item, verification, condition, mock):
             'rationale': 'Compare this exact observed result with the unchanged accepted requirement.'},
         {'expected_plan_version': pm_plans.head(ops.db, wid)['version']})
     governance = pm_governance.get_record(ops, OWNER, wid, drift['result']['record_id'])
+    snapshot_ref = {'kind': 'snapshot', 'id': snapshot['snapshot_id'], 'digest': snapshot['snapshot_digest']}
+    if not pm_follow_up._visible(ops.db, OWNER, wid, [snapshot_ref]):
+        from bat_agent_connector import pm_meetings, pm_snapshots
+        row = ops.db.execute('SELECT * FROM pm_document_snapshots WHERE snapshot_id=?', (snapshot['snapshot_id'],)).fetchone()
+        filtered = pm_snapshots._out(pm_meetings._SourceReader(ops.db), OWNER, row)['snapshot']
+        visible_ids = {item['evidence_id'] for item in filtered['evidence']}
+        assert False, {'visibility': filtered['visibility'], 'hidden_evidence': [
+            {key: item[key] for key in ('evidence_id', 'source_kind', 'source_id')}
+            for item in snapshot['evidence'] if item['evidence_id'] not in visible_ids]}
+    for ref in pm_follow_up._thread_inputs(ops, OWNER, wid, w['thread_id'])[-1]:
+        assert pm_follow_up._visible(ops.db, OWNER, wid, [ref]), ref
     data = {'wid': wid, 'snapshot': snapshot, 'target': {'workspace_id': wid, 'thread_id': w['thread_id']}}
     intake_op = await quality.execute(w, follow.request(ops, data, thread_id=w['thread_id'],
         governance_revision_ids=[governance['revision']['revision_id']]))
