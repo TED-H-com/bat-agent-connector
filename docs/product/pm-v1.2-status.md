@@ -172,7 +172,9 @@ M4 第 13 步的 followup 已接入本批整合：固定 Maintenance Review 候�
 同批準備不同的 core／app 版號，使新 client 不會因 core 同版號而重用舊程式。
 升級 fixture 使用兩份實際打包 binary，核對原身分、workspace、operation key／歷史、
 三個並行 clients、重啟與拒絕降版；未知外部結果必須阻擋升級並保留舊 owner。
-較早的 Linux 隔離 package pair 已通過，但不把該結果歸給最後 AHP 整合包。
+最後整合 `bc6afc8` 的 Linux 0.2.5 core 已從成功 desktop CI 的 `56d1bf5`／0.2.4 實包升級通過，
+上述身分／歷史／並行／重啟／拒絕降版與未知效果防護均已核對，測試服務及目錄已清除。
+這次使用 child PATH 無 Python 的打包程式；較早 package pair 的結果分開保留。
 CI 將由固定 `56d1bf5`／0.2.4 建立 baseline，在各桌面平台驗證新 core；目前尚未跑完。
 這是 core 升級 fixture，不代表應用程式 installer 原地升級或使用者環境驗收。
 
