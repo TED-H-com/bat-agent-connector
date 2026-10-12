@@ -1,11 +1,11 @@
 # Conversation proposals and one owner review
 
 This closes the natural-discussion input gap without creating another plan model.
-An explicit `pm.conversation.propose` uses the existing bounded native analysis
+An explicit `pm.conversation.propose` uses the selected existing bounded analysis
 runtime. Ordinary Idea messages remain freeform and never trigger adoption.
 
 The action targets `workspace_id, thread_id`, accepts the ordinary bounded
-`purpose, model?, max_chars?, timeout_s?`, and requires exact `expected_version`,
+`purpose, model?, max_chars?, timeout_s?, adapter?`, and requires exact `expected_version`,
 `expected_plan_version`, and `expected_accepted_revision_id`. Admission freezes
 the complete selected discussion (at most 100 messages/current inputs), selected
 draft sources, accepted document and adoption, original source-operation IDs and
@@ -13,6 +13,28 @@ quoted reference registry. The complete context must fit 2,000–64,000 characte
 omission is an explicit error, never an apparently complete plan. Accepted plans
 with more than 20 requirements or 20 selected inputs retain the existing plan
 workflow and are refused before launching this bounded proposal.
+
+Optional `adapter` is exactly `codex-native-linux` or `bat-pm-linux-v1`;
+omission preserves the existing native request. Workspace capability
+`structured_analysis.version: 1` advertises eligible adapters separately for
+this action and `pm.follow_up.analyze`. An explicit BAT selection uses the
+[existing BAT PM executor](pm-bat-analysis.md), fixed selected host/workspace
+binding, original owned session and original send/readback receipts. No new
+executor, automatic selection, fallback or caller-selected output sink exists.
+The UI saves this choice inside the existing durable intent and locks it while
+recovering that intent. An older server receives the original absent-adapter
+request; withdrawing a BAT capability does not convert a saved BAT request to
+native. Eligibility is not runtime attestation or successful model execution.
+
+Admission freezes the adapter and source context together. Only the registered
+action's trusted callback may create the fixed `conversation_proposal` output
+destination. Import recomputes the selected runtime's original completion proof
+inside the same transaction that saves the proposal. BAT replay assistant IDs
+remain distinct from native app-server item IDs; BAT provenance includes the
+original runtime observation digest, terminal and process-death references.
+Public proof projects explicit fields, while complete raw records remain in
+the private journal. Unknown start, send or death retains the original writer;
+valid JSON or an ACK cannot release it.
 
 The model returns version 1, title, summary, candidates, requirements,
 removed_requirement_ids, and zero to three questions. Each of at most 20
