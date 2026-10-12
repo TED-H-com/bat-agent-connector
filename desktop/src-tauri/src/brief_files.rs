@@ -144,8 +144,7 @@ fn verify(value: Value, reference: &Reference) -> Result<Verified, String> {
         || doc.template_version != 1
         || !matches!(
             (doc.renderer_version, doc.coverage.projection.as_str()),
-            (1 | 3 | 4, "project_brief_only")
-                | (2 | 3 | 4, "project_brief_with_maintenance_review")
+            (1 | 3 | 4, "project_brief_only") | (2..=4, "project_brief_with_maintenance_review")
         )
         || doc.workspace_id != reference.workspace_id
         || doc.snapshot_id != reference.snapshot_id
