@@ -1,25 +1,27 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-2026-10-12 06:43 UTC：已採用的 [PM v1.2](pm-v1.2-plan.md) 持續交付，
-[#115](https://github.com/teddashh/bat-agent-connector/pull/115) 已合併為 `c0027daa`。
-其精確來源 `2b0211e` 的 Python 3.10–3.13 完整 CI 各 5,684 項通過、51 項跳過，
-desktop 五個 jobs 全部通過，Linux 共享 UI 1,949 項通過／3 項跳過；四平台實包升級
-與原始安裝／升級回執已核對。合併樹與測試來源樹相同。
+2026-10-12 09:40 UTC：PM v1.2 的 M4 整合候選 `c31a54a` 已通過同帳本完整流程，
+Python 3.12 為 1 項通過、296.86 秒。流程涵蓋討論與計畫採用、相依需求驗收、共用品質視圖、
+發布、自動 Maintain、自有維護修復、兩次 Review、暫停重開，以及中央重啟後使用原操作
+接續 PM 對話並明確採用新計畫；原工作、Sprint、快照與人工資源保持原樣。
 
-M4 的 Roadmap 品質、原批次回合完成、人工唯讀活動查核與 Brief 偏差投影仍在本機
-接續整合；同帳本 release → repair → Review → reopen／replan 尚未全程通過。
-原回合的 Python 3.12 延伸檢查 169 項通過，舊來源 Python 3.10 執行已中止，沒有完成結果。
-同步來源查核兩版本各 23 項、Brief 後端各 68 項、相關 UI 179 項／Node 34 項／native 9 項，
-以及治理／會議 journal 配接與 Brief API capability 的 Python 3.12 檢查 5 項，皆是分段證據。
-這 5 項使用既有 task-verifier fixture，未驗證新增 standalone verifier／GitHub 品質證據的
-實際討論路徑。後續 `097dbe5` 的原 GitHub 討論來源在 Python 3.12／3.10 各 2 項通過，
-standalone verifier 另有一個 Python 3.12 案例通過；兩者不能合稱整條流程通過。
-固定 `d3502a6` 的完整流程仍在維護修復 PR publication 收斂時超過既有 60 秒界線，
-結果為 1 項失敗、254.33 秒，來源查核範圍修正仍待驗證。core `0.2.6`／desktop `0.1.2`
-僅完成來源版號準備，最終整合完整 CI 與 `0.2.5` → `0.2.6` 實包升級仍待執行。
+本次候選補上一般批次的原回合完成證據、人工單次輸入的唯讀活動查核、Roadmap 品質與
+Brief 偏差投影。歷史品質查核只讀原固定計畫版本，避免目前草稿的附帶顯示形成來源循環；
+同步來源重用保留每次新效果的權限檢查，未知回覆仍查回原操作，不重送。
+早期失敗與各固定來源的分段檢查保留於 [PM 開發狀態](pm-v1.2-status.md)，
+完整流程的通過不代替最終候選的完整 CI 或桌面安裝證據。
+
+截至本次查核，[#115](https://github.com/teddashh/bat-agent-connector/pull/115) 已合併為
+`c0027daa`。其精確來源 `2b0211e` 及合併後四個 Python 完整 CI 均各 5,684 項通過、
+51 項跳過，desktop 五個 jobs 與 Pages 均通過；原四平台 0.2.4 → 0.2.5 升級回執已核對。
+本次 M4 候選為 core `0.2.6`／desktop `0.1.2`，須按本次 PR 的精確來源核對完整
+Python 3.10–3.13、全部 desktop jobs，以及固定 `50dbb7e`／core `0.2.5` 起始的四平台
+實包升級回執；既有 #114／#115 結果不能代替新版本驗證。
+
+獨立 M5 workspace 分析選擇 `736b2a2` 有兩個 Python 版本各 19 項、UI 97 項與 Node
+34 項通過，尚未合併，不屬於本次 M4 候選，也不代表完整 M5／M6 已完成。
+本批未安裝到使用者環境、未發布穩定版，沒有新增 live 模型／主機驗收宣稱。
 逐項來源、限制與 W01–W52 狀態見 [PM v1.2 開發狀態](pm-v1.2-status.md)。
-本批未安裝到使用者環境、未發布穩定版，也不宣稱 live 或完整 M4 驗收。
-下文已結案的舊範圍維持原有證據，不代表新的專業 PM／Maintainer 已完成。
 
 查核日期：2026-10-10。依 [共用產品與 Tauri 方向](realignment-v2.md)；兩份計畫是同一產品的 UI 修訂，共用一份功能 backlog。歷史交接見
 [`2026-10-08-dispatch.md`](../handoff/2026-10-08-dispatch.md)。此表以 source evidence
