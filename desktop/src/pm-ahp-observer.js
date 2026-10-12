@@ -35,7 +35,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
       const state=snapshot.state||{},kind=snapshot.source_kind??state.source_kind??(state.kind==='root'?'root':'unknown');
       if(kind==='root')continue;
       snapshots.append(h('details',{},h('summary',{},state.title||snapshot.resource),h('p',{class:'mono'},snapshot.resource),
-        line('ahp_from_sequence',snapshot.from_seq),line('ahp_later_events',t(snapshot.later_events_observed?'ahp_yes':'ahp_no')),
+        line('ahp_from_sequence',snapshot.from_seq),line('ahp_later_events',t(snapshot.later_event_observed===true?'ahp_yes':snapshot.later_event_observed===false?'ahp_no':'ahp_unknown')),
         ...(kind==='session'?[line('ahp_provider',state.provider),line('ahp_native_lifecycle',state.lifecycle)]:kind==='changeset'
           ?[line('ahp_file_count',state.files?.length??0)]:[h('p',{class:'muted'},t('ahp_unknown_source_kind'))])));
     }
