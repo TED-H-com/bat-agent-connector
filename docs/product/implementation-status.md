@@ -1,8 +1,22 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-2026-10-11：開始已採用的 [PM v1.2](pm-v1.2-plan.md) 開發，新增範圍與 W01–W52
-逐項狀態見 [PM v1.2 開發狀態](pm-v1.2-status.md)。下文已結案的舊範圍維持原有證據，
-不代表新的專業 PM／Maintainer 已完成。
+2026-10-12 06:16 UTC：已採用的 [PM v1.2](pm-v1.2-plan.md) 持續交付，
+[#115](https://github.com/teddashh/bat-agent-connector/pull/115) 已合併為 `c0027daa`。
+其精確來源 `2b0211e` 的 Python 3.10–3.13 完整 CI 各 5,684 項通過、51 項跳過，
+desktop 五個 jobs 全部通過，Linux 共享 UI 1,949 項通過／3 項跳過；四平台實包升級
+與原始安裝／升級回執已核對。合併樹與測試來源樹相同。
+
+M4 的 Roadmap 品質、原批次回合完成、人工唯讀活動查核與 Brief 偏差投影仍在本機
+接續整合；同帳本 release → repair → Review → reopen／replan 尚未全程通過。
+原回合的 Python 3.12 延伸檢查 169 項通過，舊來源 Python 3.10 執行已中止，沒有完成結果。
+同步來源查核兩版本各 23 項、Brief 後端各 68 項、相關 UI 179 項／Node 34 項／native 9 項，
+以及治理／會議 journal 配接與 Brief API capability 的 Python 3.12 檢查 5 項，皆是分段證據。
+這 5 項使用既有 task-verifier fixture，未驗證新增 standalone verifier／GitHub 品質證據的
+實際討論路徑。core `0.2.6`／desktop `0.1.2` 僅完成來源版號準備，最終整合完整 CI
+與 `0.2.5` → `0.2.6` 實包升級仍待執行。
+逐項來源、限制與 W01–W52 狀態見 [PM v1.2 開發狀態](pm-v1.2-status.md)。
+本批未安裝到使用者環境、未發布穩定版，也不宣稱 live 或完整 M4 驗收。
+下文已結案的舊範圍維持原有證據，不代表新的專業 PM／Maintainer 已完成。
 
 查核日期：2026-10-10。依 [共用產品與 Tauri 方向](realignment-v2.md)；兩份計畫是同一產品的 UI 修訂，共用一份功能 backlog。歷史交接見
 [`2026-10-08-dispatch.md`](../handoff/2026-10-08-dispatch.md)。此表以 source evidence
