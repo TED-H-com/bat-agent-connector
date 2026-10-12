@@ -213,6 +213,10 @@ def _visible_roots(db, principal, original_ids):
             from .pm_review_candidate_sources import operation_visible as candidate_visible
             if not candidate_visible(db, principal, operation):
                 return False
+        elif operation['action'] == 'pm.workspace.adapter.select':
+            from .pm_workspace_adapter import operation_visible as adapter_visible
+            if not adapter_visible(db, principal, operation):
+                return False
         elif operation["action"] in {"pm.conversation.propose", "pm.conversation.adopt"}:
             from .pm_conversation_proposals import operation_visible as conversation_visible
             if not conversation_visible(db, principal, operation):
@@ -310,7 +314,7 @@ def bind_operation(db, operation_id, target, params, binding):
         original_ids = [operation_id, *original_ids]
         resources.append(("session", binding["pm_bat_binding"]["target"]["host"] + "/" + str(uuid.uuid5(NAMESPACE, operation_id))))
     if (binding.get("pm_spec_materialization") is not None or binding.get("pm_maintenance_repair") is not None
-            or binding.get('pm_review_candidate') is not None):
+            or binding.get('pm_review_candidate') is not None or binding.get('pm_adapter_selection') is not None):
         original_ids = [operation_id, *original_ids]
     if binding.get("pm_handoff") is not None:
         from .checkpoints import _SESSION_NS

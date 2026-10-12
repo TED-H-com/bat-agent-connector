@@ -45,7 +45,9 @@ def _values(ops, principal, target, params, pre):
 
 def _admit(ops, principal, target, params, pre):
     context = _values(ops, principal, target, params, pre)
-    return {"principal": pm_workspace.principal_binding(principal), **context}
+    from .pm_workspace_adapter import admission
+    return {"principal": pm_workspace.principal_binding(principal), **context,
+        **admission(ops, principal, target['workspace_id'], pm_native_journal.ADAPTER)}
 
 
 def _authorize_existing(ops, principal, op, verb):

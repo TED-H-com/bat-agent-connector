@@ -18,6 +18,7 @@ from .operations import OperationError
 # None of these actions launches a runtime, changes accepted product scope, or
 # selects new development work. Their existing scope/source/owner checks still run.
 RECORD_ACTIONS = frozenset({
+    'pm.workspace.adapter.select',
     'pm.work_batch.evidence.record',
     'pm.maintenance.repair.evidence.record',
     'pm.quality.review.create', 'pm.quality.review.record', 'pm.quality.review.revoke',
