@@ -52,7 +52,7 @@ def test_public_metadata_does_not_grant_anonymous_original_source_access(db):
         assert decision(db)
 
 
-@pytest.mark.parametrize('kind', ['execution_verifier', 'quality_sources', 'workload_sources'])
+@pytest.mark.parametrize('kind', ['execution_verifier', 'quality_sources', 'workload_sources', 'repair_sources'])
 def test_typed_wrappers_preserve_original_depth_and_keep_their_own_bound(db, kind):
     def descend(level, maximum):
         if level == maximum:
@@ -73,6 +73,8 @@ def test_quality_verifier_workload_and_original_wrappers_coexist_at_supported_de
                     reads.check(db, OWNER, 'workload_sources', level, lambda: descend(level + 1, maximum)))))
     assert descend(0, reads.MAX_DEPTH)
     assert not descend(0, reads.MAX_DEPTH + 1)
+    # One outer repair reader must not halve any previously supported chain.
+    assert reads.check(db, OWNER, 'repair_sources', 'outer', lambda: descend(0, reads.MAX_DEPTH))
 
 
 def test_credential_and_scope_are_distinct_even_for_same_actor(db):
