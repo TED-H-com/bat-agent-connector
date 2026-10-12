@@ -4,6 +4,7 @@ from contextlib import contextmanager
 
 from bat_agent_connector import pm_execution_runtime as runtime
 from bat_agent_connector import pm_maintenance_repairs as repairs
+from bat_agent_connector.operations import OperationError
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
 from tests.test_pm_joined_lifecycle import test_same_ledger_development_and_semantic_dependency as run_story
 
@@ -69,6 +70,10 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
     def guarded_check(*args, **kwargs):
         try:
             return check(*args, **kwargs)
+        except OperationError:
+            # The joined story deliberately exercises duplicate admission.
+            # Preserve that expected domain error without masking later failures.
+            raise
         except Exception:
             failures.append(traceback.format_exc())
             raise
