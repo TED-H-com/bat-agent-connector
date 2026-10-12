@@ -66,8 +66,13 @@ provider commands, arbitrary resource reads and ownership claims are rejected.
 Select at most eight distinct original session URIs; each must be positively advertised by
 the fresh catalog before a subscription is sent. Empty selection reads only the
 catalog. The 1.0 profile accepts `ahp-session:` identities; the VS Code 0.10 profile
-accepts provider session identities such as `copilot:/<native-id>` only when the
+accepts provider session identities such as `copilotcli:/<native-id>` only when the
 advertised provider matches that scheme. This syntax is not an ownership claim.
+The pinned stable distribution's built-in IDs are `copilotcli`, `claude` and
+`codex` (`common/agent.ts:305–311`, registered in `node/agentHostMain.ts`). They
+produce lowercase schemes. This profile preserves exact opaque URI/provider
+strings; it does not claim generic URI case-folding support or normalize a provider
+ID into another identity.
 Neither profile rewrites native identities into aliases. File/network resource
 URIs cannot be selected as sessions. Changesets are at most sixteen exact static
 URIs advertised by a selected session: the nested `<original-session>/changeset/<id>`
@@ -177,13 +182,33 @@ GET performs no network calls. Missing-source meaning remains disposed-or-withdr
 never "finished". An endpoint grant does not bypass existing Connector source lineage;
 this slice does not attach AHP resources to BAT/Task/PM writer ownership at all.
 
+Every historical read, global operation/event projection and original-key lookup
+checks that the saved document's reference list completely covers its own catalog,
+snapshots and event receipts. Empty or partial references cannot orphan retained
+facts, even if a later observation makes the native resources accessible again.
+This check uses only the original document, before current source access is checked.
+
 The mutable access projection stores explicit `source_kind` (`session` or
 `changeset`). Complete catalogs withdraw all missing session identities by this
 kind, including provider-scheme identities. Upgrade adds the column idempotently
 and reconstructs old kinds from the original immutable catalogs and receipt parent
 relations. It does not rewrite document bytes/digests, allocate a schema
-`user_version`, or identify resources by filesystem path. Unproven old projection
-rows remain unavailable. Old 1.0 identity digests and historical access are preserved.
+`user_version`, identify resources by filesystem path, or increase an existing
+row's `available` value. Unproven old projection rows remain unavailable.
+
+Compatibility is explicit: pre-profile `7a56732` records already have per-receipt
+`original_sources` and retain those fixed references. Earlier `40f609b` records
+may be reconstructed only when they report a complete, observed 1.0 capture with
+no reconnect, gap, missing source or catalog notification; every retained non-root
+receipt must have its original session in that same saved catalog, and a saved
+session snapshot must independently contain the identical provider and `createdAt`.
+Changeset receipts also require the saved session's exact static advertisement and
+saved changeset snapshot. Reconstructed references must exactly match the document's
+original reference list. A timestamp-free early snapshot, inconsistent identity,
+incomplete capture or orphaned reference fails closed. Later snapshots and current
+catalogs cannot repair these historical proof gaps. The old bytes, IDs and digests
+remain intact in both the restored and hidden cases; this is not a claim that all
+legacy history can be made readable.
 
 ## Pinned wire evidence and validation boundary
 
@@ -212,8 +237,14 @@ For later validation, fixed VS Code main source
 `80101bda7057c6f2081cc64f510b6fa3cbf2de5b` (package version 1.142.0) advertises
 1.1.0 with a 1.0.0 compatibility baseline and an explicit 0.10 shim in
 [agentHostProtocolCompatibility.ts](https://github.com/microsoft/vscode/blob/80101bda7057c6f2081cc64f510b6fa3cbf2de5b/src/vs/platform/agentHost/common/agentHostProtocolCompatibility.ts).
-It is a fixed source option, not a verified installed distribution. A future 1.1
-decoder is not enabled by that version string. Editor socket/named-pipe transport,
+It is a research source option, not a supported or verified installed distribution.
+Its `protocolServerHandler.ts:1870` still returns original provider-scheme sessions
+alongside canonical sessions and ignores catalog page hints; `:3092` does not
+exclude legacy sessions for this observer's unknown client type. The current
+`ahp_1_0_observer_v1` therefore covers the upstream canonical-session subset only,
+not this main distribution's complete mixed catalog. It does not silently switch
+to 0.10 decoding after negotiating 1.0. A future 1.1 decoder is not enabled by that
+version string. Editor socket/named-pipe transport,
 headless configuration, credentials and real provider behavior remain outside the
 current explicitly configured TCP fixture acceptance.
 

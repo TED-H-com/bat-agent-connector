@@ -98,9 +98,9 @@ def stable_010(host):
     ignores the catalog limit hint, as that pinned implementation does.
     """
     host.version = '0.10.0'
-    host.session = 'copilot:/11111111-1111-4111-8111-111111111111'
+    host.session = 'copilotcli:/11111111-1111-4111-8111-111111111111'
     host.changeset = host.session + '/changeset/session'
-    host.catalog = [{**SUMMARY, 'resource': host.session, 'provider': 'copilot',
+    host.catalog = [{**SUMMARY, 'resource': host.session, 'provider': 'copilotcli',
         'chats': [{'resource': host.session + '/chat/default', 'title': 'Original chat', 'archived': True}]}]
     host.session_state = {**host.catalog[0], 'lifecycle': 'ready', 'changesets': [
         {'label': 'Session Changes', 'uriTemplate': host.changeset, 'changeKind': 'session'}]}
@@ -321,7 +321,7 @@ async def test_upgrade_redirect_never_transmits_credential_to_second_endpoint(mo
 
 async def test_stable_010_original_provider_uris_nested_changeset_and_whole_catalog(host):
     stable_010(host)
-    host.catalog += [{**host.catalog[0], 'resource': f'copilot:/catalog-{i}'} for i in range(79)]
+    host.catalog += [{**host.catalog[0], 'resource': f'copilotcli:/catalog-{i}'} for i in range(79)]
     result = await observer(host).collect()
     assert result['status'] == 'observed' and result['catalog_complete']
     assert result['protocol_version'] == result['negotiated_version'] == '0.10.0'
@@ -397,8 +397,8 @@ async def test_unregistered_version_never_uses_server_info_as_negotiation_author
 
 
 @pytest.mark.parametrize('bad_uri,provider', [
-    ('file:/human', 'file'), ('https:/private', 'https'), ('copilot:/one/two', 'copilot'),
-    ('ahp-session:/one', 'copilot'), ('copilot:/one', 'claude')])
+    ('file:/human', 'file'), ('https:/private', 'https'), ('copilotcli:/one/two', 'copilotcli'),
+    ('ahp-session:/one', 'copilotcli'), ('copilotcli:/one', 'claude')])
 async def test_stable_profile_rejects_non_session_or_provider_mismatched_catalog(host, bad_uri, provider):
     stable_010(host)
     host.catalog[0].update(resource=bad_uri, provider=provider)
@@ -409,11 +409,21 @@ async def test_stable_profile_rejects_non_session_or_provider_mismatched_catalog
 
 async def test_stable_whole_catalog_bound_is_not_a_truncated_absence_proof(host):
     stable_010(host)
-    host.catalog += [{**host.catalog[0], 'resource': f'copilot:/catalog-{i}'} for i in range(200)]
+    host.catalog += [{**host.catalog[0], 'resource': f'copilotcli:/catalog-{i}'} for i in range(200)]
     result = await observer(host).collect()
     assert result['status'] == 'incomplete' and not result['catalog_complete']
     assert not result['positive_catalog'] and not result['missing']
     assert not any(r['method'] == 'subscribe' for _, r in host.requests)
+
+
+async def test_10_canonical_subset_does_not_switch_to_legacy_decoder_for_mixed_host_catalog(host):
+    stable_010(host)
+    host.version = '1.0.0'
+    result = await observer(host).collect()
+    assert result['negotiated_version'] == '1.0.0'
+    assert result['decoder_profile'] == 'ahp_1_0_observer_v1'
+    assert result['reason'] == 'invalid_session_summary' and not result['catalog_complete']
+    assert [r['method'] for _, r in host.requests] == ['initialize', 'listSessions']
 
 
 @pytest.mark.parametrize('version', ['1.0.0', '0.10.0'])
@@ -422,7 +432,7 @@ async def test_nested_changesets_use_exact_advertised_parent_and_static_shape(ho
         stable_010(host)
     host.changeset = host.session + '/changeset/session'
     templates = [host.changeset, host.session + '/changeset/{turnId}',
-        'copilot:/other/changeset/session', 'file:///human/checkout', host.session + '/changeset/']
+        'copilotcli:/other/changeset/session', 'file:///human/checkout', host.session + '/changeset/']
     host.session_state['changesets'] = [{'label': 'Changes', 'uriTemplate': uri, 'changeKind': 'session'} for uri in templates]
     result = await observer(host).collect()
     assert result['status'] == 'observed'
