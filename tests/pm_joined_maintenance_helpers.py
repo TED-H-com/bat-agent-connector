@@ -30,6 +30,7 @@ from tests.pm_joined_delivery_helpers import settle
 from tests.pm_joined_lifecycle_helpers import OWNER, assert_manual_preserved, engineering, execute
 from tests.test_checkpoints import git
 from tests.test_integration import commit
+from tests.test_pm_delivery_lineage import sync_provider_graph
 from tests.test_pm_maintenance_repair_receipts import record
 from tests.test_pm_maintenance_repairs import advance, shared_request, view
 from tests.test_pm_package_handoff import request as handoff_request
@@ -103,6 +104,8 @@ def maintenance_provider(w):
             gh.script.append(('GET', re.escape(path) + '$', 200, {}, copy.deepcopy(payload)))
         elif previous:
             previous(method, path, body)
+        if method == 'POST' and path == '/repos/o/r/pulls':
+            sync_provider_graph(w)
 
     gh.before_request, gh.comparison = provider, comparison
 

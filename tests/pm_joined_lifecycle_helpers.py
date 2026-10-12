@@ -238,6 +238,8 @@ async def develop_original_requirements(w, mock):
     from tests.test_integration import commit
 
     login, recovery = await engineering(w, 'member.login'), await engineering(w, 'member.recovery')
+    from tests.pm_joined_quality_helpers import plan_iteration
+    await plan_iteration(w, (login, recovery))
     conditions = [acceptance.freeze_condition(item['package'], item['params']['requirements'])
         for item in (login, recovery)]
     entries = [await batch.selected(login, 'login'), await batch.selected(recovery, 'recovery',

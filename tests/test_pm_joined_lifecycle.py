@@ -20,6 +20,7 @@ from tests.pm_joined_lifecycle_helpers import (
     provider_mux,
 )
 from tests.pm_joined_maintenance_helpers import enter_maintenance, repair_original_release, review_and_reopen
+from tests.pm_joined_quality_helpers import shared_outcomes
 from tests.test_checkpoints import MANUAL
 from tests.test_pm_bat_operations import bat_world  # noqa: F401
 from tests.test_repository_sync import world  # noqa: F401
@@ -36,12 +37,13 @@ async def joined(world, bat_world, mock, monkeypatch):  # noqa: F811
     return await prepare_world(world)
 
 
-async def test_same_ledger_development_and_semantic_dependency(joined, mock):
+async def test_same_ledger_development_and_semantic_dependency(joined, mock, monkeypatch):
     w = await develop_original_requirements(joined, mock)
     assert w['ledger'].phases == ['idea_to_adopted_planning', 'development_and_quality']
     assert len(w['ledger'].references['execution_ids']) == 2
     assert_manual_preserved(w, mock)
     await finish_original_readers(w)
+    await shared_outcomes(w, monkeypatch)
     await publish_release(w, mock)
     complete_native_turn(w, mock, MANUAL)
     ops = w['d'].ops
