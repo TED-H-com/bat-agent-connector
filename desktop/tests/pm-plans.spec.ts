@@ -95,6 +95,45 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await expect(action(page,'pm.plan.adopt').getByRole('button',{name:'Adopt this plan',exact:true})).toBeEnabled();
     expect(f.state.writes.at(-1).body.params.repository_binding).toEqual({...target,source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)});
   });
+  for(const changedPrincipal of [false,true])test(`access remount ${changedPrincipal?'isolates another principal':'preserves the open plan editor'} while rereading sources`,async({page})=>{
+    const f=planning();let reset=false,bootstraps=0,held=false,release:()=>void=()=>{},reads=0;
+    const gate=new Promise<void>(resolve=>release=resolve);
+    await mountConversation(page,native,async(input:any)=>{
+      const path=new URL(input.path,'http://fixture').pathname;
+      if(path==='/bootstrap'&&++bootstraps===2){held=true;await gate;}
+      if(path==='/events'&&reset){reset=false;return {status:409,data:{error:{code:'EVENT_CURSOR_RESET',reason:'access_changed'}}};}
+      if(path===`/pm/workspaces/${workspaceId}/threads/${threadId}`)reads++;
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute);const editor=page.locator('[data-pm-revision-editor]');
+    await editor.locator(':scope > summary').click();
+    await editor.getByLabel('Plan title',{exact:true}).fill('Original private plan draft');
+    await editor.getByLabel('Plan document (Markdown)',{exact:true}).fill('Keep the same reviewed text.');
+    if(changedPrincipal)f.state.principal='person-2';
+    reset=true;
+    try{
+      await expect.poll(()=>held).toBe(true);
+      await expect(page.locator('.pm-notes')).toHaveCount(0);
+      await expect(editor).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+    }finally{release();}
+    await expect.poll(()=>reads).toBe(2);
+    await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
+    if(changedPrincipal){
+      await expect(editor).not.toHaveAttribute('open','');
+      await editor.locator(':scope > summary').click();
+      await expect(editor.getByLabel('Plan title',{exact:true})).not.toHaveValue('Original private plan draft');
+      await expect(editor.getByLabel('Plan document (Markdown)',{exact:true})).toHaveValue('');
+      expect(f.state.writes).toHaveLength(0);
+    }else{
+      await expect(editor).toHaveAttribute('open','');
+      await expect(editor.getByLabel('Plan title',{exact:true})).toHaveValue('Original private plan draft');
+      await expect(editor.getByLabel('Plan document (Markdown)',{exact:true})).toHaveValue('Keep the same reviewed text.');
+      await editor.getByRole('button',{name:'Save plan revision',exact:true}).click();
+      await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
+      expect(f.state.writes).toHaveLength(1);
+      expect(f.state.writes[0].body.params.title).toBe('Original private plan draft');
+    }
+  });
   test('unfinished plan edits survive refresh and readers cannot create or adopt revisions', async({page}) => {
     const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);
     await page.locator('[data-pm-revision-editor] > summary').click();

@@ -67,6 +67,17 @@ async function edit(page:any,kind:string){
   return action(page,kind);
 }
 for(const native of [false,true])test.describe(native?'native lifecycle':'web lifecycle',()=>{
+  test('initial thread mount retains lifecycle forms until the complete read can enable them',async({page})=>{
+    const f=fixture();let release:()=>void=()=>{};f.state.readGate=new Promise<void>(resolve=>release=resolve);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const editor=await edit(page,'pause'),reason=editor.getByLabel('Reason and retained context');
+    try{await expect(reason).toBeDisabled();expect(f.state.writes).toHaveLength(0);}finally{release();}
+    await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
+    await expect(reason).toBeEnabled();await reason.fill('Pause once after the original workspace read.');
+    await editor.getByRole('button',{name:'Pause new work',exact:true}).click();
+    await expect.poll(()=>f.state.writes.length).toBe(1);
+    expect(f.state.writes[0].body.preconditions).toEqual({expected_lifecycle_revision:0});
+  });
   test('Idea remains a readable stage without dispatching or changing its discussion',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
     await expect(activity(page)).toContainText('Idea');await expect(activity(page)).toContainText('Discussions, Sprint commitments');

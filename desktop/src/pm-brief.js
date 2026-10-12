@@ -90,7 +90,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   }
   async function refresh(selectedId = null) {
     const selected=selectedId||selectedSnapshotId||'latest';if(selectedId)selectedSnapshotId=selectedId;
-    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();exports?.update();
+    const ticket=++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();
     try {
       const [latest, listing, current]=await Promise.all([api('GET',`${endpoint}/snapshots/${selected}`),
         api('GET',`${endpoint}/snapshots?limit=20`),api('GET',`${endpoint}/plans/head`)]);alive();if(ticket!==serial)return;

@@ -82,3 +82,42 @@ test('bounded runtime failure evidence only retains fixed codes and numeric OS e
     assert.deepEqual(await serviceFailure(root), { state: 'unavailable' });
   }
 });
+
+test('installed startup evidence preserves only existing finite runtime locations', async t => {
+  const root = await fixture(t);
+  const failure = { protocol: 1, error: 'MANAGED_RUNTIME_UNAVAILABLE',
+    message: 'PermissionError: managed installation needs recovery', errno: 13, winerror: 5 };
+  const phases = ['root', 'launcher_lock', 'prepare', 'manifest', 'service_lease', 'spawn',
+    'endpoint', 'verify', 'ensure', 'serve', 'stop', 'unknown'];
+  const storage = ['directory', 'open', 'read', 'write', 'lock', 'none'];
+  const locations = [...phases.map(phase => ({ phase, storage: 'write' })),
+    ...storage.map(storage => ({ phase: 'serve', storage }))];
+  for (const location of locations) {
+    await put(root, 'service.log', { ...failure, location: { ...location, filename: 'private-secret' } });
+    assert.deepEqual(await serviceFailure(root), {
+      state: 'reported', error: 'MANAGED_RUNTIME_UNAVAILABLE', exception: 'PermissionError',
+      errno: 13, winerror: 5, location,
+    });
+  }
+});
+
+test('unknown runtime locations cannot disclose paths, tokens or arbitrary diagnostics', async t => {
+  const root = await fixture(t);
+  const secret = '/private-secret/customer-token';
+  const cases = [
+    { input: null, phase: 'unknown', storage: 'unknown' },
+    { input: secret, phase: 'unknown', storage: 'unknown' },
+    { input: [secret], phase: 'unknown', storage: 'unknown' },
+    { input: { phase: secret, storage: secret, stack: secret }, phase: 'unknown', storage: 'unknown' },
+    { input: { phase: 'serve', storage: { token: secret } }, phase: 'serve', storage: 'unknown' },
+    { input: { phase: [secret], storage: 'write' }, phase: 'unknown', storage: 'write' },
+  ];
+  for (const { input, phase, storage } of cases) {
+    await put(root, 'service.log', { protocol: 1, error: 'MANAGED_RUNTIME_UNAVAILABLE',
+      message: secret, errno: secret, winerror: secret, location: input, traceback: secret });
+    const result = await serviceFailure(root);
+    assert.deepEqual(result, { state: 'reported', error: 'MANAGED_RUNTIME_UNAVAILABLE',
+      exception: 'other', errno: null, winerror: null, location: { phase, storage } });
+    assert(!JSON.stringify(result).includes(secret));
+  }
+});

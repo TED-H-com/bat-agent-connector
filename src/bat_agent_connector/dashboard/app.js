@@ -9120,6 +9120,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		signature = "";
 		view.replaceChildren();
 		history.replaceChildren();
+		create.update();
 		exports?.update();
 		try {
 			const [latest, listing, current] = await Promise.all([
@@ -14244,7 +14245,8 @@ var threadDisclosureSelectors = [
 	"[data-pm-add-input]",
 	"[data-pm-planning-revision]",
 	"[data-pm-note-only]",
-	"[data-pm-prepare-context]"
+	"[data-pm-prepare-context]",
+	"[data-pm-revision-editor]"
 ];
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
 function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage" }) {
@@ -14497,7 +14499,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		main.append(h("p", {}, t("pm_unavailable")));
 		return;
 	}
-	let disposed = false, workspace = null, threadData = null, loaded = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
 	const disclosureKey = JSON.stringify([
 		namespace,
 		workspaceId,
@@ -14528,8 +14530,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			namespace,
 			errorBox,
 			...options,
-			permitted: () => options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
-			recoverPermitted: options.recoverPermitted || options.permitted
+			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
+			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)()
 		});
 		forms.push(value);
 		return value;
@@ -14938,8 +14940,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		for (const checkbox of facts?.querySelectorAll("input[type=checkbox]") || []) checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
 	};
 	const updateForms = () => {
-		for (let i = forms.length - 1; i >= 0; i--) if (!forms[i].box.isConnected) forms.splice(i, 1);
-		else forms[i].update();
+		for (let i = forms.length - 1; i >= 0; i--) if (forms[i].box.isConnected) forms[i].update();
+		else if (initialReadComplete) forms.splice(i, 1);
 	};
 	const timestamp = (value) => typeof value === "number" ? value * 1e3 : value;
 	const time = (value) => {
@@ -15639,6 +15641,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	}
 	await load();
+	initialReadComplete = true;
+	updateForms();
 	let eventReads = Promise.resolve();
 	const off = onEvents((event) => {
 		if ([
