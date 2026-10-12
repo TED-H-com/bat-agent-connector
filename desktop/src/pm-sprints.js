@@ -77,8 +77,8 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       fold('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
         h('dt', {}, t('pm_sprint_developers')), h('dd', {}, def.developers.join(', ')), h('dt', {}, t('pm_sprint_capacity')), h('dd', {}, def.capacity_note))),
       row('pm_sprint_work', workRows(data.selected_items || [])),
-      row('pm_sprint_dod_heading', h('div', {}, note(data.quality==='fixed_original_assessments'?'pq_fixed':'pm_sprint_quality'), h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
-        fold('pm_sprint_fixed', h('div', {}, h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
+      row('pm_sprint_dod_heading', h('div', {}, note(data.quality==='fixed_original_assessments'?'pq_fixed':'pm_sprint_unassessed'), h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
+        fold('pm_sprint_fixed', h('div', {}, data.quality==='fixed_original_assessments' ? '' : note('pm_sprint_quality'), h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
           h('p', {}, source(def.product_goal_revision_id)), h('p', {}, source(def.dod_revision_id)), h('p', {}, source(def.backlog_revision_id))))))));
     const ticket = serial, terminal = ['closed', 'cancelled'].includes(sprint.status);
     let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
