@@ -3,9 +3,9 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
-## 目前整合狀態（2026-10-12 04:53 UTC）
+## 目前整合狀態（2026-10-12 05:44 UTC）
 
-#98–#113 已合併。下列是接續候選的固定證據；後面的分批紀錄保留當時範圍，
+#98–#114 已合併。下列是接續候選的固定證據；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
 
 - [#113](https://github.com/teddashh/bat-agent-connector/pull/113) `de30795`：成果評估、
@@ -17,7 +17,8 @@
   Windows 安裝 fixture 的首個 HTTP 讀取逾時後，清理錯誤蓋過原始失敗。
   新版只修測試的有界重試及失敗保存；精確 `50dbb7e` 的 desktop 五個 jobs 全部通過，
   Linux 共享 UI 1,911 項通過／3 項跳過，四平台實包升級的原始回執與下載雜湊已核對。
-  完整後端 CI 仍在執行；已安全改接 main，來源及改動檔案保持相同。
+  Python 3.10–3.13 完整 CI 各 5,629 項通過、51 項跳過；已合併為 `53600baf`。
+  這些是原候選的 CI／實包 fixture 證據，不代表已安裝或發布穩定版。
 - BAT owner fork [#3](https://github.com/teddashh/better-agent-terminal/pull/3) 已合併至
   `737f6fb`，內容與通過 CI 的 `4be316e` 相同。固定 Linux server 套件的 59 個 payload
   檔案、來源及雜湊已核對，實包啟動／認證／重啟／清理 fixture 通過。安裝方式見
@@ -30,7 +31,8 @@
   `a3c332b` 有 15 項相關 UI 通過，兩者使用真正 browser locale 驗證英／繁中。
   原 98 項中的八個 workspace 案例曾使用未生效的語系儲存鍵，保留為功能測試證據，
   不當成繁中驗證。工作量原因與來源說明 `8dda3ff` 另有 66 項 UI 及 34 項 Node 通過。
-  這些接續修正的精確來源 CI 正在執行，尚未合併主線。
+  #115 已改接 main；精確 `2b0211e` 的 desktop 五個 jobs 通過，Python 3.11 完整 CI
+  有 5,684 項通過、51 項跳過，其他 Python 版本仍待結果；尚未合併主線。
 - Refresh fixture `0d8e848` 固定背景 catalog 讀取先於點擊的順序。負控制重現舊順序的
   disabled-click timeout；修正後的實際中央／瀏覽器完整流程通過，包括草稿、精確操作帳本、
   Brief 輸出與 pause／close／reopen。早期只攔一個重疊讀取的兩次控制組未重現，未算成失敗重現證據。
@@ -39,9 +41,31 @@
   五個相關模組在 Python 3.12／3.10 各 116 項通過。先前 `2d8e409` 的完整回應大小測試
   抓到整份觀察截斷時仍可能顯示合格；修正後將整份涵蓋缺口一併納入判斷。
   UI `96f0fa9` 的 28 項相關檢查與 34 項 Node 檢查通過，英／繁中及窄畫面已檢視。
+  這批 Roadmap 品質投影只在本機整合分支，尚未合併主線。
+- 一般 W38 批次的[原回合完成與人工活動觀察](../design/pm-execution-runtime-completion.md)
+  已接入本機分支：固定原 first-send、native input／cursor、明確選定的成果證據及目前完整
+  inventory 才能排除已完成的原批次工作；保留 worktree 不再自行構成活躍工作。
+  人工 session 僅支援既有明確工作連結的一次原輸入完整回合，唯讀查核不取得控制權、
+  不釋放人工資源容量，也不接受工程品質；多次輸入、缺失或過期證據仍保留 blocker。
+  `4f8f187` 的首次 Python 3.12 focused 檢查 23 項通過，修正原 workspace／profile
+  wire 解碼後 `6e88d44` 的 5 項 Python 3.12 人工來源檢查通過；169 項 Python 3.12／3.10
+  最終回歸仍在執行，不能把早期分段結果當成最終矩陣已通過。
+- 原回合／人工唯讀觀察 UI `20188735` 的 106 項共享 UI 及 34 項 Node 檢查通過，
+  包含真正英／繁中 locale、Web／Tauri、窄畫面、來源撤權與原 key 恢復。
+  Kanban 分開顯示歷史回合完成、品質與目前工作量；降為 reader 後仍可查回可讀的原收據，
+  新查核需目前 writer。build 與 committed browser assets 檢查通過，尚未合併主線。
+- 原動作入口／skill 同步 `f68dffd` 的 Python 3.12／3.10 各 10 項通過，
+  實際 HTTP／MCP 核對人工查核、writer 降權後原 key 查回與來源撤權。兩個服務私有
+  runtime observers 不再宣告 caller 可用；原 native 共用 POST envelope 無需新增路由。
+  Canonical skill 及生成版本一致，Ruff／public-content／diff 檢查通過。
+- 版本準備 `673a7c9` 在本機整合候選將 core／desktop 分別升為 `0.2.6`／`0.1.2`，
+  skill metadata 同步為 `0.2.6`，下次實包升級 fixture 固定以 `50dbb7e`／core `0.2.5`
+  為基底。這是來源及版號準備，不能引用 #114 的升級結果宣稱新版本已完成實包驗收。
 
-M4 的同一 workspace、同一份 ID 紀錄完整流程正在串接。一般工程工作包的原執行完成
-與閒置判斷仍需補齊；不刪除人工 session 或保留的 worktree 來製造閒置。
+M4 的同一 workspace、同一份 ID 紀錄 fixture 已走到原需求開發、品質、交付與自動 Maintain；
+接續維護修復、Review 回 Idea、暫停重開及中央重啟後的新 PM 回合／計畫更新仍在驗證，
+尚未取得整條流程成功結果。上述 Roadmap、原回合、人工觀察、入口與新版號只在本機
+整合分支，不屬於已合併的 #114 或正在 CI 的 #115；不刪除人工 session 或 worktree 製造閒置。
 本批未安裝到使用者環境、未發布穩定版，也沒有新增 live 模型／主機驗收宣稱。
 
 ## 第一批：workspace、Idea 與 Planning 草稿
@@ -121,7 +145,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W11 | P1 | Plan diff 與影響分析 | 開發分支：固定版本／來源／接受條件比較、明確工作關聯的影響候選；語意判讀與採用變更流程仍待做 |
 | W12 | P1 | Project Brief | #96 的五項來源總覽與固定快照已合併；#113 加入同一份原始評估的需求／DoD／合格數量及來源投影；完整語意偏差判讀仍待實作 |
 | W13 | P1 | Roadmap 與 scope | #98 已合併固定需求、里程碑／依賴、原定／預測／實際證據與歷史；接續分支消費同一快照已選評估，投影固定里程碑需求與 DoD，保留涵蓋缺口；Git materialization 仍待做 |
-| W14 | P1 | Kanban | #100 已合併原工作／執行紀錄與 WIP；#113 加入固定品質投影；需求前置接受條件已接交接就緒判斷，分派與完整 WIP 政策仍待做 |
+| W14 | P1 | Kanban | #100／#113 已合併原工作、WIP 與固定品質投影；本機接續分支顯示 W38 原回合完成及固定人工來源的唯讀活動查核，保留原 key／來源權限；歷史完成、品質與目前工作量分開，分派與完整 WIP 政策仍待做 |
 | W15 | P1 | Sprint artifacts 與時間 | #99 已合併基本 Sprint；#113 接入固定 DoD／接受條件評估與原成果品質投影，完整 Scrum 事件與引導仍待做 |
 | W16 | P1 | Planning Review Retro | #100 已合併：各自輸出、固定討論依據、明確完成與改善追蹤；Daily Scrum、LLM 會議引導與品質判定待做 |
 | W17 | P1 | 風險、變更與決策 | #101 已合併：固定計畫／快照來源、明確根因去重、版本決策與原採用結果關聯；自動分析、跨快照追蹤與提醒待做 |
@@ -129,12 +153,12 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W19 | P1 | Orchestrator readiness 與派工 | #110 已合併固定工作包經既有 repository.continue 交接，#112 加入有界批次；#113 再以原始已合格需求評估滿足明確前置條件，保留原來源及最後執行檢查 |
 | W20 | P1 | 現有 integration 與 merge 接入 | #112 已合併既有 integration preview／apply／conflict handoff／PR merge 的固定工作包與來源 lineage，最後 frame 與已送出結果查回分開；Web／Tauri／API／MCP 可讀原推送／合併 receipt，不據此接受需求 |
 | W21 | P1 | 現有 deploy 與 receipt 接入 | #112 已合併既有 deploy／rollback／merge-and-deploy 的原來源權限與固定 release receipt，交付投影分開顯示合併、部署驗證與目前部署；未安裝或 live-tested |
-| W22 | P1 | AHP observer 與 create-own | 開發分支已接明確設定的 AHP 有界唯讀觀察、原始來源權限、API／MCP／Web／Tauri；固定 1.0 canonical subset 與 VS Code 0.10 profiles 已有 fixture，完整 CI／合併待完成；create-own、寫入及 live host 尚未驗證 |
+| W22 | P1 | AHP observer 與 create-own | #114 已合併明確設定的有界唯讀觀察、原來源權限與 API／MCP／Web／Tauri；固定 1.0 canonical subset／VS Code 0.10 profiles 已通過完整 CI；create-own、寫入及 live host 尚未驗證 |
 | W23 | P1 | 第一個 native CLI adapter | 獨立 coding sandbox spike `1d80743` 的外層探針通過；內層 namespace 被主機拒絕，coding／隔離 canaries 未驗證，未註冊為產品 adapter；Python 3.12／3.10 各 6 項通過、1 項明確跳過 |
 | W24 | P1 | PM adapter 切換 | 單次 PM 分析已有明確 adapter selector 與獨立原操作查回；長期 workspace adapter／PM 文件接續與 writer 切換尚待完成 |
-| W25 | P1 | Fleet readiness 與安裝版 | 沿用既有 managed installation；core 0.2.5／desktop 0.1.1 候選 `50dbb7e` 四平台實包升級及全部 desktop jobs 通過，完整後端 CI 仍在跑；完整 Fleet 矩陣另行追蹤，尚未發布或安裝 |
+| W25 | P1 | Fleet readiness 與安裝版 | #114 的 core 0.2.5／desktop 0.1.1 已通過四平台 0.2.4→0.2.5 實包升級、全部 desktop jobs 與四個 Python 完整 CI 並合併；本機另準備 0.2.6／0.1.2，該新版實包驗收待做；完整 Fleet 矩陣另行追蹤，未發布穩定版或安裝 |
 | W26 | P1 | Canonical MCP skills | 本批：PM read tools 與共用 operations；其他 v1.2 契約逐批加入 |
-| W27 | P1 | 端到端實機驗收 | 自動化 fixture／驗收支援待做；真人實機部分由使用者處理 |
+| W27 | P1 | 端到端實機驗收 | 分段 fixture、四平台實包及 CI 證據已具備；M4 同帳本完整流程仍在驗證，不能以分段通過代替全程；真人實機部分由使用者處理 |
 | W28 | P2 | 其餘具名 CLI 能力 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W29 | P2 | 額外 reviewer 與討論模板 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
 | W30 | P2 | 成本與較完整預測 | 待開發／接入 v1.2；既有底層能力按計畫重用 |
@@ -145,14 +169,14 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W35 | P1 | 架構與 SDD 工程工作包 | #104 已合併固定需求／接受條件、原規格 bytes、獨立程式基底及工程安排；#113 新增原執行驗證、明確品質／DoD 評估及有來源的需求接受，不以測試通過自行接受需求 |
 | W36 | P1 | OpenSpec read adapter | #102 已合併：既有 PM carrier 原固定 commit 的唯讀標準文件、來源 digest、Web／Tauri／API／MCP；其他 commit、自訂 schema 與 CLI JSON 契約待做 |
 | W37 | P1 | OpenSpec 自有產物與 reconciliation | #112 已合併 PM 自有 Git append-only 規格與一般 immutable artifact、原操作查回、穩定 task ID／刪除歷史、完整工程包引用與最後 frame 驗證；Web／Tauri／API／MCP 已接入，不宣稱 OpenSpec CLI 相容或規格勾選等於完成 |
-| W38 | P1 | 有界批次與工作包交接 | #112 已合併 1–16 筆固定 handoff 與有界 starts／並行／期限／proven-unsent retry；整合候選增加明確選原 CI／接受條件收據，保留原 child 查回 |
+| W38 | P1 | 有界批次與工作包交接 | #112／#113 已合併 1–16 筆固定 handoff、有界 starts／並行／期限／proven-unsent retry 與明確選定的原成果／接受條件收據；本機接續分支以原 first-send／native replay 觀察已選批次 child 的原回合完成，保留未知容量，不從單次交接成功或最新評估補認 |
 | W39 | P1 | DocumentSnapshot 與五視圖 SVG | #96 已合併固定快照；#106 已合併 Project Brief 的分頁 SVG、目前權限／來源／輸出 digest 與共用下載；其餘四視圖 SVG 待做 |
 | W40 | P1 | 專案文件與簡報 | #106 已合併同一固定 Brief 的 Markdown／HTML／SVG、中英文及 Web／Tauri 存檔；其他文件種類、可編輯簡報／播放／下載待做 |
 | W41 | P1 | Actor 決策責任與 follow-up | #101／#103／#105 已合併指定決策者、改善責任、固定治理／會議結果與前次比較，以及有來源的偏差／決策效果與下一步分析；建議仍未採用，判斷品質與自動排程待完成 |
-| W42 | P1 | Idea 到 Review 真實驗收 | 整合候選包含真實磁碟 Git／驗證器及合成 BAT／provider 的會員案例；對話採用到相依派工的整合回歸進行中；真人實機部分由使用者處理 |
+| W42 | P1 | Idea 到 Review 真實驗收 | 本機同帳本會員 fixture 已走到對話採用、相依派工、共用品質與交付、自動 Maintain；後續修復／Review／重啟接續尚未全程通過；真實磁碟 Git／驗證器與合成 provider 不代替真人實機驗收 |
 | W43 | P0 | ProjectLifecycle 與 Idea 長期停留 | #107 已合併；後續分支允許具原政策／基準／完整新鮮工作量證據的 Maintain 決策及有界自動轉入，pause/reopen 仍核對原 epoch，不由階段標籤授權執行 |
 | W44 | P0 | ReleaseBaseline 與發布 receipt | #109 已合併：明確 GitHub Release 或已驗證部署的固定基準、原 repository／channel／commit／receipt、主要基準與歷史、API／MCP／Web／Tauri；registry adapter 與自動進 Maintain 待做 |
-| W45 | P0 | 閒置與 workload coverage | #111 已合併中央工作量、來源涵蓋與穩定期間；整合候選新增完整證據下的 Maintain gate，依原輸入與目前完整觀察排除已完成維護回合；原 worktree 留存不等於活躍或完成 |
+| W45 | P0 | 閒置與 workload coverage | #111／#113 已合併中央工作量、Maintain gate 與原維護回合排除；本機接續分支加入已選一般批次原回合、明確人工單次輸入查核及同一完整 inventory scan 的目前適用性；多次人工輸入或缺證據仍阻擋，工作量觀察不評估品質 |
 | W46 | P1 | Maintainer profile 與政策執行 | #113 已合併 owner 採用的固定來源、路徑、接受條件、驗證、交付上限及預算；有界自有 repair 沿既有工程交接、驗證、PR 建立與 merge/deploy，保留原回合完成／容量釋放及同通道基準更新；M4 同帳本完整流程仍在驗證 |
 | W47 | P1 | 依賴 Issue PR 維護來源 | #111／#112 已合併雙次有界 GitHub PR／checks／statuses／Actions 觀察，及明確設定的 Issue labels、Dependabot 原生 Bot／分支／manifest 與 alerts，保存固定 finding／原始頁面／既有 work 關聯；發布版本適用性與完整依賴掃描仍是 unknown，finding 不授權修復 |
 | W48 | P0 | 維護排程與恢復 | #111／#112 已合併既有 worker 到期檢查與每週 Review、固定窗去重／漏跑合併、原 owner 憑證、並行／期間上限與絕對期限、原 children 查回；API／MCP／Web／Tauri 已接入；自有 repair 流程另見 W46 |
