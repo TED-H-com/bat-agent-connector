@@ -1,8 +1,8 @@
 {
   "schema": "public_ui_screenshots_v1",
-  "frontend_source_commit": "7d7f21f04ed955c41d5ddc584c7c1d6668e29cda",
-  "frontend_source_tree": "79f469fb5227a86617a10e1c1ffd289c29e64249",
-  "captured_at": "2026-10-12T17:06:19.021Z",
+  "frontend_source_commit": "662460311345db7dd0a9fe65ea8010dc3e5e4897",
+  "frontend_source_tree": "fc56fb3fb1b44124813758a5cc0ea366e9793e1a",
+  "captured_at": "2026-10-12T17:46:31.295Z",
   "fixture_clock": "2026-10-12T12:00:00Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -41,11 +41,11 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "8bf85466f2e85ab68e4bf166305aa718b481f42b3546b9f1ad813867fac8c56b"
+      "sha256": "703f21b2a33ae00aef972a732e86202c46c136edda7eec2205cb2df276640b93"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
-      "sha256": "93aa697bd5b06378168bff7c0e0e94dfeaff534b5715f6464c6defcd6bb8899e"
+      "sha256": "0de6a344293b2248ea73f1ca758a2746f5389ce65b3052e304db540a2628431c"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.js",
@@ -63,14 +63,14 @@
   "images": [
     {
       "file": "workspace-en.png",
-      "sha256": "6dacfc1fe0fbeaaf01341dbdcc3c10af761fe1833e658777fbf82efce60a8413",
+      "sha256": "758834ddd8e20c75d9406c5eccd3be5910fcb96466a115edee56f27074cbbb61",
       "scenario": "workspace",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
-      "theme": "dark",
+      "theme": "light",
       "route": "/dashboard/#/work/prj_aaaaaaaaaaaaaaaaaaaa/execution/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "fixture_sources": [
         "desktop/tests/workspace-fixture.ts"
@@ -96,7 +96,7 @@
     },
     {
       "file": "dispatch-en.png",
-      "sha256": "f9decafb27ef2b2ff659c2978909f70bd24667f081f09d3c3e4a68e78b2127f8",
+      "sha256": "84a3aa019c62f98213e5a790df221a6641cc7691124519bc6e5607cc210fa028",
       "scenario": "dispatch",
       "locale": "en-US",
       "viewport": {
@@ -129,7 +129,7 @@
     },
     {
       "file": "pm-planning-en.png",
-      "sha256": "3e254cd79e06eecc88ea6ac79b5ef7dc1988870c3e5b91508bd45e703e42c5f4",
+      "sha256": "000b211c8e96d0f74e11d8c76f67fe257211cf431d311233e82a4c0daa40d1cf",
       "scenario": "pm-planning",
       "locale": "en-US",
       "viewport": {
@@ -162,7 +162,7 @@
     },
     {
       "file": "pm-kanban-en.png",
-      "sha256": "f84ac61369b3adfc2cbcc9497eff25531678bab2341c52564ec52c31e2995bf3",
+      "sha256": "f0b53e3bf37b9b9e11bb855163a220bec677afb594bf2404f2d05b8901de007a",
       "scenario": "pm-kanban",
       "locale": "en-US",
       "viewport": {
@@ -175,7 +175,7 @@
         "desktop/tests/pm-fixture.ts",
         "desktop/tests/pm-kanban-fixture.ts"
       ],
-      "composition": "Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.",
+      "composition": "Seven synthetic work items across the existing five workflow columns; quality remains unassessed, partial sources explicit.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -196,14 +196,14 @@
     },
     {
       "file": "workspace-zh.png",
-      "sha256": "be2cd82b6204df3d86b06d7234f6e66bae48895e469d225fc1ab02f8e725f348",
+      "sha256": "2a15ece9d79a9f55d506724748bdf1b85e4d4a487ac7f8c0947de0b3a3bcf2e5",
       "scenario": "workspace",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
         "height": 960
       },
-      "theme": "dark",
+      "theme": "light",
       "route": "/dashboard/#/work/prj_aaaaaaaaaaaaaaaaaaaa/execution/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "fixture_sources": [
         "desktop/tests/workspace-fixture.ts"
@@ -229,7 +229,7 @@
     },
     {
       "file": "dispatch-zh.png",
-      "sha256": "ace7f8089e6cfee7fe9d5f2fe7f71c9d77410c427fa5423364ce08030f2ede06",
+      "sha256": "4b5dd8e1cd74b88826d09bbc0f0d43b521ba391afc60747ae799cc5a8de66724",
       "scenario": "dispatch",
       "locale": "zh-TW",
       "viewport": {
@@ -262,7 +262,7 @@
     },
     {
       "file": "pm-planning-zh.png",
-      "sha256": "225633b26282137e3e61d61f146f34f4d9573d5d0560a3a559d7bde903ac51ae",
+      "sha256": "355146e7bde6eac57d77a3c1b9d38928a97037f7742f0a0eaf87b2cee52c308c",
       "scenario": "pm-planning",
       "locale": "zh-TW",
       "viewport": {
@@ -295,7 +295,7 @@
     },
     {
       "file": "pm-kanban-zh.png",
-      "sha256": "8cc6de7d990280c4ff6dbc3e23fb297c56499b7a5e39bbc607b819c7c9c6a2bb",
+      "sha256": "aa77bb6f74408981c42fe25b432d42114f8068da6bc53224408bb13f4ac76a54",
       "scenario": "pm-kanban",
       "locale": "zh-TW",
       "viewport": {
@@ -308,7 +308,7 @@
         "desktop/tests/pm-fixture.ts",
         "desktop/tests/pm-kanban-fixture.ts"
       ],
-      "composition": "Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.",
+      "composition": "Seven synthetic work items across the existing five workflow columns; quality remains unassessed, partial sources explicit.",
       "responsive_checks": [
         {
           "viewport": 390,

@@ -117,6 +117,8 @@ try {
   const revision = await revisionResponse.json();
   assert.deepEqual(revision.plan.document.selected_inputs.map(input=>input.input_id), [confirmed.input_id]);
   assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
+  // Planning keeps inputs behind its normal disclosure after reload.
+  await page.locator('[data-pm-information] > summary').click();
   await page.locator('[data-pm-add-input] > summary').click();
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
@@ -198,6 +200,7 @@ try {
   assert.equal(captured.capture.execution_authorized,false);
   const comparison = page.locator('[data-pm-plan-diff]');
   await expect(comparison).toHaveCount(1);
+  await page.locator('[data-pm-plan-comparison] > summary').click();
   await expect(comparison.getByRole('button',{name:'Compare versions',exact:true})).toBeDisabled();
   await comparison.getByLabel('From version',{exact:true}).selectOption(plans.revisions[0].revision_id);
   await comparison.getByLabel('To version',{exact:true}).selectOption(updatedPlans.head.latest_revision_id);

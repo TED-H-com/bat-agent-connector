@@ -6,13 +6,13 @@
 
 Better Agent Dashboard 是人與 coding agents 一起工作的專案工作空間。從討論構想、審閱計畫，到派工給 Agent 的自有工作區，都能把成果接回原需求、測試與交付紀錄。發布後，再依已採用的維護政策觀察問題、處理修復與進行 Review。
 
-**Web 與 Tauri 桌面版共用介面及 Python 後端。**你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
-
-> **開發預覽。** 本頁介紹已合併的功能，截圖來自 `7d7f21f0`（2026 年 10 月 12 日）。PM v1.2 仍在整合；[進度報告](docs/product/progress-2026-10-12.md)分開列出主線、M4／M5 候選與剩餘工作。下載時請核對精確來源及成功的套件驗證，較新的草稿 PR 不等於已發布版本。
-
 ![專案工作空間：專案樹、對話、回覆與關聯成果。](site/images/workspace-zh.png)
 
-*實際共用介面，使用合成展示資料。本次已更新全部公開截圖；[來源與重拍方式](site/images/README.md)。截圖不代表已完成原生安裝或實際環境驗收。*
+*實際介面 · 合成展示資料 · [截圖來源](site/images/README.md)。*
+
+**Web 與 Tauri 桌面版共用介面及 Python 後端。**你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
+
+> **開發預覽。** 本頁介紹已合併的功能，截圖來自 `66246031`（2026 年 10 月 12 日）。PM v1.2 仍在整合；[進度報告](docs/product/progress-2026-10-12.md)分開列出主線、M4／M5 候選與剩餘工作。下載時請核對精確來源及成功的套件驗證，較新的草稿 PR 不等於已發布版本。
 
 ## 它幫你回答什麼
 
@@ -42,6 +42,8 @@ Project Brief、Sprint 與 Kanban 已能引用固定品質評估。M4 候選再�
 ![PM 計畫：檢視固定草稿與來源，再決定是否採用。](site/images/pm-planning-zh.png)
 
 ![PM 看板：追蹤工作及其已記錄的證據。](site/images/pm-kanban-zh.png)
+
+![專案派工：工作指示、目的地與 Agent 設定。](site/images/dispatch-zh.png)
 
 ## 安裝與連線
 

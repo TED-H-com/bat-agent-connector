@@ -14,7 +14,7 @@ import {pmFixture, pmRoute, workspaceId, threadId} from '../desktop/tests/pm-fix
 import {fixture as kanbanFixture} from '../desktop/tests/pm-kanban-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const source = '7d7f21f04ed955c41d5ddc584c7c1d6668e29cda';
+const source = '662460311345db7dd0a9fe65ea8010dc3e5e4897';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = '2026-10-12T12:00:00Z';
@@ -88,8 +88,8 @@ async function prepare(page, scenario, language, locale) {
       selected_inputs: [s.inputs[0]], candidate_inputs: [s.inputs[1]], unknowns: [{slot: 'finance'}]};
     const title = zh ? '文件搜尋：空結果體驗' : 'Documentation search: empty results';
     const markdown = zh
-      ? '# 文件搜尋：空結果體驗\n\n保留搜尋文字與輸入焦點，提供修改查詢的清楚提示。\n\n## 待確認\n\n推薦文件的範圍、驗收方式與投入預算仍待負責人決定。'
-      : '# Documentation search: empty results\n\nPreserve the search text and input focus. Offer a clear suggestion for changing the query.\n\n## Open decisions\n\nThe scope of recommendations, acceptance criteria and budget still need an owner decision.';
+      ? '# 文件搜尋：空結果體驗\n\n讓讀者在搜尋沒有結果時，能修改查詢並繼續找到文件。\n\n## 本輪範圍\n\n- 保留搜尋文字與輸入焦點。\n- 提供清楚的修改查詢提示。\n- 推薦文件不列入本輪。\n\n## 驗收條件草案\n\n- 空結果畫面保留原始查詢。\n- 使用鍵盤即可修改並重新搜尋。\n- 中英文介面都有可理解的下一步。\n\n## 待確認\n\n驗收條件與投入預算仍待負責人審閱。本版尚未採用。'
+      : '# Documentation search: empty results\n\nHelp readers refine an empty search and continue finding documentation.\n\n## Scope for this iteration\n\n- Preserve the search text and input focus.\n- Offer a clear suggestion for changing the query.\n- Keep document recommendations outside this iteration.\n\n## Proposed acceptance criteria\n\n- The empty-results view retains the original query.\n- Readers can edit and search again using the keyboard.\n- English and Chinese views offer a clear next step.\n\n## Open decisions\n\nAcceptance criteria and budget still need an owner review. This revision has not been adopted.';
     await f.dispatch({method: 'POST', path: '/operations', idempotency_key: 'public-synthetic-plan',
       body: {action: 'pm.plan.draft', target: {workspace_id: workspaceId, thread_id: threadId},
         params: {title, markdown, previous_revision_id: null}, preconditions: {expected_version: 1, expected_plan_version: 0}}});
@@ -103,9 +103,35 @@ async function prepare(page, scenario, language, locale) {
       check: () => {assert.equal(s.writes.length, 1); assert.equal(s.planHead.accepted_revision_id, null);}};
   }
   const board = kanbanFixture();
-  board.state.cards = board.state.cards.slice(0, 2);
-  board.state.cards[0].work.title = zh ? '保留搜尋文字與輸入焦點' : 'Preserve search text and input focus';
-  board.state.cards[1].work.title = zh ? '審閱空結果提示文字' : 'Review the empty-results message';
+  const examples = [
+    ['backlog', '確認鍵盤操作的驗收條件', 'Define keyboard acceptance criteria'],
+    ['backlog', '整理繁體中文提示文字', 'Prepare Traditional Chinese copy'],
+    ['in_progress', '保留搜尋文字與輸入焦點', 'Preserve search text and input focus'],
+    ['in_progress', '補上空結果回歸測試', 'Add empty-results regression tests'],
+    ['waiting', '確認推薦文件是否列入範圍', 'Decide the scope of recommendations'],
+    ['review', '審閱空結果提示文字', 'Review the empty-results message'],
+    ['accepted', '整理現有搜尋流程', 'Document the current search flow'],
+  ];
+  board.state.cards = examples.map(([column, chinese, english], i) => {
+    const card = structuredClone(board.state.cards[column === 'accepted' ? 2 : column === 'review' ? 1 : 0]);
+    const id = 'wi_' + String(i + 1).repeat(20);
+    card.work_item_id = card.binding.work_item_id = card.work.work_item_id = id;
+    card.binding.sequence = i + 1;
+    card.binding.binding_id = 'pmwb_' + String(i + 1).repeat(32);
+    card.binding.requirement_ids = ['search.empty_results'];
+    card.work.title = zh ? chinese : english;
+    card.work.state = column === 'accepted' || column === 'review' ? 'done' : column === 'backlog' ? 'todo' : 'doing';
+    card.column = column;
+    card.completion = {approved: column === 'accepted', pending: column === 'review'};
+    card.flow.wip = ['in_progress', 'waiting', 'review'].includes(column);
+    card.flow.age_seconds = card.flow.wip ? 7800 + i * 3600 : null;
+    card.latest_capture = null;
+    if (column !== 'in_progress') {
+      card.execution.accepted_attempts = 0;
+      card.execution.tasks = []; card.execution.attempts = []; card.execution.operations = [];
+    }
+    return card;
+  });
   await mountConversation(page, false, async input => {
     const pathname = new URL(input.path, 'http://fixture').pathname;
     if (pathname.includes('/kanban')) return board.dispatch(input);
@@ -116,10 +142,10 @@ async function prepare(page, scenario, language, locale) {
   });
   const route = '/dashboard/#/pm/' + workspaceId;
   await page.goto(origin + route);
-  await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
+  await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(examples.length);
   await expect(page.locator('[data-pm-kanban] h2')).toHaveText(zh ? '工作看板' : 'Work board');
   return {route, fixtures: ['desktop/tests/pm-fixture.ts', 'desktop/tests/pm-kanban-fixture.ts'],
-    composition: 'Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.',
+    composition: 'Seven synthetic work items across the existing five workflow columns; quality remains unassessed, partial sources explicit.',
     check: () => {assert.equal(board.state.writes.length, 0); assert.equal(f.state.writes.length, 0);}};
 }
 
@@ -137,7 +163,7 @@ try {
   }
   for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) {
     for (const scenario of ['workspace', 'dispatch', 'pm-planning', 'pm-kanban']) {
-      const theme = scenario === 'workspace' ? 'dark' : 'light';
+      const theme = 'light';
       const context = await browser.newContext({locale, viewport, timezoneId: 'UTC', colorScheme: theme, reducedMotion: 'reduce', serviceWorkers: 'block'});
       try {
         const blocked = [], errors = [];
@@ -153,8 +179,13 @@ try {
         const responsive = [];
         for (const width of [390, 768, 1440]) {
           await page.setViewportSize({width, height: viewport.height});
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          });
           if (scene.anchor) await page.locator(scene.anchor).evaluate(element => window.scrollTo(0,
-            element.getBoundingClientRect().top + window.scrollY - document.querySelector('header.top').getBoundingClientRect().height - 24));
+            element.getBoundingClientRect().top + window.scrollY - document.querySelector('header.top').getBoundingClientRect().height));
           else await page.evaluate(() => window.scrollTo(0, 0));
           await page.evaluate(() => document.fonts.ready);
           const dimensions = await page.evaluate(() => ({viewport: window.innerWidth, content: document.documentElement.scrollWidth}));

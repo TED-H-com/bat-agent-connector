@@ -1,7 +1,7 @@
 # Product screenshots
 
 These eight unedited PNGs show the real shared browser frontend at merged main
-`c0027daa61827bd2e505331012b7916bcf71ce9a`, captured on 2026-10-12 with synthetic API
+`662460311345db7dd0a9fe65ea8010dc3e5e4897`, captured on 2026-10-12 with synthetic API
 fixtures. They do not show customer data or establish native installation, live
 provider acceptance, completed delivery, or features from later branches.
 
@@ -9,12 +9,12 @@ provider acceptance, completed delivery, or features from later branches.
 | --- | --- |
 | `workspace-en.png`, `workspace-zh.png` | Project tree, original conversation, reply composer and result inspector. The example is still running and its result is unverified. |
 | `dispatch-en.png`, `dispatch-zh.png` | An unsubmitted project dispatch form with an explicit repository/host/workspace selection. No version preview or execution is requested. |
-| `pm-planning-en.png`, `pm-planning-zh.png` | A fixed Planning revision beside selected inputs and retained questions. It has not been adopted; acceptance criteria and budget remain undecided. |
-| `pm-kanban-en.png`, `pm-kanban-zh.png` | The existing workspace work-flow panel with in-progress and review rows, unassessed DoD, and explicit incomplete source coverage. Send acceptance is not delivery acceptance. |
+| `pm-planning-en.png`, `pm-planning-zh.png` | A fixed Planning revision with scope, proposed acceptance criteria and open decisions. It has not been adopted; acceptance and budget still need an owner review. |
+| `pm-kanban-en.png`, `pm-kanban-zh.png` | Seven synthetic work items in the existing five workflow columns, unassessed DoD, and explicit incomplete source coverage. Content approval is not delivery acceptance. |
 
 Public images are 1440 × 960. English uses browser locale `en-US`; Traditional
-Chinese uses `zh-TW`. Workspace uses the existing dark theme; the other scenes use
-the existing light theme. The capture opens normal disclosures, fills an
+Chinese uses `zh-TW`. All scenes use the existing light theme for a consistent
+tour; the application also supports the system dark theme. The capture opens normal disclosures, fills an
 unsubmitted form and scrolls the page. It does not replace, hide or rewrite DOM
 content. Fixture setup and the immutable draft are synthetic server responses.
 
@@ -30,12 +30,11 @@ To repeat this capture:
    Install the Playwright Chromium browser if it is not already available.
 2. Run `npm run check:browser` from `desktop/` to check the committed shared assets.
 3. From the repository root, run the following. Keep temporary data on disk; the
-   shared lock serializes this browser run with other local checks.
+   browser capture does not require a backend test run.
 
    ```sh
    mkdir -p "$HOME/agent-work/tmp/native-pm"
-   flock "$HOME/agent-work/tmp/pm-v12-check.lock" \
-     env TMPDIR="$HOME/agent-work/tmp/native-pm" \
+   env TMPDIR="$HOME/agent-work/tmp/native-pm" \
      CAPTURE_REVIEW_DIR="$HOME/agent-work/tmp/public-screenshot-review" \
      node --experimental-strip-types scripts/capture_site.mjs
    ```
