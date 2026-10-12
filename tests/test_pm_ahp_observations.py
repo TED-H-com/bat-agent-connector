@@ -1,6 +1,7 @@
 """Original AHP read receipts, authority and lifecycle with actual offline sockets."""
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
 from dataclasses import replace
@@ -13,7 +14,7 @@ from bat_agent_connector import pm_ahp_observations as ahp
 from bat_agent_connector.operations import OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
-from tests.test_ahp_observer import SESSION, TOKEN
+from tests.test_ahp_observer import SESSION, TOKEN, stable_010
 from tests.test_ahp_observer import host as ahp_host
 from tests.test_pm_workspace import OWNER, create, member
 from tests.test_pm_workspace import ops as workspace_ops
@@ -264,7 +265,7 @@ async def test_reconnect_cannot_orphan_retained_snapshots_or_events_from_origina
     assert refreshed['status'] == 'succeeded' and refreshed['result']['coverage_status'] == 'incomplete'
     oid = refreshed['result']['observation_id']
     document = json.loads(ops.db.execute('SELECT document FROM pm_ahp_observations WHERE observation_id=?', (oid,)).fetchone()[0])
-    original_source = {'resource': SESSION, 'source_identity': ahp.provider.digest({
+    original_source = {'resource': SESSION, 'source_kind': 'session', 'source_identity': ahp.provider.digest({
         key: SUMMARY[key] for key in ('resource', 'provider', 'createdAt')})}
     assert original_source in document['original_sources']
     assert document['evidence']['events'][0]['original_sources'] == [original_source]
@@ -286,3 +287,101 @@ async def test_reconnect_cannot_orphan_retained_snapshots_or_events_from_origina
         for event in ops.journal.api_events(0, 500)['events']
         if event['body'].get('operation_id') == refreshed['operation_id'] or event['resource_id'] == refreshed['operation_id'])
     assert len(host.requests) == requests
+
+
+@pytest.mark.parametrize('withdraw', ['empty_catalog', 'new_incarnation', 'session_notification', 'changeset_missing'])
+async def test_stable_original_sources_gate_whole_receipt_operation_and_events(ready, withdraw):
+    ops, host, wid, principal = ready
+    stable_010(host)
+    params = {'session_uris': [host.session], 'include_changesets': True}
+    original = await run(ready, params=params)
+    assert original['status'] == 'succeeded', original
+    oid = original['result']['observation_id']
+    detail = ahp.get_observation(ops, principal, wid, oid)['observation']
+    evidence = detail['document']['evidence']
+    assert evidence['status'] == 'observed' and evidence['negotiated_version'] == '0.10.0'
+    assert {s['source_kind'] for s in detail['document']['original_sources']} == {'session', 'changeset'}
+    assert ahp.operation_visible(ops.db, principal, original)
+    if withdraw == 'empty_catalog':
+        host.catalog = []
+    elif withdraw == 'new_incarnation':
+        host.catalog[0]['createdAt'] = '2026-10-12T00:00:00Z'
+    else:
+        first = host.connections + 1
+        async def change(ws, req, connection):
+            if req['method'] == 'subscribe' and req['params']['channel'] == host.changeset:
+                if withdraw == 'session_notification':
+                    await ws.send(json.dumps({'jsonrpc': '2.0', 'method': 'root/sessionRemoved',
+                        'params': {'channel': ahp.provider.ROOT, 'session': host.session}}))
+                elif connection == first:
+                    await ws.close()
+                    return True
+            return False
+        host.on_request = change
+        host.reconnect = {'type': 'replay', 'actions': [], 'missing': [host.changeset]}
+    refreshed = await run(ready, params=params, idempotency_key='stable-withdrawal')
+    assert refreshed['status'] == 'succeeded', refreshed
+    assert not pm_access.visible(ops.db, principal, original)
+    assert not any(pm_access.event_visible(ops.db, principal, event)
+        for event in ops.journal.api_events(0, 500)['events']
+        if event['body'].get('operation_id') == original['operation_id'] or event['resource_id'] == original['operation_id'])
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ahp.get_observation(ops, principal, wid, oid)
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ops.create(principal, **request(wid, params=params))
+    assert oid not in {item['observation_id'] for item in ahp.list_observations(ops, principal, wid)['observations']}
+    saved = ops.db.execute('SELECT document,document_digest FROM pm_ahp_observations WHERE observation_id=?', (oid,)).fetchone()
+    assert json.loads(saved[0]) == detail['document'] and saved[1] == detail['document_digest']
+
+
+async def test_stable_over_limit_catalog_cannot_revoke_original_identity(ready):
+    ops, host, wid, principal = ready
+    stable_010(host)
+    params = {'session_uris': [host.session], 'include_changesets': True}
+    original = await run(ready, params=params)
+    host.catalog = [{**host.catalog[0], 'resource': f'copilot:/large-{i}'} for i in range(201)]
+    refreshed = await run(ready, params=params, idempotency_key='oversized-catalog')
+    assert refreshed['status'] == 'succeeded' and refreshed['result']['coverage_status'] == 'incomplete'
+    assert ahp.operation_visible(ops.db, principal, original)
+
+
+async def test_legacy_projection_upgrade_uses_frozen_relations_and_preserves_document_bytes(ready, tmp_path):
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    row = dict(ops.db.execute('SELECT * FROM pm_ahp_observations WHERE operation_id=?', (original['operation_id'],)).fetchone())
+    document = copy.deepcopy(json.loads(row['document']))
+    def old_shape(value):
+        if isinstance(value, dict):
+            value.pop('source_kind', None)
+            for item in value.values():
+                old_shape(item)
+        elif isinstance(value, list):
+            for item in value:
+                old_shape(item)
+    old_shape(document)
+    for key in ('negotiated_version', 'decoder_profile'):
+        document['evidence'].pop(key)
+    row['document'], row['document_digest'] = json.dumps(document), ahp.provider.digest(document)
+    legacy = Journal(tmp_path / 'legacy-ahp.sqlite')
+    try:
+        legacy.db.execute(ops.db.execute("SELECT sql FROM sqlite_master WHERE name='pm_ahp_observations'").fetchone()[0])
+        legacy.db.execute('''CREATE TABLE pm_ahp_resource_access (
+            adapter_id TEXT NOT NULL, binding_digest TEXT NOT NULL, resource TEXT NOT NULL,
+            source_identity TEXT NOT NULL, available INTEGER NOT NULL,
+            PRIMARY KEY(adapter_id,binding_digest,resource,source_identity))''')
+        legacy.db.execute('INSERT INTO pm_ahp_observations VALUES(' + ','.join('?' for _ in row) + ')', tuple(row.values()))
+        legacy.db.executemany('INSERT INTO pm_ahp_resource_access VALUES(?,?,?,?,?)',
+            [tuple(r) for r in ops.db.execute('SELECT adapter_id,binding_digest,resource,source_identity,available FROM pm_ahp_resource_access')])
+        legacy.db.execute('INSERT INTO pm_ahp_resource_access VALUES(?,?,?,?,?)',
+            ('local', host.adapter.binding_digest(), 'copilot:/unproven', 'f' * 64, 1))
+        version = legacy.db.execute('PRAGMA user_version').fetchone()[0]
+        ahp.schema(legacy)
+        ahp.schema(legacy)
+        assert legacy.db.execute('PRAGMA user_version').fetchone()[0] == version
+        assert dict(legacy.db.execute('SELECT * FROM pm_ahp_observations').fetchone()) == row
+        assert {(r['source_kind'], r['available']) for r in legacy.db.execute('SELECT * FROM pm_ahp_resource_access')} == {
+            ('session', 1), ('changeset', 1), (None, 0)}
+        # Historical documents have no kind field; access remains original-fact gated.
+        ahp._sources_access(legacy.db, 'local', host.adapter.binding_digest(), document['original_sources'])
+    finally:
+        legacy.close()

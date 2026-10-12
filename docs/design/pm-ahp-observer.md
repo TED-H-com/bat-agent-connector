@@ -1,12 +1,13 @@
 # W22-A: bounded AHP observation
 
-Connector implements a read subset of the official Agent Host Protocol 1.0.0,
+Connector implements explicit read profiles for Agent Host Protocol 1.0.0 and
+the VS Code 1.141.0 distribution's 0.10.0 wire contract. The upstream 1.0 profile is
 pinned to `microsoft/agent-host-protocol` tag `spec/v1.0.0`, commit
 `5f16d81bb7045b66d7bc768d244feab75002d943`. Primary contracts:
 [transport](https://microsoft.github.io/agent-host-protocol/specification/transport.html),
 [lifecycle and reconnect](https://microsoft.github.io/agent-host-protocol/specification/lifecycle.html),
 [session channels](https://microsoft.github.io/agent-host-protocol/specification/session-channel.html),
-and [VS Code local endpoint](https://github.com/microsoft/vscode/blob/main/src/vs/platform/agentHost/LOCAL_ENDPOINT.md).
+and [VS Code local endpoint](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/LOCAL_ENDPOINT.md).
 This is AHP, not ACP or MCP. Product names and a negotiated version do not prove
 execution/tool restrictions. No live host version has been accepted by this slice.
 
@@ -62,10 +63,17 @@ actual current in-memory configuration, not just this projection.
 
 The caller can select only an administrator-configured adapter ID. Endpoint, token,
 provider commands, arbitrary resource reads and ownership claims are rejected.
-Select at most eight distinct session URIs; each must be positively advertised by
+Select at most eight distinct original session URIs; each must be positively advertised by
 the fresh catalog before a subscription is sent. Empty selection reads only the
-catalog. Changesets are at most sixteen exact static `ahp-changeset:` URIs advertised
-by a selected session. Dynamic templates, content bytes, review mutations and
+catalog. The 1.0 profile accepts `ahp-session:` identities; the VS Code 0.10 profile
+accepts provider session identities such as `copilot:/<native-id>` only when the
+advertised provider matches that scheme. This syntax is not an ownership claim.
+Neither profile rewrites native identities into aliases. File/network resource
+URIs cannot be selected as sessions. Changesets are at most sixteen exact static
+URIs advertised by a selected session: the nested `<original-session>/changeset/<id>`
+shape used by VS Code, plus 1.0 `ahp-changeset:` advertisements. Their source kind
+and parent are fixed from the original advertisement, not inferred from a URI prefix.
+Dynamic templates, content bytes, review mutations and
 changeset operations are not implemented.
 
 Every original application frame and the final local record check cancellation,
@@ -98,7 +106,13 @@ There is no second daemon, queue, journal, model engine or new authority tier.
 
 The sole outbound application methods are `initialize`, `reconnect`, `listSessions`
 and `subscribe`. WebSocket protocol close is transport cleanup only. Initialization
-negotiates exactly 1.0.0 and subscribes only to the root. Session catalog pagination
+offers exactly `1.0.0` and `0.10.0` and subscribes only to the root. The returned
+version must map to `ahp_1_0_observer_v1` or `vscode_0_10_observer_v1`; other versions
+fail before catalog reads. Every receipt saves `negotiated_version` and
+`decoder_profile` (null when negotiation never succeeded). `serverInfo` is retained
+as informational metadata and never selects a decoder or proves host capabilities.
+Reconnect retains the original version/profile and client ID; it cannot negotiate
+a replacement version or fall back to a second initialize. Session catalog pagination
 is connection-local; every reconnect refreshes the catalog without reusing cursors.
 There is at most one reconnect using the original client ID, subscribed native URIs
 and highest observed server sequence. RPC refusal does not invoke sign-in, session
@@ -106,6 +120,13 @@ creation, initialize fallback or any write. Replay deduplicates identical origin
 sequence/envelope digests and rejects conflicting identities. Sequences can have
 gaps due to channel filtering; the observer never invents contiguous event history.
 Snapshot fallback records an explicit gap, not a replay claim.
+
+VS Code 1.141.0 ignores the `listSessions` limit/cursor hint and returns the whole
+catalog. Its profile accepts one page up to the unchanged 200-session total limit;
+an oversized result remains incomplete and establishes no absence. The 1.0 profile
+retains its 50-item page bound. Both retain byte/frame/page limits and cursor-cycle
+checks. Root catalog notifications invalidate completeness; reconnect rereads the
+catalog because those notifications are not replayed.
 
 Limits: 30 seconds total from the first durable start receipt (not reset by retry),
 1 MiB per frame, 4 MiB total, 512 frames, eight catalog pages, 200 catalog sessions,
@@ -155,6 +176,46 @@ counts, titles, operation results and events. Documents remain immutable; histor
 GET performs no network calls. Missing-source meaning remains disposed-or-withdrawn,
 never "finished". An endpoint grant does not bypass existing Connector source lineage;
 this slice does not attach AHP resources to BAT/Task/PM writer ownership at all.
+
+The mutable access projection stores explicit `source_kind` (`session` or
+`changeset`). Complete catalogs withdraw all missing session identities by this
+kind, including provider-scheme identities. Upgrade adds the column idempotently
+and reconstructs old kinds from the original immutable catalogs and receipt parent
+relations. It does not rewrite document bytes/digests, allocate a schema
+`user_version`, or identify resources by filesystem path. Unproven old projection
+rows remain unavailable. Old 1.0 identity digests and historical access are preserved.
+
+## Pinned wire evidence and validation boundary
+
+The offline socket fixtures use synthetic data shaped from the following fixed
+official sources. This is source-level compatibility evidence, not installation
+or live-host acceptance; `tested_host_versions` remains empty and
+`live_host_verified` remains false.
+
+| Contract | Pinned source |
+| --- | --- |
+| Upstream 1.0.0 | `microsoft/agent-host-protocol`, `spec/v1.0.0`, `5f16d81bb7045b66d7bc768d244feab75002d943`; local research checkout `ahp-source-v1` |
+| VS Code stable distribution | [1.141.0](https://github.com/microsoft/vscode/releases/tag/1.141.0), `2a59476c9bfcb90b3ddc372c36762471b7dfad1c`; [version registry](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/version/registry.ts#L19) advertises 0.10.0 |
+| initialize, reconnect, subscribe, pagination envelopes | [common/commands.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/common/commands.ts), interfaces at lines 151/228, 422/462, 481/539, 75/99 |
+| Snapshot, ContentRef, FileEdit, ActionEnvelope | [common/state.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/common/state.ts), [common/actions.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/common/actions.ts) |
+| listSessions, SessionSummary, SessionState | [channels-root/commands.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-root/commands.ts), [channels-session/state.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-session/state.ts) |
+| root session notifications | [channels-root/notifications.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-root/notifications.ts) |
+| Changeset catalogue, state and file records | [channels-changeset/state.ts](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/state/protocol/channels-changeset/state.ts) |
+| Actual provider session URI, whole-catalog result, static nested changeset | [common/agent.ts:1137](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/agent.ts#L1137), [node/protocolServerHandler.ts:1725](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/node/protocolServerHandler.ts#L1725), [common/changesetUri.ts:417](https://github.com/microsoft/vscode/blob/2a59476c9bfcb90b3ddc372c36762471b7dfad1c/src/vs/platform/agentHost/common/changesetUri.ts#L417) |
+
+These shared wire declarations match the upstream 1.0 read subset after removing
+comments/imports. The 0.10 optional `SessionChatSummary.archived` field is not
+retained, like other chat details. Declaration equality does not erase the actual
+URI and pagination implementation differences above.
+
+For later validation, fixed VS Code main source
+`80101bda7057c6f2081cc64f510b6fa3cbf2de5b` (package version 1.142.0) advertises
+1.1.0 with a 1.0.0 compatibility baseline and an explicit 0.10 shim in
+[agentHostProtocolCompatibility.ts](https://github.com/microsoft/vscode/blob/80101bda7057c6f2081cc64f510b6fa3cbf2de5b/src/vs/platform/agentHost/common/agentHostProtocolCompatibility.ts).
+It is a fixed source option, not a verified installed distribution. A future 1.1
+decoder is not enabled by that version string. Editor socket/named-pipe transport,
+headless configuration, credentials and real provider behavior remain outside the
+current explicitly configured TCP fixture acceptance.
 
 ## Remaining M5 work
 

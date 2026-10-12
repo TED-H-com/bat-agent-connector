@@ -34,6 +34,8 @@ class Host:
         self.requests, self.connections = [], 0
         self.on_request = None
         self.reconnect = {'type': 'replay', 'actions': [], 'missing': []}
+        self.version = '1.0.0'
+        self.session, self.changeset = SESSION, CHANGESET
         self.session_state = copy.deepcopy(STATE)
         self.catalog = [copy.deepcopy(SUMMARY)]
         self.closed = 0
@@ -52,17 +54,17 @@ class Host:
                 method, params = request['method'], request['params']
                 assert method in ahp.METHODS
                 if method == 'initialize':
-                    result = {'protocolVersion': '1.0.0', 'serverSeq': 10,
+                    result = {'protocolVersion': self.version, 'serverSeq': 10,
                               'serverInfo': {'name': 'offline-host', 'version': 'fixture-only'},
                               'snapshots': [snapshot(ahp.ROOT, {'agents': [{'config': TOKEN}]})]}
                 elif method == 'listSessions':
                     result = {'items': self.catalog}
                 elif method == 'reconnect':
                     result = self.reconnect
-                elif params['channel'] == SESSION:
-                    result = {'snapshot': snapshot(SESSION, self.session_state)}
-                elif params['channel'] == CHANGESET:
-                    result = {'snapshot': snapshot(CHANGESET, {'status': 'ready', 'files': [
+                elif params['channel'] == self.session:
+                    result = {'snapshot': snapshot(self.session, self.session_state)}
+                elif params['channel'] == self.changeset:
+                    result = {'snapshot': snapshot(self.changeset, {'status': 'ready', 'files': [
                         {'id': 'file-1', 'edit': {'before': {'uri': 'file:///human/checkout/a.py',
                             'content': {'uri': 'data:secret-code'}}, 'after': {'uri': 'file:///human/checkout/b.py'},
                             'diff': {'added': 2, 'removed': 1}}}], 'operations': [{'id': 'apply'}]})}
@@ -84,8 +86,26 @@ async def host(monkeypatch):
 
 
 def observer(host, *, check=lambda: None, selected=None):
-    return ahp.Observer(host.adapter, client_id='original-observer-id', selected=[SESSION] if selected is None else selected,
+    return ahp.Observer(host.adapter, client_id='original-observer-id', selected=[host.session] if selected is None else selected,
                         changesets=True, check=check)
+
+
+def stable_010(host):
+    """Official VS Code 1.141.0@2a59476 shapes; synthetic data, no real host.
+
+    common/agent.ts AgentSession.uri; node/protocolServerHandler.ts listSessions;
+    common/changesetUri.ts buildDefaultChangesetCatalog. The server intentionally
+    ignores the catalog limit hint, as that pinned implementation does.
+    """
+    host.version = '0.10.0'
+    host.session = 'copilot:/11111111-1111-4111-8111-111111111111'
+    host.changeset = host.session + '/changeset/session'
+    host.catalog = [{**SUMMARY, 'resource': host.session, 'provider': 'copilot',
+        'chats': [{'resource': host.session + '/chat/default', 'title': 'Original chat', 'archived': True}]}]
+    host.session_state = {**host.catalog[0], 'lifecycle': 'ready', 'changesets': [
+        {'label': 'Session Changes', 'uriTemplate': host.changeset, 'changeKind': 'session'}]}
+    host.session_state.pop('createdAt')
+    host.session_state.pop('modifiedAt')
 
 
 async def test_actual_catalog_selected_static_changesets_and_secret_minimization(host):
@@ -251,7 +271,7 @@ async def test_session_state_without_catalog_only_timestamps_keeps_original_iden
     assert result['status'] == 'observed'
     session = next(item for item in result['snapshots'] if item['resource'] == SESSION)
     assert session['original_sources'] == [{
-        'resource': SESSION, 'source_identity': result['catalog'][0]['source_identity']}]
+        'resource': SESSION, 'source_identity': result['catalog'][0]['source_identity'], 'source_kind': 'session'}]
 
 
 @pytest.mark.parametrize('field,value', [('provider', 'different-provider'), ('createdAt', '2026-10-12T00:00:00Z')])
@@ -297,3 +317,136 @@ async def test_upgrade_redirect_never_transmits_credential_to_second_endpoint(mo
             result = await ahp.Observer(adapter, client_id='redirect-fixture', selected=[], changesets=False, check=lambda: None).collect()
     assert result['status'] == 'incomplete' and not received
     assert TOKEN not in json.dumps(result)
+
+
+async def test_stable_010_original_provider_uris_nested_changeset_and_whole_catalog(host):
+    stable_010(host)
+    host.catalog += [{**host.catalog[0], 'resource': f'copilot:/catalog-{i}'} for i in range(79)]
+    result = await observer(host).collect()
+    assert result['status'] == 'observed' and result['catalog_complete']
+    assert result['protocol_version'] == result['negotiated_version'] == '0.10.0'
+    assert result['decoder_profile'] == 'vscode_0_10_observer_v1'
+    assert len(result['catalog']) == 80 and result['pages'] == 1
+    assert host.requests[0][1]['params']['protocolVersions'] == ['1.0.0', '0.10.0']
+    assert result['changeset_owners'] == {host.changeset: host.session}
+    assert [r['params']['channel'] for _, r in host.requests if r['method'] == 'subscribe'] == [host.session, host.changeset]
+    assert [s['source_kind'] for s in result['snapshots']] == ['root', 'session', 'changeset']
+    assert result['snapshots'][2]['original_sources'][0]['resource'] == host.session
+    assert result['snapshots'][2]['state']['files'][0]['edit']['diff'] == {'added': 2, 'removed': 1}
+    assert all(row['ownership'] == 'foreign_or_manual' for row in result['catalog'])
+    assert 'archived' not in json.dumps(result) and 'data:secret-code' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('version', ['1.0.0', '0.10.0'])
+@pytest.mark.parametrize('mode', ['replay', 'snapshot', 'missing'])
+async def test_profiles_preserve_original_decoder_and_exact_resources_on_reconnect(host, version, mode):
+    if version == '0.10.0':
+        stable_010(host)
+    original = host.session
+    if mode == 'snapshot':
+        host.reconnect = {'type': mode, 'snapshots': [snapshot(ahp.ROOT, {}, 30), snapshot(original, host.session_state, 30)]}
+    else:
+        host.reconnect = {'type': 'replay', 'actions': [] if mode == 'missing' else [
+            {'channel': original, 'serverSeq': 12, 'action': {'type': 'session/titleChanged'}}],
+            'missing': [original] if mode == 'missing' else []}
+    async def drop(ws, req, connection):
+        if connection == 1 and req['method'] == 'subscribe' and req['params']['channel'] == host.changeset:
+            await ws.close()
+            return True
+        return False
+    host.on_request = drop
+    result = await observer(host).collect()
+    assert result['negotiated_version'] == version and result['decoder_profile'] == ahp.PROFILES[version]
+    assert sum(r['method'] == 'initialize' for _, r in host.requests) == 1
+    rec = next(r for _, r in host.requests if r['method'] == 'reconnect')
+    assert rec['params']['subscriptions'] == [ahp.ROOT, original, host.changeset]
+    assert 'protocolVersions' not in rec['params']
+    assert result['status'] == ('incomplete' if mode == 'missing' else 'observed')
+    if mode != 'missing':
+        session = next(s for s in result['snapshots'] if s['resource'] == original)
+        assert session['original_sources'][0]['source_identity'] == result['catalog'][0]['source_identity']
+
+
+async def test_reconnect_cannot_upgrade_original_profile_or_fall_back_to_initialize(host):
+    stable_010(host)
+    host.reconnect = {'type': 'replay', 'actions': [], 'missing': [], 'protocolVersion': '1.0.0'}
+    async def drop(ws, req, connection):
+        if connection == 1 and req['method'] == 'subscribe':
+            await ws.close()
+            return True
+        return False
+    host.on_request = drop
+    result = await observer(host).collect()
+    assert result['reason'] == 'protocol_version_changed'
+    assert result['negotiated_version'] == '0.10.0'
+    assert [r['method'] for c, r in host.requests if c == 2] == ['reconnect']
+
+
+@pytest.mark.parametrize('version', ['0.9.0', '1.1.0', None, ['0.10.0']])
+async def test_unregistered_version_never_uses_server_info_as_negotiation_authority(host, version):
+    async def misleading(ws, req, connection):
+        await ws.send(json.dumps({'jsonrpc': '2.0', 'id': req['id'], 'result': {
+            'protocolVersion': version, 'serverSeq': 10, 'serverInfo': {'name': 'VS Code', 'version': '1.141.0'},
+            'snapshots': [snapshot(ahp.ROOT, {})]}}))
+        return True
+    host.on_request = misleading
+    result = await observer(host).collect()
+    assert result['reason'] == 'protocol_version_unsupported'
+    assert result['negotiated_version'] is result['decoder_profile'] is None
+    assert [r['method'] for _, r in host.requests] == ['initialize']
+
+
+@pytest.mark.parametrize('bad_uri,provider', [
+    ('file:/human', 'file'), ('https:/private', 'https'), ('copilot:/one/two', 'copilot'),
+    ('ahp-session:/one', 'copilot'), ('copilot:/one', 'claude')])
+async def test_stable_profile_rejects_non_session_or_provider_mismatched_catalog(host, bad_uri, provider):
+    stable_010(host)
+    host.catalog[0].update(resource=bad_uri, provider=provider)
+    result = await observer(host).collect()
+    assert result['reason'] == 'invalid_session_summary' and not result['catalog_complete']
+    assert [r['method'] for _, r in host.requests] == ['initialize', 'listSessions']
+
+
+async def test_stable_whole_catalog_bound_is_not_a_truncated_absence_proof(host):
+    stable_010(host)
+    host.catalog += [{**host.catalog[0], 'resource': f'copilot:/catalog-{i}'} for i in range(200)]
+    result = await observer(host).collect()
+    assert result['status'] == 'incomplete' and not result['catalog_complete']
+    assert not result['positive_catalog'] and not result['missing']
+    assert not any(r['method'] == 'subscribe' for _, r in host.requests)
+
+
+@pytest.mark.parametrize('version', ['1.0.0', '0.10.0'])
+async def test_nested_changesets_use_exact_advertised_parent_and_static_shape(host, version):
+    if version == '0.10.0':
+        stable_010(host)
+    host.changeset = host.session + '/changeset/session'
+    templates = [host.changeset, host.session + '/changeset/{turnId}',
+        'copilot:/other/changeset/session', 'file:///human/checkout', host.session + '/changeset/']
+    host.session_state['changesets'] = [{'label': 'Changes', 'uriTemplate': uri, 'changeKind': 'session'} for uri in templates]
+    result = await observer(host).collect()
+    assert result['status'] == 'observed'
+    assert [e['read_supported'] for e in result['snapshots'][1]['state']['changesets']] == [True, False, False, False, False]
+    assert [r['params']['channel'] for _, r in host.requests if r['method'] == 'subscribe'] == [host.session, host.changeset]
+
+
+@pytest.mark.parametrize('version', ['1.0.0', '0.10.0'])
+@pytest.mark.parametrize('method', ['root/sessionAdded', 'root/sessionSummaryChanged'])
+async def test_root_notifications_invalidate_catalog_without_retaining_private_payload(host, version, method):
+    if version == '0.10.0':
+        stable_010(host)
+    async def notify(ws, req, connection):
+        if req['method'] == 'listSessions':
+            params = {'channel': ahp.ROOT}
+            if method == 'root/sessionAdded':
+                params['summary'] = {**host.catalog[0], 'title': 'Unretained notification title'}
+            else:
+                params.update(session=host.session, changes={'title': 'Unretained notification title'})
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'method': method, 'params': params}))
+        return False
+    host.on_request = notify
+    result = await observer(host).collect()
+    assert result['reason'] == 'catalog_changed_during_capture' and not result['catalog_complete']
+    assert result['notifications'][0]['method'] == method
+    assert 'Unretained notification title' not in json.dumps(result)
+    assert all(r['method'] in ahp.METHODS for _, r in host.requests)

@@ -40,8 +40,26 @@ def schema(journal):
             actor TEXT NOT NULL, operation_id TEXT NOT NULL UNIQUE)''')
         journal.db.execute('''CREATE TABLE IF NOT EXISTS pm_ahp_resource_access (
             adapter_id TEXT NOT NULL, binding_digest TEXT NOT NULL, resource TEXT NOT NULL,
-            source_identity TEXT NOT NULL, available INTEGER NOT NULL,
+            source_identity TEXT NOT NULL, available INTEGER NOT NULL, source_kind TEXT,
             PRIMARY KEY(adapter_id,binding_digest,resource,source_identity))''')
+        columns = {row[1] for row in journal.db.execute('PRAGMA table_info(pm_ahp_resource_access)')}
+        if 'source_kind' not in columns:
+            journal.db.execute('ALTER TABLE pm_ahp_resource_access ADD COLUMN source_kind TEXT')
+            # Upgrade the current access projection from original immutable facts,
+            # not URI prefixes. No historical document/digest or ID is rewritten.
+            for row in journal.db.execute('SELECT adapter_id,binding_digest,document,document_digest FROM pm_ahp_observations'):
+                try:
+                    document = json.loads(row[2])
+                    if provider.digest(document) != row[3]:
+                        continue
+                    sources = _document_sources(document['evidence'])
+                except (ValueError, KeyError, TypeError, OperationError):
+                    continue
+                for source in sources:
+                    journal.db.execute('''UPDATE pm_ahp_resource_access SET source_kind=?
+                        WHERE adapter_id=? AND binding_digest=? AND resource=? AND source_identity=?''',
+                        (source['source_kind'], row[0], row[1], source['resource'], source['source_identity']))
+            journal.db.execute('UPDATE pm_ahp_resource_access SET available=0 WHERE source_kind IS NULL')
         for verb in ('UPDATE', 'DELETE'):
             journal.db.execute(f'CREATE TRIGGER IF NOT EXISTS pm_ahp_observations_{verb.lower()}_immutable '
                 f'BEFORE {verb} ON pm_ahp_observations '
@@ -71,7 +89,10 @@ def install(ops):
 
 def capabilities():
     return {'contract': 'ahp_observer_v1', 'protocol_version': provider.VERSION,
+        'protocol_versions': list(provider.PROFILES), 'decoder_profiles': dict(provider.PROFILES),
         'spec_commit': '5f16d81bb7045b66d7bc768d244feab75002d943',
+        'offline_wire_sources': [{'distribution': 'microsoft/vscode', 'version': '1.141.0',
+            'commit': '2a59476c9bfcb90b3ddc372c36762471b7dfad1c', 'protocol_version': '0.10.0'}],
         'implemented_subset': sorted(provider.METHODS), 'observation': 'supported',
         'create_own': 'unsupported', 'send': 'unsupported', 'cancel': 'unsupported',
         'close': 'unsupported', 'pm_writer': 'unsupported', 'adapter_switch': 'unsupported',
@@ -106,10 +127,11 @@ def _grant(db, principal, wid, adapter_id, binding_digest):
 
 def _sources_access(db, adapter_id, binding_digest, sources):
     for source in sources:
-        row = db.execute('''SELECT available FROM pm_ahp_resource_access
+        row = db.execute('''SELECT available,source_kind FROM pm_ahp_resource_access
             WHERE adapter_id=? AND binding_digest=? AND resource=? AND source_identity=?''',
             (adapter_id, binding_digest, source['resource'], source['source_identity'])).fetchone()
-        if not row or row[0] != 1:
+        if (not row or row[0] != 1 or row[1] not in {'session', 'changeset'}
+                or source.get('source_kind', row[1]) != row[1]):
             raise _bad('NOT_FOUND', 404)
 
 
@@ -122,34 +144,47 @@ def _project_access(db, adapter_id, binding_digest, evidence):
     """
     catalog = evidence['positive_catalog']
     if evidence['catalog_complete']:
-        db.execute("UPDATE pm_ahp_resource_access SET available=0 WHERE adapter_id=? AND binding_digest=? AND resource LIKE 'ahp-session:%'",
+        db.execute("UPDATE pm_ahp_resource_access SET available=0 WHERE adapter_id=? AND binding_digest=? AND source_kind='session'",
             (adapter_id, binding_digest))
     proofs = list(catalog)
     for source in _document_sources(evidence):
-        if (source['resource'].startswith('ahp-changeset:') and source['resource'] in evidence['positive_snapshots']
+        if (source['source_kind'] == 'changeset' and source['resource'] in evidence['positive_snapshots']
                 and any(item['resource'] == evidence['changeset_owners'].get(source['resource']) for item in catalog)):
             proofs.append(source)
     for item in proofs:
         db.execute('''UPDATE pm_ahp_resource_access SET available=0
             WHERE adapter_id=? AND binding_digest=? AND resource=? AND source_identity<>?''',
             (adapter_id, binding_digest, item['resource'], item['source_identity']))
-        db.execute('''INSERT INTO pm_ahp_resource_access VALUES(?,?,?,?,1)
-            ON CONFLICT(adapter_id,binding_digest,resource,source_identity) DO UPDATE SET available=1''',
-            (adapter_id, binding_digest, item['resource'], item['source_identity']))
+        db.execute('''INSERT INTO pm_ahp_resource_access
+            (adapter_id,binding_digest,resource,source_identity,available,source_kind) VALUES(?,?,?,?,1,?)
+            ON CONFLICT(adapter_id,binding_digest,resource,source_identity)
+            DO UPDATE SET available=1,source_kind=excluded.source_kind''',
+            (adapter_id, binding_digest, item['resource'], item['source_identity'], item['source_kind']))
     for resource in evidence['missing']:
         db.execute('UPDATE pm_ahp_resource_access SET available=0 WHERE adapter_id=? AND binding_digest=? AND resource=?',
             (adapter_id, binding_digest, resource))
 
 
 def _document_sources(evidence):
-    sources = [{key: item[key] for key in ('resource', 'source_identity')} for item in evidence['catalog']]
+    sources = [{key: item[key] for key in ('resource', 'source_identity')} | {'source_kind': 'session'}
+        for item in evidence['catalog']]
     # Reconnect can fail before a fresh catalog arrives. Retained snapshots and
     # event metadata still belong to their original identities, independently of
     # the final (possibly empty or replaced) catalog. Never orphan those sources.
     for receipt in [*evidence['snapshots'], *evidence['events']]:
-        sources.extend(receipt['original_sources'])
-    return [dict(resource=resource, source_identity=identity) for resource, identity in
-        sorted({(source['resource'], source['source_identity']) for source in sources})]
+        resource = receipt.get('resource', receipt.get('channel'))
+        parent = evidence['changeset_owners'].get(resource, resource)
+        for source in receipt['original_sources']:
+            # Also reconstruct pre-profile records without modifying their bytes.
+            # A source is the original receipt channel or its advertised parent,
+            # never a classification inferred from an arbitrary URI scheme.
+            kind = ('session' if source['resource'] == parent and parent != provider.ROOT
+                else 'changeset' if source['resource'] == resource and resource != parent else None)
+            if kind is None or source.get('source_kind', kind) != kind:
+                raise _bad('AHP_OBSERVATION_CORRUPT')
+            sources.append({**source, 'source_kind': kind})
+    return [dict(resource=resource, source_identity=identity, source_kind=kind) for resource, identity, kind in
+        sorted({(source['resource'], source['source_identity'], source['source_kind']) for source in sources})]
 
 
 def _live(ops, binding):
@@ -179,7 +214,7 @@ def _validate(target, params, pre):
         raise _bad('INVALID_PARAMS', 422)
     selected = params.get('session_uris', [])
     if (not isinstance(selected, list) or len(selected) > provider.MAX_SELECTED
-            or any(not provider.uri(uri, 'ahp-session:') for uri in selected)
+            or any(not provider.session_uri(uri) for uri in selected)
             or len(set(selected)) != len(selected) or type(params.get('include_changesets', False)) is not bool):
         raise _bad('INVALID_PARAMS', 422)
 

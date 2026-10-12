@@ -1,4 +1,4 @@
-"""Bounded AHP 1.0.0 read subset. No dispatch, authentication or session writes.
+"""Bounded, version-profiled AHP reads. No dispatch, authentication or writes.
 
 Wire source: microsoft/agent-host-protocol spec/v1.0.0, 5f16d81bb7045b66.
 Events are original metadata receipts, not a second reducer or completion proof.
@@ -9,6 +9,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from urllib.parse import urlencode
 
@@ -16,6 +17,11 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 VERSION = '1.0.0'
+PROFILES = {'1.0.0': 'ahp_1_0_observer_v1', '0.10.0': 'vscode_0_10_observer_v1'}
+# These are wire profiles, never inferred from informational serverInfo strings.
+_LEGACY_SESSION = re.compile(r'([a-z][a-z0-9+.-]*):/([^/?#\\]+)')
+_RESERVED_SCHEMES = frozenset({'file', 'http', 'https', 'ws', 'wss', 'data', 'javascript',
+    'ftp', 'ssh', 'mailto', 'ahp-root', 'ahp-changeset', 'ahp-terminal', 'ahp-chat', 'ahp-folder-changeset'})
 ROOT = 'ahp-root://'
 MAX_SECONDS = 30
 MAX_BYTES = 4 * 1024 * 1024
@@ -66,8 +72,29 @@ def integer(value):
     return value
 
 
-def summary(value):
-    if not isinstance(value, dict) or not uri(value.get('resource'), 'ahp-session:'):
+def session_uri(value, version=None, provider_id=None):
+    """Syntax only; subscription still requires the original advertised identity."""
+    if uri(value, 'ahp-session:'):
+        return version != '0.10.0'
+    if version not in (None, '0.10.0') or not uri(value, ''):
+        return False
+    match = _LEGACY_SESSION.fullmatch(value)
+    return bool(match and match[1] not in _RESERVED_SCHEMES and not match[1].startswith('ahp-')
+        and (provider_id is None or provider_id == match[1]))
+
+
+def static_changeset(value, parent, version):
+    if version == '1.0.0' and uri(value, 'ahp-changeset:'):
+        return True
+    # VS Code advertises nested session changesets in both wire versions. Read
+    # only this exact static advertisement, never expand templates or read files.
+    prefix = parent + '/changeset/'
+    return (uri(value, prefix) and bool(value[len(prefix):])
+        and not any(c in value[len(prefix):] for c in '/?#\\'))
+
+
+def summary(value, version=VERSION):
+    if not isinstance(value, dict) or not session_uri(value.get('resource'), version, value.get('provider')):
         raise ObserverError('invalid_session_summary')
     out = {key: text(value[key]) for key in ('resource', 'provider', 'title')}
     out['status'] = integer(value['status'])
@@ -79,19 +106,19 @@ def summary(value):
         if not isinstance(dirs, list) or len(dirs) > 32:
             raise ObserverError('invalid_peer_shape')
         out['workingDirectories'] = [text(item) for item in dirs]
-    out.update(ownership='foreign_or_manual', access='read_only', completion='not_inferred')
+    out.update(source_kind='session', ownership='foreign_or_manual', access='read_only', completion='not_inferred')
     return out
 
 
-def project_snapshot(resource, state):
+def project_snapshot(resource, state, kind, version):
     if not isinstance(state, dict):
         raise ObserverError('invalid_snapshot')
     if resource == ROOT:
         # Agent configuration, authentication challenges, customizations and tools
         # aren't needed for this observer and must not become a secret side channel.
         return {'kind': 'root', 'provider_configuration': 'not_retained'}
-    if resource.startswith('ahp-session:'):
-        out = summary({**state, 'resource': resource})
+    if kind == 'session':
+        out = summary({**state, 'resource': resource}, version)
         out['lifecycle'] = text(state.get('lifecycle', 'unknown'), 64)
         entries = state.get('changesets', [])
         if not isinstance(entries, list) or len(entries) > 64:
@@ -103,9 +130,9 @@ def project_snapshot(resource, state):
             template = text(entry.get('uriTemplate'))
             out['changesets'].append({'label': text(entry.get('label')), 'uriTemplate': template,
                 'changeKind': text(entry.get('changeKind'), 128),
-                'read_supported': uri(template, 'ahp-changeset:')})
+                'read_supported': static_changeset(template, resource, version)})
         return out
-    if resource.startswith('ahp-changeset:'):
+    if kind == 'changeset':
         files = state.get('files')
         if not isinstance(files, list) or len(files) > 500:
             raise ObserverError('changeset_file_limit')
@@ -141,6 +168,7 @@ class Observer:
         self.session_sources = {}
         self.positive_catalog, self.positive_snapshots = [], []
         self.catalog_changed, self.notifications = False, []
+        self.negotiated_version = self.decoder_profile = None
 
     def sources(self, resource):
         if resource == ROOT:
@@ -149,9 +177,9 @@ class Observer:
         original = self.session_sources.get(parent)
         if original is None:
             raise ObserverError('snapshot_source_unavailable')
-        result = [{key: original[key] for key in ('resource', 'source_identity')}]
+        result = [{key: original[key] for key in ('resource', 'source_identity')} | {'source_kind': 'session'}]
         if parent != resource:
-            result.append({'resource': resource, 'source_identity': digest({
+            result.append({'resource': resource, 'source_kind': 'changeset', 'source_identity': digest({
                 'resource': resource, 'session_identity': original['source_identity']})})
         return result
 
@@ -190,17 +218,21 @@ class Observer:
         resource, seq = value['resource'], integer(value.get('fromSeq'))
         if resource in self.missing:
             return  # A later response must not revive a disposed/withdrawn URI.
-        state = project_snapshot(resource, value.get('state'))
-        sources = self.sources(resource)
-        if resource.startswith('ahp-session:'):
+        raw_state = value.get('state')
+        if resource in self.session_sources:
             original = self.session_sources[resource]
             # SessionState has provider but, unlike SessionSummary, need not
             # contain createdAt. Bind it to the catalog identity captured before
             # subscription; compare a timestamp if the host supplies one.
-            if (state['provider'] != original['provider']
-                    or 'createdAt' in state and state['createdAt'] != original['createdAt']):
+            if (not isinstance(raw_state, dict) or raw_state.get('provider') != original['provider']
+                    or 'createdAt' in raw_state and raw_state['createdAt'] != original['createdAt']):
                 raise ObserverError('session_identity_changed')
+        kind = ('root' if resource == ROOT else 'session' if resource in self.session_sources
+            else 'changeset' if resource in self.changeset_owners else 'unknown')
+        state = project_snapshot(resource, raw_state, kind, self.negotiated_version)
+        sources = self.sources(resource)
         self.snapshots[resource] = {'resource': resource, 'from_seq': seq,
+            'source_kind': kind,
             'original_digest': digest(value), 'received_at': time.time(),
             'state': state, 'original_sources': sources}
         if resource not in self.positive_snapshots:
@@ -239,7 +271,7 @@ class Observer:
                     self.notifications.append({'method': value['method'], 'original_digest': digest(value),
                         'received_at': time.time(), 'payload': 'not_retained'})
                     if value['method'] == 'root/sessionRemoved':
-                        if not uri(params.get('session'), 'ahp-session:'):
+                        if not session_uri(params.get('session'), self.negotiated_version):
                             raise ObserverError('invalid_catalog_notification')
                         self.withdraw(params['session'])
                 # Other server notifications aren't commands and are not retained.
@@ -264,10 +296,15 @@ class Observer:
                 params['cursor'] = cursor
             page = await self.request('listSessions', params)
             items = page.get('items')
-            if not isinstance(items, list) or len(items) > 50:
+            # 1.141.0 returns the whole catalog despite the limit hint. The
+            # original global session/frame/byte bounds still apply.
+            page_limit = MAX_SESSIONS if self.negotiated_version == '0.10.0' else 50
+            if not isinstance(items, list) or len(items) > page_limit:
                 raise ObserverError('invalid_catalog')
             for item in items:
-                row = summary(item)
+                if len(self.catalog) >= MAX_SESSIONS:
+                    raise ObserverError('catalog_session_limit')
+                row = summary(item, self.negotiated_version)
                 if 'createdAt' not in row or 'modifiedAt' not in row:
                     raise ObserverError('catalog_identity_unavailable')
                 row['source_identity'] = digest({key: row[key] for key in ('resource', 'provider', 'createdAt')})
@@ -275,9 +312,7 @@ class Observer:
                     raise ObserverError('catalog_changed_during_pagination')
                 resources.add(row['resource'])
                 self.catalog.append(row)
-                self.positive_catalog.append({key: row[key] for key in ('resource', 'source_identity')})
-                if len(self.catalog) > MAX_SESSIONS:
-                    raise ObserverError('catalog_session_limit')
+                self.positive_catalog.append({key: row[key] for key in ('resource', 'source_identity', 'source_kind')})
             cursor = page.get('nextCursor')
             if cursor is None:
                 self.catalog_complete = True
@@ -307,8 +342,14 @@ class Observer:
                 ping_interval=None, logger=_LOGGER) as ws:
             self.ws = ws
             if reconnect:
+                if self.negotiated_version not in PROFILES or self.decoder_profile != PROFILES[self.negotiated_version]:
+                    raise ObserverError('protocol_version_unsupported')
                 result = await self.request('reconnect', {'channel': ROOT, 'clientId': self.client_id,
                     'lastSeenServerSeq': self.sequence, 'subscriptions': list(self.subscriptions)})
+                # Reconnect has no renegotiation field in either contract. A peer
+                # claiming a different version cannot change this original read.
+                if result.get('protocolVersion', self.negotiated_version) != self.negotiated_version:
+                    raise ObserverError('protocol_version_changed')
                 self.reconnect_mode = result.get('type')
                 if self.reconnect_mode == 'replay':
                     actions, missing = result.get('actions'), result.get('missing')
@@ -332,11 +373,13 @@ class Observer:
                 else:
                     raise ObserverError('invalid_reconnect')
             else:
-                result = await self.request('initialize', {'channel': ROOT, 'protocolVersions': [VERSION],
+                result = await self.request('initialize', {'channel': ROOT, 'protocolVersions': list(PROFILES),
                     'clientId': self.client_id, 'clientInfo': {'name': 'bat-agent-connector'},
                     'initialSubscriptions': [ROOT]})
-                if result.get('protocolVersion') != VERSION:
+                version = result.get('protocolVersion')
+                if not isinstance(version, str) or version not in PROFILES:
                     raise ObserverError('protocol_version_unsupported')
+                self.negotiated_version, self.decoder_profile = version, PROFILES[version]
                 self.sequence = integer(result.get('serverSeq'))
                 info = result.get('serverInfo', {})
                 if not isinstance(info, dict):
@@ -376,11 +419,12 @@ class Observer:
                         channel = entry['uriTemplate']
                         if not entry['read_supported']:
                             continue
-                        if channel in self.changeset_owners and self.changeset_owners[channel] != resource:
+                        if (channel in resources or channel == ROOT
+                                or channel in self.changeset_owners and self.changeset_owners[channel] != resource):
                             raise ObserverError('changeset_source_ambiguous')
                         self.changeset_owners[channel] = resource
                         if channel not in self.subscriptions:
-                            if sum(s.startswith('ahp-changeset:') for s in self.subscriptions) >= MAX_CHANGESETS:
+                            if sum(s in self.changeset_owners for s in self.subscriptions) >= MAX_CHANGESETS:
                                 raise ObserverError('changeset_limit')
                             self.subscriptions.append(channel)
                         if channel in self.missing:
@@ -419,7 +463,8 @@ class Observer:
         if self.catalog_changed:
             self.catalog_complete = False
             reason = reason or 'catalog_changed_during_capture'
-        result = {'protocol_version': VERSION, 'server_info': self.server_info,
+        result = {'protocol_version': self.negotiated_version, 'negotiated_version': self.negotiated_version,
+            'decoder_profile': self.decoder_profile, 'server_info': self.server_info,
             'status': 'incomplete' if reason else 'observed', 'reason': reason,
             'catalog': self.catalog, 'catalog_complete': self.catalog_complete,
             'snapshots': list(self.snapshots.values()), 'events': self.events,
