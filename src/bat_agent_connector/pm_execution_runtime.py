@@ -360,7 +360,9 @@ def _settled(ops, child, reader_id):
         if op['action'] == ACTION:
             continue  # Other private readers cannot create unsettled coding effects.
         if op['status'] not in batches.TERMINAL or batches._uncertain(ops, op):
-            return False
+            from .pm_maintenance_repairs import _only_current_local_reservation
+            if not _only_current_local_reservation(ops, op):
+                return False
     return True
 
 
