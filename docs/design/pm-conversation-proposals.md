@@ -101,6 +101,13 @@ The repair's complete historical source reader supplies one such scope even
 when called directly by an execution guard. Current credentials, policy,
 lifecycle, deadline and effect eligibility remain outside that reader; subsequent
 frames and independent reads never reuse its completed permissions.
+The original execution-verifier visibility reader also reuses only a completed
+boolean for its canonical saved operation ID within that same scope. It has its
+own 64-node depth allowance so verifier wrappers do not shorten supported root
+or conversation histories; the shared 2,048-node budget still applies. Publication
+quality-source and visibility reads open one synchronous scope for the complete
+original read. They do not cache assessment documents, current acceptance,
+credentials, eligibility, or any decision across a provider await or effect.
 
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.

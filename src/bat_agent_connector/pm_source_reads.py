@@ -120,10 +120,12 @@ def check(db, principal, kind, identity, predicate):
         key = kind, identity
         if key in state['memo']:
             return state['memo'][key]
-        # Preserve the existing conversation's 64-node recursion allowance.
-        # Added root wrappers do not consume that previously supported depth.
-        conversation = kind.startswith('conversation.')
-        depth = sum(active_kind.startswith('conversation.') == conversation for active_kind, _ in state['active'])
+        # Typed verifier wrappers must not reduce the previously supported
+        # original-root or conversation depth. All share the same node budget.
+        def group(value):
+            return ('conversation' if value.startswith('conversation.') else
+                    'execution_verifier' if value == 'execution_verifier' else 'original')
+        depth = sum(group(active_kind) == group(kind) for active_kind, _ in state['active'])
         if key in state['active'] or depth >= MAX_DEPTH or state['budget']['nodes'] >= MAX_NODES:
             return False
         state['budget']['nodes'] += 1

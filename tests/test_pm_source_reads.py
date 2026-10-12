@@ -41,6 +41,16 @@ def test_only_one_synchronous_snapshot_reuses_original_decision(db):
     assert len(calls) == 2
 
 
+def test_verifier_wrappers_preserve_original_depth_and_keep_their_own_bound(db):
+    def descend(level, maximum):
+        if level == maximum:
+            return True
+        return reads.check(db, OWNER, 'original_root', level, lambda:
+            reads.check(db, OWNER, 'execution_verifier', level, lambda: descend(level + 1, maximum)))
+    assert descend(0, reads.MAX_DEPTH)
+    assert not descend(0, reads.MAX_DEPTH + 1)
+
+
 def test_credential_and_scope_are_distinct_even_for_same_actor(db):
     rotated = Principal(OWNER.actor, OWNER.scopes, credential_id='other-credential')
     unscoped = Principal(OWNER.actor, frozenset(), credential_id=OWNER.credential_id)
