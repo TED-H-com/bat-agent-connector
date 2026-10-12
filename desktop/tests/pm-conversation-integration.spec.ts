@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {structuredCapability,BAT} from './pm-structured-analysis-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture,pmRoute,pmPath,workspaceId} from './pm-fixture.ts';
 import {proposalFixture,proposalId,PROPOSE,ADOPT} from './pm-plan-proposals-fixture.ts';
@@ -47,4 +48,22 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   await expect(panel).not.toBeVisible();
   await expect(page.locator('.pm-notes')).not.toBeVisible();
   expect(proposal.state.writes).toHaveLength(1);
+});
+
+for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`structured proposal ${native?'Tauri':'Web'} ${locale} sends an explicit BAT intent`,async({page})=>{
+  const base=pmFixture(),proposal=proposalFixture();Object.assign(base.state,{actor:'owner',plans:true,start:true,bound:true});base.state.thread.version=4;
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    if(path.includes('/conversation-proposals')||input.body?.action?.startsWith('pm.conversation.'))return proposal.dispatch(input);
+    const value=await base.dispatch(input);
+    if(path==='/bootstrap'||path==='/capabilities'){const caps=path==='/bootstrap'?value.data.capabilities:value.data;caps.features.pm_workspaces.conversation_proposals={version:1};caps.actions.push(...[PROPOSE,ADOPT].map(action=>({action,allowed:true})));}
+    if(path===`/pm/workspaces/${workspaceId}/capabilities`){value.data.native_analysis={eligible_for_preflight:false,authorized:true};value.data.structured_analysis=structuredCapability();}return value;
+  };
+  await page.addInitScript(locale=>localStorage.setItem('batc.lang',locale),locale);await mountConversation(page,native,dispatch);
+  if(native)await page.addInitScript(caps=>{const ipc=(window as any).__TAURI_INTERNALS__,invoke=ipc.invoke;ipc.invoke=(command:string,args:any)=>command==='connector_connect'?Promise.resolve(caps):invoke(command,args);},(await dispatch({method:'GET',path:'/capabilities'})).data);
+  await page.goto(pmRoute);const form=page.locator(`[data-pm-action="${PROPOSE}"]`),choice=form.locator('[data-pm-structured-analysis] select');
+  await expect(choice).toBeEnabled();await choice.selectOption(BAT);await form.locator('textarea').fill('Prepare the original member-access conversation.');
+  await page.reload();await expect(choice).toHaveValue(BAT);await expect(form.locator('textarea')).toHaveValue('Prepare the original member-access conversation.');
+  await form.locator('button[type=submit]').click();await expect.poll(()=>proposal.state.writes.length).toBe(1);
+  expect(proposal.state.writes[0].body.params.adapter).toBe(BAT);expect(base.state.writes).toEqual([]);
 });

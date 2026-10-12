@@ -1,4 +1,5 @@
 // One reviewed central intent; proposal text never becomes authority by itself.
+import {structuredAnalysis} from './pm-structured-analysis.js';
 const PROPOSE='pm.conversation.propose',ADOPT='pm.conversation.adopt';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),copy=value=>structuredClone(value);
 const statuses=['user_confirmed','agent_assumption','unresolved','conflicting','not_applicable'];
@@ -35,14 +36,17 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const select=(label,options,attrs={})=>h('select',{'aria-label':t(label),...attrs},...options.map(([value,text])=>h('option',{value},text)));
   const hidden=()=>h('input',{type:'hidden',value:''});
   const picker=select('pcp_saved',[['',t('pcp_choose')]]),notice=h('div',{role:'status'}),detail=h('div'),content=h('div');
-  const purpose=input('pcp_purpose',{multiline:true,max:4000}),model=input('pcp_model',{max:128,required:false}),prepareReason=h('p',{class:'muted','data-proposal-availability':''});
-  prepare=form({action:PROPOSE,target,fields:{purpose,model},params:values=>({purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{})}),
+  const purpose=input('pcp_purpose',{multiline:true,max:4000}),model=input('pcp_model',{max:128,required:false});
+  const runtime=structuredAnalysis({h,t,labelled,action:PROPOSE,capability:()=>capability,readable:()=>visible,
+    authorized:()=>writing()&&caps()?.scopes?.includes('start')&&!adopt?.locked(),
+    legacyEligible:()=>capability?.native_analysis?.authorized!==false&&capability?.native_analysis?.eligible_for_preflight===true});
+  prepare=form({action:PROPOSE,target,fields:{purpose,model,adapter:runtime.field},params:values=>({purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{}),...runtime.params(values)}),
     preconditions:()=>({expected_version:thread().thread.version,expected_plan_version:head.version,expected_accepted_revision_id:head.accepted_revision_id}),
-    permitted:()=>writing()&&head&&caps()?.scopes?.includes('start')&&capability?.native_analysis?.authorized!==false&&capability?.native_analysis?.eligible_for_preflight===true&&!adopt?.locked(),
+    permitted:()=>writing()&&head&&caps()?.scopes?.includes('start')&&runtime.eligible()&&!adopt?.locked(),
     recoverPermitted:()=>writing()&&caps()?.scopes?.includes('start'),label:'pcp_prepare',
     onSaved:async result=>{const id=result?.outcome?.proposal_id||result?.proposal_id;if(id)picker.value=id;await refreshParent?.();await refresh(id);},
     onStateChange:()=>{if(ready)updateControls();},
-    extra:h('div',{class:'pm-fields'},labelled('pcp_purpose',purpose),h('details',{},h('summary',{},t('pcp_model')),labelled('pcp_model',model)),note('pcp_prepare_help'),prepareReason)});
+    extra:h('div',{class:'pm-fields'},labelled('pcp_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pcp_model')),labelled('pcp_model',model)),note('pcp_prepare_help'))});
   const review=hidden(),rationale=input('pcp_rationale',{multiline:true,max:4000});
   adopt=form({action:ADOPT,target,fields:{review,rationale},params:values=>{
       const saved=JSON.parse(values.review);if(!active||saved.proposal_id!==active.proposal_id||!validReview(saved.review))throw Error(t('pcp_missing'));
@@ -93,8 +97,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const row=active.context.source_references[key];return h('div',{},h('blockquote',{class:'pm-note-text'},row.quote),h('small',{},row.kind,' · ',row.id));}));}
   function updateControls(){
     if(!ready)return;const locked=adopt.locked()||!deciding();picker.disabled=loading||adopt.locked();reload.disabled=loading;more.disabled=loading;
-    const unavailable=capability?.native_analysis?.authorized===false||capability?.native_analysis?.eligible_for_preflight!==true||!caps()?.scopes?.includes('start');
-    prepareReason.hidden=!unavailable;prepareReason.textContent=unavailable?t('pcp_runtime'):'';
+    runtime.update(prepare);
     for(const element of content.querySelectorAll('input,textarea,select,button'))element.disabled=locked;
     if(active&&active.validation.status==='format_valid'){
       const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?'pcp_stale':reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';reasons.hidden=!reason;}
@@ -113,6 +116,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const p=active;if(!p)return;const sig=p.proposal_id+':'+p.document_digest;
     if(rendered===sig){adopt.update();return;}rendered=sig;candidateFields=[];requirementFields=[];detail.replaceChildren();content.replaceChildren();
     detail.append(h('h4',{},t('pcp_review')));
+    if(p.provenance?.adapter)detail.append(h('p',{class:'muted'},t('pm_native_origin'),' ',p.provenance.adapter));
     if(p.validation.status!=='format_valid'){detail.append(note('pcp_invalid'),h('ul',{},...(p.validation.errors||[]).map(error=>h('li',{},String(error)))),h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply)));return;}
     let saved=original();if(saved?.proposal_id!==p.proposal_id){
       if(adopt.locked())throw fail();const drafts={...(record(saved?.drafts)?saved.drafts:{})};

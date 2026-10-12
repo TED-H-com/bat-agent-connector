@@ -1,4 +1,5 @@
-// The UI selects a fixed intake; only the central native runner performs analysis.
+// The central service checks the explicitly selected runtime against a fixed intake.
+import {structuredAnalysis} from './pm-structured-analysis.js';
 export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,permitted,errorBox,onSaved,onAccessFailure=()=>{}}) {
   const actor=caps()?.actor,endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial=0,intake=null,capability=null,thread=null,request=null,retired=false,next=null,rows=[];
@@ -31,20 +32,18 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       }};
       const purpose=input('pm_fa_purpose',{multiline:true,max:4000}),model=input('pm_native_model',{required:false,max:128});model.placeholder=t('pm_native_default_model');
       const version=h('input',{type:'hidden',value:String(thread.thread.version)}),warning=note('pm_fa_thread_stale');
+      const runtime=structuredAnalysis({h,t,labelled,action:'pm.follow_up.analyze',capability:()=>capability,authorized,
+        legacyEligible:()=>capability?.follow_up_analysis?.authorized===true&&capability?.follow_up_analysis?.eligible_for_preflight===true});
       const stale=()=>version.value!==String(thread?.thread.version);
       const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{if(request&&!request.locked()&&authorized()){request.set('_version',String(thread.thread.version));request.update();}}},t('pm_fa_use_thread_version'));
-      const sync=()=>{warning.hidden=!stale();rebase.hidden=!stale();rebase.disabled=Boolean(request?.locked())||!authorized();navigation();};
-      const eligible=()=>authorized()&&capability?.authorized===true&&capability?.eligible_for_preflight===true&&!stale();
+      const sync=()=>{warning.hidden=!stale();rebase.hidden=!stale();rebase.disabled=Boolean(request?.locked())||!authorized();navigation();runtime.update(request);};
+      const eligible=()=>authorized()&&runtime.eligible()&&!stale();
       request=form({api:guardedApi,namespace:`${namespace}.follow-up.${intake.intake_id}`,action:'pm.follow_up.analyze',target:{workspace_id:workspaceId,thread_id:thread.thread.thread_id},
-        fields:{purpose,model,_version:version},params:values=>({intake_id:intake.intake_id,purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{})}),
+        fields:{purpose,model,_version:version,adapter:runtime.field},params:values=>({intake_id:intake.intake_id,purpose:values.purpose,...(values.model.trim()?{model:values.model.trim()}:{}),...runtime.params(values)}),
         preconditions:()=>({expected_version:Number(version.value),expected_intake_digest:intake.document_digest}),
         permitted:eligible,recoverPermitted:authorized,label:'pm_fa_analyze',onStateChange:sync,onSaved,
-        extra:h('div',{class:'pm-fields'},labelled('pm_fa_purpose',purpose),h('details',{},h('summary',{},t('pm_fa_model_optional')),labelled('pm_native_model',model)),version)});
-      const reason=!authorized()?'pm_native_permissions':capability?.eligible_for_preflight?'pm_native_preflight_pending':{
-        PM_NATIVE_PLATFORM_UNSUPPORTED:'pm_native_platform',PM_NATIVE_EXECUTABLE_UNAVAILABLE:'pm_native_install',
-        PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED:'pm_native_managed',PM_NATIVE_AUTH_UNAVAILABLE:'pm_native_auth',PM_NATIVE_HOME_UNAVAILABLE:'pm_native_auth',
-      }[capability?.reason]||'pm_native_unavailable';
-      body.append(note(reason),warning,rebase,request.box);request.update();
+        extra:h('div',{class:'pm-fields'},labelled('pm_fa_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pm_fa_model_optional')),labelled('pm_native_model',model)),version)});
+      body.append(warning,rebase,request.box);request.update();
     }catch(error){if(ticket===serial)fail(error);}
   }
   async function readThreads(after=null){
@@ -60,7 +59,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
     if(!intake||retired)return;const ticket=++serial;status.replaceChildren(note('pm_fa_loading_thread'));
     try{
       const data=check(await api('GET',`${endpoint}/capabilities`));if(!current(ticket))return;
-      capability=data.follow_up_analysis;rows=[];next=null;
+      capability=data;rows=[];next=null;
       if(intake.document.thread_ref){choices.set(intake.intake_id,intake.document.thread_ref.thread_id);await readThread();}
       else await readThreads();
     }catch(error){if(ticket===serial)fail(error);}
