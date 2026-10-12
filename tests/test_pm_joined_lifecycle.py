@@ -19,6 +19,7 @@ from tests.pm_joined_lifecycle_helpers import (
     prepare_world,
     provider_mux,
 )
+from tests.pm_joined_maintenance_helpers import enter_maintenance, repair_original_release, review_and_reopen
 from tests.test_checkpoints import MANUAL
 from tests.test_pm_bat_operations import bat_world  # noqa: F401
 from tests.test_repository_sync import world  # noqa: F401
@@ -55,3 +56,6 @@ async def test_same_ledger_development_and_semantic_dependency(joined, mock):
         'specific_stale_reason', 'field_evidence', 'native_input_state', 'sdk_session_id', 'registry_origin', 'provenance')}
     assert document['classification'] == 'idle_candidate', {'reasons': document['blocking_reasons'],
         'manual': diagnostic, 'last_seen_at': manual['last_seen_at'], 'exclusions': document['exclusions']}
+    await enter_maintenance(w, mock)
+    await repair_original_release(w, mock)
+    await review_and_reopen(w, mock)
