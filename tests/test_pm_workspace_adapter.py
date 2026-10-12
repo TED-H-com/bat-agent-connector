@@ -236,6 +236,24 @@ async def test_source_withdrawal_hides_original_choice_and_derived_reply(chosen_
         pm_discussions.get_thread(ops, plans.OWNER, **plans.target(w))
 
 
+async def test_later_choice_keeps_preceding_original_decision_source_access(chosen_world, monkeypatch):
+    w, ops = chosen_world, chosen_world['d'].ops
+    first = await select(w)
+    second = await select(w, adapters.ADAPTERS[1])
+    saved = ops.db.execute('SELECT document FROM pm_adapter_choices WHERE operation_id=?', (second['operation_id'],)).fetchone()[0]
+    original = pm_access.operation_source_visible
+    # The earlier original decision becomes unavailable independently of the
+    # currently accepted carrier. No row or current membership is replaced.
+    monkeypatch.setattr(pm_access, 'operation_source_visible', lambda db, principal, identity:
+        identity != first['operation_id'] and original(db, principal, identity))
+    value = adapters.read(ops, plans.OWNER, w['workspace_id'])
+    assert value['choice'] is None and value['reason'] == 'original_sources_unavailable'
+    assert not adapters.operation_visible(ops.db, plans.OWNER, second)
+    with pytest.raises(OperationError):
+        bundles.request(w, 'pm.run.bat.analyze')
+    assert ops.db.execute('SELECT document FROM pm_adapter_choices WHERE operation_id=?', (second['operation_id'],)).fetchone()[0] == saved
+
+
 async def test_lost_local_receipt_recovers_after_owner_downgrade_without_new_selection(chosen_world, monkeypatch):
     w, ops = chosen_world, chosen_world['d'].ops
     op = request(w)
