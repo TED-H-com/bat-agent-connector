@@ -177,6 +177,12 @@ def document_roots(db, value):
 
 
 def visible_roots(db, principal, original_ids):
+    # Public metadata has no original sources and needs no authority scope.
+    # A missing principal must still never authorize a referenced resource.
+    if not original_ids:
+        return True
+    if principal is None:
+        return False
     from .pm_maintenance_repairs import source_backedge
     from .pm_source_reads import check, scope
     with scope(db, principal):
