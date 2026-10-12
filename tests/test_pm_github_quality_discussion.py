@@ -123,7 +123,7 @@ async def test_original_github_quality_reaches_followup_and_withdrawal_hides_who
     reader = pm_meetings._SourceReader(ops.db)
     before, provider_calls = ops.db.total_changes, len(w['gh'].requests)
     pm_work_batch_evidence.require_sources(reader, OWNER, w['workspace_id'], proof)
-    assert reader.get(observation['operation_id'], principal=OWNER) == observation
+    assert reader.get(observation['operation_id'], principal=OWNER) == ops.get(observation['operation_id'], steps=False)
     assert pm_evidence._read_operation(reader, OWNER, w['workspace_id'], observation['operation_id']) is None
     saved = ops.db.execute('SELECT * FROM pm_document_snapshots WHERE snapshot_id=?', (frozen['snapshot_id'],)).fetchone()
     read = pm_snapshots._out(reader, OWNER, saved)['snapshot']
