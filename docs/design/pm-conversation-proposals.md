@@ -114,6 +114,13 @@ canonical verifier's immutable lineage may terminate the edge. The complete
 principal and credential must match; this partial verifier grant is not memoized.
 The outer verifier read must still finish every original source check before
 its completed boolean can be reused.
+Quality history access follows the same rule: reload the canonical review and
+its bounded original history on every call, retain the history-depth return
+value, and reuse only the completed source/proof boolean. Caller projections
+cannot supply a different context for the same review ID. Quality source nodes
+have an independent 64-node depth allowance within the shared traversal budget;
+the exact active repair backedge remains uncached. Current qualification,
+responsibility, revocation and effect eligibility are not memoized.
 
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.
