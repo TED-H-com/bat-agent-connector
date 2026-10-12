@@ -9,6 +9,7 @@ import copy
 import re
 import sys
 import time
+from unittest.mock import patch
 
 from bat_agent_connector import pm_execution_verification, pm_plans, repository_sync
 from bat_agent_connector import pm_github_observation as github
@@ -167,11 +168,34 @@ async def repair_original_release(w, mock):
     request['params'].update(rule_key='member_password_type', finding_ref={
         'observation_id': observation['observation_id'], 'document_digest': observation['document_digest'],
         'finding_id': finding['finding_id']})
-    parent = await advance(w, ops.create(OWNER, **request)[0])
+    saved_workload = workload._record(ops.db, wid, captured['result']['snapshot_id'])['document']
+    collected = []
+    original_collect = workload.sources.Collector.collect
+    def diagnostic_collect(collector):
+        value = original_collect(collector)
+        from bat_agent_connector import pm_execution_runtime as normal
+        unresolved = []
+        for source_id in w['ledger'].references['execution_ids']:
+            for row in ops.db.execute("SELECT DISTINCT resource_id FROM pm_source_lineage WHERE resource_type='operation' AND original_operation_id=?",
+                    (source_id,)):
+                operation = ops.get(row[0])
+                if operation['action'] == normal.ACTION:
+                    continue
+                uncertain = normal.batches._uncertain(ops, operation)
+                if operation['status'] not in normal.batches.TERMINAL or uncertain:
+                    unresolved.append({'original_execution_id': source_id, 'operation_id': row[0],
+                        'action': operation['action'], 'status': operation['status'], 'uncertain': uncertain})
+        collected.append({'classification': value['classification'], 'blocking_reasons': value['blocking_reasons'],
+            'unresolved_original_derivatives': unresolved})
+        return value
+    with patch.object(workload.sources.Collector, 'collect', diagnostic_collect):
+        parent = await advance(w, ops.create(OWNER, **request)[0])
     child = repairs._child(ops, parent)
     assert child and child['status'] == 'succeeded', {
         'parent': {key: parent.get(key) for key in ('operation_id', 'status', 'status_reason', 'error_code')},
         'steps': [{key: step.get(key) for key in ('name', 'status', 'error')} for step in parent['steps']],
+        'saved_workload': {key: saved_workload[key] for key in ('classification', 'blocking_reasons')},
+        'fresh_checks': collected[-3:],
         'child': {key: child.get(key) for key in ('operation_id', 'status', 'status_reason', 'error_code')} if child else None}
     original = ops.create(OWNER, **request)
     assert not original[1] and original[0]['operation_id'] == parent['operation_id']
