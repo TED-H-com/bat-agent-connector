@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from bat_agent_connector import pm_discussions, pm_runs, pm_workspace
+from bat_agent_connector import pm_access, pm_discussions, pm_runs
 from bat_agent_connector import pm_workspace_adapter as adapters
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationError
@@ -191,7 +191,7 @@ async def test_source_withdrawal_hides_original_choice_and_derived_reply(chosen_
     assert adapters.operation_visible(ops.db, plans.OWNER, choice)
     ops.db.execute('UPDATE pm_workspaces SET repositories=? WHERE workspace_id=?', ('[]', w['workspace_id']))
     assert not adapters.operation_visible(ops.db, plans.OWNER, choice)
-    assert not pm_workspace.operation_visible(ops.db, plans.OWNER, out)
+    assert not pm_access.visible(ops.db, plans.OWNER, out)
     value = adapters.read(ops, plans.OWNER, w['workspace_id'])
     assert value['choice'] is None and value['preconditions'] is None and not value['available']
     with pytest.raises(OperationError):
@@ -206,7 +206,7 @@ async def test_lost_local_receipt_recovers_after_owner_downgrade_without_new_sel
     def lost(ctx, name, fn, **kwargs):
         result = original(ctx, name, fn, **kwargs)
         if ctx.operation_id == op['operation_id']:
-            raise Uncertain('Original local selection saved before outer completion')
+            raise Uncertain(name, 'Original local selection saved before outer completion')
         return result
     # The local effect's saved row is independent of the outer operation result.
     with monkeypatch.context() as patch:
@@ -215,8 +215,62 @@ async def test_lost_local_receipt_recovers_after_owner_downgrade_without_new_sel
     row = ops.db.execute('SELECT document FROM pm_adapter_choices WHERE operation_id=?', (op['operation_id'],)).fetchone()
     assert row is not None
     plans.revoke(w)
-    await ops._execute(op['operation_id'])
-    saved = ops.get(op['operation_id'])
-    assert saved['status'] == 'succeeded', saved
-    assert saved['result'] == json.loads(row[0])
-    assert ops.db.execute('SELECT count(*) FROM pm_adapter_choices').fetchone()[0] == 1
+    from bat_agent_connector.operations import OperationService
+    from bat_agent_connector.task_journal import Journal
+    journal = Journal(w['d'].journal.path)
+    resumed = OperationService(journal)
+    adapters.install(resumed)
+    resumed.context.update(ops.context)
+    try:
+        await resumed._execute(op['operation_id'])
+        saved = resumed.get(op['operation_id'])
+        assert saved['status'] == 'succeeded', saved
+        assert saved['result'] == json.loads(row[0])
+        assert journal.db.execute('SELECT count(*) FROM pm_adapter_choices').fetchone()[0] == 1
+    finally:
+        journal.close()
+
+
+async def test_shared_http_rpc_mcp_read_and_registered_action_use_original_choice(chosen_world, monkeypatch):
+    import asyncio
+
+    from bat_agent_connector import mcp_server
+    from tests.test_api_v1 import http, token
+    w, d = chosen_world, chosen_world['d']
+    auth = token(d, plans.OWNER.actor, *plans.OWNER.scopes)
+    server = await asyncio.start_server(d._handle, '127.0.0.1', 0)
+    port = server.sockets[0].getsockname()[1]
+    monkeypatch.setenv('BATC_TASK_URL', f'http://127.0.0.1:{port}/rpc')
+    monkeypatch.setenv('BATC_API_TOKEN', auth)
+    mcp, fleet = mcp_server.build_server(d.fleet.config, read_only=True, principal_only=True)
+    path = f"/api/v1/pm/workspaces/{w['workspace_id']}/capabilities"
+    try:
+        status, read = await http(port, 'GET', path, tok=auth)
+        assert status == 200, read
+        body = {'action': adapters.ACTION, 'target': {'workspace_id': w['workspace_id']},
+            'params': {'adapter': adapters.ADAPTERS[1], 'rationale': 'Use the original owned BAT carrier'},
+            'preconditions': read['workspace_adapter']['preconditions']}
+        status, admitted = await http(port, 'POST', '/api/v1/operations?wait=3', tok=auth,
+            body=body, headers={'Idempotency-Key': uuid.uuid4().hex})
+        assert status == 200, admitted
+        assert admitted['operation']['status'] == 'succeeded', admitted
+        expected = (await http(port, 'GET', path, tok=auth))[1]
+        target = {'workspace_id': w['workspace_id']}
+        assert expected == await d.call_api('pm_capabilities_get', target, plans.OWNER)
+        result = await mcp.call_tool('pm_capabilities_get', target)
+        if isinstance(result, tuple):
+            content, structured = result
+            actual = structured if structured is not None else json.loads(content[0].text)
+        else:
+            content = result.content if hasattr(result, 'content') else result
+            actual = json.loads(content[0].text)
+        assert actual == expected
+        assert expected['workspace_adapter']['choice']['operation_id'] == admitted['operation']['operation_id']
+        caps = (await http(port, 'GET', '/api/v1/capabilities', tok=auth))[1]
+        assert caps['features']['pm_workspaces']['workspace_adapter'] == {'version': 1, 'action': adapters.ACTION}
+        assert any(row['action'] == adapters.ACTION and row['allowed'] for row in caps['actions'])
+        assert not w['native_instances']
+    finally:
+        server.close()
+        await server.wait_closed()
+        await fleet.close()
