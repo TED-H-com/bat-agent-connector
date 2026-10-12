@@ -142,7 +142,12 @@ tracked separately from previously retained snapshots.
 
 Session identity uses original URI, provider and native `createdAt`, not title or
 working directory. Changeset identity includes its native URI and parent session
-identity. A reused URI with a different native creation identity cannot revive the
+identity. Each retained snapshot and event metadata receipt keeps its own original
+source references, even when reconnect fails before a fresh catalog is available.
+SessionState need not carry the catalog-only timestamps: its provider and any
+timestamp it does supply must match the original catalog identity. Reconnect may
+not rebind retained content to a newer incarnation of the same URI. A reused URI
+with a different native creation identity cannot revive the
 old receipt. Restoring access requires positive native evidence for that same
 original identity, including a fresh changeset snapshot when relevant. If any
 original source is unavailable, its entire saved observation is hidden, including

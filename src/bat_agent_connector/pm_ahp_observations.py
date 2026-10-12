@@ -143,14 +143,13 @@ def _project_access(db, adapter_id, binding_digest, evidence):
 
 def _document_sources(evidence):
     sources = [{key: item[key] for key in ('resource', 'source_identity')} for item in evidence['catalog']]
-    parents = {item['resource']: item['source_identity'] for item in sources}
-    for snapshot in evidence['snapshots']:
-        resource = snapshot['resource']
-        parent = evidence['changeset_owners'].get(resource)
-        if resource.startswith('ahp-changeset:') and parent in parents:
-            sources.append({'resource': resource, 'source_identity': provider.digest({
-                'resource': resource, 'session_identity': parents[parent]})})
-    return sources
+    # Reconnect can fail before a fresh catalog arrives. Retained snapshots and
+    # event metadata still belong to their original identities, independently of
+    # the final (possibly empty or replaced) catalog. Never orphan those sources.
+    for receipt in [*evidence['snapshots'], *evidence['events']]:
+        sources.extend(receipt['original_sources'])
+    return [dict(resource=resource, source_identity=identity) for resource, identity in
+        sorted({(source['resource'], source['source_identity']) for source in sources})]
 
 
 def _live(ops, binding):

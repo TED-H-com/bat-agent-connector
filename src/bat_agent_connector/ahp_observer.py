@@ -138,8 +138,22 @@ class Observer:
         self.server_info, self.reconnect_mode = {}, 'not_needed'
         self.catalog_complete = False
         self.tokens, self.changeset_owners = [], {}
+        self.session_sources = {}
         self.positive_catalog, self.positive_snapshots = [], []
         self.catalog_changed, self.notifications = False, []
+
+    def sources(self, resource):
+        if resource == ROOT:
+            return []
+        parent = self.changeset_owners.get(resource, resource)
+        original = self.session_sources.get(parent)
+        if original is None:
+            raise ObserverError('snapshot_source_unavailable')
+        result = [{key: original[key] for key in ('resource', 'source_identity')}]
+        if parent != resource:
+            result.append({'resource': resource, 'source_identity': digest({
+                'resource': resource, 'session_identity': original['source_identity']})})
+        return result
 
     def withdraw(self, resource):
         if resource not in self.missing:
@@ -167,7 +181,7 @@ class Observer:
         self.event_digests[seq] = original
         self.events.append({'channel': channel, 'server_seq': seq,
             'action_type': text(envelope['action'].get('type'), 256), 'original_digest': original,
-            'received_at': time.time(), 'payload': 'not_retained'})
+            'received_at': time.time(), 'payload': 'not_retained', 'original_sources': self.sources(channel)})
         self.sequence = max(self.sequence, seq)
 
     def snapshot(self, value):
@@ -176,9 +190,19 @@ class Observer:
         resource, seq = value['resource'], integer(value.get('fromSeq'))
         if resource in self.missing:
             return  # A later response must not revive a disposed/withdrawn URI.
+        state = project_snapshot(resource, value.get('state'))
+        sources = self.sources(resource)
+        if resource.startswith('ahp-session:'):
+            original = self.session_sources[resource]
+            # SessionState has provider but, unlike SessionSummary, need not
+            # contain createdAt. Bind it to the catalog identity captured before
+            # subscription; compare a timestamp if the host supplies one.
+            if (state['provider'] != original['provider']
+                    or 'createdAt' in state and state['createdAt'] != original['createdAt']):
+                raise ObserverError('session_identity_changed')
         self.snapshots[resource] = {'resource': resource, 'from_seq': seq,
             'original_digest': digest(value), 'received_at': time.time(),
-            'state': project_snapshot(resource, value.get('state'))}
+            'state': state, 'original_sources': sources}
         if resource not in self.positive_snapshots:
             self.positive_snapshots.append(resource)
         self.sequence = max(self.sequence, seq)
@@ -329,6 +353,12 @@ class Observer:
                 if resource not in resources or resource in self.missing:
                     self.withdraw(resource)
                     continue
+                source = next(row for row in self.catalog if row['resource'] == resource)
+                previous = self.session_sources.get(resource)
+                if previous and previous['source_identity'] != source['source_identity']:
+                    raise ObserverError('session_identity_changed')
+                self.session_sources[resource] = {key: source[key] for key in (
+                    'resource', 'provider', 'createdAt', 'source_identity')}
                 if resource not in self.subscriptions:
                     self.subscriptions.append(resource)
                 result = await self.request('subscribe', {'channel': resource})
@@ -346,6 +376,8 @@ class Observer:
                         channel = entry['uriTemplate']
                         if not entry['read_supported']:
                             continue
+                        if channel in self.changeset_owners and self.changeset_owners[channel] != resource:
+                            raise ObserverError('changeset_source_ambiguous')
                         self.changeset_owners[channel] = resource
                         if channel not in self.subscriptions:
                             if sum(s.startswith('ahp-changeset:') for s in self.subscriptions) >= MAX_CHANGESETS:

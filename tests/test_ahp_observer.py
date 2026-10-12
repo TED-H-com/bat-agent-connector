@@ -244,6 +244,43 @@ async def test_root_disposal_notification_cannot_be_revived_by_later_snapshot_re
     assert not any(r['params'].get('channel') == CHANGESET for _, r in host.requests)
 
 
+async def test_session_state_without_catalog_only_timestamps_keeps_original_identity(host):
+    host.session_state.pop('createdAt')
+    host.session_state.pop('modifiedAt')
+    result = await observer(host).collect()
+    assert result['status'] == 'observed'
+    session = next(item for item in result['snapshots'] if item['resource'] == SESSION)
+    assert session['original_sources'] == [{
+        'resource': SESSION, 'source_identity': result['catalog'][0]['source_identity']}]
+
+
+@pytest.mark.parametrize('field,value', [('provider', 'different-provider'), ('createdAt', '2026-10-12T00:00:00Z')])
+async def test_snapshot_cannot_replace_original_catalog_identity(host, field, value):
+    host.session_state[field] = value
+    host.session_state['title'] = 'Unrelated incarnation private title'
+    result = await observer(host).collect()
+    assert result['status'] == 'incomplete' and result['reason'] == 'session_identity_changed'
+    assert [item['resource'] for item in result['snapshots']] == [ahp.ROOT]
+    assert 'Unrelated incarnation private title' not in json.dumps(result)
+    assert not any(req['params'].get('channel') == CHANGESET for _, req in host.requests)
+
+
+async def test_static_changeset_cannot_change_its_original_parent_identity(host):
+    second = 'ahp-session:/second-original-id'
+    host.catalog.append({**SUMMARY, 'resource': second})
+    async def second_snapshot(ws, req, connection):
+        if req['method'] == 'subscribe' and req['params']['channel'] == second:
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'id': req['id'], 'result': {
+                'snapshot': snapshot(second, {**STATE, 'resource': second})}}))
+            return True
+        return False
+    host.on_request = second_snapshot
+    result = await observer(host, selected=[SESSION, second]).collect()
+    assert result['reason'] == 'changeset_source_ambiguous'
+    assert result['changeset_owners'][CHANGESET] == SESSION
+    assert sum(req['params'].get('channel') == CHANGESET for _, req in host.requests) == 1
+
+
 async def test_upgrade_redirect_never_transmits_credential_to_second_endpoint(monkeypatch):
     from websockets.datastructures import Headers
     from websockets.http11 import Response

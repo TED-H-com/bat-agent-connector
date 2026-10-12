@@ -234,3 +234,55 @@ async def test_replacing_revoked_credential_does_not_upgrade_original_pending_au
     with pytest.raises(OperationError, match='AHP_AUTHORITY_UNAVAILABLE'):
         await ops.actions[ahp.ACTION].run(OpContext(ops, original))
     assert not host.requests
+
+
+@pytest.mark.parametrize('catalog', ['failed', 'empty', 'reused_uri'])
+async def test_reconnect_cannot_orphan_retained_snapshots_or_events_from_original_source(ready, catalog):
+    from tests.test_ahp_observer import CHANGESET, SUMMARY
+    ops, host, wid, principal = ready
+    original = await run(ready)
+    assert original['status'] == 'succeeded'
+    first_connection = host.connections + 1
+    async def change(ws, req, connection):
+        if connection == first_connection and req['method'] == 'subscribe' and req['params']['channel'] == CHANGESET:
+            await ws.send(json.dumps({'jsonrpc': '2.0', 'method': 'action', 'params': {
+                'channel': SESSION, 'serverSeq': 13, 'action': {'type': 'session/titleChanged'}}}))
+            await ws.close()
+            return True
+        if connection > first_connection and req['method'] == 'listSessions':
+            reply = {'jsonrpc': '2.0', 'id': req['id']}
+            if catalog == 'failed':
+                reply['error'] = {'code': -32603, 'message': 'offline fixture unavailable'}
+            else:
+                reply['result'] = {'items': [] if catalog == 'empty' else [
+                    {**SUMMARY, 'createdAt': '2026-10-12T00:00:00Z'}]}
+            await ws.send(json.dumps(reply))
+            return True
+        return False
+    host.on_request = change
+    refreshed = await run(ready, idempotency_key='interrupted-original-source')
+    assert refreshed['status'] == 'succeeded' and refreshed['result']['coverage_status'] == 'incomplete'
+    oid = refreshed['result']['observation_id']
+    document = json.loads(ops.db.execute('SELECT document FROM pm_ahp_observations WHERE observation_id=?', (oid,)).fetchone()[0])
+    original_source = {'resource': SESSION, 'source_identity': ahp.provider.digest({
+        key: SUMMARY[key] for key in ('resource', 'provider', 'createdAt')})}
+    assert original_source in document['original_sources']
+    assert document['evidence']['events'][0]['original_sources'] == [original_source]
+    if catalog == 'failed':
+        assert ahp.operation_visible(ops.db, principal, refreshed)
+        session = next(item for item in document['evidence']['snapshots'] if item['resource'] == SESSION)
+        assert session['original_sources'] == [original_source]
+        host.on_request, host.catalog = None, []
+        withdrawn = await run(ready, idempotency_key='later-original-source-withdrawal', params={})
+        assert withdrawn['status'] == 'succeeded'
+    else:
+        assert not ahp.operation_visible(ops.db, principal, refreshed)
+    requests = len(host.requests)
+    assert not ahp.operation_visible(ops.db, principal, refreshed)
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        ahp.get_observation(ops, principal, wid, oid)
+    assert oid not in {item['observation_id'] for item in ahp.list_observations(ops, principal, wid)['observations']}
+    assert not any(pm_access.event_visible(ops.db, principal, event)
+        for event in ops.journal.api_events(0, 500)['events']
+        if event['body'].get('operation_id') == refreshed['operation_id'] or event['resource_id'] == refreshed['operation_id'])
+    assert len(host.requests) == requests
