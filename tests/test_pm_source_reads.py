@@ -41,6 +41,17 @@ def test_only_one_synchronous_snapshot_reuses_original_decision(db):
     assert len(calls) == 2
 
 
+def test_public_metadata_does_not_grant_anonymous_original_source_access(db):
+    from bat_agent_connector.pm_source_lineage import visible_roots
+    assert visible_roots(db, None, set())
+    assert not visible_roots(db, None, {'op_' + '1' * 32})
+    # An anonymous public read also cannot borrow a surrounding caller's scope.
+    with reads.scope(db, OWNER):
+        assert decision(db)
+        assert not visible_roots(db, None, {'op_' + '1' * 32})
+        assert decision(db)
+
+
 @pytest.mark.parametrize('kind', ['execution_verifier', 'quality_sources', 'workload_sources'])
 def test_typed_wrappers_preserve_original_depth_and_keep_their_own_bound(db, kind):
     def descend(level, maximum):

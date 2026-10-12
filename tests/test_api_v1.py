@@ -401,8 +401,10 @@ async def test_a10_capabilities_account_start_effect_is_cached_read_only(served,
 
 async def test_http_auth_host_origin_and_reads(served, mock):
     d, port = served
-    assert (await http(port, "GET", "/api/v1/version"))[0] == 200
+    status, version = await http(port, "GET", "/api/v1/version")
+    assert status == 200 and version["api_version"] == 1
     assert (await http(port, "GET", "/api/v1/sessions"))[0] == 401
+    assert (await http(port, "GET", "/api/v1/capabilities"))[0] == 401
     viewer = token(d, "viewer", "observe")
     await d.inventory.refresh_host("h1")
     status, body = await http(port, "GET", "/api/v1/sessions?limit=2", tok=viewer)
