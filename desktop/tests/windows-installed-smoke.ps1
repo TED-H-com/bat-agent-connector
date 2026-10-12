@@ -2,6 +2,7 @@
 param([Parameter(Mandatory)][string]$Endpoint, [Parameter(Mandatory)][string]$Evidence)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'windows-installed-support.ps1')
 if (-not $IsWindows -or $env:GITHUB_ACTIONS -cne 'true' -or $env:RUNNER_ENVIRONMENT -cne 'github-hosted') {
     throw 'Only disposable GitHub-hosted Windows runners may run this fixture'
 }
@@ -34,7 +35,8 @@ $receipt = [ordered]@{
     source_sha = (git rev-parse HEAD); source_tree = (git rev-parse 'HEAD^{tree}')
     runner_os = [Environment]::OSVersion.VersionString; version = $config.version
     installer_sha256 = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-    steps = @()
+    steps = @(); primary_failure = $null; cleanup_errors = @()
+    polling = [ordered]@{attempts = 0; transient_failures = 0; last_transport_error_type = $null}
 }
 function Record-Step([string]$Name) {
     $receipt.steps += $Name
@@ -42,12 +44,7 @@ function Record-Step([string]$Name) {
     Write-Host "Passed: $Name"
 }
 function Wait-Until([scriptblock]$Condition, [string]$Failure, [int]$Seconds = 30) {
-    $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
-    do {
-        if (& $Condition) { return }
-        Start-Sleep -Milliseconds 150
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw $Failure
+    Wait-FixtureUntil $Condition $Failure $Seconds
 }
 function Run-Installer([string]$Path, [string]$Arguments) {
     $process = Start-Process -FilePath $Path -ArgumentList $Arguments -PassThru
@@ -71,10 +68,8 @@ function Stop-Owned([Diagnostics.Process]$Process) {
         if (-not $Process.WaitForExit(10000)) { throw 'Owned app did not exit' }
     }
 }
-function Poll-Count {
-    $state = Invoke-RestMethod "$Endpoint/_fixture/status" -TimeoutSec 3
-    if (@($state.violations).Count) { throw 'Fixture received a mutation or invalid credential' }
-    @($state.requests | Where-Object { $_.path -eq '/api/v1/events' }).Count
+function Poll-Count([DateTime]$Deadline) {
+    Get-FixturePollCount $Endpoint $Deadline $receipt.polling
 }
 Add-Type @'
 using System;
@@ -189,6 +184,8 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
 $app = $null
 $second = $null
 $reopened = $null
+$primaryFailure = $null
+$cleanupFailures = [Collections.Generic.List[object]]::new()
 $managedViewProbe = Join-Path $installRoot 'managed-view-probe.exe'
 try {
     Build-ManagedViewProbe
@@ -223,7 +220,7 @@ try {
         ConvertTo-Json | Set-Content $central -Encoding utf8
     $centralHash = (Get-FileHash $central).Hash
     $app = Start-Dashboard
-    Wait-Until { if ($app.HasExited) { throw 'Installed app exited before bootstrap' }; (Poll-Count) -gt 0 } 'Installed WebView did not poll'
+    Wait-Until { param($Deadline) if ($app.HasExited) { throw 'Installed app exited before bootstrap' }; (Poll-Count $Deadline) -gt 0 } 'Installed WebView did not poll'
     $windows = @([DashboardWindows]::Find($app.Id))
     if ($windows.Count -ne 1 -or -not [DashboardWindows]::IsWindowVisible($windows[0])) {
         throw 'Expected exactly one visible Dashboard window owned by the installed app'
@@ -244,9 +241,10 @@ try {
     Record-Step 'Second invocation exited successfully and restored the same window/process'
     # This is process restart recovery, not a physical tray Quit interaction.
     Stop-Owned $app
-    $before = Poll-Count
+    $restart = @{before = $null}
+    Wait-Until { param($Deadline) $count = Poll-Count $Deadline; if ($null -eq $count) { return $false }; $restart.before = $count; return $true } 'Fixture status unavailable before relaunch'
     $reopened = Start-Dashboard
-    Wait-Until { if ($reopened.HasExited) { throw 'Reopened app exited' }; (Poll-Count) -gt $before } 'Reopened WebView did not resume polling'
+    Wait-Until { param($Deadline) if ($reopened.HasExited) { throw 'Reopened app exited' }; (Poll-Count $Deadline) -gt $restart.before } 'Reopened WebView did not resume polling'
     $windows = @([DashboardWindows]::Find($reopened.Id))
     if ($windows.Count -ne 1 -or -not [DashboardWindows]::IsWindowVisible($windows[0])) { throw 'Reopened window missing' }
     if ((Get-FileHash $central).Hash -cne $centralHash) { throw 'Reopen changed central configuration' }
@@ -293,19 +291,48 @@ try {
     Record-Step 'NSIS uninstall removed the installed executable and version registration'
     $receipt.status = 'passed'
 } catch {
+    $primaryFailure = $_
     $receipt.status = 'failed'
     $receipt.error = $_.Exception.Message
-    throw
+    $receipt.primary_failure = [ordered]@{error = $_.Exception.Message; type = $_.Exception.GetType().FullName}
+    # Preserve the original failure even if process cleanup is later interrupted.
+    try { $receipt | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Evidence 'result.json') -Encoding utf8 }
+    catch { Write-Warning 'Primary fixture failure receipt could not be saved' }
 } finally {
-    Stop-Owned $second
-    Stop-Owned $reopened
-    Stop-Owned $app
-    node tests/managed-installed-probe.mjs stop $dataRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Managed fixture service cleanup failed' }
-    $receipt | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Evidence 'result.json') -Encoding utf8
-    # State was proven absent before this fixture; only fixture-created app data is removed.
-    foreach ($path in @($configRoot, $dataRoot)) {
-        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+    $appsStopped = $true
+    foreach ($owned in @(@{name='second'; process=$second}, @{name='reopened'; process=$reopened}, @{name='app'; process=$app})) {
+        if (-not (Invoke-FixtureCleanupStep "stop_$($owned.name)" { Stop-Owned $owned.process } $cleanupFailures)) { $appsStopped = $false }
     }
-    if (Test-Path -LiteralPath $managedViewProbe) { Remove-Item -LiteralPath $managedViewProbe }
+    $serviceStopped = Invoke-FixtureCleanupStep 'stop_managed_service' {
+        node tests/managed-installed-probe.mjs stop $dataRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Managed fixture service cleanup failed' }
+    } $cleanupFailures
+    $removal = [ordered]@{attempts=0; retries=0}
+    $receipt.cleanup = [ordered]@{apps_stopped=$appsStopped; service_stopped=$serviceStopped; data_removed=$false; removal=$removal}
+    # Exact app handles only: never kill a WebView/app tree (the central must survive UI termination).
+    # WebView releases its files naturally. A sharing lock gets one bounded cleanup window.
+    if ($appsStopped -and $serviceStopped) {
+        $cleanupDeadline = [DateTime]::UtcNow.AddSeconds(15)
+        $removed = $true
+        foreach ($ownedPath in @(@{name='config'; path=$configRoot}, @{name='data'; path=$dataRoot}, @{name='probe'; path=$managedViewProbe})) {
+            if (-not (Invoke-FixtureCleanupStep "remove_$($ownedPath.name)" {
+                Remove-FixturePath $ownedPath.path $cleanupDeadline $removal
+            } $cleanupFailures)) { $removed = $false }
+        }
+        $receipt.cleanup.data_removed = $removed
+    } else {
+        $null = $cleanupFailures.Add([ordered]@{step='remove_private_data'; error='Cleanup blocked: owned app/service stop is unproven; data retained'; type='CleanupBlocked'})
+    }
+    $receipt.cleanup_errors = @($cleanupFailures.ToArray())
+    if ($cleanupFailures.Count) {
+        $receipt.status = 'failed'
+        if ($null -eq $primaryFailure) { $receipt.error = 'Fixture cleanup failed' }
+    }
+    try { $receipt | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Evidence 'result.json') -Encoding utf8 }
+    catch {
+        $null = $cleanupFailures.Add([ordered]@{step='save_receipt'; error=$_.Exception.Message; type=$_.Exception.GetType().FullName})
+        Write-Warning 'Final fixture receipt could not be saved; earlier failure remains primary'
+    }
 }
+if ($null -ne $primaryFailure) { throw $primaryFailure }
+if ($cleanupFailures.Count) { throw 'Fixture cleanup failed; see result.json cleanup_errors' }
