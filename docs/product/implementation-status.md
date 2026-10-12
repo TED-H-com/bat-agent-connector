@@ -1,6 +1,6 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-2026-10-12 06:16 UTC：已採用的 [PM v1.2](pm-v1.2-plan.md) 持續交付，
+2026-10-12 06:43 UTC：已採用的 [PM v1.2](pm-v1.2-plan.md) 持續交付，
 [#115](https://github.com/teddashh/bat-agent-connector/pull/115) 已合併為 `c0027daa`。
 其精確來源 `2b0211e` 的 Python 3.10–3.13 完整 CI 各 5,684 項通過、51 項跳過，
 desktop 五個 jobs 全部通過，Linux 共享 UI 1,949 項通過／3 項跳過；四平台實包升級
@@ -12,8 +12,11 @@ M4 的 Roadmap 品質、原批次回合完成、人工唯讀活動查核與 Brie
 同步來源查核兩版本各 23 項、Brief 後端各 68 項、相關 UI 179 項／Node 34 項／native 9 項，
 以及治理／會議 journal 配接與 Brief API capability 的 Python 3.12 檢查 5 項，皆是分段證據。
 這 5 項使用既有 task-verifier fixture，未驗證新增 standalone verifier／GitHub 品質證據的
-實際討論路徑。core `0.2.6`／desktop `0.1.2` 僅完成來源版號準備，最終整合完整 CI
-與 `0.2.5` → `0.2.6` 實包升級仍待執行。
+實際討論路徑。後續 `097dbe5` 的原 GitHub 討論來源在 Python 3.12／3.10 各 2 項通過，
+standalone verifier 另有一個 Python 3.12 案例通過；兩者不能合稱整條流程通過。
+固定 `d3502a6` 的完整流程仍在維護修復 PR publication 收斂時超過既有 60 秒界線，
+結果為 1 項失敗、254.33 秒，來源查核範圍修正仍待驗證。core `0.2.6`／desktop `0.1.2`
+僅完成來源版號準備，最終整合完整 CI 與 `0.2.5` → `0.2.6` 實包升級仍待執行。
 逐項來源、限制與 W01–W52 狀態見 [PM v1.2 開發狀態](pm-v1.2-status.md)。
 本批未安裝到使用者環境、未發布穩定版，也不宣稱 live 或完整 M4 驗收。
 下文已結案的舊範圍維持原有證據，不代表新的專業 PM／Maintainer 已完成。
