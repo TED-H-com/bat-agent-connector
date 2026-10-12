@@ -360,7 +360,14 @@ def read(ops, principal, method, params):
         from . import pm_runs
         return {"run": pm_runs.read(ops, principal, workspace_id, params.get("run_id"))}
     if method == "pm_capabilities_get":
-        from . import pm_bat_operations, pm_native_capabilities, pm_runs, pm_runtime, pm_worktree
+        from . import (
+            pm_analysis_adapters,
+            pm_bat_operations,
+            pm_native_capabilities,
+            pm_runs,
+            pm_runtime,
+            pm_worktree,
+        )
         workspace = pm_workspace.require_member(ops.db, principal, workspace_id)
         repositories = {repository.lower() for repository in workspace["repositories"]}
         binding = pm_runs.workspace_worktree(ops.db, workspace_id)
@@ -375,6 +382,7 @@ def read(ops, principal, method, params):
         else:
             adoption_reason = None
         native = pm_native_capabilities.read(ops, principal, workspace)
+        bat = pm_bat_operations.capabilities(ops, principal, workspace)
         follow_up_registered = "pm.follow_up.analyze" in ops.actions
         follow_up = {**native, "action_registered": follow_up_registered,
             "authorized": (follow_up_registered and (principal.admin or workspace["membership"]["role"] in {"owner", "contributor"})
@@ -390,7 +398,8 @@ def read(ops, principal, method, params):
                                        if binding else None),
                 "runtime": pm_runtime.capability_report(),
                 "native_analysis": native,
-                "bat_analysis": pm_bat_operations.capabilities(ops, principal, workspace),
+                "bat_analysis": bat,
+                "structured_analysis": pm_analysis_adapters.capabilities(ops, principal, workspace, native=native, bat=bat),
                 "follow_up_analysis": follow_up,
                 "conversation_proposals": {"version": 1, "analysis": native, "adoption_available": adoption_reason is None,
                     "adoption_scopes": ["observe", "manage", "start"], "adoption_role": "owner"},

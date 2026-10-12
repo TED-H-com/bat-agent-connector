@@ -182,6 +182,39 @@ def death_proof(db, run):
     return None
 
 
+def public_process_proof(proof):
+    """Project public evidence without modifying the original private receipt."""
+    if not isinstance(proof, dict):
+        return None
+    def pick(value, fields):
+        # Optional provider metadata must not smuggle an arbitrary nested object
+        # through an otherwise allowed scalar field.
+        return {key: value[key] for key in fields if key in value
+            and type(value[key]) in (str, int, float, bool, type(None))} if isinstance(value, dict) else None
+    def process(value):
+        return pick(value, ('pid', 'startTicks', 'bootIdDigest'))
+    value = pick(proof, ('runtime_id', 'session_id', 'reason', 'automatic_turn_authorized'))
+    if 'process' in proof:
+        value['process'] = process(proof['process'])
+    if isinstance(proof.get('exit'), dict):
+        value['exit'] = pick(proof['exit'], ('confirmedDead', 'exitCode', 'signal', 'action'))
+        value['exit']['process'] = process(proof['exit'].get('process'))
+    if isinstance(proof.get('observation'), dict):
+        value['observation'] = pick(proof['observation'], ('state', 'proof', 'observedAt', 'observed_at'))
+    if isinstance(proof.get('runtime'), dict):
+        # Abort-only proof has its complete original record in the immutable
+        # private abort journal. Public reads retain identity and death facts.
+        original = proof['runtime']
+        value['runtime'] = pick(original, ('sessionId', 'runtimeId', 'profile', 'profileVersion', 'clientContextDigest',
+            'batVersion', 'batSourceRevision', 'batBinaryDigest', 'codexVersion', 'codexSourceRevision',
+            'codexBinaryDigest', 'threadId', 'actualModel', 'configDigest', 'status', 'launchAttempted', 'failureReason'))
+        facts = public_process_proof({'process': original.get('process'), 'exit': original.get('exit'),
+            'observation': original.get('processObservation')})
+        value['runtime'].update(facts)
+        value['runtime_digest'] = pm_runs._digest(original)
+    return value
+
+
 def provenance(db, run):
     """Compact references to the immutable original proof, never a new probe."""
     rows = db.execute("SELECT sequence,document,document_digest FROM pm_bat_runtime_observations "
@@ -196,7 +229,39 @@ def provenance(db, run):
         "bat_source_revision": value["batSourceRevision"], "bat_binary_digest": value["batBinaryDigest"],
         "codex_source_revision": value["codexSourceRevision"], "codex_binary_digest": value["codexBinaryDigest"],
         "native_event_digest": terminal.get("eventDigest"), "native_message_id": terminal.get("nativeMessageId"),
-        "process_completion": death_proof(db, run)}
+        "process_completion": public_process_proof(death_proof(db, run))}
+
+
+def verified_reply(journal, run_id, generation):
+    """Recompute original BAT proof inside the destination's transaction.
+
+    BAT replay message IDs and native app-server item IDs remain distinct.
+    No caller can substitute content, process identity or native evidence.
+    """
+    from . import pm_runtime
+    run = pm_runs.require_writer(journal, run_id, generation)
+    if run['adapter'] != ADAPTER:
+        raise _bad()
+    binding = run['session_binding']
+    launch = next((row['data'] for row in run['receipts']
+        if row['phase'] == 'prepare' and row['status'] == 'prepared'), {})
+    if not binding or not launch or not run['send_cursor']:
+        raise _bad()
+    observed = pm_runtime.assess_turn(binding['session_id'], run['send_cursor'], pm_runs.events(journal.db, run_id),
+        run['cursor'], binding['sdk_session_id'], gap=bool(run['gaps']), has_more=run['has_more'],
+        actual_model=binding['actual_model'], expected_prompt_digest=launch['prompt_digest'])
+    require_completed(journal.db, run, observed, prompt_digest=launch['prompt_digest'], message_id='batc-pm-' + run_id)
+    terminal, payload = pm_runs._terminal(journal.db, run, turn_id=observed['native_turn_id'],
+        sdk_session_id=observed['sdk_session_id'])
+    if payload.get('reason') != 'completed':
+        raise _bad()
+    proof = {'adapter': ADAPTER, 'contract': PROFILE, 'run_id': run_id, 'context_digest': run['context_digest'],
+        'prompt_digest': launch['prompt_digest'], 'native_thread_id': binding['sdk_session_id'],
+        'client_message_id': 'batc-pm-' + run_id, 'send_cursor': run['send_cursor'], 'observed_cursor': run['cursor'],
+        'native_event_seqs': observed['source_event_seqs'],
+        'terminal': {key: terminal[key] for key in ('epoch', 'native_seq', 'digest')},
+        'bat_runtime': provenance(journal.db, run), 'coverage': run['context']['coverage']}
+    return run, observed, proof
 
 
 def require_completed(db, run, assessment, *, prompt_digest, message_id):

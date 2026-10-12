@@ -118,6 +118,9 @@ def read(ops, principal, workspace_id, run_id):
         from . import pm_bat_runtime
         if run["adapter"] == pm_bat_runtime.ADAPTER:
             run["bat_runtime_provenance"] = pm_bat_runtime.provenance(ops.db, run)
+            if isinstance(run.get('outcome'), dict) and 'process_proof' in run['outcome']:
+                run['outcome'] = {**run['outcome'],
+                    'process_proof': pm_bat_runtime.public_process_proof(run['outcome']['process_proof'])}
         _read_bound({"run": run})
         return run
 
@@ -298,10 +301,8 @@ def create(ops, principal, *, operation_id, workspace_id, thread_id, expected_ve
             if context is None:
                 context = pm_discussions.context(ops, principal, workspace_id, thread_id, max_chars=max_chars)
         if _context_factory:
-            row = ops.db.execute("SELECT action FROM operations WHERE operation_id=?", (operation_id,)).fetchone()
-            destinations = {"pm.follow_up.analyze": "follow_up_assessment", "pm.conversation.propose": "conversation_proposal"}
-            if (not row or row[0] not in destinations or adapter != "codex-native-linux"
-                    or context.get("output_destination") != destinations[row[0]]
+            from .pm_analysis_adapters import fixed_context
+            if (not fixed_context(ops.get(operation_id), adapter, context)
                     or context.get("workspace_id") != workspace_id or context.get("thread_id") != thread_id
                     or context.get("thread_version") != expected_version or context.get("coverage", {}).get("max_chars") != max_chars):
                 raise _error("A fixed context requires its original structured-analysis admission", "PM_CONTEXT_REFUSED")

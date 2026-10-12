@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -403,9 +404,25 @@ async def _send(ctx, run, client, plan, carrier):
 
 
 async def _analyze(ctx):
+    return await run_analysis(ctx)
+
+
+async def run_analysis(ctx, *, prepare=None, import_reply=None):
+    """The original BAT executor; only trusted domain code selects a sink."""
+    if prepare is None and import_reply is None:
+        return await _analyze_once(ctx)
+    try:
+        return await _analyze_once(ctx, prepare=prepare, import_reply=import_reply)
+    except (OSError, sqlite3.Error):
+        raise Uncertain('pm.bat.observe', 'Original BAT analysis receipts require recovery') from None
+
+
+async def _analyze_once(ctx, *, prepare=None, import_reply=None):
     principal = pm_workspace.admitted_principal(ctx)
     authority = pm_run_operations.execution_authority(ctx.service.db, principal, ctx.target["workspace_id"], ctx.operation_id)
     def freeze():
+        if prepare is not None:
+            return prepare(ctx, principal, authority)
         pm_native_operations._values(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         run = pm_runs.create(ctx.service, principal, operation_id=ctx.operation_id, **ctx.target,
             expected_version=ctx.preconditions["expected_version"], adapter=runtime.ADAPTER,
@@ -447,9 +464,10 @@ async def _analyze(ctx):
             runtime.require_completed(ctx.service.db, run, value, prompt_digest=launch["prompt_digest"],
                 message_id="batc-pm-" + run["run_id"])
             _check(ctx, run)
-            completed = ctx.effect("pm.bat.import", lambda: pm_runs.import_reply(ctx.service.journal,
-                run["run_id"], run["generation"], content=value["content"], native_turn_id=value["native_turn_id"],
-                sdk_session_id=value["sdk_session_id"], model=value["actual_model"], native_message_id=value["native_message_id"]),
+            completed = ctx.effect("pm.bat.import", lambda: import_reply(ctx.service.journal,
+                run['run_id'], run['generation']) if import_reply is not None else pm_runs.import_reply(ctx.service.journal,
+                    run["run_id"], run["generation"], content=value["content"], native_turn_id=value["native_turn_id"],
+                    sdk_session_id=value["sdk_session_id"], model=value["actual_model"], native_message_id=value["native_message_id"]),
                 lifecycle_bookkeeping=True)
             _retire_completed(ctx, completed)
             return pm_native_operations._result(completed)
