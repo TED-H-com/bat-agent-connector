@@ -10,6 +10,7 @@ import uuid
 import pytest
 
 from bat_agent_connector import pm_discussions, pm_plans, pm_workspace
+from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import ActionDef, OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests.test_pm_discussions import (
@@ -106,6 +107,22 @@ async def test_professional_draft_preserves_all_domains_and_source_truth(ops):
     assert ops.db.execute("SELECT COUNT(*) FROM work_items").fetchone()[0] == 0
     with pytest.raises(sqlite3.IntegrityError, match="immutable"):
         ops.db.execute("UPDATE pm_plan_revisions SET document='{}'")
+
+
+async def test_fixed_revision_source_read_keeps_membership_scope_and_exact_bytes(ops):
+    target, *_ = await planning(ops)
+    saved = await draft(ops, target)
+    args = target['workspace_id'], saved['revision_id']
+    before = ops.db.total_changes
+    assert pm_plans.require_revision_access(ops, READER, *args) is None
+    for principal in (OUTSIDER, Principal(OWNER.actor, frozenset({'manage'}))):
+        with pytest.raises(OperationError) as denied:
+            pm_plans.require_revision_access(ops, principal, *args)
+        assert denied.value.status in (403, 404)
+    with pytest.raises(OperationError) as absent:
+        pm_plans.require_revision_access(ops, OWNER, args[0], 'pmrev_' + 'f' * 32)
+    assert absent.value.status == 404
+    assert ops.db.total_changes == before
 
 
 async def test_draft_requires_explicit_planning_and_selected_sources(ops):

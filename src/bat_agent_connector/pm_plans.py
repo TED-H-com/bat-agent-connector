@@ -537,6 +537,18 @@ def _read(ops, principal, workspace_id):
     pm_workspace.require_member(ops.db, principal, workspace_id)
 
 
+def require_revision_access(ops, principal, workspace_id, revision_id):
+    """Authorize exact historical bytes without reading the current head.
+
+    A later plan may itself derive from evidence about this revision. Its
+    optional display projection is not an original source of that evidence.
+    """
+    with ops.journal.tx():
+        _read(ops, principal, workspace_id)
+        _require_revision_sources(ops.db, principal, workspace_id, revision_id)
+        revision_files(ops.db, workspace_id, revision_id)
+
+
 def _get_plan(ops, principal, workspace_id, revision_id):
     _read(ops, principal, workspace_id)
     _require_revision_sources(ops.db, principal, workspace_id, revision_id)
