@@ -341,9 +341,20 @@ def _authorize_existing(ops, principal, operation, verb):
 
 
 def _bounded(value):
-    if len(_json(value).encode()) > MAX_READ_BYTES:
+    # Match the public HTTP JSON serializer, including spacing and UTF-8 bytes.
+    # The compact canonical storage representation is not the wire size.
+    if len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8')) > MAX_READ_BYTES:
         raise _bad('AHP_READ_TOO_LARGE', 413)
     return value
+
+
+def _public_observation(row, document, *, detail):
+    out = {key: row[key] for key in ('sequence', 'observation_id', 'workspace_id', 'adapter_id',
+        'document_digest', 'created_at', 'actor', 'operation_id')}
+    out['coverage_status'] = document['evidence']['status']
+    if detail:
+        out['document'] = document
+    return out
 
 
 async def _run(ctx):
@@ -400,8 +411,15 @@ async def _run(ctx):
             'adapter_id': adapter.adapter_id, 'binding_digest': binding['ahp_binding_digest'],
             'started_at': started['started_at'], 'finished_at': now, 'evidence': evidence}
         document['original_sources'] = _document_sources(evidence)
-        _bounded(document)
         doc_digest = provider.digest(document)
+        # Reserve the widest SQLite sequence and the larger current-read
+        # envelope before changing source access or inserting an immutable row.
+        # This also covers detail reads, which omit visibility_filtered.
+        row = {'sequence': 2**63 - 1, 'observation_id': oid, 'workspace_id': ctx.target['workspace_id'],
+            'adapter_id': adapter.adapter_id, 'document_digest': doc_digest, 'created_at': now,
+            'actor': ctx.actor, 'operation_id': ctx.operation_id}
+        _bounded({'workspace_id': ctx.target['workspace_id'],
+            'observation': _public_observation(row, document, detail=True), 'visibility_filtered': False})
         _project_access(ops.db, adapter.adapter_id, binding['ahp_binding_digest'], evidence)
         ops.db.execute('''INSERT INTO pm_ahp_observations(observation_id,workspace_id,adapter_id,binding_digest,
             document,document_digest,created_at,actor,operation_id) VALUES(?,?,?,?,?,?,?,?,?)''',
@@ -432,12 +450,7 @@ def _view(ops, principal, wid, row, *, detail):
             or doc['observation_id'] != row['observation_id'] or doc['binding_digest'] != row['binding_digest']):
         raise _bad('AHP_OBSERVATION_CORRUPT')
     _sources_access(ops.db, row['adapter_id'], row['binding_digest'], _covered_sources(doc))
-    out = {key: row[key] for key in ('sequence', 'observation_id', 'workspace_id', 'adapter_id',
-        'document_digest', 'created_at', 'actor', 'operation_id')}
-    out['coverage_status'] = doc['evidence']['status']
-    if detail:
-        out['document'] = doc
-    return out
+    return _public_observation(row, doc, detail=detail)
 
 
 @_snapshot_read
