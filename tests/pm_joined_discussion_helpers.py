@@ -134,7 +134,7 @@ async def discuss_original_failure(w, item, verification, condition, mock):
         for sid in w['coding']}
     evaluated = await quality.execute(w, analysis.request(ops, {**data, 'intake': intake},
         params={'adapter': bat_runtime.ADAPTER}))
-    result = analysis.read(ops, evaluated)
+    result = analysis.read(ops, evaluated, who=OWNER)
     assert result['document'] == document and result['validation']['status'] == 'format_valid'
     assert not result['conclusions_verified'] and not result['accepted_plan_changed']
     run = pm_runs.get_by_operation(ops.db, evaluated['operation_id'])

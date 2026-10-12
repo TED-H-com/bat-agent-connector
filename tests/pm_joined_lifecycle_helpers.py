@@ -49,6 +49,7 @@ class PhaseLedger:
         assert all(key not in self.references for key in references), 'Never overwrite original phase evidence'
         self.phases.append(phase)
         self.references.update(copy.deepcopy(references))
+        print('Joined lifecycle phase:', phase, flush=True)
 
     def assert_original(self, w):
         assert w['workspace_id'] == self.workspace_id

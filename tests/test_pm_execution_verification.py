@@ -100,7 +100,7 @@ async def test_discussion_reader_accepts_exact_verifier_proof_but_not_pm_deliver
     reader = pm_meetings._SourceReader(ops.db)
     before = ops.db.total_changes
     evidence.require_sources(reader, OWNER, w['workspace_id'], proof)
-    assert reader.get(done['operation_id'], principal=OWNER) == done
+    assert reader.get(done['operation_id'], principal=OWNER) == ops.get(done['operation_id'], steps=False)
     assert pm_evidence._read_operation(reader, OWNER, w['workspace_id'], done['operation_id']) is None
     excluded = ops.db.execute("SELECT operation_id FROM operations WHERE action LIKE 'pm.%' AND action!='pm.execution.verify' LIMIT 1").fetchone()[0]
     with pytest.raises(OperationError, match='NOT_FOUND'):
