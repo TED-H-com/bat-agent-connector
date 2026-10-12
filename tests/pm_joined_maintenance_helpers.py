@@ -22,6 +22,7 @@ from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector import pm_release_baselines as baselines
 from bat_agent_connector import pm_required_ci as required_ci
 from bat_agent_connector import pm_work_batch_evidence as evidence
+from bat_agent_connector import pm_workload as workload
 from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_execution_verification as verifier
@@ -159,6 +160,8 @@ async def repair_original_release(w, mock):
     assert observed['status'] == 'succeeded', observed
     observation = github.get_observation(ops, OWNER, wid, observed['result']['observation_id'])['observation']
     assert observation['document']['evidence']['status'] == 'complete', observation
+    captured = await settle(w, shared_request(w, workload.ACTION))
+    assert captured['status'] == 'succeeded', captured
     finding = observation['document']['evidence']['maintenance_sources']['issues']['findings'][0]
     request = shared_request(w, repairs.ACTION)
     request['params'].update(rule_key='member_password_type', finding_ref={
