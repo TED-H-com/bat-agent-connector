@@ -167,12 +167,14 @@ M4 第 13 步的 followup 已接入本批整合：固定 Maintenance Review 候�
 固定整合 `cfea00e` 的 AHP socket、來源／歷史、API 與 skill 回歸在 Python 3.12／3.10
 各 112 項通過。原生來源 `fa0107c` 的全部 targets 有 134 項通過、1 項既有忽略；
 共享 UI 的最終欄位回歸 `bf318e1` 有 38 項通過，Node 34 項、兩種建置與生成資產檢查通過。
+保存前現以實際 UTF-8 序列化檢查完整回應，避免文件成功保存卻超過讀取上限；
+精確 2 MB ±1 byte 與來源／API 回歸 `8eeabb2` 在 Python 3.12／3.10 各 49 項通過。
 這些是分段 fixture 結果，完整後端與目標平台 CI、合併及 live host 驗證仍分開追蹤。
 
 同批準備不同的 core／app 版號，使新 client 不會因 core 同版號而重用舊程式。
 升級 fixture 使用兩份實際打包 binary，核對原身分、workspace、operation key／歷史、
 三個並行 clients、重啟與拒絕降版；未知外部結果必須阻擋升級並保留舊 owner。
-最後整合 `bc6afc8` 的 Linux 0.2.5 core 已從成功 desktop CI 的 `56d1bf5`／0.2.4 實包升級通過，
+加入完整回應大小防護後，最後整合 `f00070f` 的 Linux 0.2.5 core 已從成功 desktop CI 的 `56d1bf5`／0.2.4 實包升級通過，
 上述身分／歷史／並行／重啟／拒絕降版與未知效果防護均已核對，測試服務及目錄已清除。
 這次使用 child PATH 無 Python 的打包程式；較早 package pair 的結果分開保留。
 CI 將由固定 `56d1bf5`／0.2.4 建立 baseline，在各桌面平台驗證新 core；目前尚未跑完。
