@@ -38,11 +38,21 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       values.append(h('p', {class: 'muted'}, readable('pm_brief_status_', section.status)));
       if (section.quality) values.append(h('p',{},h('strong',{},t('pq_count',{
         qualified:section.quality.qualified_requirements,total:section.quality.total_requirements}))),h('p',{class:'muted'},t('pq_coverage')));
+      if (name==='deviations'&&section.version===1) values.append(h('p',{class:'muted'},t('pq_deviations_boundary')),
+        h('details',{'data-pm-deviation-coverage':''},h('summary',{},t('pq_deviations_coverage')),
+          h('p',{},t(section.coverage?.selected_source_coverage_complete?'pq_deviations_selected':'pq_deviations_partial')),
+          ...(section.coverage?.selections||[]).map(selection=>h('div',{},h('a',{href:`#/work/${selection.work_item_id}`},t('pm_evidence_open_work')),
+            h('p',{},selection.reason ? t('pq_deviation_reason_'+selection.reason) :
+              `${t('pq_acceptance')}: ${t('pq_'+selection.acceptance)} · ${t('pq_dod')}: ${t('pq_'+selection.dod)}`))),
+          h('pre',{class:'pm-brief-proof'},JSON.stringify(section.coverage,null,2))));
       for (const item of section.items || []) {
         const source = item.source || {}, details = h('div'), row = h('details', {'data-pm-brief-fact': item.kind || name},
-          h('summary', {}, item.kind==='quality_assessment' ? t(item.details?.qualified?'pq_qualified':'pq_not_qualified') : item.text), details);
+          h('summary', {}, item.kind==='quality_assessment' ? t(item.details?.qualified?'pq_qualified':'pq_not_qualified') :
+            item.kind==='quality_rejection' ? `${t('pq_rejected_'+item.details.criterion.criterion.kind)}: ${item.text}` : item.text), details);
         if(item.kind==='quality_assessment')details.append(qualityFact({h,t,fact:item.details}));
-        if (item.status) details.append(h('p', {class: 'muted'}, readable('pm_status_', item.status)));
+        if(item.kind==='quality_rejection')details.append(h('p',{},t('pq_recorded_by',{actor:item.details.assessed_by})),
+          h('p',{},item.details.assessment.rationale),h('p',{class:'muted'},t('pq_fixed')));
+        if (item.status) details.append(h('p', {class: 'muted'}, item.kind==='quality_rejection'?t('pq_rejected'):readable('pm_status_', item.status)));
         if (source.kind === 'plan_input') details.append(h('p', {class: 'muted'}, t('pm_brief_plan_source')),
           h('code', {}, source.revision_id), h('p', {}, source.source_ref?.ref || source.source_ref?.message_id || ''));
         else if (source.kind === 'plan_adoption') details.append(h('p', {class: 'muted'}, t('pm_brief_decision_source')),
@@ -61,7 +71,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
         if (item.details) details.append(h('pre', {class: 'pm-brief-proof'}, JSON.stringify(item.details, null, 2)));
         values.append(row);
       }
-      if (!section.items?.length) values.append(h('p', {}, t('pm_brief_empty_' + name)));
+      if (!section.items?.length) values.append(h('p', {}, t(name==='deviations'&&section.version===1?'pq_deviations_empty':'pm_brief_empty_' + name)));
       sections.append(h('section', {class: 'pm-brief-row', 'data-pm-brief-section': name}, h('h3', {}, t('pm_brief_' + name)), values));
     }
     view.append(sections);

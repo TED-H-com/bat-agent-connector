@@ -314,8 +314,9 @@ for(const locale of ['en','zh-TW'])test(`Sprint close freezes explicit original 
   expect(f.state.writes[0].body.params.rationale).toBe('Retain this exact original review');
   expect(f.state.writes[0].body.params).not.toHaveProperty('_baseline');
 });
-for(const mismatch of ['assessment','dod','candidate','work','withdrawal'])test(`Sprint selection refuses changed original quality ${mismatch}`,async({page})=>{
+for(const mismatch of ['assessment','dod','candidate','work','withdrawal','rejected'])test(`Sprint selection refuses changed original quality ${mismatch}`,async({page})=>{
   const {f,ref}=qualityFixture();await mount(page,f);await openAction(page,'pm.sprint.close');const editor=action(page,'pm.sprint.close');
+  if(mismatch==='rejected')f.state.qualityReview.qualified=false;
   if(mismatch==='assessment')f.state.qualityReview.assessment={...ref,version:3};
   if(mismatch==='dod')f.state.qualityReview.context.dod_ref.revision_id='pmdod_'+'9'.repeat(32);
   if(mismatch==='candidate')f.state.qualityReview.context.native_result.candidate_commit='c'.repeat(40);
