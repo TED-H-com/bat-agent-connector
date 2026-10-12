@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sqlite3
 import threading
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -314,6 +316,33 @@ async def test_configuration_activation_revokes_pending_collector_read(ready, mo
         finish.set()
         await task
     assert d.journal.db.execute("SELECT count(*) FROM resource_usage_samples").fetchone()[0] == 0
+
+
+async def test_partial_database_write_rolls_back_samples_and_cursor_then_replays_once(ready):
+    d, wid, source = ready
+    append(source.path, codex_usage(), codex_usage(2))
+    d.journal.db.execute("""CREATE TRIGGER fixture_interrupted_usage BEFORE INSERT ON resource_usage_samples
+        WHEN (SELECT count(*) FROM resource_usage_samples)>0 BEGIN
+        SELECT RAISE(ABORT, 'fixture interrupted transaction'); END""")
+    with pytest.raises(sqlite3.IntegrityError, match="fixture interrupted"):
+        await d.usage_collector.collect_once()
+    assert d.journal.db.execute("SELECT count(*) FROM resource_usage_samples").fetchone()[0] == 0
+    assert d.journal.db.execute("SELECT count(*) FROM resource_usage_sources").fetchone()[0] == 0
+    assert read(d, wid)["rows"][0]["status"] == "pending"
+    d.journal.db.execute("DROP TRIGGER fixture_interrupted_usage")
+    await d.usage_collector.collect_once()
+    await d.usage_collector.collect_once()
+    result = read(d, wid)["rows"][0]
+    assert result["observations"] == 2 and result["metrics"]["total"]["value"] == 240
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX file-type fixture")
+async def test_non_regular_file_is_refused_before_open(ready):
+    d, wid, source = ready
+    source.path.unlink()
+    os.mkfifo(source.path)
+    await asyncio.wait_for(d.usage_collector.collect_once(), 2)
+    assert read(d, wid)["rows"][0]["status"] == "unsafe_file"
 
 
 async def test_read_entrypoint_parity_scope_and_no_collection(served, tmp_path, monkeypatch):  # noqa: F811

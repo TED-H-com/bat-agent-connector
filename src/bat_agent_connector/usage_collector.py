@@ -20,7 +20,7 @@ def now():
 
 
 def schema(journal):
-    with journal.db:
+    with journal.tx():
         journal.db.execute("""CREATE TABLE IF NOT EXISTS resource_usage_sources (
             source_id TEXT PRIMARY KEY, binding TEXT NOT NULL, cursor TEXT NOT NULL,
             parser TEXT NOT NULL, quota TEXT, checked_at TEXT, successful_at TEXT, status TEXT NOT NULL)""")
@@ -40,11 +40,14 @@ def read_page(source, cursor, parser):
     # Config authorizes one regular file; symlinks, pipes, devices and recursive scans are refused.
     if any(p.is_symlink() for p in (source.path, *source.path.parents)):
         raise UsageInvalid("unsafe_file")
+    candidate = source.path.lstat()
+    if not stat.S_ISREG(candidate.st_mode):
+        raise UsageInvalid("unsafe_file")
     fd = os.open(source.path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         identity = [info.st_dev, info.st_ino]
-        if not stat.S_ISREG(info.st_mode):
+        if not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != (candidate.st_dev, candidate.st_ino):
             raise UsageInvalid("unsafe_file")
         initial_prefix_len = min(info.st_size, 256)
         initial_prefix = _hash(stream.read(initial_prefix_len))
@@ -134,7 +137,7 @@ class UsageCollector:
                     error = "source_unavailable"
                 if not self.journal.owner_valid() or source not in self.config.sources:
                     return
-                with db:
+                with self.journal.tx():
                     db.execute("INSERT OR IGNORE INTO resource_usage_sources VALUES(?,?,?,?,?,?,?,?)",
                                (source.source_id, source.binding, "{}", "{}", None, None, None, "pending"))
                     at = now()
