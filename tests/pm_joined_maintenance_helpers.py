@@ -195,7 +195,7 @@ async def repair_original_release(w, mock):
         for key, value in reference.items() if key != 'candidate_commit'}}))
     parent = await advance(w, parent, rounds=10)
     delegated = delivery.child(ops, parent)
-    assert delegated and delegated['status'] == 'waiting_external', (parent, view(w, parent))
+    assert delegated and delegated['status'] == 'waiting_external', {'parent': parent, 'delivery': delegated}
     for run_id, run in w['gh'].runs.items():
         if run['status'] != 'completed':
             run.update(status='completed', conclusion='success')
