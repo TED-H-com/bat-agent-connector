@@ -11,6 +11,8 @@ carrier, accepted revisions and context bundles remain the document authority.
 expected_accepted_revision_id,expected_continuity_digest}`. Current owners need
 observe/manage/start. The existing workspace capabilities read supplies this exact
 CAS and the current receipt; callers never enter internal identities manually.
+Public writer status contains only `generation` and `occupied`; membership alone
+does not reveal a run ID whose original discussion sources may be private.
 The selected runtime can be unavailable for preflight: saving a choice does not
 prove installation, authentication, model availability or runtime confinement.
 

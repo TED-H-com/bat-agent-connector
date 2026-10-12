@@ -272,3 +272,22 @@ test('structured Follow-up unknown request preserves original BAT key after capa
   await form.getByRole('button',{name:'Check original request',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
   expect(f.state.writes[1]).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
+
+for(const locale of ['en','zh-TW'])test(`Follow-up uses saved workspace choice and retains original pending adapter, ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage();
+  try{
+    const f=assessedFixture();f.state.structured_analysis=structuredCapability({native:true});f.state.loseAnalysisReply=true;
+    let adapter='bat-pm-linux-v1';const originalDispatch=f.dispatch;
+    f.dispatch=async input=>{const result=await originalDispatch(input);
+      if(input.path===`/pm/workspaces/${workspaceId}/capabilities`)result.data.workspace_adapter={version:1,choice:{adapter}};
+      return result;};
+    await mount(page,f,{locale});await page.locator('[data-pm-follow-up-analyze] > summary').click();
+    const form=page.locator('[data-pm-action="pm.follow_up.analyze"]'),choice=form.locator('[data-pm-structured-analysis] select');
+    await expect(choice).toHaveValue(adapter);await expect(choice).toBeDisabled();
+    await form.locator('textarea').fill('Use the original fixed follow-up context.');await form.locator('button[type=submit]').click();
+    await expect(form).toContainText('Original analysis reply lost');const original=structuredClone(f.state.writes[0]);
+    adapter='codex-native-linux';await refresh(page);await expect(choice).toHaveValue('bat-pm-linux-v1');await expect(choice).toBeDisabled();
+    await form.locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(2);
+    expect(f.state.writes[1]).toEqual(original);expect(original.body.params.adapter).toBe('bat-pm-linux-v1');
+  }finally{await context.close();}
+});

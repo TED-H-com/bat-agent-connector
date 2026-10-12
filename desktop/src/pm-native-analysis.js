@@ -1,4 +1,5 @@
 import {pmContextBundle} from './pm-context-bundle.js';
+import {workspaceAdapter,workspaceAdapterAllows,workspaceAdapterChoice} from './pm-workspace-adapter.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
 export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard}) {
   const specs = [
@@ -20,6 +21,8 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   const authorized = () => permitted(false) && thread()?.capabilities?.write === true
     && caps()?.scopes?.includes('start');
   const requests = [];
+  const choice = workspaceAdapterChoice({h,t,form,input,labelled,caps,capability,permitted,target,refresh,
+    onStateChange:()=>{if(ready)for(const row of requests)row.request.update();}});
   const otherLocked = spec => requests.some(row => row.spec !== spec && row.request.locked());
   for (const spec of specs) {
     const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
@@ -30,6 +33,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
       params: values => ({purpose: values.purpose, ...context.params(values), ...(values.model.trim() ? {model: values.model.trim()} : {})}),
       preconditions: () => ({expected_version: thread().thread.version}),
       permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec)
+        && !choice.locked() && workspaceAdapterAllows(capability(),spec.adapter)
         && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
       recoverPermitted: authorized, label: 'pm_native_analyze', onSaved: refresh,
       onStateChange: () => {context.update();if (ready) render();},
@@ -47,15 +51,20 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   });
   const box = h('section', {class: 'pm-packages pm-native-analysis', 'data-pm-native-analysis': ''},
     h('h3', {}, t('pm_native_title')), h('p', {class: 'muted'}, t('pm_native_context_only')),
+    choice.box,
     h('div', {class: 'pm-fields'}, labelled('pm_analysis_adapter', selector)),
     explanation, binding, recovery, ...requests.map(row => row.request.box), current);
   function render() {
+    const locked=requests.find(row=>row.request.locked());
+    const fixed=workspaceAdapter(capability())?.choice?.adapter;
+    if(fixed) selected=locked?.spec.key||specs.find(spec=>spec.adapter===fixed)?.key||selected;
     const active = specs.find(spec => spec.key === selected);
     const descriptor = capability()?.[selected];
     const options = requests.filter(row => advertised(row.spec) || row.request.locked() || row.spec === active);
     selector.replaceChildren(...options.map(row => h('option', {value: row.spec.key},
       t(row.spec.label) + (row.request.locked() ? ' · ' + t('pm_analysis_original') : ''))));
     selector.value = selected;
+    selector.disabled=Boolean(fixed);
     for (const row of requests) row.request.box.hidden = row.spec !== active;
     const pending = requests.filter(row => row.spec !== active && row.request.locked());
     recovery.hidden = !pending.length;
@@ -80,6 +89,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   let lastRuns = [];
   function update(runs) {
     if (runs) lastRuns = runs;
+    choice.update();
     render();
     current.replaceChildren(...lastRuns.filter(run => specs.some(spec => spec.adapter === run.adapter)).map(run =>
       h('p', {class: 'pm-source'}, h('strong', {}, run.purpose), ' · ',
