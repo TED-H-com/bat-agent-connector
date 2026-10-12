@@ -3,9 +3,9 @@
 方向以 [已採用的完整 v1.2 計畫](pm-v1.2-plan.md)為準，保留 20 章、W01–W52、A01–A64 與 M0–M6。
 專業 PM 的目的，是管理需求、價值、範圍、時程、資源、品質、風險、決策與成果；討論與執行基礎是支援這些責任的能力。
 
-## 目前整合狀態（2026-10-12 05:44 UTC）
+## 目前整合狀態（2026-10-12 06:16 UTC）
 
-#98–#114 已合併。下列是接續候選的固定證據；後面的分批紀錄保留當時範圍，
+#98–#115 已合併，主線為 `c0027daa`。下列分開記錄已合併來源與本機接續候選；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
 
 - [#113](https://github.com/teddashh/bat-agent-connector/pull/113) `de30795`：成果評估、
@@ -17,7 +17,8 @@
   Windows 安裝 fixture 的首個 HTTP 讀取逾時後，清理錯誤蓋過原始失敗。
   新版只修測試的有界重試及失敗保存；精確 `50dbb7e` 的 desktop 五個 jobs 全部通過，
   Linux 共享 UI 1,911 項通過／3 項跳過，四平台實包升級的原始回執與下載雜湊已核對。
-  Python 3.10–3.13 完整 CI 各 5,629 項通過、51 項跳過；已合併為 `53600baf`。
+  Python 3.10–3.13 完整 CI 各 5,629 項通過、51 項跳過；3.12 的 10 則 resource-tracker
+  警告保留在原 log。已合併為 `53600baf`。
   這些是原候選的 CI／實包 fixture 證據，不代表已安裝或發布穩定版。
 - BAT owner fork [#3](https://github.com/teddashh/better-agent-terminal/pull/3) 已合併至
   `737f6fb`，內容與通過 CI 的 `4be316e` 相同。固定 Linux server 套件的 59 個 payload
@@ -31,8 +32,10 @@
   `a3c332b` 有 15 項相關 UI 通過，兩者使用真正 browser locale 驗證英／繁中。
   原 98 項中的八個 workspace 案例曾使用未生效的語系儲存鍵，保留為功能測試證據，
   不當成繁中驗證。工作量原因與來源說明 `8dda3ff` 另有 66 項 UI 及 34 項 Node 通過。
-  #115 已改接 main；精確 `2b0211e` 的 desktop 五個 jobs 通過，Python 3.11 完整 CI
-  有 5,684 項通過、51 項跳過，其他 Python 版本仍待結果；尚未合併主線。
+  精確 `2b0211e` 的 Python 3.10–3.13 完整 CI 各 5,684 項通過、51 項跳過；
+  desktop 五個 jobs 全部通過，Linux 共享 UI 1,949 項通過／3 項跳過。四平台
+  0.2.4 → 0.2.5 實包升級與八份安裝／升級 fixture artifacts 的原始回執及雜湊已核對。
+  已於 06:12 UTC 合併為 `c0027daa`，合併樹與原通過 CI 的來源樹相同。
 - Refresh fixture `0d8e848` 固定背景 catalog 讀取先於點擊的順序。負控制重現舊順序的
   disabled-click timeout；修正後的實際中央／瀏覽器完整流程通過，包括草稿、精確操作帳本、
   Brief 輸出與 pause／close／reopen。早期只攔一個重疊讀取的兩次控制組未重現，未算成失敗重現證據。
@@ -48,8 +51,9 @@
   人工 session 僅支援既有明確工作連結的一次原輸入完整回合，唯讀查核不取得控制權、
   不釋放人工資源容量，也不接受工程品質；多次輸入、缺失或過期證據仍保留 blocker。
   `4f8f187` 的首次 Python 3.12 focused 檢查 23 項通過，修正原 workspace／profile
-  wire 解碼後 `6e88d44` 的 5 項 Python 3.12 人工來源檢查通過；169 項 Python 3.12／3.10
-  最終回歸仍在執行，不能把早期分段結果當成最終矩陣已通過。
+  wire 解碼後 `6e88d44` 的 5 項 Python 3.12 人工來源檢查通過；同一來源的 Python 3.12
+  延伸回歸 169 項通過。該舊來源的 Python 3.10 執行已中止、沒有完成結果；
+  後續整合來源的完整回歸仍待完成，不能記為兩版本均通過。
 - 原回合／人工唯讀觀察 UI `20188735` 的 106 項共享 UI 及 34 項 Node 檢查通過，
   包含真正英／繁中 locale、Web／Tauri、窄畫面、來源撤權與原 key 恢復。
   Kanban 分開顯示歷史回合完成、品質與目前工作量；降為 reader 後仍可查回可讀的原收據，
@@ -58,6 +62,19 @@
   實際 HTTP／MCP 核對人工查核、writer 降權後原 key 查回與來源撤權。兩個服務私有
   runtime observers 不再宣告 caller 可用；原 native 共用 POST envelope 無需新增路由。
   Canonical skill 及生成版本一致，Ruff／public-content／diff 檢查通過。
+- 同步來源讀取的重複查核修正 `85bec31`，將暫存限制在同一同步讀取及資料庫快照，
+  跨 await、修改或新的授權讀取仍重新檢查。Python 3.12／3.10 各 23 項通過；
+  各有一則 `record_property` 與 JUnit xunit2 相容性警告，原始紀錄保留。
+- 固定品質拒絕的 Brief 投影已接入本機整合：原接受條件、負責 reviewer、原候選與
+  verifier 引用保存在同一快照，Web／Tauri 及 Markdown／HTML／SVG 共用其偏差資料。
+  後端 Python 3.12／3.10 各 68 項通過，相關共享 UI 179 項、Node 34 項與 native
+  Brief 存檔 9 項通過；這些是各自固定來源的分段檢查，尚非最終整合完整 CI。
+- 同帳本 fixture 發現的治理／會議唯讀 journal 配接問題已修正；Python 3.12 的
+  5 項檢查涵蓋既有 task-verifier fixture 的治理／會議來源及 Brief API capability。
+  該次執行早於新增的 `pm.execution.verify`／`pm.github.observe` 配接，不能用來驗證
+  standalone verifier 或 GitHub 品質證據的實際討論路徑；其新回歸仍待完整結果。
+  維護修復把自己的新 reservation 算成未完成原批次的問題，已整合 `66a4bea` 的修正為
+  `0210b15`；完整修復及後續 Review 流程仍待驗證。
 - 版本準備 `673a7c9` 在本機整合候選將 core／desktop 分別升為 `0.2.6`／`0.1.2`，
   skill metadata 同步為 `0.2.6`，下次實包升級 fixture 固定以 `50dbb7e`／core `0.2.5`
   為基底。這是來源及版號準備，不能引用 #114 的升級結果宣稱新版本已完成實包驗收。
@@ -65,7 +82,7 @@
 M4 的同一 workspace、同一份 ID 紀錄 fixture 已走到原需求開發、品質、交付與自動 Maintain；
 接續維護修復、Review 回 Idea、暫停重開及中央重啟後的新 PM 回合／計畫更新仍在驗證，
 尚未取得整條流程成功結果。上述 Roadmap、原回合、人工觀察、入口與新版號只在本機
-整合分支，不屬於已合併的 #114 或正在 CI 的 #115；不刪除人工 session 或 worktree 製造閒置。
+整合分支，不屬於已合併的 #114／#115；不刪除人工 session 或 worktree 製造閒置。
 本批未安裝到使用者環境、未發布穩定版，也沒有新增 live 模型／主機驗收宣稱。
 
 ## 第一批：workspace、Idea 與 Planning 草稿
@@ -140,7 +157,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 | W06 | P0 | Session worktree work 關聯 | #95 已合併：原 project／work 明確綁定、固定已採用 plan／需求引用、既有來源關聯；不轉移 session 控制權 |
 | W07 | P0 | PM worktree bootstrap | 第三、四批：設定綁定、固定來源、自有 worktree、不可覆寫草稿與計畫 commit；不夾帶程式或其他 index 修改 |
 | W08 | P0 | Plan revision 與採用流程 | #93 已合併：不可變文件、專業領域／來源、Git 證據、accepted CAS、理由與範圍版次；不是執行授權 |
-| W09 | P1 | PM runner 與 adapter selection | 開發分支：中央原生與所選 BAT 的單次分析、計畫提案及 Follow-up 可按操作明確選擇，保留原請求與未知結果查回；長期工作 adapter 接續仍見 W24 |
+| W09 | P1 | PM runner 與 adapter selection | #113／#115 已合併中央原生與所選 BAT 的單次分析、計畫提案及 Follow-up 明確選擇，保留原請求與未知結果查回；長期工作 adapter 接續仍見 W24 |
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | #95／#96／#97 已合併：固定工作證據快照與 Idea／Planning 原生分析；完整 Follow-up／會議引導與品質判斷待做 |
 | W11 | P1 | Plan diff 與影響分析 | 開發分支：固定版本／來源／接受條件比較、明確工作關聯的影響候選；語意判讀與採用變更流程仍待做 |
 | W12 | P1 | Project Brief | #96 的五項來源總覽與固定快照已合併；#113 加入同一份原始評估的需求／DoD／合格數量及來源投影；完整語意偏差判讀仍待實作 |
