@@ -357,10 +357,10 @@ class Collector:
                 or data.get('native_input_state') != proof.get('input_state')):
             return False
         if manual:
-            from . import registry
+            from . import pm_session_quiescence, registry
             counter = runtime.input_state({'inputState': data.get('native_input_state')})
             if (data.get('provenance') != 'manual' or registry.get(row['host'], row['session_id'])
-                    or counter != origin['input_state'] or counter is None or counter['received'] != 1 or counter['pending'] != 0):
+                    or not pm_session_quiescence.receipt_applies(proof, origin, counter)):
                 return False
         elif (data.get('provenance') != 'connector_managed' or data.get('api_access') != 'managed'
                 or not runtime.same_original_input(origin, runtime.input_state({'inputState': data.get('native_input_state')}))
