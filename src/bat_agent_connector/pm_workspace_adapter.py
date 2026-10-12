@@ -85,6 +85,11 @@ def _access(db, principal, wid, document):
     workspace = pm_workspace.require_member(db, principal, wid)
     if not principal.allows('observe'):
         raise bad('PM choice reads require observe', 'FORBIDDEN', 403)
+    previous = document.get('previous_choice')
+    if previous:
+        if _ref(_row(db, wid, previous['version'])) != previous:
+            raise bad('Original preceding PM choice is unavailable', 'NOT_FOUND', 404)
+        pm_access.require_operation_sources(db, principal, [previous['operation_id']])
     anchor = document['continuity']
     pm_access.require_operation_sources(db, principal, anchor['source_operation_ids'])
     if anchor['accepted_context_ref']:
