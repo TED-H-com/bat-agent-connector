@@ -7,6 +7,11 @@
 
 ## 目前整合狀態
 
+- **Charter／RTM 開發分支：** `feat/pm-v12-charter-rtm-20261012` 從 #120／`c0caf02`
+  新增總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯。範圍與尚缺項目見
+  [工作台合約第 13 節](../design/pm-project-control-center.md#13-charterrtm-第一段實作範圍)。
+  此列描述候選來源，不宣稱已合併、安裝或完成六視圖與真人驗收。
+
 - **新的管理工作台方向已記錄，尚未完成：**[六視圖合約](../design/pm-project-control-center.md)
   定義 Charter、Agent 資源、RTM、技術相依、時程及問題／行動／變更；保留看板與工作空間。
   #118／#119 的樣式、截圖與表單整理不是這六頁的交付。W30 collector 與配額 adapter 仍待實作。

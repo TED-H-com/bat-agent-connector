@@ -57,3 +57,11 @@ on the page, with quiet lane surfaces and white cards, without an enclosing pane
 PM navigation stays visible while reading a long plan on desktop. Dispatch and
 plan reading use an 820px maximum width; buttons and disclosure links should not
 compete visually with work titles.
+
+The project workbench defaults to a six-section Charter when plan and snapshot
+capabilities are present. Compact project navigation separates report reading,
+traceability, work flow and existing editing tools. Summary sequence and adopted
+plan identity remain distinct. Report sources and full plan text expand on demand.
+RTM uses an expandable table with a work inspector; source IDs wrap below titles.
+Keep requirement order, expanded rows and filters stable during source refreshes.
+Remove withdrawn source facts from rows, counts and the inspector together.
