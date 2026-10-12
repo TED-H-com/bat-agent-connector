@@ -315,7 +315,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const checkbox of facts?.querySelectorAll('input[type=checkbox]') || [])
       checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
   };
-  const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (!forms[i].box.isConnected) forms.splice(i, 1); else forms[i].update();}};
+  // Initial section constructors can register forms before the thread attaches them.
+  const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (forms[i].box.isConnected) forms[i].update(); else if (initialReadComplete) forms.splice(i, 1);}};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
   const sourceText = item => {
