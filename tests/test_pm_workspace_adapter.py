@@ -290,7 +290,7 @@ async def test_shared_http_rpc_mcp_read_and_registered_action_use_original_choic
             'preconditions': read['workspace_adapter']['preconditions']}
         status, admitted = await http(port, 'POST', '/api/v1/operations?wait=3', tok=auth,
             body=body, headers={'Idempotency-Key': uuid.uuid4().hex})
-        assert status == 200, admitted
+        assert status == 202, admitted  # Newly admitted operations retain HTTP202 even after wait succeeds.
         assert admitted['operation']['status'] == 'succeeded', admitted
         expected = (await http(port, 'GET', path, tok=auth))[1]
         target = {'workspace_id': w['workspace_id']}
