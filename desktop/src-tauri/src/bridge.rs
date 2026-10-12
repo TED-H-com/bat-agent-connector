@@ -1275,6 +1275,11 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     if path == "/workspaces" && input.idempotency_key.is_some() {
         return Err("Workspace discovery accepts no operation key".into());
     }
+    let resource_timestamp = if pm && path.ends_with("/resources") {
+        Some(Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$").unwrap())
+    } else {
+        None
+    };
     let mut query_keys = std::collections::HashSet::new();
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
         if key.chars().chain(value.chars()).any(char::is_control) {
@@ -1371,12 +1376,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 && !path.ends_with("/context")
                 && !path.ends_with("/context-bundle");
             let valid = match key.as_ref() {
-                "since" | "until" if path.ends_with("/resources") => value.len() <= 40
-                    && Regex::new(
-                        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$",
-                    )
-                    .unwrap()
-                    .is_match(&value),
+                "since" | "until" if path.ends_with("/resources") => {
+                    value.len() <= 40
+                        && resource_timestamp
+                            .as_ref()
+                            .is_some_and(|pattern| pattern.is_match(&value))
+                }
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
                         && serde_json::from_str::<serde_json::Value>(&value)
