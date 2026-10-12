@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_runs, pm_source_reads, pm_workspace
+from bat_agent_connector import pm_access, pm_runs, pm_snapshots, pm_source_reads, pm_workspace
 from bat_agent_connector import pm_bat_operations as bat
 from bat_agent_connector import pm_conversation_proposals as proposals
 from tests.test_pm_bat_structured_analysis import (
@@ -43,7 +43,7 @@ def prior_check(ctx, run, *, sending=False):
 async def test_each_pm_frame_rechecks_writer_and_requester_with_one_source_read(structured, mock, monkeypatch, record_property):  # noqa: F811
     w, ops = structured, structured['d'].ops
     check, requester, visible = bat._check, pm_runs.require_requester, proposals._operation_visible
-    active, observed = [], []
+    active, observed, failures = [], [], []
 
     def count_requester(db, run):
         if active:
@@ -67,13 +67,17 @@ async def test_each_pm_frame_rechecks_writer_and_requester_with_one_source_read(
             value, new_queries = measured(ops.db, lambda: check(ctx, run, **kwargs))
         finally:
             active.pop()
-        assert ops.db.total_changes == before and pm_source_reads._READ.get() is None
-        assert row['requester'] == 2 and row['sources'] == 1
-        if not observed:
-            assert value == previous is None
-            assert new_queries * 3 < old_queries * 2
-            record_property('pm_frame_prior_selects', old_queries)
-            record_property('pm_frame_scoped_selects', new_queries)
+        try:
+            assert ops.db.total_changes == before and pm_source_reads._READ.get() is None
+            assert row['requester'] == 2 and row['sources'] == 1, row
+            if not observed:
+                assert value == previous is None
+                assert new_queries * 3 < old_queries * 2, (old_queries, new_queries)
+                record_property('pm_frame_prior_selects', old_queries)
+                record_property('pm_frame_scoped_selects', new_queries)
+        except AssertionError as error:
+            failures.append(error)
+            raise
         observed.append(row)
         return value
 
@@ -81,6 +85,8 @@ async def test_each_pm_frame_rechecks_writer_and_requester_with_one_source_read(
     monkeypatch.setattr(proposals, '_operation_visible', count_visible)
     monkeypatch.setattr(bat, '_check', checked)
     out = await execute(w, request(w, proposals.ACTION))
+    if failures:
+        raise failures[0]
     assert out['status'] == 'succeeded', out
     assert len(observed) > 3  # Distinct fresh guards across actual native IO.
     assert result(w, out)['validation']['status'] == 'format_valid'
@@ -93,6 +99,7 @@ async def test_next_pm_input_frame_rechecks_changed_writer_and_original_source(s
     w, ops = structured, structured['d'].ops
     client = ops.context['fleet'].client('h1')
     invoke, check, visible = client._invoke_checked, bat._check, pm_access.visible
+    snapshot_read = pm_snapshots._out
     checks, changed = [], []
     original = ops.db.execute('SELECT operation_id FROM pm_messages WHERE message_id=?',
         (w['message']['message_id'],)).fetchone()[0]
@@ -108,9 +115,16 @@ async def test_next_pm_input_frame_rechecks_changed_writer_and_original_source(s
             await asyncio.sleep(0)
             if change == 'writer':
                 ops.db.execute('UPDATE pm_writer_slots SET generation=generation+1 WHERE workspace_id=?', (w['workspace_id'],))
-            else:
+            elif action == proposals.ACTION:
                 monkeypatch.setattr(pm_access, 'visible', lambda db, principal, operation:
                     operation['operation_id'] != original and visible(db, principal, operation))
+            else:
+                source = next(ref for ref in w['intake']['document']['access_refs'] if ref['kind'] == 'snapshot')
+                def withdrawn(reader, principal, row):
+                    if row['snapshot_id'] == source['id']:
+                        raise bat.OperationError('NOT_FOUND', 'The original intake snapshot is unavailable', 404)
+                    return snapshot_read(reader, principal, row)
+                monkeypatch.setattr(pm_snapshots, '_out', withdrawn)
             changed.append(channel)
         return await invoke(channel, params, *args, **kwargs)
 
@@ -124,6 +138,5 @@ async def test_next_pm_input_frame_rechecks_changed_writer_and_original_source(s
     assert ops.db.execute('SELECT run_id FROM pm_writer_slots WHERE workspace_id=?', (w['workspace_id'],)).fetchone()[0] == run['run_id']
     if change == 'source':
         assert not pm_access.visible(ops.db, OWNER, out)
-        events = [event for event in ops.journal.api_events(0, 500)['events']
-            if event['body'].get('operation_id') == out['operation_id']]
+        events = ops.journal.api_events(resource_id=out['operation_id'], limit=500)['events']
         assert events and not any(pm_access.event_visible(ops.db, OWNER, event) for event in events)
