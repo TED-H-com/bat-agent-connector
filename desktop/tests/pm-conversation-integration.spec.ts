@@ -50,7 +50,8 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   expect(proposal.state.writes).toHaveLength(1);
 });
 
-for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`structured proposal ${native?'Tauri':'Web'} ${locale} sends an explicit BAT intent`,async({page})=>{
+for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`structured proposal ${native?'Tauri':'Web'} ${locale} sends an explicit BAT intent`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
   const base=pmFixture(),proposal=proposalFixture();Object.assign(base.state,{actor:'owner',plans:true,start:true,bound:true});base.state.thread.version=4;
   const dispatch=async(input:any)=>{
     const path=new URL(input.path,'http://fixture').pathname;
@@ -59,11 +60,14 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`struct
     if(path==='/bootstrap'||path==='/capabilities'){const caps=path==='/bootstrap'?value.data.capabilities:value.data;caps.features.pm_workspaces.conversation_proposals={version:1};caps.actions.push(...[PROPOSE,ADOPT].map(action=>({action,allowed:true})));}
     if(path===`/pm/workspaces/${workspaceId}/capabilities`){value.data.native_analysis={eligible_for_preflight:false,authorized:true};value.data.structured_analysis=structuredCapability();}return value;
   };
-  await page.addInitScript(locale=>localStorage.setItem('batc.lang',locale),locale);await mountConversation(page,native,dispatch);
+  await mountConversation(page,native,dispatch);
   if(native)await page.addInitScript(caps=>{const ipc=(window as any).__TAURI_INTERNALS__,invoke=ipc.invoke;ipc.invoke=(command:string,args:any)=>command==='connector_connect'?Promise.resolve(caps):invoke(command,args);},(await dispatch({method:'GET',path:'/capabilities'})).data);
   await page.goto(pmRoute);const form=page.locator(`[data-pm-action="${PROPOSE}"]`),choice=form.locator('[data-pm-structured-analysis] select');
+  const heading=page.locator('[data-pm-plan-proposals] > h3'),title=locale==='zh-TW'?'從這段討論整理計畫':'Plan update from this discussion';
+  await expect(heading).toHaveText(title);
   await expect(choice).toBeEnabled();await choice.selectOption(BAT);await form.locator('textarea').fill('Prepare the original member-access conversation.');
-  await page.reload();await expect(choice).toHaveValue(BAT);await expect(form.locator('textarea')).toHaveValue('Prepare the original member-access conversation.');
+  await page.reload();await expect(heading).toHaveText(title);await expect(choice).toHaveValue(BAT);await expect(form.locator('textarea')).toHaveValue('Prepare the original member-access conversation.');
   await form.locator('button[type=submit]').click();await expect.poll(()=>proposal.state.writes.length).toBe(1);
   expect(proposal.state.writes[0].body.params.adapter).toBe(BAT);expect(base.state.writes).toEqual([]);
+  }finally{await context.close();}
 });
