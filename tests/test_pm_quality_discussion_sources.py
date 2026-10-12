@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from bat_agent_connector import pm_governance, pm_meetings, pm_plans
+from bat_agent_connector import pm_governance, pm_meetings, pm_plans, pm_sprints
 from tests import test_pm_brief_quality_deviations as brief
-from tests import test_pm_meetings as meetings
 from tests import test_pm_quality_projections as shared
 from tests import test_pm_quality_reviews as base
 from tests.test_pm_plan_operations import OWNER
@@ -34,7 +33,10 @@ async def test_quality_discussion_original_sources_are_read_only_and_withdraw_to
         domain = pm_governance
     else:
         target = await shared.sprint(w, monkeypatch)
-        request = meetings.create_request(ops, target, frozen, 'review')
+        request = shared.envelope('pm.meeting.create', target,
+            {'kind': 'review', 'title': 'Review original quality', 'snapshot_id': frozen['snapshot_id'],
+                'rationale': 'Discuss the original fixed evidence.'},
+            {'expected_sprint_version': pm_sprints.get_sprint(ops, OWNER, **target)['sprint']['version']})
         domain = pm_meetings
     operation = await base.execute(w, request)
     before = (ops.db.total_changes, ops.db.in_transaction, ops.db.execute('PRAGMA user_version').fetchone()[0])
