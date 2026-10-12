@@ -1,3 +1,4 @@
+import {workbenchStrings} from './pm-workbench-strings.js';
 import {pmPlanProposalStrings} from './pm-plan-proposal-strings.js';
 import {pmContextBundleStrings} from './pm-context-bundle-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
@@ -14,6 +15,7 @@ import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
+    ...workbenchStrings.en,
     ...pmPlanProposalStrings.en,
     ...pmIssueStrings.en,
     ...pmLifecycleStrings.en,
@@ -250,6 +252,7 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    ...workbenchStrings['zh-TW'],
     ...pmPlanProposalStrings['zh-TW'],
     ...pmIssueStrings['zh-TW'],
     ...pmLifecycleStrings['zh-TW'],

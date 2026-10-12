@@ -232,3 +232,26 @@ Charter 記錄成立與高層授權，plan 描述執行與控制；RTM 將需求
 宣稱為標準 RACI。這些區別見 [PMI Lexicon v5](https://www.pmi.org/-/media/pmi/documents/registered/pdf/pmbok-standards/pmi-lexicon-pm-terms.pdf)。
 需求在不同階段持續整理與管理，參考 [PMI requirements management](https://www.pmi.org/learning/library/project-requirements-management-process-groups-6599)。
 本頁是產品設計決策，並不宣稱取得 PMP／PMI 認證或已完成所有列出的實作。
+
+## 13. Charter／RTM 第一段實作範圍
+
+候選分支 `feat/pm-v12-charter-rtm-20261012` 從 #120 的 `c0caf02` 接續；
+分支存在不代表已合併、安裝或完成真人驗收。本段只新增共用前端投影，沒有新增中央
+action、schema、外部同步、派工政策或 native 權限。
+
+- **Charter：** 六區摘要讀取同一個 DocumentSnapshot，提供前後版本、差異比較、原計畫
+  閱讀、列印與既有 Brief 匯出。比較重新核對兩份來源；歷史快照不混入目前計畫、用量
+  或完成數。清單分頁明示，未載入的版本不假裝相鄰。來源缺少時各欄保留待確認。
+- **RTM：** 使用已採用計畫、Kanban work binding、明確 Issue mapping、Roadmap milestone
+  及固定品質紀錄。Requirement 依完整計畫身分及驗收條件對照品質；同一工作可連到多條
+  需求，載入計數依 work ID 去重。其他計畫版本及未匹配 Issue 保留在待歸屬區。
+- **工作詳情：** 按需重讀原工作，展開 session／attempts、採用 actor／日期／理由及交付。
+  PR 依 provider origin、numeric repository ID、PR number 分組；merge、部署驗證與
+  `is_current` 分開。交付分頁重讀已載入頁，避免保留已失權限的舊 receipt。
+- **來源失效：** 串接、分頁或詳情讀取失敗時，相關列、計數及詳情一起撤回；遲到的回應
+  不得復活已撤回資料。保持中央 scope、既有 operation key 和原請求恢復行為。
+
+此段仍不是完整六視圖交付。Charter 尚未新增 PM 自動整理／持續補齊，從總覽進入討論
+也尚未自動將快照設成新討論的正式 source。RTM 尚未新增階段關聯、任意外部 Issue／PR
+的多對多同步或完整跨版本比較；里程碑僅使用既有明確關聯。Agent collector／quota、
+技術相依矩陣、分層甘特圖、問題處理時間線與政策內自動安排仍依第 10 節接續。
