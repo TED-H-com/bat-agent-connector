@@ -67,3 +67,11 @@
   .pm-charter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pm-charter-grid > section { break-inside: avoid; }
 }
+
+.pm-resource-facts { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(0, 1.5fr); gap: var(--space-2); margin: var(--space-3) 0; }
+.pm-resource-facts dt { color: var(--muted); }
+.pm-resource-facts dd { margin: 0; overflow-wrap: anywhere; }
+[data-pm-resources] > h3 { margin-top: var(--space-6); }
+[data-resource-row] td:nth-child(4) { font-variant-numeric: tabular-nums; min-width: 110px; }
+[data-resource-row] td:nth-child(2) { min-width: 160px; }
+[data-resource-quota] td:last-child { min-width: 180px; }

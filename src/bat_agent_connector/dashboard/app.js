@@ -190,6 +190,257 @@ function projectViews({ h, t, namespace, workspaceId, groups, onSelect = () => {
 	};
 }
 //#endregion
+//#region src/pm-resources.js
+function workspaceResources({ h, t, api, alive, workspaceId, errorBox }) {
+	let serial = 0, active = false, busy = false, paused = false, timer = null, data = null, selected = null, signature = "";
+	const body = h("tbody"), status = h("div", { role: "status" }), count = h("p", { class: "muted" }), observed = h("p", { class: "muted" });
+	const detail = h("aside", {
+		class: "pm-rtm-detail",
+		"data-resource-detail": "",
+		hidden: true
+	});
+	const quota = h("div", { "data-resource-quota": "" });
+	const filter = h("input", {
+		type: "search",
+		"aria-label": t("res_filter"),
+		placeholder: t("res_filter"),
+		oninput: () => render(true)
+	});
+	const windowSelect = h("select", {
+		"aria-label": t("res_window"),
+		onchange: () => {
+			withdraw();
+			refresh();
+		}
+	}, ...[
+		7,
+		1,
+		30,
+		90
+	].map((days) => h("option", { value: String(days) }, t("res_days", { days }))));
+	const update = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("res_refresh"));
+	const pause = h("button", {
+		type: "button",
+		class: "secondary",
+		"aria-pressed": "false",
+		onclick: () => {
+			paused = !paused;
+			pause.textContent = t(paused ? "res_resume" : "res_pause");
+			pause.setAttribute("aria-pressed", String(paused));
+			if (paused) clearTimeout(timer);
+			else refresh();
+		}
+	}, t("res_pause"));
+	const table = h("div", {
+		class: "pm-rtm-table",
+		role: "region",
+		tabindex: "0",
+		"aria-label": t("res_title")
+	}, h("table", {}, h("thead", {}, h("tr", {}, ...[
+		"res_source",
+		"res_model",
+		"res_role",
+		"res_total",
+		"res_state"
+	].map((key) => h("th", { scope: "col" }, t(key))))), body));
+	const element = h("section", { "data-pm-resources": "" }, h("header", { class: "pm-heading" }, h("h2", {}, t("res_title")), h("div", { class: "actions" }, pause, update)), h("div", { class: "pm-workbench-toolbar" }, windowSelect, filter, count), observed, status, h("div", { class: "pm-rtm-layout" }, table, detail), h("h3", {}, t("res_quota")), quota, h("p", { class: "muted" }, t("res_forecast")), h("details", {}, h("summary", {}, t("res_coverage")), h("p", {}, t("res_local")), h("p", {}, t("res_scope")), h("p", {}, t("res_setup")), h("p", {}, t("res_quota_scope"))));
+	const number = (value) => Number.isFinite(value) ? value.toLocaleString() : t("res_unknown");
+	const time = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : t("res_unknown");
+	const metric = (value) => value?.value != null ? number(value.value) : value?.observed != null ? t("res_partial", { count: number(value.observed) }) : t("res_unknown");
+	const cli = (row) => row.adapter === "codex-rollout-v1" ? "Codex" : row.adapter === "claude-transcript-v1" ? "Claude Code" : row.adapter;
+	const stateLabel = (row) => t([
+		"current",
+		"catching_up",
+		"stale",
+		"pending"
+	].includes(row.status) ? "res_" + row.status : row.status === "source_unavailable" ? "res_unavailable" : "res_error");
+	const facts = (rows) => h("dl", { class: "pm-resource-facts" }, ...rows.flatMap(([label, value]) => [h("dt", {}, t(label)), h("dd", {}, value)]));
+	function schedule() {
+		clearTimeout(timer);
+		if (active && !paused) timer = setTimeout(() => void refresh(), Math.max(1e4, Number(data?.interval_s || 60) * 1e3));
+	}
+	function withdraw() {
+		serial++;
+		busy = false;
+		data = null;
+		signature = "";
+		selected = null;
+		update.disabled = false;
+		body.replaceChildren();
+		detail.replaceChildren();
+		detail.hidden = true;
+		quota.replaceChildren();
+		count.replaceChildren();
+		observed.replaceChildren();
+		status.replaceChildren();
+	}
+	function modelRecords(row) {
+		if (!row.configurations?.length) return [h("span", { class: "muted" }, t("res_unknown"))];
+		return (row.configurations || []).map((c) => h("div", {}, c.actual_model || c.requested_model || t("res_unknown"), h("div", { class: "muted" }, t(c.actual_model ? "res_actual" : "res_requested"))));
+	}
+	function render(force = false) {
+		if (!data) return;
+		const term = filter.value.trim().toLocaleLowerCase();
+		const visible = data.rows.filter((row) => [
+			row.source_id,
+			row.role,
+			cli(row),
+			...(row.configurations || []).flatMap((c) => [c.actual_model, c.requested_model])
+		].filter(Boolean).join(" ").toLocaleLowerCase().includes(term));
+		count.textContent = t("res_count", { count: visible.length });
+		observed.textContent = t("res_as_of", { time: time(data.as_of) });
+		if (selected && !visible.some((row) => row.source_id === selected)) selected = null;
+		const next = JSON.stringify([
+			visible.map(({ checked_at, successful_at, ...row }) => row),
+			selected,
+			data.quota_pools
+		]);
+		if (!force && next === signature) return;
+		signature = next;
+		const focused = element.contains(document.activeElement) ? document.activeElement?.getAttribute("data-resource-select") : null;
+		const detailFocus = detail.contains(document.activeElement) ? document.activeElement?.tagName === "SUMMARY" ? "summary" : "button" : null;
+		const scroll = table.scrollLeft;
+		body.replaceChildren(...visible.map((row) => h("tr", { "data-resource-row": row.source_id }, h("th", { scope: "row" }, h("button", {
+			type: "button",
+			class: "secondary",
+			"data-resource-select": row.source_id,
+			"aria-expanded": String(selected === row.source_id),
+			onclick: () => {
+				selected = row.source_id;
+				refresh();
+			}
+		}, row.source_id), h("div", { class: "muted" }, cli(row))), h("td", {}, ...modelRecords(row)), h("td", {}, row.role === "unassigned" ? t("wb_unassigned") : row.role), h("td", {}, metric(row.metrics?.total)), h("td", {}, stateLabel(row)))));
+		if (!visible.length) body.append(h("tr", {}, h("td", { colspan: 5 }, t(data.rows.length ? "res_no_match" : "res_empty"))));
+		table.scrollLeft = scroll;
+		if (focused) [...body.querySelectorAll("[data-resource-select]")].find((node) => node.getAttribute("data-resource-select") === focused)?.focus({ preventScroll: true });
+		renderDetail();
+		renderQuota(visible);
+		if (detailFocus) detail.querySelector(detailFocus)?.focus({ preventScroll: true });
+	}
+	function renderDetail() {
+		const row = data?.rows.find((value) => value.source_id === selected);
+		const open = detail.querySelector("details")?.open;
+		detail.replaceChildren();
+		detail.hidden = !row;
+		if (detail.hidden) return;
+		const close = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				const id = selected;
+				selected = null;
+				render(true);
+				[...body.querySelectorAll("[data-resource-select]")].find((node) => node.getAttribute("data-resource-select") === id)?.focus({ preventScroll: true });
+			}
+		}, t("wb_close"));
+		detail.append(h("header", { class: "pm-heading" }, h("h3", {}, row.source_id), close), facts([
+			["res_source", cli(row)],
+			["res_state", stateLabel(row)],
+			["res_observations", number(row.observations)],
+			["res_calls", number(row.calls)],
+			...[
+				"input",
+				"cache_read",
+				"cache_write",
+				"output",
+				"reasoning",
+				"total"
+			].map((key) => ["res_" + key, metric(row.metrics?.[key])])
+		]), h("p", { class: "muted" }, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")), h("h3", {}, t("res_model")), ...(row.configurations || []).map((c) => facts([
+			["res_actual", c.actual_model || t("res_unknown")],
+			["res_requested", c.requested_model || t("res_unknown")],
+			["res_effort", c.effort || t("res_unknown")],
+			["res_version", c.cli_version || t("res_unknown")]
+		])));
+		if (row.configurations_partial) detail.append(h("p", {}, t("res_configurations_more")));
+		const sources = h("details", {}, h("summary", {}, t("res_coverage")), facts([
+			["res_first", time(row.first_at)],
+			["res_last", time(row.last_at)],
+			["res_collected", time(row.successful_at)]
+		]), h("code", { class: "pm-source" }, row.adapter + " · " + row.status));
+		sources.open = Boolean(open);
+		detail.append(sources);
+	}
+	function renderQuota(visible) {
+		const pools = data.quota_pools.filter((pool) => pool.snapshot && pool.status === "reported" && pool.sources.some((id) => visible.some((row) => row.source_id === id)));
+		quota.replaceChildren();
+		if (!pools.length) {
+			quota.append(h("p", { class: "muted" }, t("res_quota_unknown")));
+			return;
+		}
+		const rows = pools.flatMap((pool) => pool.snapshot.windows.map((w) => h("tr", {}, h("th", { scope: "row" }, h("code", { class: "pm-source" }, pool.pool_id), h("div", {}, pool.limit_id), h("div", { class: "muted" }, t("res_minutes", { minutes: w.window_minutes }))), h("td", {}, number(Math.round((100 - w.used_percent) * 100) / 100) + "%"), h("td", {}, time(new Date(w.resets_at * 1e3).toISOString()), h("div", { class: "muted" }, t("res_quota_at", { time: time(pool.snapshot.observed_at) }))))));
+		quota.append(h("div", {
+			class: "pm-rtm-table",
+			tabindex: "0",
+			role: "region",
+			"aria-label": t("res_quota")
+		}, h("table", {}, h("thead", {}, h("tr", {}, ...[
+			"res_pool",
+			"res_remaining",
+			"res_reset"
+		].map((key) => h("th", { scope: "col" }, t(key))))), h("tbody", {}, ...rows))));
+	}
+	async function refresh() {
+		if (!active) return;
+		const ticket = ++serial;
+		busy = true;
+		update.disabled = true;
+		status.replaceChildren();
+		const until = new Date(), since = new Date(until.getTime() - Number(windowSelect.value) * 864e5);
+		try {
+			const result = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/resources?` + new URLSearchParams({
+				since: since.toISOString(),
+				until: until.toISOString()
+			}));
+			alive();
+			if (ticket !== serial) return;
+			if (result?.workspace_id !== workspaceId || !Array.isArray(result.rows) || !Array.isArray(result.quota_pools)) throw Error(t("pm_scope_mismatch"));
+			data = result;
+			render();
+		} catch (error) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			withdraw();
+			status.replaceChildren(errorBox(error));
+		} finally {
+			if (ticket === serial || !data) {
+				busy = false;
+				update.disabled = false;
+				schedule();
+			}
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		setActive(value) {
+			active = value;
+			clearTimeout(timer);
+			if (active) {
+				if (!busy) refresh();
+			} else {
+				serial++;
+				busy = false;
+				update.disabled = false;
+			}
+		},
+		dispose() {
+			active = false;
+			clearTimeout(timer);
+			withdraw();
+		}
+	};
+}
+//#endregion
 //#region src/pm-plan-diff-strings.js
 var planDiffStrings = {
 	en: {
@@ -16613,6 +16864,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (traceability) body.insertBefore(traceability.element, content);
+	const resources = !threadId && caps()?.features?.pm_resources ? workspaceResources({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	}) : null;
+	if (resources) body.insertBefore(resources.element, content);
 	if (charter && brief) {
 		workbench = projectViews({
 			h,
@@ -16623,6 +16883,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				{
 					id: "charter",
 					sections: [brief.box]
+				},
+				{
+					id: "agents",
+					sections: [resources?.element]
 				},
 				{
 					id: "rtm",
@@ -16675,6 +16939,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sections: group.sections.filter(Boolean)
 			})),
 			onSelect: (id) => {
+				resources?.setActive(id === "agents");
 				if (id === "rtm") traceability?.activate();
 			}
 		});
@@ -16685,6 +16950,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const sourceSections = () => [
 		content,
 		workbench?.element,
+		resources?.element,
 		traceability?.element,
 		ahp?.element,
 		lifecycle?.element,
@@ -17399,6 +17665,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			for (const section of sourceSections()) section.hidden = false;
 			workbench?.apply();
 			if (workbench?.selected() === "rtm") await traceability?.activate();
+			resources?.setActive(workbench?.selected() === "agents");
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -17407,6 +17674,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				threadData = null;
 				brief?.withdraw();
 				traceability?.withdraw();
+				resources?.withdraw();
 				qualityReviews?.withdraw();
 				proposalReview?.withdraw();
 				qualitySelections.clear();
@@ -17523,6 +17791,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		off();
 		navigationMedia.removeEventListener("change", resizeNavigation);
 		traceability?.withdraw();
+		resources?.dispose();
 		proposalReview?.dispose();
 		ahp?.dispose();
 		for (const value of forms) value.dispose();
@@ -23001,6 +23270,126 @@ var pmPackageHandoffStrings = {
 	}
 };
 //#endregion
+//#region src/pm-resources-strings.js
+var resourceStrings = {
+	en: {
+		wb_agents: "Agent resources",
+		res_title: "Agent resources & usage",
+		res_filter: "Filter CLI, model or role",
+		res_window: "Observation window",
+		res_days: "Last {days} days",
+		res_refresh: "Update records",
+		res_pause: "Pause updates",
+		res_resume: "Resume updates",
+		res_source: "Source / CLI",
+		res_model: "Model records",
+		res_role: "Role",
+		res_total: "Observed tokens",
+		res_state: "Collection",
+		res_details: "Resource details",
+		res_empty: "No usage sources are connected to this workspace.",
+		res_no_match: "No sources match this filter.",
+		res_unknown: "Not provided",
+		res_local: "Central host · local files",
+		res_count: "{count} visible sources",
+		res_observations: "Usage observations",
+		res_calls: "Distinct reported messages",
+		res_as_of: "Read at {time}",
+		res_current: "Up to date",
+		res_catching_up: "Reading remaining records",
+		res_stale: "Observation overdue",
+		res_pending: "Waiting for first collection",
+		res_unavailable: "Source unavailable",
+		res_error: "Source needs review",
+		res_actual: "Reported model",
+		res_requested: "Requested model",
+		res_effort: "Effort",
+		res_version: "CLI version",
+		res_input: "Input",
+		res_cache_read: "Cache read",
+		res_cache_write: "Cache write",
+		res_output: "Output",
+		res_reasoning: "Reasoning",
+		res_coverage: "Sources and coverage",
+		res_first: "First observation in window",
+		res_last: "Last observation in window",
+		res_collected: "Last successful collection",
+		res_partial: "{count} observed · incomplete coverage",
+		res_codex_units: "Input includes cache; output includes reasoning. Total adds input and output once. Model context records describe the requested model.",
+		res_claude_units: "Input excludes cache. Total adds input, cache read, cache write and output once. Repeated fragments of one message are counted once.",
+		res_scope: "Only explicitly connected local files are included. These observations do not establish complete project cost, execution capacity or accepted delivery performance.",
+		res_setup: "A central administrator can connect a versioned CLI source to this workspace. Other hosts and unconnected sessions are outside this view.",
+		res_forecast: "Remaining usage estimate: insufficient comparable accepted-work evidence.",
+		res_quota: "Current reported quota windows",
+		res_pool: "Quota pool / limit",
+		res_remaining: "Remaining",
+		res_reset: "Resets",
+		res_quota_unknown: "No current quota balance was provided.",
+		res_quota_scope: "Pools use explicit operator bindings. Each limit is shown once; balances are never added. Reports expire after five minutes or at reset.",
+		res_quota_at: "Reported at {time}",
+		res_minutes: "{minutes}-minute window",
+		res_configurations_more: "Additional model configurations are outside this detail limit."
+	},
+	"zh-TW": {
+		wb_agents: "Agent 資源",
+		res_title: "Agent 資源與用量",
+		res_filter: "篩選 CLI、模型或角色",
+		res_window: "觀測期間",
+		res_days: "最近 {days} 天",
+		res_refresh: "更新紀錄",
+		res_pause: "暫停更新",
+		res_resume: "恢復更新",
+		res_source: "來源／CLI",
+		res_model: "模型紀錄",
+		res_role: "角色",
+		res_total: "已觀測 tokens",
+		res_state: "收集狀態",
+		res_details: "資源詳情",
+		res_empty: "此工作區尚未連接用量來源。",
+		res_no_match: "沒有符合篩選條件的來源。",
+		res_unknown: "來源未提供",
+		res_local: "中央主機・本機檔案",
+		res_count: "{count} 個可見來源",
+		res_observations: "用量觀測筆數",
+		res_calls: "已回報訊息數（去重）",
+		res_as_of: "讀取於 {time}",
+		res_current: "已讀至檔尾",
+		res_catching_up: "正在讀取剩餘紀錄",
+		res_stale: "觀測已過期",
+		res_pending: "等待首次收集",
+		res_unavailable: "來源無法讀取",
+		res_error: "來源待檢查",
+		res_actual: "回報模型",
+		res_requested: "要求的模型",
+		res_effort: "推理強度",
+		res_version: "CLI 版本",
+		res_input: "輸入",
+		res_cache_read: "快取讀取",
+		res_cache_write: "快取寫入",
+		res_output: "輸出",
+		res_reasoning: "推理",
+		res_coverage: "來源與涵蓋範圍",
+		res_first: "期間內最早觀測",
+		res_last: "期間內最新觀測",
+		res_collected: "上次成功收集",
+		res_partial: "已觀測 {count}・涵蓋不完整",
+		res_codex_units: "輸入已包含快取，輸出已包含推理；總量僅將輸入與輸出各加一次。模型脈絡紀錄代表要求的模型。",
+		res_claude_units: "輸入不含快取；總量將輸入、快取讀取、快取寫入與輸出各加一次。同一訊息的重複片段只計一次。",
+		res_scope: "只涵蓋已明確連接的本機檔案。這些觀測尚不能代表完整專案成本、執行容量或已驗收交付表現。",
+		res_setup: "中央管理者可將具名版本的 CLI 來源連接到此工作區。其他主機與未連接的 session 不在此頁涵蓋範圍。",
+		res_forecast: "剩餘耗量預估：可比較的已驗收工作證據不足。",
+		res_quota: "目前回報的配額時間窗",
+		res_pool: "配額池／限制",
+		res_remaining: "剩餘",
+		res_reset: "重設時間",
+		res_quota_unknown: "來源未提供目前可用的配額餘額。",
+		res_quota_scope: "配額池依管理者明確綁定，各限制只顯示一次，不相加餘額。回報超過五分鐘或到達重設時間即失效。",
+		res_quota_at: "回報於 {time}",
+		res_minutes: "{minutes} 分鐘時間窗",
+		res_configurations_more: "其他模型配置超出本次詳情的顯示上限。"
+	}
+};
+//#endregion
 //#region src/pm-workbench-strings.js
 var workbenchStrings = {
 	en: {
@@ -25001,6 +25390,7 @@ var pmMeetingStrings = {
 var pmStrings = {
 	en: {
 		...workbenchStrings.en,
+		...resourceStrings.en,
 		...pmPlanProposalStrings.en,
 		...pmIssueStrings.en,
 		...pmLifecycleStrings.en,
@@ -25345,6 +25735,7 @@ var pmStrings = {
 	},
 	"zh-TW": {
 		...workbenchStrings["zh-TW"],
+		...resourceStrings["zh-TW"],
 		...pmPlanProposalStrings["zh-TW"],
 		...pmIssueStrings["zh-TW"],
 		...pmLifecycleStrings["zh-TW"],

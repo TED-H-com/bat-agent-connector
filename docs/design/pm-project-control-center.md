@@ -255,3 +255,11 @@ action、schema、外部同步、派工政策或 native 權限。
 也尚未自動將快照設成新討論的正式 source。RTM 尚未新增階段關聯、任意外部 Issue／PR
 的多對多同步或完整跨版本比較；里程碑僅使用既有明確關聯。Agent collector／quota、
 技術相依矩陣、分層甘特圖、問題處理時間線與政策內自動安排仍依第 10 節接續。
+
+
+## 14. Agent 資源第一段候選
+
+`feat/pm-v12-resource-observation-20261012` 從已合併 #121 接續。新增中央定期收集
+明確綁定的本機 Codex／Claude 用量檔、原 cursor／去重、有限來源配額窗與共用資源頁。
+精確範圍、來源格式、權限及剩餘工作见 [Agent resource observations](agent-resource-observation.md)。
+這不是完整第 3 節：遠端主機、完整配額、合格交付／返工歸因、容量、區間預測和策略安排仍待做。

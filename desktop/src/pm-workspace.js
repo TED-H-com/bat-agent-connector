@@ -1,4 +1,5 @@
 import {projectViews, rememberProjectView} from './pm-workbench.js';
+import {workspaceResources} from './pm-resources.js';
 import {workspaceCharter} from './pm-charter.js';
 import {workspaceTraceability} from './pm-traceability.js';
 import {workspaceAhpObserver} from './pm-ahp-observer.js';
@@ -321,9 +322,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const traceability = charter && brief && kanban
     ? workspaceTraceability({h, t, api, alive, workspaceId, caps, errorBox}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
+  const resources = !threadId && caps()?.features?.pm_resources
+    ? workspaceResources({h, t, api, alive, workspaceId, errorBox}) : null;
+  if (resources) body.insertBefore(resources.element, content);
   if (charter && brief) {
     workbench = projectViews({h, t, namespace, workspaceId, groups: [
       {id: 'charter', sections: [brief.box]},
+      {id: 'agents', sections: [resources?.element]},
       {id: 'rtm', sections: [traceability?.element]},
       {id: 'board', sections: [kanban?.element]},
       {id: 'planning', sections: [roadmap?.box, sprints?.box, meetings?.element, qualityReviews?.element, followUp?.element]},
@@ -332,12 +337,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         handoff?.element, workBatches?.element, issues?.element, specifications?.element, ahp?.element]},
       {id: 'maintenance', sections: [releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element]},
     ].map(group => ({...group, sections: group.sections.filter(Boolean)})),
-    onSelect: id => {if (id === 'rtm') void traceability?.activate();}});
+    onSelect: id => {resources?.setActive(id === 'agents'); if (id === 'rtm') void traceability?.activate();}});
     body.insertBefore(workbench.element, status);
     body.insertBefore(content, status.nextSibling);
     workbench.apply();
   }
-  const sourceSections = () => [content, workbench?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  const sourceSections = () => [content, workbench?.element, resources?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -695,11 +700,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       for (const section of sourceSections()) section.hidden = false;
       workbench?.apply();
       if (workbench?.selected() === 'rtm') await traceability?.activate();
+      resources?.setActive(workbench?.selected() === 'agents');
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
-        brief?.withdraw();traceability?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
+        brief?.withdraw();traceability?.withdraw();resources?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
@@ -740,7 +746,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
-    traceability?.withdraw();
+    traceability?.withdraw();resources?.dispose();
     proposalReview?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };

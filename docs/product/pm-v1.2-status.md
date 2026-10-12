@@ -1,20 +1,18 @@
 # PM v1.2 開發狀態
 
-目前介面實作基準為 **3bb4fff／#119**。M4 **755f126／#116** 與 M5 **f6c8f6b**
+目前介面實作基準為 **8bc6cf3／#121**。M4 **755f126／#116** 與 M5 **f6c8f6b**
 沿用下方候選紀錄，未因網站與樣式更新宣稱完成。
 [2026-10-12 進度報告](progress-2026-10-12.md)保存最新查核時間、精確 CI、阻擋及驗證界線；
 [開發交接](../handoff/2026-10-12-pm-v1.2.md)列出 frozen branches、證據位置與接續步驟。
 
 ## 目前整合狀態
 
-- **Charter／RTM 開發分支：** `feat/pm-v12-charter-rtm-20261012` 從 #120／`c0caf02`
-  新增總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯。範圍與尚缺項目見
-  [工作台合約第 13 節](../design/pm-project-control-center.md#13-charterrtm-第一段實作範圍)。
-  此列描述候選來源，不宣稱已合併、安裝或完成六視圖與真人驗收。
+- **Charter／RTM 已合併：#121／`8bc6cf3`。** 總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯已進主線。精確候選 `0d718f3` 的 Python 3.10–3.13、五個 desktop jobs 與 1,978 項 UI 通過；沒有 owner 安裝或 live 宣稱。
+- **Agent 資源開發分支：** `feat/pm-v12-resource-observation-20261012` 從 #121 接續，新增中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。尚未合併，精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
 
 - **新的管理工作台方向已記錄，尚未完成：**[六視圖合約](../design/pm-project-control-center.md)
   定義 Charter、Agent 資源、RTM、技術相依、時程及問題／行動／變更；保留看板與工作空間。
-  #118／#119 的樣式、截圖與表單整理不是這六頁的交付。W30 collector 與配額 adapter 仍待實作。
+  #118／#119 的樣式、截圖與表單整理不是這六頁的交付。W30 本機 collector 與有限配額投影見上方候選；完整跨主機資源能力仍待完成。
 - **已合併：#117–#119。** 公開文件／截圖更新、分欄看板、Planning 閱讀和共用視覺調整；
   #119 修正中央整合測試的收合區操作，四平台 desktop jobs 已成功。後端矩陣另外追蹤。
 - **已合併：#98–#115。** 包含計畫、Sprint／Kanban、治理、工程包／交接、有界批次、發布／維護、成果評估／依賴、自然對話採用、政策內修復、AHP 唯讀及 BAT 結構化分析。
@@ -61,7 +59,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W27 | P1 | 端到端實機驗收 | 受控自動 fixtures 已有；owner 真人硬體驗收另行執行，未宣稱通過。 |
 | W28 | P2 | 其餘具名 CLI 能力 | 其他具名 CLI 的能力與版本逐一接入，尚未宣稱全面支援。 |
 | W29 | P2 | 額外 reviewer 與討論模板 | 額外 reviewer、專業討論模板與品質驗證仍待完成。 |
-| W30 | P2（原計畫） | 成本與較完整預測 | 六視圖修訂將資源觀測列為 Agent 頁及 PM 資源安排的必要依賴：各 CLI 增量聚合、去重、配額池、合格交付歸因與區間預測；沒有 collector、quota adapter 或自動模型政策。 |
+| W30 | P2（原計畫） | 成本與較完整預測 | 六視圖修訂將資源觀測列為 Agent 頁及 PM 資源安排的必要依賴：各 CLI 增量聚合、去重、配額池、合格交付歸因與區間預測；本機 Codex／Claude collector 與來源配額窗在上方候選；尚無跨主機 collector、完整 quota adapters、效能歸因／預測或自動模型政策。 |
 | W31 | P0 | Idea thread 與明確轉 Planning | 主線：持久 Idea thread、明確來源選擇及轉 Planning 草稿；可長期停留 Idea。 |
 | W32 | P0 | PhaseProfile 與 command policy | 主線：九種 phase profiles 與 policy 契約；不能把 profile 定義視為所有階段 runner 已完成。 |
 | W33 | P0 | InputRecord 與循序資訊取得 | 主線：有來源資訊、Follow-up、最多三個問題、自然對話候選與整組採用；完整研究 runner／其他階段引導待做。 |
