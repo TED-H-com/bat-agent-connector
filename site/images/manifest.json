@@ -1,0 +1,331 @@
+{
+  "schema": "public_ui_screenshots_v1",
+  "frontend_source_commit": "c0027daa61827bd2e505331012b7916bcf71ce9a",
+  "frontend_source_tree": "d3e8e2ce49ee128be9328b3f92009f6acc463574",
+  "captured_at": "2026-10-12T15:48:14.571Z",
+  "fixture_clock": "2026-10-12T12:00:00Z",
+  "timezone": "UTC",
+  "browser": "156.0.8078.4",
+  "node": "v24.21.0",
+  "synthetic_data": true,
+  "native_or_live_acceptance": false,
+  "dom_content_modified": false,
+  "source_files": [
+    {
+      "file": "desktop/package-lock.json",
+      "sha256": "8cda4fab28d4477d7c2e1504f737ed37a493a72378ee49e68c0b3c61735083b5"
+    },
+    {
+      "file": "desktop/tests/attention-fixture.ts",
+      "sha256": "bb7823856a329bc4eee89e17be297594f319495fd449c7fc774ac03635345c25"
+    },
+    {
+      "file": "desktop/tests/conversation-fixture.ts",
+      "sha256": "560abaf94e41eb4d0352e851aa0a938b4d1f1ed1c2500380954f5048c7cea78e"
+    },
+    {
+      "file": "desktop/tests/pm-fixture.ts",
+      "sha256": "199c3508d0e2f6cd1a164c98e378d935f0eb942e1ebb14a0516a836ffa4c5489"
+    },
+    {
+      "file": "desktop/tests/pm-kanban-fixture.ts",
+      "sha256": "67366bba5cd219fdc0f01ed0906f21665aee0fe45fa87bbd45a82854cc4035c2"
+    },
+    {
+      "file": "desktop/tests/repository-start-fixture.ts",
+      "sha256": "7dcecad95a266cd9226beada04ff26e70a69266cd52f12d2aea16d3609afa9bb"
+    },
+    {
+      "file": "desktop/tests/workspace-fixture.ts",
+      "sha256": "2c961c845474ef8d373d76b0dbb3101359f55769ffcd49dc3b3b75ee3c3292cc"
+    },
+    {
+      "file": "scripts/capture_site.mjs",
+      "sha256": "9aff85cd7cea58966bc2c75efd28858ec58e1daa4a772907b2b9467725e8f055"
+    },
+    {
+      "file": "src/bat_agent_connector/dashboard/app.css",
+      "sha256": "010448d2906ece757781e6c44e28280e1c9e0e003045855285d920df16c0f5d8"
+    },
+    {
+      "file": "src/bat_agent_connector/dashboard/app.js",
+      "sha256": "771ce60cc2063d20c644d55de85732087792fa27342944da8447900bb458bcaa"
+    },
+    {
+      "file": "src/bat_agent_connector/dashboard/i18n.js",
+      "sha256": "738956ae2317adaedfe6d2086daca3ab7b02c9cc39c84b4ee3f604cbc45424d7"
+    },
+    {
+      "file": "src/bat_agent_connector/dashboard/index.html",
+      "sha256": "89b85f1af8d00eee5ae1852ad072fbac56b110f2cff3bc490b2e0ad35f0c9673"
+    }
+  ],
+  "images": [
+    {
+      "file": "workspace-en.png",
+      "sha256": "6dacfc1fe0fbeaaf01341dbdcc3c10af761fe1833e658777fbf82efce60a8413",
+      "scenario": "workspace",
+      "locale": "en-US",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "dark",
+      "route": "/dashboard/#/work/prj_aaaaaaaaaaaaaaaaaaaa/execution/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fixture_sources": [
+        "desktop/tests/workspace-fixture.ts"
+      ],
+      "composition": "Project tree, original conversation and result inspector; ongoing synthetic work.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "dispatch-en.png",
+      "sha256": "5eb2972e5e2289318b699fce544c3b75b5bf180f254bd8a3a28d1c549647ddd7",
+      "scenario": "dispatch",
+      "locale": "en-US",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/dispatch/prj_11111111111111111111",
+      "fixture_sources": [
+        "desktop/tests/repository-start-fixture.ts"
+      ],
+      "composition": "Unsubmitted project dispatch form; no preview or execution requested.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "pm-planning-en.png",
+      "sha256": "046662dc90b97c74164718a2e53e6fafb52a59a237a3c30ae9541f725cef8fb1",
+      "scenario": "pm-planning",
+      "locale": "en-US",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111/pmt_22222222222222222222222222222222",
+      "fixture_sources": [
+        "desktop/tests/pm-fixture.ts"
+      ],
+      "composition": "Fixed, unadopted Planning revision with unresolved decisions; original plan disclosure opened and page scrolled to it.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "pm-kanban-en.png",
+      "sha256": "77f39ef11ace53a58c158b98a4daa3ad9dd4121d27ef4d37ce376b4bf5ec4996",
+      "scenario": "pm-kanban",
+      "locale": "en-US",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111",
+      "fixture_sources": [
+        "desktop/tests/pm-fixture.ts",
+        "desktop/tests/pm-kanban-fixture.ts"
+      ],
+      "composition": "Original workspace work-flow panel, in-progress and review rows; quality remains unassessed, partial sources explicit.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "workspace-zh.png",
+      "sha256": "be2cd82b6204df3d86b06d7234f6e66bae48895e469d225fc1ab02f8e725f348",
+      "scenario": "workspace",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "dark",
+      "route": "/dashboard/#/work/prj_aaaaaaaaaaaaaaaaaaaa/execution/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fixture_sources": [
+        "desktop/tests/workspace-fixture.ts"
+      ],
+      "composition": "Project tree, original conversation and result inspector; ongoing synthetic work.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "dispatch-zh.png",
+      "sha256": "98c13c9886a5d63d6efed58167d036550135b7801d846ce23e81dc5677af6066",
+      "scenario": "dispatch",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/dispatch/prj_11111111111111111111",
+      "fixture_sources": [
+        "desktop/tests/repository-start-fixture.ts"
+      ],
+      "composition": "Unsubmitted project dispatch form; no preview or execution requested.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "pm-planning-zh.png",
+      "sha256": "cf9ca2ecca7f47da1a2345bf3c074b193297d8adf28d855ca14236bf52ca6df3",
+      "scenario": "pm-planning",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111/pmt_22222222222222222222222222222222",
+      "fixture_sources": [
+        "desktop/tests/pm-fixture.ts"
+      ],
+      "composition": "Fixed, unadopted Planning revision with unresolved decisions; original plan disclosure opened and page scrolled to it.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "pm-kanban-zh.png",
+      "sha256": "16ec11bb3c8b0d86aee092c0f6e0b6997d012ce1b943450f26c2cda74098442b",
+      "scenario": "pm-kanban",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111",
+      "fixture_sources": [
+        "desktop/tests/pm-fixture.ts",
+        "desktop/tests/pm-kanban-fixture.ts"
+      ],
+      "composition": "Original workspace work-flow panel, in-progress and review rows; quality remains unassessed, partial sources explicit.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    }
+  ]
+}
