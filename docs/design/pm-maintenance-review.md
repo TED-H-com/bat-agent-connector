@@ -107,6 +107,8 @@ A source loss withholds the complete report instead of leaving quoted report
 text next to a filtered source. Operations and history need the same original
 source checks through `operation_visible`. Current reads do not fall back to an
 older visible report. Lists omit inaccessible rows with `visibility_filtered`.
+The operation/candidate source reader supplies the same read transaction interface
+as ordinary quality-evidence reads, without creating a service or changing data.
 
 These five actions are local records and may be admitted while Paused/Closed
 through the shared lifecycle record-action allowlist. Weekly schedule execution

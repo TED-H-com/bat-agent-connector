@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-from bat_agent_connector import pm_governance, pm_meetings, pm_plans, pm_sprints
+from bat_agent_connector import pm_governance, pm_meetings, pm_plans, pm_sprints, pm_workload
+from bat_agent_connector import pm_maintenance_review_sources as review_sources
+from bat_agent_connector.operations import OperationError
 from tests import test_pm_brief_quality_deviations as brief
 from tests import test_pm_quality_projections as shared
 from tests import test_pm_quality_reviews as base
@@ -44,3 +46,19 @@ async def test_quality_discussion_original_sources_are_read_only_and_withdraw_to
     assert (ops.db.total_changes, ops.db.in_transaction, ops.db.execute('PRAGMA user_version').fetchone()[0]) == before
     shared.withdraw_proof(w)
     assert not domain.operation_visible(ops.db, OWNER, operation)
+
+
+async def test_maintenance_review_reader_keeps_original_quality_access_and_withdrawal(reviewed):
+    w, ops = reviewed, reviewed['d'].ops
+    await shared.capture(w, await brief.rejected(w))
+    frozen = await shared.snapshot(w)
+    evidence = next(row for row in frozen['evidence'] if row['source_kind'] == 'quality_assessment')
+    refs = [review_sources.ref('evidence', evidence['evidence_id'], evidence['fact_digest'])]
+    reader = pm_workload._Reader(ops.db)
+    before = (ops.db.total_changes, ops.db.in_transaction, ops.db.execute('PRAGMA user_version').fetchone()[0])
+    review_sources.access(reader, OWNER, w['workspace_id'], refs)
+    assert (ops.db.total_changes, ops.db.in_transaction, ops.db.execute('PRAGMA user_version').fetchone()[0]) == before
+    shared.withdraw_proof(w)
+    with pytest.raises(OperationError) as hidden:
+        review_sources.access(reader, OWNER, w['workspace_id'], refs)
+    assert hidden.value.status == 404

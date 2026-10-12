@@ -129,6 +129,10 @@ def _record(db, wid, sid):
 class _Reader:
     def __init__(self, db):
         self.db = db
+        self.journal = self
+
+    def tx(self):
+        return baselines._snapshot(self.db)
 
     def get(self, oid, *, steps=False, principal=None):
         from . import pm_access
