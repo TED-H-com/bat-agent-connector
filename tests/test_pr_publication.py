@@ -198,6 +198,11 @@ async def test_foreign_branch_race_cannot_fast_forward_or_create_pr(pub, existin
     op = create(w)
     ref = "refs/heads/" + host.branch(op["operation_id"])
     foreign = w['state']['sha'] if existing == 'ancestor' else w['result_sha']
+    if existing == 'candidate':
+        # A separate publisher must have supplied the object before its racing
+        # ref creation; fetching bytes here neither creates nor adopts that ref.
+        git(w['remote'], 'fetch', '--no-tags', '--no-write-fetch-head',
+            w['original']['result']['worktree_path'], foreign)
     w["runner"].inject["publication-push"] = f'git --git-dir="{w["remote"]}" update-ref {ref} {foreign}'
     done = await settle(w, op)
     assert done["status"] == "failed" and done["error_code"] == "PR_BRANCH_CREATE_REFUSED", done
