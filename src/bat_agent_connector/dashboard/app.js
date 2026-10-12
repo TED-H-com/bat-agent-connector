@@ -141,6 +141,437 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-ahp-observer.js
+function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, workspace, form, errorBox }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.ahp.observe";
+	const choices = new Map(), editors = new Map(), selectionStorage = `batc.pm.${namespace}.ahp-adapter.${workspaceId}`;
+	let epoch = 0, detailEpoch = 0, ready = false, selected = "", cursor = null, historyAfter = 0, historyBusy = false, disposed = false;
+	try {
+		selected = localStorage.getItem(selectionStorage) || "";
+	} catch {}
+	const status = h("div", { role: "status" }), adapter = h("select", { "aria-label": t("ahp_adapter") }), body = h("div"), history = h("div"), detail = h("div");
+	const refreshButton = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("ahp_refresh"));
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void historyPage(cursor)
+	}, t("ahp_more"));
+	const element = h("details", {
+		class: "panel pm-ahp",
+		"data-pm-ahp": ""
+	}, h("summary", {}, t("ahp_title")), h("p", { class: "muted" }, t("ahp_intro")), h("div", { class: "capture-fields" }, h("label", {}, t("ahp_adapter"), adapter), refreshButton), status, body, h("details", { "data-ahp-history": "" }, h("summary", {}, t("ahp_history")), history, more), detail);
+	const valid = (ticket) => {
+		try {
+			alive();
+			return !disposed && ticket === epoch;
+		} catch {
+			return false;
+		}
+	};
+	const check = (value) => {
+		if (value?.workspace_id !== workspaceId) throw Error(t("ahp_invalid"));
+		return value;
+	};
+	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : "—";
+	const line = (key, value) => h("p", {}, h("strong", {}, `${t(key)}: `), String(value));
+	const active = (item) => ready && selected === item.key && choices.has(item.key) && Boolean(workspace()?.membership);
+	const request = async (...args) => {
+		const ticket = epoch;
+		try {
+			return await api(...args);
+		} catch (error) {
+			if (valid(ticket) && [
+				401,
+				403,
+				404
+			].includes(error.status)) failure(error);
+			throw error;
+		}
+	};
+	function row(value, withDocument = false) {
+		if (value?.workspace_id !== workspaceId || !/^pmah_[0-9a-f]{32}$/.test(value.observation_id) || !/^op_[0-9a-f]{32}$/.test(value.operation_id) || !/^([0-9a-f]{64})$/.test(value.document_digest) || typeof value.adapter_id !== "string" || !["observed", "incomplete"].includes(value.coverage_status)) throw Error(t("ahp_invalid"));
+		if (withDocument) {
+			const doc = value.document, e = doc?.evidence;
+			if (doc?.schema !== "ahp_observation_v1" || doc.observation_id !== value.observation_id || doc.workspace_id !== workspaceId || doc.adapter_id !== value.adapter_id || !/^([0-9a-f]{64})$/.test(doc.binding_digest) || !choices.has(`${doc.adapter_id}.${doc.binding_digest}`) || !Array.isArray(e?.catalog) || e.catalog.length > 200 || typeof e.catalog_complete !== "boolean" || !Array.isArray(e.snapshots) || !Array.isArray(e.events) || !Array.isArray(e.gaps) || !Array.isArray(e.missing) || e.status !== value.coverage_status || new Set(e.catalog.map((s) => s.resource)).size !== e.catalog.length || e.catalog.some((s) => typeof s.title !== "string" || typeof s.provider !== "string" || typeof s.resource !== "string" || !s.resource.length || s.resource.length > 2048 || /[\x00-\x1f\x7f]/.test(s.resource) || s.source_kind !== void 0 && s.source_kind !== "session" || typeof s.source_identity !== "string")) throw Error(t("ahp_invalid"));
+		}
+		return value;
+	}
+	function renderDetail(value) {
+		const r = row(value, true), d = r.document, e = d.evidence;
+		const snapshots = h("details", {}, h("summary", {}, t("ahp_snapshot_details")));
+		for (const snapshot of e.snapshots) {
+			const state = snapshot.state || {}, kind = snapshot.source_kind ?? state.source_kind ?? (state.kind === "root" ? "root" : "unknown");
+			if (kind === "root") continue;
+			snapshots.append(h("details", {}, h("summary", {}, state.title || snapshot.resource), h("p", { class: "mono" }, snapshot.resource), line("ahp_from_sequence", snapshot.from_seq), line("ahp_later_events", t(snapshot.later_events_observed ? "ahp_yes" : "ahp_no")), ...kind === "session" ? [line("ahp_provider", state.provider), line("ahp_native_lifecycle", state.lifecycle)] : kind === "changeset" ? [line("ahp_file_count", state.files?.length ?? 0)] : [h("p", { class: "muted" }, t("ahp_unknown_source_kind"))]));
+		}
+		const meta = h("details", {}, h("summary", {}, t("ahp_original")), h("p", { class: "mono" }, r.observation_id), h("p", { class: "mono" }, r.document_digest), h("a", { href: `#/op/${r.operation_id}` }, t("pm_operation")), h("pre", {}, JSON.stringify(d, null, 2)));
+		detail.replaceChildren(h("section", {
+			"data-ahp-detail": "",
+			class: "pm-ahp-facts"
+		}, h("h3", {}, t("ahp_saved_detail")), line("ahp_adapter", r.adapter_id), line("ahp_captured", stamp(d.finished_at)), line("ahp_protocol", e.negotiated_version || e.protocol_version || "—"), ...e.decoder_profile ? [line("ahp_decoder_profile", e.decoder_profile)] : [], line("ahp_coverage", t(e.status === "observed" ? "ahp_observed" : "ahp_incomplete")), line("ahp_catalog_coverage", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")), ...e.reason ? [line("ahp_reason", e.reason)] : [], line("ahp_snapshots", e.snapshots.length), line("ahp_events", e.events.length), line("ahp_gaps", e.gaps.length), h("p", { class: "muted" }, t("ahp_evidence_limits")), ...snapshots.children.length > 1 ? [snapshots] : [], meta));
+	}
+	async function showDetail(id) {
+		const ticket = epoch, serial = ++detailEpoch;
+		detail.replaceChildren();
+		try {
+			const value = check(await request("GET", `${base}/ahp-observations/${encodeURIComponent(id)}`));
+			if (!valid(ticket) || serial !== detailEpoch) return;
+			renderDetail(value.observation);
+		} catch (error) {
+			if (valid(ticket) && serial === detailEpoch) failure(error);
+		}
+	}
+	function renderHistory(value) {
+		check(value);
+		if (!Array.isArray(value.observations) || typeof value.visibility_filtered !== "boolean" || value.next_cursor !== null && (!Number.isSafeInteger(value.next_cursor) || value.next_cursor <= historyAfter)) throw Error(t("ahp_invalid"));
+		const rows = value.observations.map((r) => row(r));
+		cursor = value.next_cursor;
+		history.replaceChildren(...rows.map((r) => h("div", { class: "pm-ahp-history-row" }, h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => void showDetail(r.observation_id)
+		}, `${r.adapter_id} · ${stamp(r.created_at)} · ${t(r.coverage_status === "observed" ? "ahp_observed" : "ahp_incomplete")}`), h("small", { class: "mono" }, r.observation_id))));
+		if (!rows.length) history.append(h("p", { class: "muted" }, t(value.visibility_filtered ? "ahp_hidden" : "ahp_empty")));
+		else if (value.visibility_filtered) history.append(h("p", { class: "muted" }, t("ahp_hidden")));
+		more.hidden = cursor === null;
+		more.disabled = false;
+	}
+	async function historyPage(after = 0) {
+		if (historyBusy || !ready) return;
+		const ticket = epoch;
+		historyBusy = true;
+		more.disabled = true;
+		detailEpoch++;
+		detail.replaceChildren();
+		try {
+			const value = await request("GET", `${base}/ahp-observations?after=${after}&limit=20`);
+			if (!valid(ticket)) return;
+			historyAfter = after;
+			renderHistory(value);
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		} finally {
+			if (valid(ticket)) {
+				historyBusy = false;
+				more.disabled = false;
+			}
+		}
+	}
+	function editorFor(option) {
+		const key = option.key;
+		if (editors.has(key)) return editors.get(key);
+		const item = {
+			key,
+			option,
+			catalog: null,
+			page: 0,
+			source: h("input", { type: "hidden" }),
+			sessions: h("input", {
+				type: "hidden",
+				value: "[]"
+			}),
+			changesets: h("select", { "aria-label": t("ahp_changesets") }, h("option", { value: "false" }, t("ahp_sessions_only")), h("option", { value: "true" }, t("ahp_include_changesets"))),
+			catalogBox: h("div", { "data-ahp-catalog": "" }),
+			forms: []
+		};
+		item.sessions.dataset.pmDefault = "[]";
+		item.changesets.dataset.pmDefault = "false";
+		const guard = () => {
+			alive();
+			if (!active(item)) throw Object.assign(Error(), { code: "VIEW_CHANGED" });
+		};
+		const canRead = () => active(item) && caps()?.scopes?.includes("observe");
+		const fields = {
+			catalog_ref: item.source,
+			session_uris: item.sessions,
+			include_changesets: item.changesets
+		};
+		const selectedUris = () => {
+			try {
+				const values = JSON.parse(item.sessions.value || "[]");
+				if (!Array.isArray(values) || values.length > 8 || new Set(values).size !== values.length || values.some((v) => typeof v !== "string")) throw Error();
+				return values;
+			} catch {
+				throw Error(t("ahp_invalid"));
+			}
+		};
+		const selectionValid = () => {
+			try {
+				const list = selectedUris();
+				return Boolean(item.catalog && list.length && list.every((uri) => item.catalog.document.evidence.catalog.some((s) => s.resource === uri)));
+			} catch {
+				return false;
+			}
+		};
+		const updateChecks = () => {
+			const list = selectedUris();
+			for (const box of item.catalogBox.querySelectorAll("input[type=checkbox]")) {
+				box.checked = list.includes(box.value);
+				box.disabled = item.observe.locked() || !canRead() || list.length >= 8 && !box.checked;
+			}
+		};
+		function renderCatalog() {
+			item.catalogBox.replaceChildren();
+			if (!item.catalog) {
+				item.catalogBox.append(h("p", { class: "muted" }, t("ahp_need_catalog")));
+				return;
+			}
+			const e = item.catalog.document.evidence, list = selectedUris(), start = item.page * 20;
+			item.catalogBox.append(h("p", { class: "muted" }, `${t("ahp_catalog_coverage")}: ${t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")} · ${stamp(item.catalog.document.finished_at)}`), h("p", {}, t("ahp_selection_help")));
+			if (list.some((uri) => !e.catalog.some((s) => s.resource === uri))) item.catalogBox.append(h("p", { class: "muted" }, t("ahp_selection_unavailable")));
+			for (const s of e.catalog.slice(start, start + 20)) {
+				const box = h("input", {
+					type: "checkbox",
+					value: s.resource,
+					"aria-label": `${t("ahp_select")} ${s.title}`
+				});
+				box.addEventListener("change", () => {
+					if (item.observe.locked() || !canRead()) return;
+					const before = selectedUris(), values = box.checked ? [...before, s.resource] : before.filter((uri) => uri !== s.resource);
+					if (values.length <= 8) item.observe.set("session_uris", JSON.stringify(values));
+					item.observe.update();
+					updateChecks();
+				});
+				item.catalogBox.append(h("label", { class: "pm-ahp-session" }, box, h("span", {}, h("strong", {}, s.title || s.resource), h("small", {}, s.provider), h("small", { class: "mono" }, s.resource))));
+			}
+			if (!e.catalog.length) item.catalogBox.append(h("p", { class: "muted" }, t("ahp_no_sessions")));
+			if (e.catalog.length > 20) item.catalogBox.append(h("div", { class: "actions" }, h("button", {
+				type: "button",
+				class: "secondary",
+				disabled: item.page === 0,
+				onclick: () => {
+					item.page--;
+					renderCatalog();
+				}
+			}, t("pagination_prev")), h("span", {}, `${start + 1}–${Math.min(start + 20, e.catalog.length)} / ${e.catalog.length}`), h("button", {
+				type: "button",
+				class: "secondary",
+				disabled: start + 20 >= e.catalog.length,
+				onclick: () => {
+					item.page++;
+					renderCatalog();
+				}
+			}, t("pagination_next"))));
+			updateChecks();
+		}
+		item.apply = (r) => {
+			row(r, true);
+			if (r.adapter_id !== option.adapter_id || r.document.binding_digest !== option.binding_digest) throw Error(t("ahp_invalid"));
+			item.catalog = r;
+			item.page = 0;
+			renderCatalog();
+			item.observe.update();
+		};
+		item.observe = form({
+			namespace: `${namespace}.ahp.${key}.selection`,
+			action,
+			target: {
+				workspace_id: workspaceId,
+				adapter_id: option.adapter_id
+			},
+			fields,
+			api: request,
+			guard,
+			requiredScope: "observe",
+			params: () => {
+				if (!selectionValid()) throw Error(t("ahp_selection_unavailable"));
+				return {
+					session_uris: selectedUris(),
+					include_changesets: item.changesets.value === "true"
+				};
+			},
+			preconditions: () => ({}),
+			permitted: () => canRead() && selectionValid(),
+			recoverPermitted: canRead,
+			label: "ahp_capture_selected",
+			onStateChange: () => {
+				if (item.observe) updateChecks();
+			},
+			extra: h("div", {}, item.catalogBox, h("label", {}, t("ahp_changesets"), item.changesets), h("p", { class: "muted" }, t("ahp_changesets_help"))),
+			onSaved: async (result) => {
+				check(result);
+				await refresh();
+				await showDetail(result.observation_id);
+			}
+		});
+		item.catalogForm = form({
+			namespace: `${namespace}.ahp.${key}.catalog`,
+			action,
+			target: {
+				workspace_id: workspaceId,
+				adapter_id: option.adapter_id
+			},
+			fields: {},
+			api: request,
+			guard,
+			requiredScope: "observe",
+			params: () => ({
+				session_uris: [],
+				include_changesets: false
+			}),
+			preconditions: () => ({}),
+			permitted: () => canRead() && !item.observe.locked(),
+			recoverPermitted: canRead,
+			label: "ahp_capture_catalog",
+			extra: h("p", { class: "muted" }, t("ahp_catalog_help")),
+			onSaved: async (result) => {
+				check(result);
+				if (!item.observe.locked()) {
+					item.observe.set("catalog_ref", JSON.stringify({
+						observation_id: result.observation_id,
+						document_digest: result.document_digest
+					}));
+					item.observe.set("session_uris", "[]");
+				}
+				await refresh();
+				await showDetail(result.observation_id);
+			}
+		});
+		for (const f of [item.catalogForm, item.observe]) f.box.querySelector("button[type=submit]").className = "secondary";
+		item.forms = [item.catalogForm, item.observe];
+		item.element = h("div", {}, h("details", {}, h("summary", {}, t("ahp_capabilities")), h("p", {}, `${t("ahp_protocol")}: ${option.protocol_versions?.join(", ") || option.protocol_version || "—"}`), h("p", { class: "muted" }, t("ahp_capability_limits")), h("pre", {}, JSON.stringify(option, null, 2))), item.catalogForm.box, item.observe.box);
+		editors.set(key, item);
+		return item;
+	}
+	async function selectAdapter(key, current = null) {
+		const ticket = ++epoch;
+		ready = true;
+		historyBusy = false;
+		more.disabled = false;
+		selected = key;
+		body.replaceChildren();
+		detailEpoch++;
+		detail.replaceChildren();
+		status.replaceChildren();
+		for (const item of editors.values()) {
+			item.catalog = null;
+			item.catalogBox.replaceChildren();
+			for (const f of item.forms) f.dispose();
+			editors.delete(item.key);
+		}
+		if (!key || !choices.has(key)) {
+			body.append(h("p", { class: "muted" }, t("ahp_no_adapters")));
+			return;
+		}
+		const item = editorFor(choices.get(key));
+		body.append(item.element);
+		try {
+			let r = null;
+			const saved = item.source.value;
+			if (saved) {
+				const ref = JSON.parse(saved);
+				if (!/^pmah_[0-9a-f]{32}$/.test(ref.observation_id) || !/^([0-9a-f]{64})$/.test(ref.document_digest)) throw Error(t("ahp_invalid"));
+				const value = check(await api("GET", `${base}/ahp-observations/${ref.observation_id}`));
+				if (!valid(ticket)) return;
+				r = row(value.observation, true);
+				if (r.document_digest !== ref.document_digest) throw Error(t("ahp_invalid"));
+			} else if (current?.adapter_id === item.option.adapter_id && current.document?.binding_digest === item.option.binding_digest) {
+				r = current;
+				item.observe.set("catalog_ref", JSON.stringify({
+					observation_id: r.observation_id,
+					document_digest: r.document_digest
+				}));
+			}
+			if (r) item.apply(r);
+			else item.catalogBox.append(h("p", { class: "muted" }, t("ahp_need_catalog")));
+			for (const f of item.forms) f.update();
+			return valid(ticket);
+		} catch (error) {
+			if (valid(ticket)) {
+				item.catalog = null;
+				item.catalogBox.replaceChildren(h("p", { class: "muted" }, t("ahp_selection_unavailable")));
+				status.replaceChildren(errorBox(error));
+				for (const f of item.forms) f.update();
+			}
+		}
+	}
+	adapter.addEventListener("change", () => {
+		try {
+			alive();
+			localStorage.setItem(selectionStorage, adapter.value);
+		} catch {}
+		selectAdapter(adapter.value);
+	});
+	function withdraw() {
+		epoch++;
+		detailEpoch++;
+		ready = false;
+		historyBusy = false;
+		choices.clear();
+		body.replaceChildren();
+		history.replaceChildren();
+		detail.replaceChildren();
+		status.replaceChildren();
+		adapter.replaceChildren();
+		adapter.disabled = true;
+		more.hidden = true;
+		for (const item of editors.values()) {
+			item.catalog = null;
+			item.catalogBox.replaceChildren();
+			for (const f of item.forms) f.update();
+		}
+	}
+	function failure(error) {
+		withdraw();
+		status.append(h("p", { class: "muted" }, t("ahp_unavailable")), errorBox(error));
+	}
+	async function refresh() {
+		const prior = selected;
+		withdraw();
+		const ticket = epoch;
+		refreshButton.disabled = true;
+		try {
+			const [a, c, l] = await Promise.all([
+				"ahp-adapters",
+				"ahp-observations/current",
+				"ahp-observations?after=0&limit=20"
+			].map((path) => request("GET", `${base}/${path}`)));
+			if (!valid(ticket)) return;
+			check(a);
+			check(c);
+			check(l);
+			if (!Array.isArray(a.adapters) || typeof c.visibility_filtered !== "boolean" || c.visibility_filtered && c.observation !== null) throw Error(t("ahp_invalid"));
+			for (const option of a.adapters) {
+				if (typeof option.adapter_id !== "string" || !/^([0-9a-f]{64})$/.test(option.binding_digest) || option.contract !== "ahp_observer_v1") throw Error(t("ahp_invalid"));
+				const key = `${option.adapter_id}.${option.binding_digest}`;
+				choices.set(key, {
+					...option,
+					key
+				});
+				adapter.append(h("option", { value: key }, option.adapter_id));
+			}
+			if (c.observation) row(c.observation, true);
+			historyAfter = 0;
+			renderHistory(l);
+			ready = true;
+			adapter.disabled = !choices.size;
+			const key = choices.has(prior) ? prior : choices.keys().next().value || "";
+			adapter.value = key;
+			if (!await selectAdapter(key, c.observation) || !ready) return;
+			if (c.visibility_filtered) status.append(h("p", { class: "muted" }, t("ahp_hidden")));
+			if (c.observation) renderDetail(c.observation);
+		} catch (error) {
+			if (valid(ticket)) failure(error);
+		} finally {
+			refreshButton.disabled = false;
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		dispose: () => {
+			disposed = true;
+			withdraw();
+		}
+	};
+}
+//#endregion
 //#region src/pm-plan-proposals.js
 var PROPOSE = "pm.conversation.propose";
 var ADOPT = "pm.conversation.adopt";
@@ -14648,6 +15079,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace
 	}) : null;
 	if (releaseBaselines) body.insertBefore(releaseBaselines.element, content);
+	const ahp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.ahp_observation?.contract === "ahp_observer_v1" ? workspaceAhpObserver({
+		h,
+		t,
+		api,
+		alive,
+		caps,
+		namespace,
+		workspaceId,
+		workspace: () => workspace,
+		form,
+		errorBox
+	}) : null;
+	if (ahp) body.insertBefore(ahp.element, content);
 	let handoff = null;
 	const maintenancePolicy = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_policy?.version === 1 ? workspaceMaintenancePolicy({
 		h,
@@ -14912,6 +15356,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	if (qualityReviews) body.insertBefore(qualityReviews.element, sprints?.box || content);
 	const sourceSections = () => [
 		content,
+		ahp?.element,
 		lifecycle?.element,
 		evidence?.box,
 		brief?.box,
@@ -15482,6 +15927,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		handoff?.withdraw();
 		workBatches?.withdraw();
 		issues?.withdraw();
+		ahp?.withdraw();
 		releaseBaselines?.withdraw();
 		maintenancePolicy?.withdraw();
 		maintenanceRepairs?.withdraw();
@@ -15583,6 +16029,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				lifecycle,
 				evidence,
 				brief,
+				ahp,
 				releaseBaselines,
 				maintenancePolicy,
 				maintenanceRepairs,
@@ -15623,6 +16070,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				handoff?.withdraw();
 				workBatches?.withdraw();
 				issues?.withdraw();
+				ahp?.withdraw();
 				releaseBaselines?.withdraw();
 				maintenancePolicy?.withdraw();
 				maintenanceRepairs?.withdraw();
@@ -15671,7 +16119,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_maintenance_review",
 			"pm_quality_review",
 			"pm_execution_verification",
-			"pm_maintenance_repair"
+			"pm_maintenance_repair",
+			"pm_ahp_observation"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -15726,6 +16175,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		off();
 		navigationMedia.removeEventListener("change", resizeNavigation);
 		proposalReview?.dispose();
+		ahp?.dispose();
 		for (const value of forms) value.dispose();
 	};
 }
@@ -19444,6 +19894,114 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		}
 	};
 }
+//#endregion
+//#region src/pm-ahp-observer-strings.js
+var ahpObserverStrings = {
+	en: {
+		ahp_decoder_profile: "Recorded decoder profile",
+		ahp_unknown_source_kind: "This original snapshot has no supported source kind. Read its preserved metadata in the original document; the URI does not establish its type.",
+		ahp_snapshot_details: "Snapshot details",
+		ahp_from_sequence: "Snapshot sequence",
+		ahp_later_events: "Later events recorded",
+		ahp_yes: "Yes",
+		ahp_no: "No",
+		ahp_provider: "Provider",
+		ahp_native_lifecycle: "Reported lifecycle (not a completion proof)",
+		ahp_file_count: "File metadata records",
+		ahp_title: "AHP observations",
+		ahp_intro: "Read a configured host catalog and selected snapshots. Manual and foreign sessions stay read-only; these observations do not establish completion, cost or management authority.",
+		ahp_adapter: "Configured adapter",
+		ahp_refresh: "Reload saved observations",
+		ahp_history: "Saved observation history",
+		ahp_more: "Next saved observations",
+		ahp_invalid: "The observation does not match its original workspace or source.",
+		ahp_saved_detail: "Saved observation",
+		ahp_captured: "Captured at",
+		ahp_coverage: "Capture coverage",
+		ahp_observed: "Bounded observation saved",
+		ahp_incomplete: "Incomplete observation",
+		ahp_catalog_coverage: "Catalog coverage",
+		ahp_catalog_complete: "Advertised catalog pagination complete",
+		ahp_catalog_partial: "Advertised catalog incomplete",
+		ahp_reason: "Recorded reason",
+		ahp_snapshots: "Selected snapshots (including root)",
+		ahp_events: "Event metadata records",
+		ahp_gaps: "Recorded replay gaps",
+		ahp_evidence_limits: "This is dated, bounded evidence. A snapshot may have later events; gaps and missing sources remain in the original document. No transcript, file contents or completion proof is collected.",
+		ahp_original: "Original source document and receipt",
+		ahp_hidden: "Some original observations are unavailable with current source access.",
+		ahp_empty: "No saved observations.",
+		ahp_need_catalog: "Capture a catalog before selecting sessions.",
+		ahp_selection_help: "Select up to 8 sessions from this saved catalog. The host catalog is checked again during capture.",
+		ahp_selection_unavailable: "The original catalog selection is unavailable. Recover any pending request first, or capture a new catalog for a new selection.",
+		ahp_select: "Select",
+		ahp_no_sessions: "No sessions were listed in this catalog.",
+		ahp_changesets: "Snapshot contents",
+		ahp_sessions_only: "Session metadata only",
+		ahp_include_changesets: "Include advertised static changesets",
+		ahp_changesets_help: "Optional static changeset snapshots include file paths and diff counts, up to 16 changesets. Dynamic templates and file contents are excluded.",
+		ahp_capture_selected: "Capture selected snapshots",
+		ahp_capture_catalog: "Capture host catalog",
+		ahp_catalog_help: "Explicitly reads the configured host. A pending selection keeps its original request and key.",
+		ahp_capabilities: "Adapter capabilities and limits",
+		ahp_protocol: "Protocol",
+		ahp_capability_limits: "AHP read subset: catalog and selected snapshots only. Configured protocol support is separate from live host validation; check the original capability document. No session creation, messaging, stopping, writer control or adapter migration.",
+		ahp_no_adapters: "No AHP adapters are configured for this workspace. An operator must configure the central service before observations are available.",
+		ahp_unavailable: "Observation sources could not be reread. Previous source content has been hidden; original request keys are preserved."
+	},
+	"zh-TW": {
+		ahp_decoder_profile: "原紀錄 decoder profile",
+		ahp_unknown_source_kind: "這份原快照未記錄可支援的來源種類。請從原文件查看保存的 metadata；不以 URI 推定種類。",
+		ahp_snapshot_details: "快照詳情",
+		ahp_from_sequence: "快照序號",
+		ahp_later_events: "已記錄後續事件",
+		ahp_yes: "是",
+		ahp_no: "否",
+		ahp_provider: "Provider",
+		ahp_native_lifecycle: "原生回報 lifecycle（非完成證明）",
+		ahp_file_count: "檔案 metadata 紀錄",
+		ahp_title: "AHP 唯讀觀察",
+		ahp_intro: "讀取已設定主機的 catalog 與選定快照。人工及外部 session 維持唯讀；這些觀察不能證明完成、成本或管理權。",
+		ahp_adapter: "已設定的 adapter",
+		ahp_refresh: "重讀已保存觀察",
+		ahp_history: "已保存觀察歷史",
+		ahp_more: "下一頁已保存觀察",
+		ahp_invalid: "觀察與原 workspace 或來源不一致。",
+		ahp_saved_detail: "已保存的觀察",
+		ahp_captured: "擷取時間",
+		ahp_coverage: "擷取涵蓋範圍",
+		ahp_observed: "已保存有界觀察",
+		ahp_incomplete: "觀察不完整",
+		ahp_catalog_coverage: "Catalog 涵蓋範圍",
+		ahp_catalog_complete: "已列出 catalog 的分頁讀取完整",
+		ahp_catalog_partial: "已列出 catalog 不完整",
+		ahp_reason: "原紀錄原因",
+		ahp_snapshots: "選定快照（含 root）",
+		ahp_events: "事件 metadata 紀錄",
+		ahp_gaps: "已記錄的重播缺口",
+		ahp_evidence_limits: "這是有時間與範圍限制的證據。快照之後可能已有事件；缺口及缺失來源保留在原文件中。不擷取逐字稿、檔案內容或完成證明。",
+		ahp_original: "原始來源文件與收據",
+		ahp_hidden: "目前來源權限無法讀取部分原觀察。",
+		ahp_empty: "尚無已保存觀察。",
+		ahp_need_catalog: "先擷取 catalog，再選取 session。",
+		ahp_selection_help: "從這份已保存 catalog 選取最多 8 個 session。擷取時會再次查核主機 catalog。",
+		ahp_selection_unavailable: "原 catalog 選取目前無法讀取。如有待查回請求，先恢復原請求；否則可擷取新 catalog 重新選取。",
+		ahp_select: "選取",
+		ahp_no_sessions: "這份 catalog 未列出 session。",
+		ahp_changesets: "快照內容",
+		ahp_sessions_only: "僅 session metadata",
+		ahp_include_changesets: "包含已列出的靜態 changeset",
+		ahp_changesets_help: "可選的靜態 changeset 快照包含檔案路徑與 diff 數量，最多 16 份。不讀取動態範本或檔案內容。",
+		ahp_capture_selected: "擷取選定快照",
+		ahp_capture_catalog: "擷取主機 catalog",
+		ahp_catalog_help: "明確讀取已設定主機。待查回的選取請求保留原內容與 key。",
+		ahp_capabilities: "Adapter 能力與限制",
+		ahp_protocol: "協定",
+		ahp_capability_limits: "AHP 唯讀子集：僅 catalog 與選定快照。設定支援的協定與真實主機驗證不同；請查看原能力文件。不提供建立 session、傳訊、停止、writer 控制或 adapter 遷移。",
+		ahp_no_adapters: "此 workspace 尚未設定 AHP adapter。需先由操作人員設定中央服務，才能擷取觀察。",
+		ahp_unavailable: "無法重新讀取觀察來源。已隱藏先前來源內容；原請求 key 仍保留。"
+	}
+};
 //#endregion
 //#region src/pm-maintenance-repairs-strings.js
 var pmMaintenanceRepairsStrings = {
@@ -23681,6 +24239,7 @@ var pmStrings = {
 var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
+		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
 		...pmMaintenanceRepairsStrings["zh-TW"],
@@ -25144,6 +25703,7 @@ var STRINGS = {
 	},
 	en: {
 		...pmStrings.en,
+		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
 		...pmMaintenanceRepairsStrings.en,

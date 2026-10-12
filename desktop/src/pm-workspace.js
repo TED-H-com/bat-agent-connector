@@ -1,3 +1,4 @@
+import {workspaceAhpObserver} from './pm-ahp-observer.js';
 import {planProposals} from './pm-plan-proposals.js';
 import {workspaceWorkDeliveries} from './pm-work-deliveries.js';
 import {workspaceSpecMaterialization} from './pm-spec-materialization.js';
@@ -250,6 +251,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines
     ? workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace}) : null;
   if(releaseBaselines)body.insertBefore(releaseBaselines.element,content);
+  const ahp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.ahp_observation?.contract === 'ahp_observer_v1'
+    ? workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,workspace:()=>workspace,form,errorBox}) : null;
+  if(ahp)body.insertBefore(ahp.element,content);
   let handoff = null;
   const maintenancePolicy = workspaceId && !threadId && caps()?.features?.pm_workspaces?.maintenance_policy?.version === 1
     ? workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,reviewedHandoff:()=>handoff?.batchSelection()}) : null;
@@ -307,7 +311,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceQualityReviews({h,t,api,alive,workspaceId,workspace:()=>workspace,caps,permitted,form,input,labelled,errorBox,namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
-  const sourceSections = () => [content, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  const sourceSections = () => [content, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -594,7 +598,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
-    releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
+    ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -652,7 +656,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         alive(); if (ticket !== sequence) return;
       }
       worktreeChoice?.update();
-      for (const section of [lifecycle, evidence, brief, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,workBatches,issues]) {
+      for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,workBatches,issues]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -663,7 +667,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         brief?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
-        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
+        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         title.textContent = t('pm_title'); workspaceList.replaceChildren();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -676,7 +680,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   initialReadComplete = true; updateForms();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair','pm_ahp_observation'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
@@ -703,7 +707,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
-    proposalReview?.dispose();
+    proposalReview?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };
 }
