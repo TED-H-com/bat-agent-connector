@@ -80,6 +80,18 @@ allows editing/exclusion and requirement choices, shows removals and uncertainty
 and provides one final adoption action. Conflicts preserve drafts and original
 operation keys; no automatic rebase or latest-baseline substitution occurs.
 
+Original-source booleans may be reused only within one synchronous SQLite read
+snapshot, keyed by connection, actor, scopes, admin authority and credential ID.
+No parsed document, live eligibility, freshness or final-effect decision is
+cached. A write, transaction replacement, event-loop yield or foreign task
+invalidates the scope with `PM_SOURCE_READ_CHANGED`; callers must start a fresh
+read. Closed or copied scopes cannot retain permission. Original-source and
+conversation recursion have separate 64-node depth limits, with a shared
+2,048-node traversal budget and bounded nested principal scopes; cycles and
+exhausted bounds fail closed. Each later independent read rechecks withdrawal,
+and checks after awaits or at final effect frames use fresh scopes. Existing
+saved receipts and their whole original source boundary remain unchanged.
+
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.
 HTTP, RPC, MCP and native reads expose the same central operation/read model.
