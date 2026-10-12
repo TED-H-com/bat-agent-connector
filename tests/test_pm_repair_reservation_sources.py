@@ -20,13 +20,8 @@ def journal_change(db):
         db.execute('RELEASE fixture_reservation_negative')
 
 
-<<<<<<< HEAD
 async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blocking(joined, mock, monkeypatch, record_property):  # noqa: F811
-    original_check, inspected = repairs._check, []
-=======
-async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blocking(joined, mock, monkeypatch):  # noqa: F811
     original_check, inspected, failures = repairs._check, [], []
->>>>>>> 3c8eb8d (Select actual original repair dependency in reserve regression)
     def check(ops, principal, target, params, pre, *, reserving=False):
         if reserving:
             ctx = repairs._RESERVING_WORKLOAD.get()

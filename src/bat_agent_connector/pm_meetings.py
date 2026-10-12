@@ -367,11 +367,16 @@ class _SourceReader:
 
     def get(self, operation_id, *, steps=False, principal=None):
         row = self.db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
-        # PM operations are never delivery evidence sources. Reject before a
-        # nested PM visibility check, including malformed cyclic source graphs.
-        if row is None or row['action'].startswith('pm.'):
+        # The exact engineering verifier can be a quality-assessment proof.
+        # Other PM operations remain excluded before recursive source checks;
+        # the evidence collector separately rejects all PM delivery claims.
+        if row is None or (row['action'].startswith('pm.') and row['action'] != 'pm.execution.verify'):
             raise _bad('NOT_FOUND', 'Source operation not found', 404)
-        return OperationService._decode(row)
+        operation = OperationService._decode(row)
+        if principal is not None:
+            from .pm_access import require_visible
+            require_visible(self.db, principal, operation)
+        return operation
 
 
 def operation_visible(db, principal, operation):

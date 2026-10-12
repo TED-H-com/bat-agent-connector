@@ -90,6 +90,29 @@ async def test_wrong_fixed_revision_never_executes_command(owned, field):
     assert not w['marker'].exists()
 
 
+async def test_discussion_reader_accepts_exact_verifier_proof_but_not_pm_delivery_claims(owned):
+    from bat_agent_connector import pm_evidence, pm_meetings
+    w, ops = owned, owned['d'].ops
+    done = await execute(w)
+    condition = {'kind': 'fixed_revision_verification', 'profile': 'observed_runner_v1',
+        'command_digest': w['config']['command_digest']}
+    proof = evidence.evaluate(ops, OWNER, w['workspace_id'], w['child'], condition, done['result']['reference'])
+    reader = pm_meetings._SourceReader(ops.db)
+    before = ops.db.total_changes
+    evidence.require_sources(reader, OWNER, w['workspace_id'], proof)
+    assert reader.get(done['operation_id'], principal=OWNER) == done
+    assert pm_evidence._read_operation(reader, OWNER, w['workspace_id'], done['operation_id']) is None
+    excluded = ops.db.execute("SELECT operation_id FROM operations WHERE action LIKE 'pm.%' AND action!='pm.execution.verify' LIMIT 1").fetchone()[0]
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        reader.get(excluded, principal=OWNER)
+    assert ops.db.total_changes == before
+    revoke(w)
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        evidence.require_sources(reader, OWNER, w['workspace_id'], proof)
+    with pytest.raises(OperationError, match='NOT_FOUND'):
+        reader.get(done['operation_id'], principal=OWNER)
+
+
 @pytest.mark.parametrize('field', ['command_digest', 'handoff_contract_digest'])
 async def test_stale_config_or_package_fails_before_admission(owned, field):
     w = owned
