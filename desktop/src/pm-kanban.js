@@ -1,10 +1,21 @@
 // A shared, read-only work list. Status, send acceptance and saved quality evidence remain distinct.
 import {qualityFact} from './pm-quality-projections.js';
-export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projectId = null, pageSize = 20}) {
+import {kanbanObservation} from './pm-kanban-observation.js';
+export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, caps, permitted, form, projectId = null, pageSize = 20}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/kanban`;
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
   let serial = 0, next = null, reading = false, rows = new Map(), page = null;
+  const observers=new Map(),operationId=value=>/^op_[0-9a-f]{32}$/.test(value||'');
+  function completion(attempt){
+    const value=attempt.runtime_completion;
+    if(value==null)return null;
+    if(value.runtime_status!=='original_turn_completed'||value.process_death_proven!==false
+      ||!operationId(value.observation_operation_id)||!operationId(value.execution_operation_id)
+      ||value.execution_operation_id!==attempt.operation_id||!/^[0-9a-f]{64}$/.test(value.document_digest||'')
+      ||!Number.isFinite(value.recorded_at))throw Error(t('pm_kanban_scope_error'));
+    return value;
+  }
   const status = h('div', {role: 'status'}), metrics = h('div', {class: 'pm-kanban-summary'}), list = h('div', {class: 'pm-kanban-list'});
   const more = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
   const refreshButton = h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('pm_kanban_refresh'));
@@ -38,6 +49,7 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
       || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t('pm_kanban_scope_error'));
     if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId
       || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t('pm_kanban_scope_error'));
+    for(const attempt of card.execution?.attempts||[])completion(attempt);
     return card;
   }
   function checkPage(data, after) {
@@ -62,6 +74,7 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
   }
   function unavailable(error) {
     ++serial; reading = false; rows.clear(); page = null; next = null;
+    for(const observer of observers.values())observer.withdraw();
     list.replaceChildren(); metrics.replaceChildren(); more.hidden = true; more.disabled = false;
     element.removeAttribute('aria-busy');
     status.replaceChildren(errorBox ? errorBox(error) : h('p', {class: 'error'}, error.message),
@@ -90,7 +103,7 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
       lines('pm_kanban_session', execution.sessions, value => h('span', {}, value.runtime_status ? state(value.runtime_status) : t('pm_kanban_stream_unknown'), code(value.resource_id),
         h('span', {class: 'pm-kanban-note'}, t('pm_kanban_source_time'), ': ', stamp(value.observed_at)))),
       lines('pm_kanban_attempt', execution.attempts, value => h('span', {}, t(value.accepted === true ? 'pm_kanban_accepted' : 'pm_kanban_accept_unknown'), ' · ', state(value.status),
-        code(value.attempt_id), h('span', {class: 'pm-kanban-note'}, t('pm_kanban_source_time'), ': ', stamp(value.observed_at)))),
+        code(value.attempt_id), h('span', {class: 'pm-kanban-note'}, t('pm_kanban_source_time'), ': ', stamp(value.observed_at)),runtimeReceipt(value))),
       h('h4', {}, t('pm_kanban_capture')));
     if (!capture) detail.append(note('pm_kanban_no_capture'));
     else {
@@ -113,7 +126,19 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
         ['pm_kanban_requirements', (card.binding.requirement_ids || []).join(', ')], ['pm_kanban_work_version', card.work.version],
         ['pm_kanban_bound_version', card.binding.work_version]].flatMap(([key, value]) => [h('dt', {}, t(key)), h('dd', {}, code(value))])),
       note('pm_kanban_assignment'), note('pm_kanban_dependencies'));
+    if(form&&caps?.()?.actions?.some(row=>row.action==='pm.session.quiescence.observe')){
+      let observer=observers.get(card.work_item_id);
+      if(!observer){observer=kanbanObservation({h,t,api,alive,workspaceId,workId:card.work_item_id,caps,permitted,form,errorBox,onSourceFailure:unavailable});observers.set(card.work_item_id,observer);}
+      observer.update(execution.manual_observation_sources??[]);detail.append(observer.box);
+    }
     return detail;
+  }
+  function runtimeReceipt(attempt){
+    const value=completion(attempt);if(!value)return '';
+    return h('div',{'data-runtime-completion':value.execution_operation_id},h('p',{},t('pm_kanban_runtime_completed')),
+      note('pm_kanban_runtime_limits'),h('p',{},t('pm_kanban_runtime_recorded_at'),': ',stamp(value.recorded_at)),
+      h('a',{href:`#/op/${encodeURIComponent(value.observation_operation_id)}`},t('pm_kanban_runtime_receipt')),
+      code(value.observation_operation_id),code(value.document_digest));
   }
   function previewFor(card, observedAt) {
     const execution = card.execution || {}, flow = card.flow || {};
@@ -130,7 +155,8 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
         h('p', {}, t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age'), ': ', elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)),
         card.work.state === 'waiting' ? h('p', {}, t('pm_kanban_wait'), ': ', elapsed(flow.waiting_seconds)) : ''),
       h('div', {class: 'pm-kanban-metric'}, h('strong', {}, t('pm_kanban_attempts', {count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t('pm_kanban_unknown')})),
-        h('p', {}, summary || t('pm_kanban_no_execution')))), ...notices(execution.coverage));
+        h('p', {}, summary || t('pm_kanban_no_execution')),
+        execution.attempts?.some(attempt=>completion(attempt))?note('pm_kanban_runtime_recorded'):'')), ...notices(execution.coverage));
     if (flow.history !== 'available_central_events') node.append(note('pm_kanban_history_unknown'));
     node.append(h('p', {class: 'pm-kanban-note'}, t('pm_kanban_read_at'), ': ', stamp(observedAt), ' · ',
       t(card.latest_capture ? 'pm_kanban_capture_time' : 'pm_kanban_no_capture'), card.latest_capture ? ': ' : '', card.latest_capture ? stamp(card.latest_capture.captured_at) : ''));
@@ -143,7 +169,7 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
     let detailRequest = 0;
     fold.addEventListener('toggle', async () => {
       const request = ++detailRequest;
-      if (!fold.open) {body.replaceChildren(); return;}
+      if (!fold.open) {body.replaceChildren();observers.get(card.work_item_id)?.withdraw();return;}
       body.replaceChildren(note('pm_kanban_detail_loading'));
       try {
         const data = await api('GET', `${endpoint}/${encodeURIComponent(card.work_item_id)}`); alive();
@@ -171,6 +197,7 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
   async function refresh() {
     const ticket = ++serial;
     reading = true; page = null; next = null; rows.clear(); list.replaceChildren(); metrics.replaceChildren(); more.hidden = true;
+    for(const observer of observers.values())observer.withdraw();
     status.replaceChildren(note('pm_kanban_loading')); element.setAttribute('aria-busy', 'true');
     try {const data = checkPage(await api('GET', path(0)), 0); alive(); if (ticket === serial) accept(data, false);}
     catch (error) {if (ticket === serial) unavailable(error);}

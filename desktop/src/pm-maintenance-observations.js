@@ -37,7 +37,8 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
   function exclusion(row){
     if(!object(row)||!text(row.reason))throw Error(t('pmo_invalid'));
     const reasons=['checkpoint_is_not_activity','failed_attempt_explicitly_deferred','unselected_backlog',
-      'pm_owned_session','verified_ended_session_retained','original_maintenance_attempt_completed'];
+      'pm_owned_session','verified_ended_session_retained','original_maintenance_attempt_completed',
+      'original_batch_attempt_completed','manual_session_currently_quiescent'];
     const item=h('li',{},t('pmo_exclusion_'+(reasons.includes(row.reason)?row.reason:'unknown')),sourceReference(row));
     if(!reasons.includes(row.reason))item.append(h('code',{class:'pm-source'},row.reason));
     if(row.runtime_observation_id!=null){

@@ -119,6 +119,18 @@ test('unknown public exclusion reasons remain literal and do not infer completed
   await expect(excluded).toContainText('future_observation_reason');await expect(excluded).toContainText('fixture-bat/<img src=x onerror=alert(1)>');await expect(excluded.locator('img')).toHaveCount(0);
   await expect(excluded).not.toContainText('recorded completion evidence');await expect(box).toContainText('Not enough evidence to determine workload');expect(f.state.writes).toEqual([]);
 });
+for(const locale of ['en','zh-TW'])test(`normal execution and manual observation exclusions retain separate original receipts ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
+    const f=fixture(),row=f.add('workload');row.document.exclusions=[
+      {kind:'operation',id:completedExecution,reason:'original_batch_attempt_completed',runtime_observation_id:runtimeReceipt},
+      {kind:'session',id:'fixture-bat/manual-single-input',reason:'manual_session_currently_quiescent',runtime_observation_id:'op_'+'8'.repeat(32)}];
+    await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);const exclusions=section(page).locator('[data-workload-exclusions]');await exclusions.locator('summary').click();
+    await expect(exclusions).toContainText(locale==='en'?'original batch attempt has recorded completion evidence':'原始批次嘗試已有保存的完成證據');
+    await expect(exclusions).toContainText(locale==='en'?'Ownership and work acceptance are unchanged':'控制權與工作驗收不變');
+    expect(await exclusions.locator('a').evaluateAll((nodes:any[])=>nodes.map(n=>n.getAttribute('href')))).toEqual([`#/op/${runtimeReceipt}`,'#/op/op_'+'8'.repeat(32)]);
+    expect(f.state.writes).toEqual([]);
+  }finally{await context.close();}
+});
 test('malformed exclusion source clears the whole saved projection instead of hiding only that fact',async({page})=>{
   const f=fixture(),row=explanations(f);await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);
   await expect(section(page).locator('[data-workload-exclusions]')).toHaveCount(1);row.document.exclusions[0].id={unknown:'not an original source identity'};
