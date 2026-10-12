@@ -108,6 +108,12 @@ or conversation histories; the shared 2,048-node budget still applies. Publicati
 quality-source and visibility reads open one synchronous scope for the complete
 original read. They do not cache assessment documents, current acceptance,
 credentials, eligibility, or any decision across a provider await or effect.
+If a direct verifier read revisits that same verifier through its original
+repair's saved quality receipt, only an exact active repair source guard for the
+canonical verifier's immutable lineage may terminate the edge. The complete
+principal and credential must match; this partial verifier grant is not memoized.
+The outer verifier read must still finish every original source check before
+its completed boolean can be reused.
 
 No automatic execution, maintenance dispatch, scope adoption from model output,
 schema data step, live model acceptance or hardware acceptance is implied.

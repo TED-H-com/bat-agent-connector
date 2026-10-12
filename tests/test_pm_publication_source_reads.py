@@ -75,6 +75,17 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
         "AND json_extract(target,'$.execution_operation_id')=? ORDER BY created_at DESC LIMIT 1",
         (verifier.ACTION, child['operation_id'])).fetchone()[0])
     originals.append(verifying)
+    # Enter through the verifier first, with and without an existing read scope.
+    # Its saved quality -> owned child -> same repair edge is valid in the
+    # original predicate; the typed wrapper must preserve both read orders.
+    with monkeypatch.context() as prior:
+        prior.setattr(verifier, 'operation_visible', prior_verifier_visible)
+        assert verifier.operation_visible(ops.db, OWNER, verifying)
+        with pm_source_reads.scope(ops.db, OWNER):
+            assert verifier.operation_visible(ops.db, OWNER, verifying)
+    assert verifier.operation_visible(ops.db, OWNER, verifying)
+    with pm_source_reads.scope(ops.db, OWNER):
+        assert verifier.operation_visible(ops.db, OWNER, verifying)
     events = []
     for op in originals:
         assert ops.get(op['operation_id'], principal=OWNER)['operation_id'] == op['operation_id']
