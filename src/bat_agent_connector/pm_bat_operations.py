@@ -174,8 +174,13 @@ def _admit(ops, principal, target, params, pre):
 def _check(ctx, run, *, sending=False):
     principal = pm_workspace.admitted_principal(ctx)
     pm_native_operations._scopes(principal)
-    pm_run_operations.require_execution(ctx.service.journal, run["execution_authority"], run["workspace_id"])
-    pm_runs.require_requester(ctx.service.db, run)
+    from .pm_source_reads import scope
+    # The current writer check also validates the original requester sources.
+    # Both checks still execute; only completed historical source decisions
+    # share this synchronous read. Binding and transport checks remain fresh.
+    with scope(ctx.service.db, principal):
+        pm_run_operations.require_execution(ctx.service.journal, run["execution_authority"], run["workspace_id"])
+        pm_runs.require_requester(ctx.service.db, run)
     binding = ctx.admission_binding["pm_bat_binding"]
     if (pm_runs._digest(binding) != ctx.admission_binding["pm_bat_binding_digest"]
             or _binding(ctx.service, run["workspace_id"]) != binding):
