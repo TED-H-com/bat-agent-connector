@@ -197,22 +197,23 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		if (value?.workspace_id !== workspaceId || !/^pmah_[0-9a-f]{32}$/.test(value.observation_id) || !/^op_[0-9a-f]{32}$/.test(value.operation_id) || !/^([0-9a-f]{64})$/.test(value.document_digest) || typeof value.adapter_id !== "string" || !["observed", "incomplete"].includes(value.coverage_status)) throw Error(t("ahp_invalid"));
 		if (withDocument) {
 			const doc = value.document, e = doc?.evidence;
-			if (doc?.schema !== "ahp_observation_v1" || doc.observation_id !== value.observation_id || doc.workspace_id !== workspaceId || doc.adapter_id !== value.adapter_id || !/^([0-9a-f]{64})$/.test(doc.binding_digest) || !choices.has(`${doc.adapter_id}.${doc.binding_digest}`) || !Array.isArray(e?.catalog) || e.catalog.length > 200 || typeof e.catalog_complete !== "boolean" || !Array.isArray(e.snapshots) || !Array.isArray(e.events) || !Array.isArray(e.gaps) || !Array.isArray(e.missing) || e.status !== value.coverage_status || new Set(e.catalog.map((s) => s.resource)).size !== e.catalog.length || e.catalog.some((s) => typeof s.title !== "string" || typeof s.provider !== "string" || !/^ahp-session:/.test(s.resource) || typeof s.source_identity !== "string")) throw Error(t("ahp_invalid"));
+			if (doc?.schema !== "ahp_observation_v1" || doc.observation_id !== value.observation_id || doc.workspace_id !== workspaceId || doc.adapter_id !== value.adapter_id || !/^([0-9a-f]{64})$/.test(doc.binding_digest) || !choices.has(`${doc.adapter_id}.${doc.binding_digest}`) || !Array.isArray(e?.catalog) || e.catalog.length > 200 || typeof e.catalog_complete !== "boolean" || !Array.isArray(e.snapshots) || !Array.isArray(e.events) || !Array.isArray(e.gaps) || !Array.isArray(e.missing) || e.status !== value.coverage_status || new Set(e.catalog.map((s) => s.resource)).size !== e.catalog.length || e.catalog.some((s) => typeof s.title !== "string" || typeof s.provider !== "string" || typeof s.resource !== "string" || !s.resource.length || s.resource.length > 2048 || /[\x00-\x1f\x7f]/.test(s.resource) || s.source_kind !== void 0 && s.source_kind !== "session" || typeof s.source_identity !== "string")) throw Error(t("ahp_invalid"));
 		}
 		return value;
 	}
 	function renderDetail(value) {
 		const r = row(value, true), d = r.document, e = d.evidence;
 		const snapshots = h("details", {}, h("summary", {}, t("ahp_snapshot_details")));
-		for (const snapshot of e.snapshots.filter((s) => s.resource !== "ahp-root://")) {
-			const state = snapshot.state || {}, session = snapshot.resource?.startsWith("ahp-session:");
-			snapshots.append(h("details", {}, h("summary", {}, state.title || snapshot.resource), h("p", { class: "mono" }, snapshot.resource), line("ahp_from_sequence", snapshot.from_seq), line("ahp_later_events", t(snapshot.later_events_observed ? "ahp_yes" : "ahp_no")), ...session ? [line("ahp_provider", state.provider), line("ahp_native_lifecycle", state.lifecycle)] : [line("ahp_file_count", state.files?.length ?? 0)]));
+		for (const snapshot of e.snapshots) {
+			const state = snapshot.state || {}, kind = snapshot.source_kind ?? state.source_kind ?? (state.kind === "root" ? "root" : "unknown");
+			if (kind === "root") continue;
+			snapshots.append(h("details", {}, h("summary", {}, state.title || snapshot.resource), h("p", { class: "mono" }, snapshot.resource), line("ahp_from_sequence", snapshot.from_seq), line("ahp_later_events", t(snapshot.later_events_observed ? "ahp_yes" : "ahp_no")), ...kind === "session" ? [line("ahp_provider", state.provider), line("ahp_native_lifecycle", state.lifecycle)] : kind === "changeset" ? [line("ahp_file_count", state.files?.length ?? 0)] : [h("p", { class: "muted" }, t("ahp_unknown_source_kind"))]));
 		}
 		const meta = h("details", {}, h("summary", {}, t("ahp_original")), h("p", { class: "mono" }, r.observation_id), h("p", { class: "mono" }, r.document_digest), h("a", { href: `#/op/${r.operation_id}` }, t("pm_operation")), h("pre", {}, JSON.stringify(d, null, 2)));
 		detail.replaceChildren(h("section", {
 			"data-ahp-detail": "",
 			class: "pm-ahp-facts"
-		}, h("h3", {}, t("ahp_saved_detail")), line("ahp_adapter", r.adapter_id), line("ahp_captured", stamp(d.finished_at)), line("ahp_protocol", e.negotiated_version || e.protocol_version || "—"), line("ahp_coverage", t(e.status === "observed" ? "ahp_observed" : "ahp_incomplete")), line("ahp_catalog_coverage", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")), ...e.reason ? [line("ahp_reason", e.reason)] : [], line("ahp_snapshots", e.snapshots.length), line("ahp_events", e.events.length), line("ahp_gaps", e.gaps.length), h("p", { class: "muted" }, t("ahp_evidence_limits")), ...snapshots.children.length > 1 ? [snapshots] : [], meta));
+		}, h("h3", {}, t("ahp_saved_detail")), line("ahp_adapter", r.adapter_id), line("ahp_captured", stamp(d.finished_at)), line("ahp_protocol", e.negotiated_version || e.protocol_version || "—"), ...e.decoder_profile ? [line("ahp_decoder_profile", e.decoder_profile)] : [], line("ahp_coverage", t(e.status === "observed" ? "ahp_observed" : "ahp_incomplete")), line("ahp_catalog_coverage", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")), ...e.reason ? [line("ahp_reason", e.reason)] : [], line("ahp_snapshots", e.snapshots.length), line("ahp_events", e.events.length), line("ahp_gaps", e.gaps.length), h("p", { class: "muted" }, t("ahp_evidence_limits")), ...snapshots.children.length > 1 ? [snapshots] : [], meta));
 	}
 	async function showDetail(id) {
 		const ticket = epoch, serial = ++detailEpoch;
@@ -433,7 +434,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		});
 		for (const f of [item.catalogForm, item.observe]) f.box.querySelector("button[type=submit]").className = "secondary";
 		item.forms = [item.catalogForm, item.observe];
-		item.element = h("div", {}, h("details", {}, h("summary", {}, t("ahp_capabilities")), h("p", {}, `${t("ahp_protocol")}: ${option.supported_protocol_versions?.join(", ") || option.protocol_version || "—"}`), h("p", { class: "muted" }, t("ahp_capability_limits")), h("pre", {}, JSON.stringify(option, null, 2))), item.catalogForm.box, item.observe.box);
+		item.element = h("div", {}, h("details", {}, h("summary", {}, t("ahp_capabilities")), h("p", {}, `${t("ahp_protocol")}: ${option.protocol_versions?.join(", ") || option.protocol_version || "—"}`), h("p", { class: "muted" }, t("ahp_capability_limits")), h("pre", {}, JSON.stringify(option, null, 2))), item.catalogForm.box, item.observe.box);
 		editors.set(key, item);
 		return item;
 	}
@@ -19897,6 +19898,8 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 //#region src/pm-ahp-observer-strings.js
 var ahpObserverStrings = {
 	en: {
+		ahp_decoder_profile: "Recorded decoder profile",
+		ahp_unknown_source_kind: "This original snapshot has no supported source kind. Read its preserved metadata in the original document; the URI does not establish its type.",
 		ahp_snapshot_details: "Snapshot details",
 		ahp_from_sequence: "Snapshot sequence",
 		ahp_later_events: "Later events recorded",
@@ -19947,6 +19950,8 @@ var ahpObserverStrings = {
 		ahp_unavailable: "Observation sources could not be reread. Previous source content has been hidden; original request keys are preserved."
 	},
 	"zh-TW": {
+		ahp_decoder_profile: "原紀錄 decoder profile",
+		ahp_unknown_source_kind: "這份原快照未記錄可支援的來源種類。請從原文件查看保存的 metadata；不以 URI 推定種類。",
 		ahp_snapshot_details: "快照詳情",
 		ahp_from_sequence: "快照序號",
 		ahp_later_events: "已記錄後續事件",

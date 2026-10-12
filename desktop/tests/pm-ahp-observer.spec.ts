@@ -98,15 +98,45 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
     await open(page,native,f);await expect(page.locator('[data-ahp-detail]')).toContainText('Incomplete observation');await expect(page.locator('[data-ahp-detail]')).toContainText('catalog_page_limit');await expect(page.locator('[data-ahp-detail]')).toContainText('Recorded replay gaps: 1');
   });
   test('snapshot metadata displays its negotiated protocol and later-event caveat',async({page})=>{
-    const f=fixture(),r=f.make();Object.assign(f.state.adapters[0],{protocol_version:'0.10.0',supported_protocol_versions:['0.10.0','1.0.0']});
-    Object.assign(r.document.evidence,{protocol_version:'0.10.0',negotiated_version:'0.10.0',snapshots:[{resource:'ahp-session://editor/1',from_seq:12,later_events_observed:true,state:{title:'Original snapshot title',provider:'example-agent',lifecycle:'ready'}},{resource:'ahp-changeset://editor/fixed',from_seq:13,later_events_observed:false,state:{files:[{id:'fixed-source-file',edit:{after:{uri:'file:///fixture/source.js'}}}]}}]});
-    await open(page,native,f);await expect(page.locator('[data-ahp-detail]')).toContainText('Protocol: 0.10.0');await page.getByText('Snapshot details',{exact:true}).click();await page.getByText('Original snapshot title',{exact:true}).click();
+    const f=fixture(),r=f.make();Object.assign(f.state.adapters[0],{protocol_version:'0.10.0',protocol_versions:['0.10.0','1.0.0'],decoder_profiles:{'0.10.0':'vscode_0_10_observer_v1','1.0.0':'ahp_1_0_observer_v1'}});
+    Object.assign(r.document.evidence,{protocol_version:'1.0.0',negotiated_version:'1.0.0',snapshots:[{resource:'ahp-session://editor/1',source_kind:'session',from_seq:12,later_events_observed:true,state:{title:'Original snapshot title',provider:'example-agent',lifecycle:'ready'}},{resource:'ahp-changeset://editor/fixed',source_kind:'changeset',from_seq:13,later_events_observed:false,state:{files:[{id:'fixed-source-file',edit:{after:{uri:'file:///fixture/source.js'}}}]}}]});
+    await open(page,native,f);await expect(page.locator('[data-ahp-detail]')).toContainText('Protocol: 1.0.0');await page.getByText('Snapshot details',{exact:true}).click();await page.getByText('Original snapshot title',{exact:true}).click();
     await expect(page.locator('[data-ahp-detail]')).toContainText('Later events recorded: Yes');await expect(page.locator('[data-ahp-detail]')).toContainText('Reported lifecycle (not a completion proof): ready');
   });
   test('catalog pagination does not drop selections from previous page',async({page})=>{
     const f=fixture();f.make('editor',22);await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();await page.locator('[data-ahp-catalog]').getByRole('button',{name:'Next',exact:true}).click();
     await page.getByLabel('Select editor session 21',{exact:true}).check();await page.getByRole('button',{name:'Capture selected snapshots'}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
     expect(f.state.writes[0].body.params.session_uris).toEqual(['ahp-session://editor/1','ahp-session://editor/21']);
+  });
+  test('opaque session URI and nested changeset use the original server kinds without rewriting',async({page})=>{
+    const f=fixture(),r=f.make('editor',1),uri='copilot:/original-session-id';
+    Object.assign(f.state.adapters[0],{protocol_versions:['1.0.0','0.10.0'],decoder_profiles:{'0.10.0':'vscode_0_10_observer_v1'}});
+    Object.assign(r.document.evidence.catalog[0],{resource:uri,source_kind:'session',provider:'copilot'});
+    Object.assign(r.document.evidence,{protocol_version:'0.10.0',negotiated_version:'0.10.0',decoder_profile:'vscode_0_10_observer_v1',snapshots:[
+      {resource:uri,source_kind:'session',from_seq:4,later_events_observed:false,state:{title:'Opaque original session',provider:'copilot',lifecycle:'ready'}},
+      {resource:uri+'/changeset/session',source_kind:'changeset',from_seq:5,later_events_observed:false,state:{files:[{id:'fixed-path',edit:{after:{uri:'file:///fixture/source.js'}}}]}}
+    ]});
+    await open(page,native,f);await page.getByText('Adapter capabilities and limits',{exact:true}).click();await expect(page.locator('[data-pm-ahp]')).toContainText('Protocol: 1.0.0, 0.10.0');
+    await expect(page.locator('[data-ahp-detail]')).toContainText('Recorded decoder profile: vscode_0_10_observer_v1');await page.getByText('Snapshot details',{exact:true}).click();
+    await page.getByText('Opaque original session',{exact:true}).click();await expect(page.locator('[data-ahp-detail]')).toContainText('Provider: copilot');
+    await page.locator('[data-ahp-detail] summary').filter({hasText:uri+'/changeset/session'}).click();await expect(page.locator('[data-ahp-detail]')).toContainText('File metadata records: 1');
+    await page.getByLabel('Select editor session 1',{exact:true}).check();await page.getByRole('button',{name:'Capture selected snapshots'}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
+    expect(f.state.writes[0].body.params.session_uris).toEqual([uri]);
+  });
+  test('missing or unknown snapshot kind remains generic even with a familiar URI prefix',async({page})=>{
+    const f=fixture(),r=f.make('editor',1);Object.assign(r.document.evidence,{snapshots:[
+      {resource:'ahp-session://looks-like-session',from_seq:1,later_events_observed:false,state:{title:'Legacy untyped snapshot',provider:'looks-like-provider',lifecycle:'ready'}},
+      {resource:'ahp-changeset://looks-like-files',source_kind:'future_kind',from_seq:2,later_events_observed:false,state:{files:[{id:'not-classified'}]}},
+      {resource:'copilot:/legacy-typed',from_seq:3,later_events_observed:false,state:{source_kind:'session',title:'Originally typed session',provider:'copilot',lifecycle:'ready'}}
+    ]});
+    await open(page,native,f);await page.getByText('Snapshot details',{exact:true}).click();await page.getByText('Legacy untyped snapshot',{exact:true}).click();
+    await expect(page.locator('[data-ahp-detail]')).toContainText('URI does not establish its type');await expect(page.locator('[data-ahp-detail]')).not.toContainText('Provider: looks-like-provider');
+    await expect(page.locator('[data-ahp-detail]')).not.toContainText('File metadata records:');await page.getByText('Originally typed session',{exact:true}).click();await expect(page.locator('[data-ahp-detail]')).toContainText('Provider: copilot');
+    expect(f.state.writes).toHaveLength(0);
+  });
+  test('an explicit non-session catalog kind cannot become a session selection',async({page})=>{
+    const f=fixture(),r=f.make('editor',1);r.document.evidence.catalog[0].source_kind='changeset';await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-ahp] > summary').click();
+    await expect(page.locator('[data-pm-ahp]')).toContainText('does not match its original workspace');await expect(page.locator('[data-ahp-catalog] input')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
   });
   test('another central identity cannot inherit the original selection draft',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();

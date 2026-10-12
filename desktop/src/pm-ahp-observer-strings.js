@@ -1,5 +1,6 @@
 export const ahpObserverStrings={
   en:{
+    ahp_decoder_profile:'Recorded decoder profile',ahp_unknown_source_kind:'This original snapshot has no supported source kind. Read its preserved metadata in the original document; the URI does not establish its type.',
     ahp_snapshot_details:'Snapshot details',ahp_from_sequence:'Snapshot sequence',ahp_later_events:'Later events recorded',ahp_yes:'Yes',ahp_no:'No',ahp_provider:'Provider',ahp_native_lifecycle:'Reported lifecycle (not a completion proof)',ahp_file_count:'File metadata records',
     ahp_title:'AHP observations',ahp_intro:'Read a configured host catalog and selected snapshots. Manual and foreign sessions stay read-only; these observations do not establish completion, cost or management authority.',
     ahp_adapter:'Configured adapter',ahp_refresh:'Reload saved observations',ahp_history:'Saved observation history',ahp_more:'Next saved observations',ahp_invalid:'The observation does not match its original workspace or source.',
@@ -15,6 +16,7 @@ export const ahpObserverStrings={
     ahp_no_adapters:'No AHP adapters are configured for this workspace. An operator must configure the central service before observations are available.',ahp_unavailable:'Observation sources could not be reread. Previous source content has been hidden; original request keys are preserved.'
   },
   'zh-TW':{
+    ahp_decoder_profile:'原紀錄 decoder profile',ahp_unknown_source_kind:'這份原快照未記錄可支援的來源種類。請從原文件查看保存的 metadata；不以 URI 推定種類。',
     ahp_snapshot_details:'快照詳情',ahp_from_sequence:'快照序號',ahp_later_events:'已記錄後續事件',ahp_yes:'是',ahp_no:'否',ahp_provider:'Provider',ahp_native_lifecycle:'原生回報 lifecycle（非完成證明）',ahp_file_count:'檔案 metadata 紀錄',
     ahp_title:'AHP 唯讀觀察',ahp_intro:'讀取已設定主機的 catalog 與選定快照。人工及外部 session 維持唯讀；這些觀察不能證明完成、成本或管理權。',
     ahp_adapter:'已設定的 adapter',ahp_refresh:'重讀已保存觀察',ahp_history:'已保存觀察歷史',ahp_more:'下一頁已保存觀察',ahp_invalid:'觀察與原 workspace 或來源不一致。',
