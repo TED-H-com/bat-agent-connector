@@ -26,8 +26,10 @@ def operation_source_visible(db, principal, operation_id):
 
 
 def require_operation_sources(db, principal, operation_ids):
-    if any(not operation_source_visible(db, principal, identity) for identity in set(operation_ids)):
-        raise OperationError("PM_SOURCE_UNAVAILABLE", "Original PM sources are unavailable", 404)
+    from .pm_source_reads import scope
+    with scope(db, principal):
+        if any(not operation_source_visible(db, principal, identity) for identity in set(operation_ids)):
+            raise OperationError("PM_SOURCE_UNAVAILABLE", "Original PM sources are unavailable", 404)
 
 
 def inherit_operation_sources(db, operation_id, source_operation_ids):
@@ -53,6 +55,12 @@ def inherit_operation_sources(db, operation_id, source_operation_ids):
 
 
 def visible(db, principal, operation):
+    from .pm_source_reads import scope
+    with scope(db, principal):
+        return _visible(db, principal, operation)
+
+
+def _visible(db, principal, operation):
     from .pm_source_lineage import visible as source_visible
     if not source_visible(db, principal, "operation", operation.get("operation_id")):
         return False

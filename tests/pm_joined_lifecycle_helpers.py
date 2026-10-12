@@ -235,11 +235,13 @@ async def develop_original_requirements(w, mock):
 
     from bat_agent_connector import pm_requirement_acceptance as acceptance
     from tests import test_pm_execution_verification as producer
+    from tests.pm_joined_discussion_helpers import discuss_original_failure, publish_original_packages
     from tests.test_integration import commit
 
     login, recovery = await engineering(w, 'member.login'), await engineering(w, 'member.recovery')
     from tests.pm_joined_quality_helpers import plan_iteration
     await plan_iteration(w, (login, recovery))
+    await publish_original_packages(w, (login, recovery))
     conditions = [acceptance.freeze_condition(item['package'], item['params']['requirements'])
         for item in (login, recovery)]
     entries = [await batch.selected(login, 'login'), await batch.selected(recovery, 'recovery',
@@ -254,9 +256,10 @@ async def develop_original_requirements(w, mock):
     assert selected[0]['operation_id'] and selected[1]['operation_id'] is None
     child = ops.get(selected[0]['operation_id'])
     assert child['status'] == 'succeeded', child
-    await member.configure_verifier(login, child, 'login')
+    original_condition = await member.configure_verifier(login, child, 'login')
     failed = await producer.execute(login)
     assert failed['result']['status'] == 'blocked'
+    await discuss_original_failure(w, login, failed, original_condition, mock)
     wt = Path(child['result']['worktree_path'])
     git(wt, 'config', 'user.name', 'fixture')
     git(wt, 'config', 'user.email', 'fixture@example.invalid')
