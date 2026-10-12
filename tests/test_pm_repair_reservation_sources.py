@@ -50,7 +50,9 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
             assert original_id in {row[0] for row in ops.db.execute(
                 "SELECT original_operation_id FROM pm_source_lineage WHERE resource_type='operation' AND resource_id=?", (verifier_id,))}
             with journal_change(ops.db):
-                ops._status(verifier_id, 'uncertain', reason='Original verifier outcome reconciliation pending')
+                # Reproduce recovery after the original verifier receipt was
+                # saved but its overall operation outcome is still uncertain.
+                ops.db.execute("UPDATE operations SET status='uncertain' WHERE operation_id=?", (verifier_id,))
                 assert not runtime._settled(ops, child, reader['operation_id'])
             assert runtime._settled(ops, child, reader['operation_id'])
 
@@ -67,7 +69,7 @@ async def test_exact_reserve_self_check_keeps_other_original_uncertainty_blockin
     def guarded_check(*args, **kwargs):
         try:
             return check(*args, **kwargs)
-        except AssertionError:
+        except Exception:
             failures.append(traceback.format_exc())
             raise
     monkeypatch.setattr(repairs, '_check', guarded_check)
