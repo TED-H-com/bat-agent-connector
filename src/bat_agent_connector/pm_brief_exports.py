@@ -49,6 +49,9 @@ _TEXT = {
         "quality_count": "Qualified original requirements: {qualified} / {total}",
         "quality_fixed": "These attributed assessments were explicitly selected at capture time. Later conclusions and current applicability are not substituted.",
         "work_state": "Work state recorded as {status}",
+        "quality_deviations_note": "Only explicitly selected reviewer rejections of original criteria are shown. These are attributed judgments, not independent proof of semantic failure. Current applicability and other deviation dimensions are not assessed.",
+        "quality_rejection": "Reviewer rejected {kind}: {criterion}\nReviewer: {reviewer}\nRationale: {rationale}",
+        "acceptance_criterion": "acceptance criterion", "dod_criterion": "Definition of Done criterion",
     },
     "zh-TW": {
         "brief": "專案摘要", "historical": "歷史快照 · 固定來源選取",
@@ -77,6 +80,9 @@ _TEXT = {
         "quality_count": "符合驗收與完成定義的原始需求：{qualified} / {total}",
         "quality_fixed": "這些具責任歸屬的評估由整理證據時明確選取；不會替換成後來的結論，也不代表已重查目前適用性。",
         "work_state": "工作狀態記錄為 {status}",
+        "quality_deviations_note": "僅呈現明確選取、對原始條件提出的審查者否決；這是具責任歸屬的判斷，不代表獨立驗證已證明語意缺陷。目前適用性與其他偏差面向尚未評估。",
+        "quality_rejection": "審查者否決{kind}：{criterion}\n評估者：{reviewer}\n理由：{rationale}",
+        "acceptance_criterion": "驗收條件", "dod_criterion": "完成定義條件",
     },
 }
 _STATUSES = {
@@ -85,12 +91,14 @@ _STATUSES = {
            "not_applicable": "Recorded not applicable", "unassessed": "Unassessed", "unknown": "Unknown",
            "quality_unassessed": "Quality unassessed", "partial_source_states": "Partial saved source states",
            "fixed_quality_assessments": "Explicit original quality assessments", "qualified": "Qualified", "not_qualified": "Not qualified",
+           "fixed_quality_deviations": "Selected original quality judgments", "rejected": "Reviewer rejected",
            "accepted_sources": "Accepted sources", "recorded_sources": "Recorded sources", "unavailable": "Unavailable"},
     "zh-TW": {"user_confirmed": "使用者已確認", "repo_evidence": "有來源歸屬的 Repo 聲明",
               "agent_assumption": "Agent 假設", "unresolved": "尚未決定", "conflicting": "存在衝突",
               "not_applicable": "已記錄不適用", "unassessed": "尚未評估", "unknown": "未知",
               "quality_unassessed": "品質尚未評估", "partial_source_states": "部分已保存來源狀態",
               "fixed_quality_assessments": "明確選取的原始品質評估", "qualified": "符合品質條件", "not_qualified": "尚未符合品質條件",
+              "fixed_quality_deviations": "選定的原始品質判斷", "rejected": "審查者否決",
               "accepted_sources": "已採用的來源", "recorded_sources": "已記錄的來源", "unavailable": "無可用資料",
               "passed": "通過", "failed": "失敗", "merged": "已合併", "verified": "已查證",
               "unverified": "未查證", "done": "回報完成", "accepted": "內容獲准", "waiting": "等待中",
@@ -162,6 +170,9 @@ def _item_text(item, source, text, locale, *, quality=False):
     if kind == 'quality_assessment':
         labels = {'accepted': '符合', 'rejected': '不符合', 'unassessed': '尚未評估', 'not_defined': '尚未定義'} if locale == 'zh-TW' else {}
         return text['quality'].format(**{key: labels.get(details[key], details[key]) for key in ('acceptance', 'dod')})
+    if kind == 'quality_rejection':
+        return text['quality_rejection'].format(kind=text[details['criterion']['criterion']['kind'] + '_criterion'],
+            criterion=details['criterion']['text'], reviewer=details['assessed_by'], rationale=details['assessment']['rationale'])
     if kind == 'work_claim' and quality:
         return text['work_state'].format(status=value)
     if kind in {"deployment", "integration_delivery", "work_claim"}:
@@ -187,7 +198,8 @@ def _blocks(snapshot, locale):
     sources, identifiers = [], {}
     for section in SECTIONS:
         view = snapshot["brief"][section]
-        blocks.extend([("heading", text[section]), ("note", _status(view["status"], locale)), ("note", text[section + "_note"])])
+        note = 'quality_deviations_note' if section == 'deviations' and view.get('version') == 1 else section + '_note'
+        blocks.extend([("heading", text[section]), ("note", _status(view["status"], locale)), ("note", text[note])])
         if view.get('quality'):
             summary = view['quality']
             blocks.extend([('body', text['quality_count'].format(qualified=summary['qualified_requirements'], total=summary['total_requirements'])),
@@ -330,6 +342,8 @@ def _svg(blocks, locale, snapshot_id):
 
 
 def _renderer_version(snapshot):
+    if snapshot['brief']['deviations'].get('version') == 1:
+        return 4
     return 3 if snapshot['brief']['delivery'].get('quality') else RENDERER_VERSION if snapshot.get('maintenance') else 1
 
 

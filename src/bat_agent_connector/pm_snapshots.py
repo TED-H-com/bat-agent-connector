@@ -172,6 +172,75 @@ def _quality_summary(document):
         'current_applicability': 'not_evaluated', 'current_environment': 'not_assessed'}
 
 
+def _quality_deviations(document):
+    """Project attributed rejections, using only the selected frozen matrix.
+
+    Legacy facts lack criterion provenance and keep their original projection.
+    A reviewer rejection is not independent proof of a semantic defect.
+    """
+    facts = {entry['evidence_id']: entry['document']['facts'] for entry in document['evidence']
+             if entry['source_kind'] == 'quality_assessment'}
+    if not any(fact.get('criterion_assessments', {}).get('version') == 1 for fact in facts.values()):
+        return None
+    baseline = document['baseline']
+    requirements = {row['id'] for row in (baseline['document'] or {}).get('requirements', [])}
+    items, selections = [], []
+    for work in document['work']:
+        binding = work['binding']
+        selected = [(eid, facts[eid]) for eid in work['evidence_ids'] if eid in facts]
+        if len(selected) != 1:
+            selections.append({'work_item_id': work['work_item_id'], 'status': 'unassessed',
+                               'reason': 'single_original_assessment_missing'})
+            continue
+        eid, fact = selected[0]
+        matrix = fact.get('criterion_assessments')
+        reason = ('criterion_provenance_unavailable' if not matrix or matrix.get('version') != 1
+            else 'binding_mismatch' if fact['work_item_id'] != work['work_item_id'] or fact['binding_id'] != binding['binding_id']
+            else 'scope_mismatch' if fact['scope_revision'] != baseline['scope_revision']
+            else 'not_applicable_at_selection' if not fact['applicable_at_selection'] else None)
+        selection = {'work_item_id': work['work_item_id'], 'evidence_id': eid, 'reference': fact['reference'],
+            'status': 'unassessed' if reason else 'selected_original_assessment', 'reason': reason,
+            'applicability_reasons': fact['applicability_reasons'],
+            'capture_coverage': (work.get('capture') or {}).get('coverage')}
+        selections.append(selection)
+        if reason:
+            continue
+        assessment = matrix['assessment']
+        selection.update(acceptance=fact['acceptance'], dod=fact['dod'],
+            criterion_status_counts={status: sum(row['status'] == status for row in assessment['criteria'])
+                                     for status in ('accepted', 'rejected', 'unassessed')}, gaps=assessment['gaps'])
+        originals = {_json(row['criterion']): row for row in matrix['criteria']}
+        for row in assessment['criteria']:
+            if row['status'] != 'rejected':
+                continue
+            criterion = row['criterion']
+            if criterion['kind'] == 'acceptance' and criterion['requirement_id'] not in requirements.intersection(binding['requirement_ids']):
+                continue
+            original = originals[_json(criterion)]
+            details = {'baseline': {key: baseline.get(key) for key in
+                ('document_revision', 'scope_revision', 'document_digest')}, 'plan_ref': matrix['plan_ref'],
+                'work_ref': matrix['work_ref'], 'dod_ref': matrix['dod_ref'], 'package_ref': matrix['package_ref'],
+                'execution_operation_id': matrix['execution_operation_id'], 'reference': fact['reference'],
+                'requirement_ids': sorted(requirements.intersection(binding['requirement_ids'])),
+                'criterion': original, 'assessment': row, 'assessment_rationale': assessment['rationale'],
+                'assessed_by': fact['assessed_by'], 'assessed_at': fact['assessed_at'],
+                'semantics': 'attributed_reviewer_rejection', 'current_applicability': 'not_evaluated',
+                'independent_semantic_failure_proven': False}
+            items.append(_item('quality_rejection', original['text'], 'rejected',
+                               {'kind': 'evidence', 'evidence_id': eid}, details))
+    complete = not any(document['coverage'].get(key) for key in
+        ('projects_truncated', 'work_truncated', 'evidence_truncated', 'bytes_truncated', 'inaccessible_sources'))
+    complete = complete and not any(any(work['coverage'].get(key) for key in
+        ('evidence_truncated', 'inaccessible_sources')) for work in document['work'])
+    complete = complete and not any(any((work.get('capture') or {}).get('coverage', {}).get(key) for key in
+        ('truncated', 'unavailable_sources', 'unsupported_sources', 'inaccessible_sources')) for work in document['work'])
+    return {'version': 1, 'status': 'fixed_quality_deviations', 'items': items,
+        'coverage': {'basis': 'explicit_fixed_reviewer_criterion_assessments', 'selections': selections,
+            'selected_source_coverage_complete': complete, 'current_applicability': 'not_evaluated',
+            'semantic_drift': 'not_assessed', 'other_dimensions': 'not_assessed',
+            'old_binding_is_not_drift': True, 'absence_is_resolution': False}}
+
+
 def _brief(document):
     """Version-one deterministic projection; no narrative or quality inference."""
     baseline, work, evidence = document["baseline"], document["work"], document["evidence"]
@@ -243,6 +312,9 @@ def _brief(document):
         result['delivery']['coverage'].update(dod='per_selected_original_revision',
             qualified_deliverables=quality['qualified_deliverables'],
             requirement_denominator='distinct_original_scope_requirement', current_applicability='not_evaluated')
+    deviations = _quality_deviations(document)
+    if deviations is not None:
+        result['deviations'] = deviations
     return result
 
 
