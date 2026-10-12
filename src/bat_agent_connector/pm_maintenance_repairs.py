@@ -155,6 +155,12 @@ def source_backedge(db, principal, operation_id):
     return _source_read_key(db, principal, operation_id) in _READING.get()
 
 
+def source_read_active(db, principal):
+    """A partial same-caller repair traversal is never a reusable source grant."""
+    prefix = _source_read_key(db, principal, None)[:-1]
+    return any(key[:-1] == prefix for key in _READING.get())
+
+
 def _full_access(ops, principal, op):
     # A receipt may refer to this repair through its owned child. Check every
     # source on the outer traversal, while suppressing only that same back edge.
