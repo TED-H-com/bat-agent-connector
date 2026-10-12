@@ -76,6 +76,10 @@ run, including current writer, membership, cancellation, deadline and binding
 checks. This read-only snapshot ends before any await or write; each subsequent
 guard and final transport frame starts fresh. The ordinary session-start guard
 and its resource, policy, registry and cleanup checks remain outside this scope.
+Each PM frame's current-writer and requester checks likewise share only their
+completed historical source decisions within that synchronous fragment. Both
+checks run on every invocation, including after native reads; no writer grant,
+membership, cancellation, deadline or binding decision is cached.
 
 Assistant import requires contiguous original replay, exactly one original
 input and completed turn, matching native terminal JSON digest/output digest,
