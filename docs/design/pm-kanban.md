@@ -6,6 +6,29 @@ schema, action, assignment, dispatch queue or mutable progress record. The
 [work-item contract](work-items.md), [explicit PM associations](pm-evidence.md)
 and existing operation authority continue to apply.
 
+## Shared presentation (October 12 owner feedback)
+
+The default view groups compact cards by the central `column`: Backlog, In
+progress, Waiting, Review / verify and Content approved. Archived and unknown
+states remain separate when present. Column counts describe loaded cards only;
+pagination remains explicit. This is the workspace board, not an inferred Sprint
+membership filter. A refreshed card moves only when its central stage changes.
+
+Cards show the title, management state, a concise quality result, known elapsed
+time and a short incomplete-source indicator when applicable. Execution counts,
+original snapshots, source IDs and timing uncertainty expand on demand and still
+recheck access. Page WIP accounting and definitions live under Board details;
+the default view does not repeat them on each card. Content approval is never
+renamed Done or treated as a passing DoD. Dragging does not write state.
+
+Planning uses readable text-only documents and optional source/compare sections.
+Unresolved original requests expand their recovery controls after reload, even
+when the thread has moved to Planning. Sprint work uses compact title/owner/How
+rows and retains the fixed DoD. Project dispatch places recurring reference help
+in Advanced settings while keeping invalid branches, read failures, permission
+problems and original uncertain outcomes next to their actions. See
+[shared design rules](../../desktop/DESIGN.md).
+
 ## Reads and scope
 
 `pm_kanban.get_board(ops, principal, workspace_id, *, project_id=None, after=0,

@@ -6038,7 +6038,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 	const box = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-sprints": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_sprint_title")), h("p", { class: "muted" }, t("pm_sprint_intro"))), h("button", {
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_sprint_title")), h("button", {
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
@@ -6128,10 +6128,10 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 	});
 	const row = (label, contents) => h("section", { class: "pm-brief-row" }, h("h3", {}, t(label)), h("div", { class: "pm-brief-values" }, contents));
 	function workRows(items) {
-		return h("div", { class: "pm-evidence-rows" }, ...items.length ? items.map((item) => h("article", {
+		return h("div", { class: "pm-evidence-rows pm-sprint-work-list" }, ...items.length ? items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-work": item.work_item_id
-		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("p", {}, item.assignee, " · ", t("pm_sprint_unassessed")) : "", item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
+		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
 	}
 	function renderView() {
 		view.replaceChildren();
@@ -6147,7 +6147,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		}, def.starts_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC")), " → ", h("time", {
 			datetime: def.ends_at,
 			title: def.ends_at
-		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), row("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_quality"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id)))))), note("pm_sprint_no_execution")));
+		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), fold("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_quality"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id))))))));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -7628,10 +7628,19 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		class: "secondary",
 		onclick: () => void refresh()
 	}, t("pm_kanban_refresh"));
+	const columns = [
+		"backlog",
+		"in_progress",
+		"waiting",
+		"review",
+		"accepted"
+	];
+	const boardInfo = h("div");
+	const info = h("details", { class: "pm-kanban-info" }, h("summary", {}, t("pm_kanban_board_details")), boardInfo, h("p", { class: "pm-kanban-note" }, t("pm_kanban_wip_basis")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_quality")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_limits")));
 	const element = h("section", {
 		class: "panel pm-kanban",
 		"data-pm-kanban": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_kanban_title")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_intro"))), refreshButton), status, metrics, h("p", { class: "pm-kanban-note" }, t("pm_kanban_quality")), list, h("footer", { class: "pm-kanban-footer" }, more, h("p", { class: "pm-kanban-note" }, t("pm_kanban_limits"))));
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_kanban_title")), refreshButton), status, metrics, list, h("footer", { class: "pm-kanban-footer" }, more, info));
 	const note = (key, args, warning = false) => h("p", { class: warning ? "pm-kanban-notice" : "pm-kanban-note" }, t(key, args));
 	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_kanban_unassigned"));
 	const state = (value) => {
@@ -7690,6 +7699,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		next = null;
 		list.replaceChildren();
 		metrics.replaceChildren();
+		boardInfo.replaceChildren();
 		more.hidden = true;
 		more.disabled = false;
 		element.removeAttribute("aria-busy");
@@ -7702,7 +7712,8 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 	function renderMetrics() {
 		metrics.replaceChildren();
 		if (!page) return;
-		metrics.append(h("div", {}, h("strong", {}, t("pm_kanban_wip", page.wip)), note("pm_kanban_wip_basis"), note("pm_kanban_loaded", { count: rows.size })), h("div", { class: "pm-kanban-note" }, t("pm_kanban_page_at"), ": ", stamp(page.observed_at)));
+		metrics.append(note("pm_kanban_loaded", { count: rows.size }));
+		boardInfo.replaceChildren(note("pm_kanban_wip", page.wip), h("p", {}, t("pm_kanban_page_at"), ": ", stamp(page.observed_at)));
 		if (next != null) metrics.append(note("pm_kanban_partial"));
 		if (page.coverage?.byte_limited) metrics.append(note("pm_kanban_bounded"));
 		more.hidden = next == null;
@@ -7711,7 +7722,13 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 	function detailsFor(card, observedAt) {
 		const execution = card.execution || {}, capture = card.latest_capture;
 		const lines = (kind, records, content) => records?.length ? h("ul", {}, ...records.map((value) => h("li", {}, h("strong", {}, t(kind)), " · ", content(value)))) : "";
-		const detail = h("div", { class: "pm-kanban-detail" }, h("h4", {}, t("pm_kanban_execution")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), h("h4", {}, t("pm_kanban_capture")));
+		const flow = card.flow || {};
+		const detail = h("div", { class: "pm-kanban-detail" }, card.quality?.selected_assessment ? qualityFact({
+			h,
+			t,
+			fact: card.quality,
+			current: true
+		}) : note("pm_kanban_quality_unknown"), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), flow.history !== "available_central_events" ? note("pm_kanban_history_unknown") : "", h("h4", {}, t("pm_kanban_execution")), note("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") }), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), h("h4", {}, t("pm_kanban_capture")));
 		if (!capture) detail.append(note("pm_kanban_no_capture"));
 		else {
 			if (capture.workspace_id !== workspaceId || capture.work_item_id !== card.work_item_id) throw Error(t("pm_kanban_scope_error"));
@@ -7736,18 +7753,9 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		return detail;
 	}
 	function previewFor(card, observedAt) {
-		const execution = card.execution || {}, flow = card.flow || {};
-		const states = execution.tasks?.length ? execution.tasks.map((task) => task.state) : execution.attempts?.length ? execution.attempts.map((attempt) => attempt.status) : execution.operations?.length ? execution.operations.map((operation) => operation.status) : execution.sessions?.length ? execution.sessions.map((session) => session.runtime_status) : [];
-		const summary = [...new Set(states.map((value) => state(value)))].join(" · ");
-		const node = h("div", {}, h("div", { class: "pm-kanban-overview" }, h("div", { class: "pm-kanban-work" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), card.quality?.selected_assessment ? qualityFact({
-			h,
-			t,
-			fact: card.quality,
-			current: true
-		}) : note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")))), ...notices(execution.coverage));
-		if (flow.history !== "available_central_events") node.append(note("pm_kanban_history_unknown"));
-		node.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt), " · ", t(card.latest_capture ? "pm_kanban_capture_time" : "pm_kanban_no_capture"), card.latest_capture ? ": " : "", card.latest_capture ? stamp(card.latest_capture.captured_at) : ""));
-		return node;
+		const flow = card.flow || {}, coverage = card.execution?.coverage || {};
+		const age = card.completion?.approved ? flow.cycle_seconds : flow.age_seconds;
+		return h("div", { class: "pm-kanban-overview" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), h("p", { class: "pm-kanban-stage" }, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("div", { class: "pm-kanban-card-meta" }, h("span", {}, card.quality?.selected_assessment ? t(card.quality.qualified ? "pq_qualified" : "pq_not_qualified") : t("pm_kanban_quality_unknown")), typeof age === "number" && age >= 0 ? h("span", { title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age") }, elapsed(age)) : ""), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? note("pm_kanban_partial_sources") : "");
 	}
 	function renderCard(card, observedAt) {
 		const ticket = serial, preview = h("div", {}, previewFor(card, observedAt));
@@ -7773,12 +7781,40 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 				const contents = detailsFor(data.card, data.observed_at);
 				preview.replaceChildren(previewFor(data.card, data.observed_at));
 				body.replaceChildren(contents);
+				rows.set(card.work_item_id, {
+					node,
+					card: data.card
+				});
+				renderColumns();
 			} catch (error) {
 				if (ticket === serial && request === detailRequest && node.isConnected) unavailable(error);
 			}
 		});
 		node.append(fold);
 		return node;
+	}
+	function renderColumns() {
+		const groups = new Map(columns.map((column) => [column, []]));
+		for (const row of rows.values()) {
+			const column = [...columns, "archived"].includes(row.card.column) ? row.card.column : "unknown";
+			if (!groups.has(column)) groups.set(column, []);
+			groups.get(column).push(row.node);
+		}
+		for (const [column, cards] of groups) {
+			let lane = [...list.children].find((node) => node.dataset.pmKanbanColumn === column);
+			if (!lane) {
+				lane = h("section", {
+					class: "pm-kanban-column",
+					"data-pm-kanban-column": column,
+					"aria-label": column === "accepted" ? t("pm_kanban_content_approved") : state(column)
+				}, h("header", {}, h("h3", {}, column === "accepted" ? t("pm_kanban_content_approved") : state(column)), h("span", { class: "pm-kanban-count" })), h("div", { class: "pm-kanban-cards" }));
+				list.append(lane);
+			}
+			lane.querySelector(".pm-kanban-count").textContent = cards.length;
+			const holder = lane.querySelector(".pm-kanban-cards");
+			for (const card of cards) if (card.parentNode !== holder) holder.append(card);
+		}
+		for (const lane of [...list.children]) if (!groups.has(lane.dataset.pmKanbanColumn)) lane.remove();
 	}
 	function accept(data, append) {
 		if (!append) {
@@ -7788,7 +7824,6 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		for (const card of data.cards) {
 			const previous = rows.get(card.work_item_id), node = renderCard(card, data.observed_at);
 			if (previous) previous.node.replaceWith(node);
-			else list.append(node);
 			rows.set(card.work_item_id, {
 				node,
 				card
@@ -7796,8 +7831,9 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		}
 		page = data;
 		next = data.next_cursor ?? null;
-		if (!rows.size) list.replaceChildren(note("pm_kanban_empty"));
-		status.replaceChildren();
+		renderColumns();
+		if (!rows.size) status.replaceChildren(note("pm_kanban_empty"));
+		else status.replaceChildren();
 		renderMetrics();
 	}
 	const path = (after) => `${endpoint}?${new URLSearchParams({
@@ -7813,6 +7849,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		rows.clear();
 		list.replaceChildren();
 		metrics.replaceChildren();
+		boardInfo.replaceChildren();
 		more.hidden = true;
 		status.replaceChildren(note("pm_kanban_loading"));
 		element.setAttribute("aria-busy", "true");
@@ -14230,7 +14267,170 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 	};
 }
 //#endregion
+//#region src/message-format.js
+var lineText = (line) => line.replace(/\r?\n$/, "");
+function tableCells(line) {
+	let text = line.trim(), cell = "", ticks = 0, separators = 0;
+	const cells = [];
+	if (text.startsWith("|")) text = text.slice(1);
+	for (let i = 0; i < text.length; i++) {
+		const char = text[i];
+		if (char === "\\" && text[i + 1] === "|") {
+			cell += "|";
+			i++;
+			continue;
+		}
+		if (char === "`") {
+			let end = i + 1;
+			while (text[end] === "`") end++;
+			const count = end - i;
+			if (!ticks) ticks = count;
+			else if (ticks === count) ticks = 0;
+			cell += text.slice(i, end);
+			i = end - 1;
+			continue;
+		}
+		if (char === "|" && !ticks) {
+			cells.push(cell.trim());
+			cell = "";
+			separators++;
+		} else cell += char;
+	}
+	if (cell || !text.endsWith("|")) cells.push(cell.trim());
+	return separators ? cells : null;
+}
+function messageBlocks(source) {
+	if (source.length > 2e5) return [{
+		kind: "text",
+		text: source
+	}];
+	const lines = source.match(/[^\n]*\n|[^\n]+$/g) || [];
+	if (lines.length > 4e3) return [{
+		kind: "text",
+		text: source
+	}];
+	const blocks = [], plain = [];
+	const flush = () => {
+		if (plain.length) blocks.push({
+			kind: "text",
+			text: plain.splice(0).join("")
+		});
+	};
+	for (let i = 0; i < lines.length;) {
+		const fence = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)$/.exec(lineText(lines[i]));
+		if (fence && !(fence[1][0] === "`" && fence[2].includes("`"))) {
+			flush();
+			const endFence = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}[ \\t]*$`);
+			const body = [];
+			i++;
+			while (i < lines.length && !endFence.test(lineText(lines[i]))) body.push(lines[i++]);
+			if (i < lines.length) i++;
+			blocks.push({
+				kind: "code",
+				language: fence[2].trim(),
+				text: body.join("")
+			});
+			continue;
+		}
+		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
+		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+			flush();
+			const rows = [];
+			i += 2;
+			while (i < lines.length && rows.length < 100) {
+				const cells = tableCells(lineText(lines[i]));
+				if (!cells || cells.length !== header.length) break;
+				rows.push(cells);
+				i++;
+			}
+			blocks.push({
+				kind: "table",
+				header,
+				rows
+			});
+			continue;
+		}
+		plain.push(lines[i++]);
+	}
+	flush();
+	return blocks;
+}
+function inline(h, text) {
+	if (text.length > 8192) return [text];
+	const nodes = [];
+	let from = 0;
+	for (const match of text.matchAll(/`([^`\n]+)`|\*\*([^*\n]+)\*\*/g)) {
+		nodes.push(text.slice(from, match.index), h(match[1] === void 0 ? "strong" : "code", {}, match[1] ?? match[2]));
+		from = match.index + match[0].length;
+	}
+	nodes.push(text.slice(from));
+	return nodes;
+}
+function renderMessage(h, t, source, copy) {
+	return messageBlocks(source).map((block) => {
+		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
+			class: "mini",
+			type: "button",
+			onclick: () => copy(block.text)
+		}, t("message_copy_code"))), h("pre", {
+			tabindex: "0",
+			"aria-label": t("message_code")
+		}, h("code", {}, block.text)));
+		if (block.kind === "table") return h("div", {
+			class: "message-table",
+			tabindex: "0",
+			role: "region",
+			"aria-label": t("message_table")
+		}, h("table", {}, h("thead", {}, h("tr", {}, ...block.header.map((cell) => h("th", { scope: "col" }, ...inline(h, cell))))), h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((cell) => h("td", {}, ...inline(h, cell))))))));
+		return h("div", { class: "message-text" }, ...inline(h, block.text));
+	});
+}
+//#endregion
 //#region src/pm-plans.js
+function planDocument(h, markdown) {
+	const body = h("div", { class: "pm-plan-document pm-plan-reading" });
+	for (const block of messageBlocks(markdown || "")) {
+		if (block.kind === "code") {
+			body.append(h("pre", {}, h("code", {}, block.text)));
+			continue;
+		}
+		if (block.kind === "table") {
+			body.append(h("div", {
+				class: "message-table",
+				tabindex: "0"
+			}, h("table", {}, h("thead", {}, h("tr", {}, ...block.header.map((cell) => h("th", { scope: "col" }, cell)))), h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((cell) => h("td", {}, cell))))))));
+			continue;
+		}
+		let paragraph = [], list = null;
+		const flush = () => {
+			if (paragraph.length) body.append(h("p", {}, paragraph.join("\n")));
+			paragraph = [];
+		};
+		for (const line of block.text.split(/\r?\n/)) {
+			const heading = /^#{1,6}\s+(.+)$/.exec(line), bullet = /^\s*[-*+]\s+(.+)$/.exec(line);
+			if (heading) {
+				flush();
+				list = null;
+				body.append(h("h4", {}, heading[1]));
+			} else if (bullet) {
+				flush();
+				if (!list) {
+					list = h("ul");
+					body.append(list);
+				}
+				list.append(h("li", {}, bullet[1]));
+			} else if (!line.trim()) {
+				flush();
+				list = null;
+			} else {
+				list = null;
+				paragraph.push(line);
+			}
+		}
+		flush();
+	}
+	return body;
+}
 function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
 	let head = null, capability = null, signature = "", busy = false;
 	const title = input("pm_revision_title", {
@@ -14287,7 +14487,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 		workspaceId,
 		errorBox
 	});
-	box.append(comparison.box);
+	box.append(h("details", { "data-pm-plan-comparison": "" }, h("summary", {}, t("pm_compare_plans")), comparison.box));
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
 	function revisionRow(summary) {
 		const detail = h("div"), item = h("details", { "data-pm-revision": summary.revision_id }, h("summary", {}, t("pm_revision_number", { number: summary.sequence }), summary.revision_id === head.accepted_revision_id ? " · " + t("pm_plan_accepted") : ""), detail);
@@ -14307,7 +14507,8 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 					statement.source_ref?.path,
 					statement.source_ref?.revision
 				].filter(Boolean).join(" · ")))), section.coverage === "unresolved" ? h("p", { class: "muted" }, t("pm_plan_domain_unknown")) : ""));
-				detail.replaceChildren(h("h4", {}, document.title), h("div", { class: "pm-plan-document" }, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source), h("p", { class: "muted" }, t("pm_plan_no_execution")));
+				detail.replaceChildren(h("h4", {}, document.title), planDocument(h, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source));
+				if (document.requirements?.length) detail.append(h("section", { class: "pm-plan-requirements" }, h("h4", {}, t("pm_plan_acceptance")), ...document.requirements.map((requirement) => h("details", {}, h("summary", {}, requirement.text || requirement.id), h("ul", {}, ...(requirement.acceptance || []).map((criterion) => h("li", {}, criterion.text))), h("code", { class: "pm-source" }, requirement.id)))));
 				if (plan.adoption) detail.append(h("p", {}, t("pm_plan_adoption_evidence", { actor: plan.adoption.adopted_by }), h("code", {}, plan.adoption.commit_sha)), h("p", { class: "pm-note-text" }, plan.adoption.rationale));
 				if (plan.thread_id === threadId) detail.append(h("button", {
 					type: "button",
@@ -14337,7 +14538,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						max: 8e3
 					});
 					const baseline = data.head.accepted_revision_id;
-					let adopt;
+					let adopt, adoption;
 					adopt = form({
 						action: "pm.plan.adopt",
 						target: {
@@ -14352,11 +14553,21 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						label: "pm_adopt_revision",
 						onSaved: () => refresh(),
 						onStateChange: () => {
-							if (adopt) adopt.box.hidden = plan.is_current_accepted && !adopt.locked();
+							if (adopt) {
+								adopt.box.hidden = plan.is_current_accepted && !adopt.locked();
+								if (adoption) {
+									adoption.hidden = adopt.box.hidden;
+									if (adopt.locked()) adoption.open = true;
+								}
+							}
 						},
 						extra: h("div", {}, labelled("pm_adopt_rationale", rationale), h("p", { class: "muted" }, t(plan.base_accepted_revision_id !== baseline ? "pm_plan_baseline_changed" : capability?.plan_adoption_available ? "pm_adopt_help" : "pm_plan_worktree_required")))
 					});
-					detail.append(adopt.box);
+					adoption = h("details", {
+						"data-pm-plan-adopt": "",
+						open: adopt.locked()
+					}, h("summary", {}, t("pm_adopt_revision")), adopt.box);
+					detail.append(adoption);
 					adopt.update();
 				}
 				fetched = true;
@@ -14414,7 +14625,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 			]);
 			if (signature !== nextSignature) {
 				signature = nextSignature;
-				current.replaceChildren(h("p", {}, h("strong", {}, accepted.plan ? accepted.plan.document.title : t("pm_plan_none_accepted"))), h("p", { class: "muted" }, t("pm_plan_no_execution")));
+				current.replaceChildren(h("p", {}, h("strong", {}, accepted.plan ? accepted.plan.document.title : t("pm_plan_none_accepted"))));
 				if (accepted.plan) current.append(h("p", { class: "muted" }, t("pm_plan_accepted"), " · ", h("code", {}, accepted.plan.adoption.commit_sha)));
 				renderRows(page);
 			}
@@ -14863,6 +15074,7 @@ var retired = (error) => [
 var receiptSubscribers = new Map();
 var threadDisclosures = new Map();
 var threadDisclosureSelectors = [
+	"[data-pm-information]",
 	"[data-pm-add-input]",
 	"[data-pm-planning-revision]",
 	"[data-pm-note-only]",
@@ -15194,13 +15406,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		nav.open = navigationMedia.matches;
 	};
 	navigationMedia.addEventListener("change", resizeNavigation);
-	const title = h("h1", {}, t("pm_title")), subtitle = h("p", { class: "muted" }, t("pm_intro"));
+	const title = h("h1", {}, t("pm_title"));
 	const refresh = h("button", {
 		type: "button",
 		class: "secondary",
 		onclick: () => void load()
 	}, t("pm_refresh"));
-	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
+	const heading = h("header", { class: "pm-heading" }, title, refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
 	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
@@ -15878,10 +16090,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					extra: h("div", {}, selected, draftId, labelled("pm_planning_revision_rationale", rationale), h("p", { class: "muted" }, t("pm_planning_revision_help")))
 				});
 			}
+			const information = h("details", {
+				"data-pm-information": "",
+				open: thread.mode !== "planning"
+			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
 			const inspector = h("aside", {
 				class: "pm-inspector",
 				"aria-label": t("pm_inputs")
-			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
+			}, information);
 			if (brief) inspector.prepend(brief.box);
 			if (lifecycle) inspector.prepend(lifecycle.element);
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
@@ -15893,7 +16109,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		threadTitle.textContent = thread.title;
 		mode.textContent = t("pm_mode_" + thread.mode);
-		discussionHint.textContent = t(nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "pm_native_discussion" : "pm_manual");
+		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector("[data-pm-information]").open = true;
+		discussionHint.textContent = nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "" : t("pm_manual");
 		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
 		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
 			h,
@@ -16197,7 +16414,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						},
 						extra: labelled("pm_thread_title", title)
 					});
-					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), h("p", { class: "muted" }, t("pm_thread_help")), create.box));
+					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), create.box));
 				}
 			}
 			if (runs) {
@@ -17923,125 +18140,6 @@ async function readArtifactContent(reference, size, token, signal) {
 	signal.throwIfAborted();
 	if (hash !== reference.digest) throw new Error("Artifact content digest does not match the exact revision");
 	return bytes;
-}
-//#endregion
-//#region src/message-format.js
-var lineText = (line) => line.replace(/\r?\n$/, "");
-function tableCells(line) {
-	let text = line.trim(), cell = "", ticks = 0, separators = 0;
-	const cells = [];
-	if (text.startsWith("|")) text = text.slice(1);
-	for (let i = 0; i < text.length; i++) {
-		const char = text[i];
-		if (char === "\\" && text[i + 1] === "|") {
-			cell += "|";
-			i++;
-			continue;
-		}
-		if (char === "`") {
-			let end = i + 1;
-			while (text[end] === "`") end++;
-			const count = end - i;
-			if (!ticks) ticks = count;
-			else if (ticks === count) ticks = 0;
-			cell += text.slice(i, end);
-			i = end - 1;
-			continue;
-		}
-		if (char === "|" && !ticks) {
-			cells.push(cell.trim());
-			cell = "";
-			separators++;
-		} else cell += char;
-	}
-	if (cell || !text.endsWith("|")) cells.push(cell.trim());
-	return separators ? cells : null;
-}
-function messageBlocks(source) {
-	if (source.length > 2e5) return [{
-		kind: "text",
-		text: source
-	}];
-	const lines = source.match(/[^\n]*\n|[^\n]+$/g) || [];
-	if (lines.length > 4e3) return [{
-		kind: "text",
-		text: source
-	}];
-	const blocks = [], plain = [];
-	const flush = () => {
-		if (plain.length) blocks.push({
-			kind: "text",
-			text: plain.splice(0).join("")
-		});
-	};
-	for (let i = 0; i < lines.length;) {
-		const fence = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)$/.exec(lineText(lines[i]));
-		if (fence && !(fence[1][0] === "`" && fence[2].includes("`"))) {
-			flush();
-			const endFence = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}[ \\t]*$`);
-			const body = [];
-			i++;
-			while (i < lines.length && !endFence.test(lineText(lines[i]))) body.push(lines[i++]);
-			if (i < lines.length) i++;
-			blocks.push({
-				kind: "code",
-				language: fence[2].trim(),
-				text: body.join("")
-			});
-			continue;
-		}
-		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
-		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
-			flush();
-			const rows = [];
-			i += 2;
-			while (i < lines.length && rows.length < 100) {
-				const cells = tableCells(lineText(lines[i]));
-				if (!cells || cells.length !== header.length) break;
-				rows.push(cells);
-				i++;
-			}
-			blocks.push({
-				kind: "table",
-				header,
-				rows
-			});
-			continue;
-		}
-		plain.push(lines[i++]);
-	}
-	flush();
-	return blocks;
-}
-function inline(h, text) {
-	if (text.length > 8192) return [text];
-	const nodes = [];
-	let from = 0;
-	for (const match of text.matchAll(/`([^`\n]+)`|\*\*([^*\n]+)\*\*/g)) {
-		nodes.push(text.slice(from, match.index), h(match[1] === void 0 ? "strong" : "code", {}, match[1] ?? match[2]));
-		from = match.index + match[0].length;
-	}
-	nodes.push(text.slice(from));
-	return nodes;
-}
-function renderMessage(h, t, source, copy) {
-	return messageBlocks(source).map((block) => {
-		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
-			class: "mini",
-			type: "button",
-			onclick: () => copy(block.text)
-		}, t("message_copy_code"))), h("pre", {
-			tabindex: "0",
-			"aria-label": t("message_code")
-		}, h("code", {}, block.text)));
-		if (block.kind === "table") return h("div", {
-			class: "message-table",
-			tabindex: "0",
-			role: "region",
-			"aria-label": t("message_table")
-		}, h("table", {}, h("thead", {}, h("tr", {}, ...block.header.map((cell) => h("th", { scope: "col" }, ...inline(h, cell))))), h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((cell) => h("td", {}, ...inline(h, cell))))))));
-		return h("div", { class: "message-text" }, ...inline(h, block.text));
-	});
 }
 //#endregion
 //#region src/conversation.js
@@ -23338,8 +23436,9 @@ var pmSprintStrings = {
 //#region src/pm-kanban-strings.js
 var pmKanbanStrings = {
 	en: {
-		pm_kanban_title: "Work flow",
-		pm_kanban_intro: "One work item per row, with its current activity and recorded evidence.",
+		pm_kanban_title: "Work board",
+		pm_kanban_board_details: "Board details",
+		pm_kanban_partial_sources: "Sources incomplete",
 		pm_kanban_refresh: "Refresh work flow",
 		pm_kanban_retry: "Retry work flow",
 		pm_kanban_loading: "Reading work flow…",
@@ -23452,8 +23551,9 @@ var pmKanbanStrings = {
 		pm_kanban_no: "No"
 	},
 	"zh-TW": {
-		pm_kanban_title: "工作流",
-		pm_kanban_intro: "一項工作一列，同時查看目前活動與已記錄證據。",
+		pm_kanban_title: "工作看板",
+		pm_kanban_board_details: "看板資料",
+		pm_kanban_partial_sources: "來源不完整",
 		pm_kanban_refresh: "重新整理工作流",
 		pm_kanban_retry: "重試工作流",
 		pm_kanban_loading: "正在讀取工作流…",
@@ -23995,6 +24095,8 @@ var pmStrings = {
 		pm_preview_required: "Preview the selected repository revision before saving.",
 		pm_saved_worktree_choice: "Previously selected repository",
 		pm_plan_versions: "Project plan",
+		pm_compare_plans: "Compare plan revisions",
+		pm_plan_acceptance: "Requirements and acceptance criteria",
 		pm_revision_title: "Plan title",
 		pm_revision_markdown: "Plan document (Markdown)",
 		pm_revision_save: "Save plan revision",
@@ -24058,6 +24160,7 @@ var pmStrings = {
 		pm_mode_idea: "Idea",
 		pm_mode_planning: "Planning draft",
 		pm_inputs: "Facts and open questions",
+		pm_information: "Inputs and planning direction",
 		pm_inputs_help: "Confirmed statements, source claims and unresolved assumptions stay distinct.",
 		pm_no_inputs: "No facts recorded yet. Add a sourced statement or an open question from the discussion.",
 		pm_input_slot: "Topic",
@@ -24335,6 +24438,8 @@ var pmStrings = {
 		pm_preview_required: "儲存前請先預覽所選儲存庫版本。",
 		pm_saved_worktree_choice: "先前選定的儲存庫",
 		pm_plan_versions: "專案計畫",
+		pm_compare_plans: "比較計畫版本",
+		pm_plan_acceptance: "需求與驗收條件",
 		pm_revision_title: "計畫名稱",
 		pm_revision_markdown: "計畫內容（Markdown）",
 		pm_revision_save: "儲存計畫版本",
@@ -24398,6 +24503,7 @@ var pmStrings = {
 		pm_mode_idea: "想法",
 		pm_mode_planning: "規劃草稿",
 		pm_inputs: "事實與待釐清問題",
+		pm_information: "討論依據與規劃方向",
 		pm_inputs_help: "已確認的陳述、來源說法與待查假設會分開標示。",
 		pm_no_inputs: "尚無事實紀錄。可從討論中加入有來源的陳述或待釐清的問題。",
 		pm_input_slot: "主題",
@@ -31559,10 +31665,11 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		storageKey: `${storageKey}.shortcut`,
 		guard
 	});
+	if (project) advanced.append(shortcut.box, h("p", { class: "muted" }, t("pub_head_only")), h("p", { class: "muted" }, t("pub_isolation")));
 	const box = h("section", {
 		class: "session-start published-start",
 		"data-published-start": ""
-	}, project ? projectStatus : null, h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("pub_binding", binding), label("pub_ref", sourceRef)), branchHelp, h("p", { class: "muted" }, t("pub_head_only")), h("div", { class: "actions" }, inspect), facts), h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("start_agent", agent), !project ? label("start_title", title) : null, !project && expanded() ? label("start_model", model) : null), models.box, label("pub_prompt", prompt), shortcut.box, project ? advanced : null, attachmentBox, h("p", { class: "muted" }, t("pub_isolation"))), h("div", { class: "actions" }, apply, check, another), outcome, status);
+	}, project ? projectStatus : null, h("div", { class: "panel dispatch-destination" }, h("div", { class: "capture-fields" }, label("pub_binding", binding), label("pub_ref", sourceRef)), branchHelp, !project ? h("p", { class: "muted" }, t("pub_head_only")) : null, h("div", { class: "actions" }, inspect), facts), h("div", { class: "panel dispatch-instructions" }, label("pub_prompt", prompt), h("div", { class: "capture-fields" }, label("start_agent", agent), !project ? label("start_title", title) : null, !project && expanded() ? label("start_model", model) : null), models.box, !project ? shortcut.box : null, attachmentBox, project ? advanced : h("p", { class: "muted" }, t("pub_isolation"))), h("div", { class: "actions" }, apply, check, another), outcome, status);
 	function update() {
 		const fixed = Boolean(saved.intent);
 		if (attachmentBox) {
@@ -31577,7 +31684,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			models.refresh();
 		}
 		const validBranch = ref(selected().source_ref);
-		branchHelp.hidden = fixed;
+		branchHelp.hidden = fixed || Boolean(project && !(saved.source_ref && !validBranch));
 		branchHelp.textContent = t(saved.source_ref && !validBranch ? "pub_branch_invalid" : "pub_branch_help");
 		sourceRef.setAttribute("aria-invalid", String(Boolean(saved.source_ref && !validBranch)));
 		inspect.hidden = fixed;
@@ -31672,7 +31779,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			const values = Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value]));
 			fill();
 			for (const [k, value] of Object.entries(values)) inputs[k].value = value;
-			projectStatus.replaceChildren(h("p", {}, h("a", { href: `#/project/${project}` }, p.name)), h("p", { class: "muted" }, t(p.archived ? "dispatch_archived" : expanded() ? "dispatch_project_help" : "dispatch_unsupported")));
+			projectStatus.replaceChildren(h("p", {}, h("a", { href: `#/project/${project}` }, p.name)), p.archived || !expanded() ? h("p", { class: "muted" }, t(p.archived ? "dispatch_archived" : "dispatch_unsupported")) : "");
 			update();
 		} catch (e) {
 			if (current()) {
@@ -38084,7 +38191,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
 		attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)
 	});
-	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), h("h1", {}, t("dispatch_title")), h("p", { class: "muted" }, t(repairSeed ? "repair_dispatch_help" : "dispatch_intro")), panel.box);
+	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), h("h1", {}, t("dispatch_title")), repairSeed ? h("p", { class: "muted" }, t("repair_dispatch_help")) : "", panel.box);
 	try {
 		await panel.init();
 	} catch {}

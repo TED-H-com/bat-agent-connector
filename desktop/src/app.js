@@ -3486,7 +3486,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
     storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
     attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)});
   main.append(h("a", {href: `#/project/${pid}`}, t("dispatch_back")), h("h1", {}, t("dispatch_title")),
-    h("p", {class: "muted"}, t(repairSeed ? "repair_dispatch_help" : "dispatch_intro")), panel.box);
+    repairSeed ? h("p", {class: "muted"}, t("repair_dispatch_help")) : '', panel.box);
   try {await panel.init();} catch { /* original intent and project read failure remain visible */ }
   try {assertView(connection);} catch {return;}
   const offOnline = onOnline(() => {try {assertView(connection); panel.update();} catch { /* retired view */ }});

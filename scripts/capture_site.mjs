@@ -117,9 +117,9 @@ async function prepare(page, scenario, language, locale) {
   const route = '/dashboard/#/pm/' + workspaceId;
   await page.goto(origin + route);
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
-  await expect(page.locator('[data-pm-kanban] h2')).toHaveText(zh ? '工作流' : 'Work flow');
+  await expect(page.locator('[data-pm-kanban] h2')).toHaveText(zh ? '工作看板' : 'Work board');
   return {route, fixtures: ['desktop/tests/pm-fixture.ts', 'desktop/tests/pm-kanban-fixture.ts'],
-    composition: 'Original workspace work-flow panel, in-progress and review rows; quality remains unassessed, partial sources explicit.',
+    composition: 'Original workspace work-flow panel, in-progress and review cards; quality remains unassessed, partial sources explicit.',
     check: () => {assert.equal(board.state.writes.length, 0); assert.equal(f.state.writes.length, 0);}};
 }
 

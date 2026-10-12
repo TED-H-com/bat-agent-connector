@@ -52,6 +52,8 @@ async function mount(page:any,native:boolean,f:any){
   await page.goto(pmRoute);
   await expect(page.locator('[data-pm-plans]')).toBeVisible();
   await expect(box(page)).toHaveCount(1);
+  await expect(box(page)).toBeHidden();
+  await page.locator('[data-pm-plan-comparison] > summary').click();
   await expect(box(page).locator('select').first().locator('option')).toHaveCount(3);
 }
 async function choose(page:any){await box(page).getByLabel('From version',{exact:true}).selectOption(first);await box(page).getByLabel('To version',{exact:true}).selectOption(second);}

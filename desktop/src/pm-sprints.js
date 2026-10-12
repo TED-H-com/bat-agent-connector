@@ -9,7 +9,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const review = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_sprint_review_fresh'));
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_sprint_stale'));
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-sprints': ''},
-    h('header', {class: 'pm-heading'}, h('div', {}, h('h2', {}, t('pm_sprint_title')), h('p', {class: 'muted'}, t('pm_sprint_intro'))),
+    h('header', {class: 'pm-heading'}, h('h2', {}, t('pm_sprint_title')),
       h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('pm_sprint_refresh'))),
     labelled('pm_sprint_choose', choose), status, warning, review, view, editors);
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
@@ -57,11 +57,11 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const rationale = () => input('pm_sprint_reason', {multiline: true, max: 4000});
   const row = (label, contents) => h('section', {class: 'pm-brief-row'}, h('h3', {}, t(label)), h('div', {class: 'pm-brief-values'}, contents));
   function workRows(items) {
-    return h('div', {class: 'pm-evidence-rows'}, ...(items.length ? items.map(item => h('article', {class: 'pm-fact', 'data-pm-sprint-work': item.work_item_id},
-      h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
-      item.assignee ? h('p', {}, item.assignee, ' · ', t('pm_sprint_unassessed')) : '',
+    return h('div', {class: 'pm-evidence-rows pm-sprint-work-list'}, ...(items.length ? items.map(item => h('article', {class: 'pm-fact', 'data-pm-sprint-work': item.work_item_id},
+      h('div', {class: 'pm-sprint-work-heading'}, h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
+        item.assignee ? h('span', {class: 'muted'}, item.assignee) : ''),
       item.assignee ? h('p', {class: 'pm-note-text'}, item.how || t('pm_sprint_how_empty')) : '',
-      fold('pm_sprint_versions', h('div', {}, source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
+      fold('pm_sprint_versions', h('div', {}, note('pm_sprint_unassessed'), source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
         h('p', {}, (item.requirement_ids || []).join(', ')))))) : [note('pm_sprint_no_work')]));
   }
   function renderView() {
@@ -74,13 +74,12 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       row('pm_sprint_goal_heading', h('p', {class: 'pm-note-text'}, h('strong', {}, data.goal.text))),
       row('pm_sprint_period', h('div', {}, h('p', {}, h('time', {datetime: def.starts_at, title: def.starts_at}, def.starts_at.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC')),
         ' → ', h('time', {datetime: def.ends_at, title: def.ends_at}, def.ends_at.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC'))), data.timebox_elapsed ? note('pm_sprint_elapsed') : '')),
-      row('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
+      fold('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
         h('dt', {}, t('pm_sprint_developers')), h('dd', {}, def.developers.join(', ')), h('dt', {}, t('pm_sprint_capacity')), h('dd', {}, def.capacity_note))),
       row('pm_sprint_work', workRows(data.selected_items || [])),
       row('pm_sprint_dod_heading', h('div', {}, note(data.quality==='fixed_original_assessments'?'pq_fixed':'pm_sprint_quality'), h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
         fold('pm_sprint_fixed', h('div', {}, h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
-          h('p', {}, source(def.product_goal_revision_id)), h('p', {}, source(def.dod_revision_id)), h('p', {}, source(def.backlog_revision_id)))))),
-      note('pm_sprint_no_execution')));
+          h('p', {}, source(def.product_goal_revision_id)), h('p', {}, source(def.dod_revision_id)), h('p', {}, source(def.backlog_revision_id))))))));
     const ticket = serial, terminal = ['closed', 'cancelled'].includes(sprint.status);
     let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
     const closure = h('section', {class: 'pm-plans', 'data-pm-sprint-closure': ''});
