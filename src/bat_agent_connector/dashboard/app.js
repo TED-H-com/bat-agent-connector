@@ -81,11 +81,9 @@ var overviewStrings = {
 		ov_minute: "{n}m",
 		ov_delta: "+{n}d",
 		ov_partial_history: "More reports available",
-		ov_no_goal: "Not set",
-		ov_plan_unavailable: "Plan unavailable",
+		ov_loading_report: "Loading report…",
 		ov_report_previous: "Previous report",
-		ov_report_next: "Next report",
-		ov_plan_discussion: "Plan in Discussions"
+		ov_report_next: "Next report"
 	},
 	"zh-TW": {
 		ov_live: "即時",
@@ -131,11 +129,9 @@ var overviewStrings = {
 		ov_minute: "{n} 分鐘",
 		ov_delta: "+{n} 天",
 		ov_partial_history: "還有其他報告",
-		ov_no_goal: "未設定",
-		ov_plan_unavailable: "無法取得計畫",
+		ov_loading_report: "正在載入報告…",
 		ov_report_previous: "上一份報告",
-		ov_report_next: "下一份報告",
-		ov_plan_discussion: "在討論中查看計畫"
+		ov_report_next: "下一份報告"
 	}
 };
 //#endregion
@@ -549,6 +545,8 @@ var reasonLabels = Object.freeze({
 	inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
 	mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
 	issue_title_unavailable: ["Issue title unavailable", "無法取得議題標題"],
+	restricted: ["Restricted sources", "來源受限"],
+	filtered: ["Some sources hidden", "部分來源已隱藏"],
 	no_explicit_goal: ["Not set", "未設定"],
 	goal_unconfirmed: ["Unconfirmed", "待確認"],
 	no_adopted_plan: ["No adopted plan", "尚無已採用計畫"],
@@ -11371,7 +11369,8 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		onControls({
 			previous: previous.disabled,
 			next: next.disabled,
-			compare: compare.disabled
+			compare: compare.disabled,
+			historyPartial: cursor !== null
 		});
 	}
 	function historyOptions() {
@@ -11475,6 +11474,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		return pages;
 	}
 	async function refresh(id = null) {
+		onChange(null, "loading");
 		if (id) onChange(null, "selected");
 		const chosen = id || selectedId, ticket = ++serial;
 		busy = true;
@@ -11618,7 +11618,9 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		controls: () => ({
 			busy,
 			previous: previous.disabled,
-			next: next.disabled
+			next: next.disabled,
+			compare: compare.disabled,
+			historyPartial: cursor !== null
 		}),
 		comparePrevious,
 		history: () => history
@@ -11735,7 +11737,7 @@ function workspaceOverview(options) {
 	let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
 	const parts = new Map(), attentionNodes = new Map();
 	let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
-	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false;
+	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false, reportLoading = false;
 	const primary = h("a", {
 		class: "ui-button primary",
 		"data-overview-discuss": ""
@@ -11753,7 +11755,15 @@ function workspaceOverview(options) {
 		class: "pm-report-tools",
 		"data-pm-report-tools": ""
 	});
+	const historyHint = h("span", {
+		class: "ui-meta",
+		hidden: true,
+		"data-overview-history-partial": ""
+	}, t("ov_partial_history"));
+	const reportPartial = statusPill("partial");
+	reportPartial.hidden = true;
 	const reportControls = (flags) => {
+		historyHint.hidden = !flags.historyPartial;
 		for (const [key, disabled] of Object.entries(flags)) {
 			const node = savedBar.querySelector(`[data-overview-report-control="${key}"]`);
 			if (node) node.disabled = disabled;
@@ -11785,7 +11795,7 @@ function workspaceOverview(options) {
 	const reportLabel = h("span");
 	reports.previous.setAttribute("aria-label", t("ov_report_previous"));
 	reports.next.setAttribute("aria-label", t("ov_report_next"));
-	savedBar.append(reportLabel, iconButton({
+	savedBar.append(reportLabel, reportPartial, historyHint, iconButton({
 		icon: "chevron-left",
 		label: t("ov_report_previous"),
 		"data-overview-report-control": "previous",
@@ -11807,7 +11817,7 @@ function workspaceOverview(options) {
 		return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en", {
 			month: "short",
 			day: "numeric",
-			timeZone: "UTC"
+			...typeof value === "string" ? { timeZone: "UTC" } : {}
 		}) : "—";
 	};
 	const refs = () => {
@@ -11829,7 +11839,7 @@ function workspaceOverview(options) {
 			from: "overview",
 			report: mode === "saved" ? saved?.snapshot_id : void 0
 		});
-		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t("ov_not_saved") : [
+		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t(reportLoading ? "ov_loading_report" : "ov_not_saved") : [
 			projection?.plan?.title,
 			projection?.plan?.adopted_at != null ? t("ov_adopted", { date: date(projection.plan.adopted_at) }) : null,
 			t("ov_live")
@@ -11842,6 +11852,12 @@ function workspaceOverview(options) {
 		});
 	}
 	function reportChanged(value, event, error) {
+		if (event === "loading" || event === "selected") reportLoading = true;
+		if ([
+			"updated",
+			"withdrawn",
+			"error"
+		].includes(event)) reportLoading = false;
 		if (event === "selected") {
 			mode = preference.mode = "saved";
 			saved = null;
@@ -11870,7 +11886,6 @@ function workspaceOverview(options) {
 		}, t("ov_discuss"));
 	}
 	function open(row) {
-		preference.attention = row.key;
 		onOpen(row.ref, row);
 	}
 	function itemLink(row) {
@@ -11889,17 +11904,18 @@ function workspaceOverview(options) {
 		const goal = metric({
 			label: t("ov_goal"),
 			value: data?.plan?.goal ?? "—",
-			context: h("div", {}, !data?.plan?.goal ? h("span", { class: "ui-meta" }, reasonLabel(t, goalReason || "unknown")) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
+			context: h("div", {}, !data?.plan?.goal ? goalReason === "goal_unconfirmed" ? statusPill("unconfirmed") : !goalReason || goalReason === "unknown" ? statusPill("unknown") : h("span", { class: "ui-meta" }, reasonLabel(t, goalReason)) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
 		});
 		goal.dataset.overviewMetric = "goal";
+		if (fixed && savedPartial()) goal.append(statusPill("partial"));
 		const next = data?.next_milestone;
 		const progress = metric({
 			label: t("ov_progress"),
-			value: !p ? null : complete ? t("ov_accepted", {
+			value: !p || fixed ? null : complete ? t("ov_accepted", {
 				accepted: p.accepted,
 				total: p.requirements
 			}) : t("ov_requirements", { n: p.requirements }),
-			context: h("div", {}, p && !complete ? statusPill(fixed ? "unknown" : "partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
+			context: h("div", {}, fixed && p ? h("div", {}, t("ov_requirements", { n: p.requirements })) : p && !complete ? statusPill("partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
 			bar: complete ? classes.map((key, i) => ({
 				tone: tones[i],
 				value: p[key]
@@ -12089,9 +12105,14 @@ function workspaceOverview(options) {
 			sources.classList.add("pm-overview-sources");
 			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
 			sources.querySelector("summary").title = t("ov_sources");
+			const decisions = key === "decisions" && Object.hasOwn(source, "decision_count");
+			const count = source?.decision_count;
 			const card = sectionCard({
 				title: t("wb_" + key),
-				body: h("div", {}, rows.length ? list : h("span", { class: "ui-meta" }, t("ov_no_items")), sources)
+				body: h("div", {}, rows.length ? list : decisions && count !== 0 ? null : h("span", { class: "ui-meta" }, t("ov_no_items")), decisions && count === null ? statusPill("unknown") : null, decisions && source.attention_truncated ? statusPill("partial") : null, decisions && count > rows.length ? h("a", {
+					class: "ui-button ghost ui-sm",
+					href: `#/pm/${encodeURIComponent(workspaceId)}/issues`
+				}, t("ov_more", { n: count - rows.length })) : null, sources)
 			});
 			card.dataset.charterSection = key;
 			if (rows.length > 3) {
@@ -12144,6 +12165,9 @@ function workspaceOverview(options) {
 			}, null, 2)))
 		});
 	}
+	function savedPartial() {
+		return Boolean(saved?.visibility?.restricted || saved?.visibility?.filtered || Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith("_truncated") && value));
+	}
 	function savedData() {
 		const document = saved?.baseline?.document;
 		const goal = document?.selected_inputs?.find((row) => [
@@ -12151,6 +12175,30 @@ function workspaceOverview(options) {
 			"goal",
 			"problem"
 		].includes(row.slot) && ["user_confirmed", "repo_evidence"].includes(row.status))?.value;
+		const unknown = [{
+			field: "progress",
+			reason: "not_assessed"
+		}];
+		if (!goal) unknown.push({
+			field: "plan.goal",
+			reason: document?.selected_inputs?.some((row) => [
+				"value",
+				"goal",
+				"problem"
+			].includes(row.slot)) ? "goal_unconfirmed" : "no_explicit_goal"
+		});
+		if (saved?.visibility?.restricted) unknown.push({
+			field: "visibility",
+			reason: "restricted"
+		});
+		if (saved?.visibility?.filtered) unknown.push({
+			field: "visibility",
+			reason: "filtered"
+		});
+		if (Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith("_truncated") && value)) unknown.push({
+			field: "coverage",
+			reason: "source_limit"
+		});
 		return {
 			plan: document ? {
 				title: document.title,
@@ -12163,10 +12211,7 @@ function workspaceOverview(options) {
 				decision: null
 			},
 			attention: [],
-			unknown: [{
-				field: "progress",
-				reason: "not_assessed"
-			}]
+			unknown
 		};
 	}
 	function commitParts(entries) {
@@ -12200,9 +12245,10 @@ function workspaceOverview(options) {
 		savedBar.hidden = mode !== "saved";
 		box.dataset.overviewMode = mode;
 		if (mode === "saved") {
-			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t("ov_not_saved");
+			reportPartial.hidden = !savedPartial();
+			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t(reportLoading ? "ov_loading_report" : "ov_not_saved");
 			if (!saved) {
-				resetContent(loading ? skeleton(3) : h("p", {}, t("ov_not_saved")));
+				resetContent(reportLoading ? h("div", {}, h("p", { role: "status" }, t("ov_loading_report")), skeleton(3)) : h("p", {}, t("ov_not_saved")));
 				return;
 			}
 			const next = JSON.stringify(saved);
@@ -12223,7 +12269,7 @@ function workspaceOverview(options) {
 				{
 					key: "details",
 					value: saved,
-					render: () => details(null, true)
+					render: () => details(savedData(), true)
 				}
 			]);
 			return;
@@ -12240,7 +12286,9 @@ function workspaceOverview(options) {
 		signature = `live:${next}`;
 		const source = {
 			baseline: { document: plan?.document },
-			brief: {}
+			brief: {},
+			decision_count: projection.attention_counts.decision,
+			attention_truncated: projection.attention_truncated
 		};
 		source.brief.decisions = { items: projection.attention.filter((row) => row.kind === "decision").map((row) => ({
 			text: row.title,

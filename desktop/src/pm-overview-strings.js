@@ -12,8 +12,8 @@ export const overviewStrings = {
     ov_blocker: 'Blocker', ov_decision: 'Decision', ov_deviation: 'Deviation', ov_risk: 'Risk',
     ov_context_requirement: '{n} requirements', ov_context_work: 'Related work', ov_context_milestone: 'Milestone',
     ov_day: '{n}d', ov_hour: '{n}h', ov_minute: '{n}m', ov_delta: '+{n}d',
-    ov_partial_history: 'More reports available', ov_no_goal: 'Not set', ov_plan_unavailable: 'Plan unavailable',
-    ov_report_previous: 'Previous report', ov_report_next: 'Next report', ov_plan_discussion: 'Plan in Discussions',
+    ov_partial_history: 'More reports available', ov_loading_report: 'Loading report…',
+    ov_report_previous: 'Previous report', ov_report_next: 'Next report',
   },
   'zh-TW': {
     ov_live: '即時', ov_goal: '目標', ov_progress: '進度', ov_blockers: '阻礙', ov_decisions: '待決事項',
@@ -28,7 +28,7 @@ export const overviewStrings = {
     ov_blocker: '阻礙', ov_decision: '待決', ov_deviation: '偏差', ov_risk: '風險',
     ov_context_requirement: '{n} 項需求', ov_context_work: '相關工作', ov_context_milestone: '里程碑',
     ov_day: '{n} 天', ov_hour: '{n} 小時', ov_minute: '{n} 分鐘', ov_delta: '+{n} 天',
-    ov_partial_history: '還有其他報告', ov_no_goal: '未設定', ov_plan_unavailable: '無法取得計畫',
-    ov_report_previous: '上一份報告', ov_report_next: '下一份報告', ov_plan_discussion: '在討論中查看計畫',
+    ov_partial_history: '還有其他報告', ov_loading_report: '正在載入報告…',
+    ov_report_previous: '上一份報告', ov_report_next: '下一份報告',
   },
 };

@@ -57,7 +57,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     previous.disabled = busy || index <= 0; next.disabled = busy || index < 0 || index >= history.length - 1;
     compare.disabled = previous.disabled; picker.disabled = busy || !history.length; print.disabled = busy || !snapshot;
     more.hidden = cursor === null; more.disabled = busy; create.update(); exports?.update();
-    onControls({previous: previous.disabled, next: next.disabled, compare: compare.disabled});
+    onControls({previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null});
   }
   function historyOptions() {
     picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${stamp(row.as_of)}`)));
@@ -128,6 +128,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     return pages;
   }
   async function refresh(id = null) {
+    onChange(null, 'loading');
     if (id) onChange(null, 'selected');
     const chosen = id || selectedId, ticket = ++serial; busy = true; head = null; controls();
     const previous = JSON.stringify([snapshot, latestId, cursor]); comparison.replaceChildren();
@@ -180,6 +181,6 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   controls(); return {box, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
-    current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled}),
+    current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null}),
     comparePrevious, history: () => history};
 }

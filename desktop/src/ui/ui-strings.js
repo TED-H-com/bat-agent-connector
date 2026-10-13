@@ -130,6 +130,7 @@ export const reasonLabels = Object.freeze({
   inconsistent_dates: ['End precedes start; end omitted', '結束早於開始，已省略結束日期'],
   mapping_page_truncated: ['Some issues were not loaded', '部分議題尚未載入'],
   issue_title_unavailable: ['Issue title unavailable', '無法取得議題標題'],
+  restricted: ['Restricted sources', '來源受限'], filtered: ['Some sources hidden', '部分來源已隱藏'],
   no_explicit_goal: ['Not set', '未設定'], goal_unconfirmed: ['Unconfirmed', '待確認'],
   no_adopted_plan: ['No adopted plan', '尚無已採用計畫'],
   source_limit: ['Partial', '部分'], partial_page: ['Partial', '部分'],

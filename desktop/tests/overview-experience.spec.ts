@@ -11,7 +11,7 @@ const root = (page: Page) => page.locator('[data-pm-overview]');
 const metric = (page: Page, key: string) => root(page).locator(`[data-overview-metric="${key}"]`);
 function fixture(locale = 'en') {
   const base = demoFixture({locale}), data: any = overview(demoProject(locale));
-  const state = {data, cursor: 0, events: [] as any[], extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
+  const state = {data, cursor: 0, events: [] as any[], reportPatch: null as null | ((snapshot: any) => void), heldReport: null as Promise<void> | null, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
   return {...base, state, dispatch: async (input: any) => {
     state.reads.push(input.path); if (input.method !== 'GET') state.writes.push(input);
     const url = new URL(input.path, 'http://fixture');
@@ -24,6 +24,7 @@ function fixture(locale = 'en') {
       if (held) await held;
       return denied ? {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Source withdrawn'}}} : {status: 200, data: result};
     }
+    if (state.heldReport && /\/snapshots\//.test(input.path)) {const held = state.heldReport; state.heldReport = null; await held;}
     if (state.reportDenied && /\/snapshots\//.test(input.path)) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Report withdrawn'}}};
     if (url.pathname.endsWith('/snapshots')) url.searchParams.set('limit', String(state.reportPageSize));
     const response = await base.dispatch({...input, path: url.pathname + url.search});
@@ -31,6 +32,7 @@ function fixture(locale = 'en') {
       const rows = response.data.plan.document.sections.governance.statements;
       rows.push({...rows[0], value: 'A fourth explicit purpose statement', input_id: 'extra-purpose'});
     }
+    if (response.data?.snapshot && state.reportPatch) state.reportPatch(response.data.snapshot);
     return response;
   }};
 }
@@ -284,4 +286,59 @@ test('event ACK waits for the shared projection read to finish', async ({page}) 
   } finally {release();}
   await expect.poll(() => f.state.reads.some(path => path.startsWith('/events?after=20&'))).toBe(true);
   expect(f.state.reads.filter(path => path.endsWith('/overview')).length).toBe(before + 1); expect(f.state.writes).toEqual([]);
+});
+
+
+for (const restriction of ['restricted', 'filtered', 'work_truncated']) test(`saved report discloses ${restriction} and incomplete history`, async ({page}) => {
+  const f = fixture(); f.state.reportPageSize = 1;
+  f.state.reportPatch = saved => {if (restriction.endsWith('_truncated')) saved.coverage[restriction] = true; else saved.visibility[restriction] = true;};
+  await boot(page, f); await report(page, f.ids.snap1);
+  await expect(root(page).locator('.pm-overview-saved [data-status=partial]')).toBeVisible();
+  await expect(root(page).locator('[data-overview-status] [data-status=partial]')).toBeVisible();
+  await expect(root(page).locator('[data-overview-history-partial]')).toHaveText('More reports available');
+  await expect(metric(page, 'goal')).toContainText(f.copy.goalV2);
+  await root(page).locator(':scope > div > details > summary').click();
+  await expect(root(page)).toContainText(restriction === 'restricted' ? 'Restricted sources' : restriction === 'filtered' ? 'Some sources hidden' : 'Partial', {useInnerText: true});
+  await expect(root(page)).not.toContainText('3 of 8 accepted'); expect(f.state.writes).toEqual([]);
+});
+
+test('decisions card distinguishes unknown, missing and truncated items', async ({page}) => {
+  const f = fixture(); f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision');
+  f.state.data.attention_counts.decision = null; await boot(page, f);
+  const card = root(page).locator('[data-charter-section=decisions]');
+  await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText('None recorded');
+  f.state.data.attention_counts.decision = 3; f.state.data.attention_truncated = true; await refresh(page);
+  await expect(card.locator('[data-status=partial]')).toBeVisible();
+  await expect(card.getByRole('link', {name: '+3 more', exact: true})).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/issues`);
+  expect(f.state.writes).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`selected report has a loading state ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale}), page = await context.newPage(), f = fixture(locale); await boot(page, f);
+  await openPmPanel(page, 'ui_report'); await expect(page.locator('[data-pm-report-tools] select')).toBeEnabled();
+  let release!: () => void; f.state.heldReport = new Promise<void>(resolve => {release = resolve;});
+  try {
+    await page.locator('[data-pm-report-tools] select').selectOption(f.ids.snap1); await page.keyboard.press('Escape');
+    await expect(root(page).locator('.ui-skeleton')).toBeVisible();
+    await expect(root(page).getByRole('status').filter({hasText: locale === 'en' ? 'Loading report…' : '正在載入報告…'})).toBeVisible();
+    await expect(root(page)).not.toContainText(locale === 'en' ? 'Select a report in Versions.' : '請從版本選取報告。');
+  } finally {release();}
+  await expect(metric(page, 'goal')).toContainText(f.copy.goalV2); await context.close();
+});
+
+test('epoch dates are local while milestone calendar dates stay fixed', async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale: 'en', timezoneId: 'Asia/Taipei'}), page = await context.newPage(), f = fixture();
+  f.state.data.plan.adopted_at = Date.parse('2026-10-11T20:00:00Z') / 1000;
+  f.state.reportPatch = saved => {saved.as_of = Date.parse('2026-10-12T20:00:00Z') / 1000;};
+  await boot(page, f); await expect(page.locator('[data-overview-meta]')).toContainText('adopted Oct 12');
+  await expect(root(page).locator('[data-overview-milestone]').first()).toContainText('Sep 28');
+  await report(page, f.ids.snap2); await expect(page.locator('[data-overview-meta]')).toContainText('Oct 13'); await context.close();
+});
+
+test('saved goal reasons match confirmed and unconfirmed plan inputs', async ({page}) => {
+  const f = fixture(); f.state.reportPatch = saved => {saved.baseline.document.selected_inputs = [];};
+  await boot(page, f); await report(page, f.ids.snap1); await expect(metric(page, 'goal')).toContainText('Not set');
+  f.state.reportPatch = saved => {saved.baseline.document.selected_inputs[0].status = 'unresolved';};
+  await refresh(page); await expect(metric(page, 'goal').locator('[data-status=unconfirmed]')).toBeVisible();
+  expect(f.state.writes).toEqual([]);
 });

@@ -228,7 +228,12 @@ authorized comparison, history pagination, print and export. Report history load
 demand and rereads every loaded page after a refresh. Selecting a report
 replaces the status and charter with that report's fixed content; live attention,
 milestones, delivery rows and phase are absent. Historical snapshots do not contain
-central acceptance counts, so those metrics stay unknown. Back to live rereads the
+central acceptance counts, so those metrics stay unknown with the requirement
+denominator on its own line. Restricted, filtered or truncated reports show Partial
+in both the saved bar and strip; unfinished report history stays explicit. Choosing
+a report shows a loading state. Live decisions distinguish unknown counts from no
+items and link to unlisted decisions. Epoch timestamps use local calendar dates;
+date-only milestone values retain their calendar date. Back to live rereads the
 projection. Source withdrawal invalidates the affected facts and closes their reader;
 late responses cannot restore a prior generation. Preferences store only UI state,
 scoped to connection/principal and workspace. Older servers retain the saved-charter
