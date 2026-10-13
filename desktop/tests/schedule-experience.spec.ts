@@ -7,9 +7,9 @@ import {schedulePage} from './demo/schedule.ts';
 import {fixture as roadmapFixture, path as roadmapPath} from './pm-roadmap-fixture.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
-async function start(page: Page, locale = 'en', options: {native?: boolean; withoutBrief?: boolean; pageSize?: number; mutate?: (data: any) => void} = {}) {
+async function start(page: Page, locale = 'en', options: {native?: boolean; withoutBrief?: boolean; pageSize?: number; initialView?: string; mutate?: (data: any) => void} = {}) {
   const fixture = demoFixture({locale}), project = demoProject(locale);
-  const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, completed: 0, overviewReads: 0};
+  const calls: string[] = [], writes: any[] = [], state = {deny: false, tooLarge: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, eventType: 'work_item', completed: 0, overviewReads: 0};
   await page.clock.setFixedTime(DEMO_NOW);
   await mountConversation(page, options.native || false, async input => {
     if (input.method !== 'GET') writes.push(input);
@@ -18,15 +18,16 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     if (url.pathname.endsWith('/schedule')) {
       calls.push(input.path);
       const data = schedulePage(project, url, options.pageSize); options.mutate?.(data);
-      const denied = state.deny;
+      const denied = state.deny, tooLarge = state.tooLarge;
       if (state.defer) {state.defer = false; await new Promise<void>(resolve => {state.pending = resolve;});}
       // Snapshot the response before a later read revokes the source.
       state.completed++;
+      if (tooLarge) return {status: 413, data: {error: {code: 'PM_SCHEDULE_TOO_LARGE', message: 'Schedule exceeds limit'}}};
       return denied ? {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}} : {status: 200, data};
     }
     if (url.pathname === `/pm/workspaces/${fixture.ids.workspaceId}` && state.workspaceDeny) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
     if (url.pathname === '/events' && state.cursor) return {status: 200, data: {events: Number(url.searchParams.get('after')) < state.cursor
-      ? [{seq: state.cursor, resource_type: 'work_item', resource_id: fixture.ids.work.email, kind: 'work_item.updated'}] : [],
+      ? [{seq: state.cursor, resource_type: state.eventType, resource_id: state.eventType === 'pm_workspace' ? fixture.ids.workspaceId : fixture.ids.work.email, kind: `${state.eventType}.updated`}] : [],
       next_cursor: state.cursor, head_cursor: state.cursor, has_more: false, sync: {checkpoint: {cursor: state.cursor, token: `demo-${state.cursor}`}}}};
     const result = await fixture.dispatch(input);
     if (options.withoutBrief && ['/bootstrap', '/capabilities'].includes(url.pathname)) {
@@ -35,8 +36,9 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     }
     return result;
   });
-  await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/schedule`);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
+  const view = options.initialView || 'schedule';
+  await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/${view}`);
+  if (view === 'schedule') await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
   await expect(page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
   return {...fixture, state, calls, writes};
 }
@@ -71,7 +73,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(inspector.locator('[data-status=read_only]')).toBeVisible();
   await expect(inspector.locator('a[href*="run"]')).toHaveCount(0);
   const href = await inspector.locator('[data-schedule-discuss]').getAttribute('href');
-  expect(parseDiscussRefs(href!.split('?')[1])).toEqual({refs: [{kind: 'work_item', id: f.ids.work.resetEmail}], title: f.copy.work.resetEmail, from: 'schedule', report: ''});
+  expect(parseDiscussRefs(href!.split('?')[1])).toEqual({refs: [{kind: 'work_item', id: f.ids.work.resetEmail}], title: locale === 'en' ? `Change: ${f.copy.work.resetEmail}` : `變更：${f.copy.work.resetEmail}`, from: 'schedule', report: ''});
   await expect(inspector.locator('a[href*="/requirements?select="]')).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/requirements?select=${f.ids.work.resetEmail}`);
   await noOverflow(page); await shot(page, `schedule-inspector-${locale}-${width}`);
   await page.keyboard.press('Escape'); await expect(inspector).toHaveCount(0); await expect(work).toBeFocused();
@@ -247,3 +249,338 @@ test('schedule events still refresh without a mounted Overview', async ({page}) 
   await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
   expect(f.state.overviewReads).toBe(0); expect(f.writes).toEqual([]);
 });
+
+test('terminal span without end time reads End time not recorded and mobile date ranges format cleanly', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  const project = demoProject();
+  const rowId = `attempt:operation:${project.ids.work.email}:op_unrecorded_end`;
+  const f = await start(page, 'en', {mutate: data => {
+    data.rows.push({
+      id: rowId, parent_id: `work:${project.ids.work.email}`, kind: 'attempt', title: 'session.start (unrecorded end)',
+      status: 'done', blocked: null, waiting: null, depends_on: [], refs: {operation_id: 'op_unrecorded_end', agent: {cli: 'codex'}},
+      baseline: null, forecast: null, actual: {start: '2026-10-08T10:00:00Z', end: null, open: false},
+    });
+    data.unknown.push({field: `${rowId}.actual.end`, reason: 'terminal_time_unrecorded'});
+    data.rows.push({
+      id: 'work:forecast_start_only', parent_id: null, kind: 'work', title: 'Forecast start only',
+      status: 'not_started', blocked: null, waiting: null, depends_on: [], refs: {work_item_id: 'forecast_start_only'},
+      baseline: null, forecast: {start: '2026-10-21', end: null}, actual: null,
+    });
+  }});
+  const bar = page.locator(`[data-schedule-track="${rowId}"] .schedule-bar`);
+  await expect(bar).not.toHaveClass(/\bopen\b/);
+  await expect(bar).not.toHaveAttribute('data-open', 'true');
+  await expect(bar).toHaveText('End time not recorded');
+  await expect(bar).toHaveAttribute('title', 'Actual · 2026-10-08T10:00:00Z → End time not recorded');
+  await item(page, rowId).click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  await inspector.locator('[data-schedule-section="details"] > summary').click();
+  await expect(inspector.locator('[data-schedule-section="details"]')).toContainText('End time not recorded');
+  await expect(inspector.locator('[data-schedule-section="details"]')).not.toContainText('→ Open');
+  await page.setViewportSize({width: 390, height: 844});
+  await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual 2026-10-08 → End time not recorded');
+  const forecastBar = page.locator('[data-schedule-track="work:forecast_start_only"] .schedule-bar');
+  await expect(forecastBar).toHaveAttribute('title', 'Forecast · 2026-10-21');
+  await expect(forecastBar).not.toContainText('End time not recorded');
+  await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual 2026-10-06');
+  await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual 2026-10-05 → Open');
+});
+
+test('Unscheduled excludes rows already in the tree, omits requirement status pills, and hides when zero', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await start(page, 'en');
+  const region = page.locator('[data-pm-schedule]');
+  await expect(region.locator('.schedule-unscheduled summary')).toHaveText('Unscheduled (6)');
+  await region.locator('.schedule-unscheduled summary').click();
+  const overlap = await region.evaluate(root => {
+    const treeIds = new Set([...root.querySelectorAll('.schedule-chart [data-schedule-select]')].map(el => (el as HTMLElement).dataset.scheduleSelect));
+    const unschedIds = [...root.querySelectorAll('.schedule-unscheduled [data-schedule-select]')].map(el => (el as HTMLElement).dataset.scheduleSelect);
+    const reqPills = [...root.querySelectorAll('.schedule-unscheduled li')].filter(li => li.querySelector('[data-schedule-select^="requirement:"]')).flatMap(li => [...li.querySelectorAll('[data-status]')]);
+    const emptyMetaSpans = [...root.querySelectorAll('.schedule-meta > span')].filter(s => !s.textContent?.trim());
+    return {duplicates: unschedIds.filter(id => treeIds.has(id)), reqPillsCount: reqPills.length, emptyMetaSpansCount: emptyMetaSpans.length};
+  });
+  expect(overlap).toEqual({duplicates: [], reqPillsCount: 0, emptyMetaSpansCount: 0});
+});
+
+test('empty Unscheduled renders no disclosure and meta has no empty span', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await start(page, 'en', {mutate: data => { data.unscheduled = []; }});
+  const region = page.locator('[data-pm-schedule]');
+  await expect(region.locator('.schedule-unscheduled details')).toHaveCount(0);
+  expect(await region.locator('.schedule-meta > span').evaluateAll(nodes => nodes.filter(n => !n.textContent?.trim()).length)).toBe(0);
+});
+
+test('tree keeps a single tab stop, aria-selected only on treeitems, accessible row descriptions, and no lane tab stops', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  const f = await start(page, 'en');
+  const region = page.locator('[data-pm-schedule]');
+  const countZeroTabindex = () => region.locator('[role="treeitem"][tabindex="0"]').count();
+  expect(await countZeroTabindex()).toBe(1);
+
+  const workItem = item(page, `work:${f.ids.work.resetEmail}`);
+  await expect(workItem).toHaveAccessibleName(f.copy.work.resetEmail);
+  await expect(workItem).toHaveAccessibleDescription(/In progress.*Actual 2026-10-05 → Open/);
+  await workItem.click();
+  expect(await countZeroTabindex()).toBe(1);
+  await expect(workItem).toHaveAttribute('tabindex', '0');
+
+  await region.locator('.schedule-unscheduled summary').click();
+  const unscheduledBtn = region.locator('.schedule-unscheduled [data-schedule-select]').first();
+  await unscheduledBtn.click();
+  await region.getByRole('radio', {name: 'Day', exact: true}).click();
+  expect(await countZeroTabindex()).toBe(1);
+  expect(await region.locator('[aria-selected]:not([role="treeitem"])').count()).toBe(0);
+
+  await item(page, `requirement:${f.ids.planV3}:${f.ids.requirements.resetEmail}`).click();
+  await item(page, 'milestone:recovery_review').locator('button').click();
+  expect(await countZeroTabindex()).toBe(1);
+
+  expect(await region.locator('.schedule-lane[tabindex], .schedule-lane[role="region"]').count()).toBe(0);
+  await expect(region.locator('.schedule-axis .schedule-today')).toHaveAttribute('role', 'img');
+});
+
+test('roadmap drawer stays the only open inspector when a live refresh runs with a selected schedule row', async ({page}) => {
+  const f = await start(page, 'en');
+  await item(page, `work:${f.ids.work.resetEmail}`).click();
+  await expect(page.locator('[data-schedule-inspector]')).toBeVisible();
+  await page.locator('[data-schedule-tools]').click();
+  await page.getByRole('menuitem', {name: 'Roadmap', exact: true}).click();
+  await expect(page.getByText('Update a forecast')).toBeVisible();
+  await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
+  const reads = f.calls.length;
+  f.state.eventType = 'pm_workspace';
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
+  await expect(page.getByText('Update a forecast')).toBeVisible();
+  await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
+  await expect(page.locator('.ui-inspector')).toHaveCount(1);
+});
+
+test('open work item bars include Waiting and Blocked labels and delta/bar labels meet 4.5:1 contrast in light and dark mode', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    const emailRow = data.rows.find((r: any) => r.id === `work:${project.ids.work.resetEmail}`);
+    if (emailRow) emailRow.status = 'blocked';
+  }});
+  await expect(page.locator(`[data-schedule-track="work:${f.ids.work.audit}"] .schedule-bar-label`)).toHaveText('Waiting · Open');
+  await expect(page.locator(`[data-schedule-track="work:${f.ids.work.resetEmail}"] .schedule-bar-label`)).toHaveText('Blocked · Open');
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({colorScheme});
+    const ratios = await page.evaluate(() => {
+      const parse = (c: string) => (c.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+      const lum = ([r, g, b]: number[]) => {
+        const f = (v: number) => {const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;};
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const cr = (a: number[], b: number[]) => {const l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);};
+      const chartBg = parse(getComputedStyle(document.querySelector('.schedule-chart')!).backgroundColor);
+      const deltaCs = getComputedStyle(document.querySelector('.schedule-delta')!);
+      const labelCs = getComputedStyle(document.querySelector('.schedule-bar-label')!);
+      return {
+        deltaOnChart: cr(parse(deltaCs.color), chartBg),
+        deltaOnOwnBg: cr(parse(deltaCs.color), parse(deltaCs.backgroundColor)),
+        labelOnChart: cr(parse(labelCs.color), chartBg),
+        labelOnOwnBg: cr(parse(labelCs.color), parse(labelCs.backgroundColor)),
+      };
+    });
+    expect(ratios.deltaOnChart).toBeGreaterThanOrEqual(4.5);
+    expect(ratios.deltaOnOwnBg).toBeGreaterThanOrEqual(4.5);
+    expect(ratios.labelOnChart).toBeGreaterThanOrEqual(4.5);
+    expect(ratios.labelOnOwnBg).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test('inspector shows visible schedule dates and milestone delta, links milestones to a valid requirement, and resolves issue row requirements and repo#number', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    data.unscheduled.push({
+      id: `issue:${project.ids.issueMapping}`, parent_id: `work:${project.ids.work.email}`, kind: 'issue',
+      title: 'Issue #42: Email sign-in error state', status: 'in_progress', blocked: null, waiting: null, depends_on: [],
+      refs: {
+        mapping_id: project.ids.issueMapping, work_item_id: project.ids.work.email,
+        requirement_ids: [project.ids.requirements.email],
+        issue: {provider: 'github', repository: project.ids.repository, number: 42},
+      },
+    });
+  }});
+  await expect(page.locator('[data-schedule-track="milestone:recovery_review"] [data-schedule-bar="baseline"]')).toHaveAttribute('title', 'Baseline · 2026-10-16');
+  await item(page, 'milestone:recovery_review').click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  const statusSection = inspector.locator('[data-schedule-section="status"]');
+  await expect(statusSection).toContainText('Baseline: 2026-10-16');
+  await expect(statusSection).toContainText('Forecast: 2026-10-19');
+  await expect(statusSection).toContainText('+3d');
+  await expect(statusSection).not.toContainText('2026-10-16 → 2026-10-16');
+
+  await inspector.locator('a[href*="/requirements"]').click();
+  await expect(page.locator('[data-pm-rtm]')).toBeVisible();
+  await expect(page.locator('[data-pm-rtm] [aria-selected="true"]')).toHaveCount(1);
+
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/schedule`);
+  const region = page.locator('[data-pm-schedule]');
+  await region.locator('.schedule-unscheduled summary').click();
+  await region.locator(`.schedule-unscheduled [data-schedule-select="issue:${project.ids.issueMapping}"]`).click();
+  await expect(inspector.locator('[data-schedule-section="requirement"]')).toContainText(f.copy.requirements[0].text);
+  await inspector.locator('[data-schedule-section="details"] > summary').click();
+  await expect(inspector.locator('[data-schedule-section="details"]')).toContainText(`${project.ids.repository}#42`);
+});
+
+test('viewport has no nested vertical scroll cap, Day ticks and Today marker never collide in EN or zh-TW, and mobile rows share one horizontal origin', async ({browser, baseURL}) => {
+  for (const locale of ['en', 'zh-TW'] as const) {
+    const context = await browser.newContext({locale, baseURL, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+    await start(page, locale);
+    const vpStyle = await page.locator('.schedule-viewport').evaluate(el => ({
+      maxHeight: getComputedStyle(el).maxHeight,
+      overflowY: getComputedStyle(el).overflowY,
+    }));
+    expect(vpStyle.maxHeight).toBe('none');
+
+    const zooms = locale === 'en' ? ['Day', 'Week', 'Month'] : ['日', '週', '月'];
+    for (const label of zooms) {
+      await page.getByRole('radio', {name: label, exact: true}).click();
+      const check = await page.evaluate(() => {
+        const axis = document.querySelector('.schedule-axis') as HTMLElement;
+        const axisRect = axis.getBoundingClientRect();
+        const todayRect = axis.querySelector('.schedule-today')!.getBoundingClientRect();
+        const ticks = [...axis.querySelectorAll('.schedule-tick')].map(el => {
+          const r = el.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const tr = range.getBoundingClientRect();
+          return {boxLeft: r.left - axisRect.left, boxRight: r.right - axisRect.left, textRight: tr.right - axisRect.left, textBottom: tr.bottom, textLeft: tr.left, textRightAbs: tr.right};
+        });
+        let overlaps = 0, todayCutsText = false;
+        for (let i = 0; i < ticks.length - 1; i++) {
+          if (ticks[i + 1].boxLeft - ticks[i].boxRight < 0 || ticks[i + 1].boxLeft + 8 - ticks[i].textRight < 2) overlaps++;
+        }
+        for (const tk of ticks) {
+          if (todayRect.left >= tk.textLeft - 1 && todayRect.left <= tk.textRightAbs + 1 && todayRect.top < tk.textBottom) todayCutsText = true;
+        }
+        return {overlaps, todayCutsText};
+      });
+      expect(check).toEqual({overlaps: 0, todayCutsText: false});
+    }
+
+    await page.setViewportSize({width: 390, height: 844});
+    const mobileAlign = async () => page.evaluate(() => {
+      const lanes = [...document.querySelectorAll('.schedule-row[data-has-dates="true"] .schedule-lane')] as HTMLElement[];
+      const scrolls = new Set(lanes.map(l => Math.round(l.scrollLeft)));
+      const todayX = new Set(lanes.map(l => Math.round(l.querySelector('.schedule-today')!.getBoundingClientRect().left)));
+      return {laneCount: lanes.length, uniqueScrolls: scrolls.size, uniqueTodayX: todayX.size};
+    });
+    expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
+    await page.getByRole('button', {name: locale === 'en' ? 'Today' : '今天', exact: true}).click();
+    expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
+    await page.locator('.schedule-row[data-has-dates="true"] .schedule-lane').first().evaluate(node => {
+      node.scrollLeft = 180;
+      node.dispatchEvent(new Event('scroll'));
+    });
+    expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
+    await context.close();
+  }
+});
+
+test('Propose change uses Change: {firstLine} and omits milestone ref when milestone has no baseline in baseline revision', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    const req = data.unscheduled.find((r: any) => r.refs?.requirement_id === project.ids.requirements.resetEmail);
+    if (req) req.title = 'First line of requirement\nSecond line with details';
+    const launch = data.rows.find((r: any) => r.id === 'milestone:launch');
+    if (launch) launch.baseline = null;
+  }});
+  await item(page, `requirement:${f.ids.planV3}:${f.ids.requirements.resetEmail}`).click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  const reqHref = await inspector.locator('[data-schedule-discuss]').getAttribute('href');
+  expect(parseDiscussRefs(reqHref!.split('?')[1])).toEqual({
+    refs: [{kind: 'requirement', id: f.ids.requirements.resetEmail, revision_id: f.ids.planV3}],
+    title: 'Change: First line of requirement',
+    from: 'schedule',
+    report: '',
+  });
+
+  await item(page, 'milestone:launch').click();
+  const launchHref = await inspector.locator('[data-schedule-discuss]').getAttribute('href');
+  expect(parseDiscussRefs(launchHref!.split('?')[1])).toEqual({
+    refs: [],
+    title: 'Change: Launch',
+    from: 'schedule',
+    report: '',
+  });
+});
+
+test('hidden Schedule does not fetch until active, live updates keep focus in Unscheduled and Details, and 413 renders without Retry', async ({page}) => {
+  let version = 1;
+  const f = await start(page, 'en', {initialView: 'overview', mutate: data => {
+    data.unknown.push({field: `rev_${version}`, reason: 'session_not_observed'});
+  }});
+  await expect(page.locator('[data-pm-overview]')).toBeVisible();
+  expect(f.calls).toHaveLength(0);
+  f.state.cursor++;
+  await page.waitForTimeout(300);
+  expect(f.calls).toHaveLength(0);
+
+  await page.evaluate(id => {location.hash = `#/pm/${id}/schedule`;}, f.ids.workspaceId);
+  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
+  expect(f.calls).toHaveLength(1);
+
+  const region = page.locator('[data-pm-schedule]');
+  await region.locator('.schedule-unscheduled summary').click();
+  const unscheduledBtn = region.locator('.schedule-unscheduled [data-schedule-select]').first();
+  await unscheduledBtn.focus();
+  await expect(unscheduledBtn).toBeFocused();
+  version++;
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBe(2);
+  await expect(unscheduledBtn).toBeFocused();
+
+  const metaSummary = region.locator('.schedule-meta summary');
+  await metaSummary.focus();
+  await expect(metaSummary).toBeFocused();
+  version++;
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBe(3);
+  await expect(metaSummary).toBeFocused();
+
+  f.state.tooLarge = true;
+  await page.locator('.pm-main > header').getByRole('button', {name: 'Refresh', exact: true}).click();
+  const alert = region.locator('[role="alert"]');
+  await expect(alert).toContainText('Schedule exceeds the size limit.');
+  await expect(alert.locator('button')).toHaveCount(0);
+});
+
+test('UTC calendar days render identical ticks, bars, and meta in Pacific/Honolulu and Asia/Taipei', async ({browser, baseURL}) => {
+  const snapshots: Record<string, any> = {};
+  for (const timezoneId of ['Pacific/Honolulu', 'Asia/Taipei']) {
+    const context = await browser.newContext({locale: 'en', baseURL, viewport: {width: 1440, height: 900}, timezoneId}), page = await context.newPage();
+    await start(page, 'en');
+    snapshots[timezoneId] = await page.evaluate(() => ({
+      offset: new Date().getTimezoneOffset(),
+      meta: document.querySelector('.schedule-meta')?.textContent,
+      ticks: [...document.querySelectorAll('.schedule-tick')].map(el => ({text: el.textContent, left: (el as HTMLElement).style.left})),
+      bars: [...document.querySelectorAll('.schedule-bar')].map(el => ({
+        track: (el.closest('[data-schedule-track]') as HTMLElement)?.dataset.scheduleTrack,
+        kind: (el as HTMLElement).dataset.scheduleBar,
+        left: (el as HTMLElement).style.left,
+        width: (el as HTMLElement).style.width,
+        title: el.getAttribute('title'),
+      })),
+    }));
+    await context.close();
+  }
+  expect(snapshots['Pacific/Honolulu'].offset).toBe(600);
+  expect(snapshots['Asia/Taipei'].offset).toBe(-480);
+  expect(snapshots['Pacific/Honolulu'].meta).toBe(snapshots['Asia/Taipei'].meta);
+  expect(snapshots['Pacific/Honolulu'].ticks).toEqual(snapshots['Asia/Taipei'].ticks);
+  expect(snapshots['Pacific/Honolulu'].bars).toEqual(snapshots['Asia/Taipei'].bars);
+});
+
+
+
+
+
+
+
+
+
+

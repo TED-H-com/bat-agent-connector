@@ -205,8 +205,10 @@ var scheduleStrings = {
 		sched_run: "Open run",
 		sched_requirements: "Open in Requirements",
 		sched_propose: "Propose change",
+		sched_change_title: "Change: {title}",
 		sched_roadmap: "Roadmap",
 		sched_error: "Schedule unavailable",
+		sched_too_large: "Schedule exceeds the size limit.",
 		sched_changed: "Schedule changed during loading. Refresh to read it again.",
 		sched_dates: "Recorded dates",
 		sched_partial: "Some schedule data is partial.",
@@ -249,8 +251,10 @@ var scheduleStrings = {
 		sched_run: "開啟執行紀錄",
 		sched_requirements: "在需求中開啟",
 		sched_propose: "提議變更",
+		sched_change_title: "變更：{title}",
 		sched_roadmap: "路線圖",
 		sched_error: "無法取得時程",
+		sched_too_large: "時程資料超過大小上限。",
 		sched_changed: "載入期間時程已變更，請重新整理。",
 		sched_dates: "已記錄日期",
 		sched_partial: "部分時程資料尚不完整。",
@@ -28939,12 +28943,14 @@ function spans(row) {
 		if (!span) return [];
 		const start = dayNumber(span.start), end = dayNumber(span.end);
 		if (start === null && end === null) return [];
+		const invalidEnd = start !== null && end !== null && end < start;
+		const cleanEnd = invalidEnd ? null : end;
 		return [{
 			kind,
 			start,
-			end: start !== null && end !== null && end < start ? null : end,
-			open: kind === "actual" && (end === null || start !== null && end < start),
-			recordedOpen: span.open
+			end: cleanEnd,
+			open: kind === "actual" && cleanEnd === null && (span.open === true || span.open == null && invalidEnd),
+			unknownEnd: kind === "actual" && span.open === false && cleanEnd === null
 		}];
 	});
 }
@@ -28961,11 +28967,15 @@ function milestoneDelta(row) {
 }
 function scheduleRef(row, data) {
 	const refs = row.refs || {};
-	if (row.kind === "milestone") return {
-		kind: "milestone",
-		id: refs.milestone_id,
-		revision_id: data.baseline?.revision_id
-	};
+	if (row.kind === "milestone") {
+		const hasBaseline = row.baseline ? Boolean(row.baseline.start || row.baseline.end) : row.baseline !== null && !row.forecast;
+		if (!refs.milestone_id || !data?.baseline?.revision_id || !hasBaseline || refs.revision_id && refs.revision_id !== data.baseline.revision_id) return null;
+		return {
+			kind: "milestone",
+			id: refs.milestone_id,
+			revision_id: data.baseline.revision_id
+		};
+	}
 	if (row.kind === "requirement") return {
 		kind: "requirement",
 		id: refs.requirement_id,
@@ -29012,18 +29022,18 @@ async function readSchedule(api, workspaceId, check) {
 			reasons.add("schedule_page_limit");
 		}
 	}
-	const rows = [...all.values()];
+	const rows = [...all.values()], { included } = treeIds(rows);
 	return {
 		...frame,
 		rows,
-		unscheduled: rows.filter((row) => !spans(row).length),
+		unscheduled: rows.filter((row) => !spans(row).length && !included.has(row.id)),
 		range: chartRange(rows),
 		unknown: [...notes.values()],
 		partial,
 		reasons: [...reasons]
 	};
 }
-function scheduleTree(rows, collapsed) {
+function treeIds(rows) {
 	const byId = new Map(rows.map((row) => [row.id, row])), included = new Set();
 	for (const row of rows.filter((row) => spans(row).length)) {
 		let next = row;
@@ -29034,6 +29044,13 @@ function scheduleTree(rows, collapsed) {
 			next = byId.get(next.parent_id);
 		}
 	}
+	return {
+		byId,
+		included
+	};
+}
+function scheduleTree(rows, collapsed) {
+	const { byId, included } = treeIds(rows);
 	const children = new Map();
 	for (const row of rows.filter((row) => included.has(row.id) && !sessionAttempt(row))) {
 		const parent = included.has(row.parent_id) ? row.parent_id : row.kind === "milestone" ? null : "unassigned";
@@ -29075,17 +29092,30 @@ function dateRange(span) {
 		timeStyle: "short",
 		timeZone: "UTC"
 	}).format(new Date(value)) + " UTC" : value;
-	return [format(span.start) || "—", span.end && (!span.start || span.end >= span.start) ? format(span.end) : t("sched_open")].join(" → ");
+	const endBeforeStart = Boolean(span.start && span.end && span.end < span.start);
+	const validEnd = span.end && !endBeforeStart ? span.end : null;
+	if (validEnd && validEnd === span.start) return format(span.start) || "—";
+	if (validEnd) return [format(span.start) || "—", format(validEnd)].join(" → ");
+	if (span.open === true || span.open == null && endBeforeStart) return [format(span.start) || "—", t("sched_open")].join(" → ");
+	if (span.open === false) return [format(span.start) || "—", reasonLabel(t, "terminal_time_unrecorded")].join(" → ");
+	return format(span.start) || "—";
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
 function render(row, { workspaceId, data }) {
-	const refs = row.refs || {}, work = row.kind === "attempt" ? data.rows.find((value) => value.id === row.parent_id) : row;
-	const served = work?.refs || refs;
-	const requirements = data.rows.filter((value) => value.kind === "requirement" && value.refs?.plan_revision_id === served.plan_revision_id && (served.requirement_ids || [served.requirement_id]).includes(value.refs?.requirement_id));
+	const refs = row.refs || {}, work = row.kind === "attempt" || row.kind === "issue" ? data.rows.find((value) => value.id === row.parent_id) : row;
+	const served = work?.refs || refs, reqIds = served.requirement_ids || (served.requirement_id ? [served.requirement_id] : []);
+	const requirements = data.rows.filter((value) => value.kind === "requirement" && (!served.plan_revision_id || value.refs?.plan_revision_id === served.plan_revision_id) && reqIds.includes(value.refs?.requirement_id));
 	const attempts = data.rows.filter((value) => value.kind === "attempt" && value.parent_id === (work?.id || row.id));
 	const sessions = row.kind === "attempt" ? [row] : attempts;
 	const status = section("status", rowStatus(row, data));
+	for (const key of [
+		"baseline",
+		"forecast",
+		"actual"
+	].filter((key) => row[key])) status.append(h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key])));
+	const delta = milestoneDelta(row);
+	if (row.kind === "milestone" && delta !== null && delta !== 0) status.append(h$1("p", {}, t("sched_delta", { n: delta > 0 ? "+" + delta : delta })));
 	if (sessionAttempt(row)) status.append(h$1("p", { class: "ui-meta" }, row.status === "in_progress" ? t("sched_open") + " · " + t("sched_no_dates") : t("sched_no_dates")));
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
@@ -29102,13 +29132,13 @@ function render(row, { workspaceId, data }) {
 		body: attemptList,
 		open: true
 	}));
-	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || row.id;
-	const links = h$1("div", { class: "schedule-inspector-actions" }, h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")), h$1("a", {
+	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || refs.requirement_ids?.[0] || served.requirement_ids?.[0] || null;
+	const links = h$1("div", { class: "schedule-inspector-actions" }, select ? h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")) : null, h$1("a", {
 		class: "ui-button secondary",
 		href: discussHref({
 			workspaceId,
 			refs: [scheduleRef(row, data)],
-			title: row.title,
+			title: t("sched_change_title", { title: firstLine(row) }),
 			from: "schedule"
 		}),
 		"data-schedule-discuss": ""
@@ -29120,7 +29150,7 @@ function render(row, { workspaceId, data }) {
 			"baseline",
 			"forecast",
 			"actual"
-		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), refs.issue ? h$1("code", {}, `${refs.issue.repository}#${refs.issue.number}`) : null, ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
 			data.baseline?.revision_id,
 			data.forecast?.revision_id,
 			data.as_of
@@ -29140,7 +29170,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	let zoom = Object.hasOwn(ZOOM, preference.zoom) ? preference.zoom : "week";
 	const collapsed = new Set(preference.collapsed || []);
 	let selected = preference.selected || null, active = false, serial = 0, data = null, panel = null, panelSignature = "", signature = "";
-	let domain, scale, visible = [], focusId = null;
+	let domain, scale, visible = [], focusId = null, syncingLanes = false;
 	const viewport = h$1("div", {
 		class: "schedule-viewport",
 		tabindex: 0,
@@ -29199,7 +29229,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function saveScroll() {
 		if (!domain || !viewport.clientWidth) return;
-		preference.anchor = domain.start + viewport.scrollLeft / scale;
+		if (matchMedia("(min-width: 800px)").matches) preference.anchor = domain.start + viewport.scrollLeft / scale;
 		preference.top = viewport.scrollTop;
 		const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
 		const row = [...chart.querySelectorAll("[data-schedule-row]")].find((node) => node.getBoundingClientRect().bottom > top);
@@ -29209,7 +29239,11 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		};
 	}
 	function restoreScroll() {
-		viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		const left = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		viewport.scrollLeft = left;
+		syncingLanes = true;
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = left;
+		syncingLanes = false;
 		viewport.scrollTop = preference.top || 0;
 		if (preference.vertical) {
 			const row = chart.querySelector(`[data-schedule-row="${CSS.escape(preference.vertical.id)}"]`);
@@ -29221,8 +29255,13 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!domain) return;
 		const x = (dayNumber(new Date().toISOString()) - domain.start) * scale;
 		viewport.scrollLeft = Math.max(0, x - Math.max(0, viewport.clientWidth - 328) / 2);
-		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = Math.max(0, x - mini.clientWidth / 2);
-		saveScroll();
+		const firstLane = chart.querySelector("[data-has-dates=\"true\"] .schedule-lane") || chart.querySelector(".schedule-lane");
+		const miniLeft = firstLane ? Math.max(0, x - firstLane.clientWidth / 2) : 0;
+		syncingLanes = true;
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = miniLeft;
+		syncingLanes = false;
+		if (matchMedia("(max-width: 799px)").matches && firstLane?.clientWidth) preference.anchor = domain.start + miniLeft / scale;
+		else saveScroll();
 	}
 	function closePanel(clear = true) {
 		const old = selected;
@@ -29280,10 +29319,18 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		panel.scrollTop = scroll;
 		if (focus >= 0) panel.body.querySelectorAll("a, summary")[focus]?.focus({ preventScroll: true });
 	}
+	const activeTreeId = () => [focusId, selected].find((id) => visible.some((v) => v.row.id === id)) || visible[0]?.row.id || null;
 	function markSelection() {
+		const tabId = activeTreeId();
 		for (const node of element.querySelectorAll("[data-schedule-select]")) {
 			const current = node.dataset.scheduleSelect === selected;
-			node.setAttribute("aria-selected", String(current));
+			if (node.getAttribute("role") === "treeitem") {
+				node.setAttribute("aria-selected", String(current));
+				node.tabIndex = node.dataset.scheduleSelect === tabId ? 0 : -1;
+			} else {
+				node.removeAttribute("aria-selected");
+				node.setAttribute("aria-pressed", String(current));
+			}
 			node.closest(".schedule-row")?.classList.toggle("selected", current);
 		}
 	}
@@ -29291,7 +29338,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (panel && id !== selected) closePanel();
 		opener?.focus({ preventScroll: true });
 		selected = id;
-		focusId = id;
+		if (visible.some((v) => v.row.id === id)) focusId = id;
 		remember();
 		markSelection();
 		showPanel();
@@ -29303,6 +29350,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		draw();
 	}
 	function focusRow(id) {
+		if (!id || !visible.some((v) => v.row.id === id)) return;
 		focusId = id;
 		for (const node of chart.querySelectorAll("[role=treeitem]")) node.tabIndex = node.dataset.scheduleSelect === id ? 0 : -1;
 		chart.querySelector(`[data-schedule-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
@@ -29361,7 +29409,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		if (axis) {
 			const length = domain.end - domain.start + 1;
-			const step = zoom === "day" ? Math.max(1, Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
+			const step = zoom === "day" ? Math.max(2, Math.ceil(72 / scale), Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
 			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
 				const instant = new Date(date * DAY$1);
 				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
@@ -29382,16 +29430,24 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			for (const span of rowSpans) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
+				const endText = span.open ? t("sched_open") : span.unknownEnd ? reasonLabel(t, "terminal_time_unrecorded") : span.end !== null ? row[span.kind].end : null;
+				const rangeText = endText && row[span.kind].end !== row[span.kind].start ? `${row[span.kind].start || "—"} → ${endText}` : row[span.kind].start || endText || "—";
+				const barTitle = `${t("sched_" + span.kind)} · ${rangeText}`;
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
+					role: "img",
+					"aria-label": barTitle,
 					"data-schedule-bar": span.kind,
 					"data-open": span.open ? "true" : null,
-					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${span.open ? t("sched_open") : row[span.kind].end || "—"}`
+					title: barTitle
 				}, marker ? "◆" : null);
 				bar.style.left = `${(start - domain.start) * scale}px`;
 				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
-				if (span.open) bar.append(h$1("span", { class: "schedule-bar-label" }, t("sched_open")));
-				else if (["waiting", "blocked"].includes(row.status)) bar.append(h$1("span", { class: "schedule-bar-label" }, t("ui_status_" + row.status)));
+				const labels = [];
+				if (["waiting", "blocked"].includes(row.status)) labels.push(t("ui_status_" + row.status));
+				if (span.open) labels.push(t("sched_open"));
+				else if (span.unknownEnd) labels.push(reasonLabel(t, "terminal_time_unrecorded"));
+				if (labels.length) bar.append(h$1("span", { class: "schedule-bar-label" }, labels.join(" · ")));
 				node.append(bar);
 			}
 			const delta = milestoneDelta(row);
@@ -29406,6 +29462,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		const line = h$1("span", {
 			class: "schedule-today",
+			role: axis ? "img" : null,
 			"aria-label": axis ? t("sched_today") : null,
 			"aria-hidden": axis ? null : "true"
 		});
@@ -29429,6 +29486,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			role: "tree",
 			"aria-label": t("sched_tree")
 		});
+		const tabId = activeTreeId();
 		visible.forEach((item, index) => {
 			const { row, depth, expandable } = item;
 			const expand = expandable ? button({
@@ -29444,38 +29502,42 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 					focusRow(row.id);
 				}
 			}) : h$1("span", { class: "schedule-indent" });
-			const dates = [
-				"baseline",
-				"forecast",
-				"actual"
-			].filter((key) => row[key]).map((key) => `${t("sched_" + key)} ${row[key].start?.slice(0, 10) || "—"}${row[key].end && row[key].end !== row[key].start ? " → " + row[key].end.slice(0, 10) : ""}`);
+			const dates = spans(row).map((span) => {
+				const s = row[span.kind].start?.slice(0, 10) || "—";
+				const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
+				const suffix = span.open ? " → " + t("sched_open") : span.unknownEnd ? " → " + reasonLabel(t, "terminal_time_unrecorded") : e && e !== s ? " → " + e : "";
+				return `${t("sched_" + span.kind)} ${s}${suffix}`;
+			});
+			const pill = row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null;
+			const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
+			if (pill) pill.id = statusId;
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
 				"aria-level": depth,
 				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
 				"aria-label": label(row),
-				tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
+				"aria-describedby": [statusId, descId].filter(Boolean).join(" "),
+				tabindex: tabId === row.id ? 0 : -1,
 				"data-schedule-select": row.id,
 				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
 				onkeydown: (event) => keydown(event, item, index)
 			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
 				class: "schedule-title",
 				title: row.title
-			}, label(row)), h$1("span", { class: "schedule-date-range" }, dates.join(" · ") || t("sched_no_dates"))), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
+			}, label(row)), h$1("span", {
+				id: descId,
+				class: "schedule-date-range"
+			}, dates.join(" · ") || t("sched_no_dates"))), pill);
 			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
-			const lane = h$1("div", {
-				class: "schedule-lane",
-				tabindex: 0,
-				role: "region",
-				"aria-label": `${t("sched_timeline")} · ${label(row)}`
-			}, track(row));
+			const lane = h$1("div", { class: "schedule-lane" }, track(row));
 			lane.addEventListener("scroll", () => {
-				if (lane.clientWidth) {
-					preference.mini ||= {};
-					preference.mini[row.id] = domain.start + lane.scrollLeft / scale;
-				}
-			});
+				if (syncingLanes || !lane.clientWidth) return;
+				syncingLanes = true;
+				preference.anchor = domain.start + lane.scrollLeft / scale;
+				for (const other of chart.querySelectorAll(".schedule-lane")) if (other !== lane) other.scrollLeft = lane.scrollLeft;
+				syncingLanes = false;
+			}, { passive: true });
 			const line = h$1("div", {
 				class: "schedule-row",
 				"data-schedule-row": row.id,
@@ -29487,16 +29549,9 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!visible.length) chart.replaceChildren(emptyState({ title: t("sched_empty") }));
 		restoreScroll();
 		markSelection();
-		for (const lane of chart.querySelectorAll(".schedule-lane")) {
-			const id = lane.firstElementChild?.dataset.scheduleTrack;
-			if (preference.mini?.[id] !== void 0) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
-			else if (matchMedia("(max-width: 799px)").matches) {
-				const row = data.rows.find((row) => row.id === id), dates = row ? spans(row).map((span) => span.start ?? span.end) : [];
-				if (dates.length) lane.scrollLeft = Math.max(0, (Math.min(...dates) - domain.start) * scale - 32);
-			}
-		}
 		if (focused) focusRow(focused);
 	}
+	let stale = false, pendingRefresh = null;
 	function renderData() {
 		const next = JSON.stringify([
 			data.rows,
@@ -29508,6 +29563,10 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (next !== signature) {
 			saveScroll();
 			signature = next;
+			const activeEl = document.activeElement;
+			const focusMetaSummary = meta.contains(activeEl) && activeEl?.tagName === "SUMMARY";
+			const focusUnscheduledSummary = unscheduled.contains(activeEl) && activeEl?.tagName === "SUMMARY";
+			const focusUnscheduledId = unscheduled.contains(activeEl) ? activeEl?.closest("[data-schedule-select]")?.dataset.scheduleSelect : null;
 			const details = disclosure({
 				label: t("sched_details"),
 				key: `${namespace}:${workspaceId}:schedule:details`,
@@ -29515,20 +29574,23 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			});
 			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
 			const delta = upcoming ? milestoneDelta(upcoming) : null;
-			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), ...data.partial ? [statusPill("partial")] : [], details);
 			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
 				variant: "ghost",
 				label: firstLine(row),
 				"data-schedule-select": row.id,
 				title: row.title,
 				onClick: (event) => select(row.id, event.currentTarget)
-			}), rowStatus(row, data))));
-			unscheduled.replaceChildren(disclosure({
+			}), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null)));
+			unscheduled.replaceChildren(...data.unscheduled.length ? [disclosure({
 				label: t("sched_unscheduled", { n: data.unscheduled.length }),
 				key: `${namespace}:${workspaceId}:schedule:unscheduled`,
 				body: list
-			}));
+			})] : []);
 			draw();
+			if (focusMetaSummary) meta.querySelector("summary")?.focus({ preventScroll: true });
+			else if (focusUnscheduledSummary) unscheduled.querySelector("summary")?.focus({ preventScroll: true });
+			else if (focusUnscheduledId) unscheduled.querySelector(`[data-schedule-select="${CSS.escape(focusUnscheduledId)}"]`)?.focus({ preventScroll: true });
 		}
 		if (selected && !data.rows.some((row) => row.id === selected)) {
 			closePanel();
@@ -29539,6 +29601,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function withdraw() {
 		serial++;
+		stale = false;
+		pendingRefresh = null;
 		closePanel();
 		selected = null;
 		remember();
@@ -29550,43 +29614,58 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		unscheduled.replaceChildren();
 		error.replaceChildren();
 	}
-	async function refresh() {
+	async function refresh(force = false) {
 		if (!canRead()) {
 			withdraw();
 			return;
 		}
+		if (!force && element.closest("[hidden]")) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
-		if (!data) chart.replaceChildren(skeleton(6));
-		const check = () => {
-			alive();
-			if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
-		};
-		try {
-			const next = await readSchedule(api, workspaceId, check);
-			check();
-			if (data) {
-				const order = new Map(data.rows.map((row, index) => [row.id, index]));
-				next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
-			}
-			data = next;
-			error.replaceChildren();
-			renderData();
-		} catch (failure) {
-			try {
+		const run = (async () => {
+			if (!data) chart.replaceChildren(skeleton(6));
+			const check = () => {
 				alive();
-				if (ticket !== serial) return;
-			} catch {
-				return;
+				if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
+			};
+			try {
+				const next = await readSchedule(api, workspaceId, check);
+				check();
+				if (data) {
+					const order = new Map(data.rows.map((row, index) => [row.id, index]));
+					next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+				}
+				data = next;
+				error.replaceChildren();
+				renderData();
+			} catch (failure) {
+				try {
+					alive();
+					if (ticket !== serial) return;
+				} catch {
+					return;
+				}
+				withdraw();
+				const tooLarge = failure.status === 413 || failure.code === "PM_SCHEDULE_TOO_LARGE";
+				error.append(inlineError({
+					error: t(tooLarge ? "sched_too_large" : failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
+					retry: tooLarge ? null : () => refresh()
+				}));
 			}
-			withdraw();
-			error.append(inlineError({
-				error: t(failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
-				retry: refresh
-			}));
+		})();
+		pendingRefresh = run;
+		try {
+			await run;
+		} finally {
+			if (pendingRefresh === run) pendingRefresh = null;
 		}
 	}
 	async function openRef(ref) {
-		if (!data) await refresh();
+		if (pendingRefresh) await pendingRefresh;
+		else if (!data || stale) await refresh(true);
 		if (!active || !data) return;
 		const row = data.rows.find((row) => {
 			const identity = scheduleRef(row, data);
@@ -29616,15 +29695,20 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			if (!value) {
 				saveScroll();
 				closePanel(false);
-			} else if (data) {
-				restoreScroll();
-				showPanel();
+			} else {
+				if (data) {
+					restoreScroll();
+					showPanel();
+				}
+				if (stale && !element.closest("[hidden]")) refresh();
 			}
 		},
 		dispose() {
 			saveScroll();
 			remember();
 			active = false;
+			stale = false;
+			pendingRefresh = null;
 			serial++;
 			closePanel(false);
 			data = null;
@@ -37295,7 +37379,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			brief?.setActive?.(workbench?.selected() === "overview");
 			updateWorkView(workbench?.selected());
 			resources?.setActive(workbench?.selected() === "agents");
-			schedule?.setActive(workbench?.selected() === "schedule");
+			schedule?.setActive(workbench?.selected() === "schedule" && !detailPanel);
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
 			register?.setActive(workbench?.selected() === "issues");
 			updateForms();

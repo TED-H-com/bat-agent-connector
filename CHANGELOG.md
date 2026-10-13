@@ -97,6 +97,10 @@
 - Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
   baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
   evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.
+  Schedule shows "End time not recorded" for a terminal attempt with no end time, and "Open" only
+  when the projection marks the span open. Unscheduled omits rows already in the tree. The tree
+  keeps one tab stop. A hidden Schedule does not fetch. Day labels and the Today mark do not
+  collide, and narrow layouts share one timeline origin.
 - Add the Dependencies view, which answers which checks to re-run when a dependency changes: a
   component matrix with evidence styles, a bounded graph, and an inspector with the pinned version,
   owner, tests to re-run and affected components. Capture again stays the durable header action.
