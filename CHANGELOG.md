@@ -8,6 +8,10 @@
 - Organize existing PM tools into Overview, Discussions, Requirements, Schedule,
   Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
   expose reports and lifecycle through header menus without changing durable actions.
+- PM labels no longer print a missing value. A Brief section without a recorded
+  status says Unknown / 未知. Issue tracking uses the repository name stored on
+  the mapping, or the name on the published issue when the mapping omits it,
+  and otherwise shows only the issue number.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,

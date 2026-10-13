@@ -132,6 +132,9 @@ content has a 760px measure; forms 640px; tables and boards fill up to 1600px.
 English uses sentence case. Every new string has natural Traditional Chinese in
 `ui/ui-strings.js`, merged into the existing i18n mechanism. No raw keys, undefined,
 null, emoji icons or unexplained disabled navigation.
+Composed labels use `label-text.js` to omit missing segments. A Brief section without
+a recorded status says Unknown / 未知. Issue labels prefer the repository name stored
+on the mapping, then the published issue name, and otherwise show only the number.
 
 Verify both locales at 390, 768 and 1440px, plus dark mode. Inspect screenshots for
 alignment, contrast, wrapped Chinese labels and document overflow. Test keyboard

@@ -1,6 +1,7 @@
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
 import {viewState} from './ui/view-state.js';
+import {labelSegment} from './label-text.js';
 
 const sections = ['definition', 'scope', 'schedule', 'resources', 'risks', 'decisions'];
 // A report is a projection of one central DocumentSnapshot, never today's plan or quota.
@@ -64,7 +65,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   }
   function renderItems(rows, empty = 'wb_unknown') {
     if (!rows.length) return h('p', {class: 'muted'}, t(empty));
-    return h('div', {}, h('ul', {class: 'pm-charter-items'}, ...rows.map(row => h('li', {}, h('span', {}, row.text),
+    return h('div', {}, h('ul', {class: 'pm-charter-items'}, ...rows.map(row => h('li', {}, h('span', {}, labelSegment(row.text)),
       ['agent_assumption', 'unresolved', 'conflicting', 'repo_evidence'].includes(row.status)
         ? h('span', {class: 'chip'}, t('pm_status_' + row.status)) : ''))),
       h('details', {class: 'pm-charter-source'}, h('summary', {}, t('wb_sources')),

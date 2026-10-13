@@ -1,4 +1,5 @@
 import {viewState} from './ui/view-state.js';
+import {firstLabel, joinLabel} from './label-text.js';
 import {qualityFact} from './pm-quality-projections.js';
 
 // Join only central identities, including the exact adopted plan and acceptance inputs.
@@ -101,7 +102,9 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     if (!displayed.length && !unassigned.length && !orphanIssues.length) tableBody.append(h('tr', {}, h('td', {colspan: 4}, t(query ? 'wb_no_match' : 'wb_no_requirements'))));
     if (focused) tableBody.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({preventScroll: true});
   }
-  const issueLabel = row => `${row.document.issue.repository} · ${t('wb_issue', {number: row.document.issue.number})}`;
+  const issueLabel = row => joinLabel([
+    firstLabel(row.document.relation?.repository, row.document.issue?.repository),
+    t('wb_issue', {number: row.document.issue.number})]);
   function workRow(card) {return h('tr', {'data-rtm-work': card.work_item_id}, h('td', {colspan: 2}, workButton(card),
     h('span', {class: 'muted'}, label('pm_kanban_state_', card.column))),
     h('td', {}, ...issuesFor(card).map(row => h('div', {}, issueLabel(row))), !issuesFor(card).length ? '—' : ''),

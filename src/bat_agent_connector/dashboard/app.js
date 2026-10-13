@@ -4451,6 +4451,7 @@ var pmStrings = {
 		pm_brief_blockers: "Blockers",
 		pm_brief_deviations: "Deviations",
 		pm_brief_decisions: "Decisions",
+		pm_label_unknown: "Unknown",
 		pm_brief_status_accepted_sources: "Sources in the accepted plan",
 		pm_brief_status_unavailable: "Information unavailable",
 		pm_brief_status_quality_unassessed: "Definition of Done has not been assessed",
@@ -4796,6 +4797,7 @@ var pmStrings = {
 		pm_brief_blockers: "阻塞",
 		pm_brief_deviations: "偏差",
 		pm_brief_decisions: "決策",
+		pm_label_unknown: "未知",
 		pm_brief_status_accepted_sources: "已採用計畫中的來源",
 		pm_brief_status_unavailable: "資訊尚未取得",
 		pm_brief_status_quality_unassessed: "尚未評估完成定義",
@@ -10481,6 +10483,28 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 	};
 }
 //#endregion
+//#region src/label-text.js
+var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
+function labelSegment(value) {
+	if (typeof value === "string") {
+		const text = value.trim();
+		return text && !SENTINEL.test(text) ? text : "";
+	}
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+	if (typeof value === "boolean") return value ? "true" : "false";
+	return "";
+}
+function firstLabel(...values) {
+	for (const value of values) {
+		const text = labelSegment(value);
+		if (text) return text;
+	}
+	return "";
+}
+function joinLabel(parts, separator = " · ") {
+	return parts.map(labelSegment).filter(Boolean).join(separator);
+}
+//#endregion
 //#region src/pm-charter.js
 var sections = [
 	"definition",
@@ -10622,7 +10646,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	}
 	function renderItems(rows, empty = "wb_unknown") {
 		if (!rows.length) return h("p", { class: "muted" }, t(empty));
-		return h("div", {}, h("ul", { class: "pm-charter-items" }, ...rows.map((row) => h("li", {}, h("span", {}, row.text), [
+		return h("div", {}, h("ul", { class: "pm-charter-items" }, ...rows.map((row) => h("li", {}, h("span", {}, labelSegment(row.text)), [
 			"agent_assumption",
 			"unresolved",
 			"conflicting",
@@ -11098,7 +11122,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		if (!displayed.length && !unassigned.length && !orphanIssues.length) tableBody.append(h("tr", {}, h("td", { colspan: 4 }, t(query ? "wb_no_match" : "wb_no_requirements"))));
 		if (focused) tableBody.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({ preventScroll: true });
 	}
-	const issueLabel = (row) => `${row.document.issue.repository} · ${t("wb_issue", { number: row.document.issue.number })}`;
+	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wb_issue", { number: row.document.issue.number })]);
 	function workRow(card) {
 		return h("tr", { "data-rtm-work": card.work_item_id }, h("td", { colspan: 2 }, workButton(card), h("span", { class: "muted" }, label("pm_kanban_state_", card.column))), h("td", {}, ...issuesFor(card).map((row) => h("div", {}, issueLabel(row))), !issuesFor(card).length ? "—" : ""), h("td", {}, h("span", { class: "muted" }, t("wb_details"))));
 	}
@@ -15232,6 +15256,17 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		return element.isConnected && ticket === serial;
 	};
 	const hidden = () => h("input", { type: "hidden" }), fold = (label, ...children) => h("details", {}, h("summary", {}, t(label)), ...children);
+	const repositoryName = (doc) => firstLabel(doc?.relation?.repository, doc?.issue?.repository);
+	const issueNumber = (doc) => Number.isSafeInteger(doc?.issue?.number) ? `#${doc.issue.number}` : "";
+	const stateLabel = (state) => {
+		const key = "pmi_" + state, text = t(key);
+		return text === key ? "" : text;
+	};
+	const trackedIssue = (doc, state) => joinLabel([
+		repositoryName(doc),
+		issueNumber(doc),
+		state
+	]);
 	const checkScope = (value) => {
 		if (value?.version !== 1 || value.workspace_id !== workspaceId) throw Error(t("pmi_invalid"));
 		return value;
@@ -15430,7 +15465,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 	}
 	function renderDetail(record) {
 		const row = record.current, doc = row.document;
-		detail.replaceChildren(h("h4", {}, `${doc.relation.repository} · #${doc.issue.number}`), h("p", {}, t("pmi_" + doc.state)), h("p", { class: "muted" }, t("pmi_not_done")), fold("pmi_history", ...record.revisions.map((item) => {
+		detail.replaceChildren(h("h4", {}, trackedIssue(doc)), h("p", {}, stateLabel(doc.state) || t("pm_label_unknown")), h("p", { class: "muted" }, t("pmi_not_done")), fold("pmi_history", ...record.revisions.map((item) => {
 			const d = item.document, selected = d.selected;
 			return h("details", {}, h("summary", {}, `${t("pmi_revision")} ${item.sequence} · ${item.actor}`), selected.public_title ? h("h4", {}, selected.public_title) : "", selected.public_body ? h("pre", { class: "pm-note-text" }, selected.public_body) : "", selected.public_reason ? h("pre", { class: "pm-note-text" }, selected.public_reason) : "", selected.rationale ? h("p", {}, t("pmi_private_reason"), ": ", selected.rationale) : "", h("p", { class: "pm-source" }, item.revision_id, " · ", d.package_ref.package_id), h("a", { href: `#/op/${item.operation_id}` }, t("pm_operation")));
 		})), fold("pmi_stop", cancelEditor(row).box));
@@ -15453,7 +15488,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			class: "secondary",
 			"aria-pressed": row.mapping_id === selectedId,
 			onclick: () => void selectMapping(row.mapping_id)
-		}, `${row.document.relation.repository} · #${row.document.issue.number} · ${t("pmi_" + row.document.state)}`)));
+		}, trackedIssue(row.document, stateLabel(row.document.state)))));
 		if (!rows.length) catalog.append(h("p", { class: "muted" }, t("pmi_empty")));
 		if (filtered) catalog.append(h("p", { class: "muted" }, t("pmi_filtered")));
 	}
@@ -20345,8 +20380,10 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		return data;
 	};
 	const readable = (prefix, value) => {
-		const key = prefix + value, text = t(key);
-		return text === key ? String(value) : text;
+		const present = labelSegment(value);
+		if (!present) return t("pm_label_unknown");
+		const key = prefix + present, text = t(key);
+		return text === key ? present : text;
 	};
 	function render(data) {
 		snapshot = check(data).snapshot;
