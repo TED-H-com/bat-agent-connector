@@ -5,7 +5,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {issueFixture,packageId,workId,route} from './pm-issue-mappings-fixture.ts';
 const section=(page:any)=>page.locator('[data-pm-issue-mappings]');
 const action=(page:any,kind:string)=>section(page).locator(`[data-pm-action="pm.issue.${kind}"]`);
-async function selectPackage(page:any,number=1){await page.locator('[data-pm-work-packages]').getByRole('button',{name:`Restore member access · Preparation ${number}`,exact:true}).click();await expect(section(page)).toContainText('Selected preparation');}
+async function selectPackage(page:any,number=1){await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:`Restore member access · Preparation ${number}`,exact:true}).click();await expect(section(page)).toContainText('Selected preparation');await openPmSection(page,'requirements','ui_publication');}
 async function openPublication(page:any){await section(page).getByText('Prepare selected public text',{exact:true}).click();return action(page,'publish');}
 async function writePublic(page:any,title='Selected public title',body='Selected public body'){const editor=action(page,'publish');await editor.getByLabel('Public issue title',{exact:true}).fill(title);await editor.getByLabel('Public issue description',{exact:true}).fill(body);}
 async function stopEditor(page:any){await section(page).locator('details').filter({has:page.locator('[data-pm-action="pm.issue.cancel"]')}).locator(':scope > summary').click();return action(page,'cancel');}
@@ -114,8 +114,8 @@ for(const native of [false,true])test.describe(native?'Native issue mapping':'We
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`issue mapping layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=issueFixture();
   f.revision({public_title:'A public heading · 公開標題',public_body:'A long literal source '.repeat(50)});
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_publication');await page.locator('[data-pm-work-packages]').getByRole('button',{name:/Restore member access/}).click();
-  await expect(section(page)).toContainText('#41');await section(page).locator('details').filter({has:page.locator('[data-pm-action="pm.issue.publish"]')}).locator(':scope > summary').click();
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:/Restore member access/}).click();
+  await openPmSection(page,'requirements','ui_publication');await expect(section(page)).toContainText('#41');await section(page).locator('details').filter({has:page.locator('[data-pm-action="pm.issue.publish"]')}).locator(':scope > summary').click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.PM_ISSUE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await section(page).screenshot({path:`${out}/${locale}-${width}.png`});}
   await context.close();

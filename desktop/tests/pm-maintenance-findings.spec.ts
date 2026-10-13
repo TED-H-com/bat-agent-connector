@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {policyFixture,policyRoute,workspaceId} from './pm-maintenance-policy-fixture.ts';
@@ -24,7 +25,7 @@ for(const native of [false,true])test.describe(native?'native configured finding
   test('a reader can inspect exact adopted finding filters without an edit form',async({page})=>{
     const f=fixture();f.base.base.state.role='reader';
     f.policy.document.policy.observation.maintenance_sources={issues:{labels_all:[]},dependencies:{manifests:['package.json'],base_branch:'support/1.x',dependabot_actor_id:900,alerts:true,pull_requests:false}};
-    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page,'dependencies','ui_policy');
     await page.locator('[data-maintenance-current] details>summary').first().click();
     const read=page.locator('[data-maintenance-current] [data-finding-policy]');await expect(read).toBeVisible();
     await expect(read).toContainText('All open Issues');await expect(read).toContainText('package.json');await expect(read).toContainText('support/1.x');await expect(read).toContainText('900');
@@ -33,7 +34,7 @@ for(const native of [false,true])test.describe(native?'native configured finding
   test('dependency observation fixes manifest, native bot and verified branch without enabling repairs',async({page})=>{
     const f=fixture(),branch='support/1.x';
     f.base.release.state.baselines[0].document.proof.maintenance_branch={status:'verified_at_observation',ref:'refs/heads/'+branch};
-    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page,'dependencies','ui_policy');
     await page.locator('[data-maintenance-editor]>summary').click();await page.locator('[data-policy-group="pmp_scope"]>summary').click();
     await form(page).getByLabel('Sources to check: Dependencies and upstream',{exact:true}).check();
     await page.locator('[data-policy-group="pmf_sources"]>summary').click();
@@ -49,26 +50,26 @@ for(const native of [false,true])test.describe(native?'native configured finding
     expect(p.allowed_work_kinds).toEqual([]);expect(p.delivery.maximum).toBe('report');
   });
   test('explicit source decision preserves all filters and original lost request',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page,'dependencies','ui_policy');
     await page.locator('[data-maintenance-editor]>summary').click();await page.locator('[data-policy-group="pmf_sources"]>summary').click();
     await form(page).getByLabel('Observe matching Issues',{exact:true}).selectOption('true');
     await form(page).getByLabel('Required Issue labels (one per line)',{exact:true}).fill('bug\nreleased');
     await form(page).getByLabel('Reason for this policy',{exact:true}).fill('Observe only the accepted release issue labels');f.base.state.lost=true;
     await form(page).getByRole('button',{name:'Adopt maintenance policy',exact:true}).click();await expect(form(page)).toContainText('Reply unavailable');
     expect(f.base.state.writes[0].body.params.policy.observation.maintenance_sources).toEqual({issues:{labels_all:['bug','released']},dependencies:null});
-    const original=structuredClone(f.base.state.writes[0]);f.base.state.lifecycle.stage='paused';await page.reload();
+    const original=structuredClone(f.base.state.writes[0]);f.base.state.lifecycle.stage='paused';await page.reload();await openPmSection(page,'dependencies','ui_policy');
     await page.locator('[data-maintenance-editor]>summary').click();await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.base.state.writes.length).toBe(2);expect(f.base.state.writes[1]).toEqual(original);
   });
   test('saved original findings show coverage and clear after source revocation',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page,'dependencies','ui_policy');
     const view=page.locator('[data-maintenance-findings]');await view.getByText('Issue #50',{exact:true}).click();
     await expect(view).toContainText('Whether this affects the released version remains unproven.');expect(f.base.state.writes).toHaveLength(0);
     f.state.fail=true;await page.getByRole('button',{name:'Refresh saved observations',exact:true}).click();
     await expect(view).toHaveCount(0);await expect(page.locator('[data-pm-maintenance-observations]')).not.toContainText('Issue #50');
   });
   test('mismatched observation and pending source response cannot restore facts',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await expect(page.locator('[data-maintenance-findings]')).toBeVisible();
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page,'dependencies','ui_policy');await expect(page.locator('[data-maintenance-findings]')).toBeVisible();
     let release!:()=>void;f.state.hold=new Promise(resolve=>release=resolve);const before=f.state.reads;
     await page.getByRole('button',{name:'Refresh saved observations',exact:true}).click();await expect.poll(()=>f.state.reads).toBeGreaterThan(before);
     f.base.state.fail=403;await page.getByRole('button',{name:'Refresh maintenance policy',exact:true}).click();release();
@@ -77,7 +78,7 @@ for(const native of [false,true])test.describe(native?'native configured finding
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`configured findings ${locale} ${width}`,async({browser,baseURL},info)=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);await expect(page.locator('[data-maintenance-findings]')).toBeVisible();
+  await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);await openPmSection(page,'dependencies','ui_policy');await expect(page.locator('[data-maintenance-findings]')).toBeVisible();
   await page.locator('[data-maintenance-editor]>summary').click();await page.locator('[data-policy-group="pmf_sources"]>summary').click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await page.locator('main').innerText()).not.toMatch(/pmf_[a-z_]+/);

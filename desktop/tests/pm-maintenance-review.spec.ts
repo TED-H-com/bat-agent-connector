@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture} from './pm-fixture.ts';
 import {test,expect} from '@playwright/test';
@@ -208,7 +209,7 @@ for(const native of [false,true])test(native?'native shared workspace maintenanc
     if(path==='/events')for(const event of response.data.events)event.resource_type='pm_maintenance_review';
     return response;
   };
-  await mountConversation(page,native,dispatch);await page.goto('/dashboard/#/pm/'+wid);
+  await mountConversation(page,native,dispatch);await page.goto('/dashboard/#/pm/'+wid);await openPmSection(page,'issues','ui_maintenance_review');
   const box=page.locator('[data-pm-maintenance-review]');await expect(box).toContainText('Membership service maintenance');
   await saveNote(page);await expect.poll(()=>f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.action).toBe('pm.maintenance_review.note');await expect(box).toContainText('Keep this actual discussion');

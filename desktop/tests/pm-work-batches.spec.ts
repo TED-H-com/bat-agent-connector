@@ -12,7 +12,7 @@ const evidence=async(page:any,f:any)=>{await proof(page).getByLabel('Original ba
 for(const native of [false,true])test(`mounted ${native?'native':'browser'} workspace selects and starts one fixed batch`,async({page})=>{
   const f=batchFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);await openPmSection(page,'requirements','ui_packages');
   await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
-  await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await openPmSection(page,'board','ui_batches');await add(page);await fill(page);await start(page).locator('button[type=submit]').click();
+  await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await review(page);await openPmSection(page,'board','ui_batches');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);await fill(page);await start(page).locator('button[type=submit]').click();
   await expect(panel(page).getByRole('heading',{name:'Original batch and result evidence',exact:true})).toBeVisible();
   expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.action).toBe(START);expect(f.base.state.writes).toHaveLength(0);
   f.state.historyDeny=true;f.base.fixture.base.state.cursor++;

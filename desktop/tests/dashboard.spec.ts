@@ -50,7 +50,7 @@ test("desktop UI uses IPC without a WebView credential", async ({page}) => {
   await page.route("**/api/v1/**", route => { networkCalls++; return route.abort(); });
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
-  await page.getByRole("link", {name: "Connection", exact: true}).click();
+  await page.locator("#live").click();
   await expect(page.getByRole("heading", {name: "Desktop central connection"})).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   expect(networkCalls).toBe(0);
@@ -72,7 +72,7 @@ test("browser retains observation compatibility when an older central has no boo
   });
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
-  await page.getByRole("link", {name: "Connection", exact: true}).click();
+  await page.locator("#live").click();
   await expect(page.getByText(/Connected as/)).toBeVisible();
 });
 

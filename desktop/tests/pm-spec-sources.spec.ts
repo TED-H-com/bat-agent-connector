@@ -13,7 +13,7 @@ async function selectPaths(page:any, value:string){
 }
 test('existing PM page before mounting specification sources',async({page})=>{
   const f=pmFixture();await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
-  await expect(page.getByRole('heading',{name:f.state.workspaces[0].name,exact:true})).toBeVisible();
+  await expect(page.locator('.shell-workspace-block')).toContainText(f.state.workspaces[0].name);
   await expect(page.getByRole('heading',{name:f.state.thread.title,exact:true})).toBeVisible();
   if(shots){mkdirSync(shots,{recursive:true});for(const width of [1440,390]){
     await page.setViewportSize({width,height:900});await page.screenshot({path:`${shots}/before-${width}.png`,fullPage:true});}}

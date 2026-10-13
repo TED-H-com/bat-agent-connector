@@ -99,11 +99,11 @@ function withQuality(){
 }
 for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounted original quality enters Sprint ${native?'IPC':'browser'} ${locale}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width:locale==='en'?1440:390,height:900}}),page=await context.newPage(),f=withQuality();
-  await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');const quality=page.locator('[data-pm-quality-reviews]');
+  await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_quality');const quality=page.locator('[data-pm-quality-reviews]');
   await quality.getByLabel(locale==='en'?'Work item for review':'審查工作項目',{exact:true}).selectOption(f.bindings[0].work_item_id);
   await quality.locator('select').filter({has:page.locator(`option[value="${f.row.review_id}"]`)}).selectOption(f.row.review_id);
   await quality.getByRole('button',{name:locale==='en'?'Use this assessment':'使用這份評估',exact:true}).click();
-  const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的 Sprint$/}).click();
+  await openPmSection(page,'schedule','ui_sprints');const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的 Sprint$/}).click();
   const form=region.locator('[data-pm-action="pm.sprint.close"]');
   await form.getByRole('button',{name:locale==='en'?'Include chosen assessment':'納入已選評估',exact:true}).click();
   await expect(form.locator('[data-pm-quality-picker]')).toContainText(f.row.context.native_result.candidate_commit);

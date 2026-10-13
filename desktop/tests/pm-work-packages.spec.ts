@@ -83,7 +83,7 @@ for(const native of [false,true])test.describe(native?'native engineering packag
   test('late selected response cannot repopulate a page after leaving it',async({page})=>{
     const f=fixture();let release!:()=>void;f.state.gate=new Promise<void>(resolve=>release=resolve);
     await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await section(page).getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
-    await page.goto('/dashboard/#/pm');release();await expect(section(page)).toHaveCount(0);
+    await page.goto('/dashboard/#/settings');release();await expect(section(page)).toHaveCount(0);
     await expect(page.locator('main')).not.toContainText('Members can recover');expect(f.base.state.writes).toHaveLength(0);
   });
   test('current scope changes update review checks while fixed requirements remain intact',async({page})=>{
@@ -130,6 +130,7 @@ for(const native of [false,true])test.describe(native?'native saved engineering 
       return response;
     };
     await mountConversation(page,native,dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await review(page);
+    await openPmSection(page,'requirements','ui_deliveries');
     const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator('summary').click();
     await expect(box).toContainText('This page is incomplete.');await box.getByRole('button',{name:'More delivery records',exact:true}).click();
     await expect(box).toContainText('Merge observed: Yes');await expect(box).toContainText('Merge verification: No');

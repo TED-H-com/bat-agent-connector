@@ -132,7 +132,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "More", exact: true}).click();
     await page.locator('input[type="file"]').setInputFiles({name: "delayed.dat", mimeType: "application/octet-stream", buffer: binary});
     await expect.poll(() => page.evaluate(() => (window as any).fixtureReadingFile)).toBe(true);
-    await page.getByRole("link", {name: "Connection", exact: true}).click();
+    await page.locator("#live").click();
     await page.getByRole("button", {name: "Disconnect", exact: true}).click();
     state.actor = "second-artifact-person";
     if (!native) await page.locator('input[type="password"]').fill("second-fixture-token");

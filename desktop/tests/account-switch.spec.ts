@@ -47,7 +47,7 @@ for (const pause of ["digest", "lookup"]) {
     await send.click();
     if (pause === "lookup") await expect.poll(() => lookupPending).toBe(true);
     else await expect.poll(() => page.evaluate(() => !!(window as any).__digestPending)).toBe(true);
-    await page.getByRole("link", {name: "Connection", exact: true}).click();
+    await page.locator("#live").click();
     await page.getByRole("button", {name: "Disconnect", exact: true}).click();
     await page.locator('input[type="password"]').fill("second-fixture-token");
     await page.getByRole("button", {name: "Connect", exact: true}).click();

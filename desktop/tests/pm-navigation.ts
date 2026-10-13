@@ -7,6 +7,8 @@ export async function openPmSection(page: Page, view: string, section?: string) 
   if (!await entry.count()) return; // Capability-absence tests retain their zero-read assertions.
   if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
   await entry.click();
+  // A thread route remounts the workspace asynchronously before its sections exist.
+  await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
   if (section) {
     const details = page.locator(`[data-pm-section="${section}"] > details`);
     if (await details.count() && !await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator(':scope > summary').click();
