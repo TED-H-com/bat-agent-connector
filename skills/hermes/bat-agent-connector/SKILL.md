@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "0c2156895b3ac1b292643a2d957ee77fb9016a0c662b61f5d58c86e259cf4798"
+  canonical_sha256: "a8591ab10e694bb9d52a58db167acf51fe02127e5e6552a8665a82248ca356b7"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1603,7 +1603,8 @@ row id). Preserve it and read further pages. A page may also end early so its li
 stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id
-exists. A hidden issue mapping does not consume the issue cap or mark the page partial. `refs.run_id` appears only when one visible run is bound to that observed session.
+exists. A hidden issue mapping does not consume the issue cap or mark the page partial.
+A link to a hidden operation, task, or session does not consume the attempt-link caps. `refs.run_id` appears only when one visible run is bound to that observed session.
 Hidden runs do not take that slot or remove the visible run. If the per-session scan reaches
 its bound before that decision, omit `run_id`.
 Withdrawn work items, runs, operations, sessions, and tasks disappear from rows and derived

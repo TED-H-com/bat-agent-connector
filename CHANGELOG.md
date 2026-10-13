@@ -15,7 +15,8 @@
   A hidden run does not take a session's run slot or remove the visible `run_id`. The
   per-session scan stops at a second visible run, or after 64 rows when that choice is
   still open, and then omits `run_id`. A hidden issue mapping does not consume the
-  200-row issue cap or mark the page partial.
+  200-row issue cap or mark the page partial. A link to a hidden operation, task,
+  or session does not consume the attempt-link caps or withhold a visible attempt.
   See `docs/design/pm-schedule.md`.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):

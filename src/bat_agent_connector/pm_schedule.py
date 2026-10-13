@@ -26,6 +26,9 @@ MAX_BYTES = 2_000_000
 _BINDING_CHUNK = 200
 # Mappings examined, including ones list_mappings or work visibility will not emit.
 _ISSUE_SCAN = 1000
+# Links examined per schedule read, hidden ones included, before the 50 and 200 caps.
+_LINK_SCAN = 1000
+_LINK_PAGE = 200
 # Rows examined per session, hidden ones included. Visibility is decided before any run is chosen.
 _RUN_SCAN = 64
 _RANGE_BOUND = {"start": "0000-00-00", "end": "0000-00-00"}
@@ -289,7 +292,7 @@ def _works(ops, principal, workspace_id, milestones, requirements, notes, covera
         coverage["work_bindings_truncated"] = True
         _note(notes, "work", "binding_page_truncated")
     items = _work_items(db, [row["work_item_id"] for row in selected])
-    links, truncated_works = _links(db, [row["work_item_id"] for row in selected], coverage, notes)
+    links, truncated_works = _links(ops, principal, workspace_id, [row["work_item_id"] for row in selected], coverage, notes)
     evidence = _evidence(ops, principal, workspace_id, links, notes, coverage)
     works, attempts = [], []
     for binding in selected:
@@ -351,29 +354,65 @@ def _work_items(db, ids):
     return {row["work_item_id"]: work_items._item(row) for row in rows}
 
 
-def _links(db, ids, coverage, notes):
+def _link_verdict(ops, principal, workspace_id, row):
+    """Classify one link before it can take a cap slot. Missing records still count."""
+    kind, ref = row["kind"], row["ref"]
+    try:
+        if kind == "session":
+            return "visible" if pm_evidence._session_visible(ops, principal, workspace_id, ref) else "hidden"
+        if kind == "operation":
+            if pm_evidence._read_operation(ops, principal, workspace_id, ref) is not None:
+                return "visible"
+            exists = ops.db.execute("SELECT 1 FROM operations WHERE operation_id=?", (ref,)).fetchone()
+            return "hidden" if exists else "missing"
+        if kind == "task":
+            if ops.db.execute("SELECT 1 FROM tasks WHERE task_id=?", (ref,)).fetchone() is None:
+                return "missing"
+            return "visible" if pm_evidence._task_visible(ops, principal, workspace_id, ref) else "hidden"
+    except OperationError:
+        return "hidden"
+    return "hidden"
+
+
+def _links(ops, principal, workspace_id, ids, coverage, notes):
+    """Count visible and missing links, in link_id order, before either cap."""
     if not ids:
         return {}, set()
-    counts = dict(db.execute(
-        f"""SELECT work_item_id, COUNT(*) FROM work_item_links WHERE removed_at IS NULL
-            AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(ids)}) GROUP BY work_item_id""",  # noqa: S608
-        tuple(ids)).fetchall())
-    fetched = db.execute(
-        f"""SELECT work_item_id, link_id, kind, ref FROM work_item_links WHERE removed_at IS NULL
-            AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(ids)})
-            ORDER BY link_id LIMIT ?""",  # noqa: S608
-        (*ids, MAX_LINKS_TOTAL + 1)).fetchall()
-    overflow = len(fetched) > MAX_LINKS_TOTAL
-    grouped = {}
-    for row in fetched[:MAX_LINKS_TOTAL]:
-        grouped.setdefault(row["work_item_id"], []).append(row)
-    truncated = set()
-    cut_id = fetched[MAX_LINKS_TOTAL - 1]["work_item_id"] if overflow else None
-    for work_id, count in counts.items():
-        have = grouped.get(work_id, [])
-        if count > len(have) or len(have) > MAX_LINKS_PER_WORK or work_id == cut_id:
-            truncated.add(work_id)
-            grouped[work_id] = have[:MAX_LINKS_PER_WORK]
+    db = ops.db
+    wanted = list(dict.fromkeys(ids))
+    grouped, truncated = {}, set()
+    examined, counted, last_id = 0, 0, 0
+    while examined < _LINK_SCAN:
+        room = min(_LINK_PAGE, _LINK_SCAN - examined)
+        rows = db.execute(
+            f"""SELECT work_item_id, link_id, kind, ref FROM work_item_links WHERE removed_at IS NULL
+                AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(wanted)}) AND link_id>?
+                ORDER BY link_id LIMIT ?""", (*wanted, last_id, room + 1)).fetchall()  # noqa: S608
+        if not rows:
+            break
+        extra = len(rows) > room
+        for row in rows[:room]:
+            examined += 1
+            last_id = row["link_id"]
+            if _link_verdict(ops, principal, workspace_id, row) == "hidden":
+                coverage["visibility_filtered"] = True
+                continue
+            work_id = row["work_item_id"]
+            have = grouped.setdefault(work_id, [])
+            if len(have) >= MAX_LINKS_PER_WORK or counted >= MAX_LINKS_TOTAL:
+                truncated.add(work_id)
+                continue
+            have.append(row)
+            counted += 1
+        if not extra:
+            break
+        if examined >= _LINK_SCAN:
+            rest = db.execute(
+                f"""SELECT DISTINCT work_item_id FROM work_item_links WHERE removed_at IS NULL
+                    AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(wanted)})
+                    AND link_id>?""", (*wanted, last_id)).fetchall()  # noqa: S608
+            truncated.update(row[0] for row in rest)
+            break
     if truncated:
         coverage["attempts_truncated"] = True
         _note(notes, "work.actual", "attempt_links_truncated")

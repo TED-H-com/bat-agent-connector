@@ -1088,6 +1088,62 @@ async def test_run_scan_bound_omits_run_id_before_a_decision(ops, monkeypatch):
     assert ("attempt.run_id", "run_lookup_truncated") in reasons(body)
 
 
+async def test_hidden_operation_links_do_not_consume_the_per_work_cap(ops, monkeypatch):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    hidden = []
+    for _ in range(2):
+        operation_id = (await source_operation(ops))["operation_id"]
+        attach(ops, work_id, "operation", operation_id)
+        hidden.append(operation_id)
+    visible = (await source_operation(ops))["operation_id"]
+    attach(ops, work_id, "operation", visible)
+    for operation_id in hidden:
+        withdraw(ops, "operation", operation_id)
+    monkeypatch.setattr(pm_schedule, "MAX_LINKS_PER_WORK", 2)
+    body = check(schedule(ops, wid), wid)
+    attempt_id = f"attempt:operation:{work_id}:{visible}"
+    assert attempt_id in by_id(body)
+    assert by_id(body)[f"work:{work_id}"]["actual"] is not None
+    assert body["coverage"]["attempts_truncated"] is False and body["partial"] is False
+    assert ("work.actual", "attempt_links_truncated") not in reasons(body)
+    assert body["coverage"]["visibility_filtered"] is True
+
+
+async def test_hidden_links_do_not_consume_the_total_cap_across_works(ops, monkeypatch):
+    target, plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    pid = work_items._get_item(ops.db, work_id)["project_id"]
+    other = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Second deliverable")}
+    await bind_work(ops, other, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    other_id = other["work_item_id"]
+    hidden = []
+    for _ in range(2):
+        operation_id = (await source_operation(ops))["operation_id"]
+        attach(ops, work_id, "operation", operation_id)
+        hidden.append(operation_id)
+    first = (await source_operation(ops))["operation_id"]
+    second = (await source_operation(ops))["operation_id"]
+    attach(ops, work_id, "operation", first)
+    attach(ops, other_id, "operation", second)
+    for operation_id in hidden:
+        withdraw(ops, "operation", operation_id)
+    monkeypatch.setattr(pm_schedule, "MAX_LINKS_TOTAL", 2)
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert f"attempt:operation:{work_id}:{first}" in found
+    assert f"attempt:operation:{other_id}:{second}" in found
+    assert body["coverage"]["attempts_truncated"] is False and body["partial"] is False
+    third = (await source_operation(ops))["operation_id"]
+    attach(ops, other_id, "operation", third)
+    capped = check(schedule(ops, wid), wid)
+    capped_ids = by_id(capped)
+    assert f"attempt:operation:{work_id}:{first}" in capped_ids
+    assert f"attempt:operation:{other_id}:{third}" not in capped_ids
+    assert capped["coverage"]["attempts_truncated"] is True and capped["partial"] is True
+    assert ("work.actual", "attempt_links_truncated") in reasons(capped)
+
+
 async def test_a_lineage_error_hides_one_session_or_task_and_keeps_the_page(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid = target["workspace_id"]

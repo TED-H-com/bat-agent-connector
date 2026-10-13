@@ -60,7 +60,7 @@ Operation attempt 的結束時刻：成功用狀態為 `succeeded` 的步驟 `fi
 
 若算出的工作 end 早於 start，保留 start，把 end 改為 null，`open` 為 true，並記 `work.actual` / `inconsistent_dates`。
 
-該工作的 attempt 連結若被截斷，或連結只指向缺少的紀錄，工作的 actual 整段省略，已載入的 attempt 仍保留自己的 actual。這兩種情況都不會把工作標成 `not_started`；那種狀態改為 `unknown`。只有缺少紀錄才設 `attempts_unavailable`。里程碑的 actual 恒為 null，並記 `milestone.actual` / `no_explicit_finish_evidence`。
+該工作的 attempt 連結若被截斷，或連結只指向缺少的紀錄，工作的 actual 整段省略，已載入的 attempt 仍保留自己的 actual。這兩種情況都不會把工作標成 `not_started`；那種狀態改為 `unknown`。只有缺少紀錄才設 `attempts_unavailable`。連結先依 `link_id` 判斷可見性，再套每個工作 50 筆、合計 200 筆的上限。只計可見紀錄與缺列；隱藏的連結不占名額、不改可見列、也不設 `attempts_truncated`。這一批連結最多檢查 1000 筆；檢查上限停下且後面還有連結時，剩下的工作才算被截斷。里程碑的 actual 恒為 null，並記 `milestone.actual` / `no_explicit_finish_evidence`。
 
 ## 狀態
 
