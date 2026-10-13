@@ -194,7 +194,7 @@ class ApiV1:
         self.routes = [
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/resources", self.pm_resources, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register", self.pm_register, "observe"),
-            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register/(?P<row_id>(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision):[A-Za-z0-9_.~-]{1,180})", self.pm_register_row, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register/(?P<row_id>[^/]+)", self.pm_register_row, "observe"),
             ("GET", r"/api/v1/managed/setup", self.managed_setup_state, "manage"),
             ("POST", r"/api/v1/managed/setup/secrets", self.managed_setup_secret, "manage"),
             ("POST", r"/api/v1/approval-previews", self.approval_preview, "observe"),
