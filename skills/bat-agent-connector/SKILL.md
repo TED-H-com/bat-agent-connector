@@ -1579,6 +1579,8 @@ completeness and progress/counts; inspect it before describing displayed deliver
 Source cursors belong to existing source-list tools, not to the overview call.
 Hidden lifecycle inflight sources remain incomplete, including rows filtered by
 the source list; omitted is null when the transition itself is unavailable.
+409/413 size or lineage limits are source_incomplete, including pending operations
+and adopted-plan progress; source_unavailable means withdrawn/inaccessible evidence.
 Reads never collect or dispatch.
 
 `pm.thread.create` accepts ordered `context` refs (at most eight) in addition to

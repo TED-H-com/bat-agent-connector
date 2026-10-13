@@ -566,3 +566,47 @@ async def test_trimming_attention_references_preserves_complete_source_counts(re
     assert after['unknown'] == [*before['unknown'], {'field': 'attention_references', 'reason': 'source_limit'}]
     assert all('work_item_id' not in item['context'] for item in after['attention'] if item.get('reason') == 'quality_revoked')
     assert len(pm_source_lineage.document_roots(service.db, after)) <= 64
+
+
+@pytest.mark.parametrize('status', [409, 413])
+@pytest.mark.parametrize('source', ['plan', 'pending'])
+async def test_size_limits_are_incomplete_not_unavailable(ops, monkeypatch, status, source):  # noqa: F811
+    from bat_agent_connector import pm_lifecycle, pm_plans
+    from tests import test_pm_lifecycle as life
+
+    def limited(*args, **kwargs):
+        raise OperationError('SOURCE_LIMIT', 'Fixture source exceeds its bound', status)
+
+    if source == 'plan':
+        target, _ = await origins(ops)
+        wid = target['workspace_id']
+        monkeypatch.setattr(pm_plans, 'get_plan', limited)
+        fields = ('plan', 'progress')
+    else:
+        pm_lifecycle.install(ops)
+        wid = (await workspace(ops))['workspace_id']
+        async def effect(ctx):
+            return {}
+        life.register(ops, effect)
+        pending = life.submit(ops, wid)
+        await life.decide(ops, wid)
+        original = pm_source_lineage.visible
+        def visibility(db, principal, kind, identity):
+            if kind == 'operation' and identity == pending['operation_id']:
+                return limited()
+            return original(db, principal, kind, identity)
+        monkeypatch.setattr(pm_source_lineage, 'visible', visibility)
+        fields = ('lifecycle_inflight',)
+    result = pm_overview.read(ops, OWNER, wid)
+    for field in fields:
+        assert {'field': field, 'reason': 'source_incomplete'} in result['unknown']
+        assert {'field': field, 'reason': 'source_unavailable'} not in result['unknown']
+    assert not result['coverage']['sources'][fields[0]]['complete']
+    if source == 'plan':
+        assert result['plan'] is result['progress'] is None
+        assert result['attention_counts']['deviation'] is None
+    else:
+        assert result['coverage']['sources']['lifecycle_inflight']['omitted'] == 1
+        assert result['attention_counts']['decision'] is None
+        assert pending['operation_id'] not in str(result)
+    assert result['attention_truncated']

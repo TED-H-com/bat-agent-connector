@@ -106,7 +106,8 @@ class Projection:
             self.ops, self.principal, self.wid, rid)) if rid else None
         plan = page['plan'] if page else None
         if not plan:
-            self.missing('progress', 'no_adopted_plan' if rid is None else 'source_unavailable')
+            reason = next((item['reason'] for item in self.unknown if item['field'] == 'plan'), 'source_unavailable')
+            self.missing('progress', 'no_adopted_plan' if rid is None else reason)
         latest = head['latest_revision_id']
         if latest and latest != rid:
             candidate = self.source('plan_candidate', 'pm_plan_revisions', lambda: pm_plans.get_plan(
@@ -414,17 +415,20 @@ class Projection:
             pending = [item for item in page['inflight'] if item and item['disposition'] in {'unresolved', 'held'}] if page else []
             visible = []
             for item in pending:
+                reason = 'source_unavailable'
                 try:
                     allowed = pm_source_lineage.visible(self.ops.db, self.principal, 'operation', item['operation_id'])
                 except OperationError as exc:
                     if exc.status not in (403, 404, 409, 413):
                         raise
                     allowed = False
+                    reason = 'source_incomplete' if exc.status in (409, 413) else 'source_unavailable'
                 if allowed:
                     visible.append(item)
+                else:
+                    self.incomplete('lifecycle_inflight', reason)
             omitted = len(pending) - len(visible)
             if omitted:
-                self.incomplete('lifecycle_inflight', 'source_unavailable')
                 self.coverage['lifecycle_inflight']['omitted'] = omitted + (page.get('omitted') or 0)
             pending = visible
             if pending:

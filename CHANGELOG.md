@@ -7,7 +7,8 @@
   deviations that retain revoked acceptance until reacceptance, current review/proposal
   state, rollback evidence and bounded source
   coverage. Hidden lifecycle transitions and filtered pending operations remain
-  incomplete. Hidden or oversized sources stay partial; source references respect
+  incomplete. Hidden or oversized sources stay partial with distinct unavailability
+  and size-limit reasons; source references respect
   the whole document's limit without withdrawing complete source counts. Reads share a snapshot and request-local source cache.
   Saved reports retain their fixed snapshot semantics.
 - Bind up to eight original context items when creating a PM discussion and rename

@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "16b026895c76944c67a3e2847a20034fecb772963823c6dbbed7fa78477a8963"
+  canonical_sha256: "ab9894ecb93307ed6bcabf96bfee233e82e80dfc8daea146459689dfb08a9aa6"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1602,6 +1602,8 @@ completeness and progress/counts; inspect it before describing displayed deliver
 Source cursors belong to existing source-list tools, not to the overview call.
 Hidden lifecycle inflight sources remain incomplete, including rows filtered by
 the source list; omitted is null when the transition itself is unavailable.
+409/413 size or lineage limits are source_incomplete, including pending operations
+and adopted-plan progress; source_unavailable means withdrawn/inaccessible evidence.
 Reads never collect or dispatch.
 
 `pm.thread.create` accepts ordered `context` refs (at most eight) in addition to

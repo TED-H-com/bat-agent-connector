@@ -59,7 +59,9 @@ PR 欄位只回傳 receipt 中已有的 repository／number，不合成網址。
 證據通過，並非宣稱現在環境仍執行該版本；最新事件是已驗證 rollback 時為 `rolled_back`。所有來源先驗證目前可見性，再分類、排序、計數。
 
 Deviation count 的完整性同時依賴 plan、work、roadmap、forecast、quality；任一來源不完整即為 null。
-409／413 的單筆來源省略並標 `source_incomplete`，不能當成完整的空頁；既有 forecast 被撤回是
+409／413 的單筆來源省略並標 `source_incomplete`，包括 pending operation lineage 檢查與
+採用計畫讀取；無法驗證計畫大小時 progress 也沿用 `source_incomplete`，不可稱為權限撤回。
+這些限制不能當成完整的空頁；既有 forecast 被撤回是
 `source_unavailable`，不是 `not_recorded`。沒有維護政策時 findings 為 `not_configured`、涵蓋完整；
 所有來源 stopped／disabled 時為 `not_applicable`、涵蓋完整，因此空 risk 可確實回傳 0。
 隱藏的 lifecycle pending operation 不輸出 ID／狀態，只記 `coverage.sources.lifecycle_inflight.omitted`，
