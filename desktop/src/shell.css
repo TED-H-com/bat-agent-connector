@@ -64,3 +64,5 @@ body.pm-mode #main { padding: 0; }
   .pm-project-views button, .workspace-nav-footer > a, .workspace-tree-link, .workspace-tree-toggle { min-height: 44px; }
 }
 @media print { body.has-workspace #workspace { display: block; } .workspace-nav { display: none !important; } }
+/* Keep the drag target inside the scrolling rail's clip edge. */
+.workspace-nav .workspace-resizer { right: 0; width: 8px; }
