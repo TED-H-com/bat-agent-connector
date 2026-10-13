@@ -68,6 +68,8 @@ try {
   await page.getByRole('button', {name:'Create workspace', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}$/);
   await page.getByRole('link', {name:'Discuss', exact:true}).click();
+  await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/new(?:\?|$)/);
+  await expect(page.locator('[data-pm-region=discussions]')).toBeVisible();
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
   await page.getByRole('button', {name:'Rename',exact:true}).click();
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
