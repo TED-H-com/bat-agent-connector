@@ -310,7 +310,7 @@ commit digests in the reading surface. Identifiers and copyable digests are in D
 All thread tools use shared chevron disclosures, including retained lazy controls.
 Thread disclosures have connection/principal/workspace/thread keys and keep the
 reader’s choices across live reads and Refresh. A pending original request opens
-Inputs once when the thread is first shown, including after reload, and later
+Inputs once when the thread is first shown, including its drawer/sheet after reload, and later
 reads never re-expand a reader-closed disclosure.
 The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
 pills and a Compare action; revision detail reads wait until Plan opens. Meetings

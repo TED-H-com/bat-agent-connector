@@ -36141,7 +36141,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			content.append(h("div", { class: "pm-thread-layout" }, column, discussionTools.home));
 			if (!threadState.inputsInitialized && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) {
 				information.open = true;
-				discussionTools.select("inputs");
+				discussionTools.open("inputs");
 			}
 			threadState.inputsInitialized = true;
 		}

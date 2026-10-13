@@ -196,6 +196,36 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await expect(information).not.toHaveAttribute('open', '');
     expect(f.state.writes).toHaveLength(1);
   });
+  test('a pending original request opens mobile Inputs once after reload', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844});
+    const f = planning(); let reads = 0;
+    await mountConversation(page, native, async input => {
+      if (new URL(input.path, 'http://fixture').pathname === `/pm/workspaces/${workspaceId}/threads/${threadId}`) reads++;
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute); await openThreadTab(page, 'plan');
+    await page.locator('[data-pm-planning-revision] > summary').click();
+    const revise = action(page, 'pm.thread.plan.revise');
+    await revise.getByLabel('Why update this direction?', {exact: true}).fill('Keep this original request visible once.');
+    f.state.lost = true;
+    await revise.getByRole('button', {name: 'Save updated Planning draft', exact: true}).click();
+    await expect(revise).toContainText('Reply unavailable');
+    await page.keyboard.press('Escape'); await page.reload();
+    const information = page.locator('[data-pm-information]'), sheet = page.locator('.pd-panel-overlay');
+    await expect(page.locator('[data-discussion-tab=inputs]')).toBeVisible();
+    await expect(sheet).toHaveAttribute('aria-modal', 'true');
+    await expect(information).toHaveAttribute('open', '');
+    await information.locator(':scope > summary').click(); await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    const before = reads; f.state.cursor++;
+    await expect.poll(() => reads).toBeGreaterThan(before);
+    await expect(sheet).toHaveCount(0); await expect(information).not.toHaveAttribute('open', '');
+    const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+    await expect(refresh).toBeEnabled(); await refresh.click(); await expect(refresh).toBeEnabled();
+    await expect(sheet).toHaveCount(0);
+    await openThreadTab(page, 'inputs'); await expect(information).not.toHaveAttribute('open', '');
+    expect(f.state.writes).toHaveLength(1);
+  });
   test('unfinished plan edits survive refresh and readers cannot create or adopt revisions', async({page}) => {
     const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan');
     await page.locator('[data-pm-revision-editor] > summary').click();

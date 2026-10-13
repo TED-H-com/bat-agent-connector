@@ -812,7 +812,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       // Open recovery once per thread mount/reload. Later reads preserve the
       // reader's tab and keyed disclosure choices, even while the intent is pending.
       if (!threadState.inputsInitialized && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) {
-        information.open = true; discussionTools.select('inputs');
+        information.open = true; discussionTools.open('inputs');
       }
       threadState.inputsInitialized = true;
     }
