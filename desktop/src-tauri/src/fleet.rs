@@ -1,4 +1,5 @@
 //! Fixed local Fleet transport. The configured backend remains the only tunnel owner.
+use base64::Engine;
 use bat_fleet_core::{discovery::Backend, installation::Snapshot};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -17,6 +18,9 @@ use tokio::{
 
 const MAX_INPUT: usize = 65_536;
 const MAX_OUTPUT: usize = 262_144;
+const CONTRACT_READY: &[u8] = b"BATC_FLEET_READY_V1\n";
+const CONTRACT_STARTUP: Duration = Duration::from_secs(60);
+const CONTRACT_DEADLINE: Duration = Duration::from_secs(10);
 const ACTIONS: [&str; 6] = [
     "contract",
     "status",
@@ -229,7 +233,7 @@ async fn powershell_request(
     let contract_id = format!("{id}_contract");
     let contract = json!({"schema_version":1,"request_id":contract_id,"action":"contract"});
     installation.verify_current().map_err(native_error)?;
-    let result = call(&executable, &script, &contract, Duration::from_secs(10)).await?;
+    let result = call(&executable, &script, &contract, CONTRACT_DEADLINE).await?;
     verify_contract(&result)?;
     installation.verify_current().map_err(native_error)?;
     if request["action"] == "contract" {
@@ -328,23 +332,42 @@ async fn call(
     request: &Value,
     deadline: Duration,
 ) -> Result<Value, String> {
-    let command = adapter_command(executable, script)?;
-    let bytes = run_command(command, request, deadline).await?;
+    let is_contract = request["action"] == "contract";
+    let command = adapter_command(executable, script, is_contract)?;
+    let bytes = if is_contract {
+        run_command_with_startup(command, request, Some(CONTRACT_STARTUP), deadline).await?
+    } else {
+        run_command(command, request, deadline).await?
+    };
     parse_response(&bytes, request)
 }
 
-fn adapter_command(executable: &Path, script: &Path) -> Result<Command, String> {
+fn adapter_command(executable: &Path, script: &Path, contract: bool) -> Result<Command, String> {
     let mut command = Command::new(executable);
-    command
-        .args([
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(script);
+    command.args([
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+    ]);
+    if contract {
+        // Cold Windows 5.1 has exceeded 10s both before script entry and at its first
+        // JSON cmdlet (three Windows CI runs). Profile suppression/module isolation
+        // does not remove module analysis, assembly loading or first-use work.
+        // Give that work a bounded 60s startup phase in THIS process, then retain
+        // the 10s contract deadline from an explicit ready marker. This is neither
+        // a second launch nor a retry; effectful calls keep their original budget.
+        let bootstrap: Vec<u8> = include_str!("fleet-startup.ps1")
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        command
+            .arg("-EncodedCommand")
+            .arg(base64::engine::general_purpose::STANDARD.encode(bootstrap));
+    } else {
+        command.arg("-File").arg(script);
+    }
     command.current_dir(
         script
             .parent()
@@ -352,6 +375,10 @@ fn adapter_command(executable: &Path, script: &Path) -> Result<Command, String> 
     );
     // No inherited Connector/BAT tokens or proxy credentials. Preserve only Windows identity paths.
     command.env_clear();
+    if contract {
+        // A data-only path, never interpolated into PowerShell source or supplied by IPC.
+        command.env("BATC_FLEET_ADAPTER", script);
+    }
     for name in [
         "APPDATA",
         "LOCALAPPDATA",
@@ -390,10 +417,22 @@ fn adapter_command(executable: &Path, script: &Path) -> Result<Command, String> 
 }
 
 async fn run_command(
-    mut command: Command,
+    command: Command,
     request: &Value,
     deadline: Duration,
 ) -> Result<Vec<u8>, String> {
+    run_command_with_startup(command, request, None, deadline).await
+}
+
+async fn run_command_with_startup(
+    mut command: Command,
+    request: &Value,
+    startup: Option<Duration>,
+    deadline: Duration,
+) -> Result<Vec<u8>, String> {
+    if startup.is_some() && request["action"] != "contract" {
+        return Err("Invalid Fleet request".into());
+    }
     let input = serde_json::to_vec(request).map_err(|_| "Invalid Fleet request")?;
     if input.len() > MAX_INPUT {
         return Err("Fleet request exceeds its bound".into());
@@ -403,18 +442,53 @@ async fn run_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .kill_on_drop(true);
-    let work = async {
+    let start = async {
         let mut child = command
             .spawn()
             .map_err(|_| "Unable to start the Fleet adapter")?;
-        let mut stdin = child
+        let stdin = child
             .stdin
             .take()
             .ok_or("Fleet adapter stdin unavailable")?;
-        let stdout = child
+        let mut stdout = child
             .stdout
             .take()
             .ok_or("Fleet adapter stdout unavailable")?;
+        if startup.is_some() {
+            // Consume exactly one fixed marker, with no unbounded line buffering.
+            // No request bytes leave Rust until the same child proves readiness.
+            let mut ready = [0; CONTRACT_READY.len()];
+            stdout
+                .read_exact(&mut ready)
+                .await
+                .map_err(|_| "Fleet adapter transport failed; read status before retrying")?;
+            if ready != CONTRACT_READY {
+                return Err("Fleet adapter transport failed; read status before retrying");
+            }
+        }
+        Ok((child, stdin, stdout))
+    };
+    let started = tokio::time::Instant::now();
+    // Keep the child inside the cancelled future until readiness, so kill_on_drop
+    // also covers startup timeout. Later cancellation drops only this same child.
+    let launch = tokio::time::timeout(startup.unwrap_or(deadline), start).await;
+    #[cfg(test)]
+    if startup.is_some() {
+        eprintln!(
+            "synthetic adapter startup: {:?}; elapsed: {:?}",
+            launch.as_ref().map(|r| r.as_ref().map(|_| ())),
+            started.elapsed()
+        );
+    }
+    let (mut child, mut stdin, stdout) =
+        launch.map_err(|_| "Fleet request timed out; read status before retrying")??;
+    let remaining = if startup.is_some() {
+        deadline
+    } else {
+        // Ordinary actions retain one total deadline, including process startup.
+        deadline.saturating_sub(started.elapsed())
+    };
+    let work = async move {
         let write = async {
             stdin.write_all(&input).await?;
             stdin.shutdown().await?;
@@ -446,7 +520,7 @@ async fn run_command(
         }
         Ok(bytes)
     };
-    tokio::time::timeout(deadline, work)
+    tokio::time::timeout(remaining, work)
         .await
         .map_err(|_| "Fleet request timed out; read status before retrying")?
 }
@@ -895,7 +969,7 @@ mod tests {
     #[tokio::test]
     async fn windows_contract_fixture_uses_actual_system_powershell() {
         let temp = Temp::new();
-        let root = temp.0.join("kit with spaces");
+        let root = temp.0.join("kit with spaces ' 雪 $value");
         std::fs::create_dir_all(root.join("client")).unwrap();
         std::fs::write(
             root.join("client/fleet-desktop.ps1"),
@@ -921,14 +995,14 @@ mod tests {
                 std::sync::Arc::new(crate::fleet_lifecycle::Tickets::default()).capture(),
             )
             .await;
+        let elapsed = started.elapsed();
+        let phase = std::fs::read_to_string(root.join("client/phase.txt"))
+            .unwrap_or_else(|_| "not-started".into());
+        eprintln!(
+            "synthetic original request: {:?}; elapsed: {elapsed:?}; phase: {phase}",
+            result.as_ref().err()
+        );
         if result.is_err() {
-            let elapsed = started.elapsed();
-            let phase = std::fs::read_to_string(root.join("client/phase.txt"))
-                .unwrap_or_else(|_| "not-started".into());
-            eprintln!(
-                "synthetic original request: {:?}; elapsed: {elapsed:?}; phase: {phase}",
-                result.as_ref().err()
-            );
             // Synthetic diagnostics only: distinguish pipe, console and environment startup.
             // The identical probe preserves the original launch conditions and deadline;
             // it cannot turn the original failure into a pass or replay any real control.
@@ -937,7 +1011,7 @@ mod tests {
             let script = load_script(&bridge.config).unwrap();
             for probe in ["identical", "null-input", "console", "windows-environment"] {
                 let _ = std::fs::remove_file(root.join("client/phase.txt"));
-                let mut command = adapter_command(&executable, &script).unwrap();
+                let mut command = adapter_command(&executable, &script, true).unwrap();
                 let probe_started = std::time::Instant::now();
                 let outcome = if probe == "null-input" {
                     command
@@ -972,10 +1046,15 @@ mod tests {
                     }
                     format!(
                         "{:?}",
-                        run_command(
+                        run_command_with_startup(
                             command,
                             &request("contract", "fixture-diagnostic"),
-                            Duration::from_secs(if probe == "identical" { 10 } else { 5 })
+                            Some(CONTRACT_STARTUP),
+                            if probe == "identical" {
+                                CONTRACT_DEADLINE
+                            } else {
+                                Duration::from_secs(5)
+                            }
                         )
                         .await
                         .map(|_| ())
@@ -997,6 +1076,127 @@ mod tests {
         let mut c = Command::new("python3");
         c.args(["-c", code]);
         c
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn contract_startup_waits_for_readiness_before_sending_the_original_request() {
+        let req = request("contract", "cold-contract");
+        let command = python(
+            "import sys,json,select,time\n\
+             assert not select.select([sys.stdin],[],[],0.7)[0], 'request sent before readiness'\n\
+             sys.stdout.write('BATC_FLEET_READY_V1\\n'); sys.stdout.flush()\n\
+             r=json.load(sys.stdin)\n\
+             print(json.dumps(dict(schema_version=1,request_id=r['request_id'],ok=True,result={})))",
+        );
+        let started = std::time::Instant::now();
+        let bytes = run_command_with_startup(
+            command,
+            &req,
+            Some(Duration::from_secs(5)),
+            Duration::from_millis(300),
+        )
+        .await
+        .unwrap();
+        assert!(started.elapsed() >= Duration::from_millis(700));
+        assert_eq!(
+            serde_json::from_slice::<Value>(&bytes).unwrap()["request_id"],
+            req["request_id"]
+        );
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn contract_startup_refuses_bad_or_missing_readiness_and_effectful_requests() {
+        let req = request("contract", "test");
+        for code in ["print('INVALID_READY_V1__')", "pass"] {
+            assert!(run_command_with_startup(
+                python(code),
+                &req,
+                Some(Duration::from_secs(5)),
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap_err()
+            .contains("transport failed"));
+        }
+        let temp = Temp::new();
+        let marker = temp.0.join("must-not-start");
+        let mut command = python("import sys;open(sys.argv[1],'w').write('started')");
+        command.arg(&marker);
+        assert_eq!(
+            run_command_with_startup(
+                command,
+                &request("ensure_monitor", "original-key"),
+                Some(Duration::from_secs(5)),
+                Duration::from_secs(5),
+            )
+            .await
+            .unwrap_err(),
+            "Invalid Fleet request"
+        );
+        assert!(!marker.exists());
+    }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn contract_startup_and_request_timeouts_kill_only_the_owned_child_without_retry() {
+        let temp = Temp::new();
+        let mut unrelated = python("import time;time.sleep(20)")
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        for ready in [false, true] {
+            let marker = temp.0.join(if ready { "request" } else { "startup" });
+            let mut command = python(
+                "import os,sys,json,time\n\
+                 with open(sys.argv[1],'a') as f: f.write(str(os.getpid())+'\\n')\n\
+                 if sys.argv[2]=='ready':\n\
+                 \x20   sys.stdout.write('BATC_FLEET_READY_V1\\n'); sys.stdout.flush()\n\
+                 \x20   r=json.load(sys.stdin)\n\
+                 \x20   with open(sys.argv[1],'a') as f: f.write(r['request_id']+'\\n')\n\
+                 time.sleep(20)",
+            );
+            command
+                .arg(&marker)
+                .arg(if ready { "ready" } else { "hang" });
+            let started = std::time::Instant::now();
+            let error = run_command_with_startup(
+                command,
+                &request("contract", "original-key"),
+                Some(if ready {
+                    Duration::from_secs(5)
+                } else {
+                    Duration::from_millis(300)
+                }),
+                if ready {
+                    Duration::from_millis(300)
+                } else {
+                    Duration::from_secs(5)
+                },
+            )
+            .await
+            .unwrap_err();
+            assert!(error.contains("timed out") && error.contains("read status"));
+            assert!(
+                started.elapsed() < Duration::from_secs(3),
+                "phase borrowed the other phase's budget"
+            );
+            let record = std::fs::read_to_string(&marker).unwrap();
+            let lines: Vec<_> = record.lines().collect();
+            assert_eq!(&lines[1..], if ready { &["original-key"][..] } else { &[] });
+            let process = PathBuf::from(format!("/proc/{}", lines[0]));
+            for _ in 0..50 {
+                if !process.exists() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            assert!(
+                !process.exists(),
+                "owned adapter still exists after timeout"
+            );
+            assert!(unrelated.try_wait().unwrap().is_none());
+        }
+        unrelated.kill().await.unwrap();
+        unrelated.wait().await.unwrap();
     }
     #[cfg(unix)]
     #[tokio::test]
