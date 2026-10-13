@@ -51,8 +51,10 @@
 
 - Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
   Each row keeps its source record's identity and canonical status. Totals, open-item age, the
-  last 12 weeks and blocking reasons are included only when the visible scan is complete. A
-  withdrawn source leaves the rows and the counts together. The projection adds no write actions.
+  last 12 weeks and blocking reasons are included only when every source that matches the active
+  type filter was read completely. A hidden or oversized record is left out of that page; it does
+  not fail the register or change the counts. Row ids are path-safe (`governance.pmgov_…`) and
+  cursors are opaque sequence tokens. The projection adds no write actions.
 
 - Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
   `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
@@ -60,8 +62,11 @@
   The read does not compute a forecast, a critical path, phase rows, or per-work token use.
   A visible session link with no observation stays an unknown read-only attempt. A linked
   operation or task with no record is omitted, marked partial, and does not publish the id.
-  The page is cut by encoded size so the next cursor resumes without gaps. Withdrawn
-  sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
+  The page is cut by encoded size and by a 64-root lineage budget. `next_cursor` is an
+  opaque base64url keyset, so the next page resumes without gaps. Requirement text is kept
+  verbatim. Withdrawn work items, runs, operations, sessions, and tasks leave together with
+  the dates derived from them, and their ids do not appear in rows or cursors.
+  See `docs/design/pm-schedule.md`.
 
 - Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
   returns per-source local days only when `buckets=day` is set; `tz` is then an exact IANA

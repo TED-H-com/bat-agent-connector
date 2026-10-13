@@ -15,6 +15,8 @@ from .operations import OperationError, OperationService
 
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
+# Set only around one consistent read. Unset callers keep the uncached path.
+_MEMO = ContextVar("pm_source_lineage_memo", default=None)
 # Other derived writes must first implement fixed lineage and original recovery.
 DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept", "github.pr.publish", "pm.execution.verify",
     "session.send", "session.answer", "session.interrupt", "session.read", "session.position",
@@ -45,8 +47,24 @@ def schema(journal):
         delivery_schema(journal)
 
 
+@contextmanager
+def memoized_reads():
+    """Reuse lineage lookups inside one read snapshot."""
+    token = _MEMO.set({})
+    try:
+        yield
+    finally:
+        _MEMO.reset(token)
+
+
 def installed(db):
-    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_source_lineage'").fetchone() is not None
+    memo = _MEMO.get()
+    if memo is not None and "installed" in memo:
+        return memo["installed"]
+    found = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_source_lineage'").fetchone() is not None
+    if memo is not None:
+        memo["installed"] = found
+    return found
 
 
 def _table(db, name):
@@ -54,6 +72,25 @@ def _table(db, name):
 
 
 def roots(db, kind, identity, *, _seen=None):
+    memo = _MEMO.get() if _seen is None else None
+    key = ("roots", kind, identity)
+    if memo is not None and key in memo:
+        cached = memo[key]
+        if isinstance(cached, OperationError):
+            raise cached
+        return set(cached)
+    try:
+        found = _roots_collect(db, kind, identity, _seen=_seen)
+    except OperationError as error:
+        if memo is not None:
+            memo[key] = error
+        raise
+    if memo is not None:
+        memo[key] = set(found)
+    return found
+
+
+def _roots_collect(db, kind, identity, *, _seen=None):
     if not installed(db) or not isinstance(identity, str):
         return set()
     seen = set() if _seen is None else _seen
@@ -111,7 +148,7 @@ def roots(db, kind, identity, *, _seen=None):
         if row and row[1]:
             refs.append(("session", row[0] + "/" + row[1]))
     for child_kind, child_id in refs:
-        found.update(roots(db, child_kind, child_id, _seen=seen))
+        found.update(_roots_collect(db, child_kind, child_id, _seen=seen))
     if len(found) > MAX_ROOTS:
         raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources for one resource", 409)
     return found
@@ -218,7 +255,22 @@ def visible_roots(db, principal, original_ids):
 
 
 def visible(db, principal, kind, identity):
-    return visible_roots(db, principal, roots(db, kind, identity))
+    memo = _MEMO.get()
+    key = ("visible", getattr(principal, "actor", None), kind, identity)
+    if memo is not None and key in memo:
+        cached = memo[key]
+        if isinstance(cached, OperationError):
+            raise cached
+        return cached
+    try:
+        result = visible_roots(db, principal, roots(db, kind, identity))
+    except OperationError as error:
+        if memo is not None:
+            memo[key] = error
+        raise
+    if memo is not None:
+        memo[key] = result
+    return result
 
 
 def require(db, principal, kind, identity):

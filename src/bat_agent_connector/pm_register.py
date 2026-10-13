@@ -1,15 +1,16 @@
 """Read-only issues, actions and changes register.
 
-Each request is a best-effort point in time. Source modules open their own
-journal transactions, so this is not one snapshot-isolation guarantee.
-Hidden records are omitted from rows, order, counts and labels together.
-Relations come only from stored foreign keys, never from names or time.
+One request reads under a single deferred snapshot. ``as_of`` is when the
+request started. Hidden records are omitted from rows, order, counts and
+labels together. Relations come only from stored foreign keys.
 """
 from __future__ import annotations
 
+import base64
 import json
 import re
 import sqlite3
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
 from .operations import OperationError
@@ -25,18 +26,46 @@ RESOLVED_STATUSES = frozenset({"reported_resolved", "reported_done", "adopted", 
 AGE_BUCKETS = ("0-7d", "8-30d", "31-90d", "90d+")
 GOVERNANCE_TYPES = {"risk": "risk", "issue": "issue", "change": "change"}
 NEUTRAL_GOVERNANCE = frozenset({"assumption", "dependency", "drift"})
+SOURCE_TYPES = {"governance": frozenset({"risk", "issue", "change"}), "finding": frozenset({"issue"}),
+                "repair": frozenset({"action"}), "review": frozenset({"decision", "action", "change"}),
+                "follow_up": frozenset({"action"}), "meeting": frozenset({"action", "decision"}),
+                "proposal": frozenset({"change"}), "plan_revision": frozenset({"decision"}),
+                "issue_mapping": frozenset({"issue"})}
+_SELF_STEP = {"risk": "finding", "issue": "finding", "action": "action", "change": "proposal", "decision": "decision"}
 MAX_SCAN = 200
 DETAIL_CAP = 40
 PAGE = 50
-_ROW_ID = re.compile(r"^(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision):[A-Za-z0-9_.~-]{1,180}$")
+HISTORY_MEETING = 50
+HISTORY_REVIEW = 20
+_KINDS = "governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision"
+_ROW_ID = re.compile(rf"^(?:{_KINDS})\.[A-Za-z0-9._-]{{1,180}}$")
 _STATUS = re.compile(r"[a-z0-9_]{1,64}$")
-_ID = re.compile(r"[A-Za-z0-9_.~-]{1,180}$")
+_ID = re.compile(r"[A-Za-z0-9._-]{1,180}$")
+_CURSOR = re.compile(r"[A-Za-z0-9_-]{1,400}$")
+_MEETING_ITEM = re.compile(r"^(pmmeet_[0-9a-f]{32})\.(follow_up|decision)\.([A-Za-z0-9_-]{1,80})$")
+_REVIEW_FOLLOW = re.compile(r"^(pmrevw_[0-9a-f]{32})\.follow_up\.([A-Za-z0-9_-]{1,80})$")
+
+
+class _Scan(list):
+    """Partial source names, plus which of them stopped on a conflict or size cap."""
+
+    def __init__(self):
+        super().__init__()
+        self.source_incomplete = set()
+
+    def mark(self, source, *, bad=False):
+        if source not in self:
+            self.append(source)
+        if bad:
+            self.source_incomplete.add(source)
 
 
 def capabilities():
+    from .pm_source_lineage import MAX_ROOTS
     return {"version": 1, "read_only": True, "types": list(TYPES), "source_kinds": list(SOURCE_KINDS),
             "timeline_steps": list(STEPS), "dispatch": False, "writes": False,
-            "summary": "complete_visible_scan_only", "time": "iso8601_utc"}
+            "summary": "complete_visible_scan_only", "time": "iso8601_utc",
+            "row_id": "kind.ident", "cursor": "opaque_base64url_sequence", "max_roots_per_page": MAX_ROOTS}
 
 
 def _bad(message):
@@ -49,6 +78,10 @@ def _missing(exc):
 
 def _hidden(exc):
     return isinstance(exc, OperationError) and exc.status in (403, 404)
+
+
+def _conflict(exc):
+    return isinstance(exc, OperationError) and exc.status in (409, 413)
 
 
 def _iso(value):
@@ -83,6 +116,25 @@ def _check(workspace_id, principal, ops):
     require_member(ops.db, principal, workspace_id)
 
 
+def _encode_cursor(sequence, row_id):
+    raw = f"{int(sequence)}\n{row_id}".encode("ascii")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(after):
+    if not isinstance(after, str) or not _CURSOR.fullmatch(after):
+        _bad("after must be a register cursor")
+    padded = after + "=" * ((4 - len(after) % 4) % 4)
+    try:
+        text = base64.urlsafe_b64decode(padded.encode("ascii")).decode("ascii")
+    except (ValueError, UnicodeDecodeError):
+        _bad("after must be a register cursor")
+    sequence, sep, row_id = text.partition("\n")
+    if not sep or not sequence.isdecimal() or not _ROW_ID.fullmatch(row_id):
+        _bad("after must be a register cursor")
+    return int(sequence), row_id
+
+
 def _params(row_type, status, owner, q, after, limit):
     if row_type is not None and row_type not in TYPES:
         _bad("type must be risk, issue, action, change or decision")
@@ -94,15 +146,9 @@ def _params(row_type, status, owner, q, after, limit):
         _bad("q must be a title search of at most 200 characters")
     if type(limit) is not int or not 1 <= limit <= 100:
         _bad("limit must be 1-100")
-    cursor = None
-    if after is not None:
-        if not isinstance(after, str) or "~" not in after or len(after) > 400:
-            _bad("after must be a register cursor")
-        stamp, ident = after.split("~", 1)
-        if not _ROW_ID.fullmatch(ident) or (stamp and _iso(stamp) is None):
-            _bad("after must be a register cursor")
-        cursor = (_iso(stamp) or "", ident)
-    return cursor
+    if after is None:
+        return None
+    return _decode_cursor(after)
 
 
 def _ids(values):
@@ -115,7 +161,8 @@ def _ids(values):
 
 def _base(*, kind, ident, row_type, basis, title, title_reason, status, status_reason, owner, owner_reason,
           due, due_reason, impact, impact_reason, priority, priority_reason, next_step, next_reason,
-          created, updated, requirements, work_items, prs, actions, steps, refs, resolved_at, blocking):
+          created, updated, requirements, work_items, prs, actions, steps, refs, resolved_at, blocking,
+          sequence=0):
     if not _ID.fullmatch(ident):
         return None
     unknowns = {}
@@ -143,17 +190,48 @@ def _base(*, kind, ident, row_type, basis, title, title_reason, status, status_r
         clean_prs.append({"repository": repository, "number": number})
     open_row = status in OPEN_STATUSES
     unclassified = isinstance(status, str) and status not in OPEN_STATUSES and status not in RESOLVED_STATUSES
-    return {"row_id": kind + ":" + ident, "type": row_type, "type_basis": basis, **public,
+    try:
+        recorded = int(sequence)
+    except (TypeError, ValueError):
+        recorded = 0
+    return {"row_id": kind + "." + ident, "type": row_type, "type_basis": basis, **public,
             "source": {"kind": kind, "id": ident}, "related": {"requirement_ids": _ids(requirements),
             "work_item_ids": _ids(work_items), "prs": clean_prs}, "available_actions": actions, "unknowns": unknowns,
             "_steps": steps, "_refs": refs, "_open": open_row, "_resolved_at": resolved_at if status in RESOLVED_STATUSES else None,
-            "_blocking_reason": blocking, "_unclassified": unclassified, "_unknown_status": status is None}
+            "_blocking_reason": blocking, "_unclassified": unclassified, "_unknown_status": status is None,
+            "_sequence": recorded, "_roots": set()}
 
 
 def _action(ops, name, target, required=None):
     if name not in ops.actions:
         return None
     return {"action": name, "target": target, "required": required or {}}
+
+
+def _text_reason(value):
+    return value if isinstance(value, str) and value else None
+
+
+def _recorded_reason(document):
+    if not isinstance(document, dict):
+        return None
+    return _text_reason(document.get("blocking_reason")) or _text_reason(document.get("reason")) or _text_reason(document.get("result"))
+
+
+def _event_reason(events, status):
+    """Latest blocked follow-up stores its explanation in the event result."""
+    if status != "blocked":
+        return None
+    chosen, when = None, None
+    for event in events:
+        document = event.get("document") if isinstance(event, dict) else None
+        if not isinstance(document, dict) or document.get("status") != "blocked":
+            continue
+        reason = _recorded_reason(document)
+        stamp = _iso(event.get("created_at"))
+        if reason and (when is None or (stamp or "") >= (when or "")):
+            chosen, when = reason, stamp
+    return chosen
 
 
 def _governance_row(ops, workspace_id, view):
@@ -209,73 +287,113 @@ def _governance_row(ops, workspace_id, view):
         if item:
             actions.append(item)
     resolved = updated if document.get("status") in RESOLVED_STATUSES else None
-    blocking = document.get("blocking_reason") if isinstance(document.get("blocking_reason"), str) else document.get("reason") if isinstance(document.get("reason"), str) else None
+    blocking = _text_reason(document.get("blocking_reason")) or _text_reason(document.get("reason"))
     return _base(kind="governance", ident=record["record_id"], row_type=row_type, basis=basis, title=document.get("title"),
                  title_reason="not_recorded", status=document.get("status"), status_reason="not_recorded",
                  owner=document.get("owner_actor"), owner_reason="not_recorded", due=_iso(document.get("review_at")),
                  due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
                  priority_reason="not_recorded", next_step=document.get("response"), next_reason="not_recorded",
                  created=created, updated=updated, requirements=document.get("affected_requirement_ids") or [],
-                 work_items=[], prs=[], actions=actions, steps=steps, refs=refs, resolved_at=resolved, blocking=blocking)
+                 work_items=[], prs=[], actions=actions, steps=steps, refs=refs, resolved_at=resolved, blocking=blocking,
+                 sequence=record.get("sequence") or 0)
 
 
-def _history_steps(ops, principal, workspace_id, record_id):
+def _step_key(step):
+    ref = step.get("ref") or {}
+    if step.get("step") in {"decision", "revision"}:
+        return ("decision", step.get("step"), ref.get("kind"), ref.get("id"), step.get("status"))
+    return ("other", step.get("step"), ref.get("kind"), ref.get("id"), step.get("status"), step.get("at"))
+
+
+def _add_step(steps, seen, step):
+    key = _step_key(step)
+    if key in seen:
+        return
+    seen.add(key)
+    steps.append(step)
+
+
+def _governance_history(ops, principal, workspace_id, record_id):
+    """One record's own revisions. Decision and adoption steps collapse; a superseded proposal is omitted."""
     from .pm_governance import list_history
-    steps, after, seen = [], 0, 0
-    while seen < MAX_SCAN:
-        page = list_history(ops, principal, workspace_id, record_id, after=after, limit=min(PAGE, MAX_SCAN - seen))
+    cap = MAX_SCAN
+    steps, seen, proposals, adopted = [], set(), [], set()
+    after, truncated, bad = 0, False, False
+    window, cursors = deque(), set()
+    while True:
+        try:
+            page = list_history(ops, principal, workspace_id, record_id, after=after, limit=min(PAGE, max(cap, 1)))
+        except OperationError as exc:
+            if _conflict(exc):
+                return steps, True, True
+            raise
         for revision in page["revisions"]:
-            document = revision["document"]
-            when = _iso(revision["created_at"])
-            decision = document.get("decision")
-            if isinstance(decision, dict):
-                steps.append({"step": "decision", "at": when, "actor": decision.get("recorded_by")
-                              if isinstance(decision.get("recorded_by"), str) else None, "title": document.get("title"),
-                              "ref": {"kind": "governance", "id": revision["revision_id"]},
-                              "status": decision.get("disposition") if isinstance(decision.get("disposition"), str) else None})
-            adoption, proposed = document.get("adoption"), document.get("proposed_revision")
-            adopted = adoption.get("revision_id") if isinstance(adoption, dict) else None
-            proposed_id = proposed.get("revision_id") if isinstance(proposed, dict) else None
-            if isinstance(adopted, str):
-                steps.append({"step": "revision", "at": _iso(adoption.get("adopted_at")) or when,
-                              "actor": adoption.get("adopted_by") if isinstance(adoption.get("adopted_by"), str) else None,
-                              "title": document.get("title"), "ref": {"kind": "plan_revision", "id": adopted}, "status": "adopted"})
-            elif isinstance(proposed_id, str):
-                steps.append({"step": "revision", "at": when, "actor": revision.get("actor"), "title": document.get("title"),
-                              "ref": {"kind": "plan_revision", "id": proposed_id}, "status": document.get("status")})
-        seen += len(page["revisions"])
+            window.append(revision)
+            if len(window) > cap:
+                window.popleft()
+                truncated = True
         if page["next_cursor"] is None:
-            return steps, False
-        if seen >= MAX_SCAN or page["next_cursor"] == after:
-            return steps, True
+            break
+        if page["next_cursor"] == after or page["next_cursor"] in cursors:
+            truncated = True
+            break
+        cursors.add(page["next_cursor"])
         after = page["next_cursor"]
-    return steps, True
+    last_disposition = object()
+    for revision in window:
+        document = revision["document"]
+        when = _iso(revision["created_at"])
+        decision = document.get("decision") if isinstance(document.get("decision"), dict) else None
+        disposition = decision.get("disposition") if decision and isinstance(decision.get("disposition"), str) else None
+        if decision and (revision.get("action") == "pm.governance.decide" or disposition != last_disposition):
+            _add_step(steps, seen, {"step": "decision", "at": when,
+                                    "actor": decision.get("recorded_by") if isinstance(decision.get("recorded_by"), str) else None,
+                                    "title": document.get("title"), "ref": {"kind": "governance", "id": record_id},
+                                    "status": disposition})
+        if disposition is not None:
+            last_disposition = disposition
+        adoption, proposed = document.get("adoption"), document.get("proposed_revision")
+        adopted_id = adoption.get("revision_id") if isinstance(adoption, dict) else None
+        proposed_id = proposed.get("revision_id") if isinstance(proposed, dict) else None
+        if isinstance(adopted_id, str):
+            adopted.add(adopted_id)
+            _add_step(steps, seen, {"step": "revision", "at": _iso(adoption.get("adopted_at")) or when,
+                                    "actor": adoption.get("adopted_by") if isinstance(adoption.get("adopted_by"), str) else None,
+                                    "title": document.get("title"), "ref": {"kind": "plan_revision", "id": adopted_id},
+                                    "status": "adopted"})
+        elif isinstance(proposed_id, str):
+            proposals.append({"step": "revision", "at": when, "actor": revision.get("actor"), "title": document.get("title"),
+                              "ref": {"kind": "plan_revision", "id": proposed_id}, "status": document.get("status")})
+    for step in proposals:
+        if step["ref"]["id"] in adopted:
+            continue
+        _add_step(steps, seen, step)
+    return steps, truncated, bad
 
 
-def _bounded(fetch, key, cursors=("next_cursor", "next_after")):
-    after, items = 0, []
-    for _ in range(MAX_SCAN):
-        room = MAX_SCAN - len(items)
-        if room <= 0:
-            return items, True
-        page = fetch(after, min(PAGE, room))
-        batch = list(page.get(key) or [])
-        items.extend(batch[:room])
+def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limit=100):
+    """Keep the newest ``cap`` visible records. Hidden rows are already absent from ``fetch``."""
+    size = min(PAGE, page_limit)
+    after, kept, truncated, seen = 0, deque(), False, set()
+    while True:
+        try:
+            page = fetch(after, size)
+        except OperationError as exc:
+            if _conflict(exc):
+                return list(kept), True, True
+            raise
+        for item in list(page.get(key) or []):
+            kept.append(item)
+            if len(kept) > cap:
+                kept.popleft()
+                truncated = True
         cursor = next((page[name] for name in cursors if page.get(name) is not None), None)
         if cursor is None:
-            return items, False
-        if cursor == after or len(items) >= MAX_SCAN:
-            return items[:MAX_SCAN], True
+            return list(kept), truncated, False
+        if cursor == after or cursor in seen:
+            return list(kept), True, False
+        seen.add(cursor)
         after = cursor
-    return items[:MAX_SCAN], True
-
-
-def _collect_governance(ops, principal, workspace_id):
-    from .pm_governance import list_records
-    if not _table(ops.db, "pm_governance_records"):
-        return [], False
-    views, truncated = _bounded(lambda after, limit: list_records(ops, principal, workspace_id, after=after, limit=limit), "records")
-    return [row for row in (_governance_row(ops, workspace_id, view) for view in views) if row], truncated
 
 
 def _policy_rules(ops, principal, workspace_id):
@@ -293,15 +411,6 @@ def _policy_rules(ops, principal, workspace_id):
         return None
     selected = [rule for rule in rules if isinstance(rule, dict) and isinstance(rule.get("key"), str) and isinstance(rule.get("labels_all"), list) and rule["labels_all"]]
     return record.get("policy_id"), selected
-
-
-def _reserved_findings(ops, workspace_id):
-    if not _table(ops.db, "pm_maintenance_repairs"):
-        return set()
-    rows = ops.db.execute("SELECT finding_id FROM pm_maintenance_repairs WHERE workspace_id=? LIMIT ?", (workspace_id, MAX_SCAN + 1)).fetchall()
-    if len(rows) > MAX_SCAN:
-        return None
-    return {row[0] for row in rows}
 
 
 def _finding_actions(ops, workspace_id, item, rules, policy_id, ref, reserved):
@@ -344,13 +453,14 @@ def _finding_row(ops, workspace_id, item, source_kind, ref, rules, policy_id, re
             refs.add(("work_item", existing["work_item_id"]))
         if isinstance(existing.get("mapping_id"), str):
             refs.add(("issue_mapping", existing["mapping_id"]))
+    blocking = _text_reason(facts.get("blocking_reason")) or _text_reason(facts.get("reason"))
     row = _base(kind="finding", ident=item["finding_id"], row_type="issue", basis="neutral", title=None,
                 title_reason="not_recorded", status=item.get("state") if isinstance(item.get("state"), str) else None,
                 status_reason="not_recorded", owner=None, owner_reason="not_recorded", due=None, due_reason="not_recorded",
                 impact=impact, impact_reason="not_recorded", priority=priority, priority_reason="not_recorded",
                 next_step=None, next_reason="not_recorded", created=None, updated=None, requirements=[], work_items=work,
                 prs=prs, actions=_finding_actions(ops, workspace_id, item, rules, policy_id, ref, reserved), steps=[],
-                refs=refs, resolved_at=None, blocking=facts.get("blocking_reason") if isinstance(facts.get("blocking_reason"), str) else facts.get("reason") if isinstance(facts.get("reason"), str) else None)
+                refs=refs, resolved_at=None, blocking=blocking)
     if row and pull_unknown:
         row["unknowns"]["pull_requests"] = "repository_name_not_stored"
     if row:
@@ -360,31 +470,32 @@ def _finding_row(ops, workspace_id, item, source_kind, ref, rules, policy_id, re
 
 def _collect_findings(ops, principal, workspace_id, rules_state, reserved):
     if not _table(ops.db, "pm_maintenance_policies"):
-        return [], False
+        return [], False, False
     from .pm_maintenance_findings import current_findings
     from .pm_maintenance_policy import head
     if head(ops.db, workspace_id)["policy_id"] is None:
-        return [], False
+        return [], False, False
     try:
         view = current_findings(ops, principal, workspace_id)
     except OperationError as exc:
         if exc.status in (403, 404):
-            return [], False
-        if exc.status == 409:
-            return [], True
+            return [], False, False
+        if _conflict(exc):
+            return [], True, True
         raise
     except sqlite3.OperationalError as exc:
         if _missing(exc):
-            return [], False
+            return [], False, False
         raise
+    # A hidden current observation is unknown, the same as a missing one.
+    if view.get("visibility_filtered"):
+        return [], True, False
     policy_id, rules = rules_state if rules_state else (None, None)
     ref = view.get("observation_ref") if isinstance(view.get("observation_ref"), dict) else None
     finding_ref = None
     if ref and isinstance(ref.get("observation_id"), str) and isinstance(ref.get("document_digest"), str):
         finding_ref = {"observation_id": ref["observation_id"], "document_digest": ref["document_digest"]}
     rows, partial = [], False
-    if view.get("visibility_filtered"):
-        return [], False
     for name, source in (view.get("sources") or {}).items():
         if not isinstance(source, dict) or source.get("status") == "disabled":
             continue
@@ -399,42 +510,49 @@ def _collect_findings(ops, principal, workspace_id, rules_state, reserved):
             row = _finding_row(ops, workspace_id, item, name, linked, rules, policy_id, reserved)
             if row:
                 rows.append(row)
-    return rows, partial
+    return rows, partial, False
+
+
+def _repair_row(ops, workspace_id, repair):
+    from .pm_maintenance_repairs import TERMINAL
+    status = repair.get("operation_status") if isinstance(repair.get("operation_status"), str) else None
+    actions = []
+    if status not in TERMINAL:
+        item = _action(ops, "pm.maintenance.repair.evidence.record",
+                       {"workspace_id": workspace_id, "repair_id": repair["repair_id"]})
+        if item:
+            actions.append(item)
+    refs = set()
+    if isinstance(repair.get("finding_id"), str):
+        refs.add(("finding", repair["finding_id"]))
+    work = [repair["work_item_id"]] if isinstance(repair.get("work_item_id"), str) else []
+    for ident in work:
+        refs.add(("work_item", ident))
+    steps = [{"step": "work", "at": _iso(repair.get("created_at")), "actor": None, "title": None,
+              "ref": {"kind": "work_item", "id": ident}, "status": status} for ident in work]
+    resolved = _iso(repair.get("finished_at")) if status in RESOLVED_STATUSES else None
+    return _base(kind="repair", ident=repair["repair_id"], row_type="action", basis="explicit", title=None,
+                 title_reason="not_recorded", status=status, status_reason="not_recorded", owner=None,
+                 owner_reason="not_recorded", due=_iso(repair.get("deadline_at")), due_reason="not_recorded",
+                 impact=None, impact_reason="not_recorded", priority=None, priority_reason="not_recorded",
+                 next_step=None, next_reason="not_recorded", created=_iso(repair.get("created_at")),
+                 updated=_iso(repair.get("finished_at")) or _iso(repair.get("created_at")), requirements=[],
+                 work_items=work, prs=[], actions=actions, steps=steps, refs=refs, resolved_at=resolved, blocking=None,
+                 sequence=repair.get("sequence") or 0)
 
 
 def _collect_repairs(ops, principal, workspace_id):
-    from .pm_maintenance_repairs import TERMINAL, list_repairs
+    from .pm_maintenance_repairs import list_repairs
     if not _table(ops.db, "pm_maintenance_repairs"):
-        return [], False
-    records, truncated = _bounded(lambda after, limit: list_repairs(ops, principal, workspace_id, after=after, limit=limit), "repairs", ("next_after",))
+        return [], False, False
+    records, truncated, bad = _newest(lambda after, limit: list_repairs(ops, principal, workspace_id, after=after, limit=limit),
+                                      "repairs", MAX_SCAN, cursors=("next_after",), page_limit=50)
     rows = []
     for repair in records:
-        status = repair.get("operation_status") if isinstance(repair.get("operation_status"), str) else None
-        actions = []
-        if status not in TERMINAL:
-            item = _action(ops, "pm.maintenance.repair.evidence.record",
-                           {"workspace_id": workspace_id, "repair_id": repair["repair_id"]})
-            if item:
-                actions.append(item)
-        refs = set()
-        if isinstance(repair.get("finding_id"), str):
-            refs.add(("finding", repair["finding_id"]))
-        work = [repair["work_item_id"]] if isinstance(repair.get("work_item_id"), str) else []
-        for ident in work:
-            refs.add(("work_item", ident))
-        steps = [{"step": "work", "at": _iso(repair.get("created_at")), "actor": None, "title": None,
-                  "ref": {"kind": "work_item", "id": ident}, "status": status} for ident in work]
-        resolved = _iso(repair.get("finished_at")) if status in RESOLVED_STATUSES else None
-        row = _base(kind="repair", ident=repair["repair_id"], row_type="action", basis="explicit", title=None,
-                    title_reason="not_recorded", status=status, status_reason="not_recorded", owner=None,
-                    owner_reason="not_recorded", due=_iso(repair.get("deadline_at")), due_reason="not_recorded",
-                    impact=None, impact_reason="not_recorded", priority=None, priority_reason="not_recorded",
-                    next_step=None, next_reason="not_recorded", created=_iso(repair.get("created_at")),
-                    updated=_iso(repair.get("finished_at")) or _iso(repair.get("created_at")), requirements=[],
-                    work_items=work, prs=[], actions=actions, steps=steps, refs=refs, resolved_at=resolved, blocking=None)
+        row = _repair_row(ops, workspace_id, repair)
         if row:
             rows.append(row)
-    return rows, truncated
+    return rows, truncated, bad
 
 
 def _text_status(events, fallback):
@@ -458,17 +576,18 @@ def _meeting_rows(ops, workspace_id, meeting, detail):
     truncated = bool(((detail.get("coverage") or {}).get("histories") or {}).get("follow_ups", {}).get("has_more"))
     rows = []
     meeting_id = meeting["meeting_id"]
+    sequence = meeting.get("sequence") or 0
     for item in document.get("decisions") or []:
         if not isinstance(item, dict) or item.get("disposition") != "recorded_discussion_decision" or not isinstance(item.get("id"), str):
             continue
-        ident = meeting_id + "~decision~" + item["id"]
+        ident = meeting_id + ".decision." + item["id"]
         row = _base(kind="meeting", ident=ident, row_type="decision", basis="explicit", title=item.get("text") if isinstance(item.get("text"), str) else None,
                     title_reason="not_recorded", status=item.get("disposition"), status_reason="not_recorded",
                     owner=item.get("recorded_by") if isinstance(item.get("recorded_by"), str) else None, owner_reason="not_recorded",
                     due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
                     priority_reason="not_recorded", next_step=None, next_reason="not_recorded",
                     created=_iso(completion.get("created_at")), updated=_iso(completion.get("created_at")), requirements=[],
-                    work_items=[], prs=[], actions=[], steps=[], refs=set(), resolved_at=None, blocking=None)
+                    work_items=[], prs=[], actions=[], steps=[], refs=set(), resolved_at=None, blocking=None, sequence=sequence)
         if row:
             rows.append(row)
     completed = bool(meeting.get("completion_id"))
@@ -483,17 +602,20 @@ def _meeting_rows(ops, workspace_id, meeting, detail):
                             {"follow_up_id": item["id"]})
             if entry:
                 actions.append(entry)
+        ident = meeting_id + ".follow_up." + item["id"]
         steps = [{"step": "action", "at": _iso(event.get("created_at")), "actor": event.get("actor") if isinstance(event.get("actor"), str) else None,
-                  "title": item.get("text"), "ref": {"kind": "meeting", "id": meeting_id + "~follow_up~" + item["id"]},
+                  "title": item.get("text"), "ref": {"kind": "meeting", "id": ident},
                   "status": (event.get("document") or {}).get("status")} for event in related if isinstance(event.get("document"), dict)]
         resolved = event_at or _iso(completion.get("created_at")) if status in RESOLVED_STATUSES else None
-        row = _base(kind="meeting", ident=meeting_id + "~follow_up~" + item["id"], row_type="action", basis="explicit",
+        blocking = _event_reason(related, status) or (_recorded_reason(item) if status == "blocked" else None)
+        row = _base(kind="meeting", ident=ident, row_type="action", basis="explicit",
                     title=item.get("text") if isinstance(item.get("text"), str) else None, title_reason="not_recorded",
                     status=status, status_reason="not_recorded", owner=item.get("owner_actor") if isinstance(item.get("owner_actor"), str) else None,
                     owner_reason="not_recorded", due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded",
                     priority=None, priority_reason="not_recorded", next_step=item.get("expected_effect") if isinstance(item.get("expected_effect"), str) else None,
                     next_reason="not_recorded", created=_iso(completion.get("created_at")), updated=event_at or _iso(completion.get("created_at")),
-                    requirements=[], work_items=[], prs=[], actions=actions, steps=steps, refs=set(), resolved_at=resolved, blocking=None)
+                    requirements=[], work_items=[], prs=[], actions=actions, steps=steps, refs=set(), resolved_at=resolved,
+                    blocking=blocking, sequence=sequence)
         if row:
             rows.append(row)
     return rows, truncated
@@ -505,6 +627,7 @@ def _review_rows(ops, workspace_id, review, detail):
     truncated = detail.get("next_cursor") is not None if detail else False
     rows = []
     review_id = review["review_id"]
+    sequence = review.get("sequence") or 0
     if completion and isinstance(completion.get("document"), dict):
         document = completion["document"]
         direction = document.get("direction") if isinstance(document.get("direction"), str) else None
@@ -514,7 +637,7 @@ def _review_rows(ops, workspace_id, review, detail):
                     owner_reason="not_recorded", due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded",
                     priority=None, priority_reason="not_recorded", next_step=None, next_reason="not_recorded",
                     created=_iso(review.get("created_at")), updated=_iso(completion.get("created_at")), requirements=[],
-                    work_items=[], prs=[], actions=[], steps=[], refs=set(), resolved_at=None, blocking=None)
+                    work_items=[], prs=[], actions=[], steps=[], refs=set(), resolved_at=None, blocking=None, sequence=sequence)
         if row:
             rows.append(row)
         follow_events = {}
@@ -533,14 +656,16 @@ def _review_rows(ops, workspace_id, review, detail):
                 if entry:
                     actions.append(entry)
             resolved = event_at or _iso(completion.get("created_at")) if status in RESOLVED_STATUSES else None
-            follow = _base(kind="follow_up", ident=review_id + "~follow_up~" + item["id"], row_type="action", basis="explicit",
+            related = follow_events.get(item["id"], [])
+            blocking = _event_reason(related, status) or (_recorded_reason(item) if status == "blocked" else None)
+            follow = _base(kind="follow_up", ident=review_id + ".follow_up." + item["id"], row_type="action", basis="explicit",
                            title=item.get("text") if isinstance(item.get("text"), str) else None, title_reason="not_recorded",
                            status=status, status_reason="not_recorded", owner=item.get("owner_actor") if isinstance(item.get("owner_actor"), str) else None,
                            owner_reason="not_recorded", due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded",
                            priority=None, priority_reason="not_recorded", next_step=item.get("expected_effect") if isinstance(item.get("expected_effect"), str) else None,
                            next_reason="not_recorded", created=_iso(completion.get("created_at")), updated=event_at or _iso(completion.get("created_at")),
                            requirements=[], work_items=[], prs=[], actions=actions, steps=[], refs={("meeting", review_id)},
-                           resolved_at=resolved, blocking=None)
+                           resolved_at=resolved, blocking=blocking, sequence=sequence)
             if follow:
                 rows.append(follow)
     for event in events:
@@ -555,54 +680,111 @@ def _review_rows(ops, workspace_id, review, detail):
                           due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
                           priority_reason="not_recorded", next_step=None, next_reason="not_recorded",
                           created=_iso(event.get("created_at")), updated=_iso(event.get("created_at")), requirements=[],
-                          work_items=[], prs=[], actions=[], steps=[], refs={("meeting", review_id)}, resolved_at=None, blocking=None)
+                          work_items=[], prs=[], actions=[], steps=[], refs={("meeting", review_id)}, resolved_at=None,
+                          blocking=None, sequence=event.get("sequence") or sequence)
         if candidate:
             rows.append(candidate)
     return rows, truncated
 
 
-def _expand(stubs, load, cap=DETAIL_CAP):
-    rows, truncated = [], len(stubs) > cap
-    for stub in stubs[:cap]:
+def _expand(stubs, load):
+    """A listed stub that later disappears, or one conflict, marks that source partial."""
+    cap = DETAIL_CAP
+    chosen = list(stubs)
+    truncated, bad = False, False
+    if len(chosen) > cap:
+        chosen = chosen[-cap:]
+        truncated = True
+    rows = []
+    for stub in chosen:
         try:
             found, more = load(stub)
         except OperationError as exc:
             if _hidden(exc):
+                truncated = True
+                continue
+            if _conflict(exc):
+                truncated, bad = True, True
                 continue
             raise
         except sqlite3.OperationalError as exc:
             if _missing(exc):
-                return [], False
+                return [], False, False
             raise
         rows.extend(found)
         truncated = truncated or more
-    return rows, truncated
+    return rows, truncated, bad
+
+
+def _follow_up_cutoff(ops, meeting_id):
+    cap = HISTORY_MEETING
+    if not _table(ops.db, "pm_meeting_follow_up_events"):
+        return 0, False
+    row = ops.db.execute("SELECT sequence FROM pm_meeting_follow_up_events WHERE meeting_id=? "
+                         "ORDER BY sequence DESC LIMIT 1 OFFSET ?", (meeting_id, cap)).fetchone()
+    if row is None:
+        return 0, False
+    return int(row["sequence"]), True
 
 
 def _collect_meetings(ops, principal, workspace_id):
     from .pm_meetings import get_meeting, list_meetings
     if not _table(ops.db, "pm_meetings"):
-        return [], False
-    stubs, truncated = _bounded(lambda after, limit: list_meetings(ops, principal, workspace_id, after=after, limit=limit), "meetings")
+        return [], False, False
+    history = HISTORY_MEETING
+    stubs, truncated, bad = _newest(lambda after, limit: list_meetings(ops, principal, workspace_id, after=after, limit=limit),
+                                    "meetings", DETAIL_CAP)
 
     def load(stub):
-        detail = get_meeting(ops, principal, workspace_id, stub["meeting_id"], history_limit=50)
-        return _meeting_rows(ops, workspace_id, stub, detail)
-    rows, more = _expand(stubs, load)
-    return rows, truncated or more
+        after, older = _follow_up_cutoff(ops, stub["meeting_id"])
+        detail = get_meeting(ops, principal, workspace_id, stub["meeting_id"], history_limit=history, follow_up_after=after)
+        rows, more = _meeting_rows(ops, workspace_id, stub, detail)
+        return rows, more or older
+    found, more, expand_bad = _expand(stubs, load)
+    return found, truncated or more, bad or expand_bad
+
+
+def _review_events(ops, principal, workspace_id, review_id):
+    from .pm_maintenance_review import list_events
+    cap = HISTORY_REVIEW
+    after, kept, truncated, seen = 0, deque(), False, set()
+    while True:
+        try:
+            page = list_events(ops, principal, workspace_id, review_id, after=after, limit=min(100, max(cap, 1)))
+        except OperationError as exc:
+            if _conflict(exc):
+                return list(kept), True, True
+            raise
+        for event in page.get("events") or []:
+            kept.append(event)
+            if len(kept) > cap:
+                kept.popleft()
+                truncated = True
+        cursor = page.get("next_cursor")
+        if cursor is None:
+            return list(kept), truncated, False
+        if cursor == after or cursor in seen:
+            return list(kept), True, False
+        seen.add(cursor)
+        after = cursor
 
 
 def _collect_reviews(ops, principal, workspace_id):
     from .pm_maintenance_review import get_review, list_reviews
     if not _table(ops.db, "pm_maintenance_reviews"):
-        return [], False
-    stubs, truncated = _bounded(lambda after, limit: list_reviews(ops, principal, workspace_id, after=after, limit=limit), "reviews")
+        return [], False, False
+    stubs, truncated, bad = _newest(lambda after, limit: list_reviews(ops, principal, workspace_id, after=after, limit=limit),
+                                    "reviews", DETAIL_CAP)
 
     def load(stub):
-        detail = get_review(ops, principal, workspace_id, stub["review_id"], history_limit=20)
+        events, more, event_bad = _review_events(ops, principal, workspace_id, stub["review_id"])
+        if event_bad:
+            raise OperationError("PM_REGISTER_SOURCE_INCOMPLETE", "A review event is unreadable", 409)
+        detail = get_review(ops, principal, workspace_id, stub["review_id"], history_limit=1)
+        detail = {**detail, "events": events, "next_cursor": 1 if more else None}
         return _review_rows(ops, workspace_id, {**stub, **detail["review"]}, detail)
-    rows, more = _expand(stubs, load)
-    return rows, truncated or more
+    found, more, expand_bad = _expand(stubs, load)
+    return found, truncated or more, bad or expand_bad
 
 
 def _intake_row(ops, workspace_id, intake):
@@ -613,27 +795,31 @@ def _intake_row(ops, workspace_id, intake):
             refs.add(("governance", item["record_id"]))
     for item in document.get("selected_meeting_follow_up_refs") or []:
         if isinstance(item, dict) and isinstance(item.get("meeting_id"), str) and isinstance(item.get("follow_up_id"), str):
-            refs.add(("meeting", item["meeting_id"] + "~follow_up~" + item["follow_up_id"]))
+            refs.add(("meeting", item["meeting_id"] + ".follow_up." + item["follow_up_id"]))
     created = _iso(intake.get("created_at"))
     return _base(kind="follow_up", ident=intake["intake_id"], row_type="action", basis="explicit", title=None,
                  title_reason="not_recorded", status=None, status_reason="not_recorded", owner=None, owner_reason="not_recorded",
                  due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
                  priority_reason="not_recorded", next_step=None, next_reason="not_recorded", created=created, updated=created,
-                 requirements=[], work_items=[], prs=[], actions=[], steps=[], refs=refs, resolved_at=None, blocking=None)
+                 requirements=[], work_items=[], prs=[], actions=[], steps=[], refs=refs, resolved_at=None, blocking=None,
+                 sequence=intake.get("sequence") or 0)
 
 
 def _collect_intakes(ops, principal, workspace_id):
     from .pm_follow_up import get_intake, list_intakes
     if not _table(ops.db, "pm_follow_up_intakes"):
-        return [], False
-    stubs, truncated = _bounded(lambda after, limit: list_intakes(ops, principal, workspace_id, after=after, limit=limit), "intakes")
+        return [], False, False
+    stubs, truncated, bad = _newest(lambda after, limit: list_intakes(ops, principal, workspace_id, after=after, limit=limit),
+                                    "intakes", DETAIL_CAP)
 
     def load(stub):
         intake = get_intake(ops, principal, workspace_id, stub["intake_id"])["intake"]
+        if "sequence" not in intake:
+            intake = {**intake, "sequence": stub.get("sequence") or 0}
         row = _intake_row(ops, workspace_id, intake)
         return ([row] if row else []), False
-    rows, more = _expand(stubs, load)
-    return rows, truncated or more
+    found, more, expand_bad = _expand(stubs, load)
+    return found, truncated or more, bad or expand_bad
 
 
 def _proposal_row(proposal):
@@ -652,21 +838,24 @@ def _proposal_row(proposal):
                  due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
                  priority_reason="not_recorded", next_step=None, next_reason="not_recorded", created=created, updated=created,
                  requirements=requirements, work_items=[], prs=[], actions=[], steps=[], refs=set(),
-                 resolved_at=None, blocking=None)
+                 resolved_at=None, blocking=None, sequence=proposal.get("sequence") or 0)
 
 
 def _collect_proposals(ops, principal, workspace_id):
     from .pm_conversation_proposals import get_proposal, list_proposals
     if not _table(ops.db, "pm_conversation_proposals"):
-        return [], False
-    stubs, truncated = _bounded(lambda after, limit: list_proposals(ops, principal, workspace_id, after=after, limit=limit), "proposals")
+        return [], False, False
+    stubs, truncated, bad = _newest(lambda after, limit: list_proposals(ops, principal, workspace_id, after=after, limit=limit),
+                                    "proposals", DETAIL_CAP)
 
     def load(stub):
         proposal = get_proposal(ops, principal, workspace_id, stub["proposal_id"])["proposal"]
+        if "sequence" not in proposal:
+            proposal = {**proposal, "sequence": stub.get("sequence") or 0}
         row = _proposal_row(proposal)
         return ([row] if row else []), False
-    rows, more = _expand(stubs, load)
-    return rows, truncated or more
+    found, more, expand_bad = _expand(stubs, load)
+    return found, truncated or more, bad or expand_bad
 
 
 def _visible_proposal(ops, principal, workspace_id, operation_id, result):
@@ -682,79 +871,86 @@ def _visible_proposal(ops, principal, workspace_id, operation_id, result):
             if found:
                 candidates.append(found[0])
     from .pm_conversation_proposals import get_proposal
+    bad = False
     for proposal_id in candidates:
         try:
             get_proposal(ops, principal, workspace_id, proposal_id)
         except OperationError as exc:
             if _hidden(exc):
                 continue
+            if _conflict(exc):
+                bad = True
+                continue
             raise
         except sqlite3.OperationalError as exc:
             if _missing(exc):
-                return None
+                return None, False
             raise
-        return proposal_id
-    return None
+        return proposal_id, bad
+    return None, bad
 
 
 def _collect_plans(ops, principal, workspace_id):
     from .pm_plans import get_plan
     if not _table(ops.db, "pm_plan_adoptions"):
-        return [], False
-    rows = ops.db.execute("""SELECT operation_id,revision_id,previous_revision_id,adopted_by,created_at,result
-        FROM pm_plan_adoptions WHERE workspace_id=? ORDER BY created_at,operation_id LIMIT ?""", (workspace_id, MAX_SCAN + 1)).fetchall()
-    truncated = len(rows) > MAX_SCAN
-    grouped = {}
-    for row in rows[:MAX_SCAN]:
-        grouped.setdefault(row["revision_id"], []).append(row)
-    result = []
-    for revision_id, adoptions in list(grouped.items())[:DETAIL_CAP]:
-        if len(grouped) > DETAIL_CAP:
-            truncated = True
+        return [], False, False
+    cap = DETAIL_CAP
+    grouped = ops.db.execute("SELECT revision_id, MIN(rowid) AS sequence FROM pm_plan_adoptions WHERE workspace_id=? "
+                             "GROUP BY revision_id ORDER BY sequence", (workspace_id,)).fetchall()
+    # Walk oldest to newest and keep the tail, so a hidden adoption does not consume the cap.
+    visible, truncated, bad = [], False, False
+    window = deque()
+    for item in grouped:
         try:
-            plan = get_plan(ops, principal, workspace_id, revision_id)["plan"]
+            plan = get_plan(ops, principal, workspace_id, item["revision_id"])["plan"]
         except OperationError as exc:
             if _hidden(exc):
                 continue
-            if exc.status == 409:
-                truncated = True
+            if _conflict(exc):
+                bad = True
                 continue
             raise
         except sqlite3.OperationalError as exc:
             if _missing(exc):
-                return [], False
+                return [], False, False
             raise
+        window.append((item, plan))
+        if len(window) > cap:
+            window.popleft()
+            truncated = True
+    for item, plan in window:
+        adoptions = ops.db.execute("SELECT operation_id,revision_id,adopted_by,created_at,result,rowid FROM pm_plan_adoptions "
+                                   "WHERE workspace_id=? AND revision_id=? ORDER BY rowid", (workspace_id, item["revision_id"])).fetchall()
         document = plan.get("document") if isinstance(plan.get("document"), dict) else {}
         title = document.get("title") if isinstance(document.get("title"), str) else None
-        requirements = [item["id"] for item in document.get("requirements") or [] if isinstance(item, dict) and isinstance(item.get("id"), str)]
-        created = _iso(adoptions[0]["created_at"])
-        updated = _iso(adoptions[-1]["created_at"])
-        refs, steps = set(), []
-        previous = adoptions[-1]["previous_revision_id"]
-        if isinstance(previous, str):
-            refs.add(("plan_revision", previous))
+        requirements = [entry["id"] for entry in document.get("requirements") or [] if isinstance(entry, dict) and isinstance(entry.get("id"), str)]
+        created = _iso(adoptions[0]["created_at"]) if adoptions else None
+        updated = _iso(adoptions[-1]["created_at"]) if adoptions else created
+        refs = set()
         for adoption in adoptions:
             try:
                 saved = json.loads(adoption["result"])
             except (TypeError, ValueError):
                 saved = None
-            proposal_id = _visible_proposal(ops, principal, workspace_id, adoption["operation_id"], saved)
+            proposal_id, proposal_bad = _visible_proposal(ops, principal, workspace_id, adoption["operation_id"], saved)
+            bad = bad or proposal_bad
             if proposal_id:
                 refs.add(("proposal", proposal_id))
-            steps.append({"step": "decision", "at": _iso(adoption["created_at"]), "actor": adoption["adopted_by"],
-                          "title": title, "ref": {"kind": "plan_revision", "id": revision_id}, "status": "adopted"})
-        row = _base(kind="plan_revision", ident=revision_id, row_type="decision", basis="explicit", title=title,
-                    title_reason="not_recorded", status="adopted", status_reason=None, owner=adoptions[-1]["adopted_by"],
+        actor = adoptions[-1]["adopted_by"] if adoptions else None
+        steps = [{"step": "decision", "at": updated, "actor": actor, "title": title,
+                  "ref": {"kind": "plan_revision", "id": item["revision_id"]}, "status": "adopted"}]
+        row = _base(kind="plan_revision", ident=item["revision_id"], row_type="decision", basis="explicit", title=title,
+                    title_reason="not_recorded", status="adopted", status_reason=None, owner=actor,
                     owner_reason="not_recorded", due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded",
                     priority=None, priority_reason="not_recorded", next_step=None, next_reason="not_recorded", created=created,
                     updated=updated, requirements=requirements, work_items=[], prs=[], actions=[], steps=steps, refs=refs,
-                    resolved_at=created, blocking=None)
+                    resolved_at=created, blocking=None, sequence=item["sequence"])
         if row:
-            result.append(row)
-    return result, truncated
+            visible.append(row)
+    return visible, truncated, bad
 
 
-def _mapping_row(ops, workspace_id, current, created_at):
+def _mapping_row(ops, workspace_id, current, created_at, sequence):
     document = current.get("document") if isinstance(current.get("document"), dict) else {}
     selected = document.get("selected") if isinstance(document.get("selected"), dict) else {}
     title = selected.get("public_title") if isinstance(selected.get("public_title"), str) else None
@@ -773,80 +969,129 @@ def _mapping_row(ops, workspace_id, current, created_at):
             actions.append(entry)
     refs = {("work_item", ident) for ident in work}
     updated = _iso(current.get("created_at"))
-    row = _base(kind="issue_mapping", ident=current["mapping_id"], row_type="issue", basis="explicit", title=title,
-                title_reason="not_on_current_revision" if title is None else "not_recorded", status=state,
-                status_reason="not_recorded", owner=None, owner_reason="not_recorded", due=None, due_reason="not_recorded",
-                impact=None, impact_reason="not_recorded", priority=None, priority_reason="not_recorded", next_step=None,
-                next_reason="not_recorded", created=created_at or updated, updated=updated, requirements=requirements,
-                work_items=work, prs=[], actions=actions, steps=[], refs=refs,
-                resolved_at=updated if state in RESOLVED_STATUSES else None, blocking=None)
-    return row
+    return _base(kind="issue_mapping", ident=current["mapping_id"], row_type="issue", basis="explicit", title=title,
+                 title_reason="not_on_current_revision" if title is None else "not_recorded", status=state,
+                 status_reason="not_recorded", owner=None, owner_reason="not_recorded", due=None, due_reason="not_recorded",
+                 impact=None, impact_reason="not_recorded", priority=None, priority_reason="not_recorded", next_step=None,
+                 next_reason="not_recorded", created=created_at or updated, updated=updated, requirements=requirements,
+                 work_items=work, prs=[], actions=actions, steps=[], refs=refs,
+                 resolved_at=updated if state in RESOLVED_STATUSES else None, blocking=None, sequence=sequence)
 
 
 def _collect_mappings(ops, principal, workspace_id):
     from .pm_issue_mappings import list_mappings
     if not _table(ops.db, "pm_issue_revisions"):
-        return [], False
-    currents, truncated = _bounded(lambda after, limit: list_mappings(ops, principal, workspace_id, after=after, limit=limit), "mappings")
+        return [], False, False
+    currents, truncated, bad = _newest(lambda after, limit: list_mappings(ops, principal, workspace_id, after=after, limit=limit),
+                                       "mappings", MAX_SCAN)
     ids = [row["mapping_id"] for row in currents if isinstance(row.get("mapping_id"), str)]
-    created = {}
+    created, sequences = {}, {}
     if ids:
         marks = ",".join("?" for _ in ids)
-        for row in ops.db.execute(f"SELECT mapping_id,MIN(created_at) AS created_at FROM pm_issue_revisions WHERE workspace_id=? AND mapping_id IN ({marks}) GROUP BY mapping_id",  # noqa: S608 - bound placeholders
+        for row in ops.db.execute(f"SELECT mapping_id,MIN(sequence) AS sequence,MIN(created_at) AS created_at FROM pm_issue_revisions WHERE workspace_id=? AND mapping_id IN ({marks}) GROUP BY mapping_id",  # noqa: S608 - bound placeholders
                                   (workspace_id, *ids)):
             created[row["mapping_id"]] = _iso(row["created_at"])
+            sequences[row["mapping_id"]] = row["sequence"]
     rows = []
     for current in currents:
-        row = _mapping_row(ops, workspace_id, current, created.get(current.get("mapping_id")))
+        row = _mapping_row(ops, workspace_id, current, created.get(current.get("mapping_id")), sequences.get(current.get("mapping_id")) or 0)
         if row:
             rows.append(row)
-    return rows, truncated
+    return rows, truncated, bad
 
 
-def _safe(source, fn, rows, notes):
+def _collect_governance(ops, principal, workspace_id):
+    from .pm_governance import list_records
+    if not _table(ops.db, "pm_governance_records"):
+        return [], False, False
+    views, truncated, bad = _newest(lambda after, limit: list_records(ops, principal, workspace_id, after=after, limit=limit),
+                                    "records", MAX_SCAN)
+    return [row for row in (_governance_row(ops, workspace_id, view) for view in views) if row], truncated, bad
+
+
+def _take(source, fn, rows, notes):
     try:
-        found, truncated = fn()
+        found, truncated, bad = fn()
     except sqlite3.OperationalError as exc:
         if _missing(exc):
-            return
+            return False, False
         raise
     except OperationError as exc:
         if _hidden(exc):
-            return
+            return False, False
+        if _conflict(exc):
+            notes.mark(source, bad=True)
+            return True, True
         raise
     rows.extend(row for row in found if row)
-    if truncated:
-        notes.append(source)
+    if truncated or bad:
+        notes.mark(source, bad=bad)
+    return truncated, bad
 
 
 def _collect(ops, principal, workspace_id):
-    rows, notes = [], []
+    rows, notes = [], _Scan()
+    repair_rows = []
+    repair_truncated, repair_bad = _take("repair", lambda: _collect_repairs(ops, principal, workspace_id), repair_rows, notes)
+    reserved = None
+    if not repair_truncated and not repair_bad:
+        reserved = set()
+        for row in repair_rows:
+            finding_id = next((ident for kind, ident in row["_refs"] if kind == "finding"), None)
+            if finding_id:
+                reserved.add(finding_id)
     rules = None
-    reserved = set()
     try:
         rules = _policy_rules(ops, principal, workspace_id)
-        reserved = _reserved_findings(ops, workspace_id)
     except sqlite3.OperationalError as exc:
         if not _missing(exc):
             raise
-    if reserved is None:
-        notes.append("repair")
-        reserved = set()
-        rules = None
-    _safe("governance", lambda: _collect_governance(ops, principal, workspace_id), rows, notes)
-    _safe("finding", lambda: _collect_findings(ops, principal, workspace_id, rules, reserved), rows, notes)
-    _safe("repair", lambda: _collect_repairs(ops, principal, workspace_id), rows, notes)
-    _safe("review", lambda: _collect_reviews(ops, principal, workspace_id), rows, notes)
-    _safe("follow_up", lambda: _collect_intakes(ops, principal, workspace_id), rows, notes)
-    _safe("meeting", lambda: _collect_meetings(ops, principal, workspace_id), rows, notes)
-    _safe("proposal", lambda: _collect_proposals(ops, principal, workspace_id), rows, notes)
-    _safe("plan_revision", lambda: _collect_plans(ops, principal, workspace_id), rows, notes)
-    _safe("issue_mapping", lambda: _collect_mappings(ops, principal, workspace_id), rows, notes)
+    _take("governance", lambda: _collect_governance(ops, principal, workspace_id), rows, notes)
+    _take("finding", lambda: _collect_findings(ops, principal, workspace_id, rules, reserved), rows, notes)
+    if repair_truncated or repair_bad:
+        notes.mark("finding", bad=repair_bad)
+    rows.extend(repair_rows)
+    _take("review", lambda: _collect_reviews(ops, principal, workspace_id), rows, notes)
+    _take("follow_up", lambda: _collect_intakes(ops, principal, workspace_id), rows, notes)
+    _take("meeting", lambda: _collect_meetings(ops, principal, workspace_id), rows, notes)
+    _take("proposal", lambda: _collect_proposals(ops, principal, workspace_id), rows, notes)
+    _take("plan_revision", lambda: _collect_plans(ops, principal, workspace_id), rows, notes)
+    _take("issue_mapping", lambda: _collect_mappings(ops, principal, workspace_id), rows, notes)
     return rows, notes
 
 
 def _public(row):
     return {key: value for key, value in row.items() if not key.startswith("_")}
+
+
+def _lineage(ops):
+    from . import pm_source_lineage as lineage
+    if not lineage.installed(ops.db):
+        return None
+    if ops.db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is None:
+        return None
+    return lineage
+
+
+def _admit(ops, principal, rows, notes):
+    """Drop a hidden row before totals. A row with too many roots is skipped and its source is partial."""
+    lineage = _lineage(ops)
+    if lineage is None:
+        return rows
+    kept = []
+    for row in rows:
+        try:
+            roots = lineage.document_roots(ops.db, _public(row))
+        except OperationError as exc:
+            if _conflict(exc):
+                notes.mark(row["source"]["kind"], bad=True)
+                continue
+            raise
+        if not lineage.visible_roots(ops.db, principal, roots):
+            continue
+        row["_roots"] = roots
+        kept.append(row)
+    return kept
 
 
 def _filter(rows, row_type, status, owner, q):
@@ -864,6 +1109,11 @@ def _filter(rows, row_type, status, owner, q):
     return selected
 
 
+def _relevant(notes, row_type):
+    names = [name for name in notes if row_type is None or row_type in SOURCE_TYPES.get(name, frozenset())]
+    return names, bool(set(names) & set(getattr(notes, "source_incomplete", set())))
+
+
 def _monday(moment):
     day = moment.astimezone(timezone.utc).date()
     return day - timedelta(days=day.weekday())
@@ -879,7 +1129,7 @@ def _age(created, as_of):
         return "0-7d"
     if days < 31:
         return "8-30d"
-    if days < 90:
+    if days < 91:
         return "31-90d"
     return "90d+"
 
@@ -908,61 +1158,295 @@ def _summary(rows, as_of):
             "blocking_reasons": [{"reason": reason, "count": reasons[reason]} for reason in sorted(reasons, key=lambda item: (-reasons[item], item))]}
 
 
-def _coverage(complete, notes, rows, as_of):
-    return {"complete": complete, "partial_reason": None if complete else "incomplete", "sources": notes,
-            "time": "iso8601_utc", "open_statuses": sorted(OPEN_STATUSES), "resolved_statuses": sorted(RESOLVED_STATUSES),
+def _coverage(complete, notes, rows, as_of, *, source_incomplete=False):
+    blocked = None
+    if complete:
+        blocked = sum(1 for row in rows if row.get("status") == "blocked" and not row.get("_blocking_reason"))
+    return {"complete": complete, "partial_reason": None if complete else ("source_incomplete" if source_incomplete else "incomplete"),
+            "sources": list(notes), "time": "iso8601_utc", "open_statuses": sorted(OPEN_STATUSES),
+            "resolved_statuses": sorted(RESOLVED_STATUSES),
             "unclassified_status": None if not complete else sum(1 for row in rows if row["_unclassified"]),
             "unknown_status": None if not complete else sum(1 for row in rows if row["_unknown_status"]),
             "open_without_known_age": None if not complete else sum(1 for row in rows if row["_open"] and _age(_when(row["created_at"]), as_of) is None),
-            "blocking_reasons": "explicit_reason_field_only", "findings": "current_visible_observation",
-            "scan_limit_per_source": MAX_SCAN}
+            "blocked_without_reason": blocked, "blocking_reasons": "recorded_reason_or_follow_up_result",
+            "findings": "current_visible_observation", "scan_limit_per_source": MAX_SCAN}
 
 
 def _page(rows, cursor, limit):
-    ordered = sorted(rows, key=lambda row: row["row_id"])
-    ordered.sort(key=lambda row: row["updated_at"] or "", reverse=True)
+    from .pm_source_lineage import MAX_ROOTS
+    ordered = sorted(rows, key=lambda row: (-int(row.get("_sequence") or 0), row["row_id"]))
     if cursor is not None:
-        stamp, ident = cursor
-        ordered = [row for row in ordered if (row["updated_at"] or "") < stamp or ((row["updated_at"] or "") == stamp and row["row_id"] > ident)]
-    page = ordered[:limit]
-    nxt = None
-    if len(ordered) > limit and page:
-        last = page[-1]
-        nxt = (last["updated_at"] or "") + "~" + last["row_id"]
+        sequence, ident = cursor
+        ordered = [row for row in ordered if int(row.get("_sequence") or 0) < sequence
+                   or (int(row.get("_sequence") or 0) == sequence and row["row_id"] >= ident)]
+    page, seen, excluded = [], set(), None
+    for row in ordered:
+        roots = row.get("_roots") or set()
+        if len(page) >= limit or len(seen | roots) > MAX_ROOTS:
+            excluded = row
+            break
+        seen |= set(roots)
+        page.append(row)
+    nxt = _encode_cursor(int(excluded.get("_sequence") or 0), excluded["row_id"]) if excluded is not None else None
     return page, nxt
 
 
-def _direct(ops, principal, workspace_id, row_id, rows):
-    """Return the row and whether a direct read proved it absent.
+def _self_step(row):
+    return {"step": _SELF_STEP[row["type"]], "at": row["updated_at"] or row["created_at"], "actor": row["owner"],
+            "title": row["title"], "ref": dict(row["source"]), "status": row["status"]}
 
-    Governance and repair can be loaded by id. A 404 from that read is absence,
-    including when another source was truncated. Kinds that only exist inside the
-    bounded scan stay unproved so a partial scan cannot become a false 404.
-    """
+
+def _plan_resolves(ops, principal, workspace_id, revision_id):
+    from .pm_plans import get_plan
+    try:
+        get_plan(ops, principal, workspace_id, revision_id)
+    except OperationError as exc:
+        if _hidden(exc):
+            return False
+        if _conflict(exc):
+            return None
+        raise
+    except sqlite3.OperationalError as exc:
+        if _missing(exc):
+            return False
+        raise
+    return True
+
+
+def _timeline(ops, principal, workspace_id, row, notes):
+    steps, seen = [], set()
+    _add_step(steps, seen, _self_step(row))
+    if row["source"]["kind"] == "governance":
+        for step in row["_steps"]:
+            if step["step"] == "evidence":
+                _add_step(steps, seen, step)
+        try:
+            history, truncated, bad = _governance_history(ops, principal, workspace_id, row["source"]["id"])
+        except OperationError as exc:
+            if _hidden(exc):
+                return None
+            if _conflict(exc):
+                notes.mark("governance", bad=True)
+                history = []
+            else:
+                raise
+        else:
+            if truncated or bad:
+                notes.mark("governance", bad=bad)
+        for step in history:
+            ref = step.get("ref") or {}
+            if ref.get("kind") == "plan_revision" and isinstance(ref.get("id"), str):
+                visible = _plan_resolves(ops, principal, workspace_id, ref["id"])
+                if visible is None:
+                    notes.mark("plan_revision", bad=True)
+                    continue
+                if not visible:
+                    continue
+            _add_step(steps, seen, step)
+        from .pm_governance import get_record
+        for kind, ident in list(row["_refs"]):
+            if kind != "governance":
+                continue
+            try:
+                neighbour = _governance_row(ops, workspace_id, get_record(ops, principal, workspace_id, ident))
+            except OperationError as exc:
+                if _hidden(exc):
+                    continue
+                if _conflict(exc):
+                    notes.mark("governance", bad=True)
+                    continue
+                raise
+            except sqlite3.OperationalError as exc:
+                if _missing(exc):
+                    continue
+                raise
+            if neighbour is not None:
+                _add_step(steps, seen, _self_step(neighbour))
+    else:
+        for step in row["_steps"]:
+            _add_step(steps, seen, step)
+    steps.sort(key=lambda item: (item["at"] or "", STEP_ORDER.get(item["step"], 99), item["title"] or ""))
+    return steps
+
+
+def _bound_timeline(ops, principal, row, steps, notes):
+    lineage = _lineage(ops)
+    if lineage is None:
+        return steps
+    from .pm_source_lineage import MAX_ROOTS
+    roots = lineage.document_roots(ops.db, _public(row))
+    if not lineage.visible_roots(ops.db, principal, roots):
+        return None
+    kept, stopped = [], False
+    for step in steps:
+        try:
+            extra = lineage.document_roots(ops.db, step)
+        except OperationError as exc:
+            if _conflict(exc):
+                notes.mark(row["source"]["kind"], bad=True)
+                stopped = True
+                continue
+            raise
+        if not lineage.visible_roots(ops.db, principal, extra):
+            continue
+        if len(roots | extra) > MAX_ROOTS:
+            notes.mark(row["source"]["kind"])
+            break
+        roots |= extra
+        kept.append(step)
+    if stopped and row["source"]["kind"] not in notes:
+        notes.mark(row["source"]["kind"], bad=True)
+    return kept
+
+
+def _load_shallow(ops, principal, workspace_id, row_id):
+    kind, _, ident = row_id.partition(".")
+    if kind == "governance":
+        from .pm_governance import get_record
+        return _governance_row(ops, workspace_id, get_record(ops, principal, workspace_id, ident))
+    if kind == "repair":
+        from .pm_maintenance_repairs import get_repair
+        return _repair_row(ops, workspace_id, get_repair(ops, principal, workspace_id, ident)["repair"])
+    if kind == "finding":
+        return _finding_by_id(ops, principal, workspace_id, ident)
+    if kind == "meeting":
+        return _meeting_by_id(ops, principal, workspace_id, ident)
+    if kind == "follow_up":
+        return _follow_up_by_id(ops, principal, workspace_id, ident)
+    if kind == "proposal":
+        return _proposal_by_id(ops, principal, workspace_id, ident)
+    if kind == "plan_revision":
+        row = _plan_by_id(ops, principal, workspace_id, ident)
+        return row
+    if kind == "issue_mapping":
+        from .pm_issue_mappings import get_mapping
+        current = get_mapping(ops, principal, workspace_id, ident)["current"]
+        created, sequence = None, 0
+        if _table(ops.db, "pm_issue_revisions"):
+            found = ops.db.execute("SELECT MIN(sequence) AS sequence, MIN(created_at) AS created_at FROM pm_issue_revisions "
+                                   "WHERE workspace_id=? AND mapping_id=?", (workspace_id, ident)).fetchone()
+            if found and found["sequence"] is not None:
+                sequence, created = found["sequence"], _iso(found["created_at"])
+        return _mapping_row(ops, workspace_id, current, created, sequence)
+    return None
+
+
+def _finding_by_id(ops, principal, workspace_id, finding_id):
+    rules = _policy_rules(ops, principal, workspace_id)
+    repairs, truncated, bad = _collect_repairs(ops, principal, workspace_id)
+    reserved = None if truncated or bad else {ident for row in repairs for kind, ident in row["_refs"] if kind == "finding"}
+    if not _table(ops.db, "pm_maintenance_policies"):
+        return None
+    from .pm_maintenance_findings import current_findings
+    from .pm_maintenance_policy import head
+    if head(ops.db, workspace_id)["policy_id"] is None:
+        return None
+    view = current_findings(ops, principal, workspace_id)
+    if view.get("visibility_filtered"):
+        return None
+    policy_id, selected = rules if rules else (None, None)
+    ref = view.get("observation_ref") if isinstance(view.get("observation_ref"), dict) else None
+    for name, source in (view.get("sources") or {}).items():
+        if not isinstance(source, dict) or source.get("status") != "complete":
+            continue
+        for item in source.get("findings") or []:
+            if isinstance(item, dict) and item.get("finding_id") == finding_id:
+                linked = {**ref, "finding_id": finding_id} if ref and isinstance(ref.get("observation_id"), str) and isinstance(ref.get("document_digest"), str) else None
+                return _finding_row(ops, workspace_id, item, name, linked, selected, policy_id, reserved)
+    return None
+
+
+def _meeting_by_id(ops, principal, workspace_id, ident):
+    matched = _MEETING_ITEM.fullmatch(ident)
+    if matched:
+        from .pm_meetings import get_meeting
+        meeting_id = matched.group(1)
+        after, _older = _follow_up_cutoff(ops, meeting_id)
+        detail = get_meeting(ops, principal, workspace_id, meeting_id, history_limit=HISTORY_MEETING, follow_up_after=after)
+        meeting = detail.get("meeting") or {"meeting_id": meeting_id}
+        rows, _ = _meeting_rows(ops, workspace_id, meeting, detail)
+        return next((row for row in rows if row["source"]["id"] == ident), None)
+    if ident.startswith("pmrevw_"):
+        from .pm_maintenance_review import get_review
+        detail = get_review(ops, principal, workspace_id, ident, history_limit=1)
+        rows, _ = _review_rows(ops, workspace_id, detail["review"], {**detail, "events": [], "next_cursor": None})
+        return next((row for row in rows if row["source"]["id"] == ident), None)
+    return None
+
+
+def _follow_up_by_id(ops, principal, workspace_id, ident):
+    matched = _REVIEW_FOLLOW.fullmatch(ident)
+    if matched:
+        from .pm_maintenance_review import get_review
+        review_id = matched.group(1)
+        events, _, _ = _review_events(ops, principal, workspace_id, review_id)
+        detail = get_review(ops, principal, workspace_id, review_id, history_limit=1)
+        rows, _ = _review_rows(ops, workspace_id, detail["review"], {**detail, "events": events, "next_cursor": None})
+        return next((row for row in rows if row["source"]["id"] == ident), None)
+    from .pm_follow_up import get_intake
+    intake = get_intake(ops, principal, workspace_id, ident)["intake"]
+    return _intake_row(ops, workspace_id, intake)
+
+
+def _proposal_by_id(ops, principal, workspace_id, ident):
+    if ident.startswith("pmcp_"):
+        from .pm_conversation_proposals import get_proposal
+        return _proposal_row(get_proposal(ops, principal, workspace_id, ident)["proposal"])
+    if ident.startswith("pmrve_") and _table(ops.db, "pm_maintenance_review_events"):
+        found = ops.db.execute("SELECT review_id FROM pm_maintenance_review_events WHERE event_id=?", (ident,)).fetchone()
+        if found is None:
+            return None
+        from .pm_maintenance_review import get_review
+        events, _, _ = _review_events(ops, principal, workspace_id, found["review_id"])
+        detail = get_review(ops, principal, workspace_id, found["review_id"], history_limit=1)
+        rows, _ = _review_rows(ops, workspace_id, detail["review"], {**detail, "events": events, "next_cursor": None})
+        return next((row for row in rows if row["source"]["id"] == ident), None)
+    return None
+
+
+def _plan_by_id(ops, principal, workspace_id, revision_id):
+    from .pm_plans import get_plan
+    if not _table(ops.db, "pm_plan_adoptions"):
+        return None
+    item = ops.db.execute("SELECT MIN(rowid) AS sequence FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?",
+                          (workspace_id, revision_id)).fetchone()
+    if item is None or item["sequence"] is None:
+        return None
+    plan = get_plan(ops, principal, workspace_id, revision_id)["plan"]
+    adoptions = ops.db.execute("SELECT operation_id,adopted_by,created_at,result FROM pm_plan_adoptions "
+                               "WHERE workspace_id=? AND revision_id=? ORDER BY rowid", (workspace_id, revision_id)).fetchall()
+    document = plan.get("document") if isinstance(plan.get("document"), dict) else {}
+    title = document.get("title") if isinstance(document.get("title"), str) else None
+    requirements = [entry["id"] for entry in document.get("requirements") or [] if isinstance(entry, dict) and isinstance(entry.get("id"), str)]
+    created = _iso(adoptions[0]["created_at"]) if adoptions else None
+    updated = _iso(adoptions[-1]["created_at"]) if adoptions else created
+    actor = adoptions[-1]["adopted_by"] if adoptions else None
+    refs = set()
+    for adoption in adoptions:
+        try:
+            saved = json.loads(adoption["result"])
+        except (TypeError, ValueError):
+            saved = None
+        proposal_id, _bad_proposal = _visible_proposal(ops, principal, workspace_id, adoption["operation_id"], saved)
+        if proposal_id:
+            refs.add(("proposal", proposal_id))
+    steps = [{"step": "decision", "at": updated, "actor": actor, "title": title,
+              "ref": {"kind": "plan_revision", "id": revision_id}, "status": "adopted"}]
+    return _base(kind="plan_revision", ident=revision_id, row_type="decision", basis="explicit", title=title,
+                 title_reason="not_recorded", status="adopted", status_reason=None, owner=actor, owner_reason="not_recorded",
+                 due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
+                 priority_reason="not_recorded", next_step=None, next_reason="not_recorded", created=created, updated=updated,
+                 requirements=requirements, work_items=[], prs=[], actions=[], steps=steps, refs=refs, resolved_at=created,
+                 blocking=None, sequence=item["sequence"])
+
+
+def _direct(ops, principal, workspace_id, row_id, rows):
+    """Load one governance or repair row by id. Other kinds use the same direct load."""
     found = next((row for row in rows if row["row_id"] == row_id), None)
     if found:
         return found, False
-    kind, _, ident = row_id.partition(":")
     try:
-        if kind == "governance":
-            from .pm_governance import get_record
-            row = _governance_row(ops, workspace_id, get_record(ops, principal, workspace_id, ident))
-            return row, row is None
-        if kind == "repair":
-            from .pm_maintenance_repairs import get_repair
-            repair = get_repair(ops, principal, workspace_id, ident)["repair"]
-            found = next((row for row in _collect_repairs(ops, principal, workspace_id)[0] if row["row_id"] == row_id), None)
-            if found:
-                return found, False
-            row = _base(kind="repair", ident=repair["repair_id"], row_type="action", basis="explicit", title=None,
-                        title_reason="not_recorded", status=repair.get("operation_status"), status_reason="not_recorded",
-                        owner=None, owner_reason="not_recorded", due=_iso(repair.get("deadline_at")), due_reason="not_recorded",
-                        impact=None, impact_reason="not_recorded", priority=None, priority_reason="not_recorded",
-                        next_step=None, next_reason="not_recorded", created=_iso(repair.get("created_at")),
-                        updated=_iso(repair.get("finished_at")) or _iso(repair.get("created_at")), requirements=[],
-                        work_items=[repair["work_item_id"]] if isinstance(repair.get("work_item_id"), str) else [],
-                        prs=[], actions=[], steps=[], refs=set(), resolved_at=None, blocking=None)
-            return row, row is None
+        row = _load_shallow(ops, principal, workspace_id, row_id)
     except OperationError as exc:
         if _hidden(exc):
             return None, True
@@ -971,81 +1455,65 @@ def _direct(ops, principal, workspace_id, row_id, rows):
         if _missing(exc):
             return None, True
         raise
-    return None, False
+    return row, row is None
 
 
-def _timeline(rows, selected):
-    index = {(row["source"]["kind"], row["source"]["id"]): row for row in rows}
-    key = (selected["source"]["kind"], selected["source"]["id"])
-    index[key] = selected
-    seen, stack = set(), [key]
-    while stack:
-        current = stack.pop()
-        if current in seen:
-            continue
-        seen.add(current)
-        row = index.get(current)
-        if row is None:
-            continue
-        for ref in row["_refs"]:
-            if ref not in seen:
-                stack.append(ref)
-        for other, candidate in index.items():
-            if current in candidate["_refs"] and other not in seen:
-                stack.append(other)
-    steps = []
-    for current in seen:
-        row = index.get(current)
-        if row is None:
-            continue
-        steps.append({"step": {"risk": "finding", "issue": "finding", "action": "action", "change": "proposal", "decision": "decision"}[row["type"]],
-                      "at": row["updated_at"] or row["created_at"], "actor": row["owner"], "title": row["title"],
-                      "ref": dict(row["source"]), "status": row["status"]})
-        if row["row_id"] != selected["row_id"]:
-            steps.extend(row["_steps"])
-    steps.sort(key=lambda item: (item["at"] or "", STEP_ORDER.get(item["step"], 99), item["title"] or ""))
-    return steps
+def _read(ops):
+    from .pm_release_baselines import _memoized_reads, _snapshot
+    return _snapshot(ops.db), _memoized_reads()
+
+
+def _view(workspace_id, as_of, page, nxt, selected, names, complete, bad):
+    return {"workspace_id": workspace_id, "as_of": as_of.isoformat(timespec="milliseconds"), "rows": [_public(row) for row in page],
+            "next_cursor": nxt, "total_by_type": {name: sum(1 for row in selected if row["type"] == name) for name in TYPES} if complete else None,
+            "summary": _summary(selected, as_of) if complete else None,
+            "coverage": _coverage(complete, names, selected, as_of, source_incomplete=bad)}
 
 
 def list_register(ops, principal, workspace_id, row_type=None, status=None, owner=None, q=None, after=None, limit=50):
     cursor = _params(row_type, status, owner, q, after, limit)
-    _check(workspace_id, principal, ops)
     as_of = datetime.now(timezone.utc)
-    rows, notes = _collect(ops, principal, workspace_id)
-    complete = not notes
-    selected = _filter(rows, row_type, status, owner, q)
-    page, nxt = _page(selected, cursor, limit)
-    coverage = _coverage(complete, notes, selected, as_of)
-    return {"workspace_id": workspace_id, "as_of": as_of.isoformat(timespec="milliseconds"), "rows": [_public(row) for row in page],
-            "next_cursor": nxt, "total_by_type": {name: sum(1 for row in selected if row["type"] == name) for name in TYPES} if complete else None,
-            "summary": _summary(selected, as_of) if complete else None, "coverage": coverage}
+    snapshot, memo = _read(ops)
+    with snapshot, memo:
+        _check(workspace_id, principal, ops)
+        rows, notes = _collect(ops, principal, workspace_id)
+        visible = _admit(ops, principal, rows, notes)
+        selected = _filter(visible, row_type, status, owner, q)
+        names, bad = _relevant(notes, row_type)
+        complete = not names
+        page, nxt = _page(selected, cursor, limit)
+        return _view(workspace_id, as_of, page, nxt, selected, names, complete, bad)
 
 
 def get_register(ops, principal, workspace_id, row_id):
     if not isinstance(row_id, str) or not _ROW_ID.fullmatch(row_id):
         _bad("row_id must name a register source")
-    _check(workspace_id, principal, ops)
     as_of = datetime.now(timezone.utc)
-    rows, notes = _collect(ops, principal, workspace_id)
-    selected, proved_absent = _direct(ops, principal, workspace_id, row_id, rows)
-    if selected is None:
-        if proved_absent or not notes:
-            raise OperationError("NOT_FOUND", "Register row not found", 404)
-        raise OperationError("PM_REGISTER_INCOMPLETE", "The register scan cannot prove this row is absent", 409)
-    extra, history_truncated = [], False
-    if selected["source"]["kind"] == "governance" and "~" not in selected["source"]["id"]:
+    snapshot, memo = _read(ops)
+    with snapshot, memo:
+        _check(workspace_id, principal, ops)
+        notes = _Scan()
         try:
-            extra, history_truncated = _history_steps(ops, principal, workspace_id, selected["source"]["id"])
+            selected = _load_shallow(ops, principal, workspace_id, row_id)
         except OperationError as exc:
-            if not _hidden(exc):
-                raise
-            raise OperationError("NOT_FOUND", "Register row not found", 404) from None
-    steps = _timeline(rows, selected)
-    steps.extend(item for item in selected["_steps"] if not extra or item["step"] not in {"decision", "revision"})
-    steps.extend(extra)
-    steps.sort(key=lambda item: (item["at"] or "", STEP_ORDER.get(item["step"], 99), item["title"] or ""))
-    timeline_complete = not notes and not history_truncated
-    return {"workspace_id": workspace_id, "as_of": as_of.isoformat(timespec="milliseconds"), "row": _public(selected),
-            "timeline": steps, "timeline_coverage": {"complete": timeline_complete, "partial_reason": None if timeline_complete else "incomplete",
-                                                     "sources": notes},
-            "coverage": _coverage(not notes, notes, rows, as_of)}
+            if _hidden(exc):
+                raise OperationError("NOT_FOUND", "Register row not found", 404) from None
+            raise
+        except sqlite3.OperationalError as exc:
+            if _missing(exc):
+                raise OperationError("NOT_FOUND", "Register row not found", 404) from None
+            raise
+        if selected is None:
+            raise OperationError("NOT_FOUND", "Register row not found", 404)
+        steps = _timeline(ops, principal, workspace_id, selected, notes)
+        if steps is None:
+            raise OperationError("NOT_FOUND", "Register row not found", 404)
+        bounded = _bound_timeline(ops, principal, selected, steps, notes)
+        if bounded is None:
+            raise OperationError("NOT_FOUND", "Register row not found", 404)
+        names, bad = _relevant(notes, None)
+        complete = not names
+        reason = None if complete else ("source_incomplete" if bad else "incomplete")
+        return {"workspace_id": workspace_id, "as_of": as_of.isoformat(timespec="milliseconds"), "row": _public(selected),
+                "timeline": bounded, "timeline_coverage": {"complete": complete, "partial_reason": reason, "sources": names},
+                "coverage": _coverage(complete, names, [selected], as_of, source_incomplete=bad)}

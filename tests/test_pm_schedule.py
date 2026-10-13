@@ -1,12 +1,23 @@
 """Recorded project schedule: three time lines, no computed forecast."""
 from __future__ import annotations
 
+import base64
 import json
 import re
 
 import pytest
 
-from bat_agent_connector import mcp_server, pm_plans, pm_reads, pm_schedule, pm_source_lineage, work_items
+from bat_agent_connector import (
+    mcp_server,
+    pm_issue_mappings,
+    pm_package_handoff,
+    pm_plans,
+    pm_reads,
+    pm_runs,
+    pm_schedule,
+    pm_source_lineage,
+    work_items,
+)
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationError
 from tests.test_api_v1 import daemon as api_daemon
@@ -14,7 +25,7 @@ from tests.test_api_v1 import http, token, write_frames
 from tests.test_api_v1 import served as api_served
 from tests.test_pm_api import OTHER, seed
 from tests.test_pm_api import OWNER as API_OWNER
-from tests.test_pm_discussions import CONTRIBUTOR, OUTSIDER, OWNER, READER
+from tests.test_pm_discussions import CONTRIBUTOR, OUTSIDER, OWNER, READER, act, prepared
 from tests.test_pm_evidence import bind_work, item, link, session, source_operation, task
 from tests.test_pm_plans import adopt, adoption, draft, planning
 from tests.test_pm_roadmap import mapped, milestone, revision
@@ -353,7 +364,8 @@ async def test_pages_do_not_overlap_or_pretend_to_be_a_total(ops):
     full = schedule(ops, wid)
     first = check(schedule(ops, wid, limit=1), wid)
     assert first["partial"] is first["truncated"] is True and first["range_scope"] == "returned_page"
-    assert first["next_cursor"] == "milestone:release" and [row["id"] for row in first["rows"]] == ["milestone:release"]
+    assert first["next_cursor"] == pm_schedule._encode_cursor("milestone:release")
+    assert [row["id"] for row in first["rows"]] == ["milestone:release"]
     assert first["unscheduled"] == [] and instant(TASK_AT)[:10] not in json.dumps(first["range"])
     assert "total" not in first
     second = schedule(ops, wid, after=first["next_cursor"], limit=100)
@@ -364,12 +376,12 @@ async def test_pages_do_not_overlap_or_pretend_to_be_a_total(ops):
     with pytest.raises(OperationError, match="INVALID_PARAMS") as bad_limit:
         schedule(ops, wid, limit=101)
     assert bad_limit.value.status == 422
-    with pytest.raises(OperationError, match="after must be a schedule row id"):
+    with pytest.raises(OperationError, match="after must be a schedule cursor"):
         schedule(ops, wid, after="phase:a")
     for value in (True, False, 0, "1"):
         with pytest.raises(OperationError, match="limit must be 1-100"):
             schedule(ops, wid, limit=value)
-    absent = schedule(ops, wid, after="milestone:not-a-real-row")
+    absent = schedule(ops, wid, after=pm_schedule._encode_cursor("milestone:not-a-real-row"))
     assert "milestone:release" in by_id(absent)
     with pytest.raises(OperationError, match="Unknown PM read parameters"):
         pm_reads.read(ops, OWNER, "pm_schedule_get", {"workspace_id": wid, "refresh": True})
@@ -428,7 +440,7 @@ async def test_byte_cap_resumes_after_the_last_returned_row(ops, monkeypatch):
         if body["next_cursor"] is None:
             break
         assert body["partial"] is True and body["truncated"] is True and body["range_scope"] == "returned_page"
-        assert body["next_cursor"] == page[-1]
+        assert body["next_cursor"] == pm_schedule._encode_cursor(page[-1])
         cursor = body["next_cursor"]
     assert seen == expected and pages >= 2
     assert builds["n"] == pages
@@ -613,7 +625,8 @@ async def test_http_rpc_and_mcp_read_the_same_empty_schedule(served, mock, monke
     assert (await http(port, "GET", path + "?limit=1&limit=2", tok=auth))[0] == 422
     assert (await http(port, "GET", path + "?after=phase:a", tok=auth))[0] == 422
     assert (await http(port, "POST", path, tok=auth, body={}))[0] in (404, 405)
-    paged, page = await http(port, "GET", path + "?limit=1&after=milestone:release", tok=auth)
+    cursor = pm_schedule._encode_cursor("milestone:release")
+    paged, page = await http(port, "GET", path + "?limit=1&after=" + cursor, tok=auth)
     assert paged == 200 and page["rows"] == [] and page["unscheduled"] == []
     outsider = await http(port, "GET", path, tok=token(daemon_under_test, OTHER.actor, *OTHER.scopes))
     assert outsider[0] == 404 and "rows" not in outsider[1] and "unscheduled" not in outsider[1]
@@ -638,3 +651,475 @@ async def test_http_rpc_and_mcp_read_the_same_empty_schedule(served, mock, monke
         assert not write_frames(mock)
     finally:
         await fleet.close()
+
+
+def exposed_cursor(body):
+    cursor = body.get("next_cursor") if isinstance(body, dict) else None
+    if not cursor:
+        return ""
+    padded = cursor + "=" * (-len(cursor) % 4)
+    return base64.urlsafe_b64decode(padded.encode()).decode()
+
+
+def barrier(service, principal, params):
+    pm_source_lineage.read_request(service.db, principal, params)
+    result = pm_reads.read(service, principal, "pm_schedule_get", dict(params))
+    return pm_source_lineage.read_response(service.db, principal, result)
+
+
+def walk_ids(service, wid, *, limit=100, principal=OWNER):
+    seen, cursor, pages = [], None, 0
+    while pages < 30:
+        body = check(schedule(service, wid, principal, after=cursor, limit=limit), wid)
+        page = ordered_ids(body)
+        assert page, "an empty page with a cursor would loop"
+        seen.extend(page)
+        pages += 1
+        if body["next_cursor"] is None:
+            return seen, pages
+        assert body["next_cursor"] == pm_schedule._encode_cursor(page[-1])
+        cursor = body["next_cursor"]
+    raise AssertionError("schedule walk did not finish")
+
+
+async def test_hidden_work_is_absent_on_http_rpc_and_mcp(served, mock, monkeypatch):
+    daemon_under_test, port = served
+    # The served daemon admits adoption only with a bound worktree. This read test uses the fixture adopter.
+    production = daemon_under_test.ops.actions.pop("pm.plan.adopt", None)
+    try:
+        target, _plan, work, *_ = await mapped(daemon_under_test.ops)
+    finally:
+        if production is not None:
+            daemon_under_test.ops.actions["pm.plan.adopt"] = production
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    visible = await source_operation(daemon_under_test.ops)
+    await link(daemon_under_test.ops, work, "operation", visible["operation_id"])
+    withdraw(daemon_under_test.ops, "work_item", work_id)
+    direct = check(schedule(daemon_under_test.ops, wid), wid)
+    raw = json.dumps(direct)
+    assert work_id not in raw and work_id not in exposed_cursor(direct)
+    assert visible["operation_id"] not in raw
+    assert direct["coverage"]["visibility_filtered"] is True
+    assert "milestone:release" in by_id(direct)
+    auth = token(daemon_under_test, OWNER.actor, *OWNER.scopes)
+    path = f"/api/v1/pm/workspaces/{wid}/schedule"
+    after = pm_schedule._encode_cursor("work:" + work_id[:-1] + "0")
+    statuses = []
+    for suffix in ("", "?limit=1", "?after=" + after + "&limit=1"):
+        status, body = await http(port, "GET", path + suffix, tok=auth)
+        statuses.append(status)
+        assert status == 200 and work_id not in json.dumps(body) and work_id not in exposed_cursor(body)
+    rpc_default = await daemon_under_test.call_api("pm_schedule_get", {"workspace_id": wid}, OWNER)
+    rpc_after = await daemon_under_test.call_api(
+        "pm_schedule_get", {"workspace_id": wid, "after": after, "limit": 1}, OWNER)
+    assert statuses == [200, 200, 200]
+    assert work_id not in json.dumps(rpc_default) and work_id not in exposed_cursor(rpc_default)
+    assert work_id not in json.dumps(rpc_after) and work_id not in exposed_cursor(rpc_after)
+    assert stable(rpc_default) == stable(direct)
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(daemon_under_test.fleet.config, read_only=True, principal_only=True)
+    try:
+        payload = unpack(await server.call_tool("pm_schedule_get", {"workspace_id": wid}))
+        paged = unpack(await server.call_tool("pm_schedule_get", {"workspace_id": wid, "after": after, "limit": 1}))
+        assert stable(payload) == stable(direct)
+        assert work_id not in json.dumps(paged) and work_id not in exposed_cursor(paged)
+        assert work_id not in exposed_cursor(payload)
+        assert not write_frames(mock)
+    finally:
+        await fleet.close()
+
+
+async def test_hidden_work_cannot_be_recovered_from_status_codes(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    visible = await source_operation(ops)
+    await link(ops, work, "operation", visible["operation_id"])
+    withdraw(ops, "work_item", work_id)
+    seen = set()
+    for probe in (None, pm_schedule._encode_cursor("work:z"), pm_schedule._encode_cursor(f"work:{work_id}")):
+        params = {"workspace_id": wid, "limit": 1}
+        if probe is not None:
+            params["after"] = probe
+        body = barrier(ops, OWNER, params)
+        seen.add(200)
+        assert work_id not in json.dumps(body)
+    assert seen == {200}
+
+
+async def plan_with(ops, values, requirements):
+    target = await prepared(ops)
+    ids = []
+    for index, value in enumerate(values):
+        made = await act(ops, target, "pm.input.record", {"slot": "scope", "value": value, "status": "user_confirmed",
+                                                          "source_ref": {"kind": "statement", "ref": f"statement {index}"}})
+        ids.append(made["input_id"])
+    await act(ops, target, "pm.thread.plan", {"selected_input_ids": ids, "rationale": "Plan these"})
+    entries = [{**{key: value for key, value in entry.items() if key != "source"}, "source_input_id": ids[entry["source"]]}
+               for entry in requirements]
+    saved = await draft(ops, target, requirements=entries)
+    adopt(adoption(ops, target, saved["revision_id"]))
+    return target, saved
+
+
+def rewrite_requirement(service, revision_id, requirement_id, text):
+    """Blank one stored requirement. Plan rows are immutable, so the trigger is lifted for this rewrite only."""
+    document = json.loads(service.db.execute(
+        "SELECT document FROM pm_plan_revisions WHERE revision_id=?", (revision_id,)).fetchone()[0])
+    for requirement in document["requirements"]:
+        if requirement["id"] == requirement_id:
+            requirement["text"] = text
+    raw = json.dumps(document)
+    digest = pm_plans._files(revision_id, json.loads(raw))["document_digest"]
+    service.db.execute("DROP TRIGGER IF EXISTS pm_plan_revisions_update_immutable")
+    service.db.execute("UPDATE pm_plan_revisions SET document=?, document_digest=? WHERE revision_id=?",
+                       (raw, digest, revision_id))
+    service.db.execute("CREATE TRIGGER pm_plan_revisions_update_immutable BEFORE UPDATE ON pm_plan_revisions "
+                       "BEGIN SELECT RAISE(ABORT, 'PM plan history is immutable'); END")
+
+
+@pytest.mark.parametrize("text", ["Members can log in\nwith email and password", "/login redirects members home",
+                                  "Members\tcan log in"])
+async def test_requirement_text_is_kept_and_edges_name_emitted_rows(ops, text):
+    target, saved = await plan_with(ops, [text, "Billing works"], [
+        {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
+    wid, rev = target["workspace_id"], saved["revision_id"]
+    work = await work_for(ops, target)
+    await bind_work(ops, work, plan_revision_id=rev, requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone({"revision_id": rev}, requirement_ids=["login", "billing"])])
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    login, billing = f"requirement:{rev}:login", f"requirement:{rev}:billing"
+    assert found[login]["title"] == text
+    assert found[billing]["depends_on"] == [login]
+    assert login in found and found[f"work:{work['work_item_id']}"]["parent_id"] == login
+    assert ("requirement", "requirement_text_unavailable") not in reasons(body)
+    assert body["partial"] is False and body["range_scope"] == "complete"
+
+
+async def test_missing_requirement_text_still_emits_the_row(ops):
+    target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
+        {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
+    wid, rev = target["workspace_id"], saved["revision_id"]
+    rewrite_requirement(ops, rev, "login", " \n\t ")
+    work = await work_for(ops, target)
+    await bind_work(ops, work, plan_revision_id=rev, requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone({"revision_id": rev}, requirement_ids=["login", "billing"])])
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    login = f"requirement:{rev}:login"
+    assert found[login]["title"] == "login"
+    assert found[f"requirement:{rev}:billing"]["depends_on"] == [login]
+    assert found[f"work:{work['work_item_id']}"]["parent_id"] == login
+    assert ("requirement", "requirement_text_unavailable") in reasons(body)
+    assert body["partial"] is False and body["range_scope"] == "complete"
+
+
+async def test_lineage_root_budget_pages_before_64_roots(ops, monkeypatch):
+    monkeypatch.setattr(pm_package_handoff, "source_visible", lambda db, principal, op: True)
+    target, plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    second = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Second deliverable")}
+    await bind_work(ops, second, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    pm_source_lineage.schema(ops.journal)
+    for owner in (work, second):
+        for _ in range(35):
+            operation = await source_operation(ops, action="fixture.root")
+            ops.db.execute("INSERT INTO pm_source_lineage VALUES('operation',?,?,?)",
+                           (operation["operation_id"], operation["operation_id"], operation["operation_id"]))
+            attach(ops, owner["work_item_id"], "operation", operation["operation_id"])
+    seen, pages = walk_ids(ops, wid, limit=100)
+    assert pages >= 2
+    assert len([row_id for row_id in seen if row_id.startswith("attempt:")]) == 70
+    assert seen == walk_ids(ops, wid, limit=50)[0]
+    assert barrier(ops, OWNER, {"workspace_id": wid})["next_cursor"]
+
+
+async def test_links_to_missing_records_make_the_work_unknown(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    missing = "op_" + "ab" * 16
+    attach(ops, work_id, "operation", missing)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"work:{work_id}"]
+    assert row["status"] == "unknown" and "actual" not in row
+    assert body["coverage"]["attempts_unavailable"] is True
+    assert missing not in json.dumps(body)
+    assert ("attempt.operation", "operation_record_missing") in reasons(body)
+
+
+def issue_row(mapping_id, state, selected, relation, issue):
+    return {"mapping_id": mapping_id, "document": {
+        "state": state, "issue": issue, "selected": selected, "relation": relation}}
+
+
+def insert_revision(service, wid, mapping_id, work_id, document, revision_id, operation_id):
+    service.db.execute("""INSERT INTO pm_issue_revisions(revision_id,mapping_id,workspace_id,work_item_id,
+        previous_revision_id,document,document_digest,operation_id,created_at,actor)
+        VALUES(?,?,?,?,NULL,?,?,?,?,?)""",
+        (revision_id, mapping_id, wid, work_id, json.dumps(document), "d" * 64, operation_id, 1.0, OWNER.actor))
+
+
+async def test_issue_rows_keep_titles_cancelled_state_and_plan_revision(ops, monkeypatch):
+    target, plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pm_issue_mappings.schema(ops.journal)
+    issue = {"id": 1, "number": 7, "repository": "o/r", "repository_id": 1}
+    relation = {"work_item_id": work["work_item_id"], "binding_id": binding["binding_id"],
+                "requirement_ids": ["login"], "repository_id": 1, "repository": "o/r"}
+    other = "pmwb_" + "a" * 32
+    ops.db.execute("""INSERT INTO pm_work_bindings(binding_id,workspace_id,work_item_id,project_binding_id,project_id,
+        work_version,previous_binding_id,plan_revision_id,requirement_ids,rationale,actor,created_at,operation_id)
+        SELECT ?,workspace_id,work_item_id,project_binding_id,project_id,work_version,NULL,?,requirement_ids,rationale,
+        actor,created_at,? FROM pm_work_bindings WHERE binding_id=?""",
+        (other, "pmrev_" + "b" * 32, "op_" + "ab" * 16, binding["binding_id"]))
+    cancelled_id, slash_id, foreign_id = "pmim_" + "d" * 32, "pmim_" + "e" * 32, "pmim_" + "f" * 32
+    insert_revision(ops, wid, cancelled_id, work["work_item_id"],
+                    {"selected": {"public_title": "Login fell over\nagain"}}, "pmir_" + "1" * 32, "op_" + "11" * 16)
+    foreign = {**relation, "binding_id": other}
+    mappings = [
+        issue_row(cancelled_id, "cancelled", {"rationale": "Stop tracking"}, relation, issue),
+        issue_row(slash_id, "tracking", {"public_title": "/login returns 500", "public_body": "x"}, relation, issue),
+        issue_row(foreign_id, "tracking", {"public_title": "Other plan"}, foreign, issue),
+    ]
+    monkeypatch.setattr(pm_issue_mappings, "list_mappings",
+                        lambda ops, principal, workspace_id, *, after=0, limit=50: {
+                            "mappings": mappings, "next_cursor": None,
+                            "coverage": {"visibility_filtered": False, "has_more": False}})
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert found[f"issue:{cancelled_id}"]["title"] == "Login fell over\nagain"
+    assert found[f"issue:{cancelled_id}"]["refs"]["tracking_state"] == "cancelled"
+    assert found[f"issue:{cancelled_id}"]["parent_id"] == "milestone:release"
+    assert found[f"issue:{slash_id}"]["title"] == "/login returns 500"
+    assert found[f"issue:{foreign_id}"]["parent_id"] is None
+    withdraw(ops, "work_item", work["work_item_id"])
+    hidden = check(schedule(ops, wid), wid)
+    assert work["work_item_id"] not in json.dumps(hidden)
+    assert hidden["coverage"]["visibility_filtered"] is True
+    assert not any(node["kind"] == "issue" for node in nodes(hidden))
+
+
+async def test_schedule_cursor_round_trips_any_session_id(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "mock@session")
+    await link(ops, work, "session", ref)
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    seen, pages = walk_ids(ops, wid, limit=4)
+    assert pages >= 2
+    assert any("mock@session" in row_id for row_id in seen)
+    first = schedule(ops, wid, limit=4)
+    cursor = first["next_cursor"]
+    assert cursor and all(char not in cursor for char in "+/=")
+    resumed = schedule(ops, wid, after=cursor)
+    assert ordered_ids(first) + ordered_ids(resumed) == seen
+
+
+async def test_hidden_run_does_not_change_the_visible_run(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    visible_run, hidden_op = "pmr_" + "1" * 32, "op_" + "2" * 32
+
+    def run_row(generation, run, operation, binding):
+        ops.db.execute("""INSERT INTO pm_runs(run_id,operation_id,workspace_id,thread_id,generation,requester,
+            request_authority,execution_authority,adapter,purpose,thread_version,context,context_digest,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (run, operation, wid, thread, generation, OWNER.actor, "{}", "{}", "fixture", "analysis", 1, "{}", "0" * 64, 1.0))
+        ops.db.execute("INSERT INTO pm_run_state(run_id,status,session_binding,gaps,updated_at) VALUES(?,?,?,?,?)",
+                       (run, "running", json.dumps(binding) if binding else None, "[]", 1.0))
+
+    run_row(1, visible_run, "op_" + "1" * 32, {"host": "mock-host", "session_id": "run-session"})
+    run_row(2, "pmr_" + "2" * 32, hidden_op, {"host": "mock-host", "session_id": "run-session"})
+    withdraw(ops, "operation", hidden_op)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]
+    assert row["refs"]["run_id"] == visible_run
+    assert ("attempt.run_id", "multiple_explicit_runs") not in reasons(body)
+    assert body["coverage"]["visibility_filtered"] is True
+    for generation in range(3, 203):
+        run_row(generation, f"pmr_{generation:032x}", f"op_{generation:032x}", None)
+    again = by_id(schedule(ops, wid))[f"attempt:session:{work['work_item_id']}:{ref}"]
+    assert again["refs"]["run_id"] == visible_run
+    assert ("attempt.run_id", "run_index_truncated") not in reasons(schedule(ops, wid))
+
+
+async def test_a_lineage_error_hides_one_session_or_task_and_keeps_the_page(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "busy-session")
+    await link(ops, work, "session", ref)
+    pm_source_lineage.schema(ops.journal)
+    for index in range(65):
+        original = "op_" + f"{index:032x}"
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('session',?,?,?)", (ref, original, original))
+    body = check(schedule(ops, wid), wid)
+    assert ref not in json.dumps(body) and body["coverage"]["visibility_filtered"] is True
+    operation = await source_operation(ops, action="fixture.many")
+    await link(ops, work, "operation", operation["operation_id"])
+    for index in range(65):
+        original = "op_" + f"{index + 100:032x}"
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('operation',?,?,?)",
+                       (operation["operation_id"], original, original))
+    hidden = check(schedule(ops, wid), wid)
+    assert operation["operation_id"] not in json.dumps(hidden)
+    assert hidden["coverage"]["visibility_filtered"] is True
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    ops.db.execute("UPDATE tasks SET host=?, session_id=? WHERE task_id=?", ("mock-host", "task-session", source["task_id"]))
+    session(ops, "task-session")
+    withdraw(ops, "session", "mock-host/task-session")
+    gone = check(schedule(ops, wid), wid)
+    assert source["task_id"] not in json.dumps(gone) and "task-session" not in json.dumps(gone)
+
+
+async def test_scope_filter_runs_before_the_binding_cap(ops, monkeypatch):
+    target, plan, *_ = await accepted(ops)
+    wid = target["workspace_id"]
+    older = await work_for(ops, target)
+    pid = work_items._get_item(ops.db, older["work_item_id"])["project_id"]
+    newer = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Newer scheduled deliverable")}
+    binding = await bind_work(ops, newer, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone(plan, work_binding_ids=[binding["binding_id"]])])
+    monkeypatch.setattr(pm_schedule, "MAX_WORK", 1)
+    body = check(schedule(ops, wid), wid)
+    assert f"work:{newer['work_item_id']}" in by_id(body)
+    assert f"work:{older['work_item_id']}" not in by_id(body)
+
+
+async def test_verifying_task_has_no_waiting_object(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    ops.db.execute("UPDATE tasks SET state='verifying', verifying_started_at=? WHERE task_id=?",
+                   (1700000000, source["task_id"]))
+    row = by_id(schedule(ops, target["workspace_id"]))[f"attempt:task:{work['work_item_id']}:{source['task_id']}"]
+    assert row["status"] == "in_review" and row["waiting"] is None
+
+
+async def test_waiting_since_uses_the_latest_state_event(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    ops.db.execute("UPDATE tasks SET state='needs_ted' WHERE task_id=?", (source["task_id"],))
+    ops.db.execute("INSERT INTO events(task_id,kind,body,created_at) VALUES(?,?,?,?)",
+                   (source["task_id"], "state", json.dumps({"from": "running", "to": "queued"}), 1600000000.0))
+    ops.db.execute("INSERT INTO events(task_id,kind,body,created_at) VALUES(?,?,?,?)",
+                   (source["task_id"], "state", json.dumps({"from": "running", "to": "needs_ted"}), 1700000000.0))
+    body = check(schedule(ops, wid), wid)
+    task_row = by_id(body)[f"attempt:task:{work_id}:{source['task_id']}"]
+    assert task_row["waiting"] == {"reason": "human", "since": instant(1700000000)}
+    assert ("waiting.since", "state_time_unrecorded") not in reasons(body)
+    operation = await source_operation(ops, action="fixture.wait")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='waiting_external' WHERE operation_id=?", (operation["operation_id"],))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.waiting_external',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "running", "to": "waiting_external"}), OWNER.actor, 1700000000.0))
+    waited = check(schedule(ops, wid), wid)
+    op_row = by_id(waited)[f"attempt:operation:{work_id}:{operation['operation_id']}"]
+    assert op_row["waiting"]["since"] == instant(1700000000)
+    mark_waiting(ops, work_id, WAITING_AT)
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('work_item',?,'work_item.state',?,?,?)""",
+        (work_id, json.dumps({"from": "waiting", "to": "doing"}), OWNER.actor, WAITING_AT + 10))
+    stale = check(schedule(ops, wid), wid)
+    assert by_id(stale)[f"work:{work_id}"]["waiting"]["since"] is None
+    assert ("waiting.since", "state_time_unrecorded") in reasons(stale)
+
+
+async def test_finished_attempt_note_requires_a_terminal_end(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    ref = session(ops, "pending-session")
+    await link(ops, work, "session", ref)
+    ops.db.execute("DELETE FROM sessions_observed WHERE session_id='pending-session'")
+    body = check(schedule(ops, wid), wid)
+    assert ("work.status", "attempt_finished_is_not_work_completion") not in reasons(body)
+    operation = await source_operation(ops, action="fixture.done")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='succeeded', created_at=? WHERE operation_id=?", (EARLY_AT, operation["operation_id"]))
+    seq = ops.db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM operation_steps WHERE operation_id=?",
+                         (operation["operation_id"],)).fetchone()[0]
+    ops.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,response,started_at,finished_at)
+        VALUES(?,?, 'settle','succeeded','{}','{}',?,?)""", (operation["operation_id"], seq, EARLY_AT, LATE_AT))
+    finished = check(schedule(ops, wid), wid)
+    assert ("work.status", "attempt_finished_is_not_work_completion") in reasons(finished)
+    assert by_id(finished)[f"work:{work_id}"]["status"] == "unknown"
+
+
+async def test_failed_operation_ends_at_its_terminal_step(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    operation = await source_operation(ops, action="fixture.fail")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='failed', created_at=? WHERE operation_id=?", (EARLY_AT, operation["operation_id"]))
+    ops.db.execute("DELETE FROM operation_steps WHERE operation_id=?", (operation["operation_id"],))
+    ops.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,response,started_at,finished_at)
+        VALUES(?,1,'work','succeeded','{}','{}',?,?),(?,2,'give-up','failed','{}',NULL,?,?)""",
+        (operation["operation_id"], EARLY_AT, 2000, operation["operation_id"], 2000, LATE_AT))
+    row = by_id(schedule(ops, wid))[f"attempt:operation:{work_id}:{operation['operation_id']}"]
+    assert row["actual"]["end"] == instant(LATE_AT)
+    assert row["actual"]["start"] == instant(EARLY_AT)
+
+
+async def test_work_end_before_start_is_cleared(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    ops.db.execute("UPDATE tasks SET submitted_at=? WHERE task_id=?", (LATE_AT, source["task_id"]))
+    approve(ops, work_id, EARLY_AT)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"work:{work_id}"]
+    assert row["status"] == "accepted"
+    assert row["actual"]["start"] == instant(LATE_AT) and row["actual"]["end"] is None
+    assert ("work.actual", "inconsistent_dates") in reasons(body)
+
+
+async def test_one_row_over_the_byte_cap_is_413_and_multibyte_pages_have_no_gaps(ops, monkeypatch):
+    target, plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    for index in range(4):
+        extra = {"workspace_id": wid, "work_item_id": await item(ops, pid, title=f"會員登入🚀{index} " * 4)}
+        await bind_work(ops, extra, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    body = check(schedule(ops, wid), wid)
+    expected = ordered_ids(body)
+    first = by_id(body)[expected[0]]
+    row_size = len(json.dumps(first, ensure_ascii=False).encode())
+    monkeypatch.setattr(pm_schedule, "MAX_BYTES", row_size - 1)
+    assert row_size > pm_schedule.MAX_BYTES
+    with pytest.raises(OperationError, match="PM_SCHEDULE_TOO_LARGE") as too_big:
+        schedule(ops, wid)
+    assert too_big.value.status == 413
+    full_size = len(json.dumps(body, ensure_ascii=False).encode())
+    monkeypatch.setattr(pm_schedule, "MAX_BYTES", full_size - 1)
+    seen, pages = walk_ids(ops, wid, limit=3)
+    assert pages >= 2 and seen == expected
+    cursor = None
+    while True:
+        page = schedule(ops, wid, after=cursor, limit=3)
+        assert len(json.dumps(page, ensure_ascii=False).encode()) <= pm_schedule.MAX_BYTES
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+
+
+async def test_schedule_read_uses_a_deferred_snapshot(ops):
+    target, *_ = await mapped(ops)
+    statements = []
+    ops.db.set_trace_callback(statements.append)
+    try:
+        schedule(ops, target["workspace_id"])
+    finally:
+        ops.db.set_trace_callback(None)
+    assert not any(line.startswith("BEGIN IMMEDIATE") for line in statements)
+    assert any(line == "BEGIN" or line.startswith("BEGIN DEFERRED") for line in statements)
