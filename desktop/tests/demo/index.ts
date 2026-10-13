@@ -13,6 +13,7 @@ import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
 import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
 import {dependencyDocument, dependencyImpact, dependencyRevisions} from './dependencies.ts';
+import {globalRoutes} from './global.ts';
 
 export interface DemoRequest {
   method?: string;
@@ -137,6 +138,8 @@ export function demoFixture({locale, now, discussions = false}: {locale?: string
       if (path !== root && !path.startsWith(`${root}/`)) return notFound();
       return workspaceRoutes(project, url, path.slice(root.length));
     }
+    const global = globalRoutes(project, url);
+    if (global) return global.status === 200 ? ok(global.data) : global;
     if (path === '/work-items') return ok(workItems(project, url));
     const messages = path.match(/^\/sessions\/([^/]+)\/([^/]+)\/messages$/);
     if (messages) {

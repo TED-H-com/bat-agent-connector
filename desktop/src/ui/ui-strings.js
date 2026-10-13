@@ -58,6 +58,13 @@ for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(stat
 
 // Shared projection reasons. New server codes stay readable without leaking into body copy.
 export const reasonLabels = Object.freeze({
+  host_unreachable: ['Host unreachable', '主機連不上'],
+  host_not_refreshed: ['Not refreshed', '很久沒更新'],
+  not_enumerated: ['Missing from listing', '上次列舉沒有出現'],
+  gone: ['Gone', '已不存在'],
+  never_observed: ['Not observed yet', '尚未觀測'],
+  SOURCE_MOVED: ['Source moved', '來源已移動'],
+  SOURCE_UNAVAILABLE: ['Source unavailable', '來源無法取得'],
   invalid_proposal: ['Invalid proposal', '提案無效'],
   content_changed: ['Discussion changed', '討論內容已變更'],
   plan_head_changed: ['Plan changed', '計畫已變更'],

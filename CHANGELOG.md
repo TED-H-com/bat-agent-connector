@@ -955,6 +955,11 @@
   composer, and proposal adoption follows the central adoptability state while preserving drafts and
   original-key recovery.
 
+- Global screens (Pending, Operations, Delivery, Settings, first run, Projects) share the page header,
+  inbox groups, an operations table with an inspector, and settings sections. Pending uses one segmented
+  switch and one list per group, browser Settings shows one section at a time, and rail rows show a status
+  mark instead of a status word.
+
 ## 0.2.4 (unreleased)
 
 - Turn markers: `session_send` and `session_relay` return `turn_marker` / `after_ms` (the host-side id and

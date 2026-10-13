@@ -477,6 +477,13 @@ var uiStrings = {
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
 var reasonLabels = Object.freeze({
+	host_unreachable: ["Host unreachable", "主機連不上"],
+	host_not_refreshed: ["Not refreshed", "很久沒更新"],
+	not_enumerated: ["Missing from listing", "上次列舉沒有出現"],
+	gone: ["Gone", "已不存在"],
+	never_observed: ["Not observed yet", "尚未觀測"],
+	SOURCE_MOVED: ["Source moved", "來源已移動"],
+	SOURCE_UNAVAILABLE: ["Source unavailable", "來源無法取得"],
 	invalid_proposal: ["Invalid proposal", "提案無效"],
 	content_changed: ["Discussion changed", "討論內容已變更"],
 	plan_head_changed: ["Plan changed", "計畫已變更"],
@@ -586,6 +593,170 @@ for (const [reason, labels] of Object.entries(reasonLabels)) {
 function reasonLabel(t, reason) {
 	return t("ui_reason_" + (Object.hasOwn(reasonLabels, reason) ? reason : "unavailable"));
 }
+//#endregion
+//#region src/global-strings.js
+var globalStrings = {
+	en: {
+		global_product: "BAT Dashboard",
+		global_first_sentence: "Connect this dashboard to your Connector.",
+		global_setup_guide: "Setup guide",
+		global_view_all: "View all",
+		global_fleet_empty: "Fleet not set up",
+		global_access: "Access",
+		global_refresh: "Refresh",
+		global_details: "Details",
+		global_details_for: "Details for {title}",
+		global_shown: "{count} shown",
+		global_answer: "Answer",
+		global_review: "Review",
+		global_open: "Open",
+		global_approvals: "Approvals",
+		global_no_event: "No event yet",
+		global_endpoint: "Endpoint",
+		global_state: "State",
+		global_last_event: "Last event",
+		global_settings_nav: "Settings sections",
+		global_nav_connection: "Connection",
+		global_nav_desktop: "Desktop",
+		global_nav_models: "Models",
+		global_nav_fleet: "Fleet",
+		global_nav_updates: "Updates",
+		global_nav_about: "About",
+		global_search_operations: "Search operations",
+		global_ops_filter: "Operation filter",
+		global_no_match: "No matches on this page",
+		global_col_action: "Action",
+		global_col_target: "Target",
+		global_col_status: "Status",
+		global_col_duration: "Duration",
+		global_action_id: "Action ID",
+		global_operation_id: "Operation ID",
+		global_code: "Code",
+		global_refs: "References",
+		global_result: "Result",
+		global_duration_s: "{n}s",
+		global_duration_m: "{n}m {s}s",
+		global_duration_m_only: "{n}m",
+		action_unknown: "Operation",
+		action_checkpoint_continue: "Continue from checkpoint",
+		action_checkpoint_revalidate: "Revalidate checkpoint source",
+		action_artifact_upload: "Upload artifact",
+		action_artifact_capture: "Capture artifact",
+		action_artifact_accept: "Accept artifact",
+		action_session_start: "Start session",
+		action_session_send: "Send to session",
+		action_session_answer: "Answer session",
+		action_session_permissions: "Set session permissions",
+		action_session_approve: "Approve pending sessions",
+		action_repository_continue: "Continue from published version",
+		action_github_merge: "Merge pull request",
+		action_delivery_merge: "Merge and deploy",
+		action_deployment_start: "Start deployment",
+		action_cleanup_apply: "Apply cleanup",
+		action_task_pause: "Pause dispatch",
+		action_task_resume: "Resume dispatch",
+		action_task_verify: "Verify task",
+		action_worktree_merge: "Merge worktree",
+		action_integration_apply: "Apply integration",
+		action_integration_handoff: "Hand off integration",
+		action_project_create: "Create project",
+		action_project_update: "Update project",
+		action_project_order: "Reorder projects",
+		action_project_pin: "Pin project",
+		action_work_item_create: "Create work item",
+		action_work_item_update: "Update work item",
+		action_work_item_link: "Link work item",
+		action_work_item_read: "Mark work item read",
+		action_setup_host: "Set up host",
+		action_setup_repository: "Set up repository",
+		action_setup_verification: "Set up verification",
+		action_models_update: "Update model preferences",
+		rail_needs_you: "Needs you",
+		rail_asking: "Asking you",
+		rail_failed: "Failed",
+		rail_running: "Running"
+	},
+	"zh-TW": {
+		global_product: "BAT Dashboard",
+		global_first_sentence: "將這個儀表板連到你的 Connector。",
+		global_setup_guide: "設定說明",
+		global_view_all: "查看全部",
+		global_fleet_empty: "尚未設定機群",
+		global_access: "存取",
+		global_refresh: "重新整理",
+		global_details: "詳細資料",
+		global_details_for: "{title}的詳細資料",
+		global_shown: "顯示 {count} 筆",
+		global_answer: "回答",
+		global_review: "查看",
+		global_open: "開啟",
+		global_approvals: "核准",
+		global_no_event: "尚無事件",
+		global_endpoint: "位址",
+		global_state: "狀態",
+		global_last_event: "最近事件",
+		global_settings_nav: "設定分類",
+		global_nav_connection: "連線",
+		global_nav_desktop: "桌面",
+		global_nav_models: "模型",
+		global_nav_fleet: "機群",
+		global_nav_updates: "更新",
+		global_nav_about: "關於",
+		global_search_operations: "搜尋操作",
+		global_ops_filter: "操作篩選",
+		global_no_match: "這一頁沒有相符項目",
+		global_col_action: "動作",
+		global_col_target: "對象",
+		global_col_status: "狀態",
+		global_col_duration: "耗時",
+		global_action_id: "動作 ID",
+		global_operation_id: "操作 ID",
+		global_code: "代碼",
+		global_refs: "參照",
+		global_result: "結果",
+		global_duration_s: "{n} 秒",
+		global_duration_m: "{n} 分 {s} 秒",
+		global_duration_m_only: "{n} 分",
+		action_unknown: "操作",
+		action_checkpoint_continue: "從檢查點繼續",
+		action_checkpoint_revalidate: "重新驗證檢查點來源",
+		action_artifact_upload: "上傳成果",
+		action_artifact_capture: "擷取成果",
+		action_artifact_accept: "接受成果",
+		action_session_start: "開始工作階段",
+		action_session_send: "傳送到工作階段",
+		action_session_answer: "回答工作階段",
+		action_session_permissions: "設定工作階段權限",
+		action_session_approve: "核准待處理的工作階段",
+		action_repository_continue: "從已發布版本繼續",
+		action_github_merge: "合併拉取請求",
+		action_delivery_merge: "合併並部署",
+		action_deployment_start: "開始部署",
+		action_cleanup_apply: "套用清理",
+		action_task_pause: "暫停派工",
+		action_task_resume: "恢復派工",
+		action_task_verify: "驗證任務",
+		action_worktree_merge: "合併工作樹",
+		action_integration_apply: "套用整合",
+		action_integration_handoff: "交接整合",
+		action_project_create: "建立專案",
+		action_project_update: "更新專案",
+		action_project_order: "調整專案順序",
+		action_project_pin: "固定專案",
+		action_work_item_create: "建立工作項目",
+		action_work_item_update: "更新工作項目",
+		action_work_item_link: "連結工作項目",
+		action_work_item_read: "標記工作項目已讀",
+		action_setup_host: "設定主機",
+		action_setup_repository: "設定儲存庫",
+		action_setup_verification: "設定驗證",
+		action_models_update: "更新模型偏好",
+		rail_needs_you: "需要你",
+		rail_asking: "正在詢問",
+		rail_failed: "失敗",
+		rail_running: "執行中"
+	}
+};
 //#endregion
 //#region src/pm-ahp-observer-strings.js
 var ahpObserverStrings = {
@@ -5904,6 +6075,7 @@ var STRINGS = {
 		...uiStrings["zh-TW"],
 		...overviewStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
+		...globalStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
@@ -6005,7 +6177,7 @@ var STRINGS = {
 		managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 		delivery_list_prs: "瀏覽 Pull Requests",
 		delivery_no_prs: "找不到 PR。",
-		delivery_refresh_prs: "重新整理",
+		delivery_refresh_prs: "重新整理這一頁的 PR",
 		delivery_search_prs: "搜尋這一頁的 PR",
 		delivery_choose_repository: "請先選取或填入已連結的儲存庫。",
 		delivery_pr_page: "第 {page} 頁",
@@ -7053,13 +7225,13 @@ var STRINGS = {
 		attention_tab_needs: "需要你處理",
 		attention_tab_active: "執行中操作",
 		attention_tab_unread: "未讀工作更新",
-		attention_replies: "待回覆與權限",
+		attention_replies: "提問",
 		attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
-		attention_completion: "完成確認",
+		attention_completion: "待你確認",
 		attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
-		attention_problems: "需處理的操作",
+		attention_problems: "失敗的操作",
 		attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
-		attention_hosts: "主機連線",
+		attention_hosts: "主機",
 		attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
 		attention_active: "執行中操作",
 		attention_active_note: "已受理、執行中或等待外部條件的操作；這不是工作完成確認。",
@@ -7372,6 +7544,7 @@ var STRINGS = {
 		...uiStrings.en,
 		...overviewStrings.en,
 		...scheduleStrings.en,
+		...globalStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
@@ -7498,7 +7671,7 @@ var STRINGS = {
 		mobile_draft_indicator: "Draft",
 		delivery_list_prs: "List Pull Requests",
 		delivery_no_prs: "No PRs found.",
-		delivery_refresh_prs: "Refresh",
+		delivery_refresh_prs: "Refresh this page of PRs",
 		delivery_choose_pr: "Choose a repository to load PRs.",
 		delivery_search_prs: "Search this page of PRs",
 		delivery_choose_repository: "Choose or enter a configured repository first.",
@@ -8522,13 +8695,13 @@ var STRINGS = {
 		attention_tab_needs: "Needs you",
 		attention_tab_active: "Active operations",
 		attention_tab_unread: "Unread work updates",
-		attention_replies: "Replies and permissions",
+		attention_replies: "Questions",
 		attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
-		attention_completion: "Completion review",
+		attention_completion: "Reviews",
 		attention_completion_note: "Work reported done or with every step checked still needs your decision.",
-		attention_problems: "Operations needing attention",
+		attention_problems: "Failed operations",
 		attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
-		attention_hosts: "Host connections",
+		attention_hosts: "Hosts",
 		attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
 		attention_active: "Active operations",
 		attention_active_note: "Accepted, running or waiting for external conditions. These are not work completion reviews.",
@@ -8997,6 +9170,15 @@ var paths = {
 			"y2": "16"
 		}]
 	],
+	"circle-x": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "10"
+		}],
+		["path", { "d": "m15 9-6 6" }],
+		["path", { "d": "m9 9 6 6" }]
+	],
 	"cpu": [
 		["path", { "d": "M12 20v2" }],
 		["path", { "d": "M12 2v2" }],
@@ -9428,6 +9610,72 @@ function inspector({ title, onClose = () => {} }) {
 		close,
 		dispose: close
 	});
+}
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable }) {
+	const tbody = h$1("tbody");
+	const root = h$1("div", {
+		class: "ui-data-table",
+		tabindex: 0
+	}, h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
+		scope: "col",
+		class: column.numeric ? "numeric" : ""
+	}, column.label)))), tbody)), controls = [];
+	rows.forEach((row, i) => {
+		const key = typeof rowKey === "function" ? rowKey(row) : row[rowKey], active = key === selected;
+		const tr = h$1("tr", {
+			"data-row-key": key,
+			tabindex: active || selected == null && i === 0 ? 0 : -1,
+			"aria-selected": String(active),
+			onclick: (event) => {
+				if (!event.target.closest("button, a, input, select")) select();
+			}
+		});
+		function select() {
+			controls.forEach((node) => {
+				node.tabIndex = node === tr ? 0 : -1;
+				node.setAttribute("aria-selected", String(node === tr));
+			});
+			onSelect(key, row);
+		}
+		if (expandable) {
+			const detail = h$1("tr", { hidden: true }, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			const toggle = iconButton({
+				icon: "chevron-right",
+				label: t("ui_expand", { title: row.title || key }),
+				"aria-expanded": "false",
+				onClick: () => {
+					detail.hidden = !detail.hidden;
+					toggle.setAttribute("aria-expanded", String(!detail.hidden));
+					toggle.setAttribute("aria-label", t(detail.hidden ? "ui_expand" : "ui_collapse", { title: row.title || key }));
+				}
+			});
+			tr.append(h$1("td", {}, toggle));
+			tbody.append(tr, detail);
+		} else tbody.append(tr);
+		tr.append(...columns.map((column) => h$1("td", { class: column.numeric ? "numeric" : "" }, column.render ? column.render(row) : row[column.key] ?? "—")));
+		tr.addEventListener("keydown", (event) => {
+			if (event.target !== tr) return;
+			if (["Enter", " "].includes(event.key)) {
+				event.preventDefault();
+				select();
+			}
+			if ([
+				"ArrowDown",
+				"ArrowUp",
+				"Home",
+				"End"
+			].includes(event.key)) {
+				event.preventDefault();
+				const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : Math.max(0, Math.min(controls.length - 1, i + (event.key === "ArrowUp" ? -1 : 1)));
+				controls.forEach((node, n) => {
+					node.tabIndex = n === next ? 0 : -1;
+				});
+				controls[next]?.focus();
+			}
+		});
+		controls.push(tr);
+	});
+	return root;
 }
 //#endregion
 //#region src/pm-workbench.js
@@ -9891,6 +10139,318 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/label-text.js
+var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
+function labelSegment(value) {
+	if (typeof value === "string") {
+		const text = value.trim();
+		return text && !SENTINEL.test(text) ? text : "";
+	}
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+	if (typeof value === "boolean") return value ? "true" : "false";
+	return "";
+}
+function firstLabel(...values) {
+	for (const value of values) {
+		const text = labelSegment(value);
+		if (text) return text;
+	}
+	return "";
+}
+function joinLabel(parts, separator = " · ") {
+	return parts.map(labelSegment).filter(Boolean).join(separator);
+}
+//#endregion
+//#region src/global-labels.js
+var ACTIONS = {
+	"checkpoint.continue": "action_checkpoint_continue",
+	"checkpoint.continue.revalidate": "action_checkpoint_revalidate",
+	"artifact.upload": "action_artifact_upload",
+	"artifact.capture.managed": "action_artifact_capture",
+	"artifact.accept": "action_artifact_accept",
+	"session.start": "action_session_start",
+	"session.send": "action_session_send",
+	"session.answer": "action_session_answer",
+	"session.permissions": "action_session_permissions",
+	"session.approve_pending": "action_session_approve",
+	"repository.continue": "action_repository_continue",
+	"github.pr.merge": "action_github_merge",
+	"delivery.merge_and_deploy": "action_delivery_merge",
+	"deployment.start": "action_deployment_start",
+	"cleanup.apply": "action_cleanup_apply",
+	"task.pause": "action_task_pause",
+	"task.resume": "action_task_resume",
+	"task.verify": "action_task_verify",
+	"worktree.merge": "action_worktree_merge",
+	"integration.apply": "action_integration_apply",
+	"integration.handoff": "action_integration_handoff",
+	"project.create": "action_project_create",
+	"project.update": "action_project_update",
+	"project.order": "action_project_order",
+	"project.pin": "action_project_pin",
+	"work_item.create": "action_work_item_create",
+	"work_item.update": "action_work_item_update",
+	"work_item.link": "action_work_item_link",
+	"work_item.read": "action_work_item_read",
+	"setup.host": "action_setup_host",
+	"setup.repository": "action_setup_repository",
+	"setup.verification": "action_setup_verification",
+	"preferences.models.update": "action_models_update"
+};
+var OPERATION_STATUS = {
+	accepted: "waiting",
+	running: "in_progress",
+	waiting_checks: "waiting",
+	waiting_external: "waiting",
+	needs_attention: "blocked",
+	uncertain: "unknown",
+	succeeded: "done",
+	failed: "blocked",
+	cancelled: "historical"
+};
+var WORK_STATUS = {
+	todo: "not_started",
+	doing: "in_progress",
+	waiting: "waiting",
+	done: "done",
+	awaiting_approval: "in_review"
+};
+function actionLabel(action) {
+	const key = ACTIONS[action];
+	if (!key) return t("action_unknown");
+	const label = t(key);
+	return label === key ? t("action_unknown") : label;
+}
+function operationStatusKey(status) {
+	return OPERATION_STATUS[status] || "unknown";
+}
+function workStatusKey(state) {
+	return WORK_STATUS[state] || "unknown";
+}
+function operationTargetText(op) {
+	const target = op?.target;
+	if (!target || typeof target !== "object") return labelSegment(target);
+	return labelSegment(target.title || target.name || target.recipe || target.branch || target.repository || target.host || target.session_id || target.project_id || target.work_item_id || target.checkpoint_id);
+}
+function operationMeta(op, whenText = "") {
+	return joinLabel([
+		operationTargetText(op),
+		op?.actor,
+		whenText
+	]);
+}
+function formatTime(seconds) {
+	const value = Number(seconds);
+	if (!Number.isFinite(value) || value <= 0) return "";
+	const date = new Date(value * 1e3);
+	return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+function operationDuration(op) {
+	const start = Number(op?.created_at);
+	const end = Number(op?.finished_at ?? op?.completed_at);
+	if (!Number.isFinite(start) || start <= 0 || !Number.isFinite(end) || end < start) return "";
+	const seconds = Math.round(end - start);
+	if (seconds < 60) return t("global_duration_s", { n: seconds });
+	const minutes = Math.floor(seconds / 60);
+	const rest = seconds % 60;
+	return rest ? t("global_duration_m", {
+		n: minutes,
+		s: rest
+	}) : t("global_duration_m_only", { n: minutes });
+}
+function railPresentation(state) {
+	if (!state?.key) return null;
+	if (state.key === "pending_ask_user") return {
+		labelKey: "rail_asking",
+		loud: true,
+		tone: state.tone || "stale"
+	};
+	if (state.key === "workspace_needs_you" || state.key === "pending_permission" || state.key === "wi_state_awaiting_approval") return {
+		labelKey: "rail_needs_you",
+		loud: true,
+		tone: state.tone || "stale"
+	};
+	if (state.key === "op_failed" || state.key === "task_state_failed" || state.key === "wi_state_failed") return {
+		labelKey: "rail_failed",
+		loud: true,
+		tone: "bad"
+	};
+	if (state.key === "obs_value_streaming") return {
+		labelKey: "rail_running",
+		loud: false,
+		tone: state.tone || "info"
+	};
+	return {
+		labelKey: state.key,
+		loud: false,
+		tone: state.tone || ""
+	};
+}
+function reasonText$1(code) {
+	const token = labelSegment(code);
+	if (!token) return "";
+	return reasonLabel(t, token);
+}
+//#endregion
+//#region src/global-screens.js
+function setupGuide() {
+	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
+}
+function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
+	const article = h("article", {
+		class: "global-inbox-row",
+		"data-inbox-key": key
+	});
+	if (onOpen) article.addEventListener("click", (event) => {
+		if (event.target.closest("a, button, input, select, textarea")) return;
+		onOpen();
+	});
+	const text = h("div", { class: "global-inbox-text" }, h("a", {
+		class: "title",
+		href
+	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
+	const details = onOpen ? iconButton({
+		icon: "chevron-right",
+		label: detailsLabel,
+		onClick: () => onOpen()
+	}) : null;
+	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
+	return article;
+}
+function firstRunCard({ h, t, body, footer }) {
+	return h("div", { class: "global-first-run" }, h("section", {
+		class: "global-first-card",
+		"aria-labelledby": "global-first-title"
+	}, h("span", {
+		class: "brand-mark",
+		"aria-hidden": "true"
+	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
+}
+function settingsFrame({ h, t, sections, exclusive = false }) {
+	const nav = h("nav", {
+		class: "global-settings-nav",
+		role: "tablist",
+		"aria-orientation": "vertical",
+		"aria-label": t("global_settings_nav")
+	});
+	const panels = h("div", { class: "global-settings-panels" });
+	const buttons = [];
+	const roots = [];
+	for (const section of sections) {
+		const panel = h("section", {
+			class: "global-settings-section",
+			role: "tabpanel",
+			id: `settings-panel-${section.id}`,
+			"data-settings-panel": section.id,
+			"aria-labelledby": `settings-tab-${section.id}`
+		});
+		if (section.id === "models") panel.setAttribute("data-settings-models", "");
+		const button = h("button", {
+			type: "button",
+			role: "tab",
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id,
+			"aria-controls": panel.id
+		}, section.label);
+		if (section.hidden) {
+			button.hidden = true;
+			panel.hidden = true;
+		}
+		button.addEventListener("click", () => select(section.id, true));
+		buttons.push(button);
+		roots.push(panel);
+		nav.append(button);
+		panels.append(panel);
+	}
+	const visible = () => buttons.filter((button) => !button.hidden);
+	function apply(id) {
+		for (const button of buttons) {
+			const on = !button.hidden && button.dataset.settingsNav === id;
+			button.setAttribute("aria-selected", on ? "true" : "false");
+			button.tabIndex = on ? 0 : -1;
+		}
+		if (!exclusive) return;
+		for (const node of roots) {
+			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
+			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
+		}
+	}
+	function select(id, scroll) {
+		const button = buttons.find((item) => item.dataset.settingsNav === id);
+		if (!button || button.hidden) return;
+		apply(id);
+		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
+	}
+	nav.addEventListener("keydown", (event) => {
+		if (![
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		const enabled = visible();
+		const current = enabled.indexOf(document.activeElement);
+		if (current < 0) return;
+		event.preventDefault();
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		next.focus();
+		select(next.dataset.settingsNav, true);
+	});
+	const first = sections.find((section) => !section.hidden);
+	if (first) apply(first.id);
+	function panel(id) {
+		return roots.find((node) => node.dataset.settingsPanel === id);
+	}
+	function show(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		button.hidden = false;
+		if (!exclusive) node.hidden = false;
+		const selected = visible().find((item) => item.getAttribute("aria-selected") === "true");
+		apply(selected ? selected.dataset.settingsNav : id);
+	}
+	function hide(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		const was = button.getAttribute("aria-selected") === "true";
+		button.hidden = true;
+		node.hidden = true;
+		if (was) {
+			const next = visible()[0];
+			if (next) apply(next.dataset.settingsNav);
+		}
+	}
+	return {
+		root: h("div", {
+			class: "global-settings",
+			"data-settings-exclusive": exclusive ? "true" : "false"
+		}, nav, panels),
+		panel,
+		show,
+		hide
+	};
+}
+//#endregion
+//#region src/ui/view-state.js
+var states$1 = new Map();
+function viewState(namespace, workspaceId, view) {
+	const key = JSON.stringify([
+		namespace,
+		workspaceId,
+		view
+	]);
+	const value = states$1.get(key) || {};
+	states$1.delete(key);
+	states$1.set(key, value);
+	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
+	return value;
+}
+//#endregion
 //#region src/pr-selector.js
 function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, stale = false, error = "";
@@ -10011,21 +10571,6 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 		container,
 		loadList
 	};
-}
-//#endregion
-//#region src/ui/view-state.js
-var states$1 = new Map();
-function viewState(namespace, workspaceId, view) {
-	const key = JSON.stringify([
-		namespace,
-		workspaceId,
-		view
-	]);
-	const value = states$1.get(key) || {};
-	states$1.delete(key);
-	states$1.set(key, value);
-	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
-	return value;
 }
 //#endregion
 //#region src/pm-discussions.js
@@ -11695,28 +12240,6 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		element,
 		update
 	};
-}
-//#endregion
-//#region src/label-text.js
-var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
-function labelSegment(value) {
-	if (typeof value === "string") {
-		const text = value.trim();
-		return text && !SENTINEL.test(text) ? text : "";
-	}
-	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
-	if (typeof value === "boolean") return value ? "true" : "false";
-	return "";
-}
-function firstLabel(...values) {
-	for (const value of values) {
-		const text = labelSegment(value);
-		if (text) return text;
-	}
-	return "";
-}
-function joinLabel(parts, separator = " · ") {
-	return parts.map(labelSegment).filter(Boolean).join(separator);
 }
 //#endregion
 //#region src/pm-charter.js
@@ -31725,8 +32248,20 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		} catch {}
 	};
 	const link = (href, label, state = null, reading = null) => {
-		const statusText = [state ? t(state.key) : "", reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""].filter(Boolean).join(" · ");
-		const full = [label, statusText].filter(Boolean).join(" · ");
+		const presented = railPresentation(state);
+		const full = joinLabel([
+			label,
+			presented ? t(presented.labelKey) : "",
+			reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""
+		]);
+		let glyph = null;
+		if (presented?.labelKey === "rail_needs_you" || presented?.labelKey === "rail_asking") {
+			glyph = icon("circle-alert", { size: 14 });
+			glyph.classList.add("workspace-rail-alert");
+		} else if (presented?.labelKey === "rail_failed") {
+			glyph = icon("circle-x", { size: 14 });
+			glyph.classList.add("workspace-rail-failed");
+		} else if (presented?.labelKey === "rail_running") glyph = h("span", { class: "workspace-dot info" });
 		return h("a", {
 			href,
 			class: "workspace-tree-link",
@@ -31737,10 +32272,10 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}, h("span", {
 			class: "workspace-tree-label",
 			title: label
-		}, label), statusText ? h("span", {
+		}, label), presented ? h("span", {
 			class: "workspace-tree-state",
 			"aria-hidden": "true"
-		}, h("span", { class: `workspace-dot ${state?.tone || ""}` }), h("span", { class: "workspace-tree-state-label" }, statusText)) : null);
+		}, glyph) : null);
 	};
 	const workLink = (pid, item) => link(`#/work/${[
 		pid,
@@ -31884,7 +32419,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 						cursors.add(cursor);
 					}
 					const focused = sessionRows.contains(document.activeElement) ? document.activeElement.getAttribute("href") : null;
-					sessionRows.replaceChildren(...groupedSessions([...rows.values()]).map((group) => h("div", {}, h("p", { class: "muted workspace-session-group" }, group.host, " · ", group.name || group.id || t("obs_unknown")), ...group.sessions.map((session) => link(`#/session/${[session.host, session.session_id].map(encodeURIComponent).join("/")}`, session.title || session.session_id, sessionActivity(session), session.reading)))), h("p", { class: "muted" }, t("attention_loaded", { count: rows.size })));
+					sessionRows.replaceChildren(...groupedSessions([...rows.values()]).map((group) => h("div", {}, h("p", { class: "muted workspace-session-group" }, joinLabel([group.host, group.name || group.id || t("obs_unknown")])), ...group.sessions.map((session) => link(`#/session/${[session.host, session.session_id].map(encodeURIComponent).join("/")}`, session.title || session.session_id, sessionActivity(session), session.reading)))), h("p", { class: "muted" }, t("attention_loaded", { count: rows.size })));
 					if (focused) [...sessionRows.querySelectorAll("a")].find((a) => a.getAttribute("href") === focused)?.focus({ preventScroll: true });
 					more.hidden = !cursor;
 					sessionsLoaded = true;
@@ -32781,38 +33316,90 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const unread = caps?.features?.work_item_reads?.version === 1;
 	const saved = sessionStorage.getItem(storageKey) || sessionStorage.getItem("batc.tab");
 	const tab = saved === "confirm" || saved === "active" ? "active" : saved === "unread" && unread ? "unread" : "needs";
-	const tabs = h("div", {
-		class: "tabs attention-tabs",
-		role: "group",
-		"aria-label": t("nav_home")
-	}, ...[
-		"needs",
-		"active",
-		...unread ? ["unread"] : []
-	].map((value) => h("button", {
-		class: value === tab ? "on" : "",
-		"aria-pressed": String(value === tab),
-		onclick: () => {
+	const tabs = segmented({
+		label: t("nav_home"),
+		value: tab,
+		options: [
+			"needs",
+			"active",
+			...unread ? ["unread"] : []
+		].map((value) => ({
+			value,
+			label: t("attention_tab_" + value)
+		})),
+		onChange: (value) => {
 			guard();
 			sessionStorage.setItem(storageKey, value);
 			route();
 		}
-	}, t("attention_tab_" + value))));
-	const empty = h("section", {
-		class: "panel",
-		hidden: true
-	}, h("p", {}, t("empty_needs_you")), h("p", { class: "muted" }, t("empty_next_work")), h("div", { class: "actions" }, h("a", { href: "#/projects" }, t("sessions_projects")), caps?.scopes?.includes("start") && caps?.actions?.some((a) => a.action === "session.start" && a.allowed === true) ? h("a", { href: "#/start" }, t("start_title_page")) : null));
+	});
+	tabs.classList.add("global-inbox-tabs");
+	const empty = emptyState({
+		title: t("empty_needs_you"),
+		action: h("div", { class: "actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			href: "#/projects"
+		}, t("sessions_projects")), caps?.scopes?.includes("start") && caps?.actions?.some((a) => a.action === "session.start" && a.allowed === true) ? h("a", {
+			class: "ui-button primary ui-sm",
+			href: "#/start"
+		}, t("start_title_page")) : null)
+	});
+	empty.hidden = true;
+	const notes = disclosure({
+		label: t("global_details"),
+		key: storageKey + ".notes",
+		body: h("div", {}, ...[
+			"replies",
+			"completion",
+			"problems",
+			"hosts",
+			"active",
+			"unread"
+		].map((key) => h("p", {}, h("strong", {}, t("attention_" + key)), " ", t("attention_" + key + "_note"))), h("p", {}, t("empty_next_work")))
+	});
+	let sheet = null;
+	const open = (key, title, nodes) => {
+		if (!sheet?.isConnected || sheet.dataset.inboxKey !== key) {
+			sheet?.dispose();
+			const node = inspector({
+				title,
+				onClose: () => {
+					if (sheet === node) sheet = null;
+				}
+			});
+			node.dataset.inboxKey = key;
+			sheet = node;
+			main.append(node);
+		}
+		sheet.body.replaceChildren(...[].concat(nodes).flat().filter((node) => node != null && node !== false));
+	};
 	const sections = [];
+	const reconcile = () => {
+		if (!sheet) return;
+		if (!sections.some((section) => section.list.querySelector(`[data-inbox-key="${CSS.escape(sheet.dataset.inboxKey)}"]`))) sheet.dispose();
+	};
 	const add = (key, path, field, row, options = {}) => {
-		const list = h("div", {}), status = h("div", { role: "status" });
-		const count = h("span", { class: "muted" }), more = h("button", {
+		const list = h("div", { class: "global-inbox-list" });
+		const status = h("div", { role: "status" });
+		const badge = h("span", { class: "global-group-count" });
+		const count = h("span", {
+			class: "muted",
+			"data-shown": ""
+		});
+		const more = h("button", {
 			class: "secondary",
 			hidden: true
 		}, t("load_more"));
+		const viewAll = key === "problems" ? h("a", {
+			class: "global-view-all",
+			href: "#/operations/attention"
+		}, t("global_view_all")) : null;
+		const quiet = key === "active" ? h("a", { href: "#/operations/active" }, t("operations_view_active")) : null;
 		const section = h("section", {
-			class: "panel attention-section",
-			"aria-label": t("attention_" + key)
-		}, h("h2", {}, t("attention_" + key)), h("p", { class: "muted" }, t("attention_" + key + "_note")), status, list, h("div", { class: "actions attention-footer" }, count, more, key === "problems" || key === "active" ? h("a", { href: "#/operations/" + (key === "problems" ? "attention" : "active") }, t(key === "problems" ? "operations_view_attention" : "operations_view_active")) : null));
+			class: "global-group",
+			"aria-label": t("attention_" + key),
+			"data-inbox-group": key
+		}, h("div", { class: "global-group-head" }, h("h2", {}, t("attention_" + key)), badge, viewAll), status, list, h("div", { class: "global-group-foot" }, count, more, quiet));
 		const state = {
 			key,
 			path,
@@ -32822,6 +33409,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section,
 			list,
 			status,
+			badge,
 			count,
 			more,
 			pages: 1,
@@ -32832,25 +33420,70 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		sections.push(state);
 		return section;
 	};
-	const hostRow = (x) => h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, x.host), h("div", { class: "muted" }, x.error || t("stale_reason_" + x.stale_reason))));
-	main.append(pageHeader({ title: t("nav_home") }), tabs, empty, ...tab === "needs" ? [
-		add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
-		add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
-		add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {
+	const hostRow = (x, present) => inboxRow({
+		h,
+		key: x.host,
+		title: x.host,
+		href: `#/host/${encodeURIComponent(x.host)}`,
+		meta: x.error || reasonText$1(x.stale_reason),
+		pill: statusPill("stale"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: `#/host/${encodeURIComponent(x.host)}`
+		}, t("global_review")),
+		detailsLabel: t("global_details_for", { title: x.host }),
+		onOpen: () => present(x.host, x.host, [h("p", {}, reasonText$1(x.stale_reason) || t("reason_unavailable")), disclosure({
+			label: t("global_details"),
+			body: h("dl", { class: "kv" }, h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, x.stale_reason || x.error || "—")))
+		})])
+	});
+	const approvals = caps?.actions?.some((action) => action.action === "session.approve_pending" && action.allowed === true) ? h("section", {
+		class: "global-group",
+		"aria-label": t("global_approvals")
+	}, h("div", { class: "global-group-head" }, h("h2", {}, t("global_approvals"))), h("div", { class: "global-inbox-list" }, inboxRow({
+		h,
+		key: "approvals",
+		title: t("bulk_title"),
+		href: "#/approvals",
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: "#/approvals"
+		}, t("global_review"))
+	}))) : null;
+	main.append(...[
+		pageHeader({
+			title: t("nav_home"),
+			actions: [iconButton({
+				icon: "refresh-cw",
+				label: t("global_refresh"),
+				onClick: () => refresh().catch(() => {})
+			})]
+		}),
+		tabs,
+		empty,
+		...tab === "needs" ? [
+			approvals,
+			add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
+			add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
+			add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {
+				cursor: "next_before",
+				param: "before"
+			}),
+			add("hosts", "/hosts", "hosts", hostRow, { filter: (x) => x.stale })
+		] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
 			cursor: "next_before",
 			param: "before"
-		}),
-		add("hosts", "/hosts", "hosts", hostRow, { filter: (x) => x.stale })
-	] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
-		cursor: "next_before",
-		param: "before"
-	})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)]);
+		})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)],
+		notes
+	].filter((node) => node != null && node !== false));
 	let serial = Promise.resolve();
 	const load = async (section, wanted) => {
 		guard();
 		section.busy = true;
 		section.more.disabled = true;
-		if (section.size === null) section.status.replaceChildren(h("p", { class: "muted" }, t("loading")));
+		if (section.size === null) section.status.replaceChildren(skeleton(3));
+		const focusKey = section.list.contains(document.activeElement) ? document.activeElement.closest("[data-inbox-key]")?.dataset.inboxKey : null;
+		const focusLabel = document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent || "";
 		try {
 			let cursor = null, pages = 0;
 			const items = new Map(), seen = new Set();
@@ -32867,11 +33500,20 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section.pages = pages;
 			section.size = items.size;
 			section.partial = cursor !== null;
-			section.list.replaceChildren(...items.size ? [...items.values()].map(section.row) : [h("p", { class: "muted" }, t("attention_empty"))]);
-			section.count.textContent = t("attention_loaded", { count: items.size });
+			section.list.replaceChildren(...items.size ? [...items.values()].map((item) => section.row(item, open)) : []);
+			section.badge.hidden = Boolean(section.partial);
+			section.badge.textContent = section.partial ? "" : String(items.size);
+			section.count.hidden = !section.partial;
+			section.count.textContent = section.partial ? t("global_shown", { count: items.size }) : "";
 			section.status.replaceChildren();
 			section.more.hidden = cursor === null;
+			section.section.hidden = items.size === 0;
 			section.section.dataset.fresh = "true";
+			if (focusKey) {
+				const row = section.list.querySelector(`[data-inbox-key="${CSS.escape(focusKey)}"]`);
+				([...row?.querySelectorAll("a, button") || []].find((node) => (node.getAttribute("aria-label") || node.textContent) === focusLabel) || row)?.focus({ preventScroll: true });
+			}
+			reconcile();
 			if (tab === "needs") onPending(sections.every((item) => item.section.dataset.fresh === "true") ? {
 				count: sections.reduce((sum, item) => sum + item.size, 0),
 				partial: sections.some((item) => item.partial)
@@ -32883,8 +33525,11 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			if ([403, 404].includes(error.status)) {
 				section.list.replaceChildren();
 				section.count.replaceChildren();
+				section.badge.textContent = "";
 				section.size = null;
 				section.more.hidden = true;
+				section.section.hidden = false;
+				reconcile();
 			}
 			section.status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("attention_not_updated")));
 			throw error;
@@ -32896,10 +33541,11 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const refresh = (only, wanted) => {
 		const work = serial.catch(() => {}).then(async () => {
 			guard();
-			const results = await Promise.allSettled((only ? [only] : sections).map((s) => load(s, only ? wanted : s.pages)));
+			const results = await Promise.allSettled((only ? [only] : sections).map((item) => load(item, only ? wanted : item.pages)));
 			guard();
-			empty.hidden = tab !== "needs" || !sections.every((s) => s.size === 0 && s.section.dataset.fresh === "true");
-			const failed = results.find((r) => r.status === "rejected");
+			const settled = sections.every((item) => item.size === 0 && item.section.dataset.fresh === "true");
+			empty.hidden = tab !== "needs" || Boolean(approvals) || !settled;
+			const failed = results.find((item) => item.status === "rejected");
 			if (failed) throw failed.reason;
 		});
 		serial = work;
@@ -36223,7 +36869,15 @@ async function mountFleet(main, { h, t }) {
 //#endregion
 //#region src/tailscale.js
 init_transport();
-function mountTailscale(main, { h, t }) {
+function mountTailscale(main, { h, t, presentation } = {}) {
+	if (!nativeDesktop && presentation === "note") {
+		const note = h("section", {
+			class: "global-tailscale-note",
+			"aria-label": t("tailscale_title")
+		}, h("p", {}, t("tailscale_browser")));
+		main.append(note);
+		return () => note.remove();
+	}
 	const panel = h("section", {
 		class: "panel",
 		"aria-label": t("tailscale_title")
@@ -37080,15 +37734,18 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 }
 //#endregion
 //#region src/operation-list.js
-function operationList({ h, t, api, guard, row, statuses }) {
-	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false;
-	const list = h("div", {
-		class: "panel",
-		"data-operation-list": ""
-	}), count = h("p", {
+function operationList({ h, t, api, guard, statuses, namespace }) {
+	const memory = viewState(namespace || "", "", "operations:" + (statuses || "all"));
+	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, query = memory.query || "";
+	let sheet = null, request = 0;
+	const list = h("div", { "data-operation-list": "" });
+	const count = h("p", {
 		class: "muted",
 		"data-operation-count": ""
-	}), status = h("div", { role: "status" });
+	});
+	const status = h("div", { role: "status" });
+	const inspectorHost = h("div", { class: "global-ops-inspector" });
+	const layout = h("div", { class: "global-ops" }, list, inspectorHost);
 	const current = () => {
 		try {
 			guard();
@@ -37097,28 +37754,154 @@ function operationList({ h, t, api, guard, row, statuses }) {
 			return false;
 		}
 	};
-	const update = () => {
-		more.hidden = before === null;
-		more.disabled = pending > 0 || failed;
-		refresh.disabled = pending > 0;
-	};
 	const more = h("button", {
 		class: "secondary",
 		onclick: () => load(true).catch(() => {})
 	}, t("operations_more"));
-	const refresh = h("button", {
-		class: "secondary",
-		onclick: () => load().catch(() => {})
-	}, t("refresh"));
-	const box = h("div", {}, count, list, status, h("div", { class: "actions" }, more, refresh));
+	const box = h("div", {}, count, layout, status, h("div", { class: "actions" }, more));
+	const update = () => {
+		more.hidden = before === null;
+		more.disabled = pending > 0 || failed;
+	};
+	const visible = () => {
+		const needle = query.trim().toLocaleLowerCase();
+		if (!needle) return rows;
+		return rows.filter((op) => [
+			actionLabel(op.action),
+			op.action,
+			op.actor,
+			operationTargetText(op),
+			op.operation_id,
+			op.status,
+			op.status_reason
+		].join("\n").toLocaleLowerCase().includes(needle));
+	};
+	const columns = [
+		{
+			key: "action",
+			label: t("global_col_action"),
+			render: (op) => actionLabel(op.action)
+		},
+		{
+			key: "target",
+			label: t("global_col_target"),
+			render: (op) => operationTargetText(op) || "—"
+		},
+		{
+			key: "status",
+			label: t("global_col_status"),
+			render: (op) => statusPill(operationStatusKey(op.status))
+		},
+		{
+			key: "actor",
+			label: t("actor"),
+			render: (op) => op.actor || "—"
+		},
+		{
+			key: "started",
+			label: t("created"),
+			render: (op) => formatTime(op.created_at) || "—"
+		},
+		{
+			key: "duration",
+			label: t("global_col_duration"),
+			render: (op) => operationDuration(op) || "—"
+		}
+	];
+	function body(op) {
+		const steps = Array.isArray(op.steps) ? op.steps : [];
+		const precise = t("op_" + op.status);
+		return [
+			statusPill(operationStatusKey(op.status)),
+			h("p", { class: "muted" }, operationMeta(op, formatTime(op.created_at)) || "—"),
+			op.status_reason ? h("p", {}, op.status_reason) : null,
+			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			disclosure({
+				label: t("global_details"),
+				key: "operations." + op.operation_id,
+				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
+					step.name,
+					step.status,
+					step.error?.code
+				]))))
+			})
+		];
+	}
+	async function fill(op) {
+		const id = op.operation_id;
+		const token = ++request;
+		if (!sheet?.isConnected || sheet.dataset.operationId !== id) {
+			const previous = sheet;
+			sheet = null;
+			previous?.dispose();
+			const node = inspector({
+				title: actionLabel(op.action),
+				onClose: () => {
+					if (sheet !== node) return;
+					memory.selected = "";
+					sheet = null;
+					layout.classList.remove("has-inspector");
+				}
+			});
+			node.dataset.operationId = id;
+			sheet = node;
+			inspectorHost.append(node);
+			layout.classList.add("has-inspector");
+		}
+		sheet.body.replaceChildren(skeleton(3));
+		let record = op;
+		try {
+			const data = await api("GET", "/operations/" + encodeURIComponent(id));
+			if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
+			if (data?.operation?.operation_id === id) record = {
+				...op,
+				...data.operation
+			};
+		} catch (error) {
+			if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
+			if ([403, 404].includes(error.status)) {
+				rows = rows.filter((item) => item.operation_id !== id);
+				sheet.dispose();
+				paint();
+				return;
+			}
+			sheet.body.replaceChildren(inlineError({ error }), ...body(op).filter(Boolean));
+			return;
+		}
+		if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
+		sheet.body.replaceChildren(...body(record).filter(Boolean));
+	}
+	function paint() {
+		const focus = list.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.dataset.rowKey : null;
+		const shown = visible();
+		if (!rows.length) list.replaceChildren(emptyState({ title: t("operations_empty") }));
+		else if (!shown.length) list.replaceChildren(emptyState({ title: t("global_no_match") }));
+		else list.replaceChildren(dataTable({
+			columns,
+			rows: shown,
+			rowKey: "operation_id",
+			selected: memory.selected,
+			onSelect: (key, row) => {
+				memory.selected = key;
+				fill(row).catch(() => {});
+			}
+		}));
+		if (focus) list.querySelector(`[data-row-key="${CSS.escape(focus)}"]`)?.focus({ preventScroll: true });
+		count.hidden = before === null;
+		count.textContent = before === null ? "" : t("global_shown", { count: rows.length });
+		if (sheet?.isConnected && memory.selected) {
+			if (!rows.find((op) => op.operation_id === memory.selected)) sheet.dispose();
+		}
+	}
 	function load(append = false) {
 		pending++;
 		update();
 		const job = queue.catch(() => {}).then(async () => {
 			guard();
 			if (append && before === null) return;
-			const first = [...list.children].find((el) => el.getBoundingClientRect().bottom >= 0);
-			const anchor = first?.dataset.operationId, top = first?.getBoundingClientRect().top;
+			const anchor = [...list.querySelectorAll("[data-row-key]")].find((el) => el.getBoundingClientRect().bottom >= 0);
+			const anchorId = anchor?.dataset.rowKey;
+			const top = anchor?.getBoundingClientRect().top;
 			let next = append ? before : null, candidate = append ? [...rows] : [], read = 0;
 			const targetPages = append ? 1 : pages;
 			for (let i = 0; i < targetPages; i++) {
@@ -37138,15 +37921,14 @@ function operationList({ h, t, api, guard, row, statuses }) {
 			pages = append ? pages + read : read;
 			before = next;
 			failed = false;
-			list.replaceChildren(...rows.length ? rows.map((op) => {
-				const el = row(op);
-				el.dataset.operationId = op.operation_id;
-				return el;
-			}) : [h("p", { class: "muted" }, t("operations_empty"))]);
-			count.textContent = t("operations_loaded", { count: rows.length });
+			paint();
 			status.replaceChildren();
-			const restored = [...list.children].find((el) => el.dataset.operationId === anchor);
+			const restored = anchorId ? list.querySelector(`[data-row-key="${CSS.escape(anchorId)}"]`) : null;
 			if (restored && top !== void 0) window.scrollBy(0, restored.getBoundingClientRect().top - top);
+			if (memory.selected) {
+				const selected = rows.find((op) => op.operation_id === memory.selected);
+				if (selected && sheet?.isConnected) fill(selected).catch(() => {});
+			}
 		}).catch((error) => {
 			if (current()) {
 				failed = true;
@@ -37163,7 +37945,11 @@ function operationList({ h, t, api, guard, row, statuses }) {
 	update();
 	return {
 		box,
-		load
+		load,
+		filter(text) {
+			query = memory.query = text || "";
+			paint();
+		}
 	};
 }
 //#endregion
@@ -40127,7 +40913,10 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e)))
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
-	container.append(pageHeader({ title: t("ar_title") }), h("p", { class: "muted" }, t("ar_help")), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
+	container.append(pageHeader({ title: t("ar_title") }), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("ar_help"))
+	}), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
 	function update() {
 		content.update();
 		const fixed = busy || frozen();
@@ -40457,6 +41246,7 @@ var state = {
 	token: null,
 	caps: null,
 	lastEvent: 0,
+	lastEventAt: 0,
 	listeners: new Set(),
 	namespace: "",
 	epoch: 0,
@@ -40516,6 +41306,7 @@ function disconnect() {
 	state.token = null;
 	state.caps = null;
 	state.lastEvent = 0;
+	state.lastEventAt = 0;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
@@ -41353,6 +42144,7 @@ async function streamEvents() {
 				if (page.sync?.checkpoint?.cursor !== cursor || !page.sync?.checkpoint?.token) throw new Error("Invalid central event checkpoint");
 				state.sync = page.sync.checkpoint;
 			}
+			if (cursor !== state.lastEvent) state.lastEventAt = Date.now();
 			state.lastEvent = cursor;
 			saveCursor();
 			state.refreshCycle = null;
@@ -41514,32 +42306,80 @@ function sessionBadges(s) {
 		s.pending ? chip(t("pending_" + s.pending.kind), "stale") : null
 	];
 }
-function light(s) {
-	return h("span", {
-		class: `light ${s.pending ? "pending" : s.streaming ? "streaming" : s.loaded ? "ok" : ""}`,
-		title: s.streaming ? t("state_streaming") : s.loaded ? t("state_loaded") : t("state_unloaded")
-	});
-}
-function sessionRow(s) {
-	return h("div", { class: "row" }, light(s), h("div", { class: "grow" }, h("a", {
-		class: "title",
-		href: `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`
-	}, s.title || s.session_id), h("div", { class: "muted" }, [
-		s.workspace,
+function sessionRow(s, open) {
+	const title = s.title || s.session_id;
+	const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
+	const key = JSON.stringify([s.host, s.session_id]);
+	const asking = s.pending?.kind === "ask_user";
+	const permission = s.pending?.kind === "permission";
+	const meta = joinLabel([
+		s.host,
 		s.agent_kind,
-		s.worktree_branch
-	].filter(Boolean).join(" · "))), h("div", { class: "actions session-badges" }, ...sessionBadges(s)), h("span", { class: "muted" }, when(s.last_activity_at)));
+		s.worktree_branch,
+		s.pending?.kind ? t("pending_" + s.pending.kind) : "",
+		s.stale ? reasonText$1(s.stale_reason) : ""
+	]);
+	return inboxRow({
+		h,
+		key,
+		title,
+		href,
+		meta,
+		pill: statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href
+		}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+		detailsLabel: t("global_details_for", { title }),
+		onOpen: () => open?.(key, title, [
+			statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+			meta ? h("p", {}, meta) : null,
+			disclosure({
+				label: t("global_details"),
+				body: h("dl", { class: "kv" }, h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, s.session_id || "—")), h("dt", {}, t("host")), h("dd", {}, s.host || "—"), s.pending?.kind ? [h("dt", {}, t("global_state")), h("dd", {}, t("pending_" + s.pending.kind))] : null, s.stale_reason ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(s.stale_reason), " ", h("code", {}, String(s.stale_reason)))] : null)
+			})
+		])
+	});
 }
 var epoch = (x) => x ? new Date(x * 1e3).toISOString() : "";
 function opStatus(op) {
 	const started = op.status === "succeeded" && ["session.start", "repository.continue"].includes(op.action);
 	return h("span", { class: `status-${op.status}` }, t(started ? "start_dispatched" : "op_" + op.status));
 }
-function opRow(op) {
-	return h("div", { class: "row" }, h("div", { class: "grow" }, h("a", {
-		class: "title",
-		href: `#/op/${op.operation_id}`
-	}, op.action), h("div", { class: "muted" }, [op.actor, when(epoch(op.created_at))].join(" · ")), op.status_reason ? h("div", { class: "muted" }, op.status_reason) : null), opStatus(op), op.error_code ? chip(op.error_code, "bad") : null);
+function opRow(op, open) {
+	const title = actionLabel(op.action);
+	const href = `#/op/${encodeURIComponent(op.operation_id)}`;
+	const key = op.operation_id;
+	const meta = operationMeta(op, formatTime(op.created_at));
+	const needs = [
+		"needs_attention",
+		"uncertain",
+		"failed"
+	].includes(op.status);
+	const precise = t("op_" + op.status);
+	return inboxRow({
+		h,
+		key,
+		title,
+		href,
+		meta,
+		pill: statusPill(operationStatusKey(op.status)),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href
+		}, t(needs ? "global_review" : "global_open")),
+		detailsLabel: t("global_details_for", { title }),
+		onOpen: () => open?.(key, title, [
+			statusPill(operationStatusKey(op.status)),
+			meta ? h("p", { class: "muted" }, meta) : null,
+			op.status_reason ? h("p", {}, op.status_reason) : null,
+			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			disclosure({
+				label: t("global_details"),
+				body: h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)
+			})
+		])
+	});
 }
 async function viewHome(main) {
 	const connection = {
@@ -41602,7 +42442,10 @@ async function viewSessions(main) {
 		class: "session-project-link",
 		href: "#/projects"
 	}, t("sessions_projects")));
-	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), h("p", { class: "muted" }, t("sessions_intro")), h("div", { class: "filters session-filters" }, search, hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
+	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("sessions_intro"))
+	}), h("div", { class: "filters session-filters" }, search, hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
 		"aria-label": t("sessions_title"),
 		class: "session-results"
 	}, count, list, h("div", { class: "session-pagination" }, more, h("span", { class: "muted" }, t("sessions_page_note"))))));
@@ -42763,6 +43606,7 @@ function checkpointPanel(host, sid) {
 }
 async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceRepository) {
 	freshPage();
+	let reload = async () => {};
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -42805,7 +43649,14 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 		groups.get(key).push(r);
 	}
 	const environments = [...groups.values()].map(environmentCard);
-	main.append(pageHeader({ title: t("nav_delivery") }), ...environments.map((e) => e.card));
+	main.append(pageHeader({
+		title: t("nav_delivery"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => reload().catch(() => {})
+		})]
+	}), ...environments.map((e) => e.card));
 	if (source) main.append(h("p", { class: "note" }, t("delivery_source_context"), " ", h("code", {}, source.id)));
 	let selectedMethod = "";
 	let reviewedPreview = null;
@@ -42951,7 +43802,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 			if (!holdCard()) fill(card, errorBox(e));
 		}
 	};
-	const reload = async (fromEvent = true) => {
+	reload = async (fromEvent = true) => {
 		await settleRefreshes([...environments.map((e) => e.load(fromEvent)), load(null, fromEvent)]);
 	};
 	await reload(false);
@@ -43634,10 +44485,15 @@ function integrationStatus(op, act) {
 	return out;
 }
 async function viewOperations(main, filter = "all") {
+	const selected = [
+		"all",
+		"attention",
+		"active"
+	].includes(filter) ? filter : "all";
 	const statuses = {
 		attention: "needs_attention,uncertain",
 		active: "accepted,running,waiting_checks,waiting_external"
-	}[filter];
+	}[selected];
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -43648,17 +44504,42 @@ async function viewOperations(main, filter = "all") {
 		t,
 		api,
 		guard: () => assertView(connection),
-		row: opRow,
-		statuses
+		statuses,
+		namespace: state.namespace
 	});
-	main.append(pageHeader({ title: t("nav_operations") }), h("div", { class: "actions" }, ...[
-		["all", "operations_all"],
-		["attention", "tab_needs_you"],
-		["active", "tab_to_confirm"]
-	].map(([id, label]) => h("a", {
-		href: `#/operations/${id}`,
-		class: filter === id ? "on" : ""
-	}, t(label)))), list.box);
+	const memory = viewState(state.namespace || "", "", "operations:" + (statuses || "all"));
+	const search = h("input", {
+		type: "search",
+		"aria-label": t("global_search_operations"),
+		placeholder: t("global_search_operations"),
+		value: memory.query || ""
+	});
+	search.addEventListener("input", () => list.filter(search.value));
+	const searchField = h("div", { class: "workspace-search global-ops-search" }, icon("search", { size: 16 }), search);
+	const filters = segmented({
+		label: t("global_ops_filter"),
+		value: selected,
+		options: [
+			["all", "operations_all"],
+			["attention", "tab_needs_you"],
+			["active", "tab_to_confirm"]
+		].map(([value, label]) => ({
+			value,
+			label: t(label)
+		})),
+		onChange: (value) => {
+			location.hash = "#/operations/" + value;
+		}
+	});
+	main.append(pageHeader({
+		title: t("nav_operations"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => list.load().catch(() => {})
+		})]
+	}), h("div", { class: "global-ops-tools" }, filters, searchField), list.box);
+	if (memory.query) list.filter(memory.query);
 	await list.load().catch(() => {});
 	const reload = debounceRefresh(() => list.load(), 500);
 	return onEvents((ev) => {
@@ -43773,7 +44654,10 @@ async function viewOperation(main, id) {
 				return;
 			}
 			freshPage();
-			fill(panel, pageHeader({ title: op.action }), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(op.error_code, "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, h("dt", {}, "Target"), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, "Refs"), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, "Result"), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
+			fill(panel, pageHeader({
+				title: actionLabel(op.action),
+				pill: statusPill(operationStatusKey(op.status))
+			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, s.status), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
@@ -43804,40 +44688,113 @@ function mergeRecovery(op) {
 		"data-merge-recovery": true
 	}, h("h2", {}, t("delivery_merge_recovery")), h("p", { class: "note" }, t("delivery_merge_held")), h("dl", { class: "kv" }, ...["source", "destination"].flatMap((label, i) => [h("dt", {}, t("delivery_merge_" + label)), h("dd", {}, h("code", {}, refs.carrier_paths?.[i] || t("obs_unknown")))])), ...frames.map((step) => h("p", {}, h("code", {}, step.name), " · ", t(step.status === "succeeded" ? "delivery_merge_ack" : "delivery_merge_no_ack"), " · ", observationTime(step.finished_at || step.started_at))), h("p", {}, t("delivery_merge_safe_reads")), h("p", { class: "muted" }, t("delivery_merge_closeout")), refs.host && refs.session_id ? observationLink("session", `${refs.host}/${refs.session_id}`) : null);
 }
-function viewSettings(main) {
-	if (state.caps?.managed_installation) return viewManagedSettings(main);
-	if (nativeDesktop) return viewNativeSettings(main);
-	if (state.token && state.caps && state.token === "managed-browser-session") {
-		main.append(pageHeader({ title: t("nav_settings") }), h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), h("p", {}, t("connected_as", {
-			actor: state.caps.actor,
-			scopes: state.caps.scopes.join(", ")
-		})), h("p", { class: "muted" }, t("managed_browser_help")), h("button", {
-			class: "secondary",
-			onclick: () => {
-				disconnect();
-				route();
+function fleetEmpty() {
+	return h("section", { class: "panel" }, emptyState({
+		title: t("global_fleet_empty"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: setupGuide()
+		}, t("global_setup_guide"))
+	}));
+}
+function connectionFacts() {
+	const endpoint = state.endpoint || (state.token ? location.origin : "");
+	const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+	const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+	return h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), h("dd", {}, h("span", { class: `ui-pill tone-${tone}` }, t(key))), h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
+}
+function openSettings(main, { exclusive = false } = {}) {
+	const frame = settingsFrame({
+		h,
+		t,
+		exclusive,
+		sections: [
+			{
+				id: "connection",
+				label: t("global_nav_connection")
+			},
+			{
+				id: "desktop",
+				label: t("global_nav_desktop"),
+				hidden: true
+			},
+			{
+				id: "models",
+				label: t("global_nav_models"),
+				hidden: true
+			},
+			{
+				id: "fleet",
+				label: t("global_nav_fleet"),
+				hidden: true
+			},
+			{
+				id: "updates",
+				label: t("global_nav_updates"),
+				hidden: true
+			},
+			{
+				id: "about",
+				label: t("global_nav_about")
 			}
-		}, t("disconnect"))));
-		return mountTailscale(main, {
-			h,
-			t
-		});
-	}
+		]
+	});
+	if (state.token && state.caps) main.append(pageHeader({
+		title: t("ui_settings"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => route()
+		})]
+	}));
+	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("a", { href: setupGuide() }, t("global_setup_guide"))));
+	main.append(frame.root);
+	return frame;
+}
+function viewBrowserSettings(main) {
+	const frame = openSettings(main, { exclusive: true });
+	const managed = state.token === browserSessionToken;
+	const facts = connectionFacts();
+	facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {
+		actor: state.caps.actor,
+		scopes: state.caps.scopes.join(", ")
+	})));
+	const footer = h("div", { class: "global-card-footer" });
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, managed ? disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("managed_browser_help"))
+	}) : null, h("button", {
+		class: "danger",
+		onclick: () => {
+			disconnect();
+			route();
+		}
+	}, t("disconnect")), footer));
+	const note = mountTailscale(footer, {
+		h,
+		t,
+		presentation: "note"
+	});
+	frame.show("fleet");
+	frame.panel("fleet").append(fleetEmpty());
+	return note;
+}
+function viewBrowserSignedOut(main) {
 	const input = h("input", {
 		type: "password",
 		autocomplete: "off",
 		placeholder: "batc_…"
 	});
 	const remember = h("input", { type: "checkbox" });
-	const info = h("p", { class: "muted" });
-	if (state.caps) info.textContent = t("connected_as", {
-		actor: state.caps.actor,
-		scopes: state.caps.scopes.join(", ")
+	const info = h("p", {
+		class: "muted",
+		role: "status"
 	});
-	else if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
-	main.append(pageHeader({ title: t("nav_settings") }), h("div", { class: "panel" }, h("div", { class: "filters connection-controls" }, h("label", { class: "connection-token" }, t("token"), input), h("button", {
-		class: "primary",
-		onclick: async () => {
+	if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
+	const form = h("form", {
+		class: "global-connect-form",
+		onsubmit: async (event) => {
+			event.preventDefault();
 			disconnect();
 			state.token = input.value.trim();
 			try {
@@ -43850,17 +44807,35 @@ function viewSettings(main) {
 				info.replaceChildren(errorBox(e));
 			}
 		}
-	}, t("connect")), h("button", {
-		class: "secondary",
-		onclick: () => {
-			disconnect();
-			route();
-		}
-	}, t("disconnect"))), h("label", {}, remember, " ", t("remember")), h("p", { class: "muted" }, t("token_help")), info));
-	return mountTailscale(main, {
+	}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
+		class: "primary",
+		type: "submit"
+	}, t("connect")), h("a", {
+		class: "global-quiet-link",
+		href: setupGuide()
+	}, t("global_setup_guide"))), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("token_help"))
+	}), info);
+	const footer = h("div", { class: "global-card-footer" });
+	const root = firstRunCard({
 		h,
-		t
+		t,
+		body: form,
+		footer
 	});
+	main.append(root);
+	mountTailscale(footer, {
+		h,
+		t,
+		presentation: "note"
+	});
+}
+function viewSettings(main) {
+	if (state.caps?.managed_installation) return viewManagedSettings(main);
+	if (nativeDesktop) return viewNativeSettings(main);
+	if (state.token && state.caps) return viewBrowserSettings(main);
+	viewBrowserSignedOut(main);
 }
 async function viewManagedSettings(main) {
 	const connection = {
@@ -43870,11 +44845,15 @@ async function viewManagedSettings(main) {
 	};
 	const guard = () => assertView(connection);
 	const status = h("div", { role: "status" });
-	const local = h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), h("p", {}, t("connected_as", {
+	const frame = openSettings(main, { exclusive: !nativeDesktop });
+	const local = h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), connectionFacts(), h("p", {}, t("connected_as", {
 		actor: state.caps.actor,
 		scopes: state.caps.scopes.join(", ")
-	})), h("p", { class: "muted" }, t("managed_background_help")), h("details", { "data-managed-locations": "" }, h("summary", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))), status);
-	main.append(pageHeader({ title: t("nav_settings") }), local);
+	})), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("managed_background_help"))
+	}), h("details", { "data-managed-locations": "" }, h("summary", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))), status);
+	frame.panel("connection").append(local);
 	const setup = managedSetupPanel({
 		h,
 		t,
@@ -43890,7 +44869,7 @@ async function viewManagedSettings(main) {
 			state.caps = caps;
 		}
 	});
-	main.append(setup.box);
+	frame.panel("connection").append(setup.box);
 	await setup.load();
 	try {
 		guard();
@@ -43899,9 +44878,9 @@ async function viewManagedSettings(main) {
 		if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(error.code)) return;
 		throw error;
 	}
-	const fleetRoot = h("div");
-	main.append(fleetRoot);
-	let disposeFleet;
+	const fleetRoot = frame.panel("fleet");
+	frame.show("fleet");
+	let disposeFleet, disposeTailscale;
 	if (nativeDesktop) {
 		const login = h("input", {
 			type: "checkbox",
@@ -43994,10 +44973,11 @@ async function viewManagedSettings(main) {
 						contract_version: "2026-10-08"
 					});
 				} }, h("p", { class: "muted" }, t("managed_join_help")), h("div", { class: "capture-fields" }, h("label", {}, t("desktop_endpoint"), endpoint), h("label", {}, t("desktop_expected_actor"), actor)), review);
-				main.append(h("details", {
+				frame.panel("desktop").append(h("details", {
 					class: "panel",
 					"data-managed-join": ""
 				}, h("summary", {}, t("managed_join_existing")), form));
+				frame.show("desktop");
 			}
 		} catch (error) {
 			if (connection.generation === generation) status.append(errorBox(error));
@@ -44006,21 +44986,33 @@ async function viewManagedSettings(main) {
 			h,
 			t
 		});
-	} else local.append(h("p", { class: "muted" }, t("managed_browser_help")), h("button", {
-		class: "secondary",
-		onclick: () => {
-			disconnect();
-			route();
-		}
-	}, t("disconnect")));
-	const disposeTailscale = mountTailscale(fleetRoot, {
-		h,
-		t
-	});
+		disposeTailscale = mountTailscale(fleetRoot, {
+			h,
+			t
+		});
+	} else {
+		const footer = h("div", { class: "global-card-footer" });
+		local.append(disclosure({
+			label: t("global_details"),
+			body: h("p", {}, t("managed_browser_help"))
+		}), h("button", {
+			class: "danger",
+			onclick: () => {
+				disconnect();
+				route();
+			}
+		}, t("disconnect")), footer);
+		disposeTailscale = mountTailscale(footer, {
+			h,
+			t,
+			presentation: "note"
+		});
+		fleetRoot.append(fleetEmpty());
+	}
 	return () => {
 		setup.dispose();
 		disposeFleet?.();
-		disposeTailscale();
+		disposeTailscale?.();
 	};
 }
 async function nativeTransition(kind, config = null) {
@@ -44118,16 +45110,20 @@ async function viewNativeSettings(main) {
 	const enroll = action("enroll", "desktop_add_credential");
 	const reload = action("reload", "desktop_reload_configuration");
 	const forget = action("forget", "desktop_forget_credential");
-	const leave = action("disconnect", "disconnect");
+	const leave = action("disconnect", "disconnect", "danger");
 	const actions = h("div", { class: "actions" }, connect, enroll, reload, leave);
 	const saved = h("div", {}, h("p", { class: "muted" }, t("desktop_forget_help")), forget);
 	const connectionDetails = h("details", {}, h("summary", {}, t("connection_details")), technicalDetails, help);
 	const introduction = h("details", {}, h("summary", {}, t("delivery_setup_title")), h("ol", {}, h("li", {}, t("delivery_setup_central")), h("li", {}, t("delivery_setup_identity")), h("li", {}, t("delivery_setup_mode"))));
 	const localDetails = h("details", { class: "panel" }, h("summary", {}, t("desktop_local")), h("p", { class: "muted" }, t("desktop_dashboard_only")));
-	main.append(pageHeader({ title: t("nav_settings") }), h("section", {
+	const frame = openSettings(main);
+	frame.panel("connection").append(h("section", {
 		class: "panel native-connection",
 		"aria-label": t("desktop_connection")
-	}, h("h2", {}, t("desktop_connection")), setup, details, platform, actions, info, connectionDetails, introduction, saved), localDetails, fleetRoot, updateRoot);
+	}, h("h2", {}, t("desktop_connection")), setup, details, platform, actions, info, connectionDetails, introduction, saved));
+	frame.panel("desktop").append(localDetails);
+	frame.panel("fleet").append(fleetRoot);
+	frame.panel("updates").append(updateRoot);
 	const showInfo = () => {
 		info.replaceChildren();
 		if (state.caps) info.append(h("p", {}, t("connected_as", {
@@ -44229,7 +45225,15 @@ async function viewNativeSettings(main) {
 		if (mine === generation) info.append(errorBox(error));
 	}
 	if (mine !== generation) return;
-	if (firstConnection) return () => disposeUpdates?.();
+	if (disposeUpdates) frame.show("updates");
+	if (firstConnection) {
+		setup.prepend(h("span", {
+			class: "brand-mark",
+			"aria-hidden": "true"
+		}), h("p", {}, t("global_first_sentence")), h("a", { href: setupGuide() }, t("global_setup_guide")));
+		return () => disposeUpdates?.();
+	}
+	frame.show("desktop");
 	const disposeFleet = await mountFleet(fleetRoot, {
 		h,
 		t
@@ -44243,6 +45247,7 @@ async function viewNativeSettings(main) {
 		h,
 		t
 	});
+	frame.show("fleet");
 	return () => {
 		disposeFleet?.();
 		disposeUpdates?.();
@@ -44302,22 +45307,16 @@ function indent(el, depth) {
 	return el;
 }
 function stateChip(c) {
-	const cls = {
-		done: "ok",
-		awaiting_approval: "warn",
-		doing: "info",
-		waiting: "warn"
-	}[c.display_state] || "";
-	return chip(t("wi_state_" + c.display_state), cls);
+	return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
 	return [
-		c.doing ? chip(`${t("wi_state_doing")} ${c.doing}`, "info") : null,
-		c.awaiting_approval ? chip(`${t("wi_state_awaiting_approval")} ${c.awaiting_approval}`, "warn") : null,
-		chip(t("wi_done_of", {
+		c.doing ? h("span", { class: "ui-pill tone-info" }, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+		c.awaiting_approval ? h("span", { class: "ui-pill tone-review" }, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+		h("span", { class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "") }, t("wi_done_of", {
 			done: c.done,
 			total: c.total
-		}), c.total && c.done === c.total ? "ok" : "")
+		}))
 	];
 }
 function orderButtons(sibs, i, key, run) {
@@ -44482,7 +45481,17 @@ async function viewProjects(main) {
 		}
 	});
 	const showArchived = h("input", { type: "checkbox" });
-	main.append(pageHeader({ title: t("nav_projects") }), h("p", { class: "muted" }, t("projects_help")), manageNote() || "", create.box, out, tree, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+	main.append(pageHeader({
+		title: t("nav_projects"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => render().catch(() => {})
+		})]
+	}), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("projects_help"))
+	}), manageNote() || "", create.box, out, tree, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens;
 		try {
@@ -44725,7 +45734,7 @@ async function viewProject(main, pid) {
 			const row = indent(h("div", { class: "row tree" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
 				class: "title",
 				href: `#/item/${w.work_item_id}`
-			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, w.completion.pending ? chip(t("needs_decision"), "warn") : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
+			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
 			if (may("manage") && !p.archived) dr.box.prepend(h("div", { class: "actions" }, ...orderButtons(sibs, i, "work_item_id", run)));
 			if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({
 				h,
@@ -45187,11 +46196,37 @@ function eventDetail(b) {
 function linkedItems(items) {
 	return h("p", { class: "muted" }, t("linked_items"), ": ", ...items.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/item/${x.work_item_id}` }, x.title)]));
 }
-function workItemRow(w) {
-	return h("div", { class: "row" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
-		class: "title",
-		href: `#/item/${w.work_item_id}`
-	}, w.title), h("div", { class: "muted" }, [w.project_name, w.completion.claimed_by && t("claimed_by", { who: w.completion.claimed_by })].filter(Boolean).join(" · "))), w.reading?.unread ? chip(t("reading_unread")) : null, w.completion.pending ? chip(t("needs_decision"), "warn") : null);
+function workItemRow(w, open) {
+	const title = w.title || w.work_item_id;
+	const href = `#/item/${encodeURIComponent(w.work_item_id)}`;
+	const key = w.work_item_id;
+	const meta = joinLabel([
+		w.project_name,
+		w.completion?.claimed_by ? t("claimed_by", { who: w.completion.claimed_by }) : "",
+		w.reading?.unread ? t("reading_unread") : ""
+	]);
+	return inboxRow({
+		h,
+		key,
+		title,
+		href,
+		meta,
+		pill: statusPill(workStatusKey(w.completion?.display_state)),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href
+		}, t("global_review")),
+		detailsLabel: t("global_details_for", { title }),
+		onOpen: () => open?.(key, title, [
+			statusPill(workStatusKey(w.completion?.display_state)),
+			meta ? h("p", {}, meta) : null,
+			w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
+			disclosure({
+				label: t("global_details"),
+				body: h("dl", { class: "kv" }, h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, w.work_item_id || "—")))
+			})
+		])
+	});
 }
 async function viewCleanup(main, section, ident) {
 	const connection = {
@@ -45580,7 +46615,21 @@ async function viewCleanup(main, section, ident) {
 			fill(retainedOut, errorBox(e));
 		}
 	}
-	main.append(pageHeader({ title: t("nav_cleanup") }), h("p", { class: "muted" }, t("cleanup_intro")), section === "task" || supportsTask ? h("p", { class: "muted" }, t("cleanup_task_help")) : "");
+	main.append(pageHeader({
+		title: t("nav_cleanup"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => settleRefreshes([
+				loadHistory(),
+				loadRetained(),
+				refreshCleanup(true)
+			]).catch(() => {})
+		})]
+	}), disclosure({
+		label: t("global_details"),
+		body: h("div", {}, h("p", {}, t("cleanup_intro")), section === "task" || supportsTask ? h("p", {}, t("cleanup_task_help")) : null)
+	}));
 	if (section === "resource") {
 		try {
 			const data = await api("GET", `/cleanup-tombstones/${encodeURIComponent(ident)}`);
@@ -45634,6 +46683,7 @@ async function viewApprovals(main) {
 		opStatus,
 		storageKey: `batc.approvals.${connection.namespace}`
 	});
+	panel.box.classList.add("global-form");
 	main.append(h("a", { href: "#/sessions" }, t("sessions_title")), pageHeader({ title: t("bulk_title") }), panel.box);
 	try {
 		await panel.refresh();
@@ -46098,7 +47148,13 @@ async function route() {
 			onEvents,
 			errorBox
 		});
-		main.append(preferences.box);
+		const slot = main.querySelector("[data-settings-models]");
+		const tab = main.querySelector("[data-settings-nav=\"models\"]");
+		if (slot) {
+			slot.append(preferences.box);
+			if (tab) tab.hidden = false;
+			if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
+		} else main.append(preferences.box);
 	}
 	if (name === "project" && state.caps?.features?.project_skills?.version === 1) {
 		const connection = {

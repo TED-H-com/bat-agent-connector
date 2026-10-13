@@ -36,7 +36,7 @@ function fixture() {
 for (const native of [false, true]) {
   test(`personal preferences preserve unknown IDs, drafts and frozen retry (${native ? 'IPC' : 'Web'})`, async ({page}) => {
     const f = fixture(); page.on('pageerror', e => f.state.errors.push(e.message)); await mountConversation(page, native, f.dispatch);
-    await page.goto('/dashboard/#/settings'); const panel = page.locator('[data-model-preferences]');
+    await page.goto('/dashboard/#/settings'); await page.getByRole('tab', {name: /^(Models|模型)$/}).click(); const panel = page.locator('[data-model-preferences]');
     await panel.locator('summary').click(); const initial = panel.getByRole('textbox', {name: 'Initial model ID', exact: true});
     await expect(initial).toHaveValue('unavailable-original'); await expect(panel).toContainText('42%');
     await expect(panel).toContainText('7-day usage: unknown'); await expect(panel).toContainText('Host-reported provider account: host-account@example.test');
@@ -48,10 +48,10 @@ for (const native of [false, true]) {
     await expect(panel).toContainText('Lost preference reply'); await expect(initial).toBeDisabled();
     const original = f.data.writes[0]; expect(original.body.preconditions).toEqual({expected_revision: 2});
     expect(original.body.params).toMatchObject({initial_model: 'preserved-draft', last_model: 'actual:last', order: ['claude:model-a', 'claude:model-b']});
-    await page.reload(); await panel.locator('summary').click(); await expect(initial).toHaveValue('preserved-draft'); await expect(initial).toBeDisabled();
+    await page.reload(); await page.getByRole('tab', {name: /^(Models|模型)$/}).click(); await panel.locator('summary').click(); await expect(initial).toHaveValue('preserved-draft'); await expect(initial).toBeDisabled();
     await panel.getByRole('button', {name: 'Retry original request', exact: true}).click(); await expect(initial).toBeEnabled();
     expect(f.data.writes[1]).toEqual(original);
-    await initial.fill('private-draft'); f.data.principal = 'another'; await page.reload(); await panel.locator('summary').click();
+    await initial.fill('private-draft'); f.data.principal = 'another'; await page.reload(); await page.getByRole('tab', {name: /^(Models|模型)$/}).click(); await panel.locator('summary').click();
     await expect(initial).toHaveValue('preserved-draft'); expect(f.state.errors).toEqual([]);
   });
   test(`start model choices use actual catalog and explicit initial versus last (${native ? 'IPC' : 'Web'})`, async ({page}) => {

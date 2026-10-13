@@ -18,4 +18,5 @@ import "./pm-issues.css";
 import "./shell.css";
 import "./pm-overview.css";
 import "./pm-discussions.css";
+import "./global-screens.css";
 import "./app.js";
