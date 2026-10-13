@@ -41,10 +41,10 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W07 | P0 | PM worktree bootstrap | 主線：PM 自有 carrier、固定 commit、不可覆寫草稿與文件採用，不夾帶程式碼修改。 |
 | W08 | P0 | Plan revision 與採用流程 | 主線：版本、來源、accepted CAS、理由、scope revision 與 Git 證據；採用不直接授權執行。 |
 | W09 | P1 | PM runner 與 adapter selection | 主線 #115：按操作選 native／BAT 有界分析、計畫提案與 Follow-up；持久 workspace 選擇見 W24。 |
-| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄；更完整專業會議主持仍待做。 |
+| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄；`ux/be-overview-discuss` 分支新增有序 context binding、來源撤回與 durable rename，前端接入／整合待驗證；更完整專業會議主持仍待做。 |
 | W11 | P1 | Plan diff 與影響分析 | 主線：固定版本／來源／條件差異及影響候選；#113 提供候選更新及整組採用，完整語意判讀待強化。 |
-| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。 |
-| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據；M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。本分支另有尚未合併的唯讀時程投影，不含甘特圖、推算預測或 critical path。 |
+| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。中央另有獨立即時 overview 投影、可見需求進度／待決／偏差與涵蓋標記，固定報告不混入即時數字；[API 合約](../design/pm-overview-discussion-context.md)。 |
+| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據；M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。中央另有唯讀時程投影（[合約](../design/pm-schedule.md)），不含甘特圖、推算預測或 critical path；前端尚未接上。 |
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |

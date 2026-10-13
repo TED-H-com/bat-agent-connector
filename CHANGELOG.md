@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
+  with adopted-requirement progress, explicit blockers, decisions, schedule/quality
+  deviations, visible delivery evidence and bounded source coverage. Saved reports
+  retain their fixed snapshot semantics.
+- Bind up to eight original context items when creating a PM discussion and rename
+  threads with durable version checks. Current source withdrawal redacts chips and
+  protects analysis derived from their frozen context; English and Traditional
+  Chinese validation messages accompany the new context errors.
+
 - Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
   Each row keeps its source record's identity and canonical status. Totals, open-item age, the
   last 12 weeks and blocking reasons are included only when the visible scan is complete. A
