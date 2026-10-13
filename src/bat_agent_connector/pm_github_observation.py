@@ -5,9 +5,9 @@ import json
 import re
 import time
 
-from . import pm_source_reads, pm_workspace
 from . import pm_github_sources as provider
 from . import pm_release_baselines as baselines
+from . import pm_source_reads, pm_workspace
 from . import pm_workload as workload
 from . import pm_workload_sources as sources
 from .operations import ActionDef, OperationError, OperationService
