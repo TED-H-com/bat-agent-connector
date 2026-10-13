@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Add a repeatable real-central PM decision walkthrough in English and zh-TW,
+  with scripted native analysis, temporary Git, original-key adoption recovery
+  and step screenshots. It currently exposes two Overview contract gaps;
+  see [walkthrough status](docs/design/pm-decision-walkthrough.md).
+
 - Keep unsent PM discussions focused on their draft; defer thread tools until the
   central discussion is created, even when all PM capabilities are available.
 
