@@ -200,3 +200,35 @@ background reads; the toolbar can pause view updates without stopping collection
 When the resources projection includes `buckets`, the usage trend is one stacked bar
 per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
 Omit the chart when the projection has no buckets.
+
+## Dependencies
+
+The question on this view is which checks have to be run again if one dependency changes.
+It reads the current dependency projection, its revisions, and one impact query. Capture,
+declare, and retract stay the durable dependency actions, using the projection version,
+the workspace version, and the source binding digest. Capture again is the only primary
+action in the page header. Maintenance policy, release baselines, maintenance checks, and
+workload observations stay in the secondary cards.
+
+The header names the capture commit and its UTC date. A Stale pill is shown only when
+the projection says `stale` is true. Unknown freshness stays out of the header and is
+stated once under Details. A Partial pill and the omitted total describe the returned
+capture, not a repository-wide total. Relation counts do the same, and they are omitted
+when the projection has no count object.
+
+The matrix groups dependency columns by kind. A cell shows relation letters: verified
+is solid, declared is an outline, and inferred is dashed. The version is the accessible
+name and the tooltip. More than six columns start as the focused component's direct
+dependencies, with Show all. At 800px and below the same rows become a list. The graph
+is a left-to-right drawing of the loaded capture. It is labelled Loaded and is not a
+fleet-wide graph. Selecting a node keeps its upstream and downstream visible.
+
+The inspector shows a pinned version only when this capture resolved one, plus the
+allowed range, the evidence location, and the maintenance owner or the recorded reason.
+Tests to re-run come from the capture's verification hints. Affected components come
+from the impact read. A bounded prefix says how many components were loaded. An impact
+miss says why the dependency is outside this projection, which is not the same as no
+impact. Check impact opens a discussion with no context ref; the dependency name and
+the impact summary are in the title. Declare and retract stay owner actions in a
+disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
+the shared wording, and the raw code appears only there.
