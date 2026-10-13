@@ -1569,3 +1569,21 @@ Quota windows require an explicit opaque pool binding and a fresh source report;
 never add shared balances or convert tokens into subscription quota. Capacity,
 accepted-work performance and remaining-work forecasts are not supplied by this
 increment. See `docs/design/agent-resource-observation.md` for the exact scope.
+
+### Project schedule
+
+Use `pm_schedule_get(workspace_id, after?, limit?)` with your own observe principal.
+This is the same read as `GET /api/v1/pm/workspaces/{workspace_id}/schedule`. Membership
+is checked on every read. It does not adopt a baseline, compute a forecast, compute a
+critical path, attribute tokens, or dispatch work.
+
+Baseline and forecast dates come only from the current recorded roadmap revisions.
+Milestone dates are points. Rows with no baseline, forecast, or actual dates stay in
+`unscheduled` and keep `parent_id` and `depends_on`. Do not infer parents, dependencies,
+or phase rows from names, paths, titles, or time. Manual sessions stay `read_only`.
+A session that stopped producing output is not ended; do not use the last message time.
+
+`limit` is 1–100. Preserve `next_cursor` and read further pages. A page is not a total:
+honor `truncated`, `partial`, and `range_scope`. Withdrawn sources disappear from rows
+and derived dates together; do not refill them from memory. Unknown fields stay null
+with a reason in `unknown`. See `docs/design/pm-schedule.md`.

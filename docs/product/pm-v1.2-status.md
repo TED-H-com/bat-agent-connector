@@ -10,6 +10,7 @@
 
 - **Charter／RTM 已合併：#121／`8bc6cf3`。** 總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯已進主線。精確候選 `0d718f3` 的 Python 3.10–3.13、五個 desktop jobs 與 1,978 項 UI 通過；沒有 owner 安裝或 live 宣稱。
 - **Agent 資源第一段已合併：#122／`2bf152d`。** 新增中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。候選 `dc92f99` 的四版後端與五個 desktop jobs 通過；合併後主線 Windows synthetic PowerShell fixture 逾時，後端矩陣仍待收齊，不能宣稱主線全綠。精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。同一讀取另附每日用量桶（`buckets`，可選 IANA `tz`，預設 UTC）：只含仍計入總量的來源；整日 `complete` 僅在既有 cursor 已讀到檔尾且成功時間蓋過該本地日。缺欄位與未涵蓋日是 null，不是 0。圖表 UI 尚未接上。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
+- **專案時程讀取（後端讀取）：** `GET /api/v1/pm/workspaces/{id}/schedule` 與 `pm_schedule_get` 回傳已記錄的 baseline、forecast 與 actual。沒有甘特圖 UI、推算預測、critical path、階段資料或依工作項目的 token 歸因。合約見 [pm-schedule.md](../design/pm-schedule.md)。
 
 - **新的管理工作台方向已記錄，尚未完成：**[六視圖合約](../design/pm-project-control-center.md)
   定義 Charter、Agent 資源、RTM、技術相依、時程及問題／行動／變更；保留看板與工作空間。
@@ -43,7 +44,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄；更完整專業會議主持仍待做。 |
 | W11 | P1 | Plan diff 與影響分析 | 主線：固定版本／來源／條件差異及影響候選；#113 提供候選更新及整組採用，完整語意判讀待強化。 |
 | W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。 |
-| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據；M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
+| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據；M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。本分支另有尚未合併的唯讀時程投影，不含甘特圖、推算預測或 critical path。 |
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |

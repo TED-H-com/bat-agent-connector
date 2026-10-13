@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
+  `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
+  Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
+  The read does not compute a forecast, a critical path, phase rows, or per-work token use.
+  Withdrawn sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
+
 - Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
   an optional IANA `tz` (default UTC) and returns per-source local days for the selected
   window. A day is complete only when the stored cursor had reached EOF at or after that
