@@ -122,7 +122,7 @@ async def repair_ready(fixed, monkeypatch):
     monkeypatch.setattr(ops, '_step_restart', restart_guard)
     clock = [time.time()]
     w['clock'] = clock
-    for module in (repairs, evidence, policy, workload, github, checks, github_sources):
+    for module in (api_auth, repairs, evidence, policy, workload, github, checks, github_sources):
         monkeypatch.setattr(module, 'time', SimpleNamespace(time=lambda: clock[0], monotonic=time.monotonic))
     sha = w['package']['document']['code_source']['source_sha']
     old_provider = w['gh'].before_request
@@ -165,8 +165,8 @@ async def repair_ready(fixed, monkeypatch):
     w['policy_id'] = adopted['result']['policy_id']
     await decide(ops, wid, 'set_stage', params={'stage': 'development'}, who=OWNER)
     api_auth.issue(ops.db, OWNER.actor, sorted(OWNER.scopes))
-    # Credential was issued just after the fixed test clock.
-    clock[0] = time.time() + 1
+    # Credential issuance and policy eligibility use the same controlled clock.
+    clock[0] += 1
     await refresh(w)
     return w
 

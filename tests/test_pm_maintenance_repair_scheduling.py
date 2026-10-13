@@ -1,6 +1,7 @@
 """No new investment from revoked policy, unknown applicability or absent budget."""
 import copy
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,10 +107,28 @@ async def test_current_owner_credential_rotation_preserves_same_controller(repai
     parent = ops.create(OWNER, **request(w))[0]
     api_auth.revoke(ops.db, OWNER.actor)
     api_auth.issue(ops.db, OWNER.actor, sorted(repairs.REQUIRED))
+    created_at = ops.db.execute('SELECT created_at FROM api_principals WHERE actor=? AND revoked_at IS NULL',
+        (OWNER.actor,)).fetchone()[0]
+    assert created_at == w['clock'][0]  # Issuance and current-policy checks share the fixture clock.
     w['clock'][0] += 1
     parent = await advance(w, parent)
     assert view(w, parent)['child']['status'] == 'succeeded'
     assert mock.channels().count('claude:start-session') == 1
+
+
+async def test_future_credential_cannot_reserve_repair_or_start_child(repair_ready, mock, monkeypatch):
+    w, ops = repair_ready, repair_ready['d'].ops
+    parent = ops.create(OWNER, **request(w))[0]
+    api_auth.revoke(ops.db, OWNER.actor)
+    future = w['clock'][0] + 10
+    monkeypatch.setattr(api_auth, 'time', SimpleNamespace(time=lambda: future))
+    api_auth.issue(ops.db, OWNER.actor, sorted(repairs.REQUIRED))
+    w['clock'][0] += 1
+    parent = await advance(w, parent)
+    assert parent['error_code'] == 'PM_MAINTENANCE_AUTHORITY_UNAVAILABLE', parent
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repairs').fetchone()[0] == 0
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repair_children').fetchone()[0] == 0
+    assert not bat_writes(mock)
 
 
 async def test_explicit_caller_cannot_borrow_other_live_start_credential(repair_ready):
