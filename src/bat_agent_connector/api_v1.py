@@ -179,6 +179,8 @@ class ApiV1:
         pm_maintenance_policy.install(daemon.ops)
         pm_workload.install(daemon.ops)
         pm_github_observation.install(daemon.ops)
+        from . import pm_dependencies
+        pm_dependencies.install(daemon.ops)
         pm_maintenance_checks.install(daemon.ops)
         pm_maintenance_review.install(daemon.ops)
         pm_maintenance_repairs.install(daemon.ops)
@@ -192,7 +194,14 @@ class ApiV1:
         self._streams = 0
         self._streams_by_actor: dict[str, int] = {}
         self.routes = [
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/overview", self.pm_overview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/resources", self.pm_resources, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/schedule", self.pm_schedule, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register", self.pm_register, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register/(?P<row_id>(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision):[A-Za-z0-9_.~-]{1,180})", self.pm_register_row, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies", self.pm_dependencies, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies/revisions", self.pm_dependency_revisions, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies/impact", self.pm_dependency_impact, "observe"),
             ("GET", r"/api/v1/managed/setup", self.managed_setup_state, "manage"),
             ("POST", r"/api/v1/managed/setup/secrets", self.managed_setup_secret, "manage"),
             ("POST", r"/api/v1/approval-previews", self.approval_preview, "observe"),
@@ -514,7 +523,8 @@ class ApiV1:
                       self.pm_maintenance_reviews, self.pm_maintenance_review_current, self.pm_maintenance_review, self.pm_maintenance_review_events,
                       self.pm_maintenance_checks, self.pm_maintenance_check_current, self.pm_maintenance_check, self.pm_maintenance_schedule,
                       self.pm_ahp_adapters, self.pm_ahp_observations, self.pm_ahp_observation_current, self.pm_ahp_observation,
-                      self.pm_resources, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
+                      self.pm_overview, self.pm_dependencies, self.pm_dependency_revisions, self.pm_dependency_impact,
+                      self.pm_resources, self.pm_register, self.pm_register_row, self.pm_schedule, self.pm_github_observations, self.pm_github_observation_current, self.pm_github_observation,
                       self.pm_workload_snapshots, self.pm_workload_snapshot_current, self.pm_workload_snapshot,
                       self.pm_maintenance_policies, self.pm_maintenance_policy_current, self.pm_maintenance_policy,
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
@@ -691,7 +701,7 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -908,8 +918,29 @@ class ApiV1:
     async def pm_ahp_adapters(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_ahp_adapters_list", query, workspace_id=workspace_id)
 
+    async def pm_overview(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_overview_get", query, workspace_id=workspace_id)
+
+    async def pm_dependencies(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_dependencies_get", query, workspace_id=workspace_id)
+
+    async def pm_dependency_revisions(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_dependencies_revisions_list", query, workspace_id=workspace_id)
+
+    async def pm_dependency_impact(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_dependencies_impact_get", query, workspace_id=workspace_id)
+
     async def pm_resources(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_resources_get", query, workspace_id=workspace_id)
+
+    async def pm_schedule(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_schedule_get", query, workspace_id=workspace_id)
+
+    async def pm_register(self, principal, query, workspace_id, **_):
+        return self._pm_read(principal, "pm_register_list", query, workspace_id=workspace_id)
+
+    async def pm_register_row(self, principal, query, workspace_id, row_id, **_):
+        return self._pm_read(principal, "pm_register_get", query, workspace_id=workspace_id, row_id=row_id)
 
     async def pm_ahp_observations(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_ahp_observations_list", query, workspace_id=workspace_id)
@@ -1041,7 +1072,16 @@ class ApiV1:
         return self._pm_read(principal, "pm_brief_export_get", query, workspace_id=workspace_id, snapshot_id=snapshot_id)
 
     async def capabilities(self, principal, **_):
-        from . import pm_ahp_observations, pm_github_observation, pm_lifecycle, pm_resources
+        from . import (
+            pm_ahp_observations,
+            pm_dependencies,
+            pm_github_observation,
+            pm_lifecycle,
+            pm_overview,
+            pm_register,
+            pm_resources,
+            pm_schedule,
+        )
         fleet = self.daemon.fleet
         from . import (
             pm_conversation_proposals,
@@ -1102,7 +1142,11 @@ class ApiV1:
                       "features": {"dashboard_sync": {"version": 1, "bootstrap": "/api/v1/bootstrap", "checkpoint_replay": True},
                                   "controller_isolation": {"version": 1, "identity": "server_actor",
                                       "unproven_legacy": "read_only", "admin_takeover": False},
+                                  "pm_overview": pm_overview.capabilities(),
                                   "pm_resources": pm_resources.capabilities(),
+                                  "pm_schedule": pm_schedule.capabilities(),
+                                  "pm_register": pm_register.capabilities(),
+                                  "pm_dependencies": pm_dependencies.capabilities(),
                                   "pm_github_observation": pm_github_observation.capabilities(),
                                   "pm_workspaces": {"version": 1, "ahp_observation": pm_ahp_observations.capabilities(), "executable_modes": ["idea", "planning"],
                                                     "runner": False, "context_packages": True,

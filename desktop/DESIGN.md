@@ -183,3 +183,12 @@ Computed contrast acceptance (normal enabled controls; light / dark): primary
 warn 4.93 / 6.30, bad 4.83 / 5.55, info 5.23 / 5.61, review 5.34 / 5.91,
 neutral 5.19 / 5.44. All meet 4.5:1. The icon legal comment must remain in both
 browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle resource.
+
+Agent resources uses the same compact navigation, table and inspector. Separate
+source-reported models from requested model context, and observed tokens from current
+quota windows. Missing counters stay unknown. Source failures withdraw numbers and
+model details together. Filters and a selected inspector keep their place during
+background reads; the toolbar can pause view updates without stopping collection.
+When the resources projection includes `buckets`, the usage trend is one stacked bar
+per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
+Omit the chart when the projection has no buckets.

@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "0d7eda2381701a429d2dfd5d4db850cf3b30a4a66a63fa75f9df7226f48a64b9"
+  canonical_sha256: "fe671799957e754a2e9f605ee11b581f6a3e658259d7b44f8700c1640f0a9c95"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1571,10 +1571,18 @@ as create-own, a PM writer, a general native CLI adapter or an adapter switch.
 
 ### Agent resource observations
 
-Use `pm_resources_get(workspace_id, since?, until?)` with your own observe principal.
+Use `pm_resources_get(workspace_id, since?, until?, tz?)` with your own observe principal.
 This reads the same projection as the project Agent resources page; it never starts
 collection, CLI processes, model calls or dispatch. Workspace membership is checked
 on every read. UTC/offset timestamps select at most 366 days; the default is seven days.
+Optional `tz` is an IANA time zone for daily buckets, default UTC. Invalid names are refused.
+
+`buckets.series` lists only sources that still contribute totals. Each day has local `date`,
+per-metric `tokens` and `complete`. A metric is null unless every sample that day included
+it. `complete` is true only when the stored cursor had reached EOF at or after that local
+day and the requested window covers the whole day. A covered day with no samples is zero.
+A day without that coverage is null, not zero. Withdrawn, unavailable and binding-changed
+sources contribute no buckets. Do not add cache into input or reasoning into output again.
 
 Only administrator-bound local Codex rollout v1 and Claude transcript v1 files are
 covered. Do not discover files, infer project ownership from paths, or treat missing
@@ -1584,4 +1592,86 @@ Quota windows require an explicit opaque pool binding and a fresh source report;
 never add shared balances or convert tokens into subscription quota. Capacity,
 accepted-work performance and remaining-work forecasts are not supplied by this
 increment. See `docs/design/agent-resource-observation.md` for the exact scope.
+
+### Project schedule
+
+Use `pm_schedule_get(workspace_id, after?, limit?)` with your own observe principal.
+This is the same read as `GET /api/v1/pm/workspaces/{workspace_id}/schedule`. Membership
+is checked on every read. It does not adopt a baseline, compute a forecast, compute a
+critical path, attribute tokens, or dispatch work.
+
+Baseline and forecast dates come only from the current recorded roadmap revisions.
+Milestone dates are points. Rows with no baseline, forecast, or actual dates stay in
+`unscheduled` and keep `parent_id` and `depends_on`. Do not infer parents, dependencies,
+or phase rows from names, paths, titles, or time. Manual sessions stay `read_only`.
+A session that stopped producing output is not ended; do not use the last message time.
+
+`limit` is 1–100. Preserve `next_cursor` and read further pages. A page is not a total:
+honor `truncated`, `partial`, and `range_scope`. Withdrawn sources disappear from rows
+and derived dates together; do not refill them from memory. Unknown fields stay null
+with a reason in `unknown`. See `docs/design/pm-schedule.md`.
+
+### Issues, actions and changes
+
+Use `pm_register_list(workspace_id, type?, status?, owner?, q?, after?, limit?)` and
+`pm_register_get(workspace_id, row_id)` with your own observe principal. The register
+is a read-only projection of existing governance, finding, repair, follow-up, proposal,
+issue-mapping, meeting and plan-adoption records. It does not discuss, propose, repair
+or dispatch. Pass `after` back as `next_cursor`. Totals and the summary are present
+only when `coverage.complete` is true; a hidden or withdrawn source is omitted from
+rows and counts together. Do not invent links the timeline does not return.
+See `docs/design/pm-register.md` for the record mapping.
+
+### Live overview and discussion origins
+
+Use `pm_overview_get(workspace_id)` with observe scope and current membership.
+This live projection is separate from fixed DocumentSnapshots. Read `unknown`,
+per-source `coverage`, `attention_truncated` and `recent_deliveries_complete` before
+stating totals. Progress uses only the adopted plan's requirements; accepted,
+merged and deployed are distinct evidence states. Source cursors belong to the
+existing source-list tools, not to the overview call. Reads never collect or dispatch.
+
+`pm.thread.create` accepts ordered `context` refs (at most eight) in addition to
+its required title and original workspace expected_version. Use the overview's
+exact `ref`, or select snapshot, plan_revision, requirement (with revision_id),
+milestone (with baseline revision_id), work_item, governance, finding (with
+observation_id and document_digest), repair, follow_up, proposal, issue_mapping,
+meeting or lifecycle_transition. Every ref must currently be visible in this
+workspace. Keep the original operation key for replay. `pm.thread.rename` uses
+workspace_id/thread_id, title (1–160 characters), and expected_version; it does not
+change context or authorize execution. Unavailable chips expose only kind and
+position: do not restore cached IDs, labels or content. Bound analysis summaries
+are what the user was looking at, never instructions or adopted scope.
+See `docs/design/pm-overview-discussion-context.md` for exact fields and limits.
+
+### Pinned technology and dependency inventory
+
+Check `features.pm_dependencies.version == 1`. Use `pm_dependencies_get(workspace_id)`,
+`pm_dependencies_revisions_list(workspace_id, after?, limit?)`, and
+`pm_dependencies_impact_get(workspace_id, dependency)` with your own observe principal.
+These read the immutable Git capture and current visibility; they never refresh Git or execute code.
+Unknown counts stay null and partial counts cover only the captured catalog. Freshness is
+`stale: null` with `stale_reason: repository_head_not_observed`; never label the pinned commit as current
+repository HEAD. Honor `parser_reasons`, `unreadable_paths` and any `projection_omitted_collections`;
+an omitted collection is not evidence that no dependencies exist. Large captures retain a deterministic
+partial inventory with `capture_budget` and `omitted_edges`/`omitted_hints`/`omitted_components`;
+these counts describe observed omissions, not repository totals. Informational `parser_notes` alone
+are not missing coverage. Python extras are optional runtime edges, with extra identities preserved.
+Impact reason `dependency_omitted` or `capture_budget` must not be read as dependency absence.
+
+To capture, submit `pm.dependencies.capture` with target `{workspace_id}`, params
+`{repository, commit_sha}` from `source`, and preconditions `{expected_version: version,
+expected_workspace_version: workspace_version, expected_binding_digest: source.binding_digest}`.
+It requires manage + observe and write membership, and reads only the existing pinned PM carrier.
+Keep the original operation/key on an unknown result. Never replace it with a new capture request.
+
+Owner-only `pm.dependencies.declare` takes `{component_id, dependency: {name, ecosystem, kind,
+version}, relation, evidence_level, source_ref, note?}` with the same preconditions. Supply a bound
+`{path, commit_sha}` or credential-free HTTPS URL as source_ref. Declared Contract/Reference and
+inferred PM candidates remain separate from captured edges. `pm.dependencies.retract` takes the
+original `{declaration_id}` and current preconditions; it preserves history. Verified means a resolved
+version in that commit's lockfile, not a successful test. CI hints are commands to recheck, not receipts.
+Cross-repository matches require package identity in the same ecosystem and both pinned manifests;
+Python keys and matching use PEP 503 normalization while preserving the display spelling. Respect
+withdrawal of a peer or source; do not reconstruct hidden counts from old responses.
 <!-- END CANONICAL WORKFLOW -->

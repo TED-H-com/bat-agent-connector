@@ -24,6 +24,44 @@
   Installed-app UI tests retry transient UI Automation reads within the existing
   readiness deadline and keep bounded, text-free attempt diagnostics.
 
+- Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
+  lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
+  immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
+  current membership and source withdrawal; capture never executes repository code. Lockfile
+  versions count as verified only for components the lockfile covers (never by name alone),
+  unsupported fields make a capture partial, and freshness stays unknown until a repository head
+  is observed. Optional extras and tool-specific dev groups keep their roles; an oversized
+  manifest is stored as a deterministic partial capture with its omission count.
+
+- Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
+  with adopted-requirement progress, explicit blockers, decisions, schedule/quality
+  deviations, visible delivery evidence and bounded source coverage. Saved reports
+  retain their fixed snapshot semantics.
+- Bind up to eight original context items when creating a PM discussion and rename
+  threads with durable version checks. Current source withdrawal redacts chips and
+  protects analysis derived from their frozen context; English and Traditional
+  Chinese validation messages accompany the new context errors.
+
+- Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
+  Each row keeps its source record's identity and canonical status. Totals, open-item age, the
+  last 12 weeks and blocking reasons are included only when the visible scan is complete. A
+  withdrawn source leaves the rows and the counts together. The projection adds no write actions.
+
+- Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
+  `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
+  Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
+  The read does not compute a forecast, a critical path, phase rows, or per-work token use.
+  A visible session link with no observation stays an unknown read-only attempt. A linked
+  operation or task with no record is omitted, marked partial, and does not publish the id.
+  The page is cut by encoded size so the next cursor resumes without gaps. Withdrawn
+  sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
+
+- Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
+  an optional IANA `tz` (default UTC) and returns per-source local days for the selected
+  window. A day is complete only when the stored cursor had reached EOF at or after that
+  day; missing counters and uncovered days stay null, and withdrawn sources omit buckets
+  together with their totals.
+
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
   the mapping, or the name on the published issue when the mapping omits it,

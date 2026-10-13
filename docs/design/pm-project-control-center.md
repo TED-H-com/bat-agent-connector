@@ -130,6 +130,8 @@ repo、語言／runtime、library、API／schema、build／test toolchain、外�
 需要重跑的測試及受影響的 release。明確區分已驗證相依、文件聲稱的相依與 PM 待確認推論。
 不要僅從「同一語言」推論兩個 repo 有相依關係。
 
+中央清冊、固定來源、操作及 read API 的後端候選契約見 [固定版本技術相依清冊](pm-dependencies.md)；前端矩陣／圖仍需另行整合。
+
 此頁回答「改 A，要查誰、驗證什麼？」；「檢視影響」產出可審閱的維護／變更建議。
 上游變更通知由既有觀察與政策提供，矩陣本身不自動寫入其他 repo。
 
@@ -142,6 +144,10 @@ repo、語言／runtime、library、API／schema、build／test toolchain、外�
 原定 baseline、目前 forecast、實際起訖分開。里程碑用明確符號，未來計畫用虛線，
 阻塞／驗證等待用文字與狀態。依賴箭頭來自明確關係；未排期工作留在待排清單，
 缺結束證據的 session 不從最後一筆輸出自行推算結束。
+
+目前可讀的投影是 [專案時程](pm-schedule.md)。它只回傳已記錄的 baseline、forecast
+與明確執行證據，並把沒有日期的列留在未排期清單。這一版沒有階段列、推算預測、
+critical path、token 歸因或拖曳改期。
 
 支援日／週／月縮放、今日定位、關鍵依賴追蹤與同步工作詳情。日期拖動產生時程提案，
 不能無聲覆寫已採用 baseline。資料足夠才算 critical path／預測；不以 token/s 推算完成日期。
@@ -171,6 +177,7 @@ flowchart LR
 摘要圖只回答管理問題：新增／解決趨勢、未決事項年齡、阻塞原因、變更影響或處理流量。
 圓餅／環形圖僅用於同一分母、互斥類別的組成；允許多標籤的記錄使用條形圖，不硬算比例。
 圖表能點回對應列，篩選、計量期間與涵蓋範圍共用，不設一排沒有行動價值的裝飾 KPI。
+登記的讀取投影與紀錄對照見 [pm-register.md](pm-register.md)。篩選表、時間線畫面與圖表仍待實作。
 
 ## 8. 派工與 PM 的責任
 
@@ -208,7 +215,7 @@ unknown 時使用對應狀態，不用流動線條假裝正在產出。使用者
 | 工序 | 既有基礎 | 仍需完成 | 對應工作 |
 | --- | --- | --- | --- |
 | 1. 總覽與專案內導覽 | PlanRevision、採用、DocumentSnapshot、Brief、自然對話提案 | 一頁 Charter、整合計畫、快照版本箭頭、PM 持續補齊、單頁列印 | W08、W10–12、W33、W39–40 |
-| 2. RTM 與處理鏈 | Requirement、品質紀錄、Issue mapping、delivery lineage、治理 | 明確多對多外部同步、跨版本完整追溯、可展開表格和處理鏈 | W05–06、W17–21 |
+| 2. RTM 與處理鏈 | Requirement、品質紀錄、Issue mapping、delivery lineage、治理、登記讀取 API | 明確多對多外部同步、跨版本完整追溯、可展開表格畫面（契約見 pm-register.md） | W05–06、W17–21 |
 | 3. 資源與效能 | 前次人工本機診斷方法；中央 execution/verification 來源 | 多 CLI collector、增量 cursor、去重、配額 adapter、效能歸因、估計 | W09、W23–24、W28、W30 |
 | 4. 技術相依與時程 | 固定 repo/spec 來源、Roadmap baseline/forecast、maintenance policy | 技術關係 inventory、影響矩陣、分層甘特圖與時程提案 | W13、W35–37、W42–49 |
 | 5. 政策內自動安排 | 有界工作包／批次及維護派工 | 資源 reservation、PM 安排政策、exception 回討論及完整循環 | W19、W30、W44–46、W50–52 |
@@ -260,17 +267,20 @@ action、schema、外部同步、派工政策或 native 權限。
 - **來源失效：** 串接、分頁或詳情讀取失敗時，相關列、計數及詳情一起撤回；遲到的回應
   不得復活已撤回資料。保持中央 scope、既有 operation key 和原請求恢復行為。
 
-此段仍不是完整六視圖交付。Charter 尚未新增 PM 自動整理／持續補齊，從總覽進入討論
-也尚未自動將快照設成新討論的正式 source。RTM 尚未新增階段關聯、任意外部 Issue／PR
-的多對多同步或完整跨版本比較；里程碑僅使用既有明確關聯。本機 Agent collector／quota
-第一段見第 14 節；技術相依矩陣、分層甘特圖、問題處理時間線與政策內自動安排仍依第 10 節接續。
+此段仍不是完整六視圖交付。Charter 尚未新增 PM 自動整理／持續補齊。中央已補即時 overview、
+建立討論時的正式 context refs（含固定 snapshot）與 durable rename；API／來源可見性／涵蓋限制見
+[即時總覽與討論來源](pm-overview-discussion-context.md)。前端入口尚未接上，也尚未安裝或實機驗收。
+RTM 尚未新增階段關聯、任意外部 Issue／PR 的多對多同步或完整跨版本比較；里程碑僅使用既有明確關聯。
+本機 Agent collector／quota 第一段見第 14 節；技術相依矩陣、分層甘特圖、問題處理時間線與政策內自動安排
+仍依第 10 節接續。
 
 
 ## 14. Agent 資源第一段實作範圍
 
 #122 已將 `feat/pm-v12-resource-observation-20261012` 合併為 `2bf152d`，從 #121 接續。新增中央定期收集
 明確綁定的本機 Codex／Claude 用量檔、原 cursor／去重、有限來源配額窗與共用資源頁。
-精確範圍、來源格式、權限及剩餘工作见 [Agent resource observations](agent-resource-observation.md)。
+精確範圍、來源格式、權限及剩餘工作見 [Agent resource observations](agent-resource-observation.md)。
+同一投影現在附帶每日本地用量桶，供之後的趨勢圖使用；這還不是圖表 UI。
 這不是完整第 3 節：遠端主機、完整配額、合格交付／返工歸因、容量、區間預測和策略安排仍待做。
 候選檢查、合併後主線 Windows 失敗及安裝／live 界線見
 [資源交接](../handoff/2026-10-12-pm-v1.2-resources.md)。

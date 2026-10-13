@@ -9,7 +9,8 @@
 ## 目前整合狀態
 
 - **Charter／RTM 已合併：#121／`8bc6cf3`。** 總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯已進主線。精確候選 `0d718f3` 的 Python 3.10–3.13、五個 desktop jobs 與 1,978 項 UI 通過；沒有 owner 安裝或 live 宣稱。
-- **Agent 資源第一段已合併：#122／`2bf152d`。** 新增中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。候選 `dc92f99` 的四版後端與五個 desktop jobs 通過；合併後主線 Windows synthetic PowerShell fixture 逾時，後端矩陣仍待收齊，不能宣稱主線全綠。精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
+- **Agent 資源第一段已合併：#122／`2bf152d`。** 新增中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。候選 `dc92f99` 的四版後端與五個 desktop jobs 通過；合併後主線 Windows synthetic PowerShell fixture 逾時，後端矩陣仍待收齊，不能宣稱主線全綠。精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。同一讀取另附每日用量桶（`buckets`，可選 IANA `tz`，預設 UTC）：只含仍計入總量的來源；整日 `complete` 僅在既有 cursor 已讀到檔尾且成功時間蓋過該本地日。缺欄位與未涵蓋日是 null，不是 0。圖表 UI 尚未接上。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
+- **專案時程讀取（後端讀取）：** `GET /api/v1/pm/workspaces/{id}/schedule` 與 `pm_schedule_get` 回傳已記錄的 baseline、forecast 與 actual。沒有甘特圖 UI、推算預測、critical path、階段資料或依工作項目的 token 歸因。合約見 [pm-schedule.md](../design/pm-schedule.md)。
 
 - **新的管理工作台方向已記錄，尚未完成：**[六視圖合約](../design/pm-project-control-center.md)
   定義 Charter、Agent 資源、RTM、技術相依、時程及問題／行動／變更；保留看板與工作空間。
@@ -40,14 +41,14 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W07 | P0 | PM worktree bootstrap | 主線：PM 自有 carrier、固定 commit、不可覆寫草稿與文件採用，不夾帶程式碼修改。 |
 | W08 | P0 | Plan revision 與採用流程 | 主線：版本、來源、accepted CAS、理由、scope revision 與 Git 證據；採用不直接授權執行。 |
 | W09 | P1 | PM runner 與 adapter selection | 主線 #115：按操作選 native／BAT 有界分析、計畫提案與 Follow-up；持久 workspace 選擇見 W24。 |
-| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄；更完整專業會議主持仍待做。 |
+| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄；`ux/be-overview-discuss` 分支新增有序 context binding、來源撤回與 durable rename，前端接入／整合待驗證；更完整專業會議主持仍待做。 |
 | W11 | P1 | Plan diff 與影響分析 | 主線：固定版本／來源／條件差異及影響候選；#113 提供候選更新及整組採用，完整語意判讀待強化。 |
-| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。 |
-| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據；M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
+| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。中央另有獨立即時 overview 投影、可見需求進度／待決／偏差與涵蓋標記，固定報告不混入即時數字；[API 合約](../design/pm-overview-discussion-context.md)。 |
+| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據；M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。中央另有唯讀時程投影（[合約](../design/pm-schedule.md)），不含甘特圖、推算預測或 critical path；前端尚未接上。 |
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |
-| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任；自動跨快照追蹤／提醒待做。 |
+| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。登記讀取投影（`pm_register`）提供列、完整可見掃描的合計與明確連結時間線；畫面與自動跨快照追蹤／提醒仍待做。 |
 | W18 | P1 | GitHub issue mapping | 主線：明確選取公開內容、穩定 Issue 關聯、追加版本及原操作查回；完整外部同步、多對多、明確重開待做。 |
 | W19 | P1 | Orchestrator readiness 與派工 | 主線：固定 package 經既有交接派工；原接受證據可滿足明確依賴；保留最後來源與權限檢查。 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 主線：integration preview／apply／conflict handoff／PR merge 接原 package 與 lineage；merge receipt 不代替需求驗收。 |
@@ -77,7 +78,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W44 | P0 | ReleaseBaseline 與發布 receipt | 主線：明確 release／已驗證部署基準與原通道／commit／receipt；完整 registry adapter 待做。 |
 | W45 | P0 | 閒置與 workload coverage | 主線：中央工作量、來源涵蓋與穩定期間；M4 原完成／人工單次觀察、M5 人工序列觀察尚未合併。 |
 | W46 | P1 | Maintainer profile 與政策執行 | 主線 #113：採用政策內的自有 repair、驗證／PR／交付上限、原完成與基準更新；M4 完整串接仍待最終 CI。 |
-| W47 | P1 | 依賴 Issue PR 維護來源 | 主線：有界 GitHub PR／checks／Actions、明確 Issue／Dependabot／alert 來源與固定 findings；完整依賴掃描仍有限。 |
+| W47 | P1 | 依賴 Issue PR 維護來源 | 主線：有界 GitHub PR／checks／Actions、明確 Issue／Dependabot／alert 來源與固定 findings。`ux/be-techdeps` 後端候選新增 [固定 commit 相依清冊](../design/pm-dependencies.md)、宣告／撤回、CI hints 和有界 impact；前端、合併及 installed/live 待整合驗收。 |
 | W48 | P0 | 維護排程與恢復 | 主線：有界到期檢查、週 Review、窗去重／漏跑合併、原 owner 憑證、容量／期限及原 children 查回。 |
 | W49 | P1 | 每週 Maintenance Review 與改進研究 | 主線：固定週報、原 findings／repairs、前次決策、owner outcome、责任與雙語輸出；改進研究待做。 |
 | W50 | P0 | 暫停 關閉與 reopen | 主線：pause／close／reopen、原 execution epoch、在途查回與保留；不復活舊佇列、不接管外部 session；M4 joined 有接續回歸。 |

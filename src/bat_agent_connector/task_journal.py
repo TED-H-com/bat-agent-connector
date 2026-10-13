@@ -136,6 +136,7 @@ class Journal:
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL REFERENCES tasks(task_id),
                 kind TEXT NOT NULL, body TEXT NOT NULL, created_at REAL NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS events_task ON events(task_id, kind, event_id);
             CREATE TABLE IF NOT EXISTS routing (
                 route_id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL REFERENCES tasks(task_id),
                 step TEXT NOT NULL, step_type TEXT NOT NULL, provider TEXT NOT NULL,

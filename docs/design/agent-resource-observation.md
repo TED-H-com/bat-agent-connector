@@ -105,13 +105,48 @@ Pool identity is an administrator assertion, not an inferred account match. Cros
 pool federation and Claude quota signals are not implemented.
 
 `GET /api/v1/pm/workspaces/{workspace_id}/resources` and RPC/MCP
-`pm_resources_get(workspace_id, since?, until?)` read this same projection. They do not
-collect files or dispatch work. Tauri allows only this exact read and bounded timestamp
-queries; paths, refresh commands and POST are refused. Default window: seven days;
-maximum: 366 days with explicit timezone/UTC boundaries, inclusive start/exclusive end.
+`pm_resources_get(workspace_id, since?, until?, tz?)` read this same projection. They do not
+collect files or dispatch work. Tauri allows only this exact read, bounded timestamp
+queries and one IANA `tz` name; paths, refresh commands and POST are refused. Default window:
+seven days; maximum: 366 days, inclusive start/exclusive end. `tz` defaults to UTC.
+An unknown or malformed zone is 422 `INVALID_PARAMS`. A window that would cover more than
+366 local dates is refused with the same window error.
 The selected window applies to token observations; the separate quota table always shows
 currently fresh reports. Resource configuration detail is capped at 20 groups with an
 explicit partial marker. Per-source counts are not summed into a project-wide cost claim.
+
+## Daily buckets
+
+`buckets` is additive, so `features.pm_resources.version` stays 1. Clients detect the chart
+data from `buckets` (or `features.pm_resources.buckets`), not from a version bump.
+The object is `{granularity: "day", tz, series}`. `tz` is the IANA zone actually used.
+Each series is one source that still contributes totals: `source_id`, `adapter`, `cli`
+(`codex` or `claude`, the adapter name before the first hyphen) and `days`. A day is
+`{date, tokens, complete}`. `date` is the local calendar day. `tokens` has `input`,
+`cache_read`, `cache_write`, `output`, `reasoning` and `total`, each a number or null.
+
+Daily values sum the metrics already stored on samples inside both that local day and the
+requested window. They do not add cache into input or reasoning into output again, and they
+do not recompute Claude's total. A metric is present only when every sample that day has it.
+A missing counter stays null. A field seen on only some samples is null, not a partial sum
+presented as the day's total.
+
+`complete` is true only when all of these hold: the stored source status is `current`
+(that cycle committed a cursor at EOF together with the samples), `successful_at` is at or
+after the local day's exclusive end, and the requested window contains the whole local day.
+`catching_up` is not proof, because the unread suffix can still hold events for that day.
+A projected `stale` label does not erase an earlier full read: historical days that ended
+before `successful_at` stay complete. A clipped first or last day is not complete. Its
+tokens are the samples inside the window. A day with no samples and without that coverage
+has null tokens, not zeros. A fully covered day with no samples is zero for every metric:
+the file was read and contained no usage. That zero is not a substitute for an omitted
+counter on a real sample.
+
+Withdrawn, unavailable, binding-changed, pending and removed sources are omitted from
+`series` in the same cases where their totals are withheld. The read scans stored samples
+with the existing `(source_id, observed_at)` index. It does not open log files, move a
+cursor or collect. At most 366 local days are returned per visible source. Quota snapshots
+stay separate and are not split by day.
 
 The shared UI shows source/CLI, recorded model context, role, observed tokens and collection
 state, with details for counters and their inclusion rules. Source filters preserve row order;
@@ -124,6 +159,6 @@ work remain unknown/insufficient; no savings recommendation or automatic model d
 Remote host-local collectors and authenticated metadata transport; safe graphical source
 binding and session discovery; more named CLI adapters; account/pool federation; complete
 work/attempt/verification attribution and rework classification; capacity observations;
-comparable accepted-work distributions and range forecasts; usage charts with matching
-coverage filters; scheduling reservations and policy execution remain on the adopted backlog.
+comparable accepted-work distributions and range forecasts; the shared usage-chart UI over
+these daily buckets; scheduling reservations and policy execution remain on the adopted backlog.
 No owner installation or live BAT/provider acceptance is established by offline fixtures.

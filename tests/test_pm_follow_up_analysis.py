@@ -116,6 +116,7 @@ async def test_fixed_intake_imports_one_assessment_raw_proof_and_no_chat_or_adop
     settings["summary_terminal"] = summary
     before = execution_state(ops)
     thread_before = pm_discussions.get_thread(ops, OWNER, **data["target"])
+    stored_thread_before = pm_discussions._thread(ops.db, data["wid"], data["target"]["thread_id"])
     original = request(ops, data)
     if adapter is not None:
         original['params']['adapter'] = adapter
@@ -136,7 +137,8 @@ async def test_fixed_intake_imports_one_assessment_raw_proof_and_no_chat_or_adop
     assert pm_native_journal.events(ops.db, saved["run_id"]) == instances[0].rows
     assert len(instances) == 1 and instances[0].sends == 1 and instances[0].closed and writer(ops, data["target"]) is None
     assert pm_discussions.get_thread(ops, OWNER, **data["target"])["messages"] == thread_before["messages"]
-    assert pm_discussions._thread(ops.db, data["wid"], data["target"]["thread_id"]) == thread_before["thread"]
+    assert pm_discussions._thread(ops.db, data["wid"], data["target"]["thread_id"]) == stored_thread_before
+    assert pm_discussions.get_thread(ops, OWNER, **data["target"])["thread"] == thread_before["thread"]
     assert execution_state(ops) == before
     assert ops.create(OWNER, **original)[0]["operation_id"] == op["operation_id"]
     with pytest.raises(OperationError, match="PM_OUTPUT_DESTINATION_REFUSED"):

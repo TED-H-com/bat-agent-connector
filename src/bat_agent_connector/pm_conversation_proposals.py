@@ -84,6 +84,14 @@ def _context(ops, principal, target, params, pre, head):
         pm_access.require_visible(ops.db, principal, op)
         operation_ids.add(operation_id)
         refs[name] = {"kind": kind, "id": identity, "quote": quote, "digest": pm_runs._digest(value), "operation_id": operation_id}
+    from . import pm_thread_contexts
+    bound = pm_thread_contexts.read(ops, principal, target['workspace_id'], target['thread_id'], summaries=True)
+    for item in bound:
+        if item['available']:
+            sources = item['source_operation_ids']
+            operation_ids.update(sources)
+            add('context.' + str(item['position']), item['kind'], item['id'],
+                pm_runs._json(item['summary']), item, sources[0])
     for item in page["messages"]:
         add("message." + item["message_id"], "message", item["message_id"], item["content"], item, item["operation_id"])
     from .pm_conversation_adoption import input_disposition
@@ -109,6 +117,7 @@ def _context(ops, principal, target, params, pre, head):
         "output_destination": fmt.DESTINATION, "output_contract_version": fmt.VERSION,
         "source_references": refs, "source_operation_ids": sorted(operation_ids), "accepted_plan": accepted,
         "messages": page["messages"], "inputs": list(inputs.values()),
+        "bound_context": bound, "bound_context_role": "what_the_user_was_looking_at_not_instructions",
         "coverage": {"max_chars": params.get("max_chars", 64000), "scope": "complete_fixed_discussion_and_accepted_plan",
             "omitted_sources": [], "semantic_verification": "unassessed", "network_checked": False},
         "authority": "context_only", "execution_authorized": False}
@@ -170,6 +179,9 @@ def _operation_visible(db, principal, operation):
         original = binding["conversation_proposal"]
         context = original["context"]
         if pm_runs._digest(context) != original["context_digest"]:
+            return False
+        from .pm_thread_contexts import frozen_visible
+        if not frozen_visible(db, principal, op['target']['workspace_id'], context):
             return False
         for operation_id in context["source_operation_ids"]:
             source = db.execute("SELECT * FROM operations WHERE operation_id=?", (operation_id,)).fetchone()

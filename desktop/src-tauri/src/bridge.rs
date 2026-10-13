@@ -1162,7 +1162,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/overview|/schedule|/register(?:/(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision):[A-Za-z0-9_.~-]{1,180})?|/dependencies(?:/(?:revisions|impact))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1280,6 +1280,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     } else {
         None
     };
+    let schedule = pm && path.ends_with("/schedule");
     let mut query_keys = std::collections::HashSet::new();
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
         if key.chars().chain(value.chars()).any(char::is_control) {
@@ -1300,6 +1301,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             let spec_sources = path.ends_with("/spec-sources");
             let roadmap_list = path.ends_with("/roadmap/revisions");
             let governance_list = path.ends_with("/governance");
+            let register_list = path.ends_with("/register");
             let follow_up_list = path.ends_with("/follow-ups");
             let assessment_list = path.ends_with("/follow-up-assessments");
             let conversation_list = path.ends_with("/conversation-proposals");
@@ -1311,7 +1313,8 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 && path.split('/').count() == 6;
             let spec_materialization_list = path.ends_with("/spec-materializations");
             let repair_list = path.ends_with("/maintenance-repairs");
-            let workload_list = conversation_list
+            let workload_list = path.ends_with("/dependencies/revisions")
+                || conversation_list
                 || path.ends_with("/deliveries")
                 || repair_list
                 || path.ends_with("/quality-reviews")
@@ -1376,11 +1379,69 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 && !path.ends_with("/context")
                 && !path.ends_with("/context-bundle");
             let valid = match key.as_ref() {
+                "dependency" if path.ends_with("/dependencies/impact") => {
+                    value.len() == 41
+                        && value.starts_with("pmdepkey_")
+                        && value[9..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                }
                 "since" | "until" if path.ends_with("/resources") => {
                     value.len() <= 40
                         && resource_timestamp
                             .as_ref()
                             .is_some_and(|pattern| pattern.is_match(&value))
+                }
+                "tz" if path.ends_with("/resources") => {
+                    (1..=64).contains(&value.len())
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b"/_.+-".contains(&b))
+                        && !value.contains("//")
+                        && !value.contains("..")
+                        && !value.starts_with('/')
+                        && !value.ends_with('/')
+                }
+                "limit" if schedule => {
+                    !value.is_empty()
+                        && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
+                }
+                "after" if schedule => value.split_once(':').is_some_and(|(kind, rest)| {
+                    matches!(
+                        kind,
+                        "milestone" | "requirement" | "issue" | "work" | "attempt"
+                    ) && (1..=360).contains(&rest.len())
+                        && rest.chars().all(|ch| {
+                            ch.is_ascii_alphanumeric()
+                                || matches!(ch, '_' | '.' | ':' | '/' | '+' | '-')
+                        })
+                }),
+                "type" if register_list => {
+                    matches!(
+                        value.as_ref(),
+                        "risk" | "issue" | "action" | "change" | "decision"
+                    )
+                }
+                "status" if register_list => {
+                    !value.is_empty()
+                        && value.len() <= 64
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+                }
+                "owner" | "q" if register_list => !value.is_empty() && value.chars().count() <= 200,
+                "after" if register_list => {
+                    value.len() <= 400
+                        && value.contains('~')
+                        && value.bytes().all(|b| b.is_ascii_graphic())
+                }
+                "limit" if register_list => {
+                    !value.is_empty()
+                        && value.len() <= 3
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
@@ -1939,6 +2000,52 @@ mod tests {
         assert!(validate_request(&request("GET", "/managed/setup/secrets")).is_err());
     }
     #[test]
+    fn project_overview_is_an_exact_read_only_route() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/overview";
+        assert!(validate_request(&get(root)).is_ok());
+        assert!(validate_request(&get(&format!("{root}/refresh"))).is_err());
+        assert!(validate_request(&get(&format!("{root}?path=fixture"))).is_err());
+        let mut write = get(root);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
+    }
+
+    #[test]
+    fn dependencies_are_exact_read_routes_without_capture_commands() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/dependencies";
+        for suffix in [
+            "",
+            "/revisions?after=0&limit=100",
+            "/impact?dependency=pmdepkey_22222222222222222222222222222222",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
+        }
+        for suffix in [
+            "/capture",
+            "/declare",
+            "/retract",
+            "?path=package.json",
+            "?limit=1",
+            "/revisions?limit=101",
+            "/revisions?after=-1",
+            "/revisions?limit=1&limit=2",
+            "/impact?dependency=name",
+            "/impact?dependency=pmdepkey_22222222222222222222222222222222&host=fixture",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
+        }
+        let mut write = get(root);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
+    }
+
+    #[test]
     fn resource_usage_is_a_scoped_read_without_paths_or_collection_commands() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/resources";
         assert!(validate_request(&get(root)).is_ok());
@@ -1946,6 +2053,20 @@ mod tests {
             "{root}?since=2026-10-01T00%3A00%3A00Z&until=2026-10-12T12%3A00%3A00.000Z"
         )))
         .is_ok());
+        assert!(validate_request(&get(&format!(
+            "{root}?since=2026-10-01T00%3A00%3A00Z&until=2026-10-08T00%3A00%3A00Z&tz=Asia%2FTaipei"
+        )))
+        .is_ok());
+        assert!(validate_request(&get(&format!("{root}?tz=UTC"))).is_ok());
+        assert!(validate_request(&get(&format!("{root}?tz=Etc%2FGMT%2B8"))).is_ok());
+        assert!(validate_request(&get(&format!(
+            "{root}?tz=America%2FArgentina%2FBuenos_Aires"
+        )))
+        .is_ok());
+        assert!(validate_request(&get(
+            "/pm/workspaces/ws_11111111111111111111111111111111/plans?tz=UTC"
+        ))
+        .is_err());
         for query in [
             "path=/private/session.jsonl",
             "refresh=1",
@@ -1953,6 +2074,13 @@ mod tests {
             "since=yesterday",
             "since=2026-10-01",
             "since=2026-10-01T00:00:00Z&since=2026-10-02T00:00:00Z",
+            "tz=",
+            "tz=../UTC",
+            "tz=/UTC",
+            "tz=UTC/",
+            "tz=America//New_York",
+            "tz=Not%20A%20Zone",
+            "tz=UTC&tz=Asia%2FTaipei",
         ] {
             assert!(
                 validate_request(&get(&format!("{root}?{query}"))).is_err(),
@@ -1960,6 +2088,74 @@ mod tests {
             );
         }
         assert!(validate_request(&get(&format!("{root}/collect"))).is_err());
+        let mut write = get(root);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
+    }
+
+    #[test]
+    fn project_schedule_is_a_scoped_read_without_collection_commands() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/schedule";
+        assert!(validate_request(&get(root)).is_ok());
+        assert!(
+            validate_request(&get(&format!("{root}?limit=50&after=milestone:release"))).is_ok()
+        );
+        assert!(validate_request(&get(&format!(
+            "{root}?limit=1&after=attempt:session:wi_11111111111111111111:mock-host/mock-session"
+        )))
+        .is_ok());
+        for query in [
+            "path=/private/session.jsonl",
+            "refresh=1",
+            "limit=101",
+            "limit=0",
+            "after=phase:a",
+            "after=../x",
+            "limit=50&limit=1",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}?{query}"))).is_err(),
+                "{query}"
+            );
+        }
+        assert!(validate_request(&get(&format!("{root}/collect"))).is_err());
+        let mut write = get(root);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
+        let maintenance = "/pm/workspaces/ws_11111111111111111111111111111111/maintenance-schedule";
+        assert!(validate_request(&get(maintenance)).is_ok());
+        assert!(validate_request(&get(&format!("{maintenance}?limit=1"))).is_err());
+    }
+
+    #[test]
+    fn register_is_a_scoped_read_without_writes() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/register";
+        assert!(validate_request(&get(root)).is_ok());
+        assert!(validate_request(&get(&format!(
+            "{root}?type=risk&status=open&owner=project-owner&q=login&limit=50&after=~governance:pmgov_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        )))
+        .is_ok());
+        assert!(validate_request(&get(&format!("{root}?q=%E7%99%BB%E5%85%A5"))).is_ok());
+        let detail = format!("{root}/governance:pmgov_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        assert!(validate_request(&get(&detail)).is_ok());
+        let meeting = format!(
+            "{root}/meeting:pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa~follow_up~verify_login"
+        );
+        assert!(validate_request(&get(&meeting)).is_ok());
+        assert!(validate_request(&get(&format!("{detail}?type=risk"))).is_err());
+        for query in [
+            "type=story",
+            "status=Open",
+            "limit=0",
+            "limit=101",
+            "after=nocursor",
+            "path=/tmp",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}?{query}"))).is_err(),
+                "{query}"
+            );
+        }
         let mut write = get(root);
         write.method = "POST".into();
         assert!(validate_request(&write).is_err());
