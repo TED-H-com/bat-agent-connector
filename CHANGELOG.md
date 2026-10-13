@@ -144,7 +144,8 @@
   titles, agents and disclosures. Keep Session transcript position and tool disclosures stable
   during live updates and resizing; restore focus on Back to latest and follow successful replies.
   Show received message counts, consistent agent marks, compact durations and Person on manual
-  turns.
+  turns. Give mobile Session titles the full header width so wider fonts leave room for a whole
+  pending answer input.
 
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,

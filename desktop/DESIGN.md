@@ -625,6 +625,9 @@ Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the over
 menu. An absent title says Untitled session, and an unreported agent uses Unknown.
 A manual or unconfirmed session shows Read-only and has no send, answer, or
 interrupt control.
+On mobile, the Session title and metadata use the full header width, with actions
+on the next row. Wider fonts must not turn the title into a tall narrow column
+that squeezes the pending question scroller below a whole answer input.
 
 The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
 body column for the name, compact time, chip, text, and disclosure. Agent marks use the same vocabulary as the header; tools and system rows use icons.
