@@ -20,11 +20,32 @@ function noOverflow() {
   return document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1;
 }
 
+for (const locale of ['en', 'zh-TW'] as const) for (const timezoneId of ['UTC', 'America/New_York', 'Asia/Taipei']) {
+  test(`session observation time is local ${locale} ${timezoneId}`, async ({browser, baseURL}) => {
+    const context = await browser.newContext({baseURL, locale, timezoneId});
+    const page = await context.newPage(), fixture = demoFixture({locale}), writes: unknown[] = [];
+    await page.clock.install({time: new Date('2026-10-14T09:00:00Z')});
+    await mountConversation(page, false, async input => {
+      if (input.method !== 'GET') writes.push(input);
+      return fixture.dispatch(input);
+    });
+    await page.goto(`/dashboard/#/session/${fixture.ids.host}/${fixture.ids.sessions.implement}`);
+    const clocks = locale === 'en'
+      ? {'UTC': '9:00 AM', 'America/New_York': '5:00 AM', 'Asia/Taipei': '5:00 PM'}
+      : {'UTC': '上午9:00', 'America/New_York': '上午5:00', 'Asia/Taipei': '下午5:00'};
+    await expect(page.locator('.workspace-session-meta time')).toHaveText(
+      (locale === 'en' ? 'Oct 12, ' : '10月12日 ') + clocks[timezoneId]);
+    expect(writes).toHaveLength(0);
+    await context.close();
+  });
+}
+
 for (const locale of ['en', 'zh-TW'] as const) {
   test(`session workspace ${locale}`, async ({browser, baseURL}) => {
     test.setTimeout(90_000);
     const context = await browser.newContext({
       locale: locale === 'zh-TW' ? 'zh-TW' : 'en-US', baseURL, viewport: {width: 1440, height: 900},
+      timezoneId: 'America/New_York',
     });
     const page = await context.newPage();
     const fixture = demoFixture({locale});
