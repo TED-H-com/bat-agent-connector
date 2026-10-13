@@ -1561,3 +1561,14 @@ Quota windows require an explicit opaque pool binding and a fresh source report;
 never add shared balances or convert tokens into subscription quota. Capacity,
 accepted-work performance and remaining-work forecasts are not supplied by this
 increment. See `docs/design/agent-resource-observation.md` for the exact scope.
+
+### Issues, actions and changes
+
+Use `pm_register_list(workspace_id, type?, status?, owner?, q?, after?, limit?)` and
+`pm_register_get(workspace_id, row_id)` with your own observe principal. The register
+is a read-only projection of existing governance, finding, repair, follow-up, proposal,
+issue-mapping, meeting and plan-adoption records. It does not discuss, propose, repair
+or dispatch. Pass `after` back as `next_cursor`. Totals and the summary are present
+only when `coverage.complete` is true; a hidden or withdrawn source is omitted from
+rows and counts together. Do not invent links the timeline does not return.
+See `docs/design/pm-register.md` for the record mapping.

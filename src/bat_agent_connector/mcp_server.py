@@ -78,7 +78,7 @@ READ_TOOLS = [
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
-    "pm_resources_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
+    "pm_resources_get", "pm_register_list", "pm_register_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
     "pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get",
@@ -764,6 +764,15 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read observed local CLI usage and reported quota; never collect or dispatch from a read."""
         return await pm_daemon("pm_resources_get", workspace_id=workspace_id, since=since, until=until)
 
+    async def pm_register_list(workspace_id: str, type: str | None = None, status: str | None = None, owner: str | None = None,
+                               q: str | None = None, after: str | None = None, limit: int = 50) -> dict[str, Any]:
+        """Read the issues, actions and changes register. This never discusses, repairs or dispatches."""
+        return await pm_daemon("pm_register_list", workspace_id=workspace_id, type=type, status=status, owner=owner, q=q, after=after, limit=limit)
+
+    async def pm_register_get(workspace_id: str, row_id: str) -> dict[str, Any]:
+        """Read one register row and the processing chain of its explicit links."""
+        return await pm_daemon("pm_register_get", workspace_id=workspace_id, row_id=row_id)
+
     async def pm_ahp_adapters_list(workspace_id: str) -> dict[str, Any]:
         """List administrator-granted AHP observer IDs; never returns endpoints or credentials."""
         return await pm_daemon("pm_ahp_adapters_list", workspace_id=workspace_id)
@@ -1083,7 +1092,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
-               pm_resources_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
+               pm_resources_get, pm_register_list, pm_register_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
                pm_maintenance_policies_list, pm_maintenance_policy_current_get, pm_maintenance_policy_get,
