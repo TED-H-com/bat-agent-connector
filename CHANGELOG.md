@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Share compact, bilingual timestamps across the Web/Tauri views, with timezone
+  tooltips, calendar-safe dates and one visibility-aware minute ticker.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,

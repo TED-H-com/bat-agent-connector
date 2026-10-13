@@ -32,7 +32,7 @@ import {createRecordForm} from "./create-record.js";
 // BAT Dashboard: a client of /api/v1 only. Every change is an operation with an Idempotency-Key; text from
 // sessions is always set with textContent (never parsed as HTML).
 import { t } from "./i18n.js";
-import {compactTime} from "./ui/time.js";
+import {timeStamp, timeText, timeLabel, startTimeTicker} from "./ui/stamps.js";
 import { connectorRequest, connectorUploadArtifact, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
@@ -125,15 +125,9 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 const chip = (text, cls = "") => h("span", { class: `chip ${cls}` }, text);
-function when(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return isNaN(d) ? iso : d.toLocaleString();
-}
-function sessionWhen(value) {
-  if (value == null || value === "") return "";
-  return compactTime(typeof value === "number" ? new Date(value * 1000).toISOString() : value);
-}
+const when = value => timeStamp(value, {milliseconds: true, empty: ''});
+const sessionWhen = value => timeText(value);
+startTimeTicker();
 function metaTail(text, sep) {
   const words = String(text).trim().split(/\s+/);
   const last = words.pop() || "";
@@ -1531,7 +1525,7 @@ async function viewSession(main, host, sid, context = null) {
     meta.replaceChildren(...metaBits.flatMap((bit, index) => {
       const sep = index < metaBits.length - 1;
       const [head, tail] = metaTail(bit.text, sep);
-      const node = bit.kind === "time" ? h("time", {class: "session-meta-time", dateTime: bit.dateTime || ""}, bit.text)
+      const node = bit.kind === "time" ? timeStamp(bit.dateTime, {attrs:{class:"session-meta-time"}})
         : bit.kind === "text" ? h("span", {}, head, sep ? h("span", {class: "session-meta-tail"}, tail) : tail)
         : metaAnchor(bit.href, bit.text, sep, bit.quiet);
       return index ? [" ", node] : [node];
@@ -1544,7 +1538,7 @@ async function viewSession(main, host, sid, context = null) {
         h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
         h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
-        h("dt", {}, t("observed")), h("dd", {}, sessionWhen(row.observed_at) || t("obs_unknown"),
+        h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}),
           row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
     if (!batHandoff) batHandoff = sessionBatPanel({h, t, guard: () => assertView(connection), session: () => row,
       storageKey: `batc.session-bat.${connection.namespace}.${JSON.stringify([host, sid])}`});
@@ -1693,7 +1687,7 @@ function checkpointPanel(host, sid) {
     return h("div", { class: "row" },
       h("div", { class: "grow" },
         h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""),
-        h("div", { class: "muted" }, [sessionWhen(cp.captured_at), cp.actor,
+        h("div", { class: "muted" }, timeStamp(cp.captured_at), " · ", [cp.actor,
           t("excerpt_count", { n: cp.excerpt_messages })].join(" · ")),
         cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty }))
           : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null,
@@ -2113,10 +2107,10 @@ function environmentCard(group) {
         h("div", { class: "deployment-versions" },
           h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)),
           h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed),
-            h("p", { class: "muted" }, t("dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })),
+            h("p", { class: "muted" }, timeLabel(t, "dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })),
             env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)),
         h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity),
-          h("p", { class: "muted" }, t("dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })),
+          h("p", { class: "muted" }, timeLabel(t, "dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })),
           verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null,
           verified ? deploymentReceipt(verified) : null),
         h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" },
@@ -2263,7 +2257,7 @@ function integrationPanel(pr, reloadCard, source = null) {
         doc.overlaps.map(o => `${o.path} (${o.seqs.join(", ")}${o.also_changed_on_pr ? ", PR" : ""})`).join("; ")) : null,
       doc.blocking.length ? h("ul", { class: "error" }, ...doc.blocking.map(plain)) : null,
       doc.warnings.length ? h("ul", { class: "muted" }, ...doc.warnings.map(plain)) : null,
-      h("p", { class: "muted" }, expired ? t("preview_expired") : t("previewed_at", { time: when(epoch(doc.observed_at)) }),
+      h("p", { class: "muted" }, expired ? t("preview_expired") : timeLabel(t, "previewed_at", { time: when(epoch(doc.observed_at)) }),
         " ", h("a", { href: "#", onclick: ev => { ev.preventDefault(); runPreview(); } }, t("preview_again"))),
       h("div", { class: "actions" }, go)].filter(Boolean)); // replaceChildren would print a null as "null"
   };
@@ -2302,7 +2296,7 @@ function integrationPanel(pr, reloadCard, source = null) {
           session.pending && runtimeStale(session) ? chip(t("sessions_stale"), "stale") : null,
           h("p", {class: "muted"}, t("delivery_result_unverified")),
           h("p", {class: "muted"}, session.observed_at
-            ? t("delivery_observed_at", {time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at)}) : t("delivery_unobserved")),
+            ? timeLabel(t, "delivery_observed_at", {time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at)}) : t("delivery_unobserved")),
           r.unavailable ? h("p", {class: "note"}, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
           ...delivered(r)];
       };
@@ -2541,7 +2535,7 @@ function connectionFacts() {
     const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
     const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
     stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
-    eventCell.textContent = state.lastEventAt ? when(state.lastEventAt) : t("global_no_event");
+    eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
   };
   render();
   const paint = () => {
@@ -3290,7 +3284,7 @@ async function viewWorkItem(main, wid) {
     const keepGoing = h("button", { class: "secondary", disabled: !live || !may("manage"),
       onclick: () => decide("work_item.continue", `wi.continue.${wid}.${c.fingerprint}`) }, t("keep_working"));
     let banner = null;
-    if (c.approved) banner = h("p", { class: "note ok" }, t("approved_by", { who: c.approved_by, time: when(epoch(c.approved_at)) }));
+    if (c.approved) banner = h("p", { class: "note ok" }, timeLabel(t, "approved_by", { who: c.approved_by, time: when(epoch(c.approved_at)) }));
     else if (c.pending && w.state === "done") banner = h("div", { class: "note warn" }, h("p", {}, t("claimed_done", { who: c.claimed_by || "?" })),
       h("div", { class: "actions" }, approve, keepGoing), may("approve") ? null : h("p", { class: "muted" }, t("needs_approve_scope")));
     else if (c.pending) banner = h("div", { class: "note warn" }, h("p", {}, t("steps_all_checked")), h("div", { class: "actions" }, approve, keepGoing));
@@ -3345,7 +3339,7 @@ async function viewWorkItem(main, wid) {
     };
     const linkRows = data.links.map(l => h("div", { class: "row" }, chip(t("link_" + l.kind)),
       h("div", { class: "grow" }, linkTarget(l), l.note ? h("div", { class: "muted" }, l.note) : null,
-        h("div", { class: "muted" }, `${l.linked_by} · ${when(epoch(l.linked_at))}`)),
+        h("div", { class: "muted" }, l.linked_by, " · ", when(epoch(l.linked_at)))),
       l.kind === "checkpoint" && l.target?.found && live ? continueFrom(w, l.ref, notice, data.children) : null,
       live && may("manage") ? h("button", { class: "mini", title: t("remove"), "aria-label": t("remove"),
         onclick: () => link({ kind: l.kind, ref: l.ref, remove: true }, `wi.unlink.${wid}.${l.kind}.${l.ref}`) }, "×") : null));
@@ -3375,7 +3369,7 @@ async function viewWorkItem(main, wid) {
       data.derived.length ? [h("h2", {}, t("derived")), h("div", { class: "panel" }, ...data.derived.map(brief))] : null,
       h("h2", {}, t("history")), h("div", { class: "panel" }, ...data.events.map(ev => h("div", { class: "row" },
         h("div", { class: "grow" }, t("ev_" + ev.kind.replace(".", "_")), h("div", { class: "muted" }, eventDetail(ev.body))),
-        h("span", { class: "muted" }, `${ev.actor || ""} · ${when(epoch(ev.created_at))}`)))));
+        h("span", { class: "muted" }, ev.actor || "", " · ", when(epoch(ev.created_at)))))));
     if (draft) { draft = null; d.open(); }
   };
   await render();
@@ -3642,7 +3636,7 @@ async function viewCleanup(main, section, ident) {
   } }, t("cleanup_apply"));
   function renderPreview() {
     fill(previewOut, h("h2", {}, t("cleanup_preview")), h("p", {}, t("cleanup_counts", { reclaim: doc.impact.reclaim, retain: doc.impact.retain })),
-      h("p", { class: "muted" }, t("cleanup_expires", { time: when(doc.expires_at * 1000) })),
+      h("p", { class: "muted" }, timeLabel(t, "cleanup_expires", { time: when(doc.expires_at * 1000) })),
       ...(doc.items || []).map(resourceRow), !doc.ready ? h("p", { class: "note" }, t("cleanup_blocked")) : null);
   }
   const previewButton = h("button", { class: "secondary", onclick: async () => {

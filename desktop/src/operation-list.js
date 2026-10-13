@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // Refresh the loaded window through central cursors. A shown count is only the loaded page.
 import {dataTable, disclosure, emptyState, inlineError, inspector, skeleton, statusPill} from './ui/components.js';
 import {joinLabel} from './label-text.js';
@@ -28,7 +29,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     {key: 'target', label: t('global_col_target'), render: op => operationTargetText(op) || '—'},
     {key: 'status', label: t('global_col_status'), render: op => statusPill(operationStatusKey(op.status))},
     {key: 'actor', label: t('actor'), render: op => op.actor || '—'},
-    {key: 'started', label: t('created'), render: op => formatTime(op.created_at) || '—'},
+    {key: 'started', label: t('created'), render: op => timeStamp(op.created_at)},
     {key: 'duration', label: t('global_col_duration'), render: op => operationDuration(op, Date.now() / 1000) || '—'},
   ];
   const focusRow = id => {
@@ -44,7 +45,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     const attempts = typeof op.attempts === 'number' && Number.isFinite(op.attempts) ? String(op.attempts) : '—';
     return h('dl', {class: 'kv global-op-facts'},
       h('dt', {}, t('actor')), h('dd', {}, op.actor || '—'),
-      h('dt', {}, t('created')), h('dd', {}, formatTime(op.created_at) || '—'),
+      h('dt', {}, t('created')), h('dd', {}, timeStamp(op.created_at)),
       h('dt', {}, t('global_col_duration')), h('dd', {}, operationDuration(op, Date.now() / 1000) || '—'),
       h('dt', {}, t('global_attempts')), h('dd', {}, attempts));
   }

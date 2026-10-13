@@ -1,3 +1,5 @@
+import {locale} from './i18n.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 // Stacked daily bars. Dates and the y scale are HTML so the plot never stretches text.
 // Plot geometry matches --plot-h / --line-top / --line-base in pm-agents.css.
 import {disclosure} from './ui/components.js';
@@ -22,19 +24,10 @@ function svgEl(tag, attrs) {
   return el;
 }
 
-function uiLocale() {
-  return (navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh-TW' : 'en-US';
-}
-
-function axisDate(date) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
-  if (!match) return '';
-  const instant = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
-  return new Intl.DateTimeFormat(uiLocale(), {timeZone: 'UTC', month: 'numeric', day: 'numeric'}).format(instant);
-}
+const axisDate = date => timeStamp(date, {dateOnly:true});
 
 function compact(value) {
-  return new Intl.NumberFormat(uiLocale(), {notation: 'compact', maximumFractionDigits: 1}).format(value);
+  return new Intl.NumberFormat(locale, {notation: 'compact', maximumFractionDigits: 1}).format(value);
 }
 
 function dayState(day, t) {
@@ -72,7 +65,7 @@ export function usageChart({h, t, buckets, now = new Date(), exactKey, window: b
   const hatchId = `agents-hatch-${++hatchSerial}`;
   const host = h('figure', {class: 'pm-agents-chart', 'data-resource-chart': ''});
   const yscale = h('div', {class: 'pm-agents-yscale'});
-  const summary = [t('res_trend'), dateText(days[0].date), dateText(days.at(-1).date), shown.map(cliName).join(', ')].filter(Boolean).join(', ');
+  const summary = [t('res_trend'), timeText(days[0].date, {dateOnly:true}), timeText(days.at(-1).date, {dateOnly:true}), shown.map(cliName).join(', ')].filter(Boolean).join(', ');
   const svg = svgEl('svg', {role: 'img', 'aria-label': summary, preserveAspectRatio: 'xMinYMin meet'});
   const labels = h('div', {class: 'pm-agents-xlabels'});
   const plot = h('div', {class: 'pm-agents-plot-main'}, svg, labels);
@@ -136,7 +129,7 @@ export function usageChart({h, t, buckets, now = new Date(), exactKey, window: b
         class: 'day', 'data-date': day.date,
         'data-incomplete': day.mark || null, 'data-partial': day.partial ? 'true' : null,
         'data-gap': gaps.join(' ') || null, 'data-zero': zeros.join(' ') || null,
-        'aria-label': [dateText(day.date), dayState(day, t), ...day.parts.map(part => partText(part, t))].filter(Boolean).join(' · '),
+        'aria-label': [timeText(day.date, {dateOnly:true}), dayState(day, t), ...day.parts.map(part => partText(part, t))].filter(Boolean).join(' · '),
       });
       let top = BASELINE - 1;
       let placed = false;

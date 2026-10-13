@@ -1,3 +1,4 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, segmented, statusPill, inspector, disclosure, emptyState, skeleton, inlineError} from './ui/components.js';
@@ -121,7 +122,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const step = zoom === 'day' ? Math.max(1, Math.ceil(length / 300)) : zoom === 'week' ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9000));
       for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
         const instant = new Date(date * DAY);
-        const text = new Intl.DateTimeFormat(navigator.language, {month: 'short', day: zoom === 'month' ? undefined : 'numeric', timeZone: 'UTC'}).format(instant);
+        const text = timeStamp(instant.toISOString().slice(0, 10), {dateOnly:true});
         const tick = h('span', {class: 'schedule-tick'}, text); tick.style.left = `${(date - domain.start) * scale}px`; node.append(tick);
         if (zoom === 'month') {instant.setUTCMonth(instant.getUTCMonth() + step, 1); date = instant.getTime() / DAY;}
         else if (zoom === 'week' && count === 0) date += ((8 - instant.getUTCDay()) % 7 || 7);
@@ -193,7 +194,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     if (next !== signature) {
       saveScroll(); signature = next;
       const details = disclosure({label: t('sched_details'), key: `${namespace}:${workspaceId}:schedule:details`, body: h('div', {},
-        h('p', {}, t('sched_as_of', {date: data.as_of})),
+        h('p', {}, timeLabel(t, 'sched_as_of', {date: timeStamp(data.as_of)})),
         ...[...data.reasons.map(reason => ({reason})), ...data.unknown].map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))))});
       const upcoming = data.rows.filter(row => row.kind === 'milestone' && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString()))
         .sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];

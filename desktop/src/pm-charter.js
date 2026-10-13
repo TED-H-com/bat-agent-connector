@@ -1,3 +1,4 @@
+import {timeStamp, timeText, timeLabel} from './ui/stamps.js';
 import {disclosure, iconButton} from './ui/components.js';
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
@@ -44,7 +45,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
     snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}, errorBox}) : null;
   if (exports) box.append(exports.element);
-  const stamp = value => Number.isFinite(value) ? new Date(value * 1000).toLocaleString() : t('wb_unknown');
+  const stamp = value => timeStamp(value, {empty:t('wb_unknown')});
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   function checkedSnapshot(data, id) {
     const value = check(data).snapshot;
@@ -61,7 +62,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     onControls({previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null});
   }
   function historyOptions() {
-    picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${stamp(row.as_of)}`)));
+    picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${timeText(row.as_of)}`)));
     if (snapshot && !history.some(row => row.snapshot_id === selectedId)) picker.append(h('option', {value: selectedId}, t('wb_snapshot', {number: snapshot.sequence})));
     picker.value = selectedId || ''; controls();
   }
@@ -81,7 +82,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     report.append(h('div', {class: 'pm-charter-meta'}, h('strong', {}, snapshot.title),
       h('span', {}, t('wb_snapshot', {number: snapshot.sequence})),
       h('span', {class: 'chip'}, t(snapshot.snapshot_id === latestId ? 'wb_saved' : 'wb_historical')),
-      h('span', {}, t('pm_brief_as_of', {time: stamp(snapshot.as_of)}))),
+      h('span', {}, timeLabel(t, 'pm_brief_as_of', {time: stamp(snapshot.as_of)}))),
     h('p', {class: 'pm-charter-plan-ref'}, t('wb_plan'), ': ', document?.title || t('wb_no_plan')));
     const grid = h('div', {class: 'pm-charter-grid'});
     for (const key of sections) grid.append(h('section', {'data-charter-section': key}, h('h3', {}, t('wb_' + key)),

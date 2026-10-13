@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // Saved discussion preparation. Model execution and adopted scope remain separate.
 import {followUpAssessments} from './pm-follow-up-analysis.js';
 import {followUpAnalysisRequest} from './pm-follow-up-request.js';
@@ -12,8 +13,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const note=key=>h('p',{class:'muted pm-note-text'},t(key));
   const code=value=>h('code',{class:'pm-source'},value||t('pm_fu_unknown'));
   const state=value=>{const key='pm_fu_state_'+value;return t(key)===key?String(value||t('pm_fu_unknown')).replaceAll('_',' '):t(key);};
-  const date=value=>{const d=typeof value==='number'?new Date(value*1000):null;return d&&Number.isFinite(d.getTime())
-    ?h('time',{datetime:d.toISOString()},d.toISOString().replace('T',' ').replace(/\.\d+Z$/,' UTC')):t('pm_fu_unknown');};
+  const date=value=>timeStamp(value, {empty:t('pm_fu_unknown')});
   const fold=(key,...nodes)=>h('details',{},h('summary',{},t(key)),...nodes);
   const check=data=>{if(data?.workspace_id!==workspaceId)throw Error(t('pm_fu_scope_error'));return data;};
   const current=ticket=>{alive();if(actor!==caps()?.actor){retired=true;throw Error(t('pm_fu_actor_changed'));}return ticket===serial&&!retired;};

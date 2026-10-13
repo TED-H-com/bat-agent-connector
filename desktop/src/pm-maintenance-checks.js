@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // The central owns cadence and execution. This view reads facts and submits one fixed intent.
 export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,profile='github_open_prs_and_actions_v1';
@@ -10,8 +11,8 @@ export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,perm
   const current=()=>ready&&policy&&baseline&&lifecycle;
   const stage=()=>['development','maintain'].includes(lifecycle?.stage);
   const canCheck=()=>Boolean(current()&&owner()&&stage()&&policy.document.policy.enabled===true&&policy.document.scope.github_scope===profile&&schedule&&!schedule.blocked_reason);
-  const stamp=value=>Number.isFinite(value)?new Date(value*1000).toLocaleString():t('pmc_unknown_time');
-  const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),String(value));
+  const stamp=value=>timeStamp(value, {empty:t('pmc_unknown_time')});
+  const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),value);
   const opLink=id=>h('a',{href:`#/op/${encodeURIComponent(id)}`},t('pm_operation'));
   const isId=(value,prefix)=>typeof value==='string'&&new RegExp(`^${prefix}_[0-9a-f]{32}$`).test(value);
   const blocker=code=>t('pmc_block_'+({PM_MAINTENANCE_AUTHORITY_UNAVAILABLE:'authority',PM_MAINTENANCE_CONTROLLER_CHANGED:'authority',FORBIDDEN:'authority',

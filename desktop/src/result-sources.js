@@ -1,6 +1,7 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 const itemHref = item => `#/item/${encodeURIComponent(item.work_item_id)}`;
 const artifactHref = artifact => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
-const date = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : '—';
+const date = value => timeStamp(value);
 export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, onEvents, errorBox}) {
   let doc = null, serial = 0, children = [], refreshing = null;
   const warning = h('div', {'data-child-warning': ''}), status = h('p', {class: 'muted', role: 'status'}), body = h('div');
@@ -61,7 +62,7 @@ export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, on
       renderSource(doc.item, true), ...children.map(child => renderSource(child)));
     for (const node of body.querySelectorAll('details[data-result-child]')) node.open = opens.has(node.dataset.resultChild);
     if (focused) [...body.querySelectorAll('a')].find(node => node.getAttribute('href') === focused)?.focus({preventScroll: true});
-    status.textContent = t('models_source', {source: doc.source, time: date(doc.read_at)});
+    status.replaceChildren(timeLabel(t, 'models_source', {source: doc.source, time: date(doc.read_at)}));
     more.hidden = !doc.children_next_cursor;
   }
   function load(after = '') {

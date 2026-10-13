@@ -1,3 +1,5 @@
+import {locale} from './i18n.js';
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
 import {agentMark, button, dataTable, disclosure, emptyState, inspector, metric, sectionCard, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
@@ -73,56 +75,14 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   const element = h('section', {'data-pm-resources': '', class: 'pm-agents'}, toolbar, status, layout);
 
   function finite(value) {return typeof value === 'number' && Number.isFinite(value) ? value : null;}
-  function uiLocale() {return (navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh-TW' : 'en-US';}
   function cssEscape(value) {return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/"/g, '\\"');}
   function cliOf(row) {
     const adapter = typeof row?.adapter === 'string' ? row.adapter : '';
     return adapter.split('-')[0] || '';
   }
   function isReadable(row) {return READABLE.has(row?.status) && Boolean(row?.metrics);}
-  function formatDay(date, withYear) {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
-    if (!match) return '';
-    const instant = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
-    const options = {timeZone: 'UTC', month: 'short', day: 'numeric'};
-    if (withYear) options.year = 'numeric';
-    return new Intl.DateTimeFormat(uiLocale(), options).format(instant);
-  }
-  function relativePast(ms) {
-    if (!Number.isFinite(ms) || ms < 60000) return t('res_just_now');
-    const min = Math.floor(ms / 60000);
-    if (min < 60) return t('res_min_ago', {n: min});
-    const hr = Math.floor(min / 60);
-    if (hr < 24) return t('res_hr_ago', {n: hr});
-    return t('res_day_ago', {n: Math.floor(hr / 24)});
-  }
-  function relativeFuture(ms) {
-    const min = Math.max(1, Math.ceil(ms / 60000));
-    if (min < 60) return t('res_in_min', {n: min});
-    const hr = Math.ceil(min / 60);
-    if (hr < 24) return t('res_in_hr', {n: hr});
-    return t('res_in_day', {n: Math.max(1, Math.round(hr / 24))});
-  }
-  function clock(value) {
-    const parsed = Date.parse(value);
-    if (!Number.isFinite(parsed)) return EM;
-    return new Intl.DateTimeFormat(uiLocale(), {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(parsed);
-  }
-  function clockTime(value) {
-    const parsed = Date.parse(value);
-    if (!Number.isFinite(parsed)) return '';
-    return new Intl.DateTimeFormat(uiLocale(), {hour: 'numeric', minute: '2-digit'}).format(parsed);
-  }
-  function seenCell(row) {
-    if (!isReadable(row)) return EM;
-    const parsed = Date.parse(row.last_at);
-    if (!Number.isFinite(parsed)) return EM;
-    const when = new Date(parsed);
-    const locale = uiLocale();
-    const date = new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric'}).format(when);
-    const time = new Intl.DateTimeFormat(locale, {hour: 'numeric', minute: '2-digit'}).format(when);
-    return h('span', {class: 'pm-agents-seen'}, date, h('span', {}, time));
-  }
+  const clock = value => timeStamp(value, {empty:EM});
+  function seenCell(row) {return isReadable(row) ? clock(row.last_at) : EM;}
   function roleLabel(role) {return role === 'unassigned' ? t('wb_unassigned') : (role || EM);}
   function effortLabel(value) {
     if (value === 'low' || value === 'medium' || value === 'high') return t('res_effort_' + value);
@@ -242,8 +202,8 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   function updateMeta() {
     if (!data) {meta.replaceChildren(); meta.hidden = true; mountMeta(); return;}
     if (paused) {
-      const time = clockTime(data.as_of);
-      meta.textContent = t('res_paused_meta', {time: time || EM});
+      const time = clock(data.as_of);
+      meta.replaceChildren(timeLabel(t, 'res_paused_meta', {time}));
       meta.hidden = false;
       mountMeta();
       return;
@@ -253,16 +213,12 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     const since = Date.parse(data.window?.since), until = Date.parse(data.window?.until);
     if (Number.isFinite(since) && Number.isFinite(until) && until >= since) {
       const first = dayKey(new Date(since), zone), last = dayKey(new Date(until), zone);
-      const withYear = first.slice(0, 4) !== last.slice(0, 4);
-      start = formatDay(first, withYear); end = formatDay(last, withYear);
+      start = timeStamp(first, {dateOnly:true}); end = timeStamp(last, {dateOnly:true});
     }
     const parsed = Date.parse(data.as_of);
-    const ago = Number.isFinite(parsed) ? relativePast(Date.now() - parsed) : '';
+    const ago = Number.isFinite(parsed) ? clock(data.as_of) : '';
     if (!(start && end)) {meta.replaceChildren(); meta.hidden = true; mountMeta(); return;}
-    const text = t(ago ? 'res_observed' : 'res_observed_range', {start, end, zone, ago});
-    const at = text.indexOf(zone);
-    if (at < 0) meta.textContent = text;
-    else meta.replaceChildren(text.slice(0, at), h('span', {'data-tz': zone}, zone), text.slice(at + zone.length));
+    meta.replaceChildren(timeLabel(t, ago ? 'res_observed' : 'res_observed_range', {start, end, zone:h('span', {'data-tz':zone}, zone), ago}));
     meta.hidden = false;
     mountMeta();
   }
@@ -311,7 +267,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
         if (earliest == null || at < earliest) earliest = at;
       }
     }
-    return metric({label: t('res_next_reset'), value: earliest == null ? null : relativeFuture(earliest - now)});
+    return metric({label: t('res_next_reset'), value: earliest == null ? null : timeStamp(earliest, {milliseconds:true})});
   }
   function quotaNodes() {
     const ids = new Set((data?.rows || []).map(row => row.source_id));
@@ -326,7 +282,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   }
   function formatPercent(value) {
     const digits = Math.abs(value) > 0 && Math.abs(value) < 10 ? 1 : 0;
-    return new Intl.NumberFormat(uiLocale(), {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value) + '%';
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value) + '%';
   }
   function windowLabel(minutes) {
     const value = finite(minutes);
@@ -354,7 +310,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     let reset = '';
     if (finite(item?.resets_at) != null) {
       const at = item.resets_at * 1000;
-      reset = t('res_resets_in', {when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString())});
+      reset = timeLabel(t, 'res_resets_in', {when: timeStamp(at, {milliseconds:true})});
     }
     const details = disclosure({label: t('res_details'), key: `agents-pool:${workspaceId}:${pool.pool_id || poolLabel(pool)}:${item?.window || 'none'}`,
       body: h('p', {class: 'pm-agents-pool-id'}, h('code', {class: 'mono'}, pool.pool_id || EM))});
@@ -435,7 +391,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     if (!key) {dropChart(); return null;}
     if (chartNode && chartTrendKey === key && chartNode.isConnected) return chartNode;
     dropChart();
-    chartNode = usageChart({h, t, buckets, now: new Date(), exactKey: `agents-exact:${workspaceId}`, window: data?.window, formatDay});
+    chartNode = usageChart({h, t, buckets, now: new Date(), exactKey: `agents-exact:${workspaceId}`, window: data?.window});
     chartTrendKey = key;
     return chartNode;
   }

@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // A reviewed remote read, never a local file picker or a directory browser.
 const record = value => value && typeof value === "object" && !Array.isArray(value);
 const digest = value => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
@@ -157,7 +158,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
       const facts = [[t("capture_name"), doc.relative_path.split("/").at(-1)], [t("capture_bytes"), String(doc.evidence.size_bytes)],
         ["SHA-256", doc.evidence.digest], [t("capture_source"), `${doc.source.host} / ${doc.source.session_id}`],
         [t("capture_path"), doc.relative_path], [t("capture_root"), doc.source.root], [t("capture_repository"), doc.source.repository_root],
-        ["HEAD", doc.evidence.head_sha], [t("capture_expiry"), new Date(doc.expires_at * 1000).toLocaleString()]];
+        ["HEAD", doc.evidence.head_sha], [t("capture_expiry"), timeStamp(doc.expires_at)]];
       evidence.append(h("dl", {class: "kv"}, ...facts.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, h("code", {}, value))])),
         h("p", {class: "muted", "data-capture-expiry": ""}));
     }

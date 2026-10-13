@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
 export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps,qualitySelection=null}) {
@@ -72,8 +73,8 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     view.append(h('div', {class: 'pm-plans'}, h('h3', {}, def.title, ' · ', t('pm_sprint_' + sprint.status)),
       h('p', {class: 'muted'}, t(def.mode === 'scrum' ? 'pm_sprint_scrum' : 'pm_sprint_personal')),
       row('pm_sprint_goal_heading', h('p', {class: 'pm-note-text'}, h('strong', {}, data.goal.text))),
-      row('pm_sprint_period', h('div', {}, h('p', {}, h('time', {datetime: def.starts_at, title: def.starts_at}, def.starts_at.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC')),
-        ' → ', h('time', {datetime: def.ends_at, title: def.ends_at}, def.ends_at.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC'))), data.timebox_elapsed ? note('pm_sprint_elapsed') : '')),
+      row('pm_sprint_period', h('div', {}, h('p', {}, timeStamp(def.starts_at),
+        ' → ', timeStamp(def.ends_at)), data.timebox_elapsed ? note('pm_sprint_elapsed') : '')),
       fold('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
         h('dt', {}, t('pm_sprint_developers')), h('dd', {}, def.developers.join(', ')), h('dt', {}, t('pm_sprint_capacity')), h('dd', {}, def.capacity_note))),
       row('pm_sprint_work', workRows(data.selected_items || [])),

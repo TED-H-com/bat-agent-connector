@@ -1,3 +1,4 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
 import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
@@ -661,12 +662,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   // Initial section constructors can register forms before the thread attaches them.
   const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (forms[i].box.isConnected) forms[i].update(); else if (initialReadComplete) forms.splice(i, 1);}};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
-  const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
+  const time = value => timeStamp(value, {empty:''});
   const sourceText = item => {
     const source = item.source_ref || {};
     if (source.kind === 'message') {
       const message = threadData?.messages?.find(row => row.message_id === source.message_id);
-      return message ? t('pm_note_source', {author: message.actor, time: time(message.created_at)}) : t('pm_saved_note_source');
+      return message ? timeLabel(t, 'pm_note_source', {author: message.actor, time: time(message.created_at)}) : t('pm_saved_note_source');
     }
     if(source.kind==='maintenance_review_candidate')return t('pmrv_idea_original')+' · '+source.event_id;
     return [source.ref, source.revision, source.path].filter(Boolean).join(' · ');
@@ -1012,7 +1013,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       threadRows.replaceChildren(...(threadList?.threads || []).map(thread => h('a', {class: 'pm-thread-link',
           href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
           'aria-current': thread.thread_id === threadId ? 'page' : null, onclick: () => rememberOrigin(thread.thread_id, {from: 'discussions'})}, h('strong', {title: thread.title}, thread.title),
-          h('span', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, discussionLabel(t, 'pm_mode_', thread.mode)), ' · ', h('time', {}, time(thread.updated_at))),
+          h('span', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, discussionLabel(t, 'pm_mode_', thread.mode)), time(thread.updated_at)),
           ...discussionContext(t, thread.context?.slice(0, 1)))));
       if (!workspaceId) workspaceList.replaceChildren(...lastList.map(row => h('a', {href: `#/pm/${row.workspace_id}`}, row.name)), h('button', {type: 'button', class: 'primary', onclick: showCreate}, t('ui_new_workspace')));
       filterThreads(); workspaceList.scrollTop = scroll;

@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // Narrow adapter for the shared work inspector: render(row, context) returns content only.
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
@@ -11,8 +12,7 @@ export function rowStatus(row, data) {
 }
 export function dateRange(span) {
   if (!span) return t('sched_no_dates');
-  const format = value => value?.includes('T') ? new Intl.DateTimeFormat(navigator.language, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}).format(new Date(value)) + ' UTC' : value;
-  return [format(span.start) || '—', span.end && (!span.start || span.end >= span.start) ? format(span.end) : t('sched_open')].join(' → ');
+  return h('span', {}, timeStamp(span.start), ' → ', span.end && (!span.start || span.end >= span.start) ? timeStamp(span.end) : t('sched_open'));
 }
 const unknown = () => h('span', {class: 'ui-meta'}, t('sched_unavailable'));
 const section = (key, ...body) => h('section', {'data-schedule-section': key}, h('h3', {}, t('sched_' + key)), ...body);
@@ -49,7 +49,7 @@ export function render(row, {workspaceId, data}) {
     ...['baseline', 'forecast', 'actual'].filter(key => row[key]).map(key => h('p', {}, t('sched_' + key), ': ', dateRange(row[key]))),
     ...notes.map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))),
     h('code', {}, row.id), ...Object.values(refs).flatMap(value => typeof value === 'string' ? [h('code', {}, value)] : []),
-    ...[data.baseline?.revision_id, data.forecast?.revision_id, data.as_of].filter(Boolean).map(value => h('code', {}, value))) });
+    ...[data.baseline?.revision_id, data.forecast?.revision_id].filter(Boolean).map(value => h('code', {}, value)), timeStamp(data.as_of)) });
   details.dataset.scheduleSection = 'details';
   return h('div', {class: 'schedule-inspector-content'},
     section('requirement', ...(requirements.length ? requirements.map(value => h('p', {class: 'schedule-full-title'}, value.title)) : [unknown()])),

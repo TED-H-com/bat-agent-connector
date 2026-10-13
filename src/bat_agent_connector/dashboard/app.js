@@ -9815,9 +9815,9 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "The PR branch is at its old head, but the composed commit exists on GitHub: an earlier push may have landed and been set back. Nothing is pushed again; check the PR, then cancel and preview again."
 	}
 };
-var lang = (navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+var locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
 function t(key, vars = {}) {
-	return (STRINGS[lang][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
+	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }
 //#endregion
 //#region src/ui/icons.js
@@ -11118,6 +11118,132 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/ui/time.js
+var MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec"
+];
+var DAY$1 = 864e5;
+var zh = (locale) => String(locale || "en").toLowerCase().startsWith("zh");
+function calendarDate(value) {
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+	const [year, month, day] = value.split("-").map(Number);
+	const date = new Date(year, month - 1, day);
+	return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+}
+function parse(value) {
+	if (value == null || value === "" || !(typeof value === "string" || typeof value === "number" || value instanceof Date)) return null;
+	if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !calendarDate(value)) return null;
+	const date = calendarDate(value) || (value instanceof Date ? value : new Date(value));
+	return Number.isFinite(date.getTime()) ? date : null;
+}
+function clock(date, chinese) {
+	const hour = date.getHours(), minute = String(date.getMinutes()).padStart(2, "0");
+	const period = hour < 12 ? chinese ? "上午" : "AM" : chinese ? "下午" : "PM";
+	return chinese ? `${period}${hour % 12 || 12}:${minute}` : `${hour % 12 || 12}:${minute} ${period}`;
+}
+function compactDate(value, { locale = "en", now = Date.now() } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	const year = date.getFullYear() !== new Date(now).getFullYear() ? date.getFullYear() : null;
+	return zh(locale) ? `${year == null ? "" : `${year}年`}${date.getMonth() + 1}月${date.getDate()}日` : `${MONTHS[date.getMonth()]} ${date.getDate()}${year == null ? "" : `, ${year}`}`;
+}
+function compactTime(value, { locale = "en", now = Date.now() } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
+	if (distance < DAY$1) {
+		if (distance < 6e4) return chinese ? "剛剛" : "just now";
+		const minutes = Math.floor(distance / 6e4), n = minutes < 60 ? minutes : Math.floor(minutes / 60);
+		const unit = minutes < 60 ? chinese ? "分鐘" : "m" : chinese ? "小時" : "h";
+		return chinese ? `${n} ${unit}${delta < 0 ? "後" : "前"}` : delta < 0 ? `in ${n}${unit}` : `${n}${unit} ago`;
+	}
+	return `${compactDate(date, {
+		locale,
+		now
+	})}${chinese ? " " : ", "}${clock(date, chinese)}`;
+}
+function fullTime(value, { locale = "en" } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	return new Intl.DateTimeFormat(zh(locale) ? "zh-TW" : "en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		second: "2-digit",
+		timeZoneName: "long"
+	}).format(date);
+}
+//#endregion
+//#region src/ui/stamps.js
+var instant = (value, milliseconds) => typeof value === "number" ? new Date(value * (milliseconds ? 1 : 1e3)) : value;
+var timeText = (value, options = {}) => (options.dateOnly || calendarDate(value) ? compactDate : compactTime)(instant(value, options.milliseconds), {
+	locale,
+	...options
+});
+function timeStamp(value, options = {}) {
+	const date = instant(value, options.milliseconds), text = timeText(value, options);
+	if (!text) return options.empty ?? "—";
+	const day = calendarDate(date), parsed = day || new Date(date);
+	return h$1("time", {
+		datetime: day ? date : parsed.toISOString(),
+		title: fullTime(parsed, { locale }),
+		"data-ui-time": options.dateOnly || day ? "date" : "instant",
+		...options.attrs
+	}, text);
+}
+function timeLabel(t, key, vars) {
+	const nodes = [], tokens = {};
+	for (const [name, value] of Object.entries(vars)) if (value instanceof Node) {
+		tokens[name] = `\uFFF0${nodes.length}\uFFF1`;
+		nodes.push(value);
+	} else tokens[name] = value;
+	const fragment = document.createDocumentFragment();
+	for (const part of t(key, tokens).split(/(\uFFF0\d+\uFFF1)/)) {
+		const match = /^\uFFF0(\d+)\uFFF1$/.exec(part);
+		fragment.append(match ? nodes[Number(match[1])] : document.createTextNode(part));
+	}
+	return fragment;
+}
+function refreshTimeStamps(root = document, now = Date.now()) {
+	for (const node of root.querySelectorAll("time[data-ui-time]")) {
+		const text = (node.dataset.uiTime === "date" ? compactDate : compactTime)(node.dateTime, {
+			locale,
+			now
+		});
+		if (text && node.textContent !== text) node.textContent = text;
+	}
+}
+var started = false;
+function startTimeTicker() {
+	if (started) return;
+	started = true;
+	let timer;
+	const tick = () => {
+		if (!document.hidden) {
+			refreshTimeStamps();
+			timer = setTimeout(tick, 6e4);
+		}
+	};
+	document.addEventListener("visibilitychange", () => {
+		clearTimeout(timer);
+		tick();
+	});
+	tick();
+}
+//#endregion
 //#region src/label-text.js
 var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
 function labelSegment(value) {
@@ -11339,11 +11465,8 @@ function operationMeta(op, whenText = "") {
 		whenText
 	]);
 }
-function formatTime(seconds) {
-	const value = Number(seconds);
-	if (!Number.isFinite(value) || value <= 0) return "";
-	const date = new Date(value * 1e3);
-	return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+function formatTime(value) {
+	return value ? timeText(value) : "";
 }
 var TERMINAL_OPERATION = new Set([
 	"succeeded",
@@ -12326,21 +12449,9 @@ function svgEl(tag, attrs) {
 	}
 	return el;
 }
-function uiLocale() {
-	return (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en-US";
-}
-function axisDate(date) {
-	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || "");
-	if (!match) return "";
-	const instant = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
-	return new Intl.DateTimeFormat(uiLocale(), {
-		timeZone: "UTC",
-		month: "numeric",
-		day: "numeric"
-	}).format(instant);
-}
+var axisDate = (date) => timeStamp(date, { dateOnly: true });
 function compact(value) {
-	return new Intl.NumberFormat(uiLocale(), {
+	return new Intl.NumberFormat(locale, {
 		notation: "compact",
 		maximumFractionDigits: 1
 	}).format(value);
@@ -12383,8 +12494,8 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey, window: bounds,
 		role: "img",
 		"aria-label": [
 			t("res_trend"),
-			dateText(days[0].date),
-			dateText(days.at(-1).date),
+			timeText(days[0].date, { dateOnly: true }),
+			timeText(days.at(-1).date, { dateOnly: true }),
 			shown.map(cliName).join(", ")
 		].filter(Boolean).join(", "),
 		preserveAspectRatio: "xMinYMin meet"
@@ -12483,7 +12594,7 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey, window: bounds,
 				"data-gap": gaps.join(" ") || null,
 				"data-zero": zeros.join(" ") || null,
 				"aria-label": [
-					dateText(day.date),
+					timeText(day.date, { dateOnly: true }),
 					dayState(day, t),
 					...day.parts.map((part) => partText(part, t))
 				].filter(Boolean).join(" · ")
@@ -12778,9 +12889,6 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function finite(value) {
 		return typeof value === "number" && Number.isFinite(value) ? value : null;
 	}
-	function uiLocale() {
-		return (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en-US";
-	}
 	function cssEscape(value) {
 		return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/"/g, "\\\"");
 	}
@@ -12790,64 +12898,9 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function isReadable(row) {
 		return READABLE.has(row?.status) && Boolean(row?.metrics);
 	}
-	function formatDay(date, withYear) {
-		const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || "");
-		if (!match) return "";
-		const instant = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
-		const options = {
-			timeZone: "UTC",
-			month: "short",
-			day: "numeric"
-		};
-		if (withYear) options.year = "numeric";
-		return new Intl.DateTimeFormat(uiLocale(), options).format(instant);
-	}
-	function relativePast(ms) {
-		if (!Number.isFinite(ms) || ms < 6e4) return t("res_just_now");
-		const min = Math.floor(ms / 6e4);
-		if (min < 60) return t("res_min_ago", { n: min });
-		const hr = Math.floor(min / 60);
-		if (hr < 24) return t("res_hr_ago", { n: hr });
-		return t("res_day_ago", { n: Math.floor(hr / 24) });
-	}
-	function relativeFuture(ms) {
-		const min = Math.max(1, Math.ceil(ms / 6e4));
-		if (min < 60) return t("res_in_min", { n: min });
-		const hr = Math.ceil(min / 60);
-		if (hr < 24) return t("res_in_hr", { n: hr });
-		return t("res_in_day", { n: Math.max(1, Math.round(hr / 24)) });
-	}
-	function clock(value) {
-		const parsed = Date.parse(value);
-		if (!Number.isFinite(parsed)) return EM;
-		return new Intl.DateTimeFormat(uiLocale(), {
-			month: "short",
-			day: "numeric",
-			hour: "numeric",
-			minute: "2-digit"
-		}).format(parsed);
-	}
-	function clockTime(value) {
-		const parsed = Date.parse(value);
-		if (!Number.isFinite(parsed)) return "";
-		return new Intl.DateTimeFormat(uiLocale(), {
-			hour: "numeric",
-			minute: "2-digit"
-		}).format(parsed);
-	}
+	const clock = (value) => timeStamp(value, { empty: EM });
 	function seenCell(row) {
-		if (!isReadable(row)) return EM;
-		const parsed = Date.parse(row.last_at);
-		if (!Number.isFinite(parsed)) return EM;
-		const when = new Date(parsed);
-		const locale = uiLocale();
-		return h("span", { class: "pm-agents-seen" }, new Intl.DateTimeFormat(locale, {
-			month: "short",
-			day: "numeric"
-		}).format(when), h("span", {}, new Intl.DateTimeFormat(locale, {
-			hour: "numeric",
-			minute: "2-digit"
-		}).format(when)));
+		return isReadable(row) ? clock(row.last_at) : EM;
 	}
 	function roleLabel(role) {
 		return role === "unassigned" ? t("wb_unassigned") : role || EM;
@@ -13006,8 +13059,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			return;
 		}
 		if (paused) {
-			const time = clockTime(data.as_of);
-			meta.textContent = t("res_paused_meta", { time: time || EM });
+			const time = clock(data.as_of);
+			meta.replaceChildren(timeLabel(t, "res_paused_meta", { time }));
 			meta.hidden = false;
 			mountMeta();
 			return;
@@ -13017,27 +13070,23 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const since = Date.parse(data.window?.since), until = Date.parse(data.window?.until);
 		if (Number.isFinite(since) && Number.isFinite(until) && until >= since) {
 			const first = dayKey(new Date(since), zone), last = dayKey(new Date(until), zone);
-			const withYear = first.slice(0, 4) !== last.slice(0, 4);
-			start = formatDay(first, withYear);
-			end = formatDay(last, withYear);
+			start = timeStamp(first, { dateOnly: true });
+			end = timeStamp(last, { dateOnly: true });
 		}
 		const parsed = Date.parse(data.as_of);
-		const ago = Number.isFinite(parsed) ? relativePast(Date.now() - parsed) : "";
+		const ago = Number.isFinite(parsed) ? clock(data.as_of) : "";
 		if (!(start && end)) {
 			meta.replaceChildren();
 			meta.hidden = true;
 			mountMeta();
 			return;
 		}
-		const text = t(ago ? "res_observed" : "res_observed_range", {
+		meta.replaceChildren(timeLabel(t, ago ? "res_observed" : "res_observed_range", {
 			start,
 			end,
-			zone,
+			zone: h("span", { "data-tz": zone }, zone),
 			ago
-		});
-		const at = text.indexOf(zone);
-		if (at < 0) meta.textContent = text;
-		else meta.replaceChildren(text.slice(0, at), h("span", { "data-tz": zone }, zone), text.slice(at + zone.length));
+		}));
 		meta.hidden = false;
 		mountMeta();
 	}
@@ -13106,7 +13155,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		}
 		return metric({
 			label: t("res_next_reset"),
-			value: earliest == null ? null : relativeFuture(earliest - now)
+			value: earliest == null ? null : timeStamp(earliest, { milliseconds: true })
 		});
 	}
 	function quotaNodes() {
@@ -13125,7 +13174,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function formatPercent(value) {
 		const digits = Math.abs(value) > 0 && Math.abs(value) < 10 ? 1 : 0;
-		return new Intl.NumberFormat(uiLocale(), {
+		return new Intl.NumberFormat(locale, {
 			minimumFractionDigits: digits,
 			maximumFractionDigits: digits
 		}).format(value) + "%";
@@ -13158,10 +13207,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (confirmed) bar.querySelector("span").style.width = Math.max(0, Math.min(100, used)) + "%";
 		const windowText = windowLabel(item?.window_minutes);
 		let reset = "";
-		if (finite(item?.resets_at) != null) {
-			const at = item.resets_at * 1e3;
-			reset = t("res_resets_in", { when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString()) });
-		}
+		if (finite(item?.resets_at) != null) reset = timeLabel(t, "res_resets_in", { when: timeStamp(item.resets_at * 1e3, { milliseconds: true }) });
 		const details = disclosure({
 			label: t("res_details"),
 			key: `agents-pool:${workspaceId}:${pool.pool_id || poolLabel(pool)}:${item?.window || "none"}`,
@@ -13295,8 +13341,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			buckets,
 			now: new Date(),
 			exactKey: `agents-exact:${workspaceId}`,
-			window: data?.window,
-			formatDay
+			window: data?.window
 		});
 		chartTrendKey = key;
 		return chartNode;
@@ -14904,7 +14949,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		errorBox
 	}) : null;
 	if (exports) box.append(exports.element);
-	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("wb_unknown");
+	const stamp = (value) => timeStamp(value, { empty: t("wb_unknown") });
 	const check = (data) => {
 		if (data?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		return data;
@@ -14934,7 +14979,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		});
 	}
 	function historyOptions() {
-		picker.replaceChildren(...history.map((row) => h("option", { value: row.snapshot_id }, `${t("wb_snapshot", { number: row.sequence })} · ${stamp(row.as_of)}`)));
+		picker.replaceChildren(...history.map((row) => h("option", { value: row.snapshot_id }, `${t("wb_snapshot", { number: row.sequence })} · ${timeText(row.as_of)}`)));
 		if (snapshot && !history.some((row) => row.snapshot_id === selectedId)) picker.append(h("option", { value: selectedId }, t("wb_snapshot", { number: snapshot.sequence })));
 		picker.value = selectedId || "";
 		controls();
@@ -14963,7 +15008,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			return;
 		}
 		const document = snapshot.baseline?.document, groups = charterSections(snapshot);
-		report.append(h("div", { class: "pm-charter-meta" }, h("strong", {}, snapshot.title), h("span", {}, t("wb_snapshot", { number: snapshot.sequence })), h("span", { class: "chip" }, t(snapshot.snapshot_id === latestId ? "wb_saved" : "wb_historical")), h("span", {}, t("pm_brief_as_of", { time: stamp(snapshot.as_of) }))), h("p", { class: "pm-charter-plan-ref" }, t("wb_plan"), ": ", document?.title || t("wb_no_plan")));
+		report.append(h("div", { class: "pm-charter-meta" }, h("strong", {}, snapshot.title), h("span", {}, t("wb_snapshot", { number: snapshot.sequence })), h("span", { class: "chip" }, t(snapshot.snapshot_id === latestId ? "wb_saved" : "wb_historical")), h("span", {}, timeLabel(t, "pm_brief_as_of", { time: stamp(snapshot.as_of) }))), h("p", { class: "pm-charter-plan-ref" }, t("wb_plan"), ": ", document?.title || t("wb_no_plan")));
 		const grid = h("div", { class: "pm-charter-grid" });
 		for (const key of sections) grid.append(h("section", { "data-charter-section": key }, h("h3", {}, t("wb_" + key)), renderItems(groups[key], key === "decisions" ? "wb_no_decisions" : "wb_unknown"), key === "resources" ? h("p", { class: "muted" }, t("wb_quota")) : ""));
 		report.append(grid);
@@ -15297,14 +15342,7 @@ function workspaceOverview(options) {
 		onClick: () => options.onCompare?.()
 	}), back);
 	reportControls(reports.controls());
-	const date = (value) => {
-		const parsed = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00Z") : null;
-		return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en", {
-			month: "short",
-			day: "numeric",
-			...typeof value === "string" ? { timeZone: "UTC" } : {}
-		}) : "—";
-	};
+	const date = (value) => timeStamp(value, { dateOnly: typeof value === "string" && !value.includes("T") });
 	const refs = () => {
 		const revision = mode === "saved" ? saved?.baseline?.document_revision : projection?.plan?.revision_id;
 		return [...revision ? [{
@@ -15324,11 +15362,15 @@ function workspaceOverview(options) {
 			from: "overview",
 			report: mode === "saved" ? saved?.snapshot_id : void 0
 		});
-		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t(reportLoading ? "ov_loading_report" : "ov_not_saved") : [
+		meta.replaceChildren(...mode === "saved" ? saved ? [
+			t("ov_report", { n: saved.sequence }),
+			" · ",
+			date(saved.as_of)
+		] : [t(reportLoading ? "ov_loading_report" : "ov_not_saved")] : [
 			projection?.plan?.title,
-			projection?.plan?.adopted_at != null ? t("ov_adopted", { date: date(projection.plan.adopted_at) }) : null,
+			projection?.plan?.adopted_at != null ? timeLabel(t, "ov_adopted", { date: date(projection.plan.adopted_at) }) : null,
 			t("ov_live")
-		].filter(Boolean).join(" · ");
+		].filter(Boolean).flatMap((part, i) => i ? [" · ", part] : [part]));
 		const phase = mode === "live" && current?.lifecycle?.stage;
 		onHeader({
 			meta,
@@ -15383,7 +15425,7 @@ function workspaceOverview(options) {
 		}, row.title) : null;
 	}
 	function milestoneDate(row) {
-		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? ` → ${date(row.forecast_date)}` : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
+		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? h("span", {}, " → ", date(row.forecast_date)) : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
 	}
 	function statusStrip(data, fixed = false) {
 		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
@@ -15391,7 +15433,7 @@ function workspaceOverview(options) {
 		const goal = metric({
 			label: t("ov_goal"),
 			value: data?.plan?.goal ?? "—",
-			context: h("div", {}, !data?.plan?.goal ? goalReason === "goal_unconfirmed" ? statusPill("unconfirmed") : !goalReason || goalReason === "unknown" ? statusPill("unknown") : h("span", { class: "ui-meta" }, reasonLabel(t, goalReason)) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
+			context: h("div", {}, !data?.plan?.goal ? goalReason === "goal_unconfirmed" ? statusPill("unconfirmed") : !goalReason || goalReason === "unknown" ? statusPill("unknown") : h("span", { class: "ui-meta" }, reasonLabel(t, goalReason)) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, timeLabel(t, "ov_adopted", { date: date(data.plan.adopted_at) })) : null)
 		});
 		goal.dataset.overviewMetric = "goal";
 		if (fixed && savedPartial()) goal.append(statusPill("partial"));
@@ -15778,7 +15820,12 @@ function workspaceOverview(options) {
 		box.dataset.overviewMode = mode;
 		if (mode === "saved") {
 			reportPartial.hidden = !savedPartial();
-			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t(reportLoading ? "ov_loading_report" : "ov_not_saved");
+			reportLabel.replaceChildren(...saved ? [
+				t("ov_viewing", { n: saved.sequence }),
+				" · ",
+				date(saved.as_of),
+				saved.title ? " · " + saved.title : ""
+			] : [t(reportLoading ? "ov_loading_report" : "ov_not_saved")]);
 			if (!saved) {
 				resetContent(reportLoading ? h("div", {}, h("p", { role: "status" }, t("ov_loading_report")), skeleton(3)) : h("p", {}, t("ov_not_saved")));
 				return;
@@ -16136,11 +16183,7 @@ var capturedDate = (epoch) => {
 	if (typeof epoch !== "number" || !Number.isFinite(epoch)) return "";
 	const date = new Date(epoch * 1e3);
 	if (Number.isNaN(date.valueOf())) return "";
-	return date.toLocaleDateString(void 0, {
-		month: "short",
-		day: "numeric",
-		timeZone: "UTC"
-	});
+	return timeStamp(epoch);
 };
 var abbreviate = (value) => {
 	const text = String(value || "");
@@ -16740,13 +16783,13 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (!active || !data) return;
 		const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
 		const date = capturedDate(data.capture?.captured_at);
-		const line = commit && date ? t("dep_meta", {
+		const line = commit && date ? timeLabel(t, "dep_meta", {
 			commit,
 			date
 		}) : commit ? t("dep_meta_commit", { commit }) : "";
 		if (header?.meta) {
 			header.meta.hidden = !line;
-			header.meta.textContent = line;
+			header.meta.replaceChildren(line);
 		}
 		const marks = [];
 		if (data.stale === true) marks.push(statusPill("stale"));
@@ -17260,11 +17303,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			if (files.childNodes.length) detailBody.append(files);
 			if ((revisions?.revisions || []).length || revisions?.next_cursor) {
 				detailBody.append(h("h3", {}, t("dep_revisions")));
-				for (const row of revisions?.revisions || []) detailBody.append(h("p", {}, joinLabel([
-					shortSha(row.commit_sha),
-					capturedDate(row.captured_at),
-					row.status === "partial" ? t("ui_status_partial") : row.status === "complete" ? "" : reasonText(t, row.reason, true)
-				])));
+				for (const row of revisions?.revisions || []) detailBody.append(h("p", {}, shortSha(row.commit_sha), " · ", capturedDate(row.captured_at), row.status === "partial" ? " · " + t("ui_status_partial") : row.status === "complete" ? "" : " · " + reasonText(t, row.reason, true)));
 				if (revisions?.next_cursor) detailBody.append(h("p", {}, t("dep_revisions_more")));
 			}
 		}
@@ -17547,10 +17586,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 	let panel = null, actions = null, signature = "", selection = null;
 	const unknown = () => statusPill("unknown");
 	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
-	const stamp = (value) => {
-		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
-		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
-	};
+	const stamp = (value) => timeStamp(value);
 	function close() {
 		panel?.close();
 	}
@@ -18383,8 +18419,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		if (value?.workspace_id !== workspaceId) throw Error(t("ahp_invalid"));
 		return value;
 	};
-	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : "—";
-	const line = (key, value) => h("p", {}, h("strong", {}, `${t(key)}: `), String(value));
+	const stamp = (value) => timeStamp(value);
+	const line = (key, value) => h("p", {}, h("strong", {}, `${t(key)}: `), value);
 	const active = (item) => ready && selected === item.key && choices.has(item.key) && Boolean(workspace()?.membership);
 	const request = async (...args) => {
 		const ticket = epoch;
@@ -18441,7 +18477,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			type: "button",
 			class: "secondary",
 			onclick: () => void showDetail(r.observation_id)
-		}, `${r.adapter_id} · ${stamp(r.created_at)} · ${t(r.coverage_status === "observed" ? "ahp_observed" : "ahp_incomplete")}`), h("small", { class: "mono" }, r.observation_id))));
+		}, r.adapter_id, " · ", stamp(r.created_at), " · ", t(r.coverage_status === "observed" ? "ahp_observed" : "ahp_incomplete")), h("small", { class: "mono" }, r.observation_id))));
 		if (!rows.length) history.append(h("p", { class: "muted" }, t(value.visibility_filtered ? "ahp_hidden" : "ahp_empty")));
 		else if (value.visibility_filtered) history.append(h("p", { class: "muted" }, t("ahp_hidden")));
 		more.hidden = cursor === null;
@@ -18528,7 +18564,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 				return;
 			}
 			const e = item.catalog.document.evidence, list = selectedUris(), start = item.page * 20;
-			item.catalogBox.append(h("p", { class: "muted" }, `${t("ahp_catalog_coverage")}: ${t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")} · ${stamp(item.catalog.document.finished_at)}`), h("p", {}, t("ahp_selection_help")));
+			item.catalogBox.append(h("p", { class: "muted" }, t("ahp_catalog_coverage"), ": ", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial"), " · ", stamp(item.catalog.document.finished_at)), h("p", {}, t("ahp_selection_help")));
 			if (list.some((uri) => !e.catalog.some((s) => s.resource === uri))) item.catalogBox.append(h("p", { class: "muted" }, t("ahp_selection_unavailable")));
 			for (const s of e.catalog.slice(start, start + 20)) {
 				const box = h("input", {
@@ -20150,7 +20186,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	let qualityReviews = [], receipts = [], observations = [], proofReady = false, proofBaseline = null, proofChoices = null, evidenceFiltered = false, proofRebase = null;
 	const labels = new Map(), packages = new Map();
 	const facts = h("div"), status = h("div", { role: "status" }), entriesView = h("div"), startView = h("div"), proofView = h("div"), history = h("select", { "aria-label": t("pmb_history") });
-	const text = (key) => h("p", { class: "muted" }, t(key)), line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), String(value));
+	const text = (key) => h("p", { class: "muted" }, t(key)), line = (key, value) => h("p", { class: "pm-source" }, h("strong", {}, t(key) + ": "), value);
 	const hidden = (value) => {
 		const field = h("input", {
 			type: "hidden",
@@ -20626,7 +20662,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			return;
 		}
 		const limits = batch.limits, children = batch.entries.map((entry) => h("article", { class: "pm-batch-entry" }, h("h4", {}, labels.get(entry.key) || entry.key), line("pmb_state", t("pmb_state_" + entry.state) === "pmb_state_" + entry.state ? entry.state : t("pmb_state_" + entry.state)), entry.reason ? h("p", { class: "muted" }, t("pmb_blocked_reason"), " · ", entry.reason) : null, line("pmb_profile_label", t(condition(entry).profile === "accepted_requirements_v1" ? "pmb_acceptance_profile" : condition(entry).profile === profile.profile ? "pmb_github_profile" : "pmb_observed_profile")), entry.operation_id ? h("a", { href: `#/op/${entry.operation_id}` }, t("pmb_child_operation")) : text("pmb_no_child"), h("details", {}, h("summary", {}, t("pmb_fixed_sources")), line("pmb_entry_key", entry.key), line("pmb_package", entry.package_ref.package_id), line("pmb_base", entry.source_sha), ...entry.depends_on.map((edge) => h("p", {}, t("pmb_wait_for"), " ", edge.entry_key))), ...entry.verification_evidence.map(proofFacts)));
-		facts.replaceChildren(h("h3", {}, t("pmb_saved")), line("pmb_operation_status", batch.operation_status), h("p", {}, `${t("pmb_starts")}: ${limits.max_starts} · ${t("pmb_parallel")}: ${limits.max_parallel} · ${t("pmb_retries")}: ${limits.max_retries}`), line("pmb_deadline", new Date(limits.deadline_at * 1e3).toLocaleString()), text("pmb_budget_help"), text("pmb_boundary"), h("a", { href: `#/op/${batch.operation_id}` }, t("pmb_parent_operation")), ...children);
+		facts.replaceChildren(h("h3", {}, t("pmb_saved")), line("pmb_operation_status", batch.operation_status), h("p", {}, `${t("pmb_starts")}: ${limits.max_starts} · ${t("pmb_parallel")}: ${limits.max_parallel} · ${t("pmb_retries")}: ${limits.max_retries}`), line("pmb_deadline", timeStamp(limits.deadline_at)), text("pmb_budget_help"), text("pmb_boundary"), h("a", { href: `#/op/${batch.operation_id}` }, t("pmb_parent_operation")), ...children);
 	}
 	const receiptKey = (row) => `${row.operation_id}:${row.seq}`;
 	function reviewChoices(entry) {
@@ -20645,7 +20681,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			entry: batch.entries.filter((entry) => entry.operation_id && [profile.profile, "accepted_requirements_v1"].includes(condition(entry).profile)).map((entry) => [entry.key, labels.get(entry.key) || entry.key]),
 			receipt: receipts.filter((row) => row.entry_key === (proofChoices?.entry ?? proof.fields.entry.value)).map((row) => [receiptKey(row), `${row.repository} · ${row.candidate_commit.slice(0, 12)} · ${row.operation_id}`]),
 			assessment: reviewChoices(batch.entries.find((entry) => entry.key === (proofChoices?.entry ?? proof.fields.entry.value))).map((row) => [row.key, `${row.package.document.title} · ${row.review.context.native_result.candidate_commit.slice(0, 12)} · ${t("pmb_assessment_version")} ${row.review.assessment.version} · ${row.review.context.reviewer_actor}`]),
-			observation: observations.map((row) => [row.observation_id, `${new Date(row.created_at * 1e3).toLocaleString()} · ${row.document?.scope?.repository || row.observation_id} · ${t(row.document?.evidence?.status === "complete" ? "pmb_observation_complete" : "pmb_observation_incomplete")}`])
+			observation: observations.map((row) => [row.observation_id, `${timeText(row.created_at)} · ${row.document?.scope?.repository || row.observation_id} · ${t(row.document?.evidence?.status === "complete" ? "pmb_observation_complete" : "pmb_observation_incomplete")}`])
 		};
 		for (const [key, rows] of Object.entries(choices)) {
 			const node = proof.fields[key], value = proofChoices?.[key] ?? node.value;
@@ -21676,27 +21712,16 @@ var TONES = {
 };
 var REPO = /^[\w.-]+\/[\w.-]+$/;
 var DEPTH_PAGES = 20;
-var shortTime = new Intl.DateTimeFormat(void 0, {
-	dateStyle: "short",
-	timeStyle: "short"
-});
 var finite = (value) => typeof value === "number" && Number.isFinite(value);
 var known = (t, key) => {
 	const text = t(key);
 	return text === key ? "" : text;
 };
-var when$1 = (value) => {
-	const text = labelSegment(value);
-	if (!text) return "";
-	const date = new Date(text);
-	return Number.isNaN(date.valueOf()) ? "" : shortTime.format(date);
-};
-var day = (value) => {
-	const text = labelSegment(value);
-	if (!text) return "";
-	const date = new Date(text);
-	return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();
-};
+var when$1 = (value) => timeStamp(value, { empty: "" });
+var day = (value) => timeStamp(value, {
+	dateOnly: true,
+	empty: ""
+});
 function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}, nameFor = () => "" }) {
 	const preference = viewState(namespace, workspaceId, "issues");
 	let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null;
@@ -22245,7 +22270,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}, ...(Array.isArray(record.timeline) ? record.timeline : []).map((step) => {
 			if (labelSegment(step?.step) && !known(t, "reg_step_" + step.step)) unknownCodes.push(step.step);
 			if (labelSegment(step?.status) && !statusKnown(step.status)) unknownCodes.push(step.status);
-			const meta = joinLabel([step?.actor, when$1(step?.at)]);
+			const meta = h("span", {}, step?.actor || "", step?.actor && step?.at ? " · " : "", when$1(step?.at));
 			const title = labelSegment(step?.title);
 			const link = refLink(step?.ref, title, row.row_id);
 			return h("li", {
@@ -23992,10 +24017,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 		if (data?.workspace_id !== workspaceId) throw Error(t("pm_fa_mismatch"));
 		return data;
 	};
-	const date = (value) => {
-		const d = typeof value === "number" ? new Date(value * 1e3) : null;
-		return d && Number.isFinite(d.getTime()) ? d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC") : "—";
-	};
+	const date = (value) => timeStamp(value);
 	const more = h("button", {
 		type: "button",
 		class: "secondary",
@@ -24056,7 +24078,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 				navigation();
 				read(selected);
 			}
-		}, t("pm_fa_record", { sequence: row.sequence }) + " · " + date(row.created_at)), h("span", { class: "muted" }, " · ", t("pm_fa_" + row.validation.status)))));
+		}, t("pm_fa_record", { sequence: row.sequence }), " · ", date(row.created_at)), h("span", { class: "muted" }, " · ", t("pm_fa_" + row.validation.status)))));
 		more.hidden = next == null;
 		more.disabled = reading;
 		if (!rows.length) list.append(note(next == null ? "pm_fa_empty" : "pm_fa_filtered_page"));
@@ -24506,10 +24528,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		const key = "pm_fu_state_" + value;
 		return t(key) === key ? String(value || t("pm_fu_unknown")).replaceAll("_", " ") : t(key);
 	};
-	const date = (value) => {
-		const d = typeof value === "number" ? new Date(value * 1e3) : null;
-		return d && Number.isFinite(d.getTime()) ? h("time", { datetime: d.toISOString() }, d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC")) : t("pm_fu_unknown");
-	};
+	const date = (value) => timeStamp(value, { empty: t("pm_fu_unknown") });
 	const fold = (key, ...nodes) => h("details", {}, h("summary", {}, t(key)), ...nodes);
 	const check = (data) => {
 		if (data?.workspace_id !== workspaceId) throw Error(t("pm_fu_scope_error"));
@@ -25170,7 +25189,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 			"rollback",
 			"observation"
 		].map((key) => detail(t("wp_" + key) + " · " + t(delivery[key].status === "unresolved" ? "wp_unresolved_status" : "wp_" + delivery[key].status), paragraph(delivery[key].text))));
-		const sources = detail(t("wp_sources"), fact("wp_package_id", row.package_id), fact("wp_digest", row.document_digest), fact("wp_created", Number.isFinite(row.created_at) ? new Date(row.created_at * 1e3).toISOString() : null), fact("wp_author", row.actor), fact("wp_plan", context.plan_ref.revision_id), fact("wp_scope", context.plan_ref.scope_revision), fact("wp_code", doc.code_source.repository + "@" + doc.code_source.source_sha), fact("wp_work", row.work_item_id), fact("wp_binding", context.work_ref?.binding_id), fact("wp_work_version", context.work_ref?.work_version), context.dod_ref ? fact("wp_dod_revision", context.dod_ref.revision_id) : null, context.dod_ref ? fact("wp_dod_digest", context.dod_ref.document_digest) : null, row.previous_package_id ? fact("wp_previous", row.previous_package_id) : null, h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wp_operation")), doc.evidence_refs?.length ? detail(t("wp_evidence"), ...doc.evidence_refs.map((ref) => h("p", { class: "pm-source" }, ref.evidence_id, " · ", ref.fact_digest))) : null, detail(t("wp_original"), ...(doc.sources?.documents || []).map((source) => detail(source.path, paragraph(source.content), h("p", { class: "pm-source" }, source.source_id, " · ", source.commit_sha, " · ", source.sha256)))));
+		const sources = detail(t("wp_sources"), fact("wp_package_id", row.package_id), fact("wp_digest", row.document_digest), fact("wp_created", timeStamp(row.created_at, { empty: null })), fact("wp_author", row.actor), fact("wp_plan", context.plan_ref.revision_id), fact("wp_scope", context.plan_ref.scope_revision), fact("wp_code", doc.code_source.repository + "@" + doc.code_source.source_sha), fact("wp_work", row.work_item_id), fact("wp_binding", context.work_ref?.binding_id), fact("wp_work_version", context.work_ref?.work_version), context.dod_ref ? fact("wp_dod_revision", context.dod_ref.revision_id) : null, context.dod_ref ? fact("wp_dod_digest", context.dod_ref.document_digest) : null, row.previous_package_id ? fact("wp_previous", row.previous_package_id) : null, h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wp_operation")), doc.evidence_refs?.length ? detail(t("wp_evidence"), ...doc.evidence_refs.map((ref) => h("p", { class: "pm-source" }, ref.evidence_id, " · ", ref.fact_digest))) : null, detail(t("wp_original"), ...(doc.sources?.documents || []).map((source) => detail(source.path, paragraph(source.content), h("p", { class: "pm-source" }, source.source_id, " · ", source.commit_sha, " · ", source.sha256)))));
 		facts.replaceChildren(h("h4", {}, doc.title), h("p", { "data-pm-wp-readiness": "" }, t(readiness.status === "ready" ? "wp_ready" : "wp_blocked")), h("p", { class: "muted" }, t("wp_boundary")), labelled("wp_checks", checks), h("p", { class: "muted" }, t("wp_coverage")), labelled("wp_requirements", requirements), detail(t("wp_design"), paragraph(doc.design.text), fact("wp_reason", doc.rationale), refs(doc.design.source_ids)), detail(t("wp_tasks"), tasks), detail(t("wp_verification"), verification), detail(t("wp_delivery"), deliveryNode), detail(t("wp_dod"), h("p", { class: "muted" }, t(doc.dod ? "wp_dod_note" : "wp_no_dod")), doc.dod ? h("ul", {}, ...(doc.dod.criteria || []).map((item) => h("li", {}, item.text))) : null), ...doc.unresolved.length ? [labelled("wp_unresolved", h("ul", {}, ...doc.unresolved.map((value) => h("li", {}, value))))] : [], sources);
 	}
 	async function readSelected(ticket) {
@@ -25414,13 +25433,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			return;
 		}
 		const sprint = data.sprint, def = sprint.definition;
-		view.append(h("div", { class: "pm-plans" }, h("h3", {}, def.title, " · ", t("pm_sprint_" + sprint.status)), h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), row("pm_sprint_goal_heading", h("p", { class: "pm-note-text" }, h("strong", {}, data.goal.text))), row("pm_sprint_period", h("div", {}, h("p", {}, h("time", {
-			datetime: def.starts_at,
-			title: def.starts_at
-		}, def.starts_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC")), " → ", h("time", {
-			datetime: def.ends_at,
-			title: def.ends_at
-		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), fold("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_unassessed"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, data.quality === "fixed_original_assessments" ? "" : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id))))))));
+		view.append(h("div", { class: "pm-plans" }, h("h3", {}, def.title, " · ", t("pm_sprint_" + sprint.status)), h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), row("pm_sprint_goal_heading", h("p", { class: "pm-note-text" }, h("strong", {}, data.goal.text))), row("pm_sprint_period", h("div", {}, h("p", {}, timeStamp(def.starts_at), " → ", timeStamp(def.ends_at)), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), fold("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_unassessed"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, data.quality === "fixed_original_assessments" ? "" : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id))))))));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -28289,7 +28302,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 }
 //#endregion
 //#region src/pm-schedule-model.js
-var DAY$1 = 864e5;
+var DAY = 864e5;
 var ZOOM = {
 	day: 48,
 	week: 24,
@@ -28298,7 +28311,7 @@ var ZOOM = {
 function dayNumber(value) {
 	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value)) return null;
 	const n = Date.parse(value.slice(0, 10) + "T00:00:00Z");
-	return Number.isFinite(n) ? n / DAY$1 : null;
+	return Number.isFinite(n) ? n / DAY : null;
 }
 var firstLine = (row) => String(row.title || "").split(/\r?\n/)[0];
 var sessionAttempt = (row) => row.kind === "attempt" && row.id.startsWith("attempt:session:");
@@ -28451,12 +28464,7 @@ function rowStatus(row, data) {
 }
 function dateRange(span) {
 	if (!span) return t("sched_no_dates");
-	const format = (value) => value?.includes("T") ? new Intl.DateTimeFormat(navigator.language, {
-		dateStyle: "medium",
-		timeStyle: "short",
-		timeZone: "UTC"
-	}).format(new Date(value)) + " UTC" : value;
-	return [format(span.start) || "—", span.end && (!span.start || span.end >= span.start) ? format(span.end) : t("sched_open")].join(" → ");
+	return h$1("span", {}, timeStamp(span.start), " → ", span.end && (!span.start || span.end >= span.start) ? timeStamp(span.end) : t("sched_open"));
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
@@ -28497,11 +28505,7 @@ function render(row, { workspaceId, data }) {
 			"baseline",
 			"forecast",
 			"actual"
-		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
-			data.baseline?.revision_id,
-			data.forecast?.revision_id,
-			data.as_of
-		].filter(Boolean).map((value) => h$1("code", {}, value)))
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[data.baseline?.revision_id, data.forecast?.revision_id].filter(Boolean).map((value) => h$1("code", {}, value)), timeStamp(data.as_of))
 	});
 	details.dataset.scheduleSection = "details";
 	return h$1("div", { class: "schedule-inspector-content" }, section("requirement", ...requirements.length ? requirements.map((value) => h$1("p", { class: "schedule-full-title" }, value.title)) : [unknown()]), status, section("result", unknown()), section("blocker", ["blocked", "waiting"].includes(row.status) ? statusPill(row.status) : unknown(), links), section("delivery", [
@@ -28733,24 +28737,20 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				"aria-hidden": "true"
 			});
 			weekend.style.backgroundImage = `repeating-linear-gradient(90deg, transparent 0, transparent ${5 * scale}px, var(--surface-2) ${5 * scale}px, var(--surface-2) ${7 * scale}px)`;
-			weekend.style.backgroundPositionX = `${-((new Date(domain.start * DAY$1).getUTCDay() + 6) % 7) * scale}px`;
+			weekend.style.backgroundPositionX = `${-((new Date(domain.start * DAY).getUTCDay() + 6) % 7) * scale}px`;
 			node.append(weekend);
 		}
 		if (axis) {
 			const length = domain.end - domain.start + 1;
 			const step = zoom === "day" ? Math.max(1, Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
 			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
-				const instant = new Date(date * DAY$1);
-				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
-					month: "short",
-					day: zoom === "month" ? void 0 : "numeric",
-					timeZone: "UTC"
-				}).format(instant));
+				const instant = new Date(date * DAY);
+				const tick = h$1("span", { class: "schedule-tick" }, timeStamp(instant.toISOString().slice(0, 10), { dateOnly: true }));
 				tick.style.left = `${(date - domain.start) * scale}px`;
 				node.append(tick);
 				if (zoom === "month") {
 					instant.setUTCMonth(instant.getUTCMonth() + step, 1);
-					date = instant.getTime() / DAY$1;
+					date = instant.getTime() / DAY;
 				} else if (zoom === "week" && count === 0) date += (8 - instant.getUTCDay()) % 7 || 7;
 				else date += step;
 			}
@@ -28888,7 +28888,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const details = disclosure({
 				label: t("sched_details"),
 				key: `${namespace}:${workspaceId}:schedule:details`,
-				body: h$1("div", {}, h$1("p", {}, t("sched_as_of", { date: data.as_of })), ...[...data.reasons.map((reason) => ({ reason })), ...data.unknown].map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))))
+				body: h$1("div", {}, h$1("p", {}, timeLabel(t, "sched_as_of", { date: timeStamp(data.as_of) })), ...[...data.reasons.map((reason) => ({ reason })), ...data.unknown].map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))))
 			});
 			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
 			const delta = upcoming ? milestoneDelta(upcoming) : null;
@@ -29342,7 +29342,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			historyLoaded = true;
 			historyVersion = expectedVersion;
 			for (const entry of page.revisions || []) {
-				const content = h("div"), detail = h("details", {}, h("summary", {}, t("pm_roadmap_kind_" + entry.kind), " · ", new Date(entry.created_at * 1e3).toLocaleString()), content);
+				const content = h("div"), detail = h("details", {}, h("summary", {}, t("pm_roadmap_kind_" + entry.kind), " · ", timeStamp(entry.created_at)), content);
 				let fetched = false;
 				detail.addEventListener("toggle", async () => {
 					if (!detail.open || fetched) return;
@@ -29560,7 +29560,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		withdraw();
 		status.replaceChildren(errorBox(error));
 	}
-	const stamp = (value) => typeof value === "number" ? new Date(value * 1e3).toLocaleString() : t("pm_evidence_time_unknown");
+	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
 	const check = (data) => {
 		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		return data;
@@ -29582,7 +29582,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		}
 		if (snapshot.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		selectedSnapshotId = snapshot.snapshot_id;
-		view.append(h("p", { class: "pm-brief-date" }, h("strong", {}, snapshot.title || workspace().name), " · ", t("pm_brief_as_of", { time: stamp(snapshot.as_of) })), h("p", { class: "muted" }, t("pm_brief_fixed")));
+		view.append(h("p", { class: "pm-brief-date" }, h("strong", {}, snapshot.title || workspace().name), " · ", timeLabel(t, "pm_brief_as_of", { time: stamp(snapshot.as_of) })), h("p", { class: "muted" }, t("pm_brief_fixed")));
 		const sections = h("div", { class: "pm-brief-sections" });
 		for (const name of [
 			"goals",
@@ -29659,7 +29659,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 					if (ticket === serial) unavailable(error);
 				}
 			}
-		}, `${entry.title || t("pm_brief_title")} · ${stamp(entry.as_of)}`));
+		}, entry.title || t("pm_brief_title"), " · ", stamp(entry.as_of)));
 		if (page.next_cursor !== null && page.next_cursor !== void 0) {
 			const more = h("button", {
 				type: "button",
@@ -29881,12 +29881,12 @@ function maintenanceFindingsView({ h, t, workspaceId, data }) {
 function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, errorBox, onUnavailable, detail, candidateInput }) {
 	const { review, snapshot, completion, events } = detail, extension = snapshot?.maintenance, report = extension?.report;
 	if (review?.workspace_id !== workspaceId || snapshot?.workspace_id !== workspaceId || extension?.review_id !== review.review_id || review.snapshot_id !== snapshot.snapshot_id || !/^pmrevw_[0-9a-f]{32}$/.test(review.review_id) || extension.schema_version !== 1 || report?.schema_version !== 1 || report.meeting_completed !== false || report.scope_adopted !== false || report.automatic_maintenance_authorized !== false || !Array.isArray(events)) throw Error(t("pmrv_invalid"));
-	const text = (value) => h("p", { class: "pm-note-text" }, String(value));
-	const line = (key, value) => h("p", {}, h("strong", {}, `${t(key)}: `), String(value));
-	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("pmrv_unknown");
+	const text = (value) => h("p", { class: "pm-note-text" }, value);
+	const line = (key, value) => h("p", {}, h("strong", {}, `${t(key)}: `), value);
+	const stamp = (value) => timeStamp(value, { empty: t("pmrv_unknown") });
 	const fold = (key, ...nodes) => h("details", {}, h("summary", {}, t(key)), ...nodes);
 	const label = (prefix, value) => t(`${prefix}_${value}`);
-	const list = (values) => values.length ? h("ul", {}, ...values.map((value) => h("li", { class: "pm-note-text" }, String(value)))) : text(t("pmrv_none"));
+	const list = (values) => values.length ? h("ul", {}, ...values.map((value) => h("li", { class: "pm-note-text" }, value))) : text(t("pmrv_none"));
 	const op = (id) => h("a", { href: `#/op/${encodeURIComponent(id)}` }, t("pm_operation"));
 	const sourceById = new Map(report.sources.map((row) => [row.source_id, row]));
 	const sourceProof = (ids) => h("div", {}, ...ids.map((id) => {
@@ -29947,7 +29947,7 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		github_prs: ["github_open_pull_requests"],
 		github_actions: ["github_nonterminal_actions"]
 	};
-	const overview = h("section", { "data-review-report": "" }, h("h3", {}, review.title), text(t(review.status === "completed" ? "pmrv_completed" : "pmrv_prepared")), line("pmrv_period", `${stamp(report.period.start)} — ${stamp(report.period.end)}`), text(t("pmrv_period_help")), text(t("pmrv_fixed_help")), text(t("pmrv_samples")), line("pmrv_release", `${release.repository} · ${release.channel} · ${release.release_version.value}`), line("pmp_revision", report.policy.version));
+	const overview = h("section", { "data-review-report": "" }, h("h3", {}, review.title), text(t(review.status === "completed" ? "pmrv_completed" : "pmrv_prepared")), line("pmrv_period", h("span", {}, stamp(report.period.start), " — ", stamp(report.period.end))), text(t("pmrv_period_help")), text(t("pmrv_fixed_help")), text(t("pmrv_samples")), line("pmrv_release", `${release.repository} · ${release.channel} · ${release.release_version.value}`), line("pmp_revision", report.policy.version));
 	if (report.previous_context?.status === "omitted_source_limit") overview.append(text(t("pmrv_continuity_gap")));
 	if (report.schedule) overview.append(fold("pmrv_schedule", line("pmc_due", stamp(report.schedule.scheduled_at)), line("pmrv_missed_weeks", report.schedule.coalesced_windows), text(t("pmrv_missed_help"))));
 	const sources = h("section", {}, h("h4", {}, t("pmrv_coverage")));
@@ -30057,7 +30057,7 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		const d = event.document, box = h("article", {
 			class: "pm-fact",
 			"data-review-event": event.event_id
-		}, h("h5", {}, label("pmrv_event", event.kind.replaceAll(".", "_"))), line("pmrv_recorded", `${event.actor} · ${stamp(event.created_at)}`));
+		}, h("h5", {}, label("pmrv_event", event.kind.replaceAll(".", "_"))), line("pmrv_recorded", h("span", {}, event.actor, " · ", stamp(event.created_at))));
 		if (event.kind === "note") box.append(text(d.content));
 		if (event.kind === "candidate.record") {
 			box.append(h("h5", {}, d.title), text(t("pmrv_candidate_help")));
@@ -30353,7 +30353,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	const can = () => Boolean(readable() && permitted(false) && caps()?.scopes?.includes("manage"));
 	const role = (actor) => workspace()?.members?.find((member) => member.actor === actor)?.role;
 	const owner = () => can() && role(caps()?.actor) === "owner";
-	const date = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("pmrv_unknown");
+	const date = (value) => timeStamp(value, { empty: t("pmrv_unknown") });
 	const remember = () => {
 		try {
 			localStorage.setItem(navigationKey, JSON.stringify({ review_id: selected }));
@@ -30890,7 +30890,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		].map((value) => [value, t("pmrv_followup_" + value)]), "open"), result = input("pmrv_result", {
 			multiline: true,
 			max: 8e3
-		}), followReason = reason(), snapshot = sourceSelect("pmrv_result_snapshot", () => [["", t("pmrv_same_snapshot")], ...(model?.snapshots || []).map((row) => [row.snapshot_id, `${row.title} · ${date(row.as_of)}`])]);
+		}), followReason = reason(), snapshot = sourceSelect("pmrv_result_snapshot", () => [["", t("pmrv_same_snapshot")], ...(model?.snapshots || []).map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`])]);
 		const followEditor = localForm({
 			action: prefix + "follow_up.record",
 			target: target(),
@@ -30927,7 +30927,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		start.type = end.type = "datetime-local";
 		start.dataset.pmDefault = start.value;
 		end.dataset.pmDefault = end.value;
-		const previous = sourceSelect("pmrv_previous", () => [["", t("pmrv_no_previous")], ...(model?.reviews || []).map((row) => [row.review_id, `${row.title} · ${date(row.created_at)}`])]);
+		const previous = sourceSelect("pmrv_previous", () => [["", t("pmrv_no_previous")], ...(model?.reviews || []).map((row) => [row.review_id, `${row.title} · ${timeText(row.created_at)}`])]);
 		const p = () => ({
 			expected_plan_version: model.plan.head.version,
 			expected_review_revision: model.current.revision,
@@ -31164,7 +31164,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			};
 			ready = true;
 			editors.hidden = false;
-			choose.replaceChildren(h("option", { value: "" }, t("pmrv_current")), ...model.reviews.map((row) => h("option", { value: row.review_id }, `${row.title} · ${date(row.created_at)}`)));
+			choose.replaceChildren(h("option", { value: "" }, t("pmrv_current")), ...model.reviews.map((row) => h("option", { value: row.review_id }, `${row.title} · ${timeText(row.created_at)}`)));
 			if (selected && !model.reviews.some((row) => row.review_id === selected)) choose.append(h("option", { value: selected }, detail.review.title));
 			choose.value = selected;
 			renderView();
@@ -31212,7 +31212,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	const select = (label) => h("select", { "aria-label": t(label) }), finding = select("pmr_finding"), rule = select("pmr_rule"), history = select("pmr_history"), evidence = select("pmr_evidence");
 	finding.dataset.pmRepairFinding = "";
 	let pendingFinding = "";
-	const line = (label, value) => h("p", { class: "pm-source" }, h("strong", {}, t(label) + ": "), String(value ?? t("pmr_none"))), text = (label) => h("p", { class: "muted" }, t(label));
+	const line = (label, value) => h("p", { class: "pm-source" }, h("strong", {}, t(label) + ": "), value ?? t("pmr_none")), text = (label) => h("p", { class: "muted" }, t(label));
 	const state = (value) => t("pmr_status_" + ([
 		"accepted",
 		"queued",
@@ -31467,7 +31467,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			if (row.publication_child.status === "needs_attention" || row.publication_child.error_code?.includes("UNKNOWN")) box.append(text("pmr_unknown"));
 		}
 		if (p.new_investment_blocked_reason || p.blocked_reason) box.append(h("p", { class: "muted" }, reason(p.new_investment_blocked_reason || p.blocked_reason)));
-		const detail = h("details", {}, h("summary", {}, t("pmr_original")), line("pmr_work", row.work_item_id), line("pmr_policy", row.policy_id), line("pmr_observation", c.finding_ref.observation_id), line("pmr_digest", c.finding_ref.document_digest), line("pmr_deadline", new Date(row.deadline_at * 1e3).toLocaleString()), line("pmr_retry", row.retries_used), text("pmr_cost"), link(row.operation_id));
+		const detail = h("details", {}, h("summary", {}, t("pmr_original")), line("pmr_work", row.work_item_id), line("pmr_policy", row.policy_id), line("pmr_observation", c.finding_ref.observation_id), line("pmr_digest", c.finding_ref.document_digest), line("pmr_deadline", timeStamp(row.deadline_at)), line("pmr_retry", row.retries_used), text("pmr_cost"), link(row.operation_id));
 		for (const item of row.evidence) {
 			const proof = item.evidence;
 			detail.append(h("p", {}, t("pmr_kind_" + item.selection.kind), " · ", link(item.operation_id)));
@@ -31599,7 +31599,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 						kind: "required_ci",
 						reference: ref
 					},
-					label: `${t("pmr_kind_required_ci")} · #${receipt.pull_number} · ${new Date(item.created_at * 1e3).toLocaleString()}`
+					label: `${t("pmr_kind_required_ci")} · #${receipt.pull_number} · ${timeText(item.created_at)}`
 				});
 			}
 		}
@@ -31920,8 +31920,8 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 	const current = () => ready && policy && baseline && lifecycle;
 	const stage = () => ["development", "maintain"].includes(lifecycle?.stage);
 	const canCheck = () => Boolean(current() && owner() && stage() && policy.document.policy.enabled === true && policy.document.scope.github_scope === profile && schedule && !schedule.blocked_reason);
-	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("pmc_unknown_time");
-	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), String(value));
+	const stamp = (value) => timeStamp(value, { empty: t("pmc_unknown_time") });
+	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), value);
 	const opLink = (id) => h("a", { href: `#/op/${encodeURIComponent(id)}` }, t("pm_operation"));
 	const isId = (value, prefix) => typeof value === "string" && new RegExp(`^${prefix}_[0-9a-f]{32}$`).test(value);
 	const blocker = (code) => t("pmc_block_" + ({
@@ -32145,8 +32145,8 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 			return false;
 		}
 	};
-	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), String(value));
-	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("pmo_unknown_time");
+	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), value);
+	const stamp = (value) => timeStamp(value, { empty: t("pmo_unknown_time") });
 	const reasonGroups = {
 		source_limit: ["source_row_limit", "source_reference_limit"],
 		source_access: [
@@ -32441,7 +32441,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		"paused",
 		"closed"
 	].includes(lifecycle.status);
-	const stamp = (value) => new Date(value * 1e3).toLocaleString();
+	const stamp = (value) => timeStamp(value);
 	const hidden = () => h("input", { type: "hidden" });
 	const select = (label, options) => h("select", { "aria-label": t(label) }, ...options.map(([value, key]) => h("option", { value }, t(key))));
 	const bool = (label) => select(label, [["true", "pmp_yes"], ["false", "pmp_no"]]);
@@ -32886,7 +32886,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		if (row?.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.policy_id !== row.policy_id || row.document.revision !== row.revision || !/^pmmp_[0-9a-f]{32}$/.test(row.policy_id) || !Number.isSafeInteger(row.revision) || row.document.automatic_execution_started !== false) throw Error(t("pmp_invalid"));
 		return row;
 	}
-	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), String(value ?? t("pmp_none")));
+	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), value ?? t("pmp_none"));
 	function record(row, isCurrent = false) {
 		fixed(row);
 		const doc = row.document, p = doc.policy, s = doc.scope, details = h("details", {}, h("summary", {}, t("pmp_details")));
@@ -33071,10 +33071,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 		if (data?.workspace_id !== workspaceId) throw Error(t("prb_invalid"));
 		return data;
 	};
-	const stamp = (value) => {
-		const date = new Date(typeof value === "number" ? value * 1e3 : value);
-		return Number.isNaN(date.valueOf()) ? String(value ?? "—") : date.toLocaleString();
-	};
+	const stamp = (value) => timeStamp(value);
 	const query = (params) => new URLSearchParams(Object.entries(params).filter(([, value]) => value !== null && value !== void 0)).toString();
 	const bindingKey = (row, name) => JSON.stringify([row.project_binding_id, name]);
 	const selectedBinding = () => bindings.flatMap((row) => row.repositories.map((name) => ({
@@ -33213,7 +33210,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	function baselineRow(row, current = false) {
 		if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId) throw Error(t("prb_invalid"));
 		const doc = row.document, delivery = doc.delivery_status || {};
-		return h("article", { "data-release-baseline": row.baseline_id }, h("h3", {}, current ? t("prb_current") : `${t("prb_version")} ${row.version}`), h("p", {}, h("strong", {}, doc.release_version?.value || doc.commit_sha), " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, `${t("prb_version")} ${row.version} · ${stamp(row.created_at)}`), h("ul", {}, h("li", {}, t(delivery.github_release === "published" ? "prb_gh_published" : "prb_gh_unknown")), h("li", {}, t("prb_registry")), h("li", {}, t(delivery.deployment === "verified" ? "prb_dep_verified" : "prb_dep_unknown"))), delivery.deployment === "verified" ? h("p", { class: "muted" }, t("prb_not_live")) : null, h("p", { class: "muted" }, t("prb_quality")), doc.intent?.rationale ? h("p", {}, doc.intent.rationale) : null, ...(doc.quality?.known_limitations || []).map((item) => h("p", {}, `${t("prb_limit_claim")}: ${item.text}`)), fixedDetails(doc, doc.proof, row));
+		return h("article", { "data-release-baseline": row.baseline_id }, h("h3", {}, current ? t("prb_current") : `${t("prb_version")} ${row.version}`), h("p", {}, h("strong", {}, doc.release_version?.value || doc.commit_sha), " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, t("prb_version"), " ", row.version, " · ", stamp(row.created_at)), h("ul", {}, h("li", {}, t(delivery.github_release === "published" ? "prb_gh_published" : "prb_gh_unknown")), h("li", {}, t("prb_registry")), h("li", {}, t(delivery.deployment === "verified" ? "prb_dep_verified" : "prb_dep_unknown"))), delivery.deployment === "verified" ? h("p", { class: "muted" }, t("prb_not_live")) : null, h("p", { class: "muted" }, t("prb_quality")), doc.intent?.rationale ? h("p", {}, doc.intent.rationale) : null, ...(doc.quality?.known_limitations || []).map((item) => h("p", {}, `${t("prb_limit_claim")}: ${item.text}`)), fixedDetails(doc, doc.proof, row));
 	}
 	function renderCurrent(data) {
 		check(data);
@@ -33412,7 +33409,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 			choiceCursor = mode === "github_release" ? page.next_page : page.next_cursor;
 			sourceView.replaceChildren();
 			for (const row of choices) {
-				const id = String(mode === "github_release" ? row.release_id : row.deployment_id), label = mode === "github_release" ? `${row.tag} · ${row.channel} · ${stamp(row.published_at)}` : `${row.channel} · ${row.version?.value || row.commit_sha} · ${stamp(row.checked_at)}`;
+				const id = String(mode === "github_release" ? row.release_id : row.deployment_id), label = mode === "github_release" ? `${row.tag} · ${row.channel} · ${timeText(row.published_at)}` : `${row.channel} · ${row.version?.value || row.commit_sha} · ${timeText(row.checked_at)}`;
 				const radio = h("input", {
 					type: "radio",
 					name: `release-source-${workspaceId}`,
@@ -33534,7 +33531,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		const key = "pm_evidence_state_" + value, translated = t(key);
 		return translated === key ? String(value) : translated;
 	};
-	const sourceTime = (value) => typeof value === "number" ? new Date(value * 1e3).toLocaleString() : t("pm_evidence_time_unknown");
+	const sourceTime = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
 	const verify = (data) => {
 		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		return data;
@@ -33589,7 +33586,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		}
 		if (last.capture.work_item_id !== workId) throw Error(t("pm_scope_mismatch"));
 		const capture = last.capture, coverage = capture.coverage;
-		holder.append(h("p", {}, t("pm_evidence_saved_at", { time: sourceTime(capture.captured_at) })), h("p", { class: "muted" }, t("pm_evidence_coverage", {
+		holder.append(h("p", {}, timeLabel(t, "pm_evidence_saved_at", { time: sourceTime(capture.captured_at) })), h("p", { class: "muted" }, t("pm_evidence_coverage", {
 			count: coverage.links_examined,
 			missing: coverage.unavailable_sources + coverage.unsupported_sources
 		})), h("p", { class: "muted" }, t("pm_evidence_quality_unknown")));
@@ -33618,7 +33615,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 							"deployment",
 							"verification"
 						].filter((key) => fact[key] !== null && fact[key] !== void 0);
-						body.replaceChildren(h("dl", { class: "pm-evidence-fields" }, ...brief.flatMap((key) => [h("dt", {}, t("pm_evidence_field_" + key)), h("dd", {}, ["state", "status"].includes(key) ? stateText(fact[key]) : String(fact[key]))])), h("details", { class: "pm-evidence-original" }, h("summary", {}, t("pm_evidence_original")), h("dl", { class: "pm-evidence-fields" }, ...Object.entries(fact).flatMap(([key, value]) => [h("dt", {}, key), h("dd", {}, value === null ? t("pm_evidence_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value))]))), h("small", { class: "muted" }, t("pm_evidence_saved_at", { time: sourceTime(detail.evidence.captured_at) })));
+						body.replaceChildren(h("dl", { class: "pm-evidence-fields" }, ...brief.flatMap((key) => [h("dt", {}, t("pm_evidence_field_" + key)), h("dd", {}, ["state", "status"].includes(key) ? stateText(fact[key]) : String(fact[key]))])), h("details", { class: "pm-evidence-original" }, h("summary", {}, t("pm_evidence_original")), h("dl", { class: "pm-evidence-fields" }, ...Object.entries(fact).flatMap(([key, value]) => [h("dt", {}, key), h("dd", {}, value === null ? t("pm_evidence_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value))]))), h("small", { class: "muted" }, timeLabel(t, "pm_evidence_saved_at", { time: sourceTime(detail.evidence.captured_at) })));
 						fetched = true;
 					} catch (error) {
 						if (row.isConnected) body.replaceChildren(errorBox(error));
@@ -34322,7 +34319,7 @@ function pmDiscussionMessage({ h, t, message, time, timestamp }) {
 	}, h("div", { class: "pm-note-stamp" }, assistant ? agentMark("pm") : h("span", {
 		class: "ui-agent-mark",
 		"aria-hidden": true
-	}, (message.actor || "?").slice(0, 2).toUpperCase()), h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content));
+	}, (message.actor || "?").slice(0, 2).toUpperCase()), h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", timeStamp(message.created_at)), h("div", { class: "pm-note-text" }, message.content));
 	if (assistant) article.append(h("p", { class: "muted" }, t(complete ? "pm_native_reply_recorded" : "pm_native_reply_unproven")), h("details", { class: "pm-source" }, h("summary", {}, t("pm_native_evidence")), h("p", {}, t("pm_native_origin"), " ", String(source.adapter || t("pm_native_unknown_source"))), h("p", {}, t("pm_native_run"), " ", String(provenance?.run_id || "—")), h("p", {}, t("pm_native_thread"), " ", String(source.native_thread_id || provenance?.sdk_session_id || "—")), h("p", {}, t("pm_native_turn"), " ", String(provenance?.native_turn_id || "—")), h("p", {}, t("pm_native_message"), " ", String(provenance?.native_message_id || "—")), h("p", {}, t("pm_native_context"), " ", String(provenance?.context_digest || "—"))));
 	return article;
 }
@@ -35769,15 +35766,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		else if (initialReadComplete) forms.splice(i, 1);
 	};
 	const timestamp = (value) => typeof value === "number" ? value * 1e3 : value;
-	const time = (value) => {
-		const date = new Date(timestamp(value));
-		return Number.isNaN(date.valueOf()) ? String(value || "") : date.toLocaleString();
-	};
+	const time = (value) => timeStamp(value, { empty: "" });
 	const sourceText = (item) => {
 		const source = item.source_ref || {};
 		if (source.kind === "message") {
 			const message = threadData?.messages?.find((row) => row.message_id === source.message_id);
-			return message ? t("pm_note_source", {
+			return message ? timeLabel(t, "pm_note_source", {
 				author: message.actor,
 				time: time(message.created_at)
 			}) : t("pm_saved_note_source");
@@ -36475,7 +36469,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
 				"aria-current": thread.thread_id === threadId ? "page" : null,
 				onclick: () => rememberOrigin(thread.thread_id, { from: "discussions" })
-			}, h("strong", { title: thread.title }, thread.title), h("span", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, discussionLabel(t, "pm_mode_", thread.mode)), " · ", h("time", {}, time(thread.updated_at))), ...discussionContext(t, thread.context?.slice(0, 1)))));
+			}, h("strong", { title: thread.title }, thread.title), h("span", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, discussionLabel(t, "pm_mode_", thread.mode)), time(thread.updated_at)), ...discussionContext(t, thread.context?.slice(0, 1)))));
 			if (!workspaceId) workspaceList.replaceChildren(...lastList.map((row) => h("a", { href: `#/pm/${row.workspace_id}` }, row.name)), h("button", {
 				type: "button",
 				class: "primary",
@@ -38923,8 +38917,13 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				const glyphs = Array.from(whoName);
 				row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
 				row.name.textContent = whoName;
+				const stampNode = timeStamp(message.ts, { empty: "" });
 				row.time.textContent = stamp;
-				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
+				if (stampNode instanceof Node) {
+					row.time.dateTime = stampNode.dateTime;
+					row.time.title = stampNode.title;
+					row.time.dataset.uiTime = stampNode.dataset.uiTime;
+				}
 				const chipText = chip.join(" · ");
 				row.chipText.textContent = chipText;
 				row.chip.hidden = !chipText;
@@ -39202,7 +39201,7 @@ var fields$1 = [
 ];
 var modelKey = (model) => `${model.agent}:${model.id}`;
 var copyPreferences = (prefs) => Object.fromEntries(fields$1.map((key) => [key, Array.isArray(prefs[key]) ? [...prefs[key]] : prefs[key] ?? null]));
-var date$1 = (value) => typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : "—";
+var date$1 = (value) => timeStamp(value);
 var equal$7 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 var validPreferences = (value) => value && typeof value === "object" && fields$1.every((key) => key in value) && ["initial_agent", "last_agent"].every((key) => value[key] === null || ["claude", "codex"].includes(value[key])) && ["initial_model", "last_model"].every((key) => value[key] === null || typeof value[key] === "string" && value[key].length <= 256) && ["hidden", "order"].every((key) => Array.isArray(value[key]) && value[key].length <= 1e3 && value[key].every((id) => typeof id === "string" && id.length <= 300));
 var validDraft = (value) => value && Number.isInteger(value.revision) && value.revision >= 0 && validPreferences(value.params);
@@ -39546,17 +39545,17 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		[...rows.querySelectorAll("[data-model-control]")].find((node) => node.dataset.modelControl === focused)?.focus({ preventScroll: true });
 	}
 	function showUsage(value) {
-		usage.replaceChildren(h("p", { class: "muted" }, t("models_source", {
+		usage.replaceChildren(h("p", { class: "muted" }, timeLabel(t, "models_source", {
 			source: value.source || "bat_host",
 			time: date$1(value.observed_at)
 		})));
 		if (value.status !== "available") usage.append(h("p", { class: "note" }, t("models_usage_unavailable", { reason: value.reason || value.status })));
 		for (const provider of value.providers || []) {
-			const row = h("section", { class: "panel" }, h("strong", {}, provider.provider), h("p", { class: "muted" }, t("models_host_account", { account: provider.account_email || t("obs_unknown") })), h("p", { class: "muted" }, [provider.plan_type, date$1(provider.fetched_at)].filter(Boolean).join(" · ")));
+			const row = h("section", { class: "panel" }, h("strong", {}, provider.provider), h("p", { class: "muted" }, t("models_host_account", { account: provider.account_email || t("obs_unknown") })), h("p", { class: "muted" }, provider.plan_type, provider.plan_type ? " · " : "", date$1(provider.fetched_at)));
 			if (provider.stale) row.append(h("p", { class: "note warn" }, t("models_usage_stale", { reason: provider.reason || "unknown" })));
 			for (const [key, label] of [["five_hour", "models_five_hour"], ["seven_day", "models_seven_day"]]) {
 				const window = provider[key], known = typeof window?.utilization === "number" && window.utilization >= 0 && window.utilization <= 1;
-				row.append(h("p", {}, t(label), ": ", known ? `${Math.round(window.utilization * 100)}%` : t("obs_unknown"), " · ", t("models_resets", { time: date$1(window?.resets_at) })));
+				row.append(h("p", {}, t(label), ": ", known ? `${Math.round(window.utilization * 100)}%` : t("obs_unknown"), " · ", timeLabel(t, "models_resets", { time: date$1(window?.resets_at) })));
 			}
 			usage.append(row);
 		}
@@ -39582,7 +39581,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				for (const [key, input] of Object.entries(inputs)) input.value = draft.params[key] || "";
 			}
 			evidence.replaceChildren(...[
-				h("p", { class: "muted" }, t("models_source", {
+				h("p", { class: "muted" }, timeLabel(t, "models_source", {
 					source: next.model_catalog.source || "bat_host",
 					time: date$1(next.model_catalog.observed_at)
 				})),
@@ -39760,9 +39759,9 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			return;
 		}
 		const catalog = doc.catalog;
-		source.replaceChildren(h("p", { class: "muted" }, t("models_source", {
+		source.replaceChildren(h("p", { class: "muted" }, timeLabel(t, "models_source", {
 			source: `${catalog.source} · ${doc.host} / ${doc.workspace_id}`,
-			time: catalog.observed_at ? new Date(catalog.observed_at * 1e3).toLocaleString() : "—"
+			time: timeStamp(catalog.observed_at)
 		})), h("p", { class: "muted" }, t("skills_compatibility")));
 		if (catalog.status !== "available" || catalog.stale || !catalog.complete) source.append(h("p", { class: "note warn" }, t("skills_catalog_state", { state: catalog.reason || (catalog.stale ? "stale" : !catalog.complete ? "partial" : catalog.status) })));
 		if (doc.selection.selected.length && (doc.selection.host !== doc.host || doc.selection.workspace_id !== doc.workspace_id)) source.append(h("p", { class: "note warn" }, t("skills_other_binding", {
@@ -39903,7 +39902,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 //#region src/result-sources.js
 var itemHref = (item) => `#/item/${encodeURIComponent(item.work_item_id)}`;
 var artifactHref = (artifact) => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
-var date = (value) => typeof value === "number" ? new Date(value * 1e3).toLocaleString() : "—";
+var date = (value) => timeStamp(value);
 function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents, errorBox }) {
 	let doc = null, serial = 0, children = [], refreshing = null;
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
@@ -39967,10 +39966,10 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		body.replaceChildren(h("p", { class: "muted" }, t("results_independent")), ...[doc.parent && ["results_parent", doc.parent], doc.derived_from && ["derived_from", doc.derived_from]].filter(Boolean).map(([label, item]) => h("p", {}, t(label), ": ", h("a", { href: itemHref(item) }, item.title))), renderSource(doc.item, true), ...children.map((child) => renderSource(child)));
 		for (const node of body.querySelectorAll("details[data-result-child]")) node.open = opens.has(node.dataset.resultChild);
 		if (focused) [...body.querySelectorAll("a")].find((node) => node.getAttribute("href") === focused)?.focus({ preventScroll: true });
-		status.textContent = t("models_source", {
+		status.replaceChildren(timeLabel(t, "models_source", {
 			source: doc.source,
 			time: date(doc.read_at)
-		});
+		}));
 		more.hidden = !doc.children_next_cursor;
 	}
 	function load(after = "") {
@@ -40617,52 +40616,6 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 			update();
 		}
 	};
-}
-//#endregion
-//#region src/ui/time.js
-var MONTHS = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec"
-];
-var DAY = 864e5;
-function clock(date, zh) {
-	let hour = date.getHours();
-	const minute = String(date.getMinutes()).padStart(2, "0");
-	const period = hour < 12 ? zh ? "上午" : "AM" : zh ? "下午" : "PM";
-	let h12 = hour % 12;
-	if (h12 === 0) h12 = 12;
-	return zh ? `${period}${h12}:${minute}` : `${h12}:${minute} ${period}`;
-}
-function language(locale) {
-	if (typeof locale === "string" && locale) return locale;
-	if (typeof navigator !== "undefined" && navigator.language) return navigator.language;
-	return "en";
-}
-function compactTime(value, { locale, now = Date.now() } = {}) {
-	if (value == null || value === "") return "";
-	const date = value instanceof Date ? value : new Date(value);
-	if (Number.isNaN(date.getTime())) return String(value);
-	const zh = language(locale).toLowerCase().startsWith("zh");
-	const delta = now - date.getTime();
-	if (delta >= 0 && delta < DAY) {
-		const minutes = Math.floor(delta / 6e4);
-		if (minutes < 1) return zh ? "剛剛" : "just now";
-		if (minutes < 60) return zh ? `${minutes} 分鐘前` : `${minutes}m ago`;
-		const hours = Math.floor(minutes / 60);
-		return zh ? `${hours} 小時前` : `${hours}h ago`;
-	}
-	if (zh) return `${date.getMonth() + 1}月${date.getDate()}日 ${clock(date, true)}`;
-	return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${clock(date, false)}`;
 }
 //#endregion
 //#region src/native-files.js
@@ -42339,7 +42292,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 				[t("capture_root"), doc.source.root],
 				[t("capture_repository"), doc.source.repository_root],
 				["HEAD", doc.evidence.head_sha],
-				[t("capture_expiry"), new Date(doc.expires_at * 1e3).toLocaleString()]
+				[t("capture_expiry"), timeStamp(doc.expires_at)]
 			];
 			evidence.append(h("dl", { class: "kv" }, ...facts.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, h("code", {}, value))])), h("p", {
 				class: "muted",
@@ -42726,7 +42679,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		{
 			key: "started",
 			label: t("created"),
-			render: (op) => formatTime(op.created_at) || "—"
+			render: (op) => timeStamp(op.created_at)
 		},
 		{
 			key: "duration",
@@ -42751,7 +42704,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	};
 	function facts(op) {
 		const attempts = typeof op.attempts === "number" && Number.isFinite(op.attempts) ? String(op.attempts) : "—";
-		return h("dl", { class: "kv global-op-facts" }, h("dt", {}, t("actor")), h("dd", {}, op.actor || "—"), h("dt", {}, t("created")), h("dd", {}, formatTime(op.created_at) || "—"), h("dt", {}, t("global_col_duration")), h("dd", {}, operationDuration(op, Date.now() / 1e3) || "—"), h("dt", {}, t("global_attempts")), h("dd", {}, attempts));
+		return h("dl", { class: "kv global-op-facts" }, h("dt", {}, t("actor")), h("dd", {}, op.actor || "—"), h("dt", {}, t("created")), h("dd", {}, timeStamp(op.created_at)), h("dt", {}, t("global_col_duration")), h("dd", {}, operationDuration(op, Date.now() / 1e3) || "—"), h("dt", {}, t("global_attempts")), h("dd", {}, attempts));
 	}
 	function body(op) {
 		const steps = Array.isArray(op.steps) ? op.steps : [];
@@ -46250,15 +46203,12 @@ function h(tag, attrs = {}, ...children) {
 	return el;
 }
 var chip = (text, cls = "") => h("span", { class: `chip ${cls}` }, text);
-function when(iso) {
-	if (!iso) return "";
-	const d = new Date(iso);
-	return isNaN(d) ? iso : d.toLocaleString();
-}
-function sessionWhen(value) {
-	if (value == null || value === "") return "";
-	return compactTime(typeof value === "number" ? new Date(value * 1e3).toISOString() : value);
-}
+var when = (value) => timeStamp(value, {
+	milliseconds: true,
+	empty: ""
+});
+var sessionWhen = (value) => timeText(value);
+startTimeTicker();
 function metaTail(text, sep) {
 	const words = String(text).trim().split(/\s+/);
 	const last = words.pop() || "";
@@ -48498,10 +48448,7 @@ async function viewSession(main, host, sid, context = null) {
 		meta.replaceChildren(...metaBits.flatMap((bit, index) => {
 			const sep = index < metaBits.length - 1;
 			const [head, tail] = metaTail(bit.text, sep);
-			const node = bit.kind === "time" ? h("time", {
-				class: "session-meta-time",
-				dateTime: bit.dateTime || ""
-			}, bit.text) : bit.kind === "text" ? h("span", {}, head, sep ? h("span", { class: "session-meta-tail" }, tail) : tail) : metaAnchor(bit.href, bit.text, sep, bit.quiet);
+			const node = bit.kind === "time" ? timeStamp(bit.dateTime, { attrs: { class: "session-meta-time" } }) : bit.kind === "text" ? h("span", {}, head, sep ? h("span", { class: "session-meta-tail" }, tail) : tail) : metaAnchor(bit.href, bit.text, sep, bit.quiet);
 			return index ? [" ", node] : [node];
 		}));
 		paintOrigin();
@@ -48510,7 +48457,7 @@ async function viewSession(main, host, sid, context = null) {
 			"manual",
 			"connector_managed",
 			"unknown"
-		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, sessionWhen(row.observed_at) || t("obs_unknown"), row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
+		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, { empty: t("obs_unknown") }), row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
 		if (!batHandoff) batHandoff = sessionBatPanel({
 			h,
 			t,
@@ -48726,11 +48673,7 @@ function checkpointPanel(host, sid) {
 			}
 		}, t("start_agent_work"));
 		const form = h("div", { hidden: true }, confinementNote(host, agent), instr, draft.box, h("div", { class: "actions" }, agent, go), out);
-		return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
-			sessionWhen(cp.captured_at),
-			cp.actor,
-			t("excerpt_count", { n: cp.excerpt_messages })
-		].join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form), h("button", {
+		return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, timeStamp(cp.captured_at), " · ", [cp.actor, t("excerpt_count", { n: cp.excerpt_messages })].join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form), h("button", {
 			class: "secondary",
 			disabled: !can || !mayStart,
 			title: !can ? t("checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
@@ -49336,7 +49279,7 @@ function environmentCard(group) {
 					}
 				}, t("dep_next"));
 				const verified = env.last_verified;
-				fill(card, h("div", { class: "deployment-card-heading" }, h("h2", {}, group[0].environment), needs ? chip(t("dep_attention"), "warn") : null), h("p", { class: "muted" }, group[0].repository, " · ", t("dep_generation", { generation: env.desired_generation })), needs ? h("p", { class: "note warn" }, t(env.attention === "ENVIRONMENT_VERSION_DRIFT" ? "dep_drift" : "dep_attention_help")) : null, h("div", { class: "deployment-versions" }, h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)), h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed), h("p", { class: "muted" }, t("dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })), env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)), h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity), h("p", { class: "muted" }, t("dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })), verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null, verified ? deploymentReceipt(verified) : null), h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" }, ...history.items.length ? history.items.map((dep) => deploymentRecord(dep, env, load)) : [h("p", { class: "muted" }, t("dep_no_history"))]), !history.items.length && group.every((r) => !r.rollback?.supported) ? h("p", { class: "muted" }, t("dep_ROLLBACK_UNSUPPORTED")) : null, h("div", { class: "actions deployment-pagination" }, previous, h("span", { class: "muted" }, t("dep_page", { page: page + 1 })), more));
+				fill(card, h("div", { class: "deployment-card-heading" }, h("h2", {}, group[0].environment), needs ? chip(t("dep_attention"), "warn") : null), h("p", { class: "muted" }, group[0].repository, " · ", t("dep_generation", { generation: env.desired_generation })), needs ? h("p", { class: "note warn" }, t(env.attention === "ENVIRONMENT_VERSION_DRIFT" ? "dep_drift" : "dep_attention_help")) : null, h("div", { class: "deployment-versions" }, h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)), h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed), h("p", { class: "muted" }, timeLabel(t, "dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })), env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)), h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity), h("p", { class: "muted" }, timeLabel(t, "dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })), verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null, verified ? deploymentReceipt(verified) : null), h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" }, ...history.items.length ? history.items.map((dep) => deploymentRecord(dep, env, load)) : [h("p", { class: "muted" }, t("dep_no_history"))]), !history.items.length && group.every((r) => !r.rollback?.supported) ? h("p", { class: "muted" }, t("dep_ROLLBACK_UNSUPPORTED")) : null, h("div", { class: "actions deployment-pagination" }, previous, h("span", { class: "muted" }, t("dep_page", { page: page + 1 })), more));
 			} catch (e) {
 				if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(e.code)) return;
 				const failure = errorBox(e);
@@ -49563,7 +49506,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 			doc.overlaps.length ? h("p", { class: "muted" }, t("overlapping_files"), " ", doc.overlaps.map((o) => `${o.path} (${o.seqs.join(", ")}${o.also_changed_on_pr ? ", PR" : ""})`).join("; ")) : null,
 			doc.blocking.length ? h("ul", { class: "error" }, ...doc.blocking.map(plain)) : null,
 			doc.warnings.length ? h("ul", { class: "muted" }, ...doc.warnings.map(plain)) : null,
-			h("p", { class: "muted" }, expired ? t("preview_expired") : t("previewed_at", { time: when(epoch(doc.observed_at)) }), " ", h("a", {
+			h("p", { class: "muted" }, expired ? t("preview_expired") : timeLabel(t, "previewed_at", { time: when(epoch(doc.observed_at)) }), " ", h("a", {
 				href: "#",
 				onclick: (ev) => {
 					ev.preventDefault();
@@ -49631,7 +49574,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					chip(t(activity.key), activity.tone),
 					session.pending && runtimeStale(session) ? chip(t("sessions_stale"), "stale") : null,
 					h("p", { class: "muted" }, t("delivery_result_unverified")),
-					h("p", { class: "muted" }, session.observed_at ? t("delivery_observed_at", { time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at) }) : t("delivery_unobserved")),
+					h("p", { class: "muted" }, session.observed_at ? timeLabel(t, "delivery_observed_at", { time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at) }) : t("delivery_unobserved")),
 					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
 					...delivered(r)
 				];
@@ -49934,7 +49877,7 @@ function connectionFacts() {
 		const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
 		const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
 		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
-		eventCell.textContent = state.lastEventAt ? when(state.lastEventAt) : t("global_no_event");
+		eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
 	};
 	render();
 	const paint = () => {
@@ -51192,7 +51135,7 @@ async function viewWorkItem(main, wid) {
 			onclick: () => decide("work_item.continue", `wi.continue.${wid}.${c.fingerprint}`)
 		}, t("keep_working"));
 		let banner = null;
-		if (c.approved) banner = h("p", { class: "note ok" }, t("approved_by", {
+		if (c.approved) banner = h("p", { class: "note ok" }, timeLabel(t, "approved_by", {
 			who: c.approved_by,
 			time: when(epoch(c.approved_at))
 		}));
@@ -51296,7 +51239,7 @@ async function viewWorkItem(main, wid) {
 				render();
 			}
 		};
-		const linkRows = data.links.map((l) => h("div", { class: "row" }, chip(t("link_" + l.kind)), h("div", { class: "grow" }, linkTarget(l), l.note ? h("div", { class: "muted" }, l.note) : null, h("div", { class: "muted" }, `${l.linked_by} · ${when(epoch(l.linked_at))}`)), l.kind === "checkpoint" && l.target?.found && live ? continueFrom(w, l.ref, notice, data.children) : null, live && may("manage") ? h("button", {
+		const linkRows = data.links.map((l) => h("div", { class: "row" }, chip(t("link_" + l.kind)), h("div", { class: "grow" }, linkTarget(l), l.note ? h("div", { class: "muted" }, l.note) : null, h("div", { class: "muted" }, l.linked_by, " · ", when(epoch(l.linked_at)))), l.kind === "checkpoint" && l.target?.found && live ? continueFrom(w, l.ref, notice, data.children) : null, live && may("manage") ? h("button", {
 			class: "mini",
 			title: t("remove"),
 			"aria-label": t("remove"),
@@ -51321,7 +51264,7 @@ async function viewWorkItem(main, wid) {
 					ref: ref.value.trim()
 				}, `wi.link.${wid}`, true);
 			}
-		}, t("link"))) : null), data.children.length ? [h("h2", {}, t("children")), h("div", { class: "panel" }, ...data.children.map(brief))] : null, data.derived.length ? [h("h2", {}, t("derived")), h("div", { class: "panel" }, ...data.derived.map(brief))] : null, h("h2", {}, t("history")), h("div", { class: "panel" }, ...data.events.map((ev) => h("div", { class: "row" }, h("div", { class: "grow" }, t("ev_" + ev.kind.replace(".", "_")), h("div", { class: "muted" }, eventDetail(ev.body))), h("span", { class: "muted" }, `${ev.actor || ""} · ${when(epoch(ev.created_at))}`)))));
+		}, t("link"))) : null), data.children.length ? [h("h2", {}, t("children")), h("div", { class: "panel" }, ...data.children.map(brief))] : null, data.derived.length ? [h("h2", {}, t("derived")), h("div", { class: "panel" }, ...data.derived.map(brief))] : null, h("h2", {}, t("history")), h("div", { class: "panel" }, ...data.events.map((ev) => h("div", { class: "row" }, h("div", { class: "grow" }, t("ev_" + ev.kind.replace(".", "_")), h("div", { class: "muted" }, eventDetail(ev.body))), h("span", { class: "muted" }, ev.actor || "", " · ", when(epoch(ev.created_at)))))));
 		if (draft) {
 			draft = null;
 			d.open();
@@ -51758,7 +51701,7 @@ async function viewCleanup(main, section, ident) {
 		fill(previewOut, h("h2", {}, t("cleanup_preview")), h("p", {}, t("cleanup_counts", {
 			reclaim: doc.impact.reclaim,
 			retain: doc.impact.retain
-		})), h("p", { class: "muted" }, t("cleanup_expires", { time: when(doc.expires_at * 1e3) })), ...(doc.items || []).map(resourceRow), !doc.ready ? h("p", { class: "note" }, t("cleanup_blocked")) : null);
+		})), h("p", { class: "muted" }, timeLabel(t, "cleanup_expires", { time: when(doc.expires_at * 1e3) })), ...(doc.items || []).map(resourceRow), !doc.ready ? h("p", { class: "note" }, t("cleanup_blocked")) : null);
 	}
 	const previewButton = h("button", {
 		class: "secondary",

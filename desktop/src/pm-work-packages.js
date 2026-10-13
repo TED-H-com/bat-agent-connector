@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {joinLabel} from './label-text.js';
 // The central service owns preparation and source policy. This view only reads.
 export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSize=20,onSelection=()=>{}}) {
@@ -56,7 +57,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       +(delivery.pull_number?' · #'+delivery.pull_number:'')),...['migration','rollout','rollback','observation'].map(key=>
       detail(t('wp_'+key)+' · '+t(delivery[key].status==='unresolved'?'wp_unresolved_status':'wp_'+delivery[key].status),paragraph(delivery[key].text))));
     const sources=detail(t('wp_sources'),fact('wp_package_id',row.package_id),fact('wp_digest',row.document_digest),
-      fact('wp_created',Number.isFinite(row.created_at)?new Date(row.created_at*1000).toISOString():null),fact('wp_author',row.actor),
+      fact('wp_created',timeStamp(row.created_at, {empty:null})),fact('wp_author',row.actor),
       fact('wp_plan',context.plan_ref.revision_id),
       fact('wp_scope',context.plan_ref.scope_revision),fact('wp_code',doc.code_source.repository+'@'+doc.code_source.source_sha),
       fact('wp_work',row.work_item_id),fact('wp_binding',context.work_ref?.binding_id),fact('wp_work_version',context.work_ref?.work_version),

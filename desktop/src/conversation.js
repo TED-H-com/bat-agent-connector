@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {renderMessage} from "./message-format.js";
 import {disclosure, statusPill} from "./ui/components.js";
 import {icon} from "./ui/icons.js";
@@ -132,8 +133,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         const glyphs = Array.from(whoName);
         row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
         row.name.textContent = whoName;
+        const stampNode = timeStamp(message.ts, {empty:''});
         row.time.textContent = stamp;
-        row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
+        if (stampNode instanceof Node) {row.time.dateTime = stampNode.dateTime; row.time.title = stampNode.title; row.time.dataset.uiTime = stampNode.dataset.uiTime;}
         const chipText = chip.join(" · ");
         row.chipText.textContent = chipText;
         row.chip.hidden = !chipText;

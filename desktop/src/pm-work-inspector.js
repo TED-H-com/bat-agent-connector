@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {h} from './ui/dom.js';
 import {inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
@@ -70,10 +71,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
   let panel = null, actions = null, signature = '', selection = null;
   const unknown = () => statusPill('unknown');
   const paragraph = (...nodes) => h('p', {}, ...nodes);
-  const stamp = value => {
-    const date = typeof value === 'number' && Number.isFinite(value) ? new Date(value * 1000) : null;
-    return date && Number.isFinite(date.valueOf()) ? h('time', {datetime: date.toISOString()}, date.toISOString().replace('T', ' ').replace('.000Z', ' UTC')) : '—';
-  };
+  const stamp = value => timeStamp(value);
   function close() {panel?.close();}
   function show(data) {
     selection = data;

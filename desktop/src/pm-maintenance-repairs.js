@@ -1,3 +1,4 @@
+import {timeStamp, timeText} from './ui/stamps.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
 // Every choice is an original server record. A refresh may withdraw it, never silently replace it.
 const START='pm.maintenance.repair',RECORD='pm.maintenance.repair.evidence.record';
@@ -11,7 +12,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   const select=label=>h('select',{'aria-label':t(label)}),finding=select('pmr_finding'),rule=select('pmr_rule'),history=select('pmr_history'),evidence=select('pmr_evidence');
   finding.dataset.pmRepairFinding='';
   let pendingFinding='';
-  const line=(label,value)=>h('p',{class:'pm-source'},h('strong',{},t(label)+': '),String(value??t('pmr_none'))),text=label=>h('p',{class:'muted'},t(label));
+  const line=(label,value)=>h('p',{class:'pm-source'},h('strong',{},t(label)+': '),value??t('pmr_none')),text=label=>h('p',{class:'muted'},t(label));
   const state=value=>t('pmr_status_'+(['accepted','queued','pending','running','succeeded','failed','cancelled','needs_attention','not_admitted','passed','blocked'].includes(value)?value:'unknown'));
   const link=id=>h('a',{href:`#/op/${encodeURIComponent(id)}`},t('pm_operation'));
   const valid=ticket=>{try{alive();return ticket===epoch;}catch{return false;}};
@@ -102,7 +103,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       if(row.publication_child.status==='needs_attention'||row.publication_child.error_code?.includes('UNKNOWN'))box.append(text('pmr_unknown'));}
     if(p.new_investment_blocked_reason||p.blocked_reason)box.append(h('p',{class:'muted'},reason(p.new_investment_blocked_reason||p.blocked_reason)));
     const detail=h('details',{},h('summary',{},t('pmr_original')),line('pmr_work',row.work_item_id),line('pmr_policy',row.policy_id),
-      line('pmr_observation',c.finding_ref.observation_id),line('pmr_digest',c.finding_ref.document_digest),line('pmr_deadline',new Date(row.deadline_at*1000).toLocaleString()),
+      line('pmr_observation',c.finding_ref.observation_id),line('pmr_digest',c.finding_ref.document_digest),line('pmr_deadline',timeStamp(row.deadline_at)),
       line('pmr_retry',row.retries_used),text('pmr_cost'),link(row.operation_id));
     for(const item of row.evidence){const proof=item.evidence;detail.append(h('p',{},t('pmr_kind_'+item.selection.kind),' · ',link(item.operation_id)));
       for(const [name,value]of Object.entries(proof.reference||item.selection.reference||{}))detail.append(h('p',{class:'pm-source'},name+': '+value));}
@@ -145,7 +146,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
           ||!ci.pulls?.some(p=>p.native_pr_id===receipt.native_pr_id&&p.head_sha===receipt.candidate_sha))continue;
         const ref={observation_id:item.observation_id,document_digest:item.document_digest,native_pr_id:receipt.native_pr_id};
         if(!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id)||!digest.test(ref.document_digest))throw invalid();
-        choices.set('required_ci:'+ref.observation_id,{selection:{kind:'required_ci',reference:ref},label:`${t('pmr_kind_required_ci')} · #${receipt.pull_number} · ${new Date(item.created_at*1000).toLocaleString()}`});}
+        choices.set('required_ci:'+ref.observation_id,{selection:{kind:'required_ci',reference:ref},label:`${t('pmr_kind_required_ci')} · #${receipt.pull_number} · ${timeText(item.created_at)}`});}
     }
     if(!valid(ticket))return;if(filtered&&!status.querySelector('[data-repair-filtered]')){const notice=text('pmr_filtered');notice.dataset.repairFiltered='';status.append(notice);}proofReady=true;const saved=parse(editor.fields.selection),value=[...choices].find(([,v])=>same(v.selection,saved))?.[0]||'';
     options(evidence,[...choices].map(([id,value])=>[id,value.label]),value);editor.rebase.hidden=Number(editor.fields.version.value)===row.version||editor.locked();update();

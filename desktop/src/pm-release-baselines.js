@@ -1,3 +1,4 @@
+import {timeStamp, timeText} from './ui/stamps.js';
 // Release selection records a fixed source. It does not publish or authorize Maintain.
 export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -19,7 +20,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   const allowed=()=>discovery()&&owner()&&caps()?.actions?.some(row=>row.action===action&&row.allowed);
   const valid=ticket=>{try{alive();return ticket===epoch;}catch{return false;}};
   const check=data=>{if(data?.workspace_id!==workspaceId)throw Error(t('prb_invalid'));return data;};
-  const stamp=value=>{const date=new Date(typeof value==='number'?value*1000:value);return Number.isNaN(date.valueOf())?String(value??'—'):date.toLocaleString();};
+  const stamp=value=>timeStamp(value);
   const query=params=>new URLSearchParams(Object.entries(params).filter(([,value])=>value!==null&&value!==undefined)).toString();
   const bindingKey=(row,name)=>JSON.stringify([row.project_binding_id,name]);
   const selectedBinding=()=>bindings.flatMap(row=>row.repositories.map(name=>({row,name,key:bindingKey(row,name)}))).find(item=>item.key===repository.value);
@@ -80,7 +81,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     return h('article',{'data-release-baseline':row.baseline_id},
       h('h3',{},current?t('prb_current'):`${t('prb_version')} ${row.version}`),
       h('p',{},h('strong',{},doc.release_version?.value||doc.commit_sha),' · ',doc.repository,' · ',doc.channel),
-      h('p',{class:'muted'},`${t('prb_version')} ${row.version} · ${stamp(row.created_at)}`),
+      h('p',{class:'muted'},t('prb_version'), ' ', row.version, ' · ', stamp(row.created_at)),
       h('ul',{},h('li',{},t(delivery.github_release==='published'?'prb_gh_published':'prb_gh_unknown')),
         h('li',{},t('prb_registry')),h('li',{},t(delivery.deployment==='verified'?'prb_dep_verified':'prb_dep_unknown'))),
       delivery.deployment==='verified'?h('p',{class:'muted'},t('prb_not_live')):null,
@@ -169,7 +170,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
       choices=append?[...choices,...entries]:entries;choiceCursor=mode==='github_release'?page.next_page:page.next_cursor;
       sourceView.replaceChildren();
       for(const row of choices){
-        const id=String(mode==='github_release'?row.release_id:row.deployment_id),label=mode==='github_release'?`${row.tag} · ${row.channel} · ${stamp(row.published_at)}`:`${row.channel} · ${row.version?.value||row.commit_sha} · ${stamp(row.checked_at)}`;
+        const id=String(mode==='github_release'?row.release_id:row.deployment_id),label=mode==='github_release'?`${row.tag} · ${row.channel} · ${timeText(row.published_at)}`:`${row.channel} · ${row.version?.value||row.commit_sha} · ${timeText(row.checked_at)}`;
         const radio=h('input',{type:'radio',name:`release-source-${workspaceId}`,value:id,onchange:()=>{selectedKey=id;selectionEpoch++;preview=null;previewView.replaceChildren();controls();}});
         sourceView.append(h('label',{'data-release-choice':id},radio,label));
       }

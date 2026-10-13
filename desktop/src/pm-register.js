@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
 import {dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
@@ -26,12 +27,11 @@ const AGE_KEYS = {'0-7d': 'reg_age_0_7', '8-30d': 'reg_age_8_30', '31-90d': 'reg
 const TONES = {open: 'info', monitoring: 'info', observed_open: 'info', tracking: 'info', failed: 'bad', proposed: 'review', needs_review: 'review', succeeded: 'ok', running: 'info', uncertain: 'review', needs_attention: 'review', waiting_checks: 'info', waiting_external: 'info', accepted: 'info', format_valid: 'review', recorded_discussion_decision: 'info', continue_maintenance: 'info', bounded_repair_proposal: 'review', adopted_direction: 'ok'};
 const REPO = /^[\w.-]+\/[\w.-]+$/;
 const DEPTH_PAGES = 20;
-const shortTime = new Intl.DateTimeFormat(undefined, {dateStyle: 'short', timeStyle: 'short'});
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const known = (t, key) => {const text = t(key); return text === key ? '' : text;};
-const when = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? '' : shortTime.format(date);};
-const day = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();};
+const when = value => timeStamp(value, {empty:''});
+const day = value => timeStamp(value, {dateOnly:true, empty:''});
 
 export function workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}, nameFor = () => ''}) {
   const preference = viewState(namespace, workspaceId, 'issues');
@@ -331,7 +331,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const timeline = h('ol', {class: 'reg-timeline', 'data-reg-timeline': ''}, ...(Array.isArray(record.timeline) ? record.timeline : []).map(step => {
       if (labelSegment(step?.step) && !known(t, 'reg_step_' + step.step)) unknownCodes.push(step.step);
       if (labelSegment(step?.status) && !statusKnown(step.status)) unknownCodes.push(step.status);
-      const meta = joinLabel([step?.actor, when(step?.at)]);
+      const meta = h('span', {}, step?.actor || '', step?.actor && step?.at ? ' · ' : '', when(step?.at));
       const title = labelSegment(step?.title);
       const link = refLink(step?.ref, title, row.row_id);
       return h('li', {class: 'reg-step', 'data-reg-step': step?.step || 'unknown'},

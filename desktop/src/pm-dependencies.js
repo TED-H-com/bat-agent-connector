@@ -1,3 +1,4 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
 import {button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
@@ -27,7 +28,7 @@ const capturedDate = epoch => {
   if (typeof epoch !== 'number' || !Number.isFinite(epoch)) return '';
   const date = new Date(epoch * 1000);
   if (Number.isNaN(date.valueOf())) return '';
-  return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric', timeZone: 'UTC'});
+  return timeStamp(epoch);
 };
 const abbreviate = value => {const text = String(value || ''); return text.length > 16 ? text.slice(0, 15) + '…' : text;};
 const svg = (tag, attrs = {}, ...children) => {
@@ -356,8 +357,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     if (!active || !data) return;
     const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
     const date = capturedDate(data.capture?.captured_at);
-    const line = commit && date ? t('dep_meta', {commit, date}) : commit ? t('dep_meta_commit', {commit}) : '';
-    if (header?.meta) {header.meta.hidden = !line; header.meta.textContent = line;}
+    const line = commit && date ? timeLabel(t, 'dep_meta', {commit, date}) : commit ? t('dep_meta_commit', {commit}) : '';
+    if (header?.meta) {header.meta.hidden = !line; header.meta.replaceChildren(line);}
     const marks = [];
     if (data.stale === true) marks.push(statusPill('stale'));
     if (data.partial === true) marks.push(statusPill('partial'));
@@ -659,7 +660,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       if (files.childNodes.length) detailBody.append(files);
       if ((revisions?.revisions || []).length || revisions?.next_cursor) {
         detailBody.append(h('h3', {}, t('dep_revisions')));
-        for (const row of revisions?.revisions || []) detailBody.append(h('p', {}, joinLabel([shortSha(row.commit_sha), capturedDate(row.captured_at), row.status === 'partial' ? t('ui_status_partial') : row.status === 'complete' ? '' : reasonText(t, row.reason, true)])));
+        for (const row of revisions?.revisions || []) detailBody.append(h('p', {}, shortSha(row.commit_sha), ' · ', capturedDate(row.captured_at), row.status === 'partial' ? ' · ' + t('ui_status_partial') : row.status === 'complete' ? '' : ' · ' + reasonText(t, row.reason, true)));
         if (revisions?.next_cursor) detailBody.append(h('p', {}, t('dep_revisions_more')));
       }
     }

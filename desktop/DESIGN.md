@@ -55,6 +55,17 @@ for local transitions. Reduced motion removes animation and transitions; no loop
 animation claims work is running. Inputs are 32px on desktop and 16px text on mobile.
 Touch actions have at least 44px targets.
 
+## Shared time stamps
+
+`ui/time.js` is the formatter family: under 24 hours use compact past/future labels;
+older instants use month, day and local time. Include the year only outside the current
+year. Calendar dates preserve their written day in every timezone. `ui/stamps.js`
+uses the app locale and renders `<time datetime>` with a complete localized timezone
+tooltip. One document ticker updates only stamp text every minute, pauses while hidden,
+and never rerenders a view or requests data. Native option labels use the same text
+formatter because an option cannot contain a `<time>` element. ISO request parameters,
+exports and source documents retain their machine representation.
+
 ## Shared components
 
 Import helpers from `src/ui/components.js`; they return DOM nodes. Append them with

@@ -1,3 +1,4 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
 import {fixedQualityPicker} from './pm-quality-projections.js';
 const flatten = rows => (rows || []).flatMap(row => [row, ...flatten(row.children)]);
@@ -21,7 +22,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-evidence': ''}, h('h2', {}, t('pm_evidence_title')),
     h('p', {class: 'muted'}, t('pm_evidence_intro')), labelled('pm_evidence_project', choose), status, rows);
   const stateText = value => {const key = 'pm_evidence_state_' + value, translated = t(key); return translated === key ? String(value) : translated;};
-  const sourceTime = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
+  const sourceTime = value => timeStamp(value, {empty:t('pm_evidence_time_unknown')});
   const verify = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const can = decide => loaded && permitted(decide);
   const forms = new Set();
@@ -52,7 +53,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     if (!last.capture) {holder.append(h('p', {class: 'muted'}, t('pm_evidence_empty'))); return;}
     if (last.capture.work_item_id !== workId) throw Error(t('pm_scope_mismatch'));
     const capture = last.capture, coverage = capture.coverage;
-    holder.append(h('p', {}, t('pm_evidence_saved_at', {time: sourceTime(capture.captured_at)})),
+    holder.append(h('p', {}, timeLabel(t, 'pm_evidence_saved_at', {time: sourceTime(capture.captured_at)})),
       h('p', {class: 'muted'}, t('pm_evidence_coverage', {count: coverage.links_examined,
         missing: coverage.unavailable_sources + coverage.unsupported_sources})),
       h('p', {class: 'muted'}, t('pm_evidence_quality_unknown')));
@@ -77,7 +78,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
               h('details', {class: 'pm-evidence-original'}, h('summary', {}, t('pm_evidence_original')),
                 h('dl', {class: 'pm-evidence-fields'}, ...Object.entries(fact).flatMap(([key, value]) =>
                   [h('dt', {}, key), h('dd', {}, value === null ? t('pm_evidence_unknown') : typeof value === 'object' ? JSON.stringify(value) : String(value))]))),
-              h('small', {class: 'muted'}, t('pm_evidence_saved_at', {time: sourceTime(detail.evidence.captured_at)})));
+              h('small', {class: 'muted'}, timeLabel(t, 'pm_evidence_saved_at', {time: sourceTime(detail.evidence.captured_at)})));
             fetched = true;
           } catch (error) {if (row.isConnected) body.replaceChildren(errorBox(error));} finally {busy = false;}
         }); facts.append(row);

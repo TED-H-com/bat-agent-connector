@@ -1846,9 +1846,9 @@ const STRINGS = {
   },
 };
 
-const lang = (navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+export const locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
 
 export function t(key, vars = {}) {
-  const text = STRINGS[lang][key] ?? STRINGS["zh-TW"][key] ?? key;
+  const text = STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key;
   return text.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }

@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // A catalog selection is an original source, never managed-session authority.
 export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,workspace,form,errorBox}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,action='pm.ahp.observe';
@@ -12,8 +13,8 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
     h('details',{'data-ahp-history':''},h('summary',{},t('ahp_history')),history,more),detail);
   const valid=ticket=>{try{alive();return !disposed&&ticket===epoch;}catch{return false;}};
   const check=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('ahp_invalid'));return value;};
-  const stamp=value=>Number.isFinite(value)?new Date(value*1000).toLocaleString():'—';
-  const line=(key,value)=>h('p',{},h('strong',{},`${t(key)}: `),String(value));
+  const stamp=value=>timeStamp(value);
+  const line=(key,value)=>h('p',{},h('strong',{},`${t(key)}: `),value);
   const active=item=>ready&&selected===item.key&&choices.has(item.key)&&Boolean(workspace()?.membership);
   const request=async(...args)=>{const ticket=epoch;try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;}};
   function row(value,withDocument=false){
@@ -55,7 +56,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
     check(value);if(!Array.isArray(value.observations)||typeof value.visibility_filtered!=='boolean'||value.next_cursor!==null&&(!Number.isSafeInteger(value.next_cursor)||value.next_cursor<=historyAfter))throw Error(t('ahp_invalid'));
     const rows=value.observations.map(r=>row(r));cursor=value.next_cursor;
     history.replaceChildren(...rows.map(r=>h('div',{class:'pm-ahp-history-row'},h('button',{type:'button',class:'secondary',onclick:()=>void showDetail(r.observation_id)},
-      `${r.adapter_id} · ${stamp(r.created_at)} · ${t(r.coverage_status==='observed'?'ahp_observed':'ahp_incomplete')}`),h('small',{class:'mono'},r.observation_id))));
+      r.adapter_id, ' · ', stamp(r.created_at), ' · ', t(r.coverage_status==='observed'?'ahp_observed':'ahp_incomplete')),h('small',{class:'mono'},r.observation_id))));
     if(!rows.length)history.append(h('p',{class:'muted'},t(value.visibility_filtered?'ahp_hidden':'ahp_empty')));
     else if(value.visibility_filtered)history.append(h('p',{class:'muted'},t('ahp_hidden')));
     more.hidden=cursor===null;more.disabled=false;
@@ -78,7 +79,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
     function renderCatalog(){
       item.catalogBox.replaceChildren();if(!item.catalog){item.catalogBox.append(h('p',{class:'muted'},t('ahp_need_catalog')));return;}
       const e=item.catalog.document.evidence,list=selectedUris(),start=item.page*20;
-      item.catalogBox.append(h('p',{class:'muted'},`${t('ahp_catalog_coverage')}: ${t(e.catalog_complete?'ahp_catalog_complete':'ahp_catalog_partial')} · ${stamp(item.catalog.document.finished_at)}`),
+      item.catalogBox.append(h('p',{class:'muted'},t('ahp_catalog_coverage'), ': ', t(e.catalog_complete?'ahp_catalog_complete':'ahp_catalog_partial'), ' · ', stamp(item.catalog.document.finished_at)),
         h('p',{},t('ahp_selection_help')));
       if(list.some(uri=>!e.catalog.some(s=>s.resource===uri)))item.catalogBox.append(h('p',{class:'muted'},t('ahp_selection_unavailable')));
       for(const s of e.catalog.slice(start,start+20)){

@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // One scheduling baseline, explicit forecasts and fixed source observations.
 export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -135,7 +136,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
       if(!history.isConnected)return false;
       if(!after)historyBody.replaceChildren();historyLoaded=true;historyVersion=expectedVersion;
       for(const entry of page.revisions||[]){
-        const content=h('div'),detail=h('details',{},h('summary',{},t('pm_roadmap_kind_'+entry.kind),' · ',new Date(entry.created_at*1000).toLocaleString()),content);
+        const content=h('div'),detail=h('details',{},h('summary',{},t('pm_roadmap_kind_'+entry.kind),' · ',timeStamp(entry.created_at)),content);
         let fetched=false;detail.addEventListener('toggle',async()=>{
           if(!detail.open||fetched)return;fetched=true;
           try{const value=await api('GET',`${endpoint}/roadmap/revisions/${entry.revision_id}`);alive();if(!detail.isConnected)return;

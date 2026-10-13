@@ -361,7 +361,7 @@ test('epoch dates are local while milestone calendar dates stay fixed', async ({
   f.state.reportPatch = saved => {saved.as_of = Date.parse('2026-10-12T20:00:00Z') / 1000;};
   await boot(page, f); await expect(page.locator('[data-overview-meta]')).toContainText('adopted Oct 12');
   await expect(root(page).locator('[data-overview-milestone]').first()).toContainText('Sep 28');
-  await report(page, f.ids.snap2); await expect(page.locator('[data-overview-meta]')).toContainText('Oct 13'); await context.close();
+  await report(page, f.ids.snap2); await expect(page.locator('[data-overview-meta] time')).toHaveAttribute('title', /October 13, 2026/); await context.close();
 });
 
 test('saved goal reasons match confirmed and unconfirmed plan inputs', async ({page}) => {

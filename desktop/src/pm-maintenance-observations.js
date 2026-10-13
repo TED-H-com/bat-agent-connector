@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {maintenanceFindingsView} from './pm-maintenance-findings.js';
 // Saved observations are evidence at a point in time, never permission to repair.
 export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}) {
@@ -10,8 +11,8 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
   const current=()=>ready&&policy&&baseline&&lifecycle;
   const check=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('pmo_invalid'));return value;};
   const valid=ticket=>{try{alive();return ticket===epoch;}catch{return false;}};
-  const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),String(value));
-  const stamp=value=>Number.isFinite(value)?new Date(value*1000).toLocaleString():t('pmo_unknown_time');
+  const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),value);
+  const stamp=value=>timeStamp(value, {empty:t('pmo_unknown_time')});
   const reasonGroups={
     source_limit:['source_row_limit','source_reference_limit'],source_access:['source_not_visible','linked_task_unavailable','sprint_source_unavailable','linked_operation_unavailable'],
     source_age:['source_time_unproven','source_expired'],pending_work:['task_waiting','task_committed','work_waiting','work_committed','coding_active','session_waiting'],
