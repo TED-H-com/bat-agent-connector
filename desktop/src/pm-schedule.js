@@ -132,12 +132,14 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       for (const span of rowSpans) {
         const start = span.start ?? span.end, end = span.end ?? start;
         const marker = row.kind === 'milestone';
+        const endText = span.open ? t('sched_open') : span.end === null ? reasonLabel(t, 'terminal_time_unrecorded') : row[span.kind].end || '—';
         const bar = h('span', {class: `schedule-bar ${span.kind}${marker ? ' milestone' : ''}${span.open ? ' open' : ''}${row.status === 'blocked' ? ' blocked' : ''}`,
           'data-schedule-bar': span.kind, 'data-open': span.open ? 'true' : null,
-          title: `${t('sched_' + span.kind)} · ${row[span.kind].start || '—'} → ${span.open ? t('sched_open') : row[span.kind].end || '—'}`}, marker ? '◆' : null);
+          title: `${t('sched_' + span.kind)} · ${row[span.kind].start || '—'} → ${endText}`}, marker ? '◆' : null);
         bar.style.left = `${(start - domain.start) * scale}px`;
         if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
         if (span.open) bar.append(h('span', {class: 'schedule-bar-label'}, t('sched_open')));
+        else if (span.end === null) bar.append(h('span', {class: 'schedule-bar-label'}, reasonLabel(t, 'terminal_time_unrecorded')));
         else if (['waiting', 'blocked'].includes(row.status)) bar.append(h('span', {class: 'schedule-bar-label'}, t('ui_status_' + row.status)));
         node.append(bar);
       }
@@ -164,7 +166,12 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const {row, depth, expandable} = item;
       const expand = expandable ? button({icon: 'chevron-right', variant: 'ghost', label: null, 'aria-label': t(collapsed.has(row.id) ? 'ui_expand' : 'ui_collapse', {title: label(row)}),
         tabindex: -1, 'aria-expanded': String(!collapsed.has(row.id)), onClick: event => {event.stopPropagation(); toggle(row.id); focusRow(row.id);}}) : h('span', {class: 'schedule-indent'});
-      const dates = ['baseline', 'forecast', 'actual'].filter(key => row[key]).map(key => `${t('sched_' + key)} ${row[key].start?.slice(0, 10) || '—'}${row[key].end && row[key].end !== row[key].start ? ' → ' + row[key].end.slice(0, 10) : ''}`);
+      const dates = spans(row).map(span => {
+        const s = row[span.kind].start?.slice(0, 10) || '—';
+        const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
+        const suffix = span.open ? ' → ' + t('sched_open') : span.end === null ? ' → ' + reasonLabel(t, 'terminal_time_unrecorded') : e && e !== s ? ' → ' + e : '';
+        return `${t('sched_' + span.kind)} ${s}${suffix}`;
+      });
       const cell = h('div', {class: 'schedule-tree-cell', role: 'treeitem', 'aria-level': depth, 'aria-expanded': expandable ? String(!collapsed.has(row.id)) : null,
         'aria-label': label(row), tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
         'data-schedule-select': row.id, onclick: event => row.kind === 'group' ? toggle(row.id) : select(row.id, event.currentTarget), onkeydown: event => keydown(event, item, index)},

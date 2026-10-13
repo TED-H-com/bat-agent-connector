@@ -24,8 +24,8 @@ export function spans(row) {
     const span = row[kind]; if (!span) return [];
     const start = dayNumber(span.start), end = dayNumber(span.end);
     if (start === null && end === null) return [];
-    return [{kind, start, end: start !== null && end !== null && end < start ? null : end,
-      open: kind === 'actual' && (end === null || start !== null && end < start), recordedOpen: span.open}];
+    const cleanEnd = start !== null && end !== null && end < start ? null : end;
+    return [{kind, start, end: cleanEnd, open: kind === 'actual' && span.open === true && cleanEnd === null}];
   });
 }
 export function chartRange(rows) {

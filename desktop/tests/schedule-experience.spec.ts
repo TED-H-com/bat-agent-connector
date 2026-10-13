@@ -247,3 +247,32 @@ test('schedule events still refresh without a mounted Overview', async ({page}) 
   await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
   expect(f.state.overviewReads).toBe(0); expect(f.writes).toEqual([]);
 });
+
+test('terminal span without end time reads End time not recorded and mobile date ranges format cleanly', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  const project = demoProject();
+  const rowId = `attempt:operation:${project.ids.work.email}:op_unrecorded_end`;
+  const f = await start(page, 'en', {mutate: data => {
+    data.rows.push({
+      id: rowId, parent_id: `work:${project.ids.work.email}`, kind: 'attempt', title: 'session.start (unrecorded end)',
+      status: 'done', blocked: null, waiting: null, depends_on: [], refs: {operation_id: 'op_unrecorded_end', agent: {cli: 'codex'}},
+      baseline: null, forecast: null, actual: {start: '2026-10-08T10:00:00Z', end: null, open: false},
+    });
+    data.unknown.push({field: `${rowId}.actual.end`, reason: 'terminal_time_unrecorded'});
+  }});
+  const bar = page.locator(`[data-schedule-track="${rowId}"] .schedule-bar`);
+  await expect(bar).not.toHaveClass(/\bopen\b/);
+  await expect(bar).not.toHaveAttribute('data-open', 'true');
+  await expect(bar).toHaveText('End time not recorded');
+  await expect(bar).toHaveAttribute('title', 'Actual · 2026-10-08T10:00:00Z → End time not recorded');
+  await item(page, rowId).click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  await inspector.locator('[data-schedule-section="details"] > summary').click();
+  await expect(inspector.locator('[data-schedule-section="details"]')).toContainText('End time not recorded');
+  await expect(inspector.locator('[data-schedule-section="details"]')).not.toContainText('→ Open');
+  await page.setViewportSize({width: 390, height: 844});
+  await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual 2026-10-08 → End time not recorded');
+  await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual 2026-10-06');
+  await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual 2026-10-05 → Open');
+});
+

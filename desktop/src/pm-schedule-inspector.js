@@ -4,7 +4,7 @@ import {t} from './i18n.js';
 import {agentMark, disclosure, statusPill} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
-import {scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
+import {dayNumber, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
 
 export function rowStatus(row, data) {
   return notObserved(row, data) ? h('span', {class: 'ui-pill tone-neutral'}, t('sched_not_observed')) : statusPill(row.status);
@@ -12,7 +12,8 @@ export function rowStatus(row, data) {
 export function dateRange(span) {
   if (!span) return t('sched_no_dates');
   const format = value => value?.includes('T') ? new Intl.DateTimeFormat(navigator.language, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}).format(new Date(value)) + ' UTC' : value;
-  return [format(span.start) || '—', span.end && (!span.start || span.end >= span.start) ? format(span.end) : t('sched_open')].join(' → ');
+  const validEnd = span.end && (!span.start || dayNumber(span.end) >= dayNumber(span.start)) ? span.end : null;
+  return [format(span.start) || '—', validEnd ? format(validEnd) : span.open === true ? t('sched_open') : reasonLabel(t, 'terminal_time_unrecorded')].join(' → ');
 }
 const unknown = () => h('span', {class: 'ui-meta'}, t('sched_unavailable'));
 const section = (key, ...body) => h('section', {'data-schedule-section': key}, h('h3', {}, t('sched_' + key)), ...body);

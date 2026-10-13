@@ -28320,12 +28320,12 @@ function spans(row) {
 		if (!span) return [];
 		const start = dayNumber(span.start), end = dayNumber(span.end);
 		if (start === null && end === null) return [];
+		const cleanEnd = start !== null && end !== null && end < start ? null : end;
 		return [{
 			kind,
 			start,
-			end: start !== null && end !== null && end < start ? null : end,
-			open: kind === "actual" && (end === null || start !== null && end < start),
-			recordedOpen: span.open
+			end: cleanEnd,
+			open: kind === "actual" && span.open === true && cleanEnd === null
 		}];
 	});
 }
@@ -28456,7 +28456,8 @@ function dateRange(span) {
 		timeStyle: "short",
 		timeZone: "UTC"
 	}).format(new Date(value)) + " UTC" : value;
-	return [format(span.start) || "—", span.end && (!span.start || span.end >= span.start) ? format(span.end) : t("sched_open")].join(" → ");
+	const validEnd = span.end && (!span.start || dayNumber(span.end) >= dayNumber(span.start)) ? span.end : null;
+	return [format(span.start) || "—", validEnd ? format(validEnd) : span.open === true ? t("sched_open") : reasonLabel(t, "terminal_time_unrecorded")].join(" → ");
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
@@ -28759,15 +28760,17 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			for (const span of rowSpans) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
+				const endText = span.open ? t("sched_open") : span.end === null ? reasonLabel(t, "terminal_time_unrecorded") : row[span.kind].end || "—";
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
 					"data-schedule-bar": span.kind,
 					"data-open": span.open ? "true" : null,
-					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${span.open ? t("sched_open") : row[span.kind].end || "—"}`
+					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${endText}`
 				}, marker ? "◆" : null);
 				bar.style.left = `${(start - domain.start) * scale}px`;
 				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
 				if (span.open) bar.append(h$1("span", { class: "schedule-bar-label" }, t("sched_open")));
+				else if (span.end === null) bar.append(h$1("span", { class: "schedule-bar-label" }, reasonLabel(t, "terminal_time_unrecorded")));
 				else if (["waiting", "blocked"].includes(row.status)) bar.append(h$1("span", { class: "schedule-bar-label" }, t("ui_status_" + row.status)));
 				node.append(bar);
 			}
@@ -28821,11 +28824,12 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 					focusRow(row.id);
 				}
 			}) : h$1("span", { class: "schedule-indent" });
-			const dates = [
-				"baseline",
-				"forecast",
-				"actual"
-			].filter((key) => row[key]).map((key) => `${t("sched_" + key)} ${row[key].start?.slice(0, 10) || "—"}${row[key].end && row[key].end !== row[key].start ? " → " + row[key].end.slice(0, 10) : ""}`);
+			const dates = spans(row).map((span) => {
+				const s = row[span.kind].start?.slice(0, 10) || "—";
+				const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
+				const suffix = span.open ? " → " + t("sched_open") : span.end === null ? " → " + reasonLabel(t, "terminal_time_unrecorded") : e && e !== s ? " → " + e : "";
+				return `${t("sched_" + span.kind)} ${s}${suffix}`;
+			});
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
