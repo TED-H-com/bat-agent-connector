@@ -1,4 +1,4 @@
-import {disclosure, emptyState, iconButton, inspector, pageHeader, skeleton, statusPill} from './ui/components.js';
+import {disclosure, emptyState, iconButton, inspector, pageHeader, segmented, skeleton, statusPill} from './ui/components.js';
 import {reasonText} from './global-labels.js';
 import {inboxRow} from './global-screens.js';
 // Each list has its own cursor and loaded-page count. No client-invented total or
@@ -8,11 +8,12 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   const unread = caps?.features?.work_item_reads?.version === 1;
   const saved = sessionStorage.getItem(storageKey) || sessionStorage.getItem('batc.tab');
   const tab = saved === 'confirm' || saved === 'active' ? 'active' : saved === 'unread' && unread ? 'unread' : 'needs';
-  const tabs = h('div', {class: 'tabs attention-tabs global-inbox-tabs', role: 'group', 'aria-label': t('nav_home')},
-    ...['needs', 'active', ...(unread ? ['unread'] : [])].map(value => h('button', {
-      class: value === tab ? 'on' : '', 'aria-pressed': String(value === tab), onclick: () => {
-        guard(); sessionStorage.setItem(storageKey, value); route();
-      }}, t('attention_tab_' + value))));
+  const tabs = segmented({
+    label: t('nav_home'), value: tab,
+    options: ['needs', 'active', ...(unread ? ['unread'] : [])].map(value => ({value, label: t('attention_tab_' + value)})),
+    onChange: value => {guard(); sessionStorage.setItem(storageKey, value); route();},
+  });
+  tabs.classList.add('global-inbox-tabs');
   const empty = emptyState({
     title: t('empty_needs_you'),
     action: h('div', {class: 'actions'},
@@ -51,11 +52,10 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     const badge = h('span', {class: 'global-group-count'});
     const count = h('span', {class: 'muted', 'data-shown': ''});
     const more = h('button', {class: 'secondary', hidden: true}, t('load_more'));
-    const quiet = key === 'problems' || key === 'active' ? h('a', {
-      href: '#/operations/' + (key === 'problems' ? 'attention' : 'active'),
-    }, t(key === 'problems' ? 'operations_view_attention' : 'operations_view_active')) : null;
+    const viewAll = key === 'problems' ? h('a', {class: 'global-view-all', href: '#/operations/attention'}, t('global_view_all')) : null;
+    const quiet = key === 'active' ? h('a', {href: '#/operations/active'}, t('operations_view_active')) : null;
     const section = h('section', {class: 'global-group', 'aria-label': t('attention_' + key), 'data-inbox-group': key},
-      h('div', {class: 'global-group-head'}, h('h2', {}, t('attention_' + key)), badge),
+      h('div', {class: 'global-group-head'}, h('h2', {}, t('attention_' + key)), badge, viewAll),
       status, list, h('div', {class: 'global-group-foot'}, count, more, quiet));
     const state = {key, path, field, row, ...options, section, list, status, badge, count, more, pages: 1, size: null, busy: false};
     more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
@@ -66,7 +66,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     h, key: x.host, title: x.host, href: `#/host/${encodeURIComponent(x.host)}`,
     meta: x.error || reasonText(x.stale_reason),
     pill: statusPill('stale'),
-    action: h('a', {class: 'ui-button primary ui-sm', href: `#/host/${encodeURIComponent(x.host)}`}, t('global_review')),
+    action: h('a', {class: 'ui-button secondary ui-sm', href: `#/host/${encodeURIComponent(x.host)}`}, t('global_review')),
     detailsLabel: t('global_details_for', {title: x.host}),
     onOpen: () => present(x.host, x.host, [
       h('p', {}, reasonText(x.stale_reason) || t('reason_unavailable')),
@@ -77,16 +77,14 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   const approvals = caps?.actions?.some(action => action.action === 'session.approve_pending' && action.allowed === true)
     ? h('section', {class: 'global-group', 'aria-label': t('global_approvals')},
       h('div', {class: 'global-group-head'}, h('h2', {}, t('global_approvals'))),
-      inboxRow({
+      h('div', {class: 'global-inbox-list'}, inboxRow({
         h, key: 'approvals', title: t('bulk_title'), href: '#/approvals',
-        action: h('a', {class: 'ui-button primary ui-sm', href: '#/approvals'}, t('global_review')),
-        detailsLabel: t('global_details_for', {title: t('bulk_title')}),
-        onOpen: () => {location.hash = '#/approvals';},
-      })) : null;
+        action: h('a', {class: 'ui-button secondary ui-sm', href: '#/approvals'}, t('global_review')),
+      }))) : null;
   main.append(...[pageHeader({
     title: t('nav_home'),
     actions: [iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => refresh().catch(() => {})})],
-  }), tabs, notes, empty, ...(tab === 'needs' ? [
+  }), tabs, empty, ...(tab === 'needs' ? [
     approvals,
     add('replies', '/sessions?attention=true&limit=50', 'sessions', sessionRow),
     add('completion', '/work-items?pending=true&limit=50', 'work_items', workItemRow),
@@ -95,7 +93,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   ] : tab === 'active' ? [
     add('active', '/operations?status=accepted,running,waiting_checks,waiting_external&limit=50', 'operations', opRow,
       {cursor: 'next_before', param: 'before'}),
-  ] : [add('unread', '/work-items?unread=true&limit=50', 'work_items', workItemRow)])].filter(node => node != null && node !== false));
+  ] : [add('unread', '/work-items?unread=true&limit=50', 'work_items', workItemRow)]), notes].filter(node => node != null && node !== false));
   let serial = Promise.resolve();
   const load = async (section, wanted) => {
     guard(); section.busy = true; section.more.disabled = true;

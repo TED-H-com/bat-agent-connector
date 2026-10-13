@@ -1,7 +1,14 @@
 import {nativeDesktop, tailscaleControl} from './transport/index.ts';
 
 // Local login-scoped evidence; never mixed with central actor, operations or event cursors.
-export function mountTailscale(main, {h, t}) {
+export function mountTailscale(main, {h, t, presentation} = {}) {
+  // Browser builds only explain the local app. Keep the named region and do not call IPC.
+  if (!nativeDesktop && presentation === 'note') {
+    const note = h('section', {class: 'global-tailscale-note', 'aria-label': t('tailscale_title')},
+      h('p', {}, t('tailscale_browser')));
+    main.append(note);
+    return () => note.remove();
+  }
   const panel = h('section', {class: 'panel', 'aria-label': t('tailscale_title')});
   const content = h('div'), message = h('p', {class: 'muted', role: 'status'});
   panel.append(h('h2', {}, t('tailscale_title')), content, message); main.append(panel);

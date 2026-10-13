@@ -36,6 +36,7 @@ async function setup(page: any, options: any = {}) {
     }}});
   }, {doc: fixture, options});
   await page.goto("/dashboard/#/settings");
+  if (!options.delayStatus) await page.getByRole("tab", {name: /^(Fleet|機群)$/}).click();
 }
 
 for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {

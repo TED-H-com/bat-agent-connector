@@ -303,7 +303,7 @@ for(const width of [390,768,1100,1440]) test(`long tree names are single-line wi
     const size=await label.evaluate(node=>({scroll:node.scrollWidth,width:node.clientWidth,height:node.getBoundingClientRect().height,line:parseFloat(getComputedStyle(node).lineHeight)}));
     expect(size.scroll).toBeGreaterThan(size.width);expect(size.height).toBeLessThanOrEqual(size.line+1);
     expect((await row.boundingBox())!.height).toBe(width<1000?44:36);
-    await expect(row.locator('.workspace-dot')).toBeVisible();
+    await expect(row.locator('.workspace-tree-state .ui-icon, .workspace-tree-state .workspace-dot')).toBeVisible();
     if(width===1100)await expect(row.locator('.workspace-tree-state-label')).toBeHidden();
   }
   expect(f.pm.base.state.writes).toHaveLength(0);

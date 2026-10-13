@@ -291,6 +291,9 @@ var globalStrings = {
 		global_product: "BAT Dashboard",
 		global_first_sentence: "Connect this dashboard to your Connector.",
 		global_setup_guide: "Setup guide",
+		global_view_all: "View all",
+		global_fleet_empty: "Fleet not set up",
+		global_access: "Access",
 		global_refresh: "Refresh",
 		global_details: "Details",
 		global_details_for: "Details for {title}",
@@ -368,6 +371,9 @@ var globalStrings = {
 		global_product: "BAT Dashboard",
 		global_first_sentence: "將這個儀表板連到你的 Connector。",
 		global_setup_guide: "設定說明",
+		global_view_all: "查看全部",
+		global_fleet_empty: "尚未設定機群",
+		global_access: "存取",
 		global_refresh: "重新整理",
 		global_details: "詳細資料",
 		global_details_for: "{title}的詳細資料",
@@ -8535,6 +8541,15 @@ var paths = {
 			"y2": "16"
 		}]
 	],
+	"circle-x": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "10"
+		}],
+		["path", { "d": "m15 9-6 6" }],
+		["path", { "d": "m9 9 6 6" }]
+	],
 	"cpu": [
 		["path", { "d": "M12 20v2" }],
 		["path", { "d": "M12 2v2" }],
@@ -9616,32 +9631,32 @@ function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpe
 		class: "global-inbox-row",
 		"data-inbox-key": key
 	});
-	article.addEventListener("click", (event) => {
+	if (onOpen) article.addEventListener("click", (event) => {
 		if (event.target.closest("a, button, input, select, textarea")) return;
-		onOpen?.();
+		onOpen();
 	});
 	const text = h("div", { class: "global-inbox-text" }, h("a", {
 		class: "title",
 		href
-	}, title), meta ? h("p", { class: "global-inbox-meta" }, meta) : null);
-	const details = iconButton({
+	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
+	const details = onOpen ? iconButton({
 		icon: "chevron-right",
 		label: detailsLabel,
-		onClick: () => onOpen?.()
-	});
-	article.append(text, pill || null, h("div", { class: "global-inbox-actions" }, action || null, details));
+		onClick: () => onOpen()
+	}) : null;
+	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
 	return article;
 }
-function firstRunCard({ h, t, body }) {
+function firstRunCard({ h, t, body, footer }) {
 	return h("div", { class: "global-first-run" }, h("section", {
 		class: "global-first-card",
 		"aria-labelledby": "global-first-title"
 	}, h("span", {
 		class: "brand-mark",
 		"aria-hidden": "true"
-	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, h("a", { href: setupGuide() }, t("global_setup_guide"))));
+	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
 }
-function settingsFrame({ h, t, sections }) {
+function settingsFrame({ h, t, sections, exclusive = false }) {
 	const nav = h("nav", {
 		class: "global-settings-nav",
 		role: "tablist",
@@ -9678,12 +9693,22 @@ function settingsFrame({ h, t, sections }) {
 		panels.append(panel);
 	}
 	const visible = () => buttons.filter((button) => !button.hidden);
-	function select(id, scroll) {
+	function apply(id) {
 		for (const button of buttons) {
-			const on = button.dataset.settingsNav === id && !button.hidden;
+			const on = !button.hidden && button.dataset.settingsNav === id;
 			button.setAttribute("aria-selected", on ? "true" : "false");
 			button.tabIndex = on ? 0 : -1;
 		}
+		if (!exclusive) return;
+		for (const node of roots) {
+			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
+			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
+		}
+	}
+	function select(id, scroll) {
+		const button = buttons.find((item) => item.dataset.settingsNav === id);
+		if (!button || button.hidden) return;
+		apply(id);
 		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
 	}
 	nav.addEventListener("keydown", (event) => {
@@ -9705,7 +9730,7 @@ function settingsFrame({ h, t, sections }) {
 		select(next.dataset.settingsNav, true);
 	});
 	const first = sections.find((section) => !section.hidden);
-	if (first) select(first.id, false);
+	if (first) apply(first.id);
 	function panel(id) {
 		return roots.find((node) => node.dataset.settingsPanel === id);
 	}
@@ -9714,8 +9739,9 @@ function settingsFrame({ h, t, sections }) {
 		const node = panel(id);
 		if (!button || !node) return;
 		button.hidden = false;
-		node.hidden = false;
-		if (!visible().some((item) => item.getAttribute("aria-selected") === "true")) select(id, false);
+		if (!exclusive) node.hidden = false;
+		const selected = visible().find((item) => item.getAttribute("aria-selected") === "true");
+		apply(selected ? selected.dataset.settingsNav : id);
 	}
 	function hide(id) {
 		const button = buttons.find((node) => node.dataset.settingsNav === id);
@@ -9726,11 +9752,14 @@ function settingsFrame({ h, t, sections }) {
 		node.hidden = true;
 		if (was) {
 			const next = visible()[0];
-			if (next) select(next.dataset.settingsNav, false);
+			if (next) apply(next.dataset.settingsNav);
 		}
 	}
 	return {
-		root: h("div", { class: "global-settings" }, nav, panels),
+		root: h("div", {
+			class: "global-settings",
+			"data-settings-exclusive": exclusive ? "true" : "false"
+		}, nav, panels),
 		panel,
 		show,
 		hide
@@ -27732,12 +27761,19 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	};
 	const link = (href, label, state = null, reading = null) => {
 		const presented = railPresentation(state);
-		const statusText = presented ? t(presented.labelKey) : "";
 		const full = joinLabel([
 			label,
-			statusText,
+			presented ? t(presented.labelKey) : "",
 			reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""
 		]);
+		let glyph = null;
+		if (presented?.labelKey === "rail_needs_you" || presented?.labelKey === "rail_asking") {
+			glyph = icon("circle-alert", { size: 14 });
+			glyph.classList.add("workspace-rail-alert");
+		} else if (presented?.labelKey === "rail_failed") {
+			glyph = icon("circle-x", { size: 14 });
+			glyph.classList.add("workspace-rail-failed");
+		} else if (presented?.labelKey === "rail_running") glyph = h("span", { class: "workspace-dot info" });
 		return h("a", {
 			href,
 			class: "workspace-tree-link",
@@ -27751,7 +27787,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}, label), presented ? h("span", {
 			class: "workspace-tree-state",
 			"aria-hidden": "true"
-		}, h("span", { class: `workspace-dot ${presented.tone || ""}` }), presented.loud ? h("span", { class: "workspace-tree-state-label" }, statusText) : null) : null);
+		}, glyph) : null);
 	};
 	const workLink = (pid, item) => link(`#/work/${[
 		pid,
@@ -28792,23 +28828,24 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const unread = caps?.features?.work_item_reads?.version === 1;
 	const saved = sessionStorage.getItem(storageKey) || sessionStorage.getItem("batc.tab");
 	const tab = saved === "confirm" || saved === "active" ? "active" : saved === "unread" && unread ? "unread" : "needs";
-	const tabs = h("div", {
-		class: "tabs attention-tabs global-inbox-tabs",
-		role: "group",
-		"aria-label": t("nav_home")
-	}, ...[
-		"needs",
-		"active",
-		...unread ? ["unread"] : []
-	].map((value) => h("button", {
-		class: value === tab ? "on" : "",
-		"aria-pressed": String(value === tab),
-		onclick: () => {
+	const tabs = segmented({
+		label: t("nav_home"),
+		value: tab,
+		options: [
+			"needs",
+			"active",
+			...unread ? ["unread"] : []
+		].map((value) => ({
+			value,
+			label: t("attention_tab_" + value)
+		})),
+		onChange: (value) => {
 			guard();
 			sessionStorage.setItem(storageKey, value);
 			route();
 		}
-	}, t("attention_tab_" + value))));
+	});
+	tabs.classList.add("global-inbox-tabs");
 	const empty = emptyState({
 		title: t("empty_needs_you"),
 		action: h("div", { class: "actions" }, h("a", {
@@ -28865,12 +28902,16 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			class: "secondary",
 			hidden: true
 		}, t("load_more"));
-		const quiet = key === "problems" || key === "active" ? h("a", { href: "#/operations/" + (key === "problems" ? "attention" : "active") }, t(key === "problems" ? "operations_view_attention" : "operations_view_active")) : null;
+		const viewAll = key === "problems" ? h("a", {
+			class: "global-view-all",
+			href: "#/operations/attention"
+		}, t("global_view_all")) : null;
+		const quiet = key === "active" ? h("a", { href: "#/operations/active" }, t("operations_view_active")) : null;
 		const section = h("section", {
 			class: "global-group",
 			"aria-label": t("attention_" + key),
 			"data-inbox-group": key
-		}, h("div", { class: "global-group-head" }, h("h2", {}, t("attention_" + key)), badge), status, list, h("div", { class: "global-group-foot" }, count, more, quiet));
+		}, h("div", { class: "global-group-head" }, h("h2", {}, t("attention_" + key)), badge, viewAll), status, list, h("div", { class: "global-group-foot" }, count, more, quiet));
 		const state = {
 			key,
 			path,
@@ -28899,7 +28940,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		meta: x.error || reasonText(x.stale_reason),
 		pill: statusPill("stale"),
 		action: h("a", {
-			class: "ui-button primary ui-sm",
+			class: "ui-button secondary ui-sm",
 			href: `#/host/${encodeURIComponent(x.host)}`
 		}, t("global_review")),
 		detailsLabel: t("global_details_for", { title: x.host }),
@@ -28911,20 +28952,16 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const approvals = caps?.actions?.some((action) => action.action === "session.approve_pending" && action.allowed === true) ? h("section", {
 		class: "global-group",
 		"aria-label": t("global_approvals")
-	}, h("div", { class: "global-group-head" }, h("h2", {}, t("global_approvals"))), inboxRow({
+	}, h("div", { class: "global-group-head" }, h("h2", {}, t("global_approvals"))), h("div", { class: "global-inbox-list" }, inboxRow({
 		h,
 		key: "approvals",
 		title: t("bulk_title"),
 		href: "#/approvals",
 		action: h("a", {
-			class: "ui-button primary ui-sm",
+			class: "ui-button secondary ui-sm",
 			href: "#/approvals"
-		}, t("global_review")),
-		detailsLabel: t("global_details_for", { title: t("bulk_title") }),
-		onOpen: () => {
-			location.hash = "#/approvals";
-		}
-	})) : null;
+		}, t("global_review"))
+	}))) : null;
 	main.append(...[
 		pageHeader({
 			title: t("nav_home"),
@@ -28935,7 +28972,6 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			})]
 		}),
 		tabs,
-		notes,
 		empty,
 		...tab === "needs" ? [
 			approvals,
@@ -28949,7 +28985,8 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
 			cursor: "next_before",
 			param: "before"
-		})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)]
+		})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)],
+		notes
 	].filter((node) => node != null && node !== false));
 	let serial = Promise.resolve();
 	const load = async (section, wanted) => {
@@ -32344,7 +32381,15 @@ async function mountFleet(main, { h, t }) {
 //#endregion
 //#region src/tailscale.js
 init_transport();
-function mountTailscale(main, { h, t }) {
+function mountTailscale(main, { h, t, presentation } = {}) {
+	if (!nativeDesktop && presentation === "note") {
+		const note = h("section", {
+			class: "global-tailscale-note",
+			"aria-label": t("tailscale_title")
+		}, h("p", {}, t("tailscale_browser")));
+		main.append(note);
+		return () => note.remove();
+	}
 	const panel = h("section", {
 		class: "panel",
 		"aria-label": t("tailscale_title")
@@ -37794,7 +37839,7 @@ function sessionRow(s, open) {
 		meta,
 		pill: statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
 		action: h("a", {
-			class: "ui-button primary ui-sm",
+			class: "ui-button secondary ui-sm",
 			href
 		}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
 		detailsLabel: t("global_details_for", { title }),
@@ -37832,7 +37877,7 @@ function opRow(op, open) {
 		meta,
 		pill: statusPill(operationStatusKey(op.status)),
 		action: h("a", {
-			class: "ui-button primary ui-sm",
+			class: "ui-button secondary ui-sm",
 			href
 		}, t(needs ? "global_review" : "global_open")),
 		detailsLabel: t("global_details_for", { title }),
@@ -39982,6 +40027,7 @@ async function viewOperations(main, filter = "all") {
 		value: memory.query || ""
 	});
 	search.addEventListener("input", () => list.filter(search.value));
+	const searchField = h("div", { class: "workspace-search global-ops-search" }, icon("search", { size: 16 }), search);
 	const filters = segmented({
 		label: t("global_ops_filter"),
 		value: selected,
@@ -40004,7 +40050,7 @@ async function viewOperations(main, filter = "all") {
 			label: t("global_refresh"),
 			onClick: () => list.load().catch(() => {})
 		})]
-	}), h("div", { class: "global-ops-tools" }, filters, search), list.box);
+	}), h("div", { class: "global-ops-tools" }, filters, searchField), list.box);
 	if (memory.query) list.filter(memory.query);
 	await list.load().catch(() => {});
 	const reload = debounceRefresh(() => list.load(), 500);
@@ -40154,16 +40200,26 @@ function mergeRecovery(op) {
 		"data-merge-recovery": true
 	}, h("h2", {}, t("delivery_merge_recovery")), h("p", { class: "note" }, t("delivery_merge_held")), h("dl", { class: "kv" }, ...["source", "destination"].flatMap((label, i) => [h("dt", {}, t("delivery_merge_" + label)), h("dd", {}, h("code", {}, refs.carrier_paths?.[i] || t("obs_unknown")))])), ...frames.map((step) => h("p", {}, h("code", {}, step.name), " · ", t(step.status === "succeeded" ? "delivery_merge_ack" : "delivery_merge_no_ack"), " · ", observationTime(step.finished_at || step.started_at))), h("p", {}, t("delivery_merge_safe_reads")), h("p", { class: "muted" }, t("delivery_merge_closeout")), refs.host && refs.session_id ? observationLink("session", `${refs.host}/${refs.session_id}`) : null);
 }
+function fleetEmpty() {
+	return h("section", { class: "panel" }, emptyState({
+		title: t("global_fleet_empty"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: setupGuide()
+		}, t("global_setup_guide"))
+	}));
+}
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
 	const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
 	const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
 	return h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), h("dd", {}, h("span", { class: `ui-pill tone-${tone}` }, t(key))), h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
 }
-function openSettings(main) {
+function openSettings(main, { exclusive = false } = {}) {
 	const frame = settingsFrame({
 		h,
 		t,
+		exclusive,
 		sections: [
 			{
 				id: "connection",
@@ -40208,12 +40264,15 @@ function openSettings(main) {
 	return frame;
 }
 function viewBrowserSettings(main) {
-	const frame = openSettings(main);
+	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
-	frame.panel("connection").append(h("section", { class: "panel" }, connectionFacts(), managed ? h("h2", {}, t("managed_browser_connected")) : null, h("p", {}, t("connected_as", {
+	const facts = connectionFacts();
+	facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {
 		actor: state.caps.actor,
 		scopes: state.caps.scopes.join(", ")
-	})), managed ? disclosure({
+	})));
+	const footer = h("div", { class: "global-card-footer" });
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, managed ? disclosure({
 		label: t("global_details"),
 		body: h("p", {}, t("managed_browser_help"))
 	}) : null, h("button", {
@@ -40222,13 +40281,15 @@ function viewBrowserSettings(main) {
 			disconnect();
 			route();
 		}
-	}, t("disconnect"))));
-	const fleet = frame.panel("fleet");
-	frame.show("fleet");
-	return mountTailscale(fleet, {
+	}, t("disconnect")), footer));
+	const note = mountTailscale(footer, {
 		h,
-		t
+		t,
+		presentation: "note"
 	});
+	frame.show("fleet");
+	frame.panel("fleet").append(fleetEmpty());
+	return note;
 }
 function viewBrowserSignedOut(main) {
 	const input = h("input", {
@@ -40242,37 +40303,44 @@ function viewBrowserSignedOut(main) {
 		role: "status"
 	});
 	if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
+	const form = h("form", {
+		class: "global-connect-form",
+		onsubmit: async (event) => {
+			event.preventDefault();
+			disconnect();
+			state.token = input.value.trim();
+			try {
+				await activate(await api("GET", "/capabilities"));
+				saveToken(state.token, remember.checked);
+				location.hash = "#/home";
+				await route();
+			} catch (e) {
+				state.token = null;
+				info.replaceChildren(errorBox(e));
+			}
+		}
+	}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
+		class: "primary",
+		type: "submit"
+	}, t("connect")), h("a", {
+		class: "global-quiet-link",
+		href: setupGuide()
+	}, t("global_setup_guide"))), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("token_help"))
+	}), info);
+	const footer = h("div", { class: "global-card-footer" });
 	const root = firstRunCard({
 		h,
 		t,
-		body: h("form", {
-			class: "global-connect-form",
-			onsubmit: async (event) => {
-				event.preventDefault();
-				disconnect();
-				state.token = input.value.trim();
-				try {
-					await activate(await api("GET", "/capabilities"));
-					saveToken(state.token, remember.checked);
-					location.hash = "#/home";
-					await route();
-				} catch (e) {
-					state.token = null;
-					info.replaceChildren(errorBox(e));
-				}
-			}
-		}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "actions" }, h("button", {
-			class: "primary",
-			type: "submit"
-		}, t("connect"))), disclosure({
-			label: t("global_details"),
-			body: h("p", {}, t("token_help"))
-		}), info)
+		body: form,
+		footer
 	});
 	main.append(root);
-	mountTailscale(root, {
+	mountTailscale(footer, {
 		h,
-		t
+		t,
+		presentation: "note"
 	});
 }
 function viewSettings(main) {
@@ -40289,7 +40357,7 @@ async function viewManagedSettings(main) {
 	};
 	const guard = () => assertView(connection);
 	const status = h("div", { role: "status" });
-	const frame = openSettings(main);
+	const frame = openSettings(main, { exclusive: !nativeDesktop });
 	const local = h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), connectionFacts(), h("p", {}, t("connected_as", {
 		actor: state.caps.actor,
 		scopes: state.caps.scopes.join(", ")
@@ -40324,7 +40392,7 @@ async function viewManagedSettings(main) {
 	}
 	const fleetRoot = frame.panel("fleet");
 	frame.show("fleet");
-	let disposeFleet;
+	let disposeFleet, disposeTailscale;
 	if (nativeDesktop) {
 		const login = h("input", {
 			type: "checkbox",
@@ -40430,24 +40498,33 @@ async function viewManagedSettings(main) {
 			h,
 			t
 		});
-	} else local.append(disclosure({
-		label: t("global_details"),
-		body: h("p", {}, t("managed_browser_help"))
-	}), h("button", {
-		class: "danger",
-		onclick: () => {
-			disconnect();
-			route();
-		}
-	}, t("disconnect")));
-	const disposeTailscale = mountTailscale(fleetRoot, {
-		h,
-		t
-	});
+		disposeTailscale = mountTailscale(fleetRoot, {
+			h,
+			t
+		});
+	} else {
+		const footer = h("div", { class: "global-card-footer" });
+		local.append(disclosure({
+			label: t("global_details"),
+			body: h("p", {}, t("managed_browser_help"))
+		}), h("button", {
+			class: "danger",
+			onclick: () => {
+				disconnect();
+				route();
+			}
+		}, t("disconnect")), footer);
+		disposeTailscale = mountTailscale(footer, {
+			h,
+			t,
+			presentation: "note"
+		});
+		fleetRoot.append(fleetEmpty());
+	}
 	return () => {
 		setup.dispose();
 		disposeFleet?.();
-		disposeTailscale();
+		disposeTailscale?.();
 	};
 }
 async function nativeTransition(kind, config = null) {
@@ -41648,7 +41725,7 @@ function workItemRow(w, open) {
 		meta,
 		pill: statusPill(workStatusKey(w.completion?.display_state)),
 		action: h("a", {
-			class: "ui-button primary ui-sm",
+			class: "ui-button secondary ui-sm",
 			href
 		}, t("global_review")),
 		detailsLabel: t("global_details_for", { title }),
@@ -42587,8 +42664,8 @@ async function route() {
 		const tab = main.querySelector("[data-settings-nav=\"models\"]");
 		if (slot) {
 			slot.append(preferences.box);
-			slot.hidden = false;
 			if (tab) tab.hidden = false;
+			if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
 		} else main.append(preferences.box);
 	}
 	if (name === "project" && state.caps?.features?.project_skills?.version === 1) {

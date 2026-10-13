@@ -18,11 +18,11 @@ for (const native of [false, true]) {
     await expect(bare).not.toContainText('checkpoint.continue');
     await expect(problems).not.toContainText('loaded (not a total)');
     await expect(page.getByRole('button', {name: 'To confirm', exact: true})).toHaveCount(0);
-    await page.getByRole('button', {name: 'Active operations', exact: true}).click();
+    await page.getByRole('radio', {name: 'Active operations', exact: true}).click();
     await expect(page.getByRole('region', {name: 'Active operations'})).toContainText('Upload artifact');
     await expect(page.getByRole('region', {name: 'Active operations'})).not.toContainText('artifact.upload');
     await expect(page.getByRole('link', {name: 'Review delivery'})).toHaveCount(0);
-    await page.getByRole('button', {name: 'Unread work updates', exact: true}).click();
+    await page.getByRole('radio', {name: 'Unread work updates', exact: true}).click();
     const updates = page.getByRole('region', {name: 'Unread work updates'});
     await expect(updates).toContainText('1 shown');
     await updates.getByRole('button', {name: 'Load more'}).click();
@@ -114,7 +114,7 @@ test('Web and desktop share read state while another principal remains unread', 
 test('older central keeps the categories without offering unsupported read markers', async ({page}) => {
   const fixture = attentionFixture(); fixture.data.supported = false;
   await mountAttention(page, false, fixture); await page.goto('/dashboard/');
-  await expect(page.getByRole('button', {name: 'Unread work updates', exact: true})).toHaveCount(0);
+  await expect(page.getByRole('radio', {name: 'Unread work updates', exact: true})).toHaveCount(0);
   await page.getByRole('link', {name: 'Review delivery'}).click();
   await expect(page.getByRole('button', {name: 'Mark this version read'})).toHaveCount(0);
 });

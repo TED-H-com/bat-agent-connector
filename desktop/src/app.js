@@ -1,6 +1,7 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {disclosure, iconButton, pageHeader, segmented, statusPill} from './ui/components.js';
+import {disclosure, emptyState, iconButton, pageHeader, segmented, statusPill} from './ui/components.js';
+import {icon} from './ui/icons.js';
 import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, workStatusKey} from './global-labels.js';
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
@@ -793,7 +794,7 @@ function sessionRow(s, open) {
   const pill = statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
   return inboxRow({
     h, key, title, href, meta, pill,
-    action: h("a", {class: "ui-button primary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+    action: h("a", {class: "ui-button secondary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
       statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
@@ -821,7 +822,7 @@ function opRow(op, open) {
   return inboxRow({
     h, key, title, href, meta,
     pill: statusPill(operationStatusKey(op.status)),
-    action: h("a", {class: "ui-button primary ui-sm", href}, t(needs ? "global_review" : "global_open")),
+    action: h("a", {class: "ui-button secondary ui-sm", href}, t(needs ? "global_review" : "global_open")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
       statusPill(operationStatusKey(op.status)),
@@ -2217,13 +2218,14 @@ async function viewOperations(main, filter = "all") {
   const memory = viewState(state.namespace || "", "", "operations:" + (statuses || "all"));
   const search = h("input", {type: "search", "aria-label": t("global_search_operations"), placeholder: t("global_search_operations"), value: memory.query || ""});
   search.addEventListener("input", () => list.filter(search.value));
+  const searchField = h("div", {class: "workspace-search global-ops-search"}, icon("search", {size: 16}), search);
   const filters = segmented({
     label: t("global_ops_filter"), value: selected,
     options: [["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([value, label]) => ({value, label: t(label)})),
     onChange: value => {location.hash = "#/operations/" + value;},
   });
   main.append(pageHeader({title: t("nav_operations"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => list.load().catch(() => {})})]}),
-    h("div", {class: "global-ops-tools"}, filters, search), list.box);
+    h("div", {class: "global-ops-tools"}, filters, searchField), list.box);
   if (memory.query) list.filter(memory.query);
   await list.load().catch(() => {});
   const reload = debounceRefresh(() => list.load(), 500);
@@ -2355,6 +2357,12 @@ function mergeRecovery(op) {
     refs.host && refs.session_id ? observationLink("session", `${refs.host}/${refs.session_id}`) : null);
 }
 
+function fleetEmpty() {
+  return h("section", {class: "panel"}, emptyState({
+    title: t("global_fleet_empty"),
+    action: h("a", {class: "ui-button secondary ui-sm", href: setupGuide()}, t("global_setup_guide")),
+  }));
+}
 function connectionFacts() {
   const endpoint = state.endpoint || (state.token ? location.origin : "");
   const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
@@ -2364,8 +2372,8 @@ function connectionFacts() {
     h("dt", {}, t("global_state")), h("dd", {}, h("span", {class: `ui-pill tone-${tone}`}, t(key))),
     h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
 }
-function openSettings(main) {
-  const frame = settingsFrame({h, t, sections: [
+function openSettings(main, {exclusive = false} = {}) {
+  const frame = settingsFrame({h, t, exclusive, sections: [
     {id: "connection", label: t("global_nav_connection")},
     {id: "desktop", label: t("global_nav_desktop"), hidden: true},
     {id: "models", label: t("global_nav_models"), hidden: true},
@@ -2385,17 +2393,21 @@ function openSettings(main) {
   return frame;
 }
 function viewBrowserSettings(main) {
-  const frame = openSettings(main);
+  const frame = openSettings(main, {exclusive: true});
   const managed = state.token === browserSessionToken;
+  const facts = connectionFacts();
+  facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})));
+  const footer = h("div", {class: "global-card-footer"});
   frame.panel("connection").append(h("section", {class: "panel"},
-    connectionFacts(),
+    facts,
     managed ? h("h2", {}, t("managed_browser_connected")) : null,
-    h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})),
     managed ? disclosure({label: t("global_details"), body: h("p", {}, t("managed_browser_help"))}) : null,
-    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
-  const fleet = frame.panel("fleet");
+    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")),
+    footer));
+  const note = mountTailscale(footer, {h, t, presentation: "note"});
   frame.show("fleet");
-  return mountTailscale(fleet, {h, t});
+  frame.panel("fleet").append(fleetEmpty());
+  return note;
 }
 function viewBrowserSignedOut(main) {
   const input = h("input", {type: "password", autocomplete: "off", placeholder: "batc_…"});
@@ -2414,12 +2426,15 @@ function viewBrowserSignedOut(main) {
     } catch (e) {state.token = null; info.replaceChildren(errorBox(e));}
   }}, h("label", {class: "connection-token"}, t("token"), input),
     h("label", {class: "global-remember"}, remember, " ", t("remember")),
-    h("div", {class: "actions"}, h("button", {class: "primary", type: "submit"}, t("connect"))),
+    h("div", {class: "global-connect-actions"},
+      h("button", {class: "primary", type: "submit"}, t("connect")),
+      h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
-  const root = firstRunCard({h, t, body: form});
+  const footer = h("div", {class: "global-card-footer"});
+  const root = firstRunCard({h, t, body: form, footer});
   main.append(root);
   // Browser builds have no local Tailscale control. Keep the explanation visible and do not call IPC.
-  mountTailscale(root, {h, t});
+  mountTailscale(footer, {h, t, presentation: "note"});
 }
 function viewSettings(main) {
   if (state.caps?.managed_installation) return viewManagedSettings(main);
@@ -2432,7 +2447,7 @@ async function viewManagedSettings(main) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const guard = () => assertView(connection);
   const status = h("div", {role: "status"});
-  const frame = openSettings(main);
+  const frame = openSettings(main, {exclusive: !nativeDesktop});
   const local = h("section", {class: "panel"}, h("h2", {}, t("managed_browser_connected")),
     connectionFacts(),
     h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})),
@@ -2452,7 +2467,7 @@ async function viewManagedSettings(main) {
   }
   const fleetRoot = frame.panel("fleet");
   frame.show("fleet");
-  let disposeFleet;
+  let disposeFleet, disposeTailscale;
   if (nativeDesktop) {
     const login = h("input", {type: "checkbox", disabled: true});
     const open = h("button", {class: "secondary", onclick: async () => {
@@ -2491,12 +2506,15 @@ async function viewManagedSettings(main) {
       }
     } catch (error) {if (connection.generation === generation) status.append(errorBox(error));}
     disposeFleet = await mountFleet(fleetRoot, {h, t});
+    disposeTailscale = mountTailscale(fleetRoot, {h, t});
   } else {
+    const footer = h("div", {class: "global-card-footer"});
     local.append(disclosure({label: t("global_details"), body: h("p", {}, t("managed_browser_help"))}),
-      h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
+      h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")), footer);
+    disposeTailscale = mountTailscale(footer, {h, t, presentation: "note"});
+    fleetRoot.append(fleetEmpty());
   }
-  const disposeTailscale = mountTailscale(fleetRoot, {h, t});
-  return () => {setup.dispose(); disposeFleet?.(); disposeTailscale();};
+  return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
 }
 
 // Credential dialogs and protected storage stay native. A transition invalidates old async
@@ -3258,7 +3276,7 @@ function workItemRow(w, open) {
   return inboxRow({
     h, key, title, href, meta,
     pill: statusPill(workStatusKey(w.completion?.display_state)),
-    action: h("a", {class: "ui-button primary ui-sm", href}, t("global_review")),
+    action: h("a", {class: "ui-button secondary ui-sm", href}, t("global_review")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
       statusPill(workStatusKey(w.completion?.display_state)),
@@ -3753,7 +3771,11 @@ async function route() {
       storageKey: `batc.model-preferences.${connection.namespace}`, onEvents, errorBox});
     const slot = main.querySelector("[data-settings-models]");
     const tab = main.querySelector('[data-settings-nav="models"]');
-    if (slot) {slot.append(preferences.box); slot.hidden = false; if (tab) tab.hidden = false;}
+    if (slot) {
+      slot.append(preferences.box);
+      if (tab) tab.hidden = false;
+      if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
+    }
     else main.append(preferences.box);
   }
   if (name === "project" && state.caps?.features?.project_skills?.version === 1) {

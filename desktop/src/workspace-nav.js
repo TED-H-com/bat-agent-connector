@@ -36,11 +36,17 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     const unread = reading?.unread_count > 0
       ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete ? '' : '+') : '';
     const full = joinLabel([label, statusText, unread]);
+    let glyph = null;
+    if (presented?.labelKey === 'rail_needs_you' || presented?.labelKey === 'rail_asking') {
+      glyph = icon('circle-alert', {size: 14});
+      glyph.classList.add('workspace-rail-alert');
+    } else if (presented?.labelKey === 'rail_failed') {
+      glyph = icon('circle-x', {size: 14});
+      glyph.classList.add('workspace-rail-failed');
+    } else if (presented?.labelKey === 'rail_running') glyph = h('span', {class: 'workspace-dot info'});
     return h('a', {href, class: 'workspace-tree-link', 'data-tree-key': href, title: full, 'aria-label': full,
       'aria-current': selected === href ? 'page' : null}, h('span', {class: 'workspace-tree-label', title: label}, label),
-      presented ? h('span', {class: 'workspace-tree-state', 'aria-hidden': 'true'},
-        h('span', {class: `workspace-dot ${presented.tone || ''}`}),
-        presented.loud ? h('span', {class: 'workspace-tree-state-label'}, statusText) : null) : null);
+      presented ? h('span', {class: 'workspace-tree-state', 'aria-hidden': 'true'}, glyph) : null);
   };
   const workLink = (pid, item) => link(`#/work/${[pid, item.kind, item.id].map(encodeURIComponent).join('/')}`,
     item.title || item.branch || item.action || item.id, sessionActivity(item.session || {}), item.reading);

@@ -36,6 +36,7 @@ async function setup(page:any, options:any={}) {
   }}});
  },{doc:fixture,options});
  await page.goto('/dashboard/#/settings');
+ await page.getByRole('tab',{name:/^(Fleet|機群)$/}).click();
  await expect(page.locator('.fleet-bootstrap')).toBeVisible();
  await expect(page.locator('.fleet-bootstrap [role=status]')).toHaveText('');
 }

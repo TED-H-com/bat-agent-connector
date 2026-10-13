@@ -62,14 +62,14 @@ for(const native of [false,true]) {
   test(`${mode}: Home continuation preserves attention or active filter`,async({page})=>{
     await taskFixture(page,native,{list:operations()});
     await page.goto('/dashboard/#/home');
-    await page.getByRole('link',{name:'View operations needing attention'}).click();
+    await page.getByRole('link',{name:'View all',exact:true}).click();
     await expect(page.locator('[data-operation-count]')).toContainText('2 shown');
     await expect(page.getByText('Historical receipt 2',{exact:true})).toHaveCount(0);
     await page.getByRole('button',{name:'Load earlier operations'}).click();
     await page.locator('[data-row-key="op_'+String(7).padStart(32,'0')+'"]').click();
     await expect(page.getByText('Historical receipt 7',{exact:true})).toBeVisible();
     await page.goto('/dashboard/#/home');
-    await page.getByRole('button',{name:'Active operations',exact:true}).click();
+    await page.getByRole('radio',{name:'Active operations',exact:true}).click();
     await page.getByRole('link',{name:'View active operations'}).click();
     await page.locator('[data-row-key="op_'+String(2).padStart(32,'0')+'"]').click();
     await expect(page.getByText('Historical receipt 2',{exact:true})).toBeVisible();

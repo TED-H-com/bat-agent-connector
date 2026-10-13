@@ -102,8 +102,9 @@ export function operationDuration(op) {
   return rest ? t('global_duration_m', {n: minutes, s: rest}) : t('global_duration_m_only', {n: minutes});
 }
 
-// Loud labels are only the states that need the user. Every other state is a dot;
-// the words stay in the tooltip and accessible name. Streaming is "Running".
+// Loud labels are only the states that need the user. The words stay in the tooltip
+// and accessible name. The rail paints an icon for those, a dot for Running, and
+// no mark for idle, not started, done, and other neutral states.
 export function railPresentation(state) {
   if (!state?.key) return null;
   if (state.key === 'pending_ask_user') return {labelKey: 'rail_asking', loud: true, tone: state.tone || 'stale'};

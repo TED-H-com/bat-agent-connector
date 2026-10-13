@@ -127,7 +127,8 @@ for (const {locale, width, dark} of layouts) {
     await revealTree(page, width);
     const project = page.locator(`[data-tree-key="#/project/${fixture.ids.projectId}"]`);
     await expect(project).toHaveAttribute('aria-label', new RegExp(`${fixture.copy.name} · ${words.needs}`));
-    await expect(project.locator('.workspace-tree-state-label')).toHaveText(words.needs);
+    await expect(project.locator('.workspace-rail-alert')).toBeVisible();
+    await expect(project.locator('.workspace-tree-state-label')).toHaveCount(0);
     const work = page.locator(`[data-tree-key="#/work/${encodeURIComponent(fixture.ids.projectId)}/session/${encodeURIComponent(fixture.ids.sessions.implement)}"]`);
     await expect(work).toHaveAttribute('aria-label', new RegExp(words.running));
     await expect(work.locator('.workspace-dot')).toBeVisible();
