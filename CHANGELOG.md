@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Test infrastructure: fix Windows installed-app UIA caching, retry transient provider reads within the existing readiness deadline, and retain bounded, text-free attempt diagnostics.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
