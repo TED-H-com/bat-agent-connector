@@ -300,4 +300,34 @@ test('empty Unscheduled renders no disclosure and meta has no empty span', async
   expect(await region.locator('.schedule-meta > span').evaluateAll(nodes => nodes.filter(n => !n.textContent?.trim()).length)).toBe(0);
 });
 
+test('tree keeps a single tab stop, aria-selected only on treeitems, accessible row descriptions, and no lane tab stops', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  const f = await start(page, 'en');
+  const region = page.locator('[data-pm-schedule]');
+  const countZeroTabindex = () => region.locator('[role="treeitem"][tabindex="0"]').count();
+  expect(await countZeroTabindex()).toBe(1);
+
+  const workItem = item(page, `work:${f.ids.work.resetEmail}`);
+  await expect(workItem).toHaveAccessibleName(f.copy.work.resetEmail);
+  await expect(workItem).toHaveAccessibleDescription(/In progress.*Actual 2026-10-05 → Open/);
+  await workItem.click();
+  expect(await countZeroTabindex()).toBe(1);
+  await expect(workItem).toHaveAttribute('tabindex', '0');
+
+  await region.locator('.schedule-unscheduled summary').click();
+  const unscheduledBtn = region.locator('.schedule-unscheduled [data-schedule-select]').first();
+  await unscheduledBtn.click();
+  await region.getByRole('radio', {name: 'Day', exact: true}).click();
+  expect(await countZeroTabindex()).toBe(1);
+  expect(await region.locator('[aria-selected]:not([role="treeitem"])').count()).toBe(0);
+
+  await item(page, `requirement:${f.ids.planV3}:${f.ids.requirements.resetEmail}`).click();
+  await item(page, 'milestone:recovery_review').locator('button').click();
+  expect(await countZeroTabindex()).toBe(1);
+
+  expect(await region.locator('.schedule-lane[tabindex], .schedule-lane[role="region"]').count()).toBe(0);
+  await expect(region.locator('.schedule-axis .schedule-today')).toHaveAttribute('role', 'img');
+});
+
+
 

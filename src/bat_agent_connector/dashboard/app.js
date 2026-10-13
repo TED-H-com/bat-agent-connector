@@ -28665,10 +28665,18 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		panel.scrollTop = scroll;
 		if (focus >= 0) panel.body.querySelectorAll("a, summary")[focus]?.focus({ preventScroll: true });
 	}
+	const activeTreeId = () => [focusId, selected].find((id) => visible.some((v) => v.row.id === id)) || visible[0]?.row.id || null;
 	function markSelection() {
+		const tabId = activeTreeId();
 		for (const node of element.querySelectorAll("[data-schedule-select]")) {
 			const current = node.dataset.scheduleSelect === selected;
-			node.setAttribute("aria-selected", String(current));
+			if (node.getAttribute("role") === "treeitem") {
+				node.setAttribute("aria-selected", String(current));
+				node.tabIndex = node.dataset.scheduleSelect === tabId ? 0 : -1;
+			} else {
+				node.removeAttribute("aria-selected");
+				node.setAttribute("aria-pressed", String(current));
+			}
 			node.closest(".schedule-row")?.classList.toggle("selected", current);
 		}
 	}
@@ -28676,7 +28684,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (panel && id !== selected) closePanel();
 		opener?.focus({ preventScroll: true });
 		selected = id;
-		focusId = id;
+		if (visible.some((v) => v.row.id === id)) focusId = id;
 		remember();
 		markSelection();
 		showPanel();
@@ -28688,6 +28696,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		draw();
 	}
 	function focusRow(id) {
+		if (!id || !visible.some((v) => v.row.id === id)) return;
 		focusId = id;
 		for (const node of chart.querySelectorAll("[role=treeitem]")) node.tabIndex = node.dataset.scheduleSelect === id ? 0 : -1;
 		chart.querySelector(`[data-schedule-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
@@ -28768,11 +28777,14 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
 				const endText = span.open ? t("sched_open") : span.end === null ? reasonLabel(t, "terminal_time_unrecorded") : row[span.kind].end || "—";
+				const barTitle = `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${endText}`;
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
+					role: "img",
+					"aria-label": barTitle,
 					"data-schedule-bar": span.kind,
 					"data-open": span.open ? "true" : null,
-					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${endText}`
+					title: barTitle
 				}, marker ? "◆" : null);
 				bar.style.left = `${(start - domain.start) * scale}px`;
 				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
@@ -28793,6 +28805,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		const line = h$1("span", {
 			class: "schedule-today",
+			role: axis ? "img" : null,
 			"aria-label": axis ? t("sched_today") : null,
 			"aria-hidden": axis ? null : "true"
 		});
@@ -28816,6 +28829,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			role: "tree",
 			"aria-label": t("sched_tree")
 		});
+		const tabId = activeTreeId();
 		visible.forEach((item, index) => {
 			const { row, depth, expandable } = item;
 			const expand = expandable ? button({
@@ -28837,27 +28851,29 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				const suffix = span.open ? " → " + t("sched_open") : span.end === null ? " → " + reasonLabel(t, "terminal_time_unrecorded") : e && e !== s ? " → " + e : "";
 				return `${t("sched_" + span.kind)} ${s}${suffix}`;
 			});
+			const pill = row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null;
+			const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
+			if (pill) pill.id = statusId;
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
 				"aria-level": depth,
 				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
 				"aria-label": label(row),
-				tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
+				"aria-describedby": [statusId, descId].filter(Boolean).join(" "),
+				tabindex: tabId === row.id ? 0 : -1,
 				"data-schedule-select": row.id,
 				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
 				onkeydown: (event) => keydown(event, item, index)
 			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
 				class: "schedule-title",
 				title: row.title
-			}, label(row)), h$1("span", { class: "schedule-date-range" }, dates.join(" · ") || t("sched_no_dates"))), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
+			}, label(row)), h$1("span", {
+				id: descId,
+				class: "schedule-date-range"
+			}, dates.join(" · ") || t("sched_no_dates"))), pill);
 			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
-			const lane = h$1("div", {
-				class: "schedule-lane",
-				tabindex: 0,
-				role: "region",
-				"aria-label": `${t("sched_timeline")} · ${label(row)}`
-			}, track(row));
+			const lane = h$1("div", { class: "schedule-lane" }, track(row));
 			lane.addEventListener("scroll", () => {
 				if (lane.clientWidth) {
 					preference.mini ||= {};
