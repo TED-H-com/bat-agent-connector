@@ -59,6 +59,34 @@
 - Organize existing PM tools into Overview, Discussions, Requirements, Schedule,
   Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
   expose reports and lifecycle through header menus without changing durable actions.
+- Show live project status and what needs attention first in Overview, with compact charter cards
+  and saved reports on demand. Unknown values stay explicit, saved reports never mix in live data,
+  and a burst of live events coalesces into one read per source.
+- Polish Discussions with inline renaming, compact context and thread rows, and a paired composer
+  toolbar. Proposal freshness follows central adoptability, an adopted proposal links its accepted
+  revision, and first-message drafts and original-key recovery survive reloads.
+- Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
+  with list rows on narrow screens and readable columns beside the docked inspector. Board adds
+  filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in
+  drawers.
+- Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
+  baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
+  evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.
+- Add the Dependencies view, which answers which checks to re-run when a dependency changes: a
+  component matrix with evidence styles, a bounded graph, and an inspector with the pinned version,
+  owner, tests to re-run and affected components. Capture again stays the durable header action.
+- Show the central register in Issues & changes: type counts and the summary appear only when
+  coverage is complete, pagination stays honest, and a processing timeline offers Discuss and
+  Propose change. A selected row survives refreshes, and states read in the reader's language.
+- Show sourced token totals, a daily usage trend per CLI aligned to local days, and quota per pool
+  and window in Agents. The trend is requested only when the server offers daily buckets, and an
+  unavailable or withdrawn source leaves the totals, chart and inspector together.
+- Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
+  shared page header, inbox groups, operations table and inspector. Pending opens each operation
+  from its inspector and reports a failed read instead of an empty inbox, and every registered
+  action has an English and Traditional Chinese label.
+- Lay out the session transcript on one message grid with an inline agent chip. Tool events, labels
+  and checkpoints share the inspector's disclosures, and a linked work item reads Work · title.
 
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
@@ -584,11 +612,6 @@
   all three metadata-settlement writers share one insert/event transaction, including acknowledged PATCH conflicts.
   Only the first inserted receipt emits history, preserving its code without PR text; legacy receipts use the
   same sanitized backfill. Delivery DDL checks use the journal's latest allocated data-step constant.
-
-- Record the [Tauri v2 product scope](docs/product/realignment-v2.md) and
-  [integration status](docs/product/implementation-status.md) (R00). Keep the central Python backend and
-  share the browser/desktop UI; exclude Hub import and redefine B05 as Connector data preservation.
-  Desktop, Fleet parity and live acceptance remain tracked work, not completed capabilities.
 
 - Keep deployment rollback/retry keys stable across drawer close, live refresh and page reload for the same
   reviewed request. Let explicit PR loading proceed while environment details remain open, render only HTTPS
