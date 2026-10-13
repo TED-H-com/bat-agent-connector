@@ -5,10 +5,14 @@ import {fixture, mount, projectId, workId} from './pm-kanban-fixture.ts';
 const row = (page:any, n:number) => page.locator(`[data-pm-kanban-work="${workId(n)}"]`);
 const reload = (page:any) => page.evaluate(() => (window as any).refreshKanban());
 
-test('one work per row preserves visible WIP scope and has no mutation controls', async ({page}) => {
+test('central stages form a board with compact cards and accounting available on demand', async ({page}) => {
   const f=fixture(); await mount(page,f);
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
-  await expect(row(page,1)).toContainText('3 accepted sends');
+  await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(5);
+  await expect(page.locator('[data-pm-kanban-column="in_progress"] [data-pm-kanban-work]')).toHaveCount(1);
+  await expect(row(page,1)).not.toContainText('3 accepted sends');
+  await expect(page.getByText('Latest page: 2 WIP', {exact:false})).toBeHidden();
+  await page.getByText('Board details',{exact:true}).click();
   await expect(page.locator('[data-pm-kanban]')).toContainText('Latest page: 2 WIP');
   await expect(page.locator('[data-pm-kanban]')).toContainText('More work remains outside this page');
   await expect(row(page,2)).toContainText('Review / verify');
@@ -48,8 +52,20 @@ test('expanded card rechecks access and displays current execution separately fr
   expect(f.state.reads.at(-1)).toContain('/kanban/'+workId(1));
 });
 
+test('a fresh central stage moves the original card and updates both column counts', async ({page}) => {
+  const f=fixture();await mount(page,f);
+  f.state.cards[0].column='waiting';f.state.cards[0].work.state='waiting';
+  await row(page,1).getByText('Execution and sources',{exact:true}).click();
+  await expect(page.locator('[data-pm-kanban-column="waiting"] [data-pm-kanban-work]')).toHaveCount(1);
+  await expect(page.locator('[data-pm-kanban-column="in_progress"] .pm-kanban-count')).toHaveText('0');
+  await expect(row(page,1).locator('details').first()).toHaveAttribute('open','');
+  await expect(row(page,1)).toContainText('command-1');
+  expect(f.state.writes).toHaveLength(0);
+});
+
 test('standalone execution remains visible when there is no Task Service task',async({page})=>{
   const f=fixture();f.state.cards[0].execution.tasks=[];await mount(page,f);
+  await row(page,1).getByText('Execution and sources',{exact:true}).click();
   await expect(row(page,1)).toContainText('3 accepted sends');await expect(row(page,1)).toContainText('Accepted');
   await expect(row(page,1)).not.toContainText('No visible linked execution');
 });
@@ -121,8 +137,11 @@ test('a late expanded-card read cannot replace a newer board result',async({page
   await expect(row(page,1)).not.toContainText('command-1');
 });
 
-test('unknown age and partial coverage are visible without opening details',async({page})=>{
+test('partial coverage is concise while unknown timing is available in details',async({page})=>{
   const f=fixture();f.state.byteLimited=true;await mount(page,f);
+  await expect(row(page,2)).toContainText('Sources incomplete');
+  await expect(row(page,2)).not.toContainText('Work age: Unknown');
+  await row(page,2).getByText('Execution and sources',{exact:true}).click();
   await expect(row(page,2)).toContainText('Work age: Unknown');
   await expect(row(page,2)).toContainText('Recorded flow history cannot establish reliable timing');
   await expect(row(page,2)).toContainText('Source coverage is limited');
@@ -139,7 +158,7 @@ test('empty and project-filtered reads are explicit, and work titles stay litera
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Kanban layout ${locale} ${width}`,async({page},info)=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await page.setViewportSize({width,height:900});const f=fixture();await mount(page,f,{locale,pageSize:3});
-  await expect(page.locator('[data-pm-kanban] h2')).toHaveText(locale==='en'?'Work flow':'工作流');
+  await expect(page.locator('[data-pm-kanban] h2')).toHaveText(locale==='en'?'Work board':'工作看板');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_KANBAN_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
   await page.screenshot({path:`${out}/kanban-list-${locale}-${width}.png`,fullPage:true});

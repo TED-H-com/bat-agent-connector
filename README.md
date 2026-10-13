@@ -1,195 +1,121 @@
 # Better Agent Dashboard
 
-**Keep track of your coding agents, from the original request to reviewed delivery.**
+**Keep the plan, agent work and delivery evidence together.**
 
-**English** · [繁體中文](README.zh-TW.md) · [Website](https://teddashh.github.io/bat-agent-connector/) · [Getting started](docs/getting-started.md)
+**English** · [繁體中文](README.zh-TW.md) · [Website](https://teddashh.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-12.md)
 
-Better Agent Dashboard brings together **Windows Fleet connectivity and startup, agent work on BAT hosts, and delivery**. Native Windows Fleet manages selected connections, SSH tunnels, BAT profiles and sign-in startup. Python Connector / Task Service dispatches work and tracks operations. The **shared Web and Tauri Dashboard** shows hosts, sessions, worktrees, projects and results through PR and deployment.
+Better Agent Dashboard is a project workspace for people working with coding agents. Discuss an idea, review a proposed plan, dispatch work into the agent's own workspace, and follow the result back to its requirements, tests and delivery. After release, adopted maintenance policies govern observations, repair work and review.
 
-You continue coding in [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal). Agents such as Hermes and Grokbot use their own identities to work alongside you. The repository and Python package retain the name **`bat-agent-connector`**: Connector is the shared backend for the Dashboard, CLI and MCP tools.
+![Project workspace: project tree, conversation, reply and linked results.](site/images/workspace-en.png)
 
-> **This source version** includes the bundled Python runtime, owned background central, personal identity and authenticated browser entry. Use a successful desktop artifact built from the current public `main` history and match its source commit to its validation records. [Installation and first use →](docs/getting-started.md)
+*Actual UI · synthetic demonstration data · [capture source](site/images/README.md).*
 
-![Select work in the project tree and keep its conversation, reply controls and results together.](site/images/workspace-en.png)
+The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-*Actual shared frontend with synthetic demonstration data, captured from the shared project workspace implementation (October 10, 2026). This is an interface illustration, not a live-host acceptance result. [Screenshot provenance](site/images/README.md).*
+> **Development preview.** This introduction describes merged source, with screenshots captured from `66246031` (October 12, 2026). PM v1.2 is still being integrated. The [progress report](docs/product/progress-2026-10-12.md) separates the public baseline, M4/M5 candidates and remaining work. Choose a successful package for an exact source commit; a newer draft PR is not a released build.
 
-Select a project or work item in the persistent left tree. The selected session opens its conversation, reply controls and linked results together. Global management views remain under **Tools**; **Connection** retains Windows Fleet and local startup controls.
+## What it helps you answer
 
-## Explore
+| Your question | Product workflow |
+| --- | --- |
+| What did we agree to build? | Idea discussions, source records, reviewable plan proposals and explicit adoption into the PM's own versioned documents. |
+| What should happen next? | Roadmap, Sprint commitments, Kanban and engineering packages reference the adopted requirements and fixed code destinations. |
+| What needs a decision? | Follow-up analysis presents sourced findings, open questions and candidate updates. You review the meaningful changes before adopting them. |
+| Does the result satisfy the plan? | Verification and responsible quality review record fixed evidence, criteria, reasons and acceptance. Passing tests alone does not accept a requirement. |
+| Can dependent work continue? | Explicitly selected accepted requirement evidence can satisfy a package's dependency; missing or inaccessible evidence remains a blocker. |
+| What actually shipped? | Integration, PR merge, deployment verification and release baselines retain their own evidence and history. |
+| What happens after release? | An adopted policy bounds maintenance sources, schedules, repair scope, budget and delivery. Findings and repair receipts feed Maintenance Review. |
+| Where did that session go? | The project tree connects work, conversations and results. Original operation IDs support recovery after refresh or a lost reply. |
 
-[Capabilities](#what-you-can-do) · [Workflow](#from-request-to-delivery) · [Architecture](#web-desktop-and-agents) · [Windows Fleet](#windows-fleet-and-resources) · [Platforms](#platforms-and-packages) · [Start](#start-using-it) · [Trust and recovery](#permissions-ownership-and-recovery) · [Validation](#implementation-and-validation) · [Documentation](#documentation) · [Development](#development)
+Project Brief, Sprint and Kanban already consume fixed quality records. The M4 candidate extends Roadmap quality and Brief deviation explanations, and verifies the joined lifecycle. See [current limitations](#current-scope-and-limits) before treating the whole workflow as complete.
 
-## What you can do
+## Try one small project
 
-| Your question | Where to go | What you get |
+1. **Discuss the goal.** Create a PM workspace and an Idea thread. For a membership project, start with login and password reset; record what is outside the first release.
+2. **Review the plan.** Prepare a PM-owned Git worktree at a fixed revision. Ask for a proposal, inspect its sources, requirements and open questions, then explicitly adopt it.
+3. **Start bounded work.** Select the engineering package, repository, BAT host and workspace. Agents use their own managed resources; your checkout stays read-only to Connector.
+4. **Evaluate the result.** Run the configured verifier or select original GitHub checks. Record a quality review against the fixed acceptance criteria and Definition of Done, then select that evidence for the work and dependencies.
+5. **Deliver and maintain.** Review the integration and PR, verify the release baseline, and adopt the maintenance policy. Review findings and repairs before deciding the next plan change.
+
+Each stage uses the same project history. Discussion does not automatically adopt a plan; adopting a plan does not start work. A maintenance finding does not itself authorize a repair. [Step-by-step PM guide](docs/getting-started.md#try-one-pm-workflow).
+
+![PM planning: inspect a fixed draft and its sources before adoption.](site/images/pm-planning-en.png)
+
+![PM Kanban: follow work and its recorded evidence.](site/images/pm-kanban-en.png)
+
+![Project dispatch: instructions, destination and agent settings.](site/images/dispatch-en.png)
+
+## Install and connect
+
+Use the [desktop workflow on main](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain). Choose a successful platform job, match its source commit and validation records, then download that run's artifact. GitHub may require sign-in, and artifacts expire. These are validation packages, not a stable signed update channel.
+
+| Entry | Package / local features | Boundary |
 | --- | --- | --- |
-| What connects and opens at Windows sign-in? | **Connection settings / Fleet** | Independent background connections, BAT profiles and Dashboard choices; tunnel / BAT / central readiness, Tailscale sign-in, active backend and launch / migration receipts. |
-| What needs me right now? | **Pending** | Separate replies / permissions, completion review, operation problems and host connections. Idle does not mean the task is complete. |
-| What belongs to this project? | **Left project tree** | Work items, original instructions, acceptance criteria, repository bindings and dispatched work. Hierarchy, pins and archive keep ongoing projects organized. |
-| Can I start the next piece of work? | **Project dispatch / Sessions** | Select a configured repository, host and workspace; preview a fixed commit; add instructions, model and attachments; create a managed session. |
-| What is an agent doing? | **Selected work / conversation** | Recent conversation, readable code and tables, pending questions, resource ownership and freshness. Authorized controls use central operations. |
-| What did it produce? | **Artifacts / work details** | Immutable revisions, digests, capture, review and links to the originating operation, execution or task. Accepting an artifact does not merge code or complete a task. |
-| How do results reach the same PR? | **Delivery** | Preview fixed results from managed work, checkpoints or branches, then integrate them in a separate workspace. Paste a GitHub PR URL to load its configured repository. |
-| Has it actually shipped? | **Delivery** | Separate integration, merge and deployment receipts. Configured recipes check the deployed source version and runtime evidence. |
-| Can I free this worktree? | **Cleanup and retained work** | Review exact resources, preserved content and reasons preventing removal. History and relationships remain after eligible cleanup. |
-| What happened during a disconnect? | **Operations / history** | Durable IDs, original requests and receipts. Read back the original operation instead of dispatching again because its reply was lost. |
+| Windows x64 | `desktop-Windows-unsigned`: NSIS, bundled central, tray, Credential Manager and Fleet | Unsigned validation package. Windows Fleet manages connections and BAT startup. |
+| macOS Apple Silicon / Intel | `desktop-macOS-arm64-validation` / `desktop-macOS-x64-validation`: DMG, bundled central, menu bar and Keychain | Ad-hoc signing; Windows Fleet is not ported to Mac. |
+| Linux | `desktop-Linux-unsigned`: Debian package and bundled central | External-central native credentials remain memory-only; persistent native vault is excluded. |
+| Browser | Open the central's `/dashboard/`, or use the desktop's browser entry | Same project data and UI; no browser-native Fleet or credential vault. |
 
-Features are exposed according to the current account, host and repository configuration. The interface explains unavailable actions. Ordinary project dispatch does not require creating a second Task Service recipe for every request.
+The desktop package prepares a matching Python runtime, private background central, data and personal identity. Complete the guided BAT trust, repository binding and verification setup. **Joining an existing central is an explicit advanced option.** A failed connection never creates a replacement project database. Closing the Dashboard window does not stop central work.
 
-## From request to delivery
+**PM analysis has separate runtime requirements.** The current bounded analysis paths run on a configured Linux central or eligible Linux BAT host, using the pinned PM Codex runtime and confinement described in the guide. A Windows or Mac client can use those remote capabilities; its local desktop installation does not provide native Windows/Mac PM execution. PM analysis support is distinct from a general coding CLI adapter.
 
-1. **Organize the project.** Explicitly associate a configured repository, preserve the request and record acceptance criteria.
-2. **Choose the destination.** Select the BAT host and workspace. For published code, preview a branch such as `main` and confirm its fixed commit. Switching clients does not move the work.
-3. **Start the agent's own work.** Instructions, optional model and exact attachment revisions travel with the operation. Connector keeps the person's original checkout read-only.
-4. **Follow the result from the project.** Find the dispatched work, session, operation and delivery entry. “Started” means a start succeeded; activity, verification, acceptance and delivery are distinct.
-5. **Review and integrate.** Inspect candidate commits and the integration preview. Bring selected results into one PR, then review and merge its fixed scope with an authorized identity.
-6. **Deploy and tidy up.** Where a recipe is configured, follow the merged source to runtime version / health evidence. Review eligible cleanup while preserving history and retained results.
+[Installation and first use](docs/getting-started.md) · [Windows guide and resources](docs/windows.md) · [Recovery and upgrades](docs/design/managed-installation.md)
 
-Same-host continuation can use a fixed local checkpoint. Another host gets code through an **explicitly bound GitHub repository and a published commit**. Unpublished workspaces are not moved between machines, and a person's checkout is not automatically pulled or reset.
-
-## Web, desktop and agents
+## How the parts fit
 
 ```mermaid
 flowchart TB
-    subgraph Windows[Windows client]
-        Desktop[Tauri Dashboard] --> Fleet[Native Fleet: Rust or existing PowerShell]
-        Fleet --> Routes[SSH tunnels / Tailscale routes and readiness]
-        Fleet --> Profiles[Selected BAT profiles / sign-in startup]
-    end
-    Web[Web / Mac Tauri Dashboard] --> Central[Python Connector / Task Service]
-    Desktop --> Central
-    Agents[Hermes / Grokbot / MCP / CLI] --> Central
-    Fleet -. Configured central readiness and bootstrap .-> Central
-    Routes -. Connection transport .-> BAT[BAT hosts / workspaces]
-    Profiles --> Human[BAT desktop: human coding access]
-    Mobile[BAT mobile] --> BAT
-    Human --> BAT
-    Central -->|bat-remote/v2 and governed operations| BAT
-    Central --> Journal[Identity / permissions / operations / task journal]
-    BAT --> Manual[Human sessions / worktrees: Connector read-only]
-    BAT --> Managed[Agent-owned sessions / worktrees: dispatch and continuation]
-    Managed --> Delivery[Fixed results → shared PR → merge / deploy → cleanup]
-    Central --> Delivery
+    Web[Web Dashboard] --> Central[Python Connector / Task Service]
+    Desktop[Tauri Dashboard] --> Central
+    API[CLI / MCP / agent integrations] --> Central
+    Desktop --> Fleet[Windows Fleet: connections and startup]
+    Fleet --> Routes[SSH routes / selected BAT profiles]
+    Routes --> BAT[BAT hosts and workspaces]
+    Human[Your BAT desktop / mobile] --> BAT
+    Central --> Journal[Plans / evidence / permissions / operations]
+    Central --> BAT
+    BAT --> Manual[Human resources: Connector read-only]
+    BAT --> Managed[Agent-owned sessions and worktrees]
+    Managed --> Delivery[Fixed commits / PR / merge / deployment]
+    Delivery --> Central
 ```
 
-**These responsibilities are distinct and all remain part of the product.** Windows Fleet owns local connectivity, readiness and startup; Connector owns dispatch, permissions and the journal; BAT runs coding sessions on the selected hosts. Human BAT desktop / mobile access and agent-owned managed resources both remain explicit. GitHub carries published code and reviewed delivery.
+- **Connector is the authority.** Python owns project state, policy, dispatch and the durable journal. Tauri owns local windows, credentials and transport; it does not duplicate the business backend.
+- **Work stays on the chosen host.** Same-host continuation can use a fixed checkpoint. Cross-host code synchronization uses an explicitly bound GitHub repository and published commits.
+- **Windows Fleet remains a distinct layer.** Select background connections, BAT profiles and Dashboard startup independently. Route/readiness checks, Tailscale entry, configured central bootstrap and explicit Rust/PowerShell migration preserve ownership.
+- **Clients share state.** Web and Tauri use `desktop/src`; drafts and reading positions remain local to each client. Hermes, Grokbot and other MCP/CLI clients use their own principals and scopes.
 
-Project Hub is a reference for session organization and interaction. Its runtime, data backend and importer are not part of this architecture. Sharing the Dashboard with Mac / Web does not port Windows-native Fleet controls to those platforms.
+## Current scope and limits
 
-**One frontend, one central authority.** Web and Tauri are built from `desktop/src`. Python serves `/dashboard/` and `/api/v1`. Tauri bundles the same UI and uses a restricted Rust transport. It does not create a second business backend, scheduler or journal.
-
-- Both clients can be open at once. Closing a browser tab or Dashboard window does not stop the central service's work. Closing a local tunnel can disconnect that client.
-- Projects, work items, operations and versioned work-item reading markers use central state. Drafts and conversation reading positions remain local to each client.
-- Native credentials, files, tray / Dock behavior, Fleet and updates depend on platform support. Browser access does not grant local machine control.
-- MCP and CLI share central policies and durable operations. Each automation client uses its own principal and scopes.
-
-The candidate installer bundles the matching Python runtime and prepares one owned local service, private data and personal identity on first launch. It supports background startup, verified reconnection and authenticated browser entry. Reopening and safe upgrades preserve the same installation and journal. **Joining an existing central is an advanced option**; an existing connection configuration is preserved, and connection failure never provisions a replacement database. [Installation and recovery contract](docs/design/managed-installation.md).
-
-[Shared frontend](docs/design/shared-frontend.md) · [Native client](docs/design/desktop.md) · [API](docs/design/api-v1.md)
-
-## Windows Fleet and resources
-
-Windows remains a core part of the product. Sharing the Dashboard with Web / Mac retains these integrated native Fleet capabilities:
-
-| Capability | Existing implementation and entry point |
+| Status | Scope |
 | --- | --- |
-| Background connections and routes | Maintain selected tunnels from the existing inventory / SSH / profile bindings; check Tailscale and configured routes; use bounded recovery without taking over unknown processes. |
-| BAT and central readiness | Distinguish tunnel, pinned TLS, BAT identity / workspace and central observe access. An open port alone is not readiness. |
-| Windows and sign-in | Independent connection, BAT profile and Dashboard choices; login picker, saved launch choices, close-to-background and single-window restoration. |
-| Backend and ownership | Rust runtime is integrated. Existing configuration without a backend retains PowerShell; explicit migration proves the old owner stopped before starting the replacement. |
-| Tailscale and central startup | Read Tailscale state and open its installed sign-in app; a separately configured fixed SSH recipe can query / start the selected central service. This is not arbitrary remote installation. |
-| Local resources | Windows Credential Manager, native attachment selection / upload / Save As, tray and controlled update entry. |
+| Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. |
+| M4 candidate | Joined Idea → delivery → maintenance → Review → new Idea flow; original runtime completion, manual single-input activity observation, Roadmap quality and Brief deviations. Candidate checks and failures are recorded separately. |
+| M5 local candidate | Persistent workspace analysis-adapter choice and read-only observation of serial manual inputs. Focused checks passed; full candidate/platform validation remains. |
+| Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support and cross-CLI usage/efficiency reporting. |
 
-**Windows Fleet and central have separate responsibilities.** The candidate runs its bundled central locally on Windows, or joins a configured external central. Fleet keeps its own explicit connection, profile and ownership settings. Mac supports the shared Dashboard and bundled central; Windows Fleet remains a Windows capability.
+Cross-CLI token collection is **planned, not running**. Its purpose is to relate usage to accepted delivery and avoid redundant work. Missing usage must remain unknown; token traffic, estimated API prices and subscription quota are different measures. Model or effort changes need adopted policy and apply to future owned work. [Progress and priorities](docs/product/progress-2026-10-12.md).
 
-[Windows usage and resources](docs/windows.md) · [NSIS validation packages](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) · [Fleet configuration example](desktop/fleet.example.json) · [Rust Fleet source](desktop/fleet-core/README.md)
+Formal signing, Mac notarization, production update channels and Linux persistent native credential storage are outside the agreed delivery. Real-environment acceptance belongs to the owner and has not been claimed as passed. The full [PM v1.2 plan](docs/product/pm-v1.2-plan.md) remains the scope; M4 is one milestone.
 
-New Windows Fleet installations can use the native Rust backend with the
-[public configuration templates](docs/design/fleet-configuration.md). Supply your own
-hosts, SSH aliases and BAT profiles; no maintainer inventory or private Kit checkout is
-required. PowerShell remains an optional compatibility backend for existing installations.
+## Ownership and recovery
 
-## Platforms and packages
+Human sessions and worktrees remain read-only through Connector. Unknown resources need original creation evidence before managed recovery. Reading another session never transfers control of it.
 
-This source version defines packaging for the following platforms. Match CI and installed-fixture evidence to the exact source commit; implementation, a successful package job and a real user environment are separate evidence.
+A lost reply does not prove an action failed. Recover the original operation and key; uncertain work keeps its evidence and reservations. Current permissions and source availability are checked before effects. Connector policy complements host accounts and confinement; it is not an operating-system sandbox.
 
-| Component | Candidate implementation | Distribution or platform boundary |
-| --- | --- | --- |
-| Web Dashboard | Shared English / Traditional Chinese UI served by central; one-click authenticated entry from the managed desktop | Uses trusted loopback / tunnel access; no general public-hosting ingress. |
-| Windows x64 | NSIS with bundled central, private Windows storage / file locks, Credential Manager for external-central credentials, native Fleet and tray | Validation package is unsigned. |
-| macOS Apple Silicon / Intel | DMGs with bundled central, browser entry, menu bar and Keychain for external-central credentials | Ad-hoc validation signing; no Windows Fleet port. |
-| Linux | Debian package, bundled central and native WebView | External-central native credentials use the memory-only adapter; a persistent Linux credential vault is outside this delivery. |
-| Python central / CLI / MCP | One operation authority; Windows private storage and locking plus POSIX support; Python 3.10–3.13 CI matrix | Manual operator deployment remains available. Desktop users do not need a preinstalled Python runtime. |
+[Security model](SECURITY.md) · [Resource policy](docs/design/resource-policy.md) · [Operations](docs/design/operations-unification.md)
 
-Open the [desktop workflow on `main`](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain), choose a successful run from the current public history, and match the artifact’s source commit and platform job. If the current commit is still building, wait for its successful package job. GitHub may require sign-in, and artifacts expire. These are candidate artifacts, not a stable release or production update channel; historical PR artifacts are not the current download source.
+## Documentation and development
 
-## Start using it
-
-With a matching candidate package:
-
-1. **Install and launch.** The app prepares its local background central and personal identity. No Python / uv installation, endpoint entry or API-token copying is needed for this local path.
-2. **Connect BAT.** Open **Connection / Fleet → Get ready to work → Connect BAT**. Select an importable BAT connection profile, or enter the endpoint, trusted certificate fingerprint, workspace profile ID and BAT token. Use **Verify and save host**.
-3. **Choose where managed work may run.** Enable the intended conversation / start permissions, choose dedicated remote managed directories, and provide the existing trusted SSH alias used for Git and artifact operations. **Allow Git worktrees sharing a clone** is a separate explicit choice for direct BAT starts that need it; human resources remain read-only.
-4. **Bind the repository.** Under **Bind a GitHub repository**, read the host's workspaces and choose the exact workspace ID. Supply the GitHub repository, Git remote and authorization, then **Verify and bind repository**. Saving checks access without pushing or opening a PR.
-5. **Start and follow work.** Associate a project with that binding, review a fixed source commit and dispatch. Use **Configure verification commands** only when configuring Task Service projects; saving a command does not execute it. [Detailed setup and recovery](docs/getting-started.md).
-
-Use **Open Dashboard in browser** or the tray / menu-bar entry for authenticated browser access, and **Start when I sign in** for installation-owned startup. Existing external-central configuration remains active; **Advanced: join an existing central** lets you choose another trusted service explicitly. Agents receive their own scoped central identities through the [MCP setup](docs/getting-started.md#cli-and-agent-access).
-
-Working on remote BAT hosts does not require BAT to be installed on the Dashboard machine. [Canonical skill and Hermes / Grokbot adapters](docs/agent-skills.md).
-
-## Permissions, ownership and recovery
-
-**Host access and account permissions are separate.** Host `writes` / `orchestrate` settings allow classes of work. API scopes authorize an identity's actions. Resource ownership, current versions, repository bindings and task coordinator checks still apply.
-
-| Resource or outcome | Behavior |
+| Need | Start here |
 | --- | --- |
-| Human-created session / worktree | Read-only through Connector. Continue from a reviewed fixed source in new managed resources. |
-| Unknown ownership | Stay unknown unless existing creation evidence proves ownership. A matching path is insufficient. |
-| Managed work | Authorized actions pass the central handler and coordinator rules. |
-| Reply lost after dispatch | Retain the operation, original key and reservations; read back the result. A timeout does not prove failure. |
-| Agent claims completion | Present for review. Acceptance is distinct from activity, verification, merge and deploy. |
-| Cleanup touches active / unresolved work | Keep it and explain why; do not clear uncertain operations or erase their history. |
-
-MCP / CLI writes retain explicit confirmation, host tiers and audit records. The UI's reviewed actions go through central directly, without an extra LLM approval step.
-
-**Read-only Connector policy is not an OS sandbox.** Host accounts and confinement determine whether an agent process can write to human directories. General starts and Task Service recipes have documented differences. Read [confinement](docs/design/confinement.md) before relying on unattended isolation.
-
-For native BAT `worktree.merge`, an unknown ACK without sufficient positive evidence preserves the original operation and resources; it does not resend or release ownership. A human-adjudication API for that case is outside the current contract, not a remaining delivery gate. GitHub integration and deployment use their own readback contracts. [Merge recovery](docs/design/worktree-merge.md) · [Resource policy](docs/design/resource-policy.md) · [Security](SECURITY.md)
-
-## Implementation and validation
-
-Use the [current `main` checks](https://github.com/teddashh/bat-agent-connector/actions?query=branch%3Amain) and [desktop builds](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) for source and package validation. Match the exact source commit, successful platform job and installed-fixture records to the package you use. Historical implementation records remain useful context; their old run results do not validate a newly built package.
-
-The candidate includes managed installation and onboarding, an adjustable project tree, readable conversations and send receipts, unread / model preferences, reviewed skill selections, linked results and repair work. Skill selection records a fixed source digest; it does not activate a skill in a running agent. A historical queued-send receipt does not report the current BAT queue position or offer per-message cancellation.
-
-Automated validation covers Python, shared browser/native transport, packaged runtime ownership and restart, and platform installation fixtures. These controlled fixtures are distinct from a user's actual Fleet, accounts and deployment targets.
-
-The owner excluded **formal signing, Mac notarization, production update channels and Linux persistent native credential storage** from this delivery. **Human execution of the full 46-item real-environment acceptance matrix belongs to the user** and is not an outstanding agent task. These exclusions are not claims that the corresponding capabilities or real-host tests were completed. Consult the linked checks and implementation record for validation and integration evidence.
-
-[Implementation record](docs/product/implementation-status.md) · [Acceptance reference](docs/product/acceptance-v2.md)
-
-## Documentation
-
-The [adopted PM v1.2 plan](docs/product/pm-v1.2-plan.md) extends the product toward
-professional project management and maintenance. Current work connects sourced
-discussion and plan adoption with requirements, delivery evaluation and maintenance.
-Follow the [PM workflow guide](docs/getting-started.md#try-one-pm-workflow); merged
-capabilities, integration candidates and remaining lifecycle work are tracked in
-[PM implementation status](docs/product/pm-v1.2-status.md).
-See the [PM workspace contract](docs/design/pm-workspaces.md) for API/MCP usage.
-
-| Area | Guides |
-| --- | --- |
-| Getting started | [English](docs/getting-started.md) · [繁體中文](docs/getting-started.zh-TW.md) · [Configuration example](examples/hosts.example.toml) |
-| Product and installation | [Shared decisions](docs/product/realignment-v2.md) · [Managed installation requirement](docs/design/managed-installation.md) · [Work items](docs/design/work-items.md) |
-| Desktop / Web | [Shared frontend](docs/design/shared-frontend.md) · [Tauri](docs/design/desktop.md) · [Fleet](docs/design/desktop-fleet-native.md) · [Updates](docs/design/desktop-updates.md) |
-| Windows / Fleet | [Usage and resources](docs/windows.md) · [Sign-in / windows](docs/design/desktop-fleet-native.md) · [Routes](docs/design/fleet-routes.md) · [Tailscale](docs/design/tailscale-recovery.md) · [Central bootstrap](docs/design/fleet-bootstrap.md) |
-| Dispatch | [Managed start](docs/design/session-start.md) · [Published repositories](docs/design/repository-sync.md) · [Checkpoints](docs/design/checkpoints.md) · [Task Service](docs/design/task-service.md) |
-| Results | [Artifacts](docs/design/artifacts.md) · [Integration](docs/design/integration.md) · [Merge / deployment](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |
-| Automation | [API](docs/design/api-v1.md) · [Operations](docs/design/operations-unification.md) · [Agent skills](docs/agent-skills.md) · [Protocol](docs/PROTOCOL.md) |
-
-## Development
+| Use the product | [First use](docs/getting-started.md) · [Windows Fleet](docs/windows.md) |
+| Understand progress | [Progress report](docs/product/progress-2026-10-12.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
+| Continue development | [Sprint handoff](docs/handoff/2026-10-12-pm-v1.2.md) · [Adopted plan](docs/product/pm-v1.2-plan.md) · [Architecture decisions](docs/product/realignment-v2.md) |
+| Integrate an agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
+| Follow results | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |
 
 ```bash
 uv sync --locked --extra dev
@@ -203,14 +129,12 @@ npm test
 npm run test:ui
 ```
 
-`pytest-disktmp` is the development host's disk-temp wrapper. If unavailable, use a unique disk-backed `--basetemp` and delete it on exit; never use `/dev/shm` or another tmpfs. See [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md]. Backend changes also require the Python 3.10 suite.
+Use a disk-backed pytest temporary directory and remove it after the run. `pytest-disktmp` is the development host wrapper; if unavailable, supply a unique disk-backed `--basetemp`. Never use `/dev/shm` or another tmpfs. Backend changes also require the Python 3.10 suite. Follow [CONTRIBUTING](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
 
-Edit shared UI in `desktop/src` and regenerate browser assets. The public project site lives in `site/`; see [site maintenance](site/README.md). Automated tests must not write to live BAT hosts.
+Edit the shared UI in `desktop/src` and regenerate browser assets. The [public website](site/README.md) is generated from repository source. Tests use mock BAT/providers and temporary repositories, without live-host writes.
 
-## Credits and license
+## Credits
 
-An unofficial companion, **not affiliated with or endorsed by BAT's authors**. BAT is by [TonyQ / tony1223](https://github.com/tony1223) and contributors. Protocol notes were originally read from BAT v3.2.12; compatibility must be checked as BAT evolves.
+An unofficial MIT-licensed companion to BAT, not affiliated with or endorsed by its authors. [BAT](https://github.com/tony1223/better-agent-terminal) is by TonyQ and contributors. Selected organization and interaction patterns reference [Project Hub](https://github.com/kieiken/project-hub); no Hub importer or runtime dependency is included. See the [adoption review](docs/product/project-hub-frontend-audit-2026-10-09.md).
 
-[Project Hub](https://github.com/kieiken/project-hub) informs selected organization and interaction patterns. No Hub snapshot importer or runtime dependency is included. [Adoption review](docs/product/project-hub-frontend-audit-2026-10-09.md).
-
-MIT · [LICENSE](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · [Changelog](CHANGELOG.md)
+[License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · [Changelog](CHANGELOG.md)

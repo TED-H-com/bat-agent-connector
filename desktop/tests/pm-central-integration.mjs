@@ -59,6 +59,7 @@ try {
   await page.getByLabel('Workspace name', {exact:true}).fill('PM contract fixture');
   await page.getByRole('button', {name:'Create workspace', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}$/);
+  await page.getByRole('button', {name:'Discuss with PM', exact:true}).click();
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
   await page.getByRole('button', {name:'Start discussion', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/pmt_[a-f0-9]{32}$/);
@@ -117,6 +118,8 @@ try {
   const revision = await revisionResponse.json();
   assert.deepEqual(revision.plan.document.selected_inputs.map(input=>input.input_id), [confirmed.input_id]);
   assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
+  // Planning keeps inputs behind its normal disclosure after reload.
+  await page.locator('[data-pm-information] > summary').click();
   await page.locator('[data-pm-add-input] > summary').click();
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
@@ -198,6 +201,7 @@ try {
   assert.equal(captured.capture.execution_authorized,false);
   const comparison = page.locator('[data-pm-plan-diff]');
   await expect(comparison).toHaveCount(1);
+  await page.locator('[data-pm-plan-comparison] > summary').click();
   await expect(comparison.getByRole('button',{name:'Compare versions',exact:true})).toBeDisabled();
   await comparison.getByLabel('From version',{exact:true}).selectOption(plans.revisions[0].revision_id);
   await comparison.getByLabel('To version',{exact:true}).selectOption(updatedPlans.head.latest_revision_id);
@@ -288,10 +292,25 @@ try {
   assert.equal(lifecycle.lifecycle.stage,'development');assert.equal(lifecycle.lifecycle.execution_epoch,3);
   const history=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/lifecycle/transitions`,{headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.deepEqual(history.transitions.map(row=>row.to_stage),['paused','closed','development']);
+  // The workspace now opens its fixed Charter, while RTM reads the same central work.
+  await page.goto(origin + '/dashboard/#/pm/' + workspaceId);
+  await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
+  await expect(page.locator('[data-pm-charter]')).toContainText('No adopted plan in this summary');
+  child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');
+  assert.equal((await next()).usage_connected,true);
+  await page.locator('[data-pm-view="agents"]').click();
+  await expect(page.locator('[data-pm-resources]')).toContainText('1,000');
+  await page.locator('[data-resource-select="Implementation"]').click();
+  await expect(page.locator('[data-resource-detail]')).toContainText('fixture-model');
+  await expect(page.locator('[data-resource-detail]')).toContainText('Input includes cache');
+  await expect(page.locator('[data-resource-quota]')).toContainText('No current quota balance');
+  await page.locator('[data-pm-view="rtm"]').click();
+  await expect(page.locator('[data-pm-rtm]')).toContainText('First useful action');
+  await expect(page.locator('[data-pm-rtm]')).toContainText('Unassigned / other plan versions');
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.message.append','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen, fixed Charter, unassigned RTM work and recurring local usage through the central resource API; zero hosts or tasks.');
 } catch(error) {
   console.error('Synthetic PM fixture state:',await failureDetails().catch(()=>({unavailable:true})));
   throw error;

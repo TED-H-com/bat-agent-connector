@@ -1,3 +1,5 @@
+import {resourceStrings} from './pm-resources-strings.js';
+import {workbenchStrings} from './pm-workbench-strings.js';
 import {pmPlanProposalStrings} from './pm-plan-proposal-strings.js';
 import {pmContextBundleStrings} from './pm-context-bundle-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
@@ -14,6 +16,8 @@ import {pmMeetingStrings} from './pm-meetings-strings.js';
 
 export const pmStrings = {
   en: {
+    ...workbenchStrings.en,
+    ...resourceStrings.en,
     ...pmPlanProposalStrings.en,
     ...pmIssueStrings.en,
     ...pmLifecycleStrings.en,
@@ -194,7 +198,7 @@ export const pmStrings = {
     pm_context_journal: 'Discussion record only', pm_context_owned: 'Use the existing PM worktree',
     pm_preview_worktree: 'Preview published revision', pm_preview_required: 'Preview the selected repository revision before saving.',
     pm_saved_worktree_choice: 'Previously selected repository',
-    pm_plan_versions: 'Project plan', pm_revision_title: 'Plan title', pm_revision_markdown: 'Plan document (Markdown)',
+    pm_plan_versions: 'Project plan', pm_compare_plans: 'Compare plan revisions', pm_plan_acceptance: 'Requirements and acceptance criteria', pm_revision_title: 'Plan title', pm_revision_markdown: 'Plan document (Markdown)',
     pm_revision_save: 'Save plan revision', pm_revision_new: 'Write a plan revision',
     pm_revision_draft_help: 'Start with the selected Planning sources, or write the document here. Empty text creates a structured draft with unresolved domains clearly marked.',
     pm_revision_number: 'Revision {number}', pm_plan_accepted: 'Accepted plan', pm_plan_none_accepted: 'No plan has been adopted',
@@ -226,6 +230,7 @@ export const pmStrings = {
     pm_note_help: 'Saved to this discussion. This does not send a message to an agent.',
     pm_manual: 'Discussion notes · no AI participant is connected', pm_no_notes: 'No notes yet. Record the problem, an option, or a question to revisit.',
     pm_mode_idea: 'Idea', pm_mode_planning: 'Planning draft', pm_inputs: 'Facts and open questions',
+    pm_information: 'Inputs and planning direction',
     pm_inputs_help: 'Confirmed statements, source claims and unresolved assumptions stay distinct.',
     pm_no_inputs: 'No facts recorded yet. Add a sourced statement or an open question from the discussion.',
     pm_input_slot: 'Topic', pm_input_value: 'Statement or question', pm_input_status: 'Evidence status', pm_input_source: 'Source type or saved note',
@@ -256,6 +261,8 @@ export const pmStrings = {
     pm_slot_resources: 'Resources', pm_slot_risk: 'Risk', pm_slot_quality: 'Quality',
   },
   'zh-TW': {
+    ...workbenchStrings['zh-TW'],
+    ...resourceStrings['zh-TW'],
     ...pmPlanProposalStrings['zh-TW'],
     ...pmIssueStrings['zh-TW'],
     ...pmLifecycleStrings['zh-TW'],
@@ -436,7 +443,7 @@ export const pmStrings = {
     pm_context_journal: '只保留討論紀錄', pm_context_owned: '沿用既有 PM 工作目錄',
     pm_preview_worktree: '預覽已發布版本', pm_preview_required: '儲存前請先預覽所選儲存庫版本。',
     pm_saved_worktree_choice: '先前選定的儲存庫',
-    pm_plan_versions: '專案計畫', pm_revision_title: '計畫名稱', pm_revision_markdown: '計畫內容（Markdown）',
+    pm_plan_versions: '專案計畫', pm_compare_plans: '比較計畫版本', pm_plan_acceptance: '需求與驗收條件', pm_revision_title: '計畫名稱', pm_revision_markdown: '計畫內容（Markdown）',
     pm_revision_save: '儲存計畫版本', pm_revision_new: '撰寫計畫版本',
     pm_revision_draft_help: '以已選定的 Planning 來源起草，也可以在此撰寫內容。留白會產生結構化草稿，明確保留尚未釐清的管理領域。',
     pm_revision_number: '版本 {number}', pm_plan_accepted: '已採用計畫', pm_plan_none_accepted: '尚未採用計畫',
@@ -468,6 +475,7 @@ export const pmStrings = {
     pm_note_help: '儲存到這份討論，不會傳送給 Agent。', pm_manual: '討論筆記 · 目前未連接 AI 參與者',
     pm_no_notes: '尚無筆記。可以先記下問題、一個選項，或待釐清的疑問。',
     pm_mode_idea: '想法', pm_mode_planning: '規劃草稿', pm_inputs: '事實與待釐清問題',
+    pm_information: '討論依據與規劃方向',
     pm_inputs_help: '已確認的陳述、來源說法與待查假設會分開標示。',
     pm_no_inputs: '尚無事實紀錄。可從討論中加入有來源的陳述或待釐清的問題。',
     pm_input_slot: '主題', pm_input_value: '陳述或問題', pm_input_status: '依據狀態', pm_input_source: '來源類型或已存筆記',

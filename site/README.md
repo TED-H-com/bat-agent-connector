@@ -1,82 +1,101 @@
-# Maintaining the product website
+# Maintaining the Better Agent Dashboard website
 
-This is the public GitHub Pages introduction to **Better Agent Dashboard**. It is
-not the operational Dashboard served by Python. No credentials, live API calls,
-analytics or remote scripts belong here.
+This repository owns the public GitHub Pages introduction. The operational Web
+Dashboard is served by Python and shares `desktop/src` with Tauri; this static
+site does not contact a central, BAT host, model provider or analytics service.
 
-## Sources
+## What the page explains
 
-- `scripts/build_product_site.py`: bilingual product copy and semantic HTML layout.
-  Run `python3 scripts/build_product_site.py` after editing it; `site/index.html`
-  is its deterministic generated output.
-- `styles.css`: site tokens and responsive components. See [DESIGN.md](DESIGN.md).
-- `lang.js` / `app.js`: URL / saved-language selection, mobile navigation and the
-  screenshot gallery. Without JavaScript the English page and both images work.
-- [images/README.md](images/README.md): actual UI screenshot source, synthetic data
-  disclosure and regeneration instructions.
-- [English README](../README.md), [繁中 README](../README.zh-TW.md) and
-  [setup guides](../docs/getting-started.md): detailed reader and operator paths.
+The October 12 rewrite puts the PM workflow first: discussion, reviewable plans,
+agent-owned work, quality evidence, delivery and maintenance. It retains Windows
+Fleet, central authority, platform differences and installation guidance.
 
-The old externally generated `page.json` and unused flow renderer were removed.
-Do not regenerate this page with the external project-page kit: it describes an
-older MCP / CLI-only product. The original project palette, mark and language
-bootstrap were retained from the repository's previous project-page-kit site
-(https://github.com/teddashh/teddashh.github.io/tree/main/kit).
+Public feature descriptions and all eight screenshots use merged main
+`662460311345db7dd0a9fe65ea8010dc3e5e4897`. M4/M5 appear only as clearly labelled
+candidate work. Keep transient CI outcomes in the dated
+[progress report](../docs/product/progress-2026-10-12.md); link it from the site.
+The [handoff](../docs/handoff/2026-10-12-pm-v1.2.md) has development continuation
+steps, while [PM status](../docs/product/pm-v1.2-status.md) retains the full backlog.
 
-Keep both languages aligned. Update the evidence baseline only when the referenced
-candidate actually passed. Describe what the source version implements and link validation records for its
-exact package commit; do not embed temporary PR/check status in public copy. Keep user-owned real-environment acceptance and
-explicitly excluded distribution features separate from implementation status. Do not invent tool counts,
-use fixture screenshots as live evidence, or label validation artifacts as a signed
-release. Platform claims must distinguish desktop client, central service and Fleet.
+## Edit the source
 
-## Product coverage review
-
-The October 10 rewrite omitted Windows Fleet from the architecture figure and made
-the product look like a generic project manager. Browser and Python tests passed;
-they did not validate the accuracy or completeness of that description. Review
-these responsibilities against source whenever changing the READMEs or site:
-
-| Public description to preserve in both languages | Source / contract to check |
+| File | Responsibility |
 | --- | --- |
-| Windows Fleet is a distinct local connection/startup layer | `desktop/src-tauri/src/fleet.rs`, `fleet_native.rs`; [native Fleet](../docs/design/desktop-fleet-native.md) |
-| Independent connection, BAT profile and Dashboard choices; login behavior | `desktop/src/fleet-desktop.js`; [profile launch](../docs/design/fleet-profiles.md) |
-| Route recovery, Tailscale status, fixed central bootstrap | [routes](../docs/design/fleet-routes.md), [Tailscale](../docs/design/tailscale-recovery.md), [bootstrap](../docs/design/fleet-bootstrap.md) |
-| Rust/PowerShell ownership and explicit migration | [Fleet runtime](../desktop/fleet-core/README.md), [migration](../docs/design/fleet-migration.md) |
-| Python central authority; BAT host execution; manual/managed resources | [product decisions](../docs/product/realignment-v2.md), [resource policy](../docs/design/resource-policy.md) |
-| Shared Web/Tauri UI, platform differences, candidate installation and recovery | [shared frontend](../docs/design/shared-frontend.md), [managed installation](../docs/design/managed-installation.md) |
-| Discoverable Windows packages, usage and resource links | [Windows guide](../docs/windows.md), [繁中](../docs/windows.zh-TW.md) |
+| `scripts/build_product_site.py` | English/Traditional Chinese copy, semantic sections, metadata and gallery entries |
+| `site/index.html` | Generated output; regenerate after source edits |
+| `site/styles.css` | Existing paper/ink/action tokens and responsive components; see [DESIGN.md](DESIGN.md) |
+| `site/lang.js`, `site/app.js` | Language preference, mobile navigation and screenshot selection; no external requests |
+| `site/404.html` | Bilingual missing-page recovery at the production Pages base path |
+| `scripts/capture_site.mjs` | Actual shared-frontend capture with local synthetic fixtures |
+| `site/images/manifest.json` | Pinned frontend source, fixture/browser details and image/source hashes |
 
-Project Hub is an interaction reference, not the runtime, central backend or a
-replacement product. Preserve attribution without rewriting the architecture around
-that reference. Do not copy private Kit inventory or topology into public content.
+Keep the English and [Traditional Chinese README](../README.zh-TW.md) aligned with
+the same source. Preserve the [first-use guides](../docs/getting-started.md) as the
+place for setup details. Do not recreate this site with the old external page kit:
+its former MCP/CLI-only description does not describe today's product.
 
-## Preview and verification
+The site's original palette, mark and language bootstrap came from the repository's
+previous [project-page kit](https://github.com/teddashh/teddashh.github.io/tree/main/kit).
+Continue the existing design instead of introducing another visual system.
 
-From the repository root:
+## Refresh every public screenshot
+
+The gallery has four scenes in two languages: project workspace, PM planning,
+PM Kanban and project dispatch. See [screenshot provenance and reproduction](images/README.md).
+All are unedited captures of the real shared frontend using demonstration data.
+Unadopted plans, unassessed quality and incomplete coverage remain visible.
+
+When frontend source changes, update the deliberate source pin, check fixture
+compatibility, regenerate all eight images and inspect the 390/768/1440 previews.
+Commit the resulting manifest with the images. Do not substitute invented product
+screens, private conversations or later candidate UI under a main-version caption.
+
+## Verify locally
+
+From the repository root, with `desktop/` dependencies and Playwright Chromium installed:
 
 ```bash
 python3 scripts/build_product_site.py
+python3 scripts/build_product_site.py --check
 python3 scripts/check_product_site.py
+python3 scripts/check_public_content.py
+SITE_SCREENSHOT_DIR="$HOME/agent-work/artifacts/product-site-review" \
+  node scripts/verify_product_site.mjs
+```
+
+The browser verifier owns an ephemeral loopback server at the production
+`/bat-agent-connector/` path and closes it on exit. It checks both languages at
+390/768/1440, all four gallery choices, keyboard/mobile navigation, preferences,
+blocked storage, no-JavaScript fallback, image decoding, overflow and 404 recovery.
+It rejects page/console errors and external requests. Inspect the resulting images;
+a green script does not prove the prose describes the product accurately.
+
+For a manual preview:
+
+```bash
 python3 -m http.server 18745 --bind 127.0.0.1 --directory site
 ```
 
-Open `http://127.0.0.1:18745/` or `?lang=zh-TW`; stop the server when finished.
-For responsive browser verification, install `desktop/` dependencies and the
-Playwright Chromium browser, then run:
+Open `http://127.0.0.1:18745/` or `?lang=zh-TW`; stop the server afterward.
 
-```bash
-SITE_SCREENSHOT_DIR="$HOME/agent-work/artifacts/product-site-review" node scripts/verify_product_site.mjs
-```
+## Review accuracy before publishing
 
-The script owns an ephemeral loopback server with the production `/bat-agent-connector/`
-base path, closes it on exit, checks both languages at 390 / 768 / 1440px, gallery,
-keyboard / mobile navigation, persistence, no-JavaScript fallback and the 404 page.
-It saves screenshots and a JSON result for inspection; images are not test basetemps.
+- Match each feature to merged source, a labelled candidate or planned work.
+- Keep desktop client, Python central and execution host separate. A Mac/Windows
+  desktop package does not prove native PM or general coding support on that OS.
+- Keep Fleet connections/profiles/startup discoverable; PM does not replace them.
+- Describe acceptance, runtime completion, PR merge, deployment and maintenance
+  policy as separate facts with their original evidence.
+- Token collection remains planned. Do not imply a collector, automatic model
+  changes, billing data or a subscription-quota calculation exists.
+- Keep source checks, platform fixtures, owner installation and live acceptance
+  separate. Validation artifacts are not a stable signed release.
+- Preserve BAT/Project Hub attribution, manual-resource protection, original-key
+  recovery and the explicit distribution exclusions.
 
-## Publishing
+## Publish through the repository
 
-The existing GitHub Pages workflow validates a PR before deployment. A main push
-with site changes validates again and deploys `site/` through GitHub Pages. Review
-local screenshots and the source commit, then verify the live page after deployment.
-No separate hosting service or framework is required.
+The existing Pages workflow validates PRs. A main push with site changes validates
+again and deploys `site/` through GitHub Pages. Merge only the reviewed source with
+its required checks; then verify the deployed page and screenshots. A local preview,
+PR validation or successful build alone does not establish a published website.

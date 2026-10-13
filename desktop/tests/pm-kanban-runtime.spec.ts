@@ -5,13 +5,17 @@ import {workId} from './pm-kanban-fixture.ts';
 const row=(page:any)=>page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
 const editor=(page:any)=>row(page).locator(`[data-pm-action="${action}"]`);
 const detail=(page:any)=>row(page).locator('summary').first();
-const labels=(locale:string)=>locale==='en'?{heading:'Work flow',detail:'Execution and sources',check:'Check current activity',recover:'Check original request',refresh:'Refresh work flow'}:
-  {heading:'工作流',detail:'執行與來源',check:'查核目前活動',recover:'查回原請求',refresh:'重新整理工作流'};
+const labels=(locale:string)=>locale==='en'?{heading:'Work board',detail:'Execution and sources',check:'Check current activity',recover:'Check original request',refresh:'Refresh work flow'}:
+  {heading:'工作看板',detail:'執行與來源',check:'查核目前活動',recover:'查回原請求',refresh:'重新整理工作流'};
 
 for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`original completion and manual original-key recovery ${native?'Tauri':'Web'} ${locale}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),f=runtimeFixture(),l=labels(locale);
   try{
-    await mountRuntime(page,native,f);await expect(page.locator('[data-pm-kanban] h2')).toHaveText(l.heading);await detail(page).click();
+    await mountRuntime(page,native,f);await expect(page.locator('[data-pm-kanban] h2')).toHaveText(l.heading);
+    await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(5);
+    await expect(row(page)).toContainText(locale==='en'?'Original turn completion recorded':'已記錄原回合完成');
+    await expect(row(page).locator('[data-runtime-completion]')).toHaveCount(0);
+    await detail(page).click();
     await expect(row(page)).toContainText(locale==='en'?'The original execution turn completed.':'原始執行回合已完成。');
     await expect(row(page)).toContainText(locale==='en'?'DoD unassessed':'DoD 尚未評估');
     await expect(row(page)).toContainText('fixture-host/retained-managed');

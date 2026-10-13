@@ -484,6 +484,7 @@ def _activate(daemon, config, document, revision=None):
         fleet._clients = {}
         fleet.config = config
     daemon._config = config
+    daemon.usage_collector.config = config.usage
     daemon.inventory.config = config
     daemon.inventory.observation.config = config
     daemon.ops.context["github_config"] = config.github

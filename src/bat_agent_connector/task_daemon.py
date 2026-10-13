@@ -71,7 +71,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "checkpoints_list": "observe",
            "checkpoint_get": "observe", "checkpoint_preview": "observe", "integration_candidates": "observe",
            "integration_preview_get": "observe", "integration_get": "observe", "integrations_list": "observe",
-           "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
+           "pm_resources_get": "observe", "pm_workspaces_list": "observe", "pm_workspace_get": "observe", "pm_threads_list": "observe",
            "pm_thread_get": "observe", "pm_context_get": "observe", "pm_context_bundle_preview": "observe", "pm_profiles_get": "observe",
            "pm_runs_list": "observe", "pm_run_get": "observe", "pm_capabilities_get": "observe",
            "pm_spec_sources_get": "observe", "pm_spec_source_capabilities_get": "observe",
@@ -255,6 +255,9 @@ class TaskDaemon:
         self.fleet.confinement_journal = self.journal
         self.inventory.fleet.confinement_runner = self.fleet.confinement_runner
         self.inventory.fleet.confinement_journal = self.journal
+        from .usage_collector import UsageCollector
+        self.usage_collector = UsageCollector(self.journal, config.usage)
+        self.ops.context["usage_collector"] = self.usage_collector
         self.api = ApiV1(self, allowed_origins=config.api.allowed_origins)
         from . import task_cleanup
         task_cleanup.backfill(self.ops)
@@ -1150,7 +1153,7 @@ class TaskDaemon:
         if host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("task service only binds loopback")
         self.acquire_owner()
-        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = None
+        worker = pusher = reaper = operations = metadata_reads = deployment_reads = inventory = usage_reads = None
         try:
             server = await asyncio.start_server(self._handle, host, port)
             address = "[::1]" if host == "::1" else host
@@ -1163,10 +1166,11 @@ class TaskDaemon:
             metadata_reads = asyncio.create_task(self.reconcile_metadata())
             deployment_reads = asyncio.create_task(self.reconcile_deployments())
             inventory = asyncio.create_task(self.inventory.loop())
+            usage_reads = asyncio.create_task(self.usage_collector.loop())
             async with server:
                 await server.serve_forever()
         finally:
-            for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory):
+            for background in (worker, pusher, reaper, operations, metadata_reads, deployment_reads, inventory, usage_reads):
                 if background is not None:
                     background.cancel()
                     await asyncio.gather(background, return_exceptions=True)

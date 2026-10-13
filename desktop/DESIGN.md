@@ -16,7 +16,9 @@ page headings 20px and section headings 16px. Supporting orchestration text is 1
 
 Reuse `.panel` (14px padding, 10px radius, 1px border), `.capture-fields` (8px gap,
 wrapping 220px field basis), `.actions` (8px gap) and the primary/secondary/danger
-button variants (8px radius, 8px 14px padding). One primary submission per form.
+button variants (6px radius, 6px 12px padding; 36px desktop / 44px mobile height).
+Secondary buttons use neutral text and borders; reserve the action fill for the
+primary submission. One primary submission per form.
 Authenticated views use a persistent 260px project/work sidebar (230px below 1200px)
 and a flexible content area. The selected session puts conversation and reply first,
 with a 280px work/results inspector beside it at 1200px and above. Narrower screens
@@ -35,7 +37,41 @@ successful effect without central evidence. Never render agent-provided markup.
 
 ## Agent guide
 
+The owner's October 12 references prioritize a column board, compact work lists
+and readable plans. Default views show work, state and the next action. Put
+source IDs, timestamps, accounting definitions and general instructions in
+labelled disclosures. Keep actionable errors, missing permission and uncertain
+outcomes beside their controls. Do not repeat implementation caveats on every
+row or add a help sidebar. Planning sources and version comparisons expand on
+demand; a checklist is not evidence that acceptance criteria passed. Board
+columns follow central state, and content approval is not renamed delivery Done.
+
 Extract existing CSS tokens before adding UI. Use a compact selection panel and
 instruction section for a new action; use receipt links for multi-effect outcomes.
 Avoid decorative cards, oversized headings, extra primary buttons or a second font.
 Check both locales and 390/768/1440 widths with real screenshots before delivery.
+
+The October 12 visual review keeps light and dark as complete system themes.
+Public tours use light consistently across scenes. The work board sits directly
+on the page, with quiet lane surfaces and white cards, without an enclosing panel.
+PM navigation stays visible while reading a long plan on desktop. Dispatch and
+plan reading use an 820px maximum width; buttons and disclosure links should not
+compete visually with work titles.
+
+The project workbench defaults to a six-section Charter when plan and snapshot
+capabilities are present. Compact project navigation separates report reading,
+traceability, work flow and existing editing tools. Summary sequence and adopted
+plan identity remain distinct. Report sources and full plan text expand on demand.
+RTM uses an expandable table with a work inspector; source IDs wrap below titles.
+Keep requirement order, expanded rows and filters stable during source refreshes.
+Remove withdrawn source facts from rows, counts and the inspector together.
+
+Agent resources uses the same compact navigation, table and inspector. Separate
+source-reported models from requested model context, and observed tokens from current
+quota windows. Missing counters stay unknown. Source failures withdraw numbers and
+model details together. Filters and a selected inspector keep their place during
+background reads; the toolbar can pause view updates without stopping collection.
+
+The compact board retains an original-turn completion summary. Exact completion
+receipts and manual read-only observation controls remain in each card disclosure.
+Withdrawal clears board accounting and those controls in the same refresh.

@@ -176,13 +176,17 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
   const advanced = h('details', {class: 'dispatch-advanced', open: Boolean(saved.model || saved.title)},
     h('summary', {}, t('dispatch_advanced')), h('div', {class: 'capture-fields'}, label('start_title', title), label('start_model', model)));
   const shortcut = composerShortcut({h, t, input: prompt, button: apply, storageKey: `${storageKey}.shortcut`, guard});
+  if (project) advanced.append(shortcut.box,
+    h('p', {class: 'muted'}, t('pub_head_only')), h('p', {class: 'muted'}, t('pub_isolation')));
   const box = h('section', {class: 'session-start published-start', 'data-published-start': ''},
     project ? projectStatus : null,
-    h('div', {class: 'panel'}, h('div', {class: 'capture-fields'}, label('pub_binding', binding), label('pub_ref', sourceRef)), branchHelp, h('p', {class: 'muted'}, t('pub_head_only')),
+    h('div', {class: 'panel dispatch-destination'}, h('div', {class: 'capture-fields'}, label('pub_binding', binding), label('pub_ref', sourceRef)), branchHelp, !project ? h('p', {class: 'muted'}, t('pub_head_only')) : null,
       h('div', {class: 'actions'}, inspect), facts),
-    h('div', {class: 'panel'}, h('div', {class: 'capture-fields'}, label('start_agent', agent), !project ? label('start_title', title) : null,
-      !project && expanded() ? label('start_model', model) : null), models.box, label('pub_prompt', prompt), shortcut.box, project ? advanced : null, attachmentBox,
-      h('p', {class: 'muted'}, t('pub_isolation'))), h('div', {class: 'actions'}, apply, check, another), outcome, status);
+    h('div', {class: 'panel dispatch-instructions'}, label('pub_prompt', prompt),
+      h('div', {class: 'capture-fields'}, label('start_agent', agent), !project ? label('start_title', title) : null,
+      !project && expanded() ? label('start_model', model) : null), models.box,
+      !project ? shortcut.box : null, attachmentBox, project ? advanced : h('p', {class: 'muted'}, t('pub_isolation'))),
+    h('div', {class: 'actions'}, apply, check, another), outcome, status);
   function update() {
     const fixed = Boolean(saved.intent);
     if (attachmentBox) {attachmentBox.disabled = fixed || busy; attachmentBox.hidden = fixed;}
@@ -191,7 +195,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     models.update();
     if (modelHost !== saved.target?.host) {modelHost = saved.target?.host; models.refresh();}
     const validBranch = ref(selected().source_ref);
-    branchHelp.hidden = fixed;
+    branchHelp.hidden = fixed || Boolean(project && !(saved.source_ref && !validBranch));
     branchHelp.textContent = t(saved.source_ref && !validBranch ? 'pub_branch_invalid' : 'pub_branch_help');
     sourceRef.setAttribute('aria-invalid', String(Boolean(saved.source_ref && !validBranch)));
     inspect.hidden = fixed; inspect.disabled = reading || !observe() || !ready() || !projectReady() || !bound() || !validBranch;
@@ -252,7 +256,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
       const values = Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value])); fill();
       for (const [k, value] of Object.entries(values)) inputs[k].value = value;
       projectStatus.replaceChildren(h('p', {}, h('a', {href: `#/project/${project}`}, p.name)),
-        h('p', {class: 'muted'}, t(p.archived ? 'dispatch_archived' : expanded() ? 'dispatch_project_help' : 'dispatch_unsupported')));
+        p.archived || !expanded() ? h('p', {class: 'muted'}, t(p.archived ? 'dispatch_archived' : 'dispatch_unsupported')) : '');
       update();
     } catch (e) {if (current()) {projectFailed = true; projectStatus.replaceChildren(errorBox(e)); update();} throw e;}
   }

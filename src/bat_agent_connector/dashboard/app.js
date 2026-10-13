@@ -141,6 +141,2210 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/pm-workbench.js
+var selections = new Map();
+function rememberProjectView(namespace, workspaceId, id) {
+	const key = JSON.stringify([namespace, workspaceId]);
+	selections.delete(key);
+	selections.set(key, id);
+	if (selections.size > 40) selections.delete(selections.keys().next().value);
+}
+function projectViews({ h, t, namespace, workspaceId, groups, onSelect = () => {} }) {
+	const key = JSON.stringify([namespace, workspaceId]);
+	const views = groups.filter((group) => group.sections.length);
+	let selected = views.some((group) => group.id === selections.get(key)) ? selections.get(key) : "charter";
+	const buttons = new Map();
+	const element = h("nav", {
+		class: "pm-project-views",
+		"aria-label": t("wb_navigation")
+	});
+	for (const group of views) {
+		const button = h("button", {
+			type: "button",
+			class: "secondary",
+			"data-pm-view": group.id,
+			onclick: () => select(group.id)
+		}, t("wb_" + group.id));
+		buttons.set(group.id, button);
+		element.append(button);
+	}
+	function apply() {
+		for (const group of views) {
+			const current = group.id === selected;
+			buttons.get(group.id).setAttribute("aria-current", current ? "page" : "false");
+			for (const section of group.sections) section.hidden = !current;
+		}
+	}
+	function select(id) {
+		if (!buttons.has(id)) return;
+		selected = id;
+		rememberProjectView(namespace, workspaceId, id);
+		apply();
+		onSelect(id);
+	}
+	return {
+		element,
+		apply,
+		select,
+		selected: () => selected
+	};
+}
+//#endregion
+//#region src/pm-resources.js
+function workspaceResources({ h, t, api, alive, workspaceId, errorBox }) {
+	let serial = 0, active = false, busy = false, paused = false, timer = null, data = null, selected = null, signature = "";
+	const body = h("tbody"), status = h("div", { role: "status" }), count = h("p", { class: "muted" }), observed = h("p", { class: "muted" });
+	const detail = h("aside", {
+		class: "pm-rtm-detail",
+		"data-resource-detail": "",
+		hidden: true
+	});
+	const quota = h("div", { "data-resource-quota": "" });
+	const filter = h("input", {
+		type: "search",
+		"aria-label": t("res_filter"),
+		placeholder: t("res_filter"),
+		oninput: () => render(true)
+	});
+	const windowSelect = h("select", {
+		"aria-label": t("res_window"),
+		onchange: () => {
+			withdraw();
+			refresh();
+		}
+	}, ...[
+		7,
+		1,
+		30,
+		90
+	].map((days) => h("option", { value: String(days) }, t("res_days", { days }))));
+	const update = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("res_refresh"));
+	const pause = h("button", {
+		type: "button",
+		class: "secondary",
+		"aria-pressed": "false",
+		onclick: () => {
+			paused = !paused;
+			pause.textContent = t(paused ? "res_resume" : "res_pause");
+			pause.setAttribute("aria-pressed", String(paused));
+			if (paused) clearTimeout(timer);
+			else refresh();
+		}
+	}, t("res_pause"));
+	const table = h("div", {
+		class: "pm-rtm-table",
+		role: "region",
+		tabindex: "0",
+		"aria-label": t("res_title")
+	}, h("table", {}, h("thead", {}, h("tr", {}, ...[
+		"res_source",
+		"res_model",
+		"res_role",
+		"res_total",
+		"res_state"
+	].map((key) => h("th", { scope: "col" }, t(key))))), body));
+	const element = h("section", { "data-pm-resources": "" }, h("header", { class: "pm-heading" }, h("h2", {}, t("res_title")), h("div", { class: "actions" }, pause, update)), h("div", { class: "pm-workbench-toolbar" }, windowSelect, filter, count), observed, status, h("div", { class: "pm-rtm-layout" }, table, detail), h("h3", {}, t("res_quota")), quota, h("p", { class: "muted" }, t("res_forecast")), h("details", {}, h("summary", {}, t("res_coverage")), h("p", {}, t("res_local")), h("p", {}, t("res_scope")), h("p", {}, t("res_setup")), h("p", {}, t("res_quota_scope"))));
+	const number = (value) => Number.isFinite(value) ? value.toLocaleString() : t("res_unknown");
+	const time = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : t("res_unknown");
+	const metric = (value) => value?.value != null ? number(value.value) : value?.observed != null ? t("res_partial", { count: number(value.observed) }) : t("res_unknown");
+	const cli = (row) => row.adapter === "codex-rollout-v1" ? "Codex" : row.adapter === "claude-transcript-v1" ? "Claude Code" : row.adapter;
+	const stateLabel = (row) => t([
+		"current",
+		"catching_up",
+		"stale",
+		"pending"
+	].includes(row.status) ? "res_" + row.status : row.status === "source_unavailable" ? "res_unavailable" : "res_error");
+	const facts = (rows) => h("dl", { class: "pm-resource-facts" }, ...rows.flatMap(([label, value]) => [h("dt", {}, t(label)), h("dd", {}, value)]));
+	function schedule() {
+		clearTimeout(timer);
+		if (active && !paused) timer = setTimeout(() => void refresh(), Math.max(1e4, Number(data?.interval_s || 60) * 1e3));
+	}
+	function withdraw() {
+		serial++;
+		busy = false;
+		data = null;
+		signature = "";
+		selected = null;
+		update.disabled = false;
+		body.replaceChildren();
+		detail.replaceChildren();
+		detail.hidden = true;
+		quota.replaceChildren();
+		count.replaceChildren();
+		observed.replaceChildren();
+		status.replaceChildren();
+	}
+	function modelRecords(row) {
+		if (!row.configurations?.length) return [h("span", { class: "muted" }, t("res_unknown"))];
+		return (row.configurations || []).map((c) => h("div", {}, c.actual_model || c.requested_model || t("res_unknown"), h("div", { class: "muted" }, t(c.actual_model ? "res_actual" : "res_requested"))));
+	}
+	function render(force = false) {
+		if (!data) return;
+		const term = filter.value.trim().toLocaleLowerCase();
+		const visible = data.rows.filter((row) => [
+			row.source_id,
+			row.role,
+			cli(row),
+			...(row.configurations || []).flatMap((c) => [c.actual_model, c.requested_model])
+		].filter(Boolean).join(" ").toLocaleLowerCase().includes(term));
+		count.textContent = t("res_count", { count: visible.length });
+		observed.textContent = t("res_as_of", { time: time(data.as_of) });
+		if (selected && !visible.some((row) => row.source_id === selected)) selected = null;
+		const next = JSON.stringify([
+			visible.map(({ checked_at, successful_at, ...row }) => row),
+			selected,
+			data.quota_pools
+		]);
+		if (!force && next === signature) return;
+		signature = next;
+		const focused = element.contains(document.activeElement) ? document.activeElement?.getAttribute("data-resource-select") : null;
+		const detailFocus = detail.contains(document.activeElement) ? document.activeElement?.tagName === "SUMMARY" ? "summary" : "button" : null;
+		const scroll = table.scrollLeft;
+		body.replaceChildren(...visible.map((row) => h("tr", { "data-resource-row": row.source_id }, h("th", { scope: "row" }, h("button", {
+			type: "button",
+			class: "secondary",
+			"data-resource-select": row.source_id,
+			"aria-expanded": String(selected === row.source_id),
+			onclick: () => {
+				selected = row.source_id;
+				refresh();
+			}
+		}, row.source_id), h("div", { class: "muted" }, cli(row))), h("td", {}, ...modelRecords(row)), h("td", {}, row.role === "unassigned" ? t("wb_unassigned") : row.role), h("td", {}, metric(row.metrics?.total)), h("td", {}, stateLabel(row)))));
+		if (!visible.length) body.append(h("tr", {}, h("td", { colspan: 5 }, t(data.rows.length ? "res_no_match" : "res_empty"))));
+		table.scrollLeft = scroll;
+		if (focused) [...body.querySelectorAll("[data-resource-select]")].find((node) => node.getAttribute("data-resource-select") === focused)?.focus({ preventScroll: true });
+		renderDetail();
+		renderQuota(visible);
+		if (detailFocus) detail.querySelector(detailFocus)?.focus({ preventScroll: true });
+	}
+	function renderDetail() {
+		const row = data?.rows.find((value) => value.source_id === selected);
+		const open = detail.querySelector("details")?.open;
+		detail.replaceChildren();
+		detail.hidden = !row;
+		if (detail.hidden) return;
+		const close = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				const id = selected;
+				selected = null;
+				render(true);
+				[...body.querySelectorAll("[data-resource-select]")].find((node) => node.getAttribute("data-resource-select") === id)?.focus({ preventScroll: true });
+			}
+		}, t("wb_close"));
+		detail.append(h("header", { class: "pm-heading" }, h("h3", {}, row.source_id), close), facts([
+			["res_source", cli(row)],
+			["res_state", stateLabel(row)],
+			["res_observations", number(row.observations)],
+			["res_calls", number(row.calls)],
+			...[
+				"input",
+				"cache_read",
+				"cache_write",
+				"output",
+				"reasoning",
+				"total"
+			].map((key) => ["res_" + key, metric(row.metrics?.[key])])
+		]), h("p", { class: "muted" }, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")), h("h3", {}, t("res_model")), ...(row.configurations || []).map((c) => facts([
+			["res_actual", c.actual_model || t("res_unknown")],
+			["res_requested", c.requested_model || t("res_unknown")],
+			["res_effort", c.effort || t("res_unknown")],
+			["res_version", c.cli_version || t("res_unknown")]
+		])));
+		if (row.configurations_partial) detail.append(h("p", {}, t("res_configurations_more")));
+		const sources = h("details", {}, h("summary", {}, t("res_coverage")), facts([
+			["res_first", time(row.first_at)],
+			["res_last", time(row.last_at)],
+			["res_collected", time(row.successful_at)]
+		]), h("code", { class: "pm-source" }, row.adapter + " · " + row.status));
+		sources.open = Boolean(open);
+		detail.append(sources);
+	}
+	function renderQuota(visible) {
+		const pools = data.quota_pools.filter((pool) => pool.snapshot && pool.status === "reported" && pool.sources.some((id) => visible.some((row) => row.source_id === id)));
+		quota.replaceChildren();
+		if (!pools.length) {
+			quota.append(h("p", { class: "muted" }, t("res_quota_unknown")));
+			return;
+		}
+		const rows = pools.flatMap((pool) => pool.snapshot.windows.map((w) => h("tr", {}, h("th", { scope: "row" }, h("code", { class: "pm-source" }, pool.pool_id), h("div", {}, pool.limit_id), h("div", { class: "muted" }, t("res_minutes", { minutes: w.window_minutes }))), h("td", {}, number(Math.round((100 - w.used_percent) * 100) / 100) + "%"), h("td", {}, time(new Date(w.resets_at * 1e3).toISOString()), h("div", { class: "muted" }, t("res_quota_at", { time: time(pool.snapshot.observed_at) }))))));
+		quota.append(h("div", {
+			class: "pm-rtm-table",
+			tabindex: "0",
+			role: "region",
+			"aria-label": t("res_quota")
+		}, h("table", {}, h("thead", {}, h("tr", {}, ...[
+			"res_pool",
+			"res_remaining",
+			"res_reset"
+		].map((key) => h("th", { scope: "col" }, t(key))))), h("tbody", {}, ...rows))));
+	}
+	async function refresh() {
+		if (!active) return;
+		const ticket = ++serial;
+		busy = true;
+		update.disabled = true;
+		status.replaceChildren();
+		const until = new Date(), since = new Date(until.getTime() - Number(windowSelect.value) * 864e5);
+		try {
+			const result = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/resources?` + new URLSearchParams({
+				since: since.toISOString(),
+				until: until.toISOString()
+			}));
+			alive();
+			if (ticket !== serial) return;
+			if (result?.workspace_id !== workspaceId || !Array.isArray(result.rows) || !Array.isArray(result.quota_pools)) throw Error(t("pm_scope_mismatch"));
+			data = result;
+			render();
+		} catch (error) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			withdraw();
+			status.replaceChildren(errorBox(error));
+		} finally {
+			if (ticket === serial || !data) {
+				busy = false;
+				update.disabled = false;
+				schedule();
+			}
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		setActive(value) {
+			active = value;
+			clearTimeout(timer);
+			if (active) {
+				if (!busy) refresh();
+			} else {
+				serial++;
+				busy = false;
+				update.disabled = false;
+			}
+		},
+		dispose() {
+			active = false;
+			clearTimeout(timer);
+			withdraw();
+		}
+	};
+}
+//#endregion
+//#region src/pm-plan-diff-strings.js
+var planDiffStrings = {
+	en: {
+		pm_diff_title: "Compare plan versions",
+		pm_diff_intro: "Read two fixed versions and review possible effects on selected work. Existing work and its original plan stay unchanged.",
+		pm_diff_from: "From version",
+		pm_diff_to: "To version",
+		pm_diff_choose: "Choose a version",
+		pm_diff_compare: "Compare versions",
+		pm_diff_recheck: "Recheck this comparison",
+		pm_diff_loading: "Reading the fixed comparison…",
+		pm_diff_empty: "Choose both versions to see their recorded differences.",
+		pm_diff_more_versions: "More plan versions",
+		pm_diff_bindings: "Select work associations (optional)",
+		pm_diff_binding_help: "Select exact saved associations to review their possible impact. No work is selected automatically.",
+		pm_diff_load_bindings: "Read work associations",
+		pm_diff_more_bindings: "More work associations",
+		pm_diff_no_bindings: "No saved work association is available on this page.",
+		pm_diff_refresh_bindings: "Refresh work associations",
+		pm_diff_binding_count: "{count} associations selected · maximum 100",
+		pm_diff_partial: "This is a partial list. Load more to inspect additional saved entries.",
+		pm_diff_bound: "Bound plan",
+		pm_diff_no_plan: "No plan associated",
+		pm_diff_requirements: "Requirements and acceptance",
+		pm_diff_added: "Added",
+		pm_diff_removed: "Removed",
+		pm_diff_changed: "Changed",
+		pm_diff_before: "Before",
+		pm_diff_after: "After",
+		pm_diff_no_requirements: "No requirement content change is recorded.",
+		pm_diff_order: "Requirement order or membership changed.",
+		pm_diff_acceptance: "Acceptance criteria",
+		pm_diff_no_acceptance: "No acceptance criteria recorded",
+		pm_diff_priority: "Proposed priority",
+		pm_diff_dependencies: "Requirement dependencies",
+		pm_diff_source: "Original source",
+		pm_diff_sources: "Source identities and recorded statuses",
+		pm_diff_domains: "Eight management domains",
+		pm_diff_domain_same: "No recorded change",
+		pm_diff_unknown: "Unknown / not assessed",
+		pm_diff_prose: "Title and Markdown",
+		pm_diff_prose_unknown: "The text changed. Its effect on scope has not been classified; this is not progress backfill or a scope decision.",
+		pm_diff_no_prose: "Title and Markdown are unchanged.",
+		pm_diff_old_title: "Previous title",
+		pm_diff_new_title: "Compared title",
+		pm_diff_impact: "Selected work to review",
+		pm_diff_no_impact_selection: "No work associations were selected. Other work has not been scanned.",
+		pm_diff_candidate: "Review candidate",
+		pm_diff_no_identified: "No change identified · semantic impact remains unassessed",
+		pm_diff_reason_associated_requirement_changed: "An associated requirement changed.",
+		pm_diff_reason_associated_requirement_dependency_changed: "An explicitly linked requirement dependency changed.",
+		pm_diff_reason_plan_context_changed_impact_unclassified: "Plan context changed; its effect needs review.",
+		pm_diff_reason_requirement_order_or_membership_changed: "Requirement ordering or membership changed.",
+		pm_diff_reason_association_coverage_insufficient: "This saved association cannot establish the effect of this comparison.",
+		pm_diff_open_work: "Open existing work",
+		pm_diff_work_unknown: "Title and work state were not saved in this association. No current state is substituted.",
+		pm_diff_work_version: "Saved work version: {version}",
+		pm_diff_evidence: "Fixed versions and comparison record",
+		pm_diff_cursor: "Journal cursor",
+		pm_diff_no_scope_decision: "These are recorded differences, not an adopted scope change or a verification result.",
+		pm_diff_fixed: "Rechecking uses the same versions, associations and journal cursor. Change a selection to start another comparison.",
+		pm_diff_failure: "The comparison could not be read. No work was changed.",
+		pm_diff_invalid: "The response does not match the selected comparison.",
+		pm_diff_selected_source: "Source input",
+		pm_diff_confirmed_by: "Confirmed by",
+		pm_diff_not_confirmed: "No confirmer recorded",
+		pm_diff_unclassified: "Unmapped source inputs",
+		pm_diff_reading: "Reading…",
+		pm_diff_missing_versions: "No saved plan versions are available yet.",
+		pm_diff_from_digest: "Original document digest",
+		pm_diff_to_digest: "Compared document digest",
+		pm_diff_comparison_digest: "Plan comparison digest",
+		pm_diff_context_digest: "Comparison and work context digest",
+		pm_diff_from_scope_digest: "Original structured scope digest",
+		pm_diff_to_scope_digest: "Compared structured scope digest",
+		pm_diff_scope_changed: "Structured scope data differs. Its effect still needs review.",
+		pm_diff_scope_same: "Structured scope data is unchanged. Text changes still require separate review.",
+		pm_diff_scope_unknown: "Structured scope comparison is unavailable."
+	},
+	"zh-TW": {
+		pm_diff_title: "比較計畫版本",
+		pm_diff_intro: "閱讀兩個固定版本，檢視選定工作可能受到的影響。既有工作與原計畫關聯保持不變。",
+		pm_diff_from: "原版本",
+		pm_diff_to: "比較版本",
+		pm_diff_choose: "選擇版本",
+		pm_diff_compare: "比較版本",
+		pm_diff_recheck: "重查這份比較",
+		pm_diff_loading: "正在讀取固定版本差異…",
+		pm_diff_empty: "選好兩個版本，即可查看已記錄的差異。",
+		pm_diff_more_versions: "更多計畫版本",
+		pm_diff_bindings: "選擇工作關聯（選填）",
+		pm_diff_binding_help: "明確選擇已保存的關聯，再檢視可能的影響。系統不會自動選取工作。",
+		pm_diff_load_bindings: "讀取工作關聯",
+		pm_diff_more_bindings: "更多工作關聯",
+		pm_diff_no_bindings: "這一頁沒有已保存的工作關聯。",
+		pm_diff_refresh_bindings: "重新整理工作關聯",
+		pm_diff_binding_count: "已選 {count} 個關聯 · 最多 100 個",
+		pm_diff_partial: "目前是部分清單，可載入更多已保存項目。",
+		pm_diff_bound: "關聯計畫",
+		pm_diff_no_plan: "尚未關聯計畫",
+		pm_diff_requirements: "需求與接受條件",
+		pm_diff_added: "新增",
+		pm_diff_removed: "移除",
+		pm_diff_changed: "變更",
+		pm_diff_before: "原內容",
+		pm_diff_after: "新內容",
+		pm_diff_no_requirements: "沒有已記錄的需求內容變更。",
+		pm_diff_order: "需求順序或成員已有變更。",
+		pm_diff_acceptance: "接受條件",
+		pm_diff_no_acceptance: "未記錄接受條件",
+		pm_diff_priority: "建議優先順序",
+		pm_diff_dependencies: "需求依賴",
+		pm_diff_source: "原始來源",
+		pm_diff_sources: "來源身分與記錄狀態",
+		pm_diff_domains: "八個管理領域",
+		pm_diff_domain_same: "沒有已記錄的變更",
+		pm_diff_unknown: "未知／尚未評估",
+		pm_diff_prose: "標題與 Markdown",
+		pm_diff_prose_unknown: "文字已有變更，對範圍的影響尚未分類；不會因此視為成果回填或範圍決策。",
+		pm_diff_no_prose: "標題與 Markdown 沒有變更。",
+		pm_diff_old_title: "原標題",
+		pm_diff_new_title: "比較標題",
+		pm_diff_impact: "選定的待檢視工作",
+		pm_diff_no_impact_selection: "尚未選取工作關聯，也未掃描其他工作。",
+		pm_diff_candidate: "建議檢視",
+		pm_diff_no_identified: "未識別出變更 · 實際影響仍待評估",
+		pm_diff_reason_associated_requirement_changed: "已關聯的需求發生變更。",
+		pm_diff_reason_associated_requirement_dependency_changed: "明確記錄的需求依賴發生變更。",
+		pm_diff_reason_plan_context_changed_impact_unclassified: "計畫脈絡改變，影響仍需檢視。",
+		pm_diff_reason_requirement_order_or_membership_changed: "需求順序或成員改變。",
+		pm_diff_reason_association_coverage_insufficient: "這份已保存的關聯不足以判斷本次變更的影響。",
+		pm_diff_open_work: "開啟既有工作",
+		pm_diff_work_unknown: "這份關聯未保存標題與工作狀態，不會以目前資料代替歷史。",
+		pm_diff_work_version: "當時工作版本：{version}",
+		pm_diff_evidence: "固定版本與比較紀錄",
+		pm_diff_cursor: "Journal 游標",
+		pm_diff_no_scope_decision: "這裡呈現已記錄的差異，尚未採用範圍變更，也不是驗證結果。",
+		pm_diff_fixed: "重查沿用同一組版本、關聯與 journal 游標；變更選擇才會開始另一份比較。",
+		pm_diff_failure: "無法讀取比較，工作沒有變更。",
+		pm_diff_invalid: "回應與選定的比較不一致。",
+		pm_diff_selected_source: "來源輸入",
+		pm_diff_confirmed_by: "確認者",
+		pm_diff_not_confirmed: "未記錄確認者",
+		pm_diff_unclassified: "尚未歸類的來源輸入",
+		pm_diff_reading: "讀取中…",
+		pm_diff_missing_versions: "目前還沒有已保存的計畫版本。",
+		pm_diff_from_digest: "原文件摘要",
+		pm_diff_to_digest: "比較文件摘要",
+		pm_diff_comparison_digest: "計畫差異摘要",
+		pm_diff_context_digest: "差異與工作脈絡摘要",
+		pm_diff_from_scope_digest: "原結構化範圍摘要",
+		pm_diff_to_scope_digest: "比較結構化範圍摘要",
+		pm_diff_scope_changed: "結構化範圍資料已有差異，實際影響仍需檢視。",
+		pm_diff_scope_same: "結構化範圍資料相同，文字變更仍需另外檢視。",
+		pm_diff_scope_unknown: "尚無結構化範圍比較結果。"
+	}
+};
+function planDiffText(t, key, values = {}) {
+	const supplied = t(key, values);
+	if (supplied !== key) return supplied;
+	return (planDiffStrings[(navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en"][key] || key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+}
+//#endregion
+//#region src/pm-plan-diff.js
+function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
+	const text = (key, values) => planDiffText(t, key, values), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const plans = new Map(), bindings = new Map(), selected = new Set();
+	let request = 0, busy = false, cursor = null, planAfter = null, bindingAfter = null, bindingLoaded = false, bindingBusy = false;
+	const from = h("select", { "aria-label": text("pm_diff_from") }), to = h("select", { "aria-label": text("pm_diff_to") });
+	const status = h("div", { role: "status" }), result = h("div", { "data-pm-diff-result": "" });
+	const bindingRows = h("div"), selection = h("p", { class: "muted" }), bindingStatus = h("div", { role: "status" });
+	const label = (key, control) => h("label", {}, text(key), control);
+	const button = h("button", {
+		type: "button",
+		class: "secondary",
+		disabled: true,
+		onclick: () => void read()
+	}, text("pm_diff_compare"));
+	const morePlans = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => void loadPlans()
+	}, text("pm_diff_more_versions"));
+	const loadBindings = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refreshBindings(bindingAfter === null)
+	}, text("pm_diff_load_bindings"));
+	const workPicker = h("details", { "data-pm-diff-bindings": "" }, h("summary", {}, text("pm_diff_bindings")), h("p", { class: "muted" }, text("pm_diff_binding_help")), bindingStatus, bindingRows, selection, loadBindings);
+	const box = h("section", {
+		class: "pm-packages pm-plan-comparison",
+		"data-pm-plan-diff": ""
+	}, h("h3", {}, text("pm_diff_title")), h("p", { class: "muted" }, text("pm_diff_intro")), h("div", { class: "capture-fields" }, label("pm_diff_from", from), label("pm_diff_to", to)), morePlans, workPicker, h("div", { class: "actions" }, button), status, result);
+	const valid = (page) => {
+		if (page?.workspace_id !== workspaceId) throw Error(text("pm_diff_invalid"));
+		return page;
+	};
+	const raw = (value) => value === null || value === void 0 ? text("pm_diff_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value);
+	const detail = (heading, ...children) => h("details", {}, h("summary", {}, heading), ...children);
+	function controls() {
+		button.disabled = busy || !from.value || !to.value;
+		button.textContent = text(busy ? "pm_diff_reading" : cursor === null ? "pm_diff_compare" : "pm_diff_recheck");
+		selection.textContent = text("pm_diff_binding_count", { count: selected.size });
+		bindingRows.querySelectorAll("input").forEach((input) => {
+			input.disabled = selected.size >= 100 && !input.checked;
+		});
+	}
+	function changed() {
+		request++;
+		busy = false;
+		cursor = null;
+		result.replaceChildren();
+		status.replaceChildren();
+		controls();
+	}
+	from.addEventListener("change", changed);
+	to.addEventListener("change", changed);
+	workPicker.addEventListener("toggle", () => {
+		if (workPicker.open && !bindingLoaded) refreshBindings();
+	});
+	function options() {
+		for (const control of [from, to]) {
+			const old = control.value;
+			control.replaceChildren(h("option", { value: "" }, text("pm_diff_choose")), ...[...plans.values()].sort((a, b) => a.sequence - b.sequence).map((plan) => h("option", { value: plan.revision_id }, t("pm_revision_number", { number: plan.sequence }), " · ", plan.revision_id)));
+			if (plans.has(old)) control.value = old;
+		}
+		morePlans.hidden = planAfter === null;
+		if (!plans.size) status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_missing_versions")));
+		controls();
+	}
+	function update(page, workPage) {
+		valid(page);
+		for (const plan of page.revisions || []) plans.set(plan.revision_id, plan);
+		planAfter = page.next_cursor === null || page.next_cursor === void 0 ? null : Math.max(page.next_cursor, ...[...plans.values()].map((plan) => plan.sequence));
+		options();
+		if (workPage) showBindings(valid(workPage));
+	}
+	async function loadPlans() {
+		if (morePlans.disabled || planAfter === null) return;
+		morePlans.disabled = true;
+		try {
+			const page = await api("GET", `${endpoint}/plans?after=${encodeURIComponent(planAfter)}&limit=100`);
+			alive();
+			if (box.isConnected) update(page);
+		} catch (error) {
+			if (box.isConnected) status.replaceChildren(errorBox(error));
+		} finally {
+			morePlans.disabled = false;
+		}
+	}
+	function showBindings(page) {
+		bindingLoaded = true;
+		bindingAfter = page.next_cursor ?? null;
+		for (const value of page.bindings || []) bindings.set(value.binding_id, value);
+		bindingRows.replaceChildren(...[...bindings.values()].map((value) => {
+			const id = `pm-diff-${workspaceId}-${value.binding_id}`;
+			const input = h("input", {
+				id,
+				type: "checkbox",
+				checked: selected.has(value.binding_id),
+				"data-pm-diff-binding": value.binding_id,
+				onchange: () => {
+					if (input.checked) selected.add(value.binding_id);
+					else selected.delete(value.binding_id);
+					changed();
+				}
+			});
+			return h("div", { class: "pm-fact" }, h("div", { class: "pm-fact-heading" }, input, h("label", {
+				for: id,
+				class: "pm-source"
+			}, value.work_item_id)), h("p", { class: "muted pm-source" }, text("pm_diff_bound"), ": ", value.plan_revision_id || text("pm_diff_no_plan")), h("small", { class: "muted pm-source" }, value.binding_id));
+		}));
+		if (!bindings.size) bindingRows.append(h("p", { class: "muted" }, text("pm_diff_no_bindings")));
+		bindingStatus.replaceChildren(...bindingAfter !== null ? [h("p", { class: "muted" }, text("pm_diff_partial"))] : []);
+		loadBindings.hidden = false;
+		loadBindings.textContent = text(bindingAfter === null ? "pm_diff_refresh_bindings" : "pm_diff_more_bindings");
+		controls();
+	}
+	async function refreshBindings(reset = true) {
+		if (bindingBusy) return;
+		bindingBusy = true;
+		loadBindings.disabled = true;
+		try {
+			const after = reset ? null : bindingAfter;
+			const page = valid(await api("GET", `${endpoint}/work?limit=100${after === null ? "" : "&after=" + encodeURIComponent(after)}`));
+			alive();
+			if (box.isConnected) showBindings(page);
+		} catch (error) {
+			if (box.isConnected) {
+				bindingStatus.replaceChildren(errorBox(error));
+				loadBindings.hidden = false;
+			}
+		} finally {
+			bindingBusy = false;
+			loadBindings.disabled = false;
+		}
+	}
+	function source(input) {
+		return h("div", { class: "pm-fact pm-source" }, h("span", { class: "chip" }, t("pm_status_" + input.status)), h("p", { class: "pm-note-text" }, input.value), h("p", { class: "muted" }, text("pm_diff_selected_source"), ": ", input.input_id), h("p", { class: "muted" }, text("pm_diff_source"), ": ", raw(input.source_ref)), h("p", { class: "muted" }, input.confirmed_by ? text("pm_diff_confirmed_by") + ": " + input.confirmed_by : text("pm_diff_not_confirmed")));
+	}
+	function requirement(item) {
+		return h("div", { class: "pm-source" }, h("p", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_status_" + item.source_status), " · ", text("pm_diff_selected_source"), ": ", item.source_input_id), h("p", { class: "muted" }, text("pm_diff_priority"), ": ", raw(item.priority)), h("p", { class: "muted" }, text("pm_diff_dependencies"), ": ", raw(item.depends_on)), h("h4", {}, text("pm_diff_acceptance")), ...item.acceptance?.length ? item.acceptance.map((acceptance) => h("p", {}, acceptance.text, " · ", t("pm_status_" + acceptance.source_status), h("small", { class: "muted pm-source" }, " · " + acceptance.source_input_id))) : [h("p", { class: "muted" }, text("pm_diff_no_acceptance"))]);
+	}
+	function render(value) {
+		const changes = value.changes, req = changes.requirements, reqRows = [];
+		for (const kind of [
+			"added",
+			"removed",
+			"changed"
+		]) for (const item of req[kind] || []) reqRows.push(detail(text("pm_diff_" + kind) + " · " + item.id, ...kind === "changed" ? [
+			h("h4", {}, text("pm_diff_before")),
+			requirement(item.before),
+			h("h4", {}, text("pm_diff_after")),
+			requirement(item.after)
+		] : [requirement(item)]));
+		const sources = changes.sources, sourceRows = [];
+		for (const kind of [
+			"added",
+			"removed",
+			"changed",
+			"unchanged"
+		]) for (const item of sources[kind] || []) sourceRows.push(detail((kind === "unchanged" ? text("pm_diff_domain_same") : text("pm_diff_" + kind)) + " · " + item.input_id, ...kind === "changed" ? [
+			h("h4", {}, text("pm_diff_before")),
+			source(item.before),
+			h("h4", {}, text("pm_diff_after")),
+			source(item.after)
+		] : [source(item)]));
+		const domains = detail(text("pm_diff_domains"));
+		for (const [name, value] of Object.entries(changes.domains)) {
+			const row = detail(t("pm_slot_" + name) + " · " + text(value.changed ? "pm_diff_changed" : "pm_diff_domain_same"));
+			for (const side of ["before", "after"]) row.append(h("h4", {}, text("pm_diff_" + side)), ...value[side].statements?.length ? value[side].statements.map(source) : [h("p", { class: "muted" }, text("pm_diff_unknown"))]);
+			domains.append(row);
+		}
+		const prose = detail(text("pm_diff_prose"));
+		if (changes.title.changed) prose.append(h("p", {}, text("pm_diff_old_title"), ": ", changes.title.before), h("p", {}, text("pm_diff_new_title"), ": ", changes.title.after));
+		if (changes.markdown.changed || changes.title.changed) prose.append(h("p", { class: "muted" }, text("pm_diff_prose_unknown")));
+		else prose.append(h("p", { class: "muted" }, text("pm_diff_no_prose")));
+		if (changes.markdown.replacement) prose.append(h("h4", {}, text("pm_diff_removed")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.removed), h("h4", {}, text("pm_diff_added")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.added));
+		const work = h("div", {}, h("h4", {}, text("pm_diff_impact")));
+		if (!value.impact_candidates.length) work.append(h("p", { class: "muted" }, text("pm_diff_no_impact_selection")));
+		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
+		const fixed = detail(text("pm_diff_evidence"), h("p", { class: "pm-source" }, text("pm_diff_from"), ": ", value.from_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_to"), ": ", value.to_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_cursor"), ": ", value.context.journal_cursor), ...[
+			["pm_diff_from_digest", value.from_revision.document_digest],
+			["pm_diff_to_digest", value.to_revision.document_digest],
+			["pm_diff_from_scope_digest", value.from_revision.structured_scope_digest],
+			["pm_diff_to_scope_digest", value.to_revision.structured_scope_digest],
+			["pm_diff_comparison_digest", value.comparison_digest],
+			["pm_diff_context_digest", value.context_digest]
+		].map(([key, digest]) => h("p", { class: "pm-source" }, text(key), ": ", raw(digest))));
+		result.replaceChildren(h("p", { class: "muted" }, text("pm_diff_no_scope_decision")), h("p", { class: "muted" }, text(value.scope?.structured_digest_changed === true ? "pm_diff_scope_changed" : value.scope?.structured_digest_changed === false ? "pm_diff_scope_same" : "pm_diff_scope_unknown")), h("h4", {}, text("pm_diff_requirements")), ...reqRows.length ? reqRows : [h("p", { class: "muted" }, text("pm_diff_no_requirements"))], ...req.order_changed ? [h("p", { class: "muted" }, text("pm_diff_order"))] : [], domains, prose, detail(text("pm_diff_sources"), ...sourceRows, h("p", { class: "pm-source" }, text("pm_diff_unclassified"), ": ", raw(changes.unclassified_sources))), work, fixed);
+	}
+	async function read() {
+		if (busy || !from.value || !to.value) return;
+		busy = true;
+		const ticket = ++request, left = from.value, right = to.value, ids = [...selected].sort(), fixedCursor = cursor;
+		controls();
+		result.replaceChildren();
+		status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_loading")));
+		const query = new URLSearchParams({
+			from_revision_id: left,
+			to_revision_id: right
+		});
+		if (ids.length) query.set("binding_ids", ids.join(","));
+		if (fixedCursor !== null) query.set("journal_cursor", String(fixedCursor));
+		try {
+			const data = await api("GET", `${endpoint}/plan-comparison?${query}`);
+			alive();
+			if (!box.isConnected || ticket !== request) return;
+			const value = valid(data).comparison;
+			if (value?.from_revision?.revision_id !== left || value?.to_revision?.revision_id !== right || JSON.stringify(value.context?.binding_ids) !== JSON.stringify(ids) || !Array.isArray(value.impact_candidates) || value.impact_candidates.length !== ids.length || value.impact_candidates.some((candidate) => !ids.includes(candidate.binding?.binding_id) || candidate.binding?.workspace_id !== workspaceId) || new Set(value.impact_candidates.map((candidate) => candidate.binding.binding_id)).size !== ids.length || !Number.isSafeInteger(value.context?.journal_cursor) || value.context.journal_cursor < 0 || fixedCursor !== null && value.context.journal_cursor !== fixedCursor) throw Error(text("pm_diff_invalid"));
+			render(value);
+			cursor = value.context.journal_cursor;
+			status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_fixed")));
+		} catch (error) {
+			if (box.isConnected && ticket === request) {
+				result.replaceChildren();
+				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, text("pm_diff_failure")));
+			}
+		} finally {
+			if (ticket === request) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	options();
+	return {
+		box,
+		update,
+		refreshBindings
+	};
+}
+//#endregion
+//#region src/message-format.js
+var lineText = (line) => line.replace(/\r?\n$/, "");
+function tableCells(line) {
+	let text = line.trim(), cell = "", ticks = 0, separators = 0;
+	const cells = [];
+	if (text.startsWith("|")) text = text.slice(1);
+	for (let i = 0; i < text.length; i++) {
+		const char = text[i];
+		if (char === "\\" && text[i + 1] === "|") {
+			cell += "|";
+			i++;
+			continue;
+		}
+		if (char === "`") {
+			let end = i + 1;
+			while (text[end] === "`") end++;
+			const count = end - i;
+			if (!ticks) ticks = count;
+			else if (ticks === count) ticks = 0;
+			cell += text.slice(i, end);
+			i = end - 1;
+			continue;
+		}
+		if (char === "|" && !ticks) {
+			cells.push(cell.trim());
+			cell = "";
+			separators++;
+		} else cell += char;
+	}
+	if (cell || !text.endsWith("|")) cells.push(cell.trim());
+	return separators ? cells : null;
+}
+function messageBlocks(source) {
+	if (source.length > 2e5) return [{
+		kind: "text",
+		text: source
+	}];
+	const lines = source.match(/[^\n]*\n|[^\n]+$/g) || [];
+	if (lines.length > 4e3) return [{
+		kind: "text",
+		text: source
+	}];
+	const blocks = [], plain = [];
+	const flush = () => {
+		if (plain.length) blocks.push({
+			kind: "text",
+			text: plain.splice(0).join("")
+		});
+	};
+	for (let i = 0; i < lines.length;) {
+		const fence = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)$/.exec(lineText(lines[i]));
+		if (fence && !(fence[1][0] === "`" && fence[2].includes("`"))) {
+			flush();
+			const endFence = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}[ \\t]*$`);
+			const body = [];
+			i++;
+			while (i < lines.length && !endFence.test(lineText(lines[i]))) body.push(lines[i++]);
+			if (i < lines.length) i++;
+			blocks.push({
+				kind: "code",
+				language: fence[2].trim(),
+				text: body.join("")
+			});
+			continue;
+		}
+		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
+		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
+			flush();
+			const rows = [];
+			i += 2;
+			while (i < lines.length && rows.length < 100) {
+				const cells = tableCells(lineText(lines[i]));
+				if (!cells || cells.length !== header.length) break;
+				rows.push(cells);
+				i++;
+			}
+			blocks.push({
+				kind: "table",
+				header,
+				rows
+			});
+			continue;
+		}
+		plain.push(lines[i++]);
+	}
+	flush();
+	return blocks;
+}
+function inline(h, text) {
+	if (text.length > 8192) return [text];
+	const nodes = [];
+	let from = 0;
+	for (const match of text.matchAll(/`([^`\n]+)`|\*\*([^*\n]+)\*\*/g)) {
+		nodes.push(text.slice(from, match.index), h(match[1] === void 0 ? "strong" : "code", {}, match[1] ?? match[2]));
+		from = match.index + match[0].length;
+	}
+	nodes.push(text.slice(from));
+	return nodes;
+}
+function renderMessage(h, t, source, copy) {
+	return messageBlocks(source).map((block) => {
+		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
+			class: "mini",
+			type: "button",
+			onclick: () => copy(block.text)
+		}, t("message_copy_code"))), h("pre", {
+			tabindex: "0",
+			"aria-label": t("message_code")
+		}, h("code", {}, block.text)));
+		if (block.kind === "table") return h("div", {
+			class: "message-table",
+			tabindex: "0",
+			role: "region",
+			"aria-label": t("message_table")
+		}, h("table", {}, h("thead", {}, h("tr", {}, ...block.header.map((cell) => h("th", { scope: "col" }, ...inline(h, cell))))), h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((cell) => h("td", {}, ...inline(h, cell))))))));
+		return h("div", { class: "message-text" }, ...inline(h, block.text));
+	});
+}
+//#endregion
+//#region src/pm-plans.js
+function planDocument(h, markdown) {
+	const body = h("div", { class: "pm-plan-document pm-plan-reading" });
+	for (const block of messageBlocks(markdown || "")) {
+		if (block.kind === "code") {
+			body.append(h("pre", {}, h("code", {}, block.text)));
+			continue;
+		}
+		if (block.kind === "table") {
+			body.append(h("div", {
+				class: "message-table",
+				tabindex: "0"
+			}, h("table", {}, h("thead", {}, h("tr", {}, ...block.header.map((cell) => h("th", { scope: "col" }, cell)))), h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((cell) => h("td", {}, cell))))))));
+			continue;
+		}
+		let paragraph = [], list = null;
+		const flush = () => {
+			if (paragraph.length) body.append(h("p", {}, paragraph.join("\n")));
+			paragraph = [];
+		};
+		for (const line of block.text.split(/\r?\n/)) {
+			const heading = /^#{1,6}\s+(.+)$/.exec(line), bullet = /^\s*[-*+]\s+(.+)$/.exec(line);
+			if (heading) {
+				flush();
+				list = null;
+				body.append(h("h4", {}, heading[1]));
+			} else if (bullet) {
+				flush();
+				if (!list) {
+					list = h("ul");
+					body.append(list);
+				}
+				list.append(h("li", {}, bullet[1]));
+			} else if (!line.trim()) {
+				flush();
+				list = null;
+			} else {
+				list = null;
+				paragraph.push(line);
+			}
+		}
+		flush();
+	}
+	return body;
+}
+function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
+	let head = null, capability = null, signature = "", busy = false;
+	const title = input("pm_revision_title", {
+		max: 200,
+		value: thread().thread.title
+	});
+	const markdown = input("pm_revision_markdown", {
+		multiline: true,
+		max: 128e3,
+		required: false
+	});
+	const structure = h("input", {
+		type: "hidden",
+		value: "{}"
+	});
+	structure.dataset.pmDefault = "{}";
+	const editor = form({
+		action: "pm.plan.draft",
+		target: {
+			workspace_id: workspaceId,
+			thread_id: threadId
+		},
+		fields: {
+			title,
+			markdown,
+			structure
+		},
+		label: "pm_revision_save",
+		params: (values) => ({
+			title: values.title,
+			...values.markdown.trim() ? { markdown: values.markdown } : {},
+			...JSON.parse(values.structure || "{}"),
+			previous_revision_id: head.latest_revision_id
+		}),
+		preconditions: () => ({
+			expected_version: thread().thread.version,
+			expected_plan_version: head.version
+		}),
+		permitted: () => Boolean(head) && permitted(false) && thread().thread.mode === "planning",
+		onSaved: () => refresh(),
+		extra: h("div", { class: "pm-fields" }, labelled("pm_revision_title", title), labelled("pm_revision_markdown", markdown), structure, h("p", { class: "muted" }, t("pm_revision_draft_help")))
+	});
+	const draftBox = h("details", { "data-pm-revision-editor": "" }, h("summary", {}, t("pm_revision_new")), editor.box);
+	const current = h("div", { "data-pm-accepted-plan": "" }), rows = h("div", { class: "pm-revision-list" });
+	const box = h("section", {
+		class: "pm-plans",
+		"data-pm-plans": ""
+	}, h("h3", {}, t("pm_plan_versions")), current, draftBox, rows);
+	const comparison = planComparison({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	});
+	box.append(h("details", { "data-pm-plan-comparison": "" }, h("summary", {}, t("pm_compare_plans")), comparison.box));
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
+	function revisionRow(summary) {
+		const detail = h("div"), item = h("details", { "data-pm-revision": summary.revision_id }, h("summary", {}, t("pm_revision_number", { number: summary.sequence }), summary.revision_id === head.accepted_revision_id ? " · " + t("pm_plan_accepted") : ""), detail);
+		let pending = false, fetched = false;
+		item.addEventListener("toggle", async () => {
+			if (!item.open || pending || fetched) return;
+			pending = true;
+			try {
+				const data = await api("GET", `${endpoint}/${encodeURIComponent(summary.revision_id)}`);
+				alive();
+				if (!item.isConnected) return;
+				const plan = data.plan;
+				if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t("pm_scope_mismatch"));
+				const document = plan.document, source = h("div", { class: "pm-plan-domains" });
+				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, t("pm_slot_" + domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, t("pm_status_" + statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
+					statement.source_ref?.ref || statement.source_ref?.message_id,
+					statement.source_ref?.path,
+					statement.source_ref?.revision
+				].filter(Boolean).join(" · ")))), section.coverage === "unresolved" ? h("p", { class: "muted" }, t("pm_plan_domain_unknown")) : ""));
+				const titleInDocument = document.markdown?.split(/\r?\n/, 1)[0] === "# " + document.title;
+				detail.replaceChildren(titleInDocument ? "" : h("h4", {}, document.title), planDocument(h, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source));
+				if (document.requirements?.length) detail.append(h("section", { class: "pm-plan-requirements" }, h("h4", {}, t("pm_plan_acceptance")), ...document.requirements.map((requirement) => h("details", {}, h("summary", {}, requirement.text || requirement.id), h("ul", {}, ...(requirement.acceptance || []).map((criterion) => h("li", {}, criterion.text))), h("code", { class: "pm-source" }, requirement.id)))));
+				if (plan.adoption) detail.append(h("p", {}, t("pm_plan_adoption_evidence", { actor: plan.adoption.adopted_by }), h("code", {}, plan.adoption.commit_sha)), h("p", { class: "pm-note-text" }, plan.adoption.rationale));
+				if (plan.thread_id === threadId) detail.append(h("button", {
+					type: "button",
+					class: "secondary",
+					disabled: editor.locked() || !permitted(false),
+					onclick: () => {
+						if (editor.locked() || !permitted(false)) return;
+						editor.set("title", document.title);
+						editor.set("markdown", document.markdown);
+						editor.set("structure", JSON.stringify({
+							sections: Object.fromEntries(Object.entries(document.sections || {}).map(([key, value]) => [key, value.source_input_ids])),
+							requirements: (document.requirements || []).map((requirement) => ({
+								id: requirement.id,
+								source_input_id: requirement.source_input_id,
+								acceptance_input_ids: requirement.acceptance.map((value) => value.source_input_id),
+								priority: requirement.priority,
+								depends_on: requirement.depends_on
+							}))
+						}));
+						draftBox.open = true;
+						markdown.focus();
+					}
+				}, t("pm_revision_edit")));
+				if (permitted(true)) {
+					const rationale = input("pm_adopt_rationale", {
+						multiline: true,
+						max: 8e3
+					});
+					const baseline = data.head.accepted_revision_id;
+					let adopt, adoption;
+					adopt = form({
+						action: "pm.plan.adopt",
+						target: {
+							workspace_id: workspaceId,
+							revision_id: plan.revision_id
+						},
+						fields: { rationale },
+						params: (values) => ({ rationale: values.rationale }),
+						preconditions: () => ({ expected_accepted_revision_id: baseline }),
+						permitted: () => !plan.is_current_accepted && permitted(true) && capability?.plan_adoption_available === true && head.accepted_revision_id === baseline && plan.base_accepted_revision_id === baseline,
+						recoverPermitted: () => permitted(true),
+						label: "pm_adopt_revision",
+						onSaved: () => refresh(),
+						onStateChange: () => {
+							if (adopt) {
+								adopt.box.hidden = plan.is_current_accepted && !adopt.locked();
+								if (adoption) {
+									adoption.hidden = adopt.box.hidden;
+									if (adopt.locked()) adoption.open = true;
+								}
+							}
+						},
+						extra: h("div", {}, labelled("pm_adopt_rationale", rationale), h("p", { class: "muted" }, t(plan.base_accepted_revision_id !== baseline ? "pm_plan_baseline_changed" : capability?.plan_adoption_available ? "pm_adopt_help" : "pm_plan_worktree_required")))
+					});
+					adoption = h("details", {
+						"data-pm-plan-adopt": "",
+						open: adopt.locked()
+					}, h("summary", {}, t("pm_adopt_revision")), adopt.box);
+					detail.append(adoption);
+					adopt.update();
+				}
+				fetched = true;
+			} catch (error) {
+				if (item.isConnected) detail.replaceChildren(errorBox(error));
+			} finally {
+				pending = false;
+			}
+		});
+		return item;
+	}
+	function renderRows(page, append = false) {
+		if (!append) rows.replaceChildren();
+		rows.append(...(page.revisions || []).map(revisionRow));
+		if (!rows.children.length) rows.append(h("p", { class: "muted" }, t("pm_plan_no_revisions")));
+		if (page.next_cursor !== null && page.next_cursor !== void 0) {
+			const more = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: async () => {
+					if (busy) return;
+					busy = true;
+					more.disabled = true;
+					try {
+						const next = await api("GET", `${endpoint}?after=${page.next_cursor}&limit=20`);
+						alive();
+						if (next.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+						if (!more.isConnected) return;
+						more.remove();
+						renderRows(next, true);
+					} catch (error) {
+						if (more.isConnected) more.after(errorBox(error));
+					} finally {
+						busy = false;
+						more.disabled = false;
+					}
+				}
+			}, t("pm_plan_more"));
+			rows.append(more);
+		}
+	}
+	return {
+		box,
+		update(page, accepted, capabilities) {
+			if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("pm_stale"));
+			head = page.head;
+			capability = capabilities;
+			comparison.update(page);
+			draftBox.hidden = thread().thread.mode !== "planning" && !editor.locked();
+			const nextSignature = JSON.stringify([
+				page,
+				accepted,
+				capabilities
+			]);
+			if (signature !== nextSignature) {
+				signature = nextSignature;
+				current.replaceChildren(h("p", {}, h("strong", {}, accepted.plan ? accepted.plan.document.title : t("pm_plan_none_accepted"))));
+				if (accepted.plan) current.append(h("p", { class: "muted" }, t("pm_plan_accepted"), " · ", h("code", {}, accepted.plan.adoption.commit_sha)));
+				renderRows(page);
+			}
+			editor.update();
+		}
+	};
+}
+var init_tslib_es6 = __esmMin((() => {}));
+async function invoke(cmd, args = {}, options) {
+	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
+}
+function isTauri() {
+	return !!(globalThis || window).isTauri;
+}
+var init_core = __esmMin((() => {
+	init_tslib_es6();
+}));
+//#endregion
+//#region src/transport/index.ts
+async function restoreBrowserSession() {
+	if (nativeDesktop) return false;
+	const response = await fetch("/api/v1/browser-session", {
+		credentials: "same-origin",
+		mode: "same-origin",
+		cache: "no-store",
+		redirect: "error"
+	});
+	if (!response.ok) return false;
+	const data = await response.json();
+	if (typeof data.csrf !== "string" || data.csrf.length < 32) return false;
+	browserCsrf = data.csrf;
+	return true;
+}
+function browserAuthHeaders(token) {
+	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
+	if (!browserCsrf) throw new Error("Browser session needs to be restored");
+	return { "X-Batc-CSRF": browserCsrf };
+}
+function forgetBrowserSession() {
+	if (!browserCsrf) return;
+	const headers = {
+		...browserAuthHeaders(browserSessionToken),
+		"Content-Type": "application/json"
+	};
+	browserCsrf = null;
+	return fetch("/api/v1/browser-session/logout", {
+		method: "POST",
+		credentials: "same-origin",
+		mode: "same-origin",
+		redirect: "error",
+		headers,
+		body: "{}"
+	});
+}
+async function nativeStatus() {
+	const status = await invoke("native_status");
+	nativeFileSupport = status.file_transfers === true;
+	nativeBriefExportSupport = status.brief_exports === true;
+	return status;
+}
+async function connectorRequest(method, path, body, key, browserToken) {
+	if (nativeDesktop) return invoke("connector_request", { input: {
+		method,
+		path,
+		body: body ?? null,
+		idempotency_key: key ?? null
+	} });
+	const headers = browserAuthHeaders(browserToken);
+	if (body !== void 0) headers["Content-Type"] = "application/json";
+	if (key) headers["Idempotency-Key"] = key;
+	const res = await fetch(`/api/v1${path}`, {
+		method,
+		headers,
+		credentials: "same-origin",
+		redirect: "error",
+		body: body === void 0 ? void 0 : JSON.stringify(body)
+	});
+	return {
+		status: res.status,
+		data: await res.json().catch(() => ({}))
+	};
+}
+async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
+	if (nativeDesktop) {
+		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
+		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
+	}
+	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
+		method: "POST",
+		redirect: "error",
+		credentials: "same-origin",
+		headers: {
+			...browserAuthHeaders(browserToken),
+			"Content-Type": "application/octet-stream"
+		},
+		body: bytes
+	});
+	return {
+		status: res.status,
+		data: await res.json().catch(() => ({}))
+	};
+}
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var init_transport = __esmMin((() => {
+	init_core();
+	nativeDesktop = isTauri();
+	nativeFileSupport = false;
+	nativeBriefExportSupport = false;
+	browserSessionToken = "managed-browser-session";
+	browserCsrf = null;
+	nativeFilesStatus = () => invoke("native_files_status");
+	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
+	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
+	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
+		draftId,
+		enabled
+	});
+	nativeFilesControl = (transferId, action) => invoke("native_files_control", {
+		transferId,
+		action
+	});
+	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
+	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
+	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
+	nativeConnect = () => invoke("connector_connect");
+	managedControl = (input) => invoke("managed_control", { input });
+	nativeDisconnect = () => invoke("connector_disconnect");
+	nativeEnroll = () => invoke("connector_enroll", { locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US" });
+	nativeReloadConfiguration = () => invoke("connector_reload_configuration");
+	nativeSetupConfiguration = (config) => invoke("connector_setup_configuration", {
+		config,
+		locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
+	});
+	nativeForgetCredential = () => invoke("connector_forget_credential");
+	openExternal = (url) => invoke("open_external", { url });
+	fleetAvailability = () => invoke("fleet_availability");
+	fleetBootstrap = (input) => invoke("fleet_bootstrap", { input });
+	tailscaleControl = (input) => invoke("tailscale_control", { input });
+	fleetControl = (input) => invoke("fleet_control", { input });
+	fleetRequest = (input) => invoke("fleet_request", { input });
+	updateRequest = (input) => invoke("desktop_update", { input });
+}));
+//#endregion
+//#region src/pm-brief-export.js
+init_transport();
+function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, onUnavailable, errorBox }) {
+	const actor = caps()?.actor, formats = {
+		markdown: ["md", "text/markdown; charset=utf-8"],
+		html: ["html", "text/html; charset=utf-8"],
+		svg: ["svg", "image/svg+xml; charset=utf-8"]
+	};
+	let busy = false, selection = "", pendingReceipt = null;
+	const format = h("select", { "aria-label": t("pm_export_format") }, ...Object.keys(formats).map((key) => h("option", { value: key }, key === "markdown" ? "Markdown" : key.toUpperCase())));
+	const locale = h("select", { "aria-label": t("pm_export_language") }, h("option", { value: "en" }, "English"), h("option", { value: "zh-TW" }, "繁體中文"));
+	locale.value = navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+	const status = h("div", { role: "status" }), note = h("p", { class: "muted" }, t("pm_export_help"));
+	const button = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void save()
+	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
+	const element = h("details", { "data-pm-brief-export": "" }, h("summary", {}, t("pm_export_title")), note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status);
+	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
+	const identity = () => JSON.stringify([
+		snapshot()?.snapshot_id,
+		snapshot()?.snapshot_digest,
+		snapshot()?.view_digest
+	]);
+	function update() {
+		const next = identity();
+		if (selection !== next) {
+			selection = next;
+			status.replaceChildren();
+		}
+		element.hidden = !snapshot();
+		button.disabled = busy || !allowed();
+		format.disabled = locale.disabled = busy;
+		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
+		if (pendingReceipt && caps()?.actor === actor) {
+			if (pendingReceipt.error) {
+				status.replaceChildren(errorBox(pendingReceipt.error));
+				return;
+			}
+			const value = pendingReceipt.receipt;
+			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? `${t("pm_export_saved")}: ${value.display_name}` : t("pm_export_prior_saved")));
+		}
+	}
+	function live(expected) {
+		alive();
+		if (caps()?.actor !== actor || !allowed() || identity() !== expected) throw Object.assign(Error(t("pm_export_changed")), { code: "PM_EXPORT_VIEW_CHANGED" });
+	}
+	async function save() {
+		if (busy || !allowed()) return;
+		busy = true;
+		pendingReceipt = null;
+		update();
+		const expected = identity(), source = snapshot(), kind = format.value, language = locale.value;
+		let nativeSaveStarted = false;
+		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
+		try {
+			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
+			live(expected);
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.deviations?.version === 1 ? 4 : source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			const bytes = new TextEncoder().encode(report.content);
+			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
+			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
+			live(expected);
+			if (digest !== report.output_digest) throw Error(t("pm_export_changed"));
+			if (nativeDesktop) {
+				nativeSaveStarted = true;
+				const receipt = await nativeBriefSave({
+					workspace_id: workspaceId,
+					snapshot_id: source.snapshot_id,
+					format: kind,
+					locale: language,
+					expected_view_digest: report.view_digest,
+					expected_output_digest: report.output_digest
+				});
+				alive();
+				if (caps()?.actor !== actor) return;
+				if (receipt !== null && (receipt?.stage !== "saved" || receipt.workspace_id !== workspaceId || receipt.snapshot_id !== source.snapshot_id || receipt.format !== kind || receipt.locale !== language || receipt.view_digest !== report.view_digest || receipt.output_digest !== digest || receipt.byte_length !== bytes.length || typeof receipt.display_name !== "string")) throw Error(t("pm_export_changed"));
+				pendingReceipt = {
+					expected,
+					receipt
+				};
+				update();
+			} else {
+				const url = URL.createObjectURL(new Blob([bytes], { type: report.media_type }));
+				try {
+					const link = document.createElement("a");
+					link.href = url;
+					link.download = `pm-brief-${source.snapshot_id}-${language}.${formats[kind][0]}`;
+					link.click();
+				} finally {
+					setTimeout(() => URL.revokeObjectURL(url), 1e3);
+				}
+				status.replaceChildren(h("p", { class: "muted" }, t("pm_export_requested")));
+			}
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (caps()?.actor !== actor) return;
+			const code = String(error?.code || error?.message || error);
+			const key = Object.entries({
+				BRIEF_EXPORT_CHANGED: "pm_export_changed",
+				BRIEF_EXPORT_UNAVAILABLE: "pm_export_unavailable",
+				BRIEF_EXPORT_SAVE_INTERRUPTED: "pm_export_interrupted",
+				DESTINATION_EXISTS: "pm_export_exists",
+				DESTINATION_UNAVAILABLE: "pm_export_destination"
+			}).find(([prefix]) => code.includes(prefix))?.[1];
+			const rendered = key ? Error(t(key)) : error;
+			if (nativeSaveStarted && [
+				"pm_export_exists",
+				"pm_export_destination",
+				"pm_export_interrupted"
+			].includes(key)) {
+				pendingReceipt = {
+					expected,
+					error: rendered
+				};
+				update();
+				return;
+			}
+			if (identity() !== expected) return;
+			onUnavailable(rendered);
+			status.replaceChildren(errorBox(rendered));
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	format.addEventListener("change", update);
+	locale.addEventListener("change", update);
+	update();
+	return {
+		element,
+		update
+	};
+}
+//#endregion
+//#region src/pm-charter.js
+var sections = [
+	"definition",
+	"scope",
+	"schedule",
+	"resources",
+	"risks",
+	"decisions"
+];
+function charterSections(snapshot) {
+	const document = snapshot?.baseline?.document;
+	const statements = (...domains) => domains.flatMap((domain) => (document?.sections?.[domain]?.statements || []).map((row) => ({
+		text: row.value,
+		status: row.status,
+		source: row.source_ref,
+		input_id: row.input_id
+	})));
+	const items = (key) => (snapshot?.brief?.[key]?.items || []).map((row) => ({
+		text: row.text,
+		status: row.status,
+		source: row.source,
+		details: row.details
+	}));
+	return {
+		definition: statements("governance", "stakeholders", "quality"),
+		scope: statements("scope"),
+		schedule: [...statements("schedule"), ...items("delivery")],
+		resources: statements("resources", "finance"),
+		risks: [...statements("risk"), ...items("blockers")],
+		decisions: items("decisions").filter((row) => row.source?.kind !== "plan_adoption")
+	};
+}
+function workspaceCharter({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let serial = 0, head = null, snapshot = null, selectedId = null, latestId = null, history = [], cursor = null, busy = false;
+	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
+	const title = input("pm_brief_snapshot_title", {
+		max: 160,
+		required: false
+	});
+	const create = form({
+		action: "pm.snapshot.create",
+		target: { workspace_id: workspaceId },
+		fields: { title },
+		params: (values) => values.title.trim() ? { title: values.title.trim() } : {},
+		preconditions: () => ({ expected_plan_version: head.version }),
+		permitted: () => Boolean(head) && !busy && permitted(false),
+		recoverPermitted: () => permitted(false),
+		label: "pm_brief_create",
+		onSaved: (result) => refresh(result.snapshot_id),
+		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
+	});
+	const previous = h("button", {
+		type: "button",
+		class: "secondary",
+		"aria-label": t("wb_previous"),
+		onclick: () => move(-1)
+	}, "←");
+	const next = h("button", {
+		type: "button",
+		class: "secondary",
+		"aria-label": t("wb_next"),
+		onclick: () => move(1)
+	}, "→");
+	const picker = h("select", {
+		"aria-label": t("wb_history"),
+		onchange: () => void select(picker.value)
+	});
+	const compare = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void comparePrevious()
+	}, t("wb_compare"));
+	const more = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void loadMore()
+	}, t("wb_history_more"));
+	const print = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => window.print()
+	}, t("wb_print"));
+	const box = h("section", {
+		class: "pm-charter",
+		"data-pm-charter": ""
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), h("button", {
+		type: "button",
+		class: "primary",
+		onclick: () => onDiscuss(snapshot)
+	}, t("wb_discuss"))), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print), status, report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
+	const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		snapshot: () => snapshot,
+		readable: canRead,
+		onUnavailable: (error) => {
+			withdraw();
+			status.replaceChildren(errorBox(error));
+		},
+		errorBox
+	}) : null;
+	if (exports) box.append(exports.element);
+	const stamp = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("wb_unknown");
+	const check = (data) => {
+		if (data?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return data;
+	};
+	function checkedSnapshot(data, id) {
+		const value = check(data).snapshot;
+		if (id && !value) throw Error(t("pm_scope_mismatch"));
+		if (value && (value.workspace_id !== workspaceId || !/^pmsnap_[0-9a-f]{32}$/.test(value.snapshot_id) || !Number.isSafeInteger(value.sequence) || id && value.snapshot_id !== id)) throw Error(t("pm_scope_mismatch"));
+		return value;
+	}
+	function controls() {
+		const index = history.findIndex((row) => row.snapshot_id === selectedId);
+		previous.disabled = busy || index <= 0;
+		next.disabled = busy || index < 0 || index >= history.length - 1;
+		compare.disabled = previous.disabled;
+		picker.disabled = busy || !history.length;
+		print.disabled = busy || !snapshot;
+		more.hidden = cursor === null;
+		more.disabled = busy;
+		create.update();
+		exports?.update();
+	}
+	function historyOptions() {
+		picker.replaceChildren(...history.map((row) => h("option", { value: row.snapshot_id }, `${t("wb_snapshot", { number: row.sequence })} · ${stamp(row.as_of)}`)));
+		if (snapshot && !history.some((row) => row.snapshot_id === selectedId)) picker.append(h("option", { value: selectedId }, t("wb_snapshot", { number: snapshot.sequence })));
+		picker.value = selectedId || "";
+		controls();
+	}
+	function renderItems(rows, empty = "wb_unknown") {
+		if (!rows.length) return h("p", { class: "muted" }, t(empty));
+		return h("div", {}, h("ul", { class: "pm-charter-items" }, ...rows.map((row) => h("li", {}, h("span", {}, row.text), [
+			"agent_assumption",
+			"unresolved",
+			"conflicting",
+			"repo_evidence"
+		].includes(row.status) ? h("span", { class: "chip" }, t("pm_status_" + row.status)) : ""))), h("details", { class: "pm-charter-source" }, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))));
+	}
+	function render() {
+		report.replaceChildren();
+		comparison.replaceChildren();
+		if (!snapshot) {
+			report.append(h("p", {}, t("wb_no_snapshot")));
+			historyOptions();
+			return;
+		}
+		const document = snapshot.baseline?.document, groups = charterSections(snapshot);
+		report.append(h("div", { class: "pm-charter-meta" }, h("strong", {}, snapshot.title), h("span", {}, t("wb_snapshot", { number: snapshot.sequence })), h("span", { class: "chip" }, t(snapshot.snapshot_id === latestId ? "wb_saved" : "wb_historical")), h("span", {}, t("pm_brief_as_of", { time: stamp(snapshot.as_of) }))), h("p", { class: "pm-charter-plan-ref" }, t("wb_plan"), ": ", document?.title || t("wb_no_plan")));
+		const grid = h("div", { class: "pm-charter-grid" });
+		for (const key of sections) grid.append(h("section", { "data-charter-section": key }, h("h3", {}, t("wb_" + key)), renderItems(groups[key], key === "decisions" ? "wb_no_decisions" : "wb_unknown"), key === "resources" ? h("p", { class: "muted" }, t("wb_quota")) : ""));
+		report.append(grid);
+		if (document) report.append(h("details", { "data-charter-plan": "" }, h("summary", {}, t("wb_full_plan")), planDocument(h, document.markdown), h("ul", {}, ...(document.requirements || []).map((row) => h("li", {}, row.text, h("ul", {}, ...(row.acceptance || []).map((item) => h("li", {}, item.text)))))), h("code", { class: "pm-source" }, snapshot.baseline.document_revision)));
+		report.append(h("details", { class: "pm-charter-trace" }, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			snapshot_id: snapshot.snapshot_id,
+			as_of: snapshot.as_of,
+			plan_revision: snapshot.baseline?.document_revision,
+			adoption: snapshot.baseline?.adoption,
+			candidate: snapshot.candidate_document,
+			coverage: snapshot.coverage,
+			visibility: snapshot.visibility,
+			snapshot_digest: snapshot.snapshot_digest,
+			view_digest: snapshot.view_digest
+		}, null, 2))));
+		if (snapshot.visibility?.restricted || snapshot.visibility?.filtered || Object.entries(snapshot.coverage || {}).some(([key, value]) => key.endsWith("_truncated") && value)) status.append(h("p", { class: "muted" }, t("wb_partial")));
+		if (cursor !== null) status.append(h("p", { class: "muted" }, t("wb_partial_history")));
+		historyOptions();
+	}
+	function withdraw() {
+		serial++;
+		head = null;
+		snapshot = null;
+		history = [];
+		cursor = null;
+		busy = false;
+		report.replaceChildren();
+		comparison.replaceChildren();
+		picker.replaceChildren();
+		status.replaceChildren();
+		controls();
+	}
+	function failed(error, ticket) {
+		try {
+			alive();
+			if (ticket !== serial) return;
+		} catch {
+			return;
+		}
+		withdraw();
+		status.replaceChildren(errorBox(error));
+	}
+	function acceptHistory(data, after, append = false) {
+		check(data);
+		if (!Array.isArray(data.snapshots) || data.next_cursor != null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pm_scope_mismatch"));
+		let last = after;
+		for (const row of data.snapshots) {
+			if (!/^pmsnap_[0-9a-f]{32}$/.test(row.snapshot_id) || !Number.isSafeInteger(row.sequence) || row.sequence <= last) throw Error(t("pm_scope_mismatch"));
+			last = row.sequence;
+		}
+		if (data.next_cursor != null && data.next_cursor < last) throw Error(t("pm_scope_mismatch"));
+		history = append ? [...history, ...data.snapshots] : data.snapshots;
+		cursor = data.next_cursor ?? null;
+	}
+	async function refresh(id = null) {
+		const chosen = id || selectedId, ticket = ++serial;
+		busy = true;
+		head = null;
+		controls();
+		const previous = JSON.stringify([
+			snapshot,
+			latestId,
+			cursor
+		]);
+		comparison.replaceChildren();
+		try {
+			const [data, page, current] = await Promise.all([
+				api("GET", `${endpoint}/snapshots/${chosen || "latest"}`),
+				api("GET", `${endpoint}/snapshots?limit=100`),
+				api("GET", `${endpoint}/plans/head`)
+			]);
+			alive();
+			if (ticket !== serial) return;
+			if (current.head?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			snapshot = checkedSnapshot(data, chosen);
+			head = current.head;
+			acceptHistory(page, 0);
+			selectedId = snapshot?.snapshot_id || null;
+			if (!chosen) latestId = selectedId;
+			if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
+			if (!report.childElementCount || previous !== JSON.stringify([
+				snapshot,
+				latestId,
+				cursor
+			])) {
+				status.replaceChildren();
+				render();
+			} else historyOptions();
+		} catch (error) {
+			failed(error, ticket);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	async function select(id) {
+		if (busy || !history.some((row) => row.snapshot_id === id)) return;
+		const ticket = ++serial;
+		busy = true;
+		selectedId = id;
+		snapshot = null;
+		report.replaceChildren();
+		comparison.replaceChildren();
+		controls();
+		try {
+			const data = await api("GET", `${endpoint}/snapshots/${id}`);
+			alive();
+			if (ticket !== serial) return;
+			snapshot = checkedSnapshot(data, id);
+			status.replaceChildren();
+			render();
+		} catch (error) {
+			failed(error, ticket);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	function move(delta) {
+		const index = history.findIndex((row) => row.snapshot_id === selectedId);
+		if (index >= 0 && history[index + delta]) select(history[index + delta].snapshot_id);
+	}
+	async function loadMore() {
+		if (busy || cursor === null) return;
+		const ticket = ++serial, after = cursor;
+		busy = true;
+		controls();
+		try {
+			const page = await api("GET", `${endpoint}/snapshots?after=${after}&limit=100`);
+			alive();
+			if (ticket !== serial) return;
+			acceptHistory(page, after, true);
+			if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
+			historyOptions();
+		} catch (error) {
+			failed(error, ticket);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	async function comparePrevious() {
+		const index = history.findIndex((row) => row.snapshot_id === selectedId);
+		if (busy || index <= 0) return;
+		const id = selectedId, prior = history[index - 1].snapshot_id, ticket = ++serial;
+		busy = true;
+		controls();
+		comparison.replaceChildren();
+		try {
+			const [a, b] = await Promise.all([api("GET", `${endpoint}/snapshots/${prior}`), api("GET", `${endpoint}/snapshots/${id}`)]);
+			alive();
+			if (ticket !== serial) return;
+			const before = checkedSnapshot(a, prior);
+			snapshot = checkedSnapshot(b, id);
+			status.replaceChildren();
+			render();
+			const left = charterSections(before), right = charterSections(snapshot);
+			const changes = sections.filter((key) => JSON.stringify(left[key]) !== JSON.stringify(right[key]));
+			comparison.append(h("h3", {}, t("wb_comparison")), changes.length ? h("div", { class: "pm-charter-comparison" }, ...changes.map((key) => h("section", {}, h("h4", {}, t("wb_" + key)), h("div", { class: "pm-charter-grid" }, h("div", {}, h("strong", {}, t("wb_before")), renderItems(left[key])), h("div", {}, h("strong", {}, t("wb_after")), renderItems(right[key])))))) : h("p", {}, t("wb_unchanged")));
+		} catch (error) {
+			failed(error, ticket);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	controls();
+	return {
+		box,
+		refresh,
+		withdraw
+	};
+}
+//#endregion
+//#region src/pm-quality-projections.js
+function qualityFact({ h, t, fact, current = false }) {
+	if (!fact) return "";
+	const label = (value) => t("pq_" + ([
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	].includes(value) ? value : "unassessed"));
+	const reference = fact.reference || fact.selected_assessment?.reference;
+	return h("div", {
+		"data-pm-quality-fact": "",
+		class: "pm-note-text"
+	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
+}
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, requireQualified = true, errorBox }) {
+	let editor = null, pending = false;
+	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
+	const read = () => {
+		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
+		return multiple ? value[workItemId] : value;
+	};
+	function write(value) {
+		if (!editor || editor.locked()) return;
+		const values = multiple ? JSON.parse(field.value || "{}") : null;
+		if (multiple) {
+			if (value) values[workItemId] = value;
+			else delete values[workItemId];
+		}
+		field.value = JSON.stringify(multiple ? values : value);
+		editor.changed();
+		update();
+	}
+	const use = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: async () => {
+			if (!editor || editor.locked() || pending) return;
+			const selected = readSelection(workItemId);
+			if (!selected) {
+				status.replaceChildren(h("p", {}, t("pq_choose_help")));
+				return;
+			}
+			pending = true;
+			update();
+			status.replaceChildren();
+			try {
+				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
+				alive();
+				if (!element.isConnected || editor.locked()) return;
+				const row = data.review, context = row?.context, assessment = row?.assessment;
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || (requireQualified ? row.qualified !== true : row.applicable !== true) || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+					"operation_id",
+					"version",
+					"document_digest"
+				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
+				write(selected);
+			} catch (error) {
+				if (element.isConnected) status.replaceChildren(errorBox(error));
+			} finally {
+				pending = false;
+				update();
+			}
+		}
+	}, t("pq_include"));
+	const clear = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => write(null)
+	}, t("pq_clear"));
+	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
+	function update() {
+		const reference = read();
+		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
+		use.disabled = !editor || editor.locked() || pending;
+		clear.disabled = !editor || editor.locked() || pending || !reference;
+	}
+	update();
+	return {
+		element,
+		update,
+		attach: (value) => {
+			editor = value;
+			update();
+		}
+	};
+}
+//#endregion
+//#region src/pm-traceability.js
+function requirementReviews(plan, requirement, reviews) {
+	const ids = (requirement.acceptance || []).map((row) => row.source_input_id);
+	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
+	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
+}
+function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
+	let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", renderedDetail = "", deliveryPages = 1;
+	const pages = {
+		work: 1,
+		issues: 1,
+		reviews: 1
+	}, cursors = {}, expanded = new Set(), order = [];
+	const status = h("div", { role: "status" }), count = h("p", { class: "muted" }), tableBody = h("tbody");
+	const filter = h("input", {
+		type: "search",
+		"aria-label": t("wb_filter"),
+		placeholder: t("wb_filter"),
+		oninput: () => renderTable()
+	});
+	const detail = h("aside", {
+		class: "pm-rtm-detail",
+		"data-rtm-detail": "",
+		hidden: true
+	});
+	const refreshButton = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void refresh()
+	}, t("wb_apply_update"));
+	const moreButtons = Object.fromEntries([
+		"work",
+		"issues",
+		"reviews"
+	].map((kind) => [kind, h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			pages[kind]++;
+			refresh();
+		}
+	}, t(kind === "work" ? "wb_more" : kind === "issues" ? "wb_more_issues" : "wb_more_reviews"))]));
+	const table = h("div", {
+		class: "pm-rtm-table",
+		tabindex: "0",
+		role: "region",
+		"aria-label": t("wb_rtm")
+	}, h("table", {}, h("thead", {}, h("tr", {}, ...[
+		"wb_requirements",
+		"wb_milestone",
+		"wb_work",
+		"wb_acceptance"
+	].map((key) => h("th", { scope: "col" }, t(key))))), tableBody));
+	const element = h("section", { "data-pm-rtm": "" }, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_rtm")), refreshButton), h("div", { class: "pm-workbench-toolbar" }, filter, count), status, h("div", { class: "pm-rtm-layout" }, table, detail), h("div", { class: "actions" }, ...Object.values(moreButtons)), h("details", {}, h("summary", {}, t("wb_sources")), h("p", {}, t("wb_acceptance_separate")), h("p", {}, t("wb_no_phase"))));
+	const scope = (data) => {
+		if (data?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return data;
+	};
+	const label = (prefix, value) => {
+		if (!value) return t("wb_unknown");
+		const key = prefix + value;
+		return t(key) === key ? String(value).replaceAll("_", " ") : t(key);
+	};
+	const code = (value) => h("code", { class: "pm-source" }, value || t("wb_unknown"));
+	const time = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("wb_unknown");
+	const feature = (name) => caps()?.features?.pm_workspaces?.[name];
+	const cardCheck = (row, id = row?.work_item_id) => {
+		if (!/^wi_[0-9a-f]{20}$/.test(id || "") || row?.work_item_id !== id || row.work?.work_item_id !== id || row.binding?.workspace_id !== workspaceId || row.binding.work_item_id !== id || !/^pmwb_[0-9a-f]{32}$/.test(row.binding.binding_id)) throw Error(t("pm_scope_mismatch"));
+		return row;
+	};
+	const issuesFor = (card) => issues.filter((row) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
+	const detailSignature = () => JSON.stringify([
+		detailCard && [
+			detailCard.work.title,
+			detailCard.column,
+			detailCard.binding,
+			detailCard.quality,
+			detailCard.execution,
+			detailCard.latest_capture,
+			issuesFor(detailCard)
+		],
+		plan?.revision_id,
+		plan?.adoption,
+		deliveryRows,
+		deliveryCursor
+	]);
+	function controls() {
+		refreshButton.disabled = busy;
+		for (const [kind, button] of Object.entries(moreButtons)) {
+			button.disabled = busy;
+			button.hidden = cursors[kind] == null;
+		}
+	}
+	function withdraw() {
+		serial++;
+		detailSerial++;
+		busy = false;
+		plan = null;
+		cards = [];
+		issues = [];
+		reviews = [];
+		milestones = [];
+		signature = "";
+		detailCard = null;
+		deliveryRows = [];
+		deliveryCursor = null;
+		detailBusy = false;
+		renderedDetail = "";
+		tableBody.replaceChildren();
+		detail.replaceChildren();
+		detail.hidden = true;
+		count.replaceChildren();
+		status.replaceChildren();
+		for (const kind of Object.keys(pages)) cursors[kind] = null;
+		controls();
+	}
+	function fail(error, ticket) {
+		try {
+			alive();
+			if (ticket !== serial) return;
+		} catch {
+			return;
+		}
+		withdraw();
+		status.replaceChildren(errorBox(error));
+	}
+	function workButton(card) {
+		return h("button", {
+			type: "button",
+			class: "secondary pm-rtm-work",
+			"data-rtm-select": card.work_item_id,
+			"aria-pressed": String(selected === card.work_item_id),
+			onclick: () => void select(card.work_item_id, true)
+		}, card.work.title);
+	}
+	function renderTable() {
+		const focused = tableBody.contains(document.activeElement) ? ["data-rtm-select", "data-rtm-toggle"].map((attribute) => [attribute, document.activeElement?.getAttribute(attribute)]).find(([, value]) => value) : null;
+		tableBody.replaceChildren();
+		const query = filter.value.trim().toLocaleLowerCase(), requirements = plan?.document?.requirements || [];
+		const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan.revision_id && card.binding.requirement_ids?.includes(req.id));
+		const matches = (req, work) => !query || [
+			req?.text,
+			req?.id,
+			...work.flatMap((card) => [card.work.title, ...issuesFor(card).map((row) => `${row.document.issue.repository} #${row.document.issue.number}`)])
+		].join(" ").toLocaleLowerCase().includes(query);
+		const displayed = requirements.filter((req) => matches(req, linked(req)));
+		for (const req of displayed) if (!order.includes(req.id)) order.push(req.id);
+		displayed.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+		for (const req of displayed) {
+			const work = linked(req), open = expanded.has(req.id), qualified = requirementReviews(plan, req, reviews);
+			const toggle = h("button", {
+				type: "button",
+				class: "secondary pm-rtm-toggle",
+				"aria-expanded": String(open),
+				"data-rtm-toggle": req.id,
+				"aria-label": t(open ? "wb_collapse" : "wb_open", { name: req.text }),
+				onclick: () => {
+					if (expanded.has(req.id)) expanded.delete(req.id);
+					else expanded.add(req.id);
+					renderTable();
+				}
+			}, open ? "−" : "+");
+			const milestone = milestones.filter((row) => row.plan_revision_id === plan.revision_id && row.requirement_ids?.includes(req.id));
+			tableBody.append(h("tr", { "data-rtm-requirement": req.id }, h("th", { scope: "row" }, toggle, h("span", {}, req.text), code(req.id)), h("td", {}, milestone.length ? milestone.map((row) => row.title).join(" · ") : t("wb_no_milestone")), h("td", {}, String(work.length)), h("td", {}, t(qualified.length ? "pq_qualified" : "wb_not_assessed"))));
+			if (open) {
+				tableBody.append(h("tr", { class: "pm-rtm-criteria" }, h("td", { colspan: 4 }, h("ul", {}, ...(req.acceptance || []).map((row) => h("li", {}, row.text))), ...qualified.map((row) => h("details", {}, h("summary", {}, t("pq_original")), code(row.review_id), h("p", {}, t("wb_approved_by", { actor: row.assessment.actor })), code(row.context.native_result?.candidate_commit))))));
+				if (!work.length) tableBody.append(h("tr", {}, h("td", {
+					colspan: 4,
+					class: "muted"
+				}, t("wb_no_work"))));
+				for (const card of work) tableBody.append(workRow(card));
+			}
+		}
+		const unassigned = cards.filter((card) => !requirements.some((req) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id))).filter((card) => matches(null, [card]));
+		const orphanIssues = issues.filter((row) => !cards.some((card) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id)).filter((row) => !query || `${row.document.selected?.public_title} ${row.document.issue?.repository} #${row.document.issue?.number}`.toLocaleLowerCase().includes(query));
+		if (unassigned.length || orphanIssues.length) tableBody.append(h("tr", { class: "pm-rtm-group" }, h("th", {
+			scope: "rowgroup",
+			colspan: 4
+		}, t("wb_unassigned"))), ...unassigned.map(workRow), ...orphanIssues.map((row) => h("tr", { "data-rtm-unassigned-issue": row.mapping_id }, h("td", { colspan: 4 }, row.document.selected?.public_title || t("wb_work"), " · ", issueLabel(row)))));
+		if (!displayed.length && !unassigned.length && !orphanIssues.length) tableBody.append(h("tr", {}, h("td", { colspan: 4 }, t(query ? "wb_no_match" : "wb_no_requirements"))));
+		if (focused) tableBody.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({ preventScroll: true });
+	}
+	const issueLabel = (row) => `${row.document.issue.repository} · ${t("wb_issue", { number: row.document.issue.number })}`;
+	function workRow(card) {
+		return h("tr", { "data-rtm-work": card.work_item_id }, h("td", { colspan: 2 }, workButton(card), h("span", { class: "muted" }, label("pm_kanban_state_", card.column))), h("td", {}, ...issuesFor(card).map((row) => h("div", {}, issueLabel(row))), !issuesFor(card).length ? "—" : ""), h("td", {}, h("span", { class: "muted" }, t("wb_details"))));
+	}
+	async function catalogue(kind, ticket) {
+		const config = {
+			work: ["kanban", "cards"],
+			issues: ["issue-mappings", "mappings"],
+			reviews: ["quality-reviews", "reviews"]
+		}[kind];
+		let after = 0, next = null, filtered = false;
+		const rows = [];
+		for (let index = 0; index < pages[kind]; index++) {
+			const data = scope(await api("GET", `${endpoint}/${config[0]}?after=${after}&limit=20`));
+			alive();
+			if (ticket !== serial) return null;
+			if (!Array.isArray(data[config[1]]) || data.next_cursor != null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pm_scope_mismatch"));
+			rows.push(...data[config[1]]);
+			next = data.next_cursor ?? null;
+			filtered ||= Boolean(data.visibility_filtered || data.coverage?.visibility_filtered || data.coverage?.byte_limited);
+			if (next === null) break;
+			after = next;
+		}
+		return {
+			rows,
+			next,
+			filtered
+		};
+	}
+	async function refresh() {
+		if (!active) return;
+		const ticket = ++serial;
+		detailSerial++;
+		detailBusy = true;
+		busy = true;
+		controls();
+		try {
+			const accepted = await api("GET", `${endpoint}/plans/accepted`);
+			alive();
+			if (ticket !== serial) return;
+			if (accepted.head?.workspace_id !== workspaceId || accepted.plan && (accepted.plan.workspace_id !== workspaceId || accepted.plan.revision_id !== accepted.head.accepted_revision_id)) throw Error(t("pm_scope_mismatch"));
+			const [work, mappings, quality, roadmap] = await Promise.all([
+				catalogue("work", ticket),
+				feature("issue_mapping") ? catalogue("issues", ticket) : null,
+				feature("quality_reviews") ? catalogue("reviews", ticket) : null,
+				feature("roadmap") ? api("GET", `${endpoint}/roadmap`) : null
+			]);
+			alive();
+			if (ticket !== serial) return;
+			const end = await api("GET", `${endpoint}/plans/head`);
+			alive();
+			if (ticket !== serial) return;
+			if (end.head?.workspace_id !== workspaceId || end.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("wb_plan_changed"));
+			work.rows.forEach((row) => cardCheck(row));
+			if (new Set(work.rows.map((row) => row.work_item_id)).size !== work.rows.length) throw Error(t("pm_scope_mismatch"));
+			for (const row of mappings?.rows || []) if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.work_item_id !== row.work_item_id || row.document.relation?.work_item_id !== row.work_item_id || !row.document.issue?.repository || !Number.isSafeInteger(row.document.issue.number)) throw Error(t("pm_scope_mismatch"));
+			for (const row of quality?.rows || []) if (row.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			if (roadmap) scope(roadmap);
+			plan = accepted.plan;
+			cards = work.rows;
+			issues = mappings?.rows || [];
+			reviews = quality?.rows || [];
+			milestones = roadmap?.baseline?.document?.milestones || [];
+			for (const [kind, data] of Object.entries({
+				work,
+				issues: mappings,
+				reviews: quality
+			})) cursors[kind] = data?.next ?? null;
+			const next = JSON.stringify([
+				plan,
+				cards.map((card) => [
+					card.work_item_id,
+					card.binding,
+					card.work.title,
+					card.column
+				]),
+				issues,
+				reviews,
+				milestones
+			]);
+			if (next !== signature) {
+				signature = next;
+				renderTable();
+			}
+			count.textContent = t("wb_catalogue", {
+				requirements: plan?.document?.requirements?.length || 0,
+				work: cards.length
+			});
+			status.replaceChildren(...[
+				work,
+				mappings,
+				quality
+			].some((row) => row?.filtered || row?.next != null) ? [h("p", { class: "muted" }, t("wb_partial"))] : []);
+			if (selected && cards.some((card) => card.work_item_id === selected)) await select(selected, false, true);
+			else {
+				detailCard = null;
+				deliveryRows = [];
+				detail.replaceChildren();
+				detail.hidden = true;
+				detailBusy = false;
+				renderedDetail = "";
+			}
+		} catch (error) {
+			fail(error, ticket);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				controls();
+			}
+		}
+	}
+	function deliveryCheck(data, id, after) {
+		scope(data);
+		if (data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
+		return data;
+	}
+	function renderDetail() {
+		const card = detailCard;
+		if (!card) return;
+		const close = h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: () => {
+				const id = selected;
+				detailSerial++;
+				selected = null;
+				detailCard = null;
+				deliveryRows = [];
+				renderedDetail = "";
+				detail.replaceChildren();
+				detail.hidden = true;
+				renderTable();
+				tableBody.querySelector(`[data-rtm-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+			}
+		}, t("wb_close"));
+		detail.replaceChildren(h("header", { class: "pm-heading" }, h("h3", { tabindex: "-1" }, card.work.title), close), h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wb_open_work")), h("p", {}, label("pm_kanban_state_", card.column)), h("h4", {}, t("wb_version")), code(card.binding.plan_revision_id), card.binding.plan_revision_id === plan?.revision_id && plan.adoption ? h("details", {}, h("summary", {}, t("wb_approval")), h("p", {}, t("wb_approved_by", { actor: plan.adoption.adopted_by })), h("p", {}, time(plan.adoption.created_at)), h("p", {}, plan.adoption.rationale), code(plan.adoption.commit_sha)) : "", qualityFact({
+			h,
+			t,
+			fact: card.quality?.selected_assessment ? card.quality : null,
+			current: true
+		}), h("h4", {}, t("wb_attempts")), ...[
+			"sessions",
+			"attempts",
+			"operations"
+		].flatMap((kind) => (card.execution?.[kind] || []).map((row) => h("p", {}, code(row.resource_id || row.attempt_id || row.operation_id), label("pm_kanban_state_", row.runtime_status || row.status), " · ", time(row.observed_at)))), h("h4", {}, t("wb_delivery")));
+		const groups = new Map();
+		for (const row of deliveryRows) {
+			const target = row.target || {}, key = target.provider_origin && Number.isSafeInteger(target.repository_id) && Number.isSafeInteger(target.pull_number) ? JSON.stringify([
+				target.provider_origin,
+				target.repository_id,
+				target.pull_number
+			]) : row.operation_id;
+			if (!groups.has(key)) groups.set(key, []);
+			groups.get(key).push(row);
+		}
+		for (const rows of groups.values()) {
+			const target = rows[0].target || {};
+			detail.append(h("section", {
+				class: "pm-rtm-delivery",
+				"data-rtm-pr": target.pull_number || ""
+			}, h("h4", {}, target.pull_number ? `${target.repository} · PR #${target.pull_number}` : t("wb_delivery")), ...rows.map((row) => h("div", {}, h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, label("wd_action_", row.action)), h("span", { class: "muted" }, " · ", label("wd_status_", row.status)), row.merge ? h("p", {}, t(row.merge.merged === true ? "wb_merged" : "wb_merge_unknown"), code(row.merge.merged_sha)) : "", row.integration ? h("p", {}, code(row.integration.new_head)) : "", row.deployment ? h("p", {}, row.deployment.environment, " · ", t(row.deployment.verified === true ? "wb_deployed" : "wb_deployment_unknown"), " · ", t(row.deployment.is_current === true ? "wb_current_environment" : row.deployment.is_current === false ? "wb_historical_deployment" : "wb_unknown"), code(row.deployment.source_sha)) : ""))));
+		}
+		if (!deliveryRows.length) detail.append(h("p", { class: "muted" }, t("wb_no_delivery")));
+		if (deliveryCursor !== null) detail.append(h("button", {
+			type: "button",
+			class: "secondary",
+			disabled: detailBusy,
+			onclick: () => void moreDeliveries()
+		}, t("wb_receipts_more")));
+		detail.append(h("details", {}, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			binding: card.binding,
+			coverage: card.execution?.coverage,
+			capture: card.latest_capture,
+			issues: issuesFor(card),
+			deliveries: deliveryRows
+		}, null, 2))));
+		renderedDetail = detailSignature();
+	}
+	async function select(id, focus = false, retain = false) {
+		const card = cards.find((row) => row.work_item_id === id);
+		if (!card) return;
+		if (selected !== id) deliveryPages = 1;
+		const previous = retain ? renderedDetail : null;
+		const ticket = ++detailSerial, generation = serial;
+		selected = id;
+		detailBusy = true;
+		if (!retain) {
+			detailCard = null;
+			deliveryRows = [];
+			deliveryCursor = null;
+			renderedDetail = "";
+			detail.hidden = false;
+			detail.replaceChildren(h("p", { role: "status" }, t("wb_detail_loading")));
+			renderTable();
+		}
+		try {
+			const [data, deliveries] = await Promise.all([api("GET", `${endpoint}/kanban/${id}`), feature("engineering_delivery") ? readDeliveries(id, ticket, generation) : null]);
+			alive();
+			if (ticket !== detailSerial || generation !== serial) return;
+			scope(data);
+			cardCheck(data.card, id);
+			if (data.card.binding.binding_id !== card.binding.binding_id) throw Error(t("wb_plan_changed"));
+			detailCard = data.card;
+			deliveryRows = deliveries?.deliveries || [];
+			deliveryCursor = deliveries?.next_after ?? null;
+			detailBusy = false;
+			detail.hidden = false;
+			if (previous !== detailSignature()) renderDetail();
+			detail.querySelector("[data-rtm-filtered]")?.remove();
+			if (deliveries?.source_visibility_filtered) detail.append(h("p", {
+				class: "muted",
+				"data-rtm-filtered": ""
+			}, t("wb_partial")));
+			if (focus) detail.querySelector("h3")?.focus({ preventScroll: true });
+		} catch (error) {
+			if (ticket === detailSerial) fail(error, generation);
+		}
+	}
+	async function readDeliveries(id, ticket, generation) {
+		let after = 0, next = null, filtered = false;
+		const rows = new Map();
+		for (let page = 0; page < deliveryPages; page++) {
+			const data = deliveryCheck(await api("GET", `${endpoint}/work/${id}/deliveries?after=${after}&limit=20`), id, after);
+			alive();
+			if (ticket !== detailSerial || generation !== serial) return null;
+			for (const row of data.deliveries) rows.set(row.operation_id, row);
+			filtered ||= Boolean(data.source_visibility_filtered);
+			next = data.next_after ?? null;
+			if (next === null) break;
+			after = next;
+		}
+		return {
+			deliveries: [...rows.values()],
+			next_after: next,
+			source_visibility_filtered: filtered
+		};
+	}
+	async function moreDeliveries() {
+		if (detailBusy || deliveryCursor === null || !selected) return;
+		deliveryPages++;
+		await select(selected);
+	}
+	controls();
+	return {
+		element,
+		refresh,
+		withdraw,
+		activate: async () => {
+			if (!active) {
+				active = true;
+				await refresh();
+			}
+		}
+	};
+}
+//#endregion
 //#region src/pm-ahp-observer.js
 function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, workspace, form, errorBox }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.ahp.observe";
@@ -5922,94 +8126,6 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	};
 }
 //#endregion
-//#region src/pm-quality-projections.js
-function qualityFact({ h, t, fact, current = false }) {
-	if (!fact) return "";
-	const label = (value) => t("pq_" + ([
-		"accepted",
-		"rejected",
-		"unassessed",
-		"not_defined"
-	].includes(value) ? value : "unassessed"));
-	const reference = fact.reference || fact.selected_assessment?.reference;
-	return h("div", {
-		"data-pm-quality-fact": "",
-		class: "pm-note-text"
-	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
-}
-function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, requireQualified = true, errorBox }) {
-	let editor = null, pending = false;
-	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
-	const read = () => {
-		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
-		return multiple ? value[workItemId] : value;
-	};
-	function write(value) {
-		if (!editor || editor.locked()) return;
-		const values = multiple ? JSON.parse(field.value || "{}") : null;
-		if (multiple) {
-			if (value) values[workItemId] = value;
-			else delete values[workItemId];
-		}
-		field.value = JSON.stringify(multiple ? values : value);
-		editor.changed();
-		update();
-	}
-	const use = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: async () => {
-			if (!editor || editor.locked() || pending) return;
-			const selected = readSelection(workItemId);
-			if (!selected) {
-				status.replaceChildren(h("p", {}, t("pq_choose_help")));
-				return;
-			}
-			pending = true;
-			update();
-			status.replaceChildren();
-			try {
-				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
-				alive();
-				if (!element.isConnected || editor.locked()) return;
-				const row = data.review, context = row?.context, assessment = row?.assessment;
-				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || (requireQualified ? row.qualified !== true : row.applicable !== true) || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
-					"operation_id",
-					"version",
-					"document_digest"
-				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
-				write(selected);
-			} catch (error) {
-				if (element.isConnected) status.replaceChildren(errorBox(error));
-			} finally {
-				pending = false;
-				update();
-			}
-		}
-	}, t("pq_include"));
-	const clear = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => write(null)
-	}, t("pq_clear"));
-	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
-	function update() {
-		const reference = read();
-		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
-		use.disabled = !editor || editor.locked() || pending;
-		clear.disabled = !editor || editor.locked() || pending || !reference;
-	}
-	update();
-	return {
-		element,
-		update,
-		attach: (value) => {
-			editor = value;
-			update();
-		}
-	};
-}
-//#endregion
 //#region src/pm-sprints.js
 function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, qualitySelection = null }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -6038,7 +8154,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 	const box = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-sprints": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_sprint_title")), h("p", { class: "muted" }, t("pm_sprint_intro"))), h("button", {
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_sprint_title")), h("button", {
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
@@ -6128,10 +8244,10 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 	});
 	const row = (label, contents) => h("section", { class: "pm-brief-row" }, h("h3", {}, t(label)), h("div", { class: "pm-brief-values" }, contents));
 	function workRows(items) {
-		return h("div", { class: "pm-evidence-rows" }, ...items.length ? items.map((item) => h("article", {
+		return h("div", { class: "pm-evidence-rows pm-sprint-work-list" }, ...items.length ? items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-work": item.work_item_id
-		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("p", {}, item.assignee, " · ", t("pm_sprint_unassessed")) : "", item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
+		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
 	}
 	function renderView() {
 		view.replaceChildren();
@@ -6147,7 +8263,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		}, def.starts_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC")), " → ", h("time", {
 			datetime: def.ends_at,
 			title: def.ends_at
-		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), row("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_quality"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id)))))), note("pm_sprint_no_execution")));
+		}, def.ends_at.replace("T", " ").replace(/\.\d+Z$/, "Z").replace("Z", " UTC"))), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), fold("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_unassessed"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, data.quality === "fixed_original_assessments" ? "" : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id))))))));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -7755,10 +9871,19 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 		class: "secondary",
 		onclick: () => void refresh()
 	}, t("pm_kanban_refresh"));
+	const columns = [
+		"backlog",
+		"in_progress",
+		"waiting",
+		"review",
+		"accepted"
+	];
+	const boardInfo = h("div");
+	const info = h("details", { class: "pm-kanban-info" }, h("summary", {}, t("pm_kanban_board_details")), boardInfo, h("p", { class: "pm-kanban-note" }, t("pm_kanban_wip_basis")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_quality")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_limits")));
 	const element = h("section", {
 		class: "panel pm-kanban",
 		"data-pm-kanban": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_kanban_title")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_intro"))), refreshButton), status, metrics, h("p", { class: "pm-kanban-note" }, t("pm_kanban_quality")), list, h("footer", { class: "pm-kanban-footer" }, more, h("p", { class: "pm-kanban-note" }, t("pm_kanban_limits"))));
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_kanban_title")), refreshButton), status, metrics, list, h("footer", { class: "pm-kanban-footer" }, more, info));
 	const note = (key, args, warning = false) => h("p", { class: warning ? "pm-kanban-notice" : "pm-kanban-note" }, t(key, args));
 	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_kanban_unassigned"));
 	const state = (value) => {
@@ -7819,6 +9944,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 		for (const observer of observers.values()) observer.withdraw();
 		list.replaceChildren();
 		metrics.replaceChildren();
+		boardInfo.replaceChildren();
 		more.hidden = true;
 		more.disabled = false;
 		element.removeAttribute("aria-busy");
@@ -7831,7 +9957,8 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 	function renderMetrics() {
 		metrics.replaceChildren();
 		if (!page) return;
-		metrics.append(h("div", {}, h("strong", {}, t("pm_kanban_wip", page.wip)), note("pm_kanban_wip_basis"), note("pm_kanban_loaded", { count: rows.size })), h("div", { class: "pm-kanban-note" }, t("pm_kanban_page_at"), ": ", stamp(page.observed_at)));
+		metrics.append(note("pm_kanban_loaded", { count: rows.size }));
+		boardInfo.replaceChildren(note("pm_kanban_wip", page.wip), h("p", {}, t("pm_kanban_page_at"), ": ", stamp(page.observed_at)));
 		if (next != null) metrics.append(note("pm_kanban_partial"));
 		if (page.coverage?.byte_limited) metrics.append(note("pm_kanban_bounded"));
 		more.hidden = next == null;
@@ -7840,7 +9967,13 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 	function detailsFor(card, observedAt) {
 		const execution = card.execution || {}, capture = card.latest_capture;
 		const lines = (kind, records, content) => records?.length ? h("ul", {}, ...records.map((value) => h("li", {}, h("strong", {}, t(kind)), " · ", content(value)))) : "";
-		const detail = h("div", { class: "pm-kanban-detail" }, h("h4", {}, t("pm_kanban_execution")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)), runtimeReceipt(value))), h("h4", {}, t("pm_kanban_capture")));
+		const flow = card.flow || {};
+		const detail = h("div", { class: "pm-kanban-detail" }, card.quality?.selected_assessment ? qualityFact({
+			h,
+			t,
+			fact: card.quality,
+			current: true
+		}) : note("pm_kanban_quality_unknown"), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), flow.history !== "available_central_events" ? note("pm_kanban_history_unknown") : "", h("h4", {}, t("pm_kanban_execution")), note("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") }), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)), runtimeReceipt(value))), h("h4", {}, t("pm_kanban_capture")));
 		if (!capture) detail.append(note("pm_kanban_no_capture"));
 		else {
 			if (capture.workspace_id !== workspaceId || capture.work_item_id !== card.work_item_id) throw Error(t("pm_kanban_scope_error"));
@@ -7891,18 +10024,9 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 		return h("div", { "data-runtime-completion": value.execution_operation_id }, h("p", {}, t("pm_kanban_runtime_completed")), note("pm_kanban_runtime_limits"), h("p", {}, t("pm_kanban_runtime_recorded_at"), ": ", stamp(value.recorded_at)), h("a", { href: `#/op/${encodeURIComponent(value.observation_operation_id)}` }, t("pm_kanban_runtime_receipt")), code(value.observation_operation_id), code(value.document_digest));
 	}
 	function previewFor(card, observedAt) {
-		const execution = card.execution || {}, flow = card.flow || {};
-		const states = execution.tasks?.length ? execution.tasks.map((task) => task.state) : execution.attempts?.length ? execution.attempts.map((attempt) => attempt.status) : execution.operations?.length ? execution.operations.map((operation) => operation.status) : execution.sessions?.length ? execution.sessions.map((session) => session.runtime_status) : [];
-		const summary = [...new Set(states.map((value) => state(value)))].join(" · ");
-		const node = h("div", {}, h("div", { class: "pm-kanban-overview" }, h("div", { class: "pm-kanban-work" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), card.quality?.selected_assessment ? qualityFact({
-			h,
-			t,
-			fact: card.quality,
-			current: true
-		}) : note("pm_kanban_quality_unknown")), h("div", { class: "pm-kanban-metric" }, h("strong", {}, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), card.work.state === "waiting" ? h("p", {}, t("pm_kanban_wait"), ": ", elapsed(flow.waiting_seconds)) : ""), h("div", { class: "pm-kanban-metric" }, h("strong", {}, t("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") })), h("p", {}, summary || t("pm_kanban_no_execution")), execution.attempts?.some((attempt) => completion(attempt)) ? note("pm_kanban_runtime_recorded") : "")), ...notices(execution.coverage));
-		if (flow.history !== "available_central_events") node.append(note("pm_kanban_history_unknown"));
-		node.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt), " · ", t(card.latest_capture ? "pm_kanban_capture_time" : "pm_kanban_no_capture"), card.latest_capture ? ": " : "", card.latest_capture ? stamp(card.latest_capture.captured_at) : ""));
-		return node;
+		const flow = card.flow || {}, coverage = card.execution?.coverage || {};
+		const age = card.completion?.approved ? flow.cycle_seconds : flow.age_seconds;
+		return h("div", { class: "pm-kanban-overview" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), h("p", { class: "pm-kanban-stage" }, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("div", { class: "pm-kanban-card-meta" }, h("span", {}, card.quality?.selected_assessment ? t(card.quality.qualified ? "pq_qualified" : "pq_not_qualified") : t("pm_kanban_quality_unknown")), typeof age === "number" && age >= 0 ? h("span", { title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age") }, elapsed(age)) : ""), card.execution?.attempts?.some((attempt) => completion(attempt)) ? note("pm_kanban_runtime_recorded") : "", coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? note("pm_kanban_partial_sources") : "");
 	}
 	function renderCard(card, observedAt) {
 		const ticket = serial, preview = h("div", {}, previewFor(card, observedAt));
@@ -7929,12 +10053,40 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 				const contents = detailsFor(data.card, data.observed_at);
 				preview.replaceChildren(previewFor(data.card, data.observed_at));
 				body.replaceChildren(contents);
+				rows.set(card.work_item_id, {
+					node,
+					card: data.card
+				});
+				renderColumns();
 			} catch (error) {
 				if (ticket === serial && request === detailRequest && node.isConnected) unavailable(error);
 			}
 		});
 		node.append(fold);
 		return node;
+	}
+	function renderColumns() {
+		const groups = new Map(columns.map((column) => [column, []]));
+		for (const row of rows.values()) {
+			const column = [...columns, "archived"].includes(row.card.column) ? row.card.column : "unknown";
+			if (!groups.has(column)) groups.set(column, []);
+			groups.get(column).push(row.node);
+		}
+		for (const [column, cards] of groups) {
+			let lane = [...list.children].find((node) => node.dataset.pmKanbanColumn === column);
+			if (!lane) {
+				lane = h("section", {
+					class: "pm-kanban-column",
+					"data-pm-kanban-column": column,
+					"aria-label": column === "accepted" ? t("pm_kanban_content_approved") : state(column)
+				}, h("header", {}, h("h3", {}, column === "accepted" ? t("pm_kanban_content_approved") : state(column)), h("span", { class: "pm-kanban-count" })), h("div", { class: "pm-kanban-cards" }));
+				list.append(lane);
+			}
+			lane.querySelector(".pm-kanban-count").textContent = cards.length;
+			const holder = lane.querySelector(".pm-kanban-cards");
+			for (const card of cards) if (card.parentNode !== holder) holder.append(card);
+		}
+		for (const lane of [...list.children]) if (!groups.has(lane.dataset.pmKanbanColumn)) lane.remove();
 	}
 	function accept(data, append) {
 		if (!append) {
@@ -7944,7 +10096,6 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 		for (const card of data.cards) {
 			const previous = rows.get(card.work_item_id), node = renderCard(card, data.observed_at);
 			if (previous) previous.node.replaceWith(node);
-			else list.append(node);
 			rows.set(card.work_item_id, {
 				node,
 				card
@@ -7952,8 +10103,9 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 		}
 		page = data;
 		next = data.next_cursor ?? null;
-		if (!rows.size) list.replaceChildren(note("pm_kanban_empty"));
-		status.replaceChildren();
+		renderColumns();
+		if (!rows.size) status.replaceChildren(note("pm_kanban_empty"));
+		else status.replaceChildren();
 		renderMetrics();
 	}
 	const path = (after) => `${endpoint}?${new URLSearchParams({
@@ -7963,14 +10115,15 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, caps, permit
 	})}`;
 	async function refresh() {
 		const ticket = ++serial;
+		for (const observer of observers.values()) observer.withdraw();
 		reading = true;
 		page = null;
 		next = null;
 		rows.clear();
 		list.replaceChildren();
 		metrics.replaceChildren();
+		boardInfo.replaceChildren();
 		more.hidden = true;
-		for (const observer of observers.values()) observer.withdraw();
 		status.replaceChildren(note("pm_kanban_loading"));
 		element.setAttribute("aria-busy", "true");
 		try {
@@ -9418,282 +11571,6 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 	return {
 		box,
 		refresh
-	};
-}
-var init_tslib_es6 = __esmMin((() => {}));
-async function invoke(cmd, args = {}, options) {
-	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
-}
-function isTauri() {
-	return !!(globalThis || window).isTauri;
-}
-var init_core = __esmMin((() => {
-	init_tslib_es6();
-}));
-//#endregion
-//#region src/transport/index.ts
-async function restoreBrowserSession() {
-	if (nativeDesktop) return false;
-	const response = await fetch("/api/v1/browser-session", {
-		credentials: "same-origin",
-		mode: "same-origin",
-		cache: "no-store",
-		redirect: "error"
-	});
-	if (!response.ok) return false;
-	const data = await response.json();
-	if (typeof data.csrf !== "string" || data.csrf.length < 32) return false;
-	browserCsrf = data.csrf;
-	return true;
-}
-function browserAuthHeaders(token) {
-	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
-	if (!browserCsrf) throw new Error("Browser session needs to be restored");
-	return { "X-Batc-CSRF": browserCsrf };
-}
-function forgetBrowserSession() {
-	if (!browserCsrf) return;
-	const headers = {
-		...browserAuthHeaders(browserSessionToken),
-		"Content-Type": "application/json"
-	};
-	browserCsrf = null;
-	return fetch("/api/v1/browser-session/logout", {
-		method: "POST",
-		credentials: "same-origin",
-		mode: "same-origin",
-		redirect: "error",
-		headers,
-		body: "{}"
-	});
-}
-async function nativeStatus() {
-	const status = await invoke("native_status");
-	nativeFileSupport = status.file_transfers === true;
-	nativeBriefExportSupport = status.brief_exports === true;
-	return status;
-}
-async function connectorRequest(method, path, body, key, browserToken) {
-	if (nativeDesktop) return invoke("connector_request", { input: {
-		method,
-		path,
-		body: body ?? null,
-		idempotency_key: key ?? null
-	} });
-	const headers = browserAuthHeaders(browserToken);
-	if (body !== void 0) headers["Content-Type"] = "application/json";
-	if (key) headers["Idempotency-Key"] = key;
-	const res = await fetch(`/api/v1${path}`, {
-		method,
-		headers,
-		credentials: "same-origin",
-		redirect: "error",
-		body: body === void 0 ? void 0 : JSON.stringify(body)
-	});
-	return {
-		status: res.status,
-		data: await res.json().catch(() => ({}))
-	};
-}
-async function connectorUploadArtifact(operationId, bytes, browserToken) {
-	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
-	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
-		method: "POST",
-		redirect: "error",
-		credentials: "same-origin",
-		headers: {
-			...browserAuthHeaders(browserToken),
-			"Content-Type": "application/octet-stream"
-		},
-		body: bytes
-	});
-	return {
-		status: res.status,
-		data: await res.json().catch(() => ({}))
-	};
-}
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
-var init_transport = __esmMin((() => {
-	init_core();
-	nativeDesktop = isTauri();
-	nativeFileSupport = false;
-	nativeBriefExportSupport = false;
-	browserSessionToken = "managed-browser-session";
-	browserCsrf = null;
-	nativeFilesStatus = () => invoke("native_files_status");
-	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
-	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
-	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
-		draftId,
-		enabled
-	});
-	nativeFilesControl = (transferId, action) => invoke("native_files_control", {
-		transferId,
-		action
-	});
-	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
-	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
-	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
-	nativeConnect = () => invoke("connector_connect");
-	managedControl = (input) => invoke("managed_control", { input });
-	nativeDisconnect = () => invoke("connector_disconnect");
-	nativeEnroll = () => invoke("connector_enroll", { locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US" });
-	nativeReloadConfiguration = () => invoke("connector_reload_configuration");
-	nativeSetupConfiguration = (config) => invoke("connector_setup_configuration", {
-		config,
-		locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
-	});
-	nativeForgetCredential = () => invoke("connector_forget_credential");
-	openExternal = (url) => invoke("open_external", { url });
-	fleetAvailability = () => invoke("fleet_availability");
-	fleetBootstrap = (input) => invoke("fleet_bootstrap", { input });
-	tailscaleControl = (input) => invoke("tailscale_control", { input });
-	fleetControl = (input) => invoke("fleet_control", { input });
-	fleetRequest = (input) => invoke("fleet_request", { input });
-	updateRequest = (input) => invoke("desktop_update", { input });
-}));
-//#endregion
-//#region src/pm-brief-export.js
-init_transport();
-function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, onUnavailable, errorBox }) {
-	const actor = caps()?.actor, formats = {
-		markdown: ["md", "text/markdown; charset=utf-8"],
-		html: ["html", "text/html; charset=utf-8"],
-		svg: ["svg", "image/svg+xml; charset=utf-8"]
-	};
-	let busy = false, selection = "", pendingReceipt = null;
-	const format = h("select", { "aria-label": t("pm_export_format") }, ...Object.keys(formats).map((key) => h("option", { value: key }, key === "markdown" ? "Markdown" : key.toUpperCase())));
-	const locale = h("select", { "aria-label": t("pm_export_language") }, h("option", { value: "en" }, "English"), h("option", { value: "zh-TW" }, "繁體中文"));
-	locale.value = navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en";
-	const status = h("div", { role: "status" }), note = h("p", { class: "muted" }, t("pm_export_help"));
-	const button = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void save()
-	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
-	const element = h("details", { "data-pm-brief-export": "" }, h("summary", {}, t("pm_export_title")), note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status);
-	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
-	const identity = () => JSON.stringify([
-		snapshot()?.snapshot_id,
-		snapshot()?.snapshot_digest,
-		snapshot()?.view_digest
-	]);
-	function update() {
-		const next = identity();
-		if (selection !== next) {
-			selection = next;
-			status.replaceChildren();
-		}
-		element.hidden = !snapshot();
-		button.disabled = busy || !allowed();
-		format.disabled = locale.disabled = busy;
-		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
-		if (pendingReceipt && caps()?.actor === actor) {
-			if (pendingReceipt.error) {
-				status.replaceChildren(errorBox(pendingReceipt.error));
-				return;
-			}
-			const value = pendingReceipt.receipt;
-			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? `${t("pm_export_saved")}: ${value.display_name}` : t("pm_export_prior_saved")));
-		}
-	}
-	function live(expected) {
-		alive();
-		if (caps()?.actor !== actor || !allowed() || identity() !== expected) throw Object.assign(Error(t("pm_export_changed")), { code: "PM_EXPORT_VIEW_CHANGED" });
-	}
-	async function save() {
-		if (busy || !allowed()) return;
-		busy = true;
-		pendingReceipt = null;
-		update();
-		const expected = identity(), source = snapshot(), kind = format.value, language = locale.value;
-		let nativeSaveStarted = false;
-		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
-		try {
-			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
-			live(expected);
-			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.deviations?.version === 1 ? 4 : source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
-			const bytes = new TextEncoder().encode(report.content);
-			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
-			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
-			live(expected);
-			if (digest !== report.output_digest) throw Error(t("pm_export_changed"));
-			if (nativeDesktop) {
-				nativeSaveStarted = true;
-				const receipt = await nativeBriefSave({
-					workspace_id: workspaceId,
-					snapshot_id: source.snapshot_id,
-					format: kind,
-					locale: language,
-					expected_view_digest: report.view_digest,
-					expected_output_digest: report.output_digest
-				});
-				alive();
-				if (caps()?.actor !== actor) return;
-				if (receipt !== null && (receipt?.stage !== "saved" || receipt.workspace_id !== workspaceId || receipt.snapshot_id !== source.snapshot_id || receipt.format !== kind || receipt.locale !== language || receipt.view_digest !== report.view_digest || receipt.output_digest !== digest || receipt.byte_length !== bytes.length || typeof receipt.display_name !== "string")) throw Error(t("pm_export_changed"));
-				pendingReceipt = {
-					expected,
-					receipt
-				};
-				update();
-			} else {
-				const url = URL.createObjectURL(new Blob([bytes], { type: report.media_type }));
-				try {
-					const link = document.createElement("a");
-					link.href = url;
-					link.download = `pm-brief-${source.snapshot_id}-${language}.${formats[kind][0]}`;
-					link.click();
-				} finally {
-					setTimeout(() => URL.revokeObjectURL(url), 1e3);
-				}
-				status.replaceChildren(h("p", { class: "muted" }, t("pm_export_requested")));
-			}
-		} catch (error) {
-			try {
-				alive();
-			} catch {
-				return;
-			}
-			if (caps()?.actor !== actor) return;
-			const code = String(error?.code || error?.message || error);
-			const key = Object.entries({
-				BRIEF_EXPORT_CHANGED: "pm_export_changed",
-				BRIEF_EXPORT_UNAVAILABLE: "pm_export_unavailable",
-				BRIEF_EXPORT_SAVE_INTERRUPTED: "pm_export_interrupted",
-				DESTINATION_EXISTS: "pm_export_exists",
-				DESTINATION_UNAVAILABLE: "pm_export_destination"
-			}).find(([prefix]) => code.includes(prefix))?.[1];
-			const rendered = key ? Error(t(key)) : error;
-			if (nativeSaveStarted && [
-				"pm_export_exists",
-				"pm_export_destination",
-				"pm_export_interrupted"
-			].includes(key)) {
-				pendingReceipt = {
-					expected,
-					error: rendered
-				};
-				update();
-				return;
-			}
-			if (identity() !== expected) return;
-			onUnavailable(rendered);
-			status.replaceChildren(errorBox(rendered));
-		} finally {
-			busy = false;
-			update();
-		}
-	}
-	format.addEventListener("change", update);
-	locale.addEventListener("change", update);
-	update();
-	return {
-		element,
-		update
 	};
 }
 //#endregion
@@ -14027,593 +15904,6 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 	};
 }
 //#endregion
-//#region src/pm-plan-diff-strings.js
-var planDiffStrings = {
-	en: {
-		pm_diff_title: "Compare plan versions",
-		pm_diff_intro: "Read two fixed versions and review possible effects on selected work. Existing work and its original plan stay unchanged.",
-		pm_diff_from: "From version",
-		pm_diff_to: "To version",
-		pm_diff_choose: "Choose a version",
-		pm_diff_compare: "Compare versions",
-		pm_diff_recheck: "Recheck this comparison",
-		pm_diff_loading: "Reading the fixed comparison…",
-		pm_diff_empty: "Choose both versions to see their recorded differences.",
-		pm_diff_more_versions: "More plan versions",
-		pm_diff_bindings: "Select work associations (optional)",
-		pm_diff_binding_help: "Select exact saved associations to review their possible impact. No work is selected automatically.",
-		pm_diff_load_bindings: "Read work associations",
-		pm_diff_more_bindings: "More work associations",
-		pm_diff_no_bindings: "No saved work association is available on this page.",
-		pm_diff_refresh_bindings: "Refresh work associations",
-		pm_diff_binding_count: "{count} associations selected · maximum 100",
-		pm_diff_partial: "This is a partial list. Load more to inspect additional saved entries.",
-		pm_diff_bound: "Bound plan",
-		pm_diff_no_plan: "No plan associated",
-		pm_diff_requirements: "Requirements and acceptance",
-		pm_diff_added: "Added",
-		pm_diff_removed: "Removed",
-		pm_diff_changed: "Changed",
-		pm_diff_before: "Before",
-		pm_diff_after: "After",
-		pm_diff_no_requirements: "No requirement content change is recorded.",
-		pm_diff_order: "Requirement order or membership changed.",
-		pm_diff_acceptance: "Acceptance criteria",
-		pm_diff_no_acceptance: "No acceptance criteria recorded",
-		pm_diff_priority: "Proposed priority",
-		pm_diff_dependencies: "Requirement dependencies",
-		pm_diff_source: "Original source",
-		pm_diff_sources: "Source identities and recorded statuses",
-		pm_diff_domains: "Eight management domains",
-		pm_diff_domain_same: "No recorded change",
-		pm_diff_unknown: "Unknown / not assessed",
-		pm_diff_prose: "Title and Markdown",
-		pm_diff_prose_unknown: "The text changed. Its effect on scope has not been classified; this is not progress backfill or a scope decision.",
-		pm_diff_no_prose: "Title and Markdown are unchanged.",
-		pm_diff_old_title: "Previous title",
-		pm_diff_new_title: "Compared title",
-		pm_diff_impact: "Selected work to review",
-		pm_diff_no_impact_selection: "No work associations were selected. Other work has not been scanned.",
-		pm_diff_candidate: "Review candidate",
-		pm_diff_no_identified: "No change identified · semantic impact remains unassessed",
-		pm_diff_reason_associated_requirement_changed: "An associated requirement changed.",
-		pm_diff_reason_associated_requirement_dependency_changed: "An explicitly linked requirement dependency changed.",
-		pm_diff_reason_plan_context_changed_impact_unclassified: "Plan context changed; its effect needs review.",
-		pm_diff_reason_requirement_order_or_membership_changed: "Requirement ordering or membership changed.",
-		pm_diff_reason_association_coverage_insufficient: "This saved association cannot establish the effect of this comparison.",
-		pm_diff_open_work: "Open existing work",
-		pm_diff_work_unknown: "Title and work state were not saved in this association. No current state is substituted.",
-		pm_diff_work_version: "Saved work version: {version}",
-		pm_diff_evidence: "Fixed versions and comparison record",
-		pm_diff_cursor: "Journal cursor",
-		pm_diff_no_scope_decision: "These are recorded differences, not an adopted scope change or a verification result.",
-		pm_diff_fixed: "Rechecking uses the same versions, associations and journal cursor. Change a selection to start another comparison.",
-		pm_diff_failure: "The comparison could not be read. No work was changed.",
-		pm_diff_invalid: "The response does not match the selected comparison.",
-		pm_diff_selected_source: "Source input",
-		pm_diff_confirmed_by: "Confirmed by",
-		pm_diff_not_confirmed: "No confirmer recorded",
-		pm_diff_unclassified: "Unmapped source inputs",
-		pm_diff_reading: "Reading…",
-		pm_diff_missing_versions: "No saved plan versions are available yet.",
-		pm_diff_from_digest: "Original document digest",
-		pm_diff_to_digest: "Compared document digest",
-		pm_diff_comparison_digest: "Plan comparison digest",
-		pm_diff_context_digest: "Comparison and work context digest",
-		pm_diff_from_scope_digest: "Original structured scope digest",
-		pm_diff_to_scope_digest: "Compared structured scope digest",
-		pm_diff_scope_changed: "Structured scope data differs. Its effect still needs review.",
-		pm_diff_scope_same: "Structured scope data is unchanged. Text changes still require separate review.",
-		pm_diff_scope_unknown: "Structured scope comparison is unavailable."
-	},
-	"zh-TW": {
-		pm_diff_title: "比較計畫版本",
-		pm_diff_intro: "閱讀兩個固定版本，檢視選定工作可能受到的影響。既有工作與原計畫關聯保持不變。",
-		pm_diff_from: "原版本",
-		pm_diff_to: "比較版本",
-		pm_diff_choose: "選擇版本",
-		pm_diff_compare: "比較版本",
-		pm_diff_recheck: "重查這份比較",
-		pm_diff_loading: "正在讀取固定版本差異…",
-		pm_diff_empty: "選好兩個版本，即可查看已記錄的差異。",
-		pm_diff_more_versions: "更多計畫版本",
-		pm_diff_bindings: "選擇工作關聯（選填）",
-		pm_diff_binding_help: "明確選擇已保存的關聯，再檢視可能的影響。系統不會自動選取工作。",
-		pm_diff_load_bindings: "讀取工作關聯",
-		pm_diff_more_bindings: "更多工作關聯",
-		pm_diff_no_bindings: "這一頁沒有已保存的工作關聯。",
-		pm_diff_refresh_bindings: "重新整理工作關聯",
-		pm_diff_binding_count: "已選 {count} 個關聯 · 最多 100 個",
-		pm_diff_partial: "目前是部分清單，可載入更多已保存項目。",
-		pm_diff_bound: "關聯計畫",
-		pm_diff_no_plan: "尚未關聯計畫",
-		pm_diff_requirements: "需求與接受條件",
-		pm_diff_added: "新增",
-		pm_diff_removed: "移除",
-		pm_diff_changed: "變更",
-		pm_diff_before: "原內容",
-		pm_diff_after: "新內容",
-		pm_diff_no_requirements: "沒有已記錄的需求內容變更。",
-		pm_diff_order: "需求順序或成員已有變更。",
-		pm_diff_acceptance: "接受條件",
-		pm_diff_no_acceptance: "未記錄接受條件",
-		pm_diff_priority: "建議優先順序",
-		pm_diff_dependencies: "需求依賴",
-		pm_diff_source: "原始來源",
-		pm_diff_sources: "來源身分與記錄狀態",
-		pm_diff_domains: "八個管理領域",
-		pm_diff_domain_same: "沒有已記錄的變更",
-		pm_diff_unknown: "未知／尚未評估",
-		pm_diff_prose: "標題與 Markdown",
-		pm_diff_prose_unknown: "文字已有變更，對範圍的影響尚未分類；不會因此視為成果回填或範圍決策。",
-		pm_diff_no_prose: "標題與 Markdown 沒有變更。",
-		pm_diff_old_title: "原標題",
-		pm_diff_new_title: "比較標題",
-		pm_diff_impact: "選定的待檢視工作",
-		pm_diff_no_impact_selection: "尚未選取工作關聯，也未掃描其他工作。",
-		pm_diff_candidate: "建議檢視",
-		pm_diff_no_identified: "未識別出變更 · 實際影響仍待評估",
-		pm_diff_reason_associated_requirement_changed: "已關聯的需求發生變更。",
-		pm_diff_reason_associated_requirement_dependency_changed: "明確記錄的需求依賴發生變更。",
-		pm_diff_reason_plan_context_changed_impact_unclassified: "計畫脈絡改變，影響仍需檢視。",
-		pm_diff_reason_requirement_order_or_membership_changed: "需求順序或成員改變。",
-		pm_diff_reason_association_coverage_insufficient: "這份已保存的關聯不足以判斷本次變更的影響。",
-		pm_diff_open_work: "開啟既有工作",
-		pm_diff_work_unknown: "這份關聯未保存標題與工作狀態，不會以目前資料代替歷史。",
-		pm_diff_work_version: "當時工作版本：{version}",
-		pm_diff_evidence: "固定版本與比較紀錄",
-		pm_diff_cursor: "Journal 游標",
-		pm_diff_no_scope_decision: "這裡呈現已記錄的差異，尚未採用範圍變更，也不是驗證結果。",
-		pm_diff_fixed: "重查沿用同一組版本、關聯與 journal 游標；變更選擇才會開始另一份比較。",
-		pm_diff_failure: "無法讀取比較，工作沒有變更。",
-		pm_diff_invalid: "回應與選定的比較不一致。",
-		pm_diff_selected_source: "來源輸入",
-		pm_diff_confirmed_by: "確認者",
-		pm_diff_not_confirmed: "未記錄確認者",
-		pm_diff_unclassified: "尚未歸類的來源輸入",
-		pm_diff_reading: "讀取中…",
-		pm_diff_missing_versions: "目前還沒有已保存的計畫版本。",
-		pm_diff_from_digest: "原文件摘要",
-		pm_diff_to_digest: "比較文件摘要",
-		pm_diff_comparison_digest: "計畫差異摘要",
-		pm_diff_context_digest: "差異與工作脈絡摘要",
-		pm_diff_from_scope_digest: "原結構化範圍摘要",
-		pm_diff_to_scope_digest: "比較結構化範圍摘要",
-		pm_diff_scope_changed: "結構化範圍資料已有差異，實際影響仍需檢視。",
-		pm_diff_scope_same: "結構化範圍資料相同，文字變更仍需另外檢視。",
-		pm_diff_scope_unknown: "尚無結構化範圍比較結果。"
-	}
-};
-function planDiffText(t, key, values = {}) {
-	const supplied = t(key, values);
-	if (supplied !== key) return supplied;
-	return (planDiffStrings[(navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en"][key] || key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
-}
-//#endregion
-//#region src/pm-plan-diff.js
-function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
-	const text = (key, values) => planDiffText(t, key, values), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	const plans = new Map(), bindings = new Map(), selected = new Set();
-	let request = 0, busy = false, cursor = null, planAfter = null, bindingAfter = null, bindingLoaded = false, bindingBusy = false;
-	const from = h("select", { "aria-label": text("pm_diff_from") }), to = h("select", { "aria-label": text("pm_diff_to") });
-	const status = h("div", { role: "status" }), result = h("div", { "data-pm-diff-result": "" });
-	const bindingRows = h("div"), selection = h("p", { class: "muted" }), bindingStatus = h("div", { role: "status" });
-	const label = (key, control) => h("label", {}, text(key), control);
-	const button = h("button", {
-		type: "button",
-		class: "secondary",
-		disabled: true,
-		onclick: () => void read()
-	}, text("pm_diff_compare"));
-	const morePlans = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => void loadPlans()
-	}, text("pm_diff_more_versions"));
-	const loadBindings = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void refreshBindings(bindingAfter === null)
-	}, text("pm_diff_load_bindings"));
-	const workPicker = h("details", { "data-pm-diff-bindings": "" }, h("summary", {}, text("pm_diff_bindings")), h("p", { class: "muted" }, text("pm_diff_binding_help")), bindingStatus, bindingRows, selection, loadBindings);
-	const box = h("section", {
-		class: "pm-packages pm-plan-comparison",
-		"data-pm-plan-diff": ""
-	}, h("h3", {}, text("pm_diff_title")), h("p", { class: "muted" }, text("pm_diff_intro")), h("div", { class: "capture-fields" }, label("pm_diff_from", from), label("pm_diff_to", to)), morePlans, workPicker, h("div", { class: "actions" }, button), status, result);
-	const valid = (page) => {
-		if (page?.workspace_id !== workspaceId) throw Error(text("pm_diff_invalid"));
-		return page;
-	};
-	const raw = (value) => value === null || value === void 0 ? text("pm_diff_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value);
-	const detail = (heading, ...children) => h("details", {}, h("summary", {}, heading), ...children);
-	function controls() {
-		button.disabled = busy || !from.value || !to.value;
-		button.textContent = text(busy ? "pm_diff_reading" : cursor === null ? "pm_diff_compare" : "pm_diff_recheck");
-		selection.textContent = text("pm_diff_binding_count", { count: selected.size });
-		bindingRows.querySelectorAll("input").forEach((input) => {
-			input.disabled = selected.size >= 100 && !input.checked;
-		});
-	}
-	function changed() {
-		request++;
-		busy = false;
-		cursor = null;
-		result.replaceChildren();
-		status.replaceChildren();
-		controls();
-	}
-	from.addEventListener("change", changed);
-	to.addEventListener("change", changed);
-	workPicker.addEventListener("toggle", () => {
-		if (workPicker.open && !bindingLoaded) refreshBindings();
-	});
-	function options() {
-		for (const control of [from, to]) {
-			const old = control.value;
-			control.replaceChildren(h("option", { value: "" }, text("pm_diff_choose")), ...[...plans.values()].sort((a, b) => a.sequence - b.sequence).map((plan) => h("option", { value: plan.revision_id }, t("pm_revision_number", { number: plan.sequence }), " · ", plan.revision_id)));
-			if (plans.has(old)) control.value = old;
-		}
-		morePlans.hidden = planAfter === null;
-		if (!plans.size) status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_missing_versions")));
-		controls();
-	}
-	function update(page, workPage) {
-		valid(page);
-		for (const plan of page.revisions || []) plans.set(plan.revision_id, plan);
-		planAfter = page.next_cursor === null || page.next_cursor === void 0 ? null : Math.max(page.next_cursor, ...[...plans.values()].map((plan) => plan.sequence));
-		options();
-		if (workPage) showBindings(valid(workPage));
-	}
-	async function loadPlans() {
-		if (morePlans.disabled || planAfter === null) return;
-		morePlans.disabled = true;
-		try {
-			const page = await api("GET", `${endpoint}/plans?after=${encodeURIComponent(planAfter)}&limit=100`);
-			alive();
-			if (box.isConnected) update(page);
-		} catch (error) {
-			if (box.isConnected) status.replaceChildren(errorBox(error));
-		} finally {
-			morePlans.disabled = false;
-		}
-	}
-	function showBindings(page) {
-		bindingLoaded = true;
-		bindingAfter = page.next_cursor ?? null;
-		for (const value of page.bindings || []) bindings.set(value.binding_id, value);
-		bindingRows.replaceChildren(...[...bindings.values()].map((value) => {
-			const id = `pm-diff-${workspaceId}-${value.binding_id}`;
-			const input = h("input", {
-				id,
-				type: "checkbox",
-				checked: selected.has(value.binding_id),
-				"data-pm-diff-binding": value.binding_id,
-				onchange: () => {
-					if (input.checked) selected.add(value.binding_id);
-					else selected.delete(value.binding_id);
-					changed();
-				}
-			});
-			return h("div", { class: "pm-fact" }, h("div", { class: "pm-fact-heading" }, input, h("label", {
-				for: id,
-				class: "pm-source"
-			}, value.work_item_id)), h("p", { class: "muted pm-source" }, text("pm_diff_bound"), ": ", value.plan_revision_id || text("pm_diff_no_plan")), h("small", { class: "muted pm-source" }, value.binding_id));
-		}));
-		if (!bindings.size) bindingRows.append(h("p", { class: "muted" }, text("pm_diff_no_bindings")));
-		bindingStatus.replaceChildren(...bindingAfter !== null ? [h("p", { class: "muted" }, text("pm_diff_partial"))] : []);
-		loadBindings.hidden = false;
-		loadBindings.textContent = text(bindingAfter === null ? "pm_diff_refresh_bindings" : "pm_diff_more_bindings");
-		controls();
-	}
-	async function refreshBindings(reset = true) {
-		if (bindingBusy) return;
-		bindingBusy = true;
-		loadBindings.disabled = true;
-		try {
-			const after = reset ? null : bindingAfter;
-			const page = valid(await api("GET", `${endpoint}/work?limit=100${after === null ? "" : "&after=" + encodeURIComponent(after)}`));
-			alive();
-			if (box.isConnected) showBindings(page);
-		} catch (error) {
-			if (box.isConnected) {
-				bindingStatus.replaceChildren(errorBox(error));
-				loadBindings.hidden = false;
-			}
-		} finally {
-			bindingBusy = false;
-			loadBindings.disabled = false;
-		}
-	}
-	function source(input) {
-		return h("div", { class: "pm-fact pm-source" }, h("span", { class: "chip" }, t("pm_status_" + input.status)), h("p", { class: "pm-note-text" }, input.value), h("p", { class: "muted" }, text("pm_diff_selected_source"), ": ", input.input_id), h("p", { class: "muted" }, text("pm_diff_source"), ": ", raw(input.source_ref)), h("p", { class: "muted" }, input.confirmed_by ? text("pm_diff_confirmed_by") + ": " + input.confirmed_by : text("pm_diff_not_confirmed")));
-	}
-	function requirement(item) {
-		return h("div", { class: "pm-source" }, h("p", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_status_" + item.source_status), " · ", text("pm_diff_selected_source"), ": ", item.source_input_id), h("p", { class: "muted" }, text("pm_diff_priority"), ": ", raw(item.priority)), h("p", { class: "muted" }, text("pm_diff_dependencies"), ": ", raw(item.depends_on)), h("h4", {}, text("pm_diff_acceptance")), ...item.acceptance?.length ? item.acceptance.map((acceptance) => h("p", {}, acceptance.text, " · ", t("pm_status_" + acceptance.source_status), h("small", { class: "muted pm-source" }, " · " + acceptance.source_input_id))) : [h("p", { class: "muted" }, text("pm_diff_no_acceptance"))]);
-	}
-	function render(value) {
-		const changes = value.changes, req = changes.requirements, reqRows = [];
-		for (const kind of [
-			"added",
-			"removed",
-			"changed"
-		]) for (const item of req[kind] || []) reqRows.push(detail(text("pm_diff_" + kind) + " · " + item.id, ...kind === "changed" ? [
-			h("h4", {}, text("pm_diff_before")),
-			requirement(item.before),
-			h("h4", {}, text("pm_diff_after")),
-			requirement(item.after)
-		] : [requirement(item)]));
-		const sources = changes.sources, sourceRows = [];
-		for (const kind of [
-			"added",
-			"removed",
-			"changed",
-			"unchanged"
-		]) for (const item of sources[kind] || []) sourceRows.push(detail((kind === "unchanged" ? text("pm_diff_domain_same") : text("pm_diff_" + kind)) + " · " + item.input_id, ...kind === "changed" ? [
-			h("h4", {}, text("pm_diff_before")),
-			source(item.before),
-			h("h4", {}, text("pm_diff_after")),
-			source(item.after)
-		] : [source(item)]));
-		const domains = detail(text("pm_diff_domains"));
-		for (const [name, value] of Object.entries(changes.domains)) {
-			const row = detail(t("pm_slot_" + name) + " · " + text(value.changed ? "pm_diff_changed" : "pm_diff_domain_same"));
-			for (const side of ["before", "after"]) row.append(h("h4", {}, text("pm_diff_" + side)), ...value[side].statements?.length ? value[side].statements.map(source) : [h("p", { class: "muted" }, text("pm_diff_unknown"))]);
-			domains.append(row);
-		}
-		const prose = detail(text("pm_diff_prose"));
-		if (changes.title.changed) prose.append(h("p", {}, text("pm_diff_old_title"), ": ", changes.title.before), h("p", {}, text("pm_diff_new_title"), ": ", changes.title.after));
-		if (changes.markdown.changed || changes.title.changed) prose.append(h("p", { class: "muted" }, text("pm_diff_prose_unknown")));
-		else prose.append(h("p", { class: "muted" }, text("pm_diff_no_prose")));
-		if (changes.markdown.replacement) prose.append(h("h4", {}, text("pm_diff_removed")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.removed), h("h4", {}, text("pm_diff_added")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.added));
-		const work = h("div", {}, h("h4", {}, text("pm_diff_impact")));
-		if (!value.impact_candidates.length) work.append(h("p", { class: "muted" }, text("pm_diff_no_impact_selection")));
-		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
-		const fixed = detail(text("pm_diff_evidence"), h("p", { class: "pm-source" }, text("pm_diff_from"), ": ", value.from_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_to"), ": ", value.to_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_cursor"), ": ", value.context.journal_cursor), ...[
-			["pm_diff_from_digest", value.from_revision.document_digest],
-			["pm_diff_to_digest", value.to_revision.document_digest],
-			["pm_diff_from_scope_digest", value.from_revision.structured_scope_digest],
-			["pm_diff_to_scope_digest", value.to_revision.structured_scope_digest],
-			["pm_diff_comparison_digest", value.comparison_digest],
-			["pm_diff_context_digest", value.context_digest]
-		].map(([key, digest]) => h("p", { class: "pm-source" }, text(key), ": ", raw(digest))));
-		result.replaceChildren(h("p", { class: "muted" }, text("pm_diff_no_scope_decision")), h("p", { class: "muted" }, text(value.scope?.structured_digest_changed === true ? "pm_diff_scope_changed" : value.scope?.structured_digest_changed === false ? "pm_diff_scope_same" : "pm_diff_scope_unknown")), h("h4", {}, text("pm_diff_requirements")), ...reqRows.length ? reqRows : [h("p", { class: "muted" }, text("pm_diff_no_requirements"))], ...req.order_changed ? [h("p", { class: "muted" }, text("pm_diff_order"))] : [], domains, prose, detail(text("pm_diff_sources"), ...sourceRows, h("p", { class: "pm-source" }, text("pm_diff_unclassified"), ": ", raw(changes.unclassified_sources))), work, fixed);
-	}
-	async function read() {
-		if (busy || !from.value || !to.value) return;
-		busy = true;
-		const ticket = ++request, left = from.value, right = to.value, ids = [...selected].sort(), fixedCursor = cursor;
-		controls();
-		result.replaceChildren();
-		status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_loading")));
-		const query = new URLSearchParams({
-			from_revision_id: left,
-			to_revision_id: right
-		});
-		if (ids.length) query.set("binding_ids", ids.join(","));
-		if (fixedCursor !== null) query.set("journal_cursor", String(fixedCursor));
-		try {
-			const data = await api("GET", `${endpoint}/plan-comparison?${query}`);
-			alive();
-			if (!box.isConnected || ticket !== request) return;
-			const value = valid(data).comparison;
-			if (value?.from_revision?.revision_id !== left || value?.to_revision?.revision_id !== right || JSON.stringify(value.context?.binding_ids) !== JSON.stringify(ids) || !Array.isArray(value.impact_candidates) || value.impact_candidates.length !== ids.length || value.impact_candidates.some((candidate) => !ids.includes(candidate.binding?.binding_id) || candidate.binding?.workspace_id !== workspaceId) || new Set(value.impact_candidates.map((candidate) => candidate.binding.binding_id)).size !== ids.length || !Number.isSafeInteger(value.context?.journal_cursor) || value.context.journal_cursor < 0 || fixedCursor !== null && value.context.journal_cursor !== fixedCursor) throw Error(text("pm_diff_invalid"));
-			render(value);
-			cursor = value.context.journal_cursor;
-			status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_fixed")));
-		} catch (error) {
-			if (box.isConnected && ticket === request) {
-				result.replaceChildren();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, text("pm_diff_failure")));
-			}
-		} finally {
-			if (ticket === request) {
-				busy = false;
-				controls();
-			}
-		}
-	}
-	options();
-	return {
-		box,
-		update,
-		refreshBindings
-	};
-}
-//#endregion
-//#region src/pm-plans.js
-function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
-	let head = null, capability = null, signature = "", busy = false;
-	const title = input("pm_revision_title", {
-		max: 200,
-		value: thread().thread.title
-	});
-	const markdown = input("pm_revision_markdown", {
-		multiline: true,
-		max: 128e3,
-		required: false
-	});
-	const structure = h("input", {
-		type: "hidden",
-		value: "{}"
-	});
-	structure.dataset.pmDefault = "{}";
-	const editor = form({
-		action: "pm.plan.draft",
-		target: {
-			workspace_id: workspaceId,
-			thread_id: threadId
-		},
-		fields: {
-			title,
-			markdown,
-			structure
-		},
-		label: "pm_revision_save",
-		params: (values) => ({
-			title: values.title,
-			...values.markdown.trim() ? { markdown: values.markdown } : {},
-			...JSON.parse(values.structure || "{}"),
-			previous_revision_id: head.latest_revision_id
-		}),
-		preconditions: () => ({
-			expected_version: thread().thread.version,
-			expected_plan_version: head.version
-		}),
-		permitted: () => Boolean(head) && permitted(false) && thread().thread.mode === "planning",
-		onSaved: () => refresh(),
-		extra: h("div", { class: "pm-fields" }, labelled("pm_revision_title", title), labelled("pm_revision_markdown", markdown), structure, h("p", { class: "muted" }, t("pm_revision_draft_help")))
-	});
-	const draftBox = h("details", { "data-pm-revision-editor": "" }, h("summary", {}, t("pm_revision_new")), editor.box);
-	const current = h("div", { "data-pm-accepted-plan": "" }), rows = h("div", { class: "pm-revision-list" });
-	const box = h("section", {
-		class: "pm-plans",
-		"data-pm-plans": ""
-	}, h("h3", {}, t("pm_plan_versions")), current, draftBox, rows);
-	const comparison = planComparison({
-		h,
-		t,
-		api,
-		alive,
-		workspaceId,
-		errorBox
-	});
-	box.append(comparison.box);
-	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
-	function revisionRow(summary) {
-		const detail = h("div"), item = h("details", { "data-pm-revision": summary.revision_id }, h("summary", {}, t("pm_revision_number", { number: summary.sequence }), summary.revision_id === head.accepted_revision_id ? " · " + t("pm_plan_accepted") : ""), detail);
-		let pending = false, fetched = false;
-		item.addEventListener("toggle", async () => {
-			if (!item.open || pending || fetched) return;
-			pending = true;
-			try {
-				const data = await api("GET", `${endpoint}/${encodeURIComponent(summary.revision_id)}`);
-				alive();
-				if (!item.isConnected) return;
-				const plan = data.plan;
-				if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t("pm_scope_mismatch"));
-				const document = plan.document, source = h("div", { class: "pm-plan-domains" });
-				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, t("pm_slot_" + domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, t("pm_status_" + statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
-					statement.source_ref?.ref || statement.source_ref?.message_id,
-					statement.source_ref?.path,
-					statement.source_ref?.revision
-				].filter(Boolean).join(" · ")))), section.coverage === "unresolved" ? h("p", { class: "muted" }, t("pm_plan_domain_unknown")) : ""));
-				detail.replaceChildren(h("h4", {}, document.title), h("div", { class: "pm-plan-document" }, document.markdown), h("details", {}, h("summary", {}, t("pm_plan_sources")), source), h("p", { class: "muted" }, t("pm_plan_no_execution")));
-				if (plan.adoption) detail.append(h("p", {}, t("pm_plan_adoption_evidence", { actor: plan.adoption.adopted_by }), h("code", {}, plan.adoption.commit_sha)), h("p", { class: "pm-note-text" }, plan.adoption.rationale));
-				if (plan.thread_id === threadId) detail.append(h("button", {
-					type: "button",
-					class: "secondary",
-					disabled: editor.locked() || !permitted(false),
-					onclick: () => {
-						if (editor.locked() || !permitted(false)) return;
-						editor.set("title", document.title);
-						editor.set("markdown", document.markdown);
-						editor.set("structure", JSON.stringify({
-							sections: Object.fromEntries(Object.entries(document.sections || {}).map(([key, value]) => [key, value.source_input_ids])),
-							requirements: (document.requirements || []).map((requirement) => ({
-								id: requirement.id,
-								source_input_id: requirement.source_input_id,
-								acceptance_input_ids: requirement.acceptance.map((value) => value.source_input_id),
-								priority: requirement.priority,
-								depends_on: requirement.depends_on
-							}))
-						}));
-						draftBox.open = true;
-						markdown.focus();
-					}
-				}, t("pm_revision_edit")));
-				if (permitted(true)) {
-					const rationale = input("pm_adopt_rationale", {
-						multiline: true,
-						max: 8e3
-					});
-					const baseline = data.head.accepted_revision_id;
-					let adopt;
-					adopt = form({
-						action: "pm.plan.adopt",
-						target: {
-							workspace_id: workspaceId,
-							revision_id: plan.revision_id
-						},
-						fields: { rationale },
-						params: (values) => ({ rationale: values.rationale }),
-						preconditions: () => ({ expected_accepted_revision_id: baseline }),
-						permitted: () => !plan.is_current_accepted && permitted(true) && capability?.plan_adoption_available === true && head.accepted_revision_id === baseline && plan.base_accepted_revision_id === baseline,
-						recoverPermitted: () => permitted(true),
-						label: "pm_adopt_revision",
-						onSaved: () => refresh(),
-						onStateChange: () => {
-							if (adopt) adopt.box.hidden = plan.is_current_accepted && !adopt.locked();
-						},
-						extra: h("div", {}, labelled("pm_adopt_rationale", rationale), h("p", { class: "muted" }, t(plan.base_accepted_revision_id !== baseline ? "pm_plan_baseline_changed" : capability?.plan_adoption_available ? "pm_adopt_help" : "pm_plan_worktree_required")))
-					});
-					detail.append(adopt.box);
-					adopt.update();
-				}
-				fetched = true;
-			} catch (error) {
-				if (item.isConnected) detail.replaceChildren(errorBox(error));
-			} finally {
-				pending = false;
-			}
-		});
-		return item;
-	}
-	function renderRows(page, append = false) {
-		if (!append) rows.replaceChildren();
-		rows.append(...(page.revisions || []).map(revisionRow));
-		if (!rows.children.length) rows.append(h("p", { class: "muted" }, t("pm_plan_no_revisions")));
-		if (page.next_cursor !== null && page.next_cursor !== void 0) {
-			const more = h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: async () => {
-					if (busy) return;
-					busy = true;
-					more.disabled = true;
-					try {
-						const next = await api("GET", `${endpoint}?after=${page.next_cursor}&limit=20`);
-						alive();
-						if (next.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-						if (!more.isConnected) return;
-						more.remove();
-						renderRows(next, true);
-					} catch (error) {
-						if (more.isConnected) more.after(errorBox(error));
-					} finally {
-						busy = false;
-						more.disabled = false;
-					}
-				}
-			}, t("pm_plan_more"));
-			rows.append(more);
-		}
-	}
-	return {
-		box,
-		update(page, accepted, capabilities) {
-			if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-			if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("pm_stale"));
-			head = page.head;
-			capability = capabilities;
-			comparison.update(page);
-			draftBox.hidden = thread().thread.mode !== "planning" && !editor.locked();
-			const nextSignature = JSON.stringify([
-				page,
-				accepted,
-				capabilities
-			]);
-			if (signature !== nextSignature) {
-				signature = nextSignature;
-				current.replaceChildren(h("p", {}, h("strong", {}, accepted.plan ? accepted.plan.document.title : t("pm_plan_none_accepted"))), h("p", { class: "muted" }, t("pm_plan_no_execution")));
-				if (accepted.plan) current.append(h("p", { class: "muted" }, t("pm_plan_accepted"), " · ", h("code", {}, accepted.plan.adoption.commit_sha)));
-				renderRows(page);
-			}
-			editor.update();
-		}
-	};
-}
-//#endregion
 //#region src/pm-worktree-choice.js
 function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scopes, editable, errorBox }) {
 	let form = null, reading = false, sequence = 0;
@@ -15054,6 +16344,7 @@ var retired = (error) => [
 var receiptSubscribers = new Map();
 var threadDisclosures = new Map();
 var threadDisclosureSelectors = [
+	"[data-pm-information]",
 	"[data-pm-add-input]",
 	"[data-pm-planning-revision]",
 	"[data-pm-note-only]",
@@ -15385,13 +16676,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		nav.open = navigationMedia.matches;
 	};
 	navigationMedia.addEventListener("change", resizeNavigation);
-	const title = h("h1", {}, t("pm_title")), subtitle = h("p", { class: "muted" }, t("pm_intro"));
+	const title = h("h1", {}, t("pm_title"));
 	const refresh = h("button", {
 		type: "button",
 		class: "secondary",
 		onclick: () => void load()
 	}, t("pm_refresh"));
-	const heading = h("header", { class: "pm-heading" }, h("div", {}, title, subtitle), refresh);
+	const heading = h("header", { class: "pm-heading" }, title, refresh);
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	main.append(h("div", { class: "pm-shell" }, h("aside", {}, nav), body));
 	let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null, sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = "", earlier = null, historyCursor = null, historyExpanded = false, packages = null, packageSignature = "", revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
@@ -15428,7 +16719,26 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		qualitySelection
 	}) : null;
 	if (evidence) body.append(evidence.box);
-	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? projectBrief({
+	let workbench = null;
+	const charter = !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
+	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? charter ? workspaceCharter({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox,
+		caps,
+		canRead: () => loaded && Boolean(workspace),
+		onDiscuss: () => {
+			workbench?.select("workspace");
+			content.querySelector("input")?.focus();
+		}
+	}) : projectBrief({
 		h,
 		t,
 		api,
@@ -15738,8 +17048,104 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	}) : null;
 	if (qualityReviews) body.insertBefore(qualityReviews.element, sprints?.box || content);
+	const traceability = charter && brief && kanban ? workspaceTraceability({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		errorBox
+	}) : null;
+	if (traceability) body.insertBefore(traceability.element, content);
+	const resources = !threadId && caps()?.features?.pm_resources ? workspaceResources({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		errorBox
+	}) : null;
+	if (resources) body.insertBefore(resources.element, content);
+	if (charter && brief) {
+		workbench = projectViews({
+			h,
+			t,
+			namespace,
+			workspaceId,
+			groups: [
+				{
+					id: "charter",
+					sections: [brief.box]
+				},
+				{
+					id: "agents",
+					sections: [resources?.element]
+				},
+				{
+					id: "rtm",
+					sections: [traceability?.element]
+				},
+				{
+					id: "board",
+					sections: [kanban?.element]
+				},
+				{
+					id: "planning",
+					sections: [
+						roadmap?.box,
+						sprints?.box,
+						meetings?.element,
+						qualityReviews?.element,
+						followUp?.element
+					]
+				},
+				{
+					id: "governance",
+					sections: [governance?.element]
+				},
+				{
+					id: "workspace",
+					sections: [
+						content,
+						lifecycle?.element,
+						evidence?.box,
+						engineering?.element,
+						materialization?.element,
+						handoff?.element,
+						workBatches?.element,
+						issues?.element,
+						specifications?.element,
+						ahp?.element
+					]
+				},
+				{
+					id: "maintenance",
+					sections: [
+						releaseBaselines?.element,
+						maintenancePolicy?.element,
+						maintenanceRepairs?.element,
+						maintenanceReview?.element
+					]
+				}
+			].map((group) => ({
+				...group,
+				sections: group.sections.filter(Boolean)
+			})),
+			onSelect: (id) => {
+				resources?.setActive(id === "agents");
+				if (id === "rtm") traceability?.activate();
+			}
+		});
+		body.insertBefore(workbench.element, status);
+		body.insertBefore(content, status.nextSibling);
+		workbench.apply();
+	}
 	const sourceSections = () => [
 		content,
+		workbench?.element,
+		resources?.element,
+		traceability?.element,
 		ahp?.element,
 		lifecycle?.element,
 		evidence?.box,
@@ -16072,10 +17478,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					extra: h("div", {}, selected, draftId, labelled("pm_planning_revision_rationale", rationale), h("p", { class: "muted" }, t("pm_planning_revision_help")))
 				});
 			}
+			const information = h("details", {
+				"data-pm-information": "",
+				open: thread.mode !== "planning"
+			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
 			const inspector = h("aside", {
 				class: "pm-inspector",
 				"aria-label": t("pm_inputs")
-			}, h("h2", {}, t("pm_inputs")), h("p", { class: "muted" }, t("pm_inputs_help")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
+			}, information);
 			if (brief) inspector.prepend(brief.box);
 			if (lifecycle) inspector.prepend(lifecycle.element);
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
@@ -16087,7 +17497,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		threadTitle.textContent = thread.title;
 		mode.textContent = t("pm_mode_" + thread.mode);
-		discussionHint.textContent = t(nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "pm_native_discussion" : "pm_manual");
+		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector("[data-pm-information]").open = true;
+		discussionHint.textContent = nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "" : t("pm_manual");
 		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
 		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
 			h,
@@ -16363,7 +17774,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				workspaceList.append(h("p", { class: "muted" }, t("pm_no_workspaces")));
 				nav.querySelector(".pm-create-workspace").open = true;
 			}
-			if (workspace) workspaceList.append(h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}` }, t("pm_new_thread")));
+			if (workspace) workspaceList.append(h("a", {
+				href: `#/pm/${encodeURIComponent(workspaceId)}`,
+				onclick: () => {
+					rememberProjectView(namespace, workspaceId, "workspace");
+					workbench?.select("workspace");
+					if (workbench) content.querySelector("input")?.focus();
+				}
+			}, t("pm_new_thread")));
 			if (threadList?.next_cursor) workspaceList.append(h("button", {
 				type: "button",
 				class: "secondary",
@@ -16391,7 +17809,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						},
 						extra: labelled("pm_thread_title", title)
 					});
-					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), h("p", { class: "muted" }, t("pm_thread_help")), create.box));
+					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), create.box));
 				}
 			}
 			if (runs) {
@@ -16430,7 +17848,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				materialization,
 				handoff,
 				workBatches,
-				issues
+				issues,
+				traceability
 			]) {
 				if (section) await section.refresh();
 				alive();
@@ -16438,6 +17857,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 			nativeAnalysis?.update(runs?.runs || []);
 			for (const section of sourceSections()) section.hidden = false;
+			workbench?.apply();
+			if (workbench?.selected() === "rtm") await traceability?.activate();
+			resources?.setActive(workbench?.selected() === "agents");
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -16445,6 +17867,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				workspace = null;
 				threadData = null;
 				brief?.withdraw();
+				traceability?.withdraw();
+				resources?.withdraw();
 				qualityReviews?.withdraw();
 				proposalReview?.withdraw();
 				qualitySelections.clear();
@@ -16524,6 +17948,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				await qualityReviews?.refresh();
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
+				await traceability?.refresh();
 			});
 			return eventReads;
 		}
@@ -16539,6 +17964,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				await qualityReviews?.refresh();
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
+				await traceability?.refresh();
 			});
 			return eventReads;
 		}
@@ -16558,6 +17984,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sequence++;
 		off();
 		navigationMedia.removeEventListener("change", resizeNavigation);
+		traceability?.withdraw();
+		resources?.dispose();
 		proposalReview?.dispose();
 		ahp?.dispose();
 		for (const value of forms) value.dispose();
@@ -18117,125 +19545,6 @@ async function readArtifactContent(reference, size, token, signal) {
 	signal.throwIfAborted();
 	if (hash !== reference.digest) throw new Error("Artifact content digest does not match the exact revision");
 	return bytes;
-}
-//#endregion
-//#region src/message-format.js
-var lineText = (line) => line.replace(/\r?\n$/, "");
-function tableCells(line) {
-	let text = line.trim(), cell = "", ticks = 0, separators = 0;
-	const cells = [];
-	if (text.startsWith("|")) text = text.slice(1);
-	for (let i = 0; i < text.length; i++) {
-		const char = text[i];
-		if (char === "\\" && text[i + 1] === "|") {
-			cell += "|";
-			i++;
-			continue;
-		}
-		if (char === "`") {
-			let end = i + 1;
-			while (text[end] === "`") end++;
-			const count = end - i;
-			if (!ticks) ticks = count;
-			else if (ticks === count) ticks = 0;
-			cell += text.slice(i, end);
-			i = end - 1;
-			continue;
-		}
-		if (char === "|" && !ticks) {
-			cells.push(cell.trim());
-			cell = "";
-			separators++;
-		} else cell += char;
-	}
-	if (cell || !text.endsWith("|")) cells.push(cell.trim());
-	return separators ? cells : null;
-}
-function messageBlocks(source) {
-	if (source.length > 2e5) return [{
-		kind: "text",
-		text: source
-	}];
-	const lines = source.match(/[^\n]*\n|[^\n]+$/g) || [];
-	if (lines.length > 4e3) return [{
-		kind: "text",
-		text: source
-	}];
-	const blocks = [], plain = [];
-	const flush = () => {
-		if (plain.length) blocks.push({
-			kind: "text",
-			text: plain.splice(0).join("")
-		});
-	};
-	for (let i = 0; i < lines.length;) {
-		const fence = /^ {0,3}(`{3,}|~{3,})([^\r\n]*)$/.exec(lineText(lines[i]));
-		if (fence && !(fence[1][0] === "`" && fence[2].includes("`"))) {
-			flush();
-			const endFence = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}[ \\t]*$`);
-			const body = [];
-			i++;
-			while (i < lines.length && !endFence.test(lineText(lines[i]))) body.push(lines[i++]);
-			if (i < lines.length) i++;
-			blocks.push({
-				kind: "code",
-				language: fence[2].trim(),
-				text: body.join("")
-			});
-			continue;
-		}
-		const header = tableCells(lineText(lines[i])), divider = i + 1 < lines.length ? tableCells(lineText(lines[i + 1])) : null;
-		if (header?.length && header.length <= 40 && divider?.length === header.length && divider.every((cell) => /^:?-{3,}:?$/.test(cell))) {
-			flush();
-			const rows = [];
-			i += 2;
-			while (i < lines.length && rows.length < 100) {
-				const cells = tableCells(lineText(lines[i]));
-				if (!cells || cells.length !== header.length) break;
-				rows.push(cells);
-				i++;
-			}
-			blocks.push({
-				kind: "table",
-				header,
-				rows
-			});
-			continue;
-		}
-		plain.push(lines[i++]);
-	}
-	flush();
-	return blocks;
-}
-function inline(h, text) {
-	if (text.length > 8192) return [text];
-	const nodes = [];
-	let from = 0;
-	for (const match of text.matchAll(/`([^`\n]+)`|\*\*([^*\n]+)\*\*/g)) {
-		nodes.push(text.slice(from, match.index), h(match[1] === void 0 ? "strong" : "code", {}, match[1] ?? match[2]));
-		from = match.index + match[0].length;
-	}
-	nodes.push(text.slice(from));
-	return nodes;
-}
-function renderMessage(h, t, source, copy) {
-	return messageBlocks(source).map((block) => {
-		if (block.kind === "code") return h("div", { class: "message-code" }, h("div", { class: "message-code-bar" }, h("span", { class: "muted" }, block.language || t("message_code")), h("button", {
-			class: "mini",
-			type: "button",
-			onclick: () => copy(block.text)
-		}, t("message_copy_code"))), h("pre", {
-			tabindex: "0",
-			"aria-label": t("message_code")
-		}, h("code", {}, block.text)));
-		if (block.kind === "table") return h("div", {
-			class: "message-table",
-			tabindex: "0",
-			role: "region",
-			"aria-label": t("message_table")
-		}, h("table", {}, h("thead", {}, h("tr", {}, ...block.header.map((cell) => h("th", { scope: "col" }, ...inline(h, cell))))), h("tbody", {}, ...block.rows.map((row) => h("tr", {}, ...row.map((cell) => h("td", {}, ...inline(h, cell))))))));
-		return h("div", { class: "message-text" }, ...inline(h, block.text));
-	});
 }
 //#endregion
 //#region src/conversation.js
@@ -22185,6 +23494,298 @@ var pmPackageHandoffStrings = {
 	}
 };
 //#endregion
+//#region src/pm-resources-strings.js
+var resourceStrings = {
+	en: {
+		wb_agents: "Agent resources",
+		res_title: "Agent resources & usage",
+		res_filter: "Filter CLI, model or role",
+		res_window: "Observation window",
+		res_days: "Last {days} days",
+		res_refresh: "Update records",
+		res_pause: "Pause updates",
+		res_resume: "Resume updates",
+		res_source: "Source / CLI",
+		res_model: "Model records",
+		res_role: "Role",
+		res_total: "Observed tokens",
+		res_state: "Collection",
+		res_details: "Resource details",
+		res_empty: "No usage sources are connected to this workspace.",
+		res_no_match: "No sources match this filter.",
+		res_unknown: "Not provided",
+		res_local: "Central host · local files",
+		res_count: "{count} visible sources",
+		res_observations: "Usage observations",
+		res_calls: "Distinct reported messages",
+		res_as_of: "Read at {time}",
+		res_current: "Up to date",
+		res_catching_up: "Reading remaining records",
+		res_stale: "Observation overdue",
+		res_pending: "Waiting for first collection",
+		res_unavailable: "Source unavailable",
+		res_error: "Source needs review",
+		res_actual: "Reported model",
+		res_requested: "Requested model",
+		res_effort: "Effort",
+		res_version: "CLI version",
+		res_input: "Input",
+		res_cache_read: "Cache read",
+		res_cache_write: "Cache write",
+		res_output: "Output",
+		res_reasoning: "Reasoning",
+		res_coverage: "Sources and coverage",
+		res_first: "First observation in window",
+		res_last: "Last observation in window",
+		res_collected: "Last successful collection",
+		res_partial: "{count} observed · incomplete coverage",
+		res_codex_units: "Input includes cache; output includes reasoning. Total adds input and output once. Model context records describe the requested model.",
+		res_claude_units: "Input excludes cache. Total adds input, cache read, cache write and output once. Repeated fragments of one message are counted once.",
+		res_scope: "Only explicitly connected local files are included. These observations do not establish complete project cost, execution capacity or accepted delivery performance.",
+		res_setup: "A central administrator can connect a versioned CLI source to this workspace. Other hosts and unconnected sessions are outside this view.",
+		res_forecast: "Remaining usage estimate: insufficient comparable accepted-work evidence.",
+		res_quota: "Current reported quota windows",
+		res_pool: "Quota pool / limit",
+		res_remaining: "Remaining",
+		res_reset: "Resets",
+		res_quota_unknown: "No current quota balance was provided.",
+		res_quota_scope: "Pools use explicit operator bindings. Each limit is shown once; balances are never added. Reports expire after five minutes or at reset.",
+		res_quota_at: "Reported at {time}",
+		res_minutes: "{minutes}-minute window",
+		res_configurations_more: "Additional model configurations are outside this detail limit."
+	},
+	"zh-TW": {
+		wb_agents: "Agent 資源",
+		res_title: "Agent 資源與用量",
+		res_filter: "篩選 CLI、模型或角色",
+		res_window: "觀測期間",
+		res_days: "最近 {days} 天",
+		res_refresh: "更新紀錄",
+		res_pause: "暫停更新",
+		res_resume: "恢復更新",
+		res_source: "來源／CLI",
+		res_model: "模型紀錄",
+		res_role: "角色",
+		res_total: "已觀測 tokens",
+		res_state: "收集狀態",
+		res_details: "資源詳情",
+		res_empty: "此工作區尚未連接用量來源。",
+		res_no_match: "沒有符合篩選條件的來源。",
+		res_unknown: "來源未提供",
+		res_local: "中央主機・本機檔案",
+		res_count: "{count} 個可見來源",
+		res_observations: "用量觀測筆數",
+		res_calls: "已回報訊息數（去重）",
+		res_as_of: "讀取於 {time}",
+		res_current: "已讀至檔尾",
+		res_catching_up: "正在讀取剩餘紀錄",
+		res_stale: "觀測已過期",
+		res_pending: "等待首次收集",
+		res_unavailable: "來源無法讀取",
+		res_error: "來源待檢查",
+		res_actual: "回報模型",
+		res_requested: "要求的模型",
+		res_effort: "推理強度",
+		res_version: "CLI 版本",
+		res_input: "輸入",
+		res_cache_read: "快取讀取",
+		res_cache_write: "快取寫入",
+		res_output: "輸出",
+		res_reasoning: "推理",
+		res_coverage: "來源與涵蓋範圍",
+		res_first: "期間內最早觀測",
+		res_last: "期間內最新觀測",
+		res_collected: "上次成功收集",
+		res_partial: "已觀測 {count}・涵蓋不完整",
+		res_codex_units: "輸入已包含快取，輸出已包含推理；總量僅將輸入與輸出各加一次。模型脈絡紀錄代表要求的模型。",
+		res_claude_units: "輸入不含快取；總量將輸入、快取讀取、快取寫入與輸出各加一次。同一訊息的重複片段只計一次。",
+		res_scope: "只涵蓋已明確連接的本機檔案。這些觀測尚不能代表完整專案成本、執行容量或已驗收交付表現。",
+		res_setup: "中央管理者可將具名版本的 CLI 來源連接到此工作區。其他主機與未連接的 session 不在此頁涵蓋範圍。",
+		res_forecast: "剩餘耗量預估：可比較的已驗收工作證據不足。",
+		res_quota: "目前回報的配額時間窗",
+		res_pool: "配額池／限制",
+		res_remaining: "剩餘",
+		res_reset: "重設時間",
+		res_quota_unknown: "來源未提供目前可用的配額餘額。",
+		res_quota_scope: "配額池依管理者明確綁定，各限制只顯示一次，不相加餘額。回報超過五分鐘或到達重設時間即失效。",
+		res_quota_at: "回報於 {time}",
+		res_minutes: "{minutes} 分鐘時間窗",
+		res_configurations_more: "其他模型配置超出本次詳情的顯示上限。"
+	}
+};
+//#endregion
+//#region src/pm-workbench-strings.js
+var workbenchStrings = {
+	en: {
+		wb_navigation: "Project views",
+		wb_charter: "Project Charter",
+		wb_rtm: "Requirements & delivery",
+		wb_board: "Work board",
+		wb_workspace: "Workspace",
+		wb_planning: "Planning & review",
+		wb_maintenance: "Maintenance",
+		wb_governance: "Issues, actions & changes",
+		wb_unknown: "To be confirmed",
+		wb_sources: "Sources and coverage",
+		wb_previous: "Previous summary",
+		wb_next: "Next summary",
+		wb_history: "Summary version",
+		wb_history_more: "Load more summary versions",
+		wb_snapshot: "Summary #{number}",
+		wb_historical: "Historical summary",
+		wb_saved: "Saved summary",
+		wb_plan: "Referenced plan",
+		wb_full_plan: "Full plan",
+		wb_compare: "Compare with previous summary",
+		wb_print: "Print summary",
+		wb_discuss: "Discuss with PM",
+		wb_review: "Review plan updates",
+		wb_definition: "Purpose & success",
+		wb_scope: "Scope & deliverables",
+		wb_schedule: "Milestones & progress",
+		wb_resources: "Resources & budget",
+		wb_risks: "Risks & dependencies",
+		wb_decisions: "Open decisions",
+		wb_no_snapshot: "Start a discussion with PM, then save a summary of the available information. Incomplete information is welcome.",
+		wb_no_plan: "No adopted plan in this summary",
+		wb_quota: "Usage and remaining quota: not provided",
+		wb_no_decisions: "No open decisions recorded in this summary.",
+		wb_partial: "Some sources are missing, filtered or outside the loaded range.",
+		wb_comparison: "Summary changes",
+		wb_before: "Previous summary",
+		wb_after: "Selected summary",
+		wb_unchanged: "No changes in the six summary sections.",
+		wb_loading: "Reading saved sources…",
+		wb_current: "Current records",
+		wb_requirements: "Requirement",
+		wb_milestone: "Milestone",
+		wb_work: "Issue / work",
+		wb_acceptance: "Acceptance",
+		wb_delivery: "PR / deployment",
+		wb_blocker: "Next blocker",
+		wb_unassigned: "Unassigned / other plan versions",
+		wb_no_milestone: "Milestone not assigned",
+		wb_no_requirements: "No adopted requirements yet. Planning discussions can continue.",
+		wb_no_work: "No explicitly linked work in the loaded records.",
+		wb_details: "Work details",
+		wb_close: "Close details",
+		wb_open_work: "Open work and results",
+		wb_more: "Load more work",
+		wb_more_issues: "Load more Issue links",
+		wb_more_reviews: "Load more quality records",
+		wb_receipts_more: "Load more delivery records",
+		wb_issue: "Issue #{number}",
+		wb_attempts: "Execution records",
+		wb_approval: "Plan adoption",
+		wb_version: "Plan revision",
+		wb_not_assessed: "Not assessed",
+		wb_acceptance_separate: "Work approval and merge receipts do not establish requirement acceptance.",
+		wb_no_delivery: "No saved delivery records in this range.",
+		wb_merged: "Merge recorded",
+		wb_merge_unknown: "Merge not confirmed",
+		wb_deployed: "Deployment verified",
+		wb_deployment_unknown: "Deployment not verified",
+		wb_current_environment: "Current environment",
+		wb_historical_deployment: "Historical deployment",
+		wb_filter: "Filter requirements and work",
+		wb_no_match: "No matching loaded records.",
+		wb_refresh_notice: "Updated records are available.",
+		wb_apply_update: "Refresh records",
+		wb_open: "Expand {name}",
+		wb_collapse: "Collapse {name}",
+		wb_plan_changed: "The plan changed while reading. Refresh to read one consistent plan version.",
+		wb_catalogue: "{requirements} requirements · {work} distinct loaded work items",
+		wb_no_phase: "Phase associations are not recorded in these sources.",
+		wb_partial_history: "More summary versions are available. Load them to navigate beyond this range.",
+		wb_approved_by: "Adopted by {actor}",
+		wb_detail_loading: "Reading the selected work and its delivery records…"
+	},
+	"zh-TW": {
+		wb_navigation: "專案視圖",
+		wb_charter: "專案總覽",
+		wb_rtm: "需求與交付追溯",
+		wb_board: "工作看板",
+		wb_workspace: "工作空間",
+		wb_planning: "計畫與審閱",
+		wb_maintenance: "維護",
+		wb_governance: "問題、行動與變更",
+		wb_unknown: "待確認",
+		wb_sources: "來源與涵蓋範圍",
+		wb_previous: "上一份總覽",
+		wb_next: "下一份總覽",
+		wb_history: "總覽版本",
+		wb_history_more: "載入更多總覽版本",
+		wb_snapshot: "總覽 #{number}",
+		wb_historical: "歷史總覽",
+		wb_saved: "已保存總覽",
+		wb_plan: "引用的計畫",
+		wb_full_plan: "完整計畫",
+		wb_compare: "與上一份總覽比較",
+		wb_print: "列印總覽",
+		wb_discuss: "與 PM 討論",
+		wb_review: "審閱計畫更新",
+		wb_definition: "目的與成功條件",
+		wb_scope: "範圍與交付",
+		wb_schedule: "里程碑與進度",
+		wb_resources: "資源與預算",
+		wb_risks: "風險與相依",
+		wb_decisions: "待決事項",
+		wb_no_snapshot: "先與 PM 討論，再保存目前資訊的總覽。資訊不完整也可以開始。",
+		wb_no_plan: "這份總覽尚無已採用計畫",
+		wb_quota: "用量與剩餘配額：來源未提供",
+		wb_no_decisions: "這份總覽尚未記錄待決事項。",
+		wb_partial: "部分來源缺少、已過濾，或尚未載入。",
+		wb_comparison: "總覽變更",
+		wb_before: "上一份總覽",
+		wb_after: "選取的總覽",
+		wb_unchanged: "六個摘要區塊沒有變更。",
+		wb_loading: "正在讀取已保存來源…",
+		wb_current: "目前紀錄",
+		wb_requirements: "需求",
+		wb_milestone: "里程碑",
+		wb_work: "Issue／工作",
+		wb_acceptance: "驗收",
+		wb_delivery: "PR／部署",
+		wb_blocker: "下一個阻擋",
+		wb_unassigned: "待歸屬／其他計畫版本",
+		wb_no_milestone: "尚未安排里程碑",
+		wb_no_requirements: "尚無已採用需求，可以繼續規劃討論。",
+		wb_no_work: "已載入紀錄中尚無明確關聯的工作。",
+		wb_details: "工作詳情",
+		wb_close: "關閉詳情",
+		wb_open_work: "開啟工作與成果",
+		wb_more: "載入更多工作",
+		wb_more_issues: "載入更多 Issue 關聯",
+		wb_more_reviews: "載入更多品質紀錄",
+		wb_receipts_more: "載入更多交付紀錄",
+		wb_issue: "Issue #{number}",
+		wb_attempts: "執行紀錄",
+		wb_approval: "計畫採用紀錄",
+		wb_version: "計畫版本",
+		wb_not_assessed: "尚未評估",
+		wb_acceptance_separate: "工作核准與合併紀錄不代表需求已通過驗收。",
+		wb_no_delivery: "此範圍尚無已保存的交付紀錄。",
+		wb_merged: "已記錄合併",
+		wb_merge_unknown: "尚未確認合併",
+		wb_deployed: "部署已驗證",
+		wb_deployment_unknown: "部署尚未驗證",
+		wb_current_environment: "目前環境",
+		wb_historical_deployment: "歷史部署",
+		wb_filter: "篩選需求與工作",
+		wb_no_match: "已載入紀錄中沒有符合項目。",
+		wb_refresh_notice: "有更新的紀錄可讀取。",
+		wb_apply_update: "更新紀錄",
+		wb_open: "展開 {name}",
+		wb_collapse: "收合 {name}",
+		wb_plan_changed: "讀取期間計畫已變更，請重新整理以核對同一版本。",
+		wb_catalogue: "{requirements} 條需求・{work} 筆已載入工作（依身分去重）",
+		wb_no_phase: "這些來源尚未記錄階段關聯。",
+		wb_partial_history: "還有其他總覽版本，載入後可繼續切換。",
+		wb_approved_by: "核准者：{actor}",
+		wb_detail_loading: "正在讀取選定工作與交付紀錄…"
+	}
+};
+//#endregion
 //#region src/pm-plan-proposal-strings.js
 var pmPlanProposalStrings = {
 	en: {
@@ -23562,8 +25163,9 @@ var pmSprintStrings = {
 //#region src/pm-kanban-strings.js
 var pmKanbanStrings = {
 	en: {
-		pm_kanban_title: "Work flow",
-		pm_kanban_intro: "One work item per row, with its current activity and recorded evidence.",
+		pm_kanban_title: "Work board",
+		pm_kanban_board_details: "Board details",
+		pm_kanban_partial_sources: "Sources incomplete",
 		pm_kanban_refresh: "Refresh work flow",
 		pm_kanban_retry: "Retry work flow",
 		pm_kanban_loading: "Reading work flow…",
@@ -23694,8 +25296,9 @@ var pmKanbanStrings = {
 		pm_kanban_no: "No"
 	},
 	"zh-TW": {
-		pm_kanban_title: "工作流",
-		pm_kanban_intro: "一項工作一列，同時查看目前活動與已記錄證據。",
+		pm_kanban_title: "工作看板",
+		pm_kanban_board_details: "看板資料",
+		pm_kanban_partial_sources: "來源不完整",
 		pm_kanban_refresh: "重新整理工作流",
 		pm_kanban_retry: "重試工作流",
 		pm_kanban_loading: "正在讀取工作流…",
@@ -24046,6 +25649,8 @@ var pmMeetingStrings = {
 //#region src/pm-strings.js
 var pmStrings = {
 	en: {
+		...workbenchStrings.en,
+		...resourceStrings.en,
 		...pmPlanProposalStrings.en,
 		...pmIssueStrings.en,
 		...pmLifecycleStrings.en,
@@ -24270,6 +25875,8 @@ var pmStrings = {
 		pm_preview_required: "Preview the selected repository revision before saving.",
 		pm_saved_worktree_choice: "Previously selected repository",
 		pm_plan_versions: "Project plan",
+		pm_compare_plans: "Compare plan revisions",
+		pm_plan_acceptance: "Requirements and acceptance criteria",
 		pm_revision_title: "Plan title",
 		pm_revision_markdown: "Plan document (Markdown)",
 		pm_revision_save: "Save plan revision",
@@ -24333,6 +25940,7 @@ var pmStrings = {
 		pm_mode_idea: "Idea",
 		pm_mode_planning: "Planning draft",
 		pm_inputs: "Facts and open questions",
+		pm_information: "Inputs and planning direction",
 		pm_inputs_help: "Confirmed statements, source claims and unresolved assumptions stay distinct.",
 		pm_no_inputs: "No facts recorded yet. Add a sourced statement or an open question from the discussion.",
 		pm_input_slot: "Topic",
@@ -24401,6 +26009,8 @@ var pmStrings = {
 		pm_slot_quality: "Quality"
 	},
 	"zh-TW": {
+		...workbenchStrings["zh-TW"],
+		...resourceStrings["zh-TW"],
 		...pmPlanProposalStrings["zh-TW"],
 		...pmIssueStrings["zh-TW"],
 		...pmLifecycleStrings["zh-TW"],
@@ -24625,6 +26235,8 @@ var pmStrings = {
 		pm_preview_required: "儲存前請先預覽所選儲存庫版本。",
 		pm_saved_worktree_choice: "先前選定的儲存庫",
 		pm_plan_versions: "專案計畫",
+		pm_compare_plans: "比較計畫版本",
+		pm_plan_acceptance: "需求與驗收條件",
 		pm_revision_title: "計畫名稱",
 		pm_revision_markdown: "計畫內容（Markdown）",
 		pm_revision_save: "儲存計畫版本",
@@ -24688,6 +26300,7 @@ var pmStrings = {
 		pm_mode_idea: "想法",
 		pm_mode_planning: "規劃草稿",
 		pm_inputs: "事實與待釐清問題",
+		pm_information: "討論依據與規劃方向",
 		pm_inputs_help: "已確認的陳述、來源說法與待查假設會分開標示。",
 		pm_no_inputs: "尚無事實紀錄。可從討論中加入有來源的陳述或待釐清的問題。",
 		pm_input_slot: "主題",
@@ -31849,10 +33462,11 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		storageKey: `${storageKey}.shortcut`,
 		guard
 	});
+	if (project) advanced.append(shortcut.box, h("p", { class: "muted" }, t("pub_head_only")), h("p", { class: "muted" }, t("pub_isolation")));
 	const box = h("section", {
 		class: "session-start published-start",
 		"data-published-start": ""
-	}, project ? projectStatus : null, h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("pub_binding", binding), label("pub_ref", sourceRef)), branchHelp, h("p", { class: "muted" }, t("pub_head_only")), h("div", { class: "actions" }, inspect), facts), h("div", { class: "panel" }, h("div", { class: "capture-fields" }, label("start_agent", agent), !project ? label("start_title", title) : null, !project && expanded() ? label("start_model", model) : null), models.box, label("pub_prompt", prompt), shortcut.box, project ? advanced : null, attachmentBox, h("p", { class: "muted" }, t("pub_isolation"))), h("div", { class: "actions" }, apply, check, another), outcome, status);
+	}, project ? projectStatus : null, h("div", { class: "panel dispatch-destination" }, h("div", { class: "capture-fields" }, label("pub_binding", binding), label("pub_ref", sourceRef)), branchHelp, !project ? h("p", { class: "muted" }, t("pub_head_only")) : null, h("div", { class: "actions" }, inspect), facts), h("div", { class: "panel dispatch-instructions" }, label("pub_prompt", prompt), h("div", { class: "capture-fields" }, label("start_agent", agent), !project ? label("start_title", title) : null, !project && expanded() ? label("start_model", model) : null), models.box, !project ? shortcut.box : null, attachmentBox, project ? advanced : h("p", { class: "muted" }, t("pub_isolation"))), h("div", { class: "actions" }, apply, check, another), outcome, status);
 	function update() {
 		const fixed = Boolean(saved.intent);
 		if (attachmentBox) {
@@ -31867,7 +33481,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			models.refresh();
 		}
 		const validBranch = ref(selected().source_ref);
-		branchHelp.hidden = fixed;
+		branchHelp.hidden = fixed || Boolean(project && !(saved.source_ref && !validBranch));
 		branchHelp.textContent = t(saved.source_ref && !validBranch ? "pub_branch_invalid" : "pub_branch_help");
 		sourceRef.setAttribute("aria-invalid", String(Boolean(saved.source_ref && !validBranch)));
 		inspect.hidden = fixed;
@@ -31962,7 +33576,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			const values = Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value]));
 			fill();
 			for (const [k, value] of Object.entries(values)) inputs[k].value = value;
-			projectStatus.replaceChildren(h("p", {}, h("a", { href: `#/project/${project}` }, p.name)), h("p", { class: "muted" }, t(p.archived ? "dispatch_archived" : expanded() ? "dispatch_project_help" : "dispatch_unsupported")));
+			projectStatus.replaceChildren(h("p", {}, h("a", { href: `#/project/${project}` }, p.name)), p.archived || !expanded() ? h("p", { class: "muted" }, t(p.archived ? "dispatch_archived" : "dispatch_unsupported")) : "");
 			update();
 		} catch (e) {
 			if (current()) {
@@ -38374,7 +39988,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
 		attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)
 	});
-	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), h("h1", {}, t("dispatch_title")), h("p", { class: "muted" }, t(repairSeed ? "repair_dispatch_help" : "dispatch_intro")), panel.box);
+	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), h("h1", {}, t("dispatch_title")), repairSeed ? h("p", { class: "muted" }, t("repair_dispatch_help")) : "", panel.box);
 	try {
 		await panel.init();
 	} catch {}

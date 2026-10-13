@@ -18,12 +18,17 @@ async function savePlan(page:any, text = '# First visit\n\nKeep <script>literal 
   await page.getByRole('button',{name:'Save plan revision',exact:true}).click();
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
   await page.locator('[data-pm-revision] > summary').click();
+  await expect(page.locator('[data-pm-revision] .pm-plan-document')).toBeVisible();
+  const adoption = page.locator('[data-pm-plan-adopt]');
+  if (await adoption.count()) await adoption.locator(':scope > summary').click();
 }
 
 for (const native of [false,true]) test.describe(native ? 'native plans' : 'web plans', () => {
   test('Planning can select later inputs while keeping saved document revisions fixed', async({page}) => {
     const f=planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute); await savePlan(page);
     const original=structuredClone(f.state.revisions[0]);
+    await expect(page.locator('[data-pm-information]')).not.toHaveAttribute('open', '');
+    await page.locator('[data-pm-information] > summary').click();
     await page.locator('[data-pm-add-input] > summary').click();
     const record=action(page,'pm.input.record');
     await record.getByLabel('Topic',{exact:true}).selectOption('finance');
@@ -37,7 +42,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     f.state.lost=true;
     await revise.getByRole('button',{name:'Save updated Planning draft',exact:true}).click();
     await expect(revise).toContainText('Reply unavailable');
-    await page.reload(); await page.locator('[data-pm-planning-revision] > summary').click();
+    await page.reload(); await expect(page.locator('[data-pm-information]')).toHaveAttribute('open',''); await page.locator('[data-pm-planning-revision] > summary').click();
     await revise.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(4);
     expect(f.state.writes[2].body.params.selected_input_ids).toEqual([inputA,last.input_id]);
@@ -51,6 +56,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);
     await savePlan(page);
     await expect(page.locator('.pm-plan-document')).toContainText('<script>literal text</script>');
+    await expect(page.locator('.pm-plan-document').getByRole('heading', {name:'First visit',exact:true})).toBeVisible();
     await expect(page.locator('.pm-plans script')).toHaveCount(0);
     await page.getByText('Management domains and source status',{exact:true}).click();
     await page.locator('.pm-plan-domains summary').filter({hasText:'Scope'}).click();
@@ -92,6 +98,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await prepare.getByRole('button',{name:'Save context package',exact:true}).click();
     await expect.poll(()=>f.state.bound).toBe(true);
     await page.locator('[data-pm-revision] > summary').click();
+    await page.locator('[data-pm-plan-adopt] > summary').click();
     await expect(action(page,'pm.plan.adopt').getByRole('button',{name:'Adopt this plan',exact:true})).toBeEnabled();
     expect(f.state.writes.at(-1).body.params.repository_binding).toEqual({...target,source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)});
   });

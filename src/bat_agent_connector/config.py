@@ -51,6 +51,7 @@ from pathlib import Path
 from ._private_files import read_private
 from .errors import ConfigError, TokenUnavailable
 from .redact import register_secret
+from .usage_config import UsageConfig, parse_usage
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -571,6 +572,7 @@ class Config:
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)
     github: GitHubConfig = field(default_factory=GitHubConfig)
     ahp: dict = field(default_factory=dict)
+    usage: UsageConfig = field(default_factory=UsageConfig)
     client_label: str = "BAT Agent Connector"
     path: Path | None = None
     human_name: str | None = None  # [client] human_name: who relayed messages come from (NEED-<NAME> marker)
@@ -732,7 +734,7 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
     if relay_name and not re.fullmatch(r"[A-Za-z0-9 ._-]{1,40}", relay_name):
         raise ConfigError("[client] relay_name must be 1-40 letters/digits/spaces")
     from .ahp_config import parse_ahp
-    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), client_label=label,
+    return Config(hosts=hosts, safety=safety, jev=jev, api=api, github=parse_github(data), ahp=parse_ahp(data), usage=parse_usage(data), client_label=label,
                   path=path, human_name=human, relay_name=relay_name)
 
 

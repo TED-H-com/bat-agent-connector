@@ -1162,7 +1162,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     static POST: OnceLock<Regex> = OnceLock::new();
     let pattern = if input.method == "GET" {
         GET.get_or_init(|| Regex::new(concat!(r"^/(?:version|capabilities|bootstrap|hosts|workspaces|sessions|policy|operations|events|checkpoints|projects|work-items|integrations|integrations/candidates|managed/setup|",
-            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
+            r"pm/profiles|pm/workspaces(?:/ws_[0-9a-f]{32}(?:/threads(?:/pmt_[0-9a-f]{32}(?:/context(?:-bundle)?)?)?|/runs(?:/pmr_[0-9a-f]{32})?|/lifecycle(?:/(?:transitions(?:/pmlt_[0-9a-f]{32})?|inflight))?|/plans(?:/(?:head|accepted|pmrev_[0-9a-f]{32}))?|/resources|/projects|/kanban(?:/wi_[0-9a-f]{20})?|/governance(?:/pmgov_[0-9a-f]{32}(?:/history)?)?|/issue-mappings(?:/pmim_[0-9a-f]{32})?|/release-baseline-sources(?:/(?:github-releases|deployments))?|/release-baseline-preview|/release-baselines(?:/(?:current|pmrb_[0-9a-f]{32}))?|/maintenance-policies(?:/(?:current|pmmp_[0-9a-f]{32}))?|/workload-snapshots(?:/(?:current|pmwl_[0-9a-f]{32}))?|/maintenance-checks(?:/(?:current|pmck_[0-9a-f]{32}))?|/maintenance-reviews(?:/(?:current|pmrevw_[0-9a-f]{32}(?:/events)?))?|/maintenance-schedule|/ahp-adapters|/ahp-observations(?:/(?:current|pmah_[0-9a-f]{32}))?|/github-observations(?:/(?:current|pmgh_[0-9a-f]{32}))?|/maintenance-repairs(?:/(?:current|pmrp_[0-9a-f]{32}))?|/executions/op_[0-9a-f]{32}/verification-config|/execution-verifications/op_[0-9a-f]{32}|/pr-publications/op_[0-9a-f]{32}|/quality-reviews(?:/pmqr_[0-9a-f]{32})?|/work-batches(?:/pmbt_[0-9a-f]{32})?|/maintenance-findings/current|/spec-materializations(?:/pmsp_[0-9a-f]{32})?|/work-packages(?:/pmwp_[0-9a-f]{32}(?:/readiness)?)?|/conversation-proposals(?:/pmcp_[0-9a-f]{32})?|/follow-up-assessments(?:/pmfa_[0-9a-f]{32})?|/follow-ups(?:/(?:latest|pmfu_[0-9a-f]{32}))?|/meetings(?:/pmmeet_[0-9a-f]{32}(?:/history/(?:contexts|notes|drafts|follow_ups))?)?|/sprint-artifacts(?:/(?:product_goal(?:/pmgoal_[0-9a-f]{32})?|dod(?:/pmdod_[0-9a-f]{32})?|backlog(?:/pmbkl_[0-9a-f]{32})?))?|/sprints(?:/pms_[0-9a-f]{32}(?:/history/(?:goals|selections|events))?)?|/spec-sources(?:/capabilities)?|/plan-comparison|/roadmap(?:/revisions(?:/pmr[bfo]_[0-9a-f]{32})?)?|/snapshots(?:/(?:latest|pmsnap_[0-9a-f]{32}(?:/brief-export)?))?|/work(?:/wi_[0-9a-f]{20}/(?:capture|deliveries|quality))?|/evidence(?:/pme_[0-9a-f]{32})?|/captures/pmcap_[0-9a-f]{32}|/capabilities)?)?|",
             r"cleanup-retained|cleanup-tombstones(?:/(?:cr|wt)_[0-9a-f]{32})?|artifacts(?:/art_[0-9a-f]{32}/revisions/[1-9][0-9]{0,8})?|",
             r"sessions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+(?:/(?:messages|checkpoint-preview|history|relations|instructions))?|",
             r"operations/op_[0-9a-f]{32}|tasks/[0-9a-f-]{8,64}(?:/(?:history|sessions))?|checkpoints/cp_[0-9a-f]{32}|",
@@ -1275,6 +1275,11 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
     if path == "/workspaces" && input.idempotency_key.is_some() {
         return Err("Workspace discovery accepts no operation key".into());
     }
+    let resource_timestamp = if pm && path.ends_with("/resources") {
+        Some(Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$").unwrap())
+    } else {
+        None
+    };
     let mut query_keys = std::collections::HashSet::new();
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
         if key.chars().chain(value.chars()).any(char::is_control) {
@@ -1371,6 +1376,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 && !path.ends_with("/context")
                 && !path.ends_with("/context-bundle");
             let valid = match key.as_ref() {
+                "since" | "until" if path.ends_with("/resources") => {
+                    value.len() <= 40
+                        && resource_timestamp
+                            .as_ref()
+                            .is_some_and(|pattern| pattern.is_match(&value))
+                }
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
                         && serde_json::from_str::<serde_json::Value>(&value)
@@ -1927,6 +1938,33 @@ mod tests {
         assert!(validate_request(&request("GET", "/managed/setup?host=other")).is_err());
         assert!(validate_request(&request("GET", "/managed/setup/secrets")).is_err());
     }
+    #[test]
+    fn resource_usage_is_a_scoped_read_without_paths_or_collection_commands() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/resources";
+        assert!(validate_request(&get(root)).is_ok());
+        assert!(validate_request(&get(&format!(
+            "{root}?since=2026-10-01T00%3A00%3A00Z&until=2026-10-12T12%3A00%3A00.000Z"
+        )))
+        .is_ok());
+        for query in [
+            "path=/private/session.jsonl",
+            "refresh=1",
+            "host=fixture",
+            "since=yesterday",
+            "since=2026-10-01",
+            "since=2026-10-01T00:00:00Z&since=2026-10-02T00:00:00Z",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}?{query}"))).is_err(),
+                "{query}"
+            );
+        }
+        assert!(validate_request(&get(&format!("{root}/collect"))).is_err());
+        let mut write = get(root);
+        write.method = "POST".into();
+        assert!(validate_request(&write).is_err());
+    }
+
     #[test]
     fn product_reads_use_only_scoped_bounded_queries() {
         for path in [
