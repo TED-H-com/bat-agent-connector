@@ -6,24 +6,32 @@ for (const native of [false, true]) {
   test(`${transport}: independent categories, unread pages and no passive read writes`, async ({page}) => {
     const fixture = attentionFixture(); fixture.data.pageSize = 1;
     await mountAttention(page, native, fixture); await page.goto('/dashboard/');
-    const replies = page.getByRole('region', {name: 'Replies and permissions'});
-    const completion = page.getByRole('region', {name: 'Completion review'});
+    const replies = page.getByRole('region', {name: 'Questions'});
+    const completion = page.getByRole('region', {name: 'Reviews'});
     await expect(replies).toContainText('Question from agent'); await expect(replies).toContainText('Permission requested');
     await expect(completion).toContainText('Review delivery');
-    await expect(page.getByRole('region', {name: 'Operations needing attention'})).toContainText('uncertain');
+    const problems = page.getByRole('region', {name: 'Failed operations'});
+    const bare = problems.locator('[data-inbox-key="op_' + '1'.repeat(32) + '"]');
+    await expect(bare).toContainText('Continue from checkpoint');
+    await expect(bare).toContainText('Unknown');
+    await expect(bare).not.toContainText('·');
+    await expect(bare).not.toContainText('checkpoint.continue');
+    await expect(problems).not.toContainText('loaded (not a total)');
     await expect(page.getByRole('button', {name: 'To confirm', exact: true})).toHaveCount(0);
     await page.getByRole('button', {name: 'Active operations', exact: true}).click();
-    await expect(page.getByRole('region', {name: 'Active operations'})).toContainText('artifact.upload');
+    await expect(page.getByRole('region', {name: 'Active operations'})).toContainText('Upload artifact');
+    await expect(page.getByRole('region', {name: 'Active operations'})).not.toContainText('artifact.upload');
     await expect(page.getByRole('link', {name: 'Review delivery'})).toHaveCount(0);
     await page.getByRole('button', {name: 'Unread work updates', exact: true}).click();
     const updates = page.getByRole('region', {name: 'Unread work updates'});
-    await expect(updates).toContainText('1 loaded (not a total)');
+    await expect(updates).toContainText('1 shown');
     await updates.getByRole('button', {name: 'Load more'}).click();
-    await expect(updates).toContainText('2 loaded (not a total)');
+    await expect(updates).toContainText('2 shown');
     await updates.getByRole('button', {name: 'Load more'}).click();
-    await expect(updates).toContainText('3 loaded (not a total)');
+    await expect(updates.locator('[data-shown]')).toBeHidden();
     await expect(updates.getByRole('button', {name: 'Load more'})).toBeHidden();
-    await expect(updates.getByText('your decision', {exact: true})).toHaveCount(1);
+    await expect(updates.getByText('In review', {exact: true})).toHaveCount(1);
+    await expect(updates.getByText('your decision', {exact: true})).toHaveCount(0);
     fixture.data.cursor++;
     await expect.poll(() => fixture.data.reads.filter(p => p.includes('cursor=2')).length).toBeGreaterThan(1);
     expect(fixture.data.writes).toEqual([]);
@@ -49,13 +57,15 @@ for (const native of [false, true]) {
     await expect(page.getByRole('button', {name: 'Accept as done'})).toBeDisabled(); // observe is not approve
     expect(fixture.data.items[0].completion.pending).toBe(true);
     await page.locator('[data-shell-pending]').click();
-    await expect(page.getByRole('region', {name: 'Completion review'})).toContainText('Review delivery');
-    await expect(page.getByRole('region', {name: 'Replies and permissions'})).toContainText('Question from agent');
+    await expect(page.getByRole('region', {name: 'Reviews'})).toContainText('Review delivery');
+    await page.getByRole('button', {name: 'Details for Review delivery'}).click();
+    await expect(page.locator('.ui-inspector')).toContainText('your decision');
+    await expect(page.getByRole('region', {name: 'Questions'})).toContainText('Question from agent');
   });
 
   test(`${transport}: a failed refresh retains prior rows and its event checkpoint`, async ({page}) => {
     const fixture = attentionFixture(); await mountAttention(page, native, fixture); await page.goto('/dashboard/');
-    const completion = page.getByRole('region', {name: 'Completion review'});
+    const completion = page.getByRole('region', {name: 'Reviews'});
     await expect(completion).toContainText('Review delivery');
     fixture.data.failure = '/work-items'; fixture.data.cursor = 1;
     await expect(completion).toContainText('Could not refresh.');
@@ -122,10 +132,10 @@ test('a delayed reading response cannot repaint another view', async ({page}) =>
   await page.getByRole('button', {name: 'Mark this version read'}).click();
   await expect.poll(() => requested).toBe(true);
   await page.locator('[data-shell-pending]').click();
-  await expect(page.getByRole('heading', {name: 'Completion review'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Reviews'})).toBeVisible();
   release();
   await expect.poll(() => fixture.data.writes.length).toBe(1);
-  await expect(page.getByRole('heading', {name: 'Completion review'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Reviews'})).toBeVisible();
   await expect(page.locator('.reading-state')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -163,7 +173,7 @@ test('pending badge reflects only loaded attention evidence and withdraws with a
   await page.goto('/dashboard/');const count=page.locator('[data-shell-pending] [data-pending-count]');
   await expect(count).toHaveText('5+'); await expect(count).toHaveAttribute('title','5 pending loaded+');
   denied=true;fixture.data.cursor++;
-  await expect(page.getByRole('region',{name:'Completion review'})).not.toContainText('Review delivery');
+  await expect(page.getByRole('region',{name:'Reviews'})).not.toContainText('Review delivery');
   await expect(count).toBeHidden(); expect(fixture.data.writes).toEqual([]);
 });
 

@@ -20,7 +20,7 @@ for (const width of [390, 768, 1440]) {
         {sessions: [], operations: [], hosts: [], work_items: []}});
     });
     await page.goto("/dashboard/");
-    await expect(page.getByRole("heading", {name: "Connection"})).toBeVisible();
+    await expect(page.getByRole("heading", {name: "BAT Dashboard"})).toBeVisible();
     await page.locator('input[type="password"]').fill("fixture-token");
     await page.getByRole("button", {name: "Connect", exact: true}).click();
     await expect(page.getByText("Nothing needs you right now.")).toBeVisible();

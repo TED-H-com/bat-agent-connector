@@ -158,6 +158,10 @@ Optional title (trimmed to 160 code points), project-view origin and snapshot re
 use the same validation in both directions; empty values are omitted and refs with
 extra fields (including display metadata) are rejected.
 
+## Global screens
+
+Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header: a title, at most one primary action, an overflow menu and an icon refresh. Pending is an inbox. Each group is a title and a count, then rows. A row’s primary action is the existing navigation for that item. “N shown · Load more” appears only while another page exists. Explanations sit once in a Details disclosure. Operations is a dense table (action, target, status, actor, started, duration) with a segmented filter and search. Selecting a row opens an inspector; attempts, frames and raw ids stay in Details. Settings uses a sub-nav (Connection, Desktop, Models, Fleet, Updates, About) that stacks under 800px. Forms stay within 640px. Connection shows the endpoint, a state pill, the last event time and a secondary Disconnect. The signed-out screen is one centred card: the product mark, one sentence, the connect form and a link to the setup guide. Under that card, the browser build keeps the existing Tailscale explanation, with no controls and no local calls. Sidebar status text is shown only for Needs you, Asking you and Failed. Other states keep the dot, with the word in the tooltip and accessible name. Running replaces the internal streaming word. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details.
+
 ## Headers, copy and acceptance
 
 One page title; do not repeat the workspace name above it or repeat the view name
