@@ -9632,7 +9632,7 @@ function discussionComposer({ t, form, analysis, details, draft = false }) {
 	if (analysis) {
 		actions.append(analysis.querySelector("[data-discussion-ask]"));
 		status.append(analysis);
-	} else if (!draft) status.append(h$1("p", { class: "muted" }, t("pd_not_connected"), " · ", h$1("a", { href: "#/settings" }, t("pd_setup"))));
+	} else if (!draft) status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " · ", h$1("a", { href: "#/settings" }, t("pd_setup"))));
 	form.box.append(h$1("div", { class: "pd-composer-row" }, status, actions));
 	return h$1("div", { class: "pd-composer" }, form.box);
 }
@@ -27201,7 +27201,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					titleView.finish();
 					return load();
 				},
-				onStateChange: () => titleView?.update(threadData.thread.title),
+				onStateChange: () => {
+					if (threadData) titleView?.update(threadData.thread.title);
+				},
 				extra: threadTitle
 			});
 			const threadDetails = h("details", { "data-discussion-details": "" }, h("summary", {}, t("pd_details")), renameForm.box.querySelector(".pm-receipt"));

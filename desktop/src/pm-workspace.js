@@ -499,7 +499,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (sendHandoff?.threadId === threadId && !noteForm.locked()) noteForm.set('content', sendHandoff.content);
       renameForm = form({action: 'pm.thread.rename', target, fields: {title: threadTitle}, params: values => ({title: values.title.trim()}),
         preconditions, permitted: write, label: 'pd_save', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;},
-        onSaved: () => {titleView.finish(); return load();}, onStateChange: () => titleView?.update(threadData.thread.title), extra: threadTitle});
+        onSaved: () => {titleView.finish(); return load();}, onStateChange: () => {if (threadData) titleView?.update(threadData.thread.title);}, extra: threadTitle});
       const threadDetails = h('details', {'data-discussion-details': ''}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('.pm-receipt'));
       titleView = discussionTitle({t, field: threadTitle, form: renameForm, value: thread.title});
       boundContext = h('div', {class: 'pd-context'}); panelContext = h('div', {class: 'pd-context-details'});
