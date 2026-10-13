@@ -300,14 +300,15 @@ def list_inflight(ops, principal, workspace_id, *, transition_id=None, after=0, 
         if transition['to_stage'] == 'maintain' and not _transition_visible(ops.db, principal, transition):
             if transition_id is not None:
                 raise _bad('NOT_FOUND', 'Lifecycle transition not found', 404)
-            return {'workspace_id': workspace_id, 'transition_id': None, 'inflight': [], 'next_cursor': None, 'visibility_filtered': True}
+            return {'workspace_id': workspace_id, 'transition_id': None, 'inflight': [], 'next_cursor': None, 'visibility_filtered': True, 'omitted': None}
     rows = ops.db.execute('SELECT * FROM pm_lifecycle_inflight WHERE transition_id=? AND sequence>? ORDER BY sequence LIMIT ?',
                           (tid, after, limit + 1)).fetchall()
-    result = {'workspace_id': workspace_id, 'transition_id': tid, 'inflight': [], 'next_cursor': None, 'visibility_filtered': False}
+    result = {'workspace_id': workspace_id, 'transition_id': tid, 'inflight': [], 'next_cursor': None, 'visibility_filtered': False, 'omitted': 0}
     consumed = 0
     for row in rows[:limit]:
         if not _visible(ops.db, principal, row['operation_id']):
             result['visibility_filtered'], result['next_cursor'] = True, row['sequence']
+            result['omitted'] += 1
             consumed += 1
             continue
         item = _inflight(ops.db, row)

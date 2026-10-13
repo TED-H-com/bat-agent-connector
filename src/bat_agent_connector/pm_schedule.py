@@ -17,6 +17,7 @@ from . import pm_evidence, pm_roadmap, pm_source_lineage, work_items
 from .operations import STATES as OPERATION_STATES
 from .operations import TERMINAL as OPERATION_TERMINAL
 from .operations import OperationError
+from .task_journal import STATES as TASK_STATES
 
 MAX_WORK = 200
 MAX_LINKS_PER_WORK = 50
@@ -24,7 +25,13 @@ MAX_LINKS_TOTAL = 200
 MAX_ISSUES = 200
 MAX_BYTES = 2_000_000
 _BINDING_CHUNK = 200
-_RUNS_PER_SESSION = 3
+# Mappings examined, including ones list_mappings or work visibility will not emit.
+_ISSUE_SCAN = 1000
+# Links examined per schedule read, hidden ones included, before the 50 and 200 caps.
+_LINK_SCAN = 1000
+_LINK_PAGE = 200
+# Rows examined per session, hidden ones included. Visibility is decided before any run is chosen.
+_RUN_SCAN = 64
 _RANGE_BOUND = {"start": "0000-00-00", "end": "0000-00-00"}
 _PAGE_DEFAULT = 100
 _RANK = {"milestone": 0, "requirement": 1, "issue": 2, "work": 3, "attempt": 4}
@@ -82,8 +89,6 @@ def _cursor(after):
         raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422) from None
     kind, sep, rest = text.partition(":")
     if sep != ":" or kind not in _RANK or not rest or len(text) > _CURSOR_RAW_MAX:
-        raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
-    if any(ord(char) < 32 or ord(char) == 127 for char in text):
         raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
     return _RANK[kind], text
 
@@ -255,7 +260,7 @@ def _plan(ops, principal, workspace_id, revision, coverage):
         except OperationError as error:
             if error.status == 403:
                 raise
-            if error.status == 404:
+            if error.status in (404, 409):
                 coverage["visibility_filtered"] = True
                 return None
             raise
@@ -286,7 +291,7 @@ def _works(ops, principal, workspace_id, milestones, requirements, notes, covera
         coverage["work_bindings_truncated"] = True
         _note(notes, "work", "binding_page_truncated")
     items = _work_items(db, [row["work_item_id"] for row in selected])
-    links, truncated_works = _links(db, [row["work_item_id"] for row in selected], coverage, notes)
+    links, truncated_works = _links(ops, principal, workspace_id, [row["work_item_id"] for row in selected], coverage, notes)
     evidence = _evidence(ops, principal, workspace_id, links, notes, coverage)
     works, attempts = [], []
     for binding in selected:
@@ -298,6 +303,7 @@ def _works(ops, principal, workspace_id, milestones, requirements, notes, covera
         unavailable = any((link["kind"] == "operation" and link["ref"] in evidence["missing_operations"])
                           or (link["kind"] == "task" and link["ref"] in evidence["missing_tasks"]) for link in own)
         attempt_rows = [row for row in (_attempt(binding["work_item_id"], link, evidence, notes) for link in own) if row]
+        attempt_rows = [row for row in attempt_rows if _emit_row(db, row, coverage)]
         attempts.extend(attempt_rows)
         parent = _work_parent(binding, milestones, requirements, notes)
         withheld = unavailable or binding["work_item_id"] in truncated_works
@@ -348,29 +354,65 @@ def _work_items(db, ids):
     return {row["work_item_id"]: work_items._item(row) for row in rows}
 
 
-def _links(db, ids, coverage, notes):
+def _link_verdict(ops, principal, workspace_id, row):
+    """Classify one link before it can take a cap slot. Missing records still count."""
+    kind, ref = row["kind"], row["ref"]
+    try:
+        if kind == "session":
+            return "visible" if pm_evidence._session_visible(ops, principal, workspace_id, ref) else "hidden"
+        if kind == "operation":
+            if pm_evidence._read_operation(ops, principal, workspace_id, ref) is not None:
+                return "visible"
+            exists = ops.db.execute("SELECT 1 FROM operations WHERE operation_id=?", (ref,)).fetchone()
+            return "hidden" if exists else "missing"
+        if kind == "task":
+            if ops.db.execute("SELECT 1 FROM tasks WHERE task_id=?", (ref,)).fetchone() is None:
+                return "missing"
+            return "visible" if pm_evidence._task_visible(ops, principal, workspace_id, ref) else "hidden"
+    except OperationError:
+        return "hidden"
+    return "hidden"
+
+
+def _links(ops, principal, workspace_id, ids, coverage, notes):
+    """Count visible and missing links, in link_id order, before either cap."""
     if not ids:
         return {}, set()
-    counts = dict(db.execute(
-        f"""SELECT work_item_id, COUNT(*) FROM work_item_links WHERE removed_at IS NULL
-            AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(ids)}) GROUP BY work_item_id""",  # noqa: S608
-        tuple(ids)).fetchall())
-    fetched = db.execute(
-        f"""SELECT work_item_id, link_id, kind, ref FROM work_item_links WHERE removed_at IS NULL
-            AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(ids)})
-            ORDER BY link_id LIMIT ?""",  # noqa: S608
-        (*ids, MAX_LINKS_TOTAL + 1)).fetchall()
-    overflow = len(fetched) > MAX_LINKS_TOTAL
-    grouped = {}
-    for row in fetched[:MAX_LINKS_TOTAL]:
-        grouped.setdefault(row["work_item_id"], []).append(row)
-    truncated = set()
-    cut_id = fetched[MAX_LINKS_TOTAL - 1]["work_item_id"] if overflow else None
-    for work_id, count in counts.items():
-        have = grouped.get(work_id, [])
-        if count > len(have) or len(have) > MAX_LINKS_PER_WORK or work_id == cut_id:
-            truncated.add(work_id)
-            grouped[work_id] = have[:MAX_LINKS_PER_WORK]
+    db = ops.db
+    wanted = list(dict.fromkeys(ids))
+    grouped, truncated = {}, set()
+    examined, counted, last_id = 0, 0, 0
+    while examined < _LINK_SCAN:
+        room = min(_LINK_PAGE, _LINK_SCAN - examined)
+        rows = db.execute(
+            f"""SELECT work_item_id, link_id, kind, ref FROM work_item_links WHERE removed_at IS NULL
+                AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(wanted)}) AND link_id>?
+                ORDER BY link_id LIMIT ?""", (*wanted, last_id, room + 1)).fetchall()  # noqa: S608
+        if not rows:
+            break
+        extra = len(rows) > room
+        for row in rows[:room]:
+            examined += 1
+            last_id = row["link_id"]
+            if _link_verdict(ops, principal, workspace_id, row) == "hidden":
+                coverage["visibility_filtered"] = True
+                continue
+            work_id = row["work_item_id"]
+            have = grouped.setdefault(work_id, [])
+            if len(have) >= MAX_LINKS_PER_WORK or counted >= MAX_LINKS_TOTAL:
+                truncated.add(work_id)
+                continue
+            have.append(row)
+            counted += 1
+        if not extra:
+            break
+        if examined >= _LINK_SCAN:
+            rest = db.execute(
+                f"""SELECT DISTINCT work_item_id FROM work_item_links WHERE removed_at IS NULL
+                    AND kind IN ('session','operation','task') AND work_item_id IN ({_marks(wanted)})
+                    AND link_id>?""", (*wanted, last_id)).fetchall()  # noqa: S608
+            truncated.update(row[0] for row in rest)
+            break
     if truncated:
         coverage["attempts_truncated"] = True
         _note(notes, "work.actual", "attempt_links_truncated")
@@ -453,23 +495,30 @@ def _operations(ops, principal, workspace_id, ids, notes, coverage):
 
 
 def _operation_ends(db, operations):
-    """Terminal end is that status's own step time, not an earlier succeeded step."""
+    """Terminal end is the latest operation.{status} event whose `to` matches that status."""
     terminal = {oid: op.get("status") for oid, op in operations.items() if op.get("status") in OPERATION_TERMINAL}
     if not terminal:
         return {}
     ids = list(terminal)
+    kinds = tuple(f"operation.{status}" for status in sorted(OPERATION_TERMINAL))
     rows = db.execute(
-        f"""SELECT operation_id, status, MAX(finished_at) AS finished_at FROM operation_steps
-            WHERE finished_at IS NOT NULL AND status IN ('succeeded','failed','cancelled')
-            AND operation_id IN ({_marks(ids)}) GROUP BY operation_id, status""", tuple(ids)).fetchall()  # noqa: S608
-    by_status = {}
-    for row in rows:
-        by_status.setdefault(row["operation_id"], {})[row["status"]] = row["finished_at"]
+        f"""SELECT resource_id, kind, body, created_at FROM api_events
+            WHERE resource_type='operation' AND resource_id IN ({_marks(ids)}) AND kind IN ({_marks(kinds)})
+            ORDER BY seq DESC""", (*ids, *kinds)).fetchall()  # noqa: S608
     ends = {}
-    for operation_id, status in terminal.items():
-        stamp = by_status.get(operation_id, {}).get(status)
-        if stamp is not None:
-            ends[operation_id] = _instant(stamp)
+    for row in rows:
+        operation_id = row["resource_id"]
+        if operation_id in ends:
+            continue
+        status = terminal[operation_id]
+        if row["kind"] != f"operation.{status}":
+            continue
+        try:
+            body = json.loads(row["body"])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(body, dict) and body.get("to") == status:
+            ends[operation_id] = _instant(row["created_at"])
     return ends
 
 
@@ -519,37 +568,36 @@ def _tasks(ops, principal, workspace_id, ids, notes, coverage):
             coverage["visibility_filtered"] = True
             continue
         found[task_id] = present[task_id]
-    ends = {}
-    if found:
-        for row in ops.db.execute(
-                f"""SELECT task_id, MAX(created_at) AS created_at FROM events WHERE kind='state'
-                    AND json_extract(body,'$.to') IN ('done','failed') AND task_id IN ({_marks(list(found))})
-                    GROUP BY task_id""", tuple(found)):  # noqa: S608
-            ends[row["task_id"]] = row["created_at"]
-    since = _task_since(ops.db, found)
+    terminal = {task_id: row["state"] for task_id, row in found.items() if row["state"] in {"done", "failed"}}
+    ends = _task_transitions(ops.db, terminal)
+    since = {task_id: _instant(stamp) for task_id, stamp in _task_transitions(ops.db, {
+        task_id: row["state"] for task_id, row in found.items() if row["state"] in _TASK_WAIT}).items()}
     return ({task_id: {"row": row, "terminal_at": ends.get(task_id), "since": since.get(task_id)}
              for task_id, row in found.items()}, missing)
 
 
-def _task_since(db, rows):
-    waiting = {task_id: row["state"] for task_id, row in rows.items() if row["state"] in _TASK_WAIT}
-    if not waiting:
+def _task_transitions(db, wanted):
+    """Latest event_id whose body has task-state `from` and `to`, and whose `to` is the current state."""
+    if not wanted:
         return {}
-    ids = list(waiting)
+    states = tuple(sorted(TASK_STATES))
+    ids = list(wanted)
     fetched = db.execute(
-        f"""SELECT task_id, body, created_at FROM (
-                SELECT task_id, body, created_at,
-                    ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY event_id DESC) AS n
-                FROM events WHERE kind='state' AND task_id IN ({_marks(ids)})) WHERE n=1""",  # noqa: S608
-        tuple(ids)).fetchall()
+        f"""SELECT task_id, body, created_at FROM events WHERE task_id IN ({_marks(ids)})
+            AND json_extract(body,'$.from') IN ({_marks(states)})
+            AND json_extract(body,'$.to') IN ({_marks(states)})
+            ORDER BY event_id DESC""", (*ids, *states, *states)).fetchall()  # noqa: S608
     found = {}
     for row in fetched:
+        task_id = row["task_id"]
+        if task_id in found:
+            continue
         try:
             body = json.loads(row["body"])
         except (TypeError, ValueError):
             continue
-        if isinstance(body, dict) and body.get("to") == waiting[row["task_id"]]:
-            found[row["task_id"]] = _instant(row["created_at"])
+        if isinstance(body, dict) and body.get("from") in TASK_STATES and body.get("to") == wanted[task_id]:
+            found[task_id] = row["created_at"]
     return found
 
 
@@ -570,10 +618,11 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
     for host, sid, _ref in pairs:
         args.extend((host, sid))
     rows = db.execute(
-        f"""SELECT run_id, operation_id, context, host, session_id FROM (
+        f"""SELECT run_id, operation_id, context, host, session_id, created_at FROM (
                 SELECT r.run_id AS run_id, r.operation_id AS operation_id, r.context AS context,
                     json_extract(s.session_binding,'$.host') AS host,
                     json_extract(s.session_binding,'$.session_id') AS session_id,
+                    r.created_at AS created_at,
                     ROW_NUMBER() OVER (
                         PARTITION BY json_extract(s.session_binding,'$.host'),
                             json_extract(s.session_binding,'$.session_id')
@@ -581,15 +630,16 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
                 FROM pm_runs r JOIN pm_run_state s USING(run_id)
                 WHERE r.workspace_id=? AND (json_extract(s.session_binding,'$.host'),
                     json_extract(s.session_binding,'$.session_id')) IN ({marks})
-            ) WHERE n<=?""", (*args, _RUNS_PER_SESSION)).fetchall()  # noqa: S608
+            ) WHERE n<=?""", (*args, _RUN_SCAN + 1)).fetchall()  # noqa: S608
     grouped = {}
     for row in rows:
         grouped.setdefault((row["host"], row["session_id"]), []).append(row)
     from . import pm_runs
-    found, ambiguous = {}, False
+    found, ambiguous, truncated = {}, False, False
     for host, sid, ref in pairs:
-        visible_ids = []
-        for match in grouped.get((host, sid), []):
+        matches = sorted(grouped.get((host, sid), []), key=lambda row: (row["created_at"], row["run_id"]))
+        visible_ids, decided = [], False
+        for match in matches[:_RUN_SCAN]:
             try:
                 body = json.loads(match["context"]) if match["context"] else {}
             except (TypeError, ValueError):
@@ -597,20 +647,29 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
             if not isinstance(body, dict):
                 body = {}
             try:
-                allowed = pm_runs.source_visible(db, principal, {"operation_id": match["operation_id"], "context": body})
+                allowed = pm_runs.source_visible(db, principal, {
+                    "operation_id": match["operation_id"], "context": body, "workspace_id": workspace_id})
             except OperationError:
                 allowed = False
             if allowed:
                 visible_ids.append(match["run_id"])
+                if len(visible_ids) == 2:
+                    ambiguous = True
+                    decided = True
+                    break
             else:
                 coverage["visibility_filtered"] = True
-        if len(visible_ids) > 1:
-            ambiguous = True
+        if decided:
+            continue
+        if len(matches) > _RUN_SCAN:
+            truncated = True
             continue
         if len(visible_ids) == 1:
             found[ref] = visible_ids[0]
     if ambiguous:
         _note(notes, "attempt.run_id", "multiple_explicit_runs")
+    if truncated:
+        _note(notes, "attempt.run_id", "run_lookup_truncated")
     return found
 
 
@@ -874,38 +933,48 @@ def _work_actual(completion, merged, attempts):
 
 
 def _issues(ops, principal, workspace_id, milestones, notes, coverage):
+    """Page mappings until 200 rows will be emitted, or the scan bound stops on more data."""
     if not _table(ops.db, "pm_issue_revisions"):
         return []
     from . import pm_issue_mappings
-    collected, after, pages = [], 0, 0
-    while pages < 4 and len(collected) < MAX_ISSUES:
-        page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=50)
+    emitted, after, scanned, truncated = [], 0, 0, False
+    while scanned < _ISSUE_SCAN and len(emitted) < MAX_ISSUES:
+        limit = min(50, _ISSUE_SCAN - scanned)
+        page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=limit)
         if page["coverage"]["visibility_filtered"]:
             coverage["visibility_filtered"] = True
-        collected.extend(page["mappings"])
-        pages += 1
-        if not page["coverage"]["has_more"] or page["next_cursor"] is None:
+        scanned += page["coverage"].get("scanned", len(page["mappings"]))
+        binding_ids, mapping_ids = [], []
+        for mapping in page["mappings"]:
+            document = mapping.get("document") if isinstance(mapping.get("document"), dict) else {}
+            relation = document.get("relation") if isinstance(document.get("relation"), dict) else {}
+            if isinstance(relation.get("binding_id"), str):
+                binding_ids.append(relation["binding_id"])
+            if isinstance(mapping.get("mapping_id"), str):
+                mapping_ids.append(mapping["mapping_id"])
+        plans = _binding_plans(ops.db, workspace_id, binding_ids)
+        published = _published_titles(ops.db, workspace_id, mapping_ids)
+        for mapping in page["mappings"]:
+            row = _issue(ops, principal, mapping, milestones, notes, coverage, plans, published)
+            if row is None:
+                continue
+            if len(emitted) >= MAX_ISSUES:
+                truncated = True
+                break
+            emitted.append(row)
+        if truncated:
+            break
+        more = page["coverage"]["has_more"] and page["next_cursor"] is not None and page["next_cursor"] > after
+        if not more:
+            break
+        if scanned >= _ISSUE_SCAN:
+            truncated = True
             break
         after = page["next_cursor"]
-    else:
+    if truncated:
         coverage["issues_truncated"] = True
         _note(notes, "issue", "mapping_page_truncated")
-    if len(collected) > MAX_ISSUES:
-        collected = collected[:MAX_ISSUES]
-        coverage["issues_truncated"] = True
-        _note(notes, "issue", "mapping_page_truncated")
-    binding_ids, mapping_ids = [], []
-    for mapping in collected:
-        document = mapping.get("document") if isinstance(mapping.get("document"), dict) else {}
-        relation = document.get("relation") if isinstance(document.get("relation"), dict) else {}
-        if isinstance(relation.get("binding_id"), str):
-            binding_ids.append(relation["binding_id"])
-        if isinstance(mapping.get("mapping_id"), str):
-            mapping_ids.append(mapping["mapping_id"])
-    plans = _binding_plans(ops.db, workspace_id, binding_ids)
-    published = _published_titles(ops.db, workspace_id, mapping_ids)
-    return [row for row in (_issue(ops, principal, mapping, milestones, notes, coverage, plans, published)
-                            for mapping in collected) if row]
+    return emitted
 
 
 def _binding_plans(db, workspace_id, binding_ids):
@@ -1001,6 +1070,21 @@ def _row_roots(db, public):
     for kind, identity in pm_source_lineage.references(public):
         found.update(pm_source_lineage.roots(db, kind, identity))
     return found
+
+
+def _emit_row(db, row, coverage):
+    """Drop a row whose own roots will not fit before it can change a work's dates or status."""
+    if not _lineage_open(db):
+        return True
+    try:
+        roots = _row_roots(db, _public(row))
+    except OperationError:
+        coverage["visibility_filtered"] = True
+        return False
+    if len(roots) > pm_source_lineage.MAX_ROOTS:
+        coverage["visibility_filtered"] = True
+        return False
+    return True
 
 
 def _fit(loaded, ordered, limit):

@@ -2153,7 +2153,8 @@ mod tests {
     fn register_is_a_scoped_read_without_writes() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/register";
         assert!(validate_request(&get(root)).is_ok());
-        let cursor = "MQlnb3Zlcm5hbmNlLnBtZ292X2FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ";
+        // Unpadded base64url of "{sequence}\n{row_id}". The bridge checks the alphabet only.
+        let cursor = "MQpnb3Zlcm5hbmNlLnBtZ292X2FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh";
         assert!(validate_request(&get(&format!(
             "{root}?type=risk&status=open&owner=project-owner&q=login&limit=50&after={cursor}"
         )))
@@ -2166,6 +2167,15 @@ mod tests {
             "{root}/meeting.pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.follow_up.verify_login"
         );
         assert!(validate_request(&get(&meeting)).is_ok());
+        // Item ids follow pm_sprints.ITEM_ID, so '.' is part of the id.
+        let dotted_follow = format!(
+            "{root}/meeting.pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.follow_up.check.quality"
+        );
+        let dotted_decision = format!(
+            "{root}/meeting.pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.decision.retain.direction"
+        );
+        assert!(validate_request(&get(&dotted_follow)).is_ok());
+        assert!(validate_request(&get(&dotted_decision)).is_ok());
         assert!(validate_request(&get(&format!("{detail}?type=risk"))).is_err());
         assert!(validate_request(&get(&format!(
             "{root}/governance:pmgov_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

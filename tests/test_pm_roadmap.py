@@ -105,7 +105,8 @@ async def test_baseline_is_an_explicit_schedule_with_exact_adopted_plan_and_no_e
     assert ops.db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0
 
 
-@pytest.mark.parametrize("invalid", ["2026-02-29", "2026-04-31", "2026-1-01", "2026-13-01", "0000-01-01", "2026-11-01T00:00:00Z", "", True, 20261101])
+@pytest.mark.parametrize("invalid", ["2026-02-29", "2026-04-31", "2026-1-01", "2026-13-01", "0000-01-01",
+                                     "2026-11-01T00:00:00Z", "2026-W41-1", "2026-W41", "20261011", "", True, 20261101])
 async def test_dates_reject_invalid_calendar_values_before_effects(ops, invalid):
     target, plan, *_ = await accepted(ops)
     with pytest.raises(OperationError, match="INVALID_PARAMS"):

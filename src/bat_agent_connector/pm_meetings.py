@@ -543,7 +543,8 @@ def get_meeting(ops, principal, workspace_id, meeting_id, *, history_limit=50, f
                 'follow_ups': _history_rows(ops, meeting, 'follow_ups', follow_up_after, history_limit)}
         draft = _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id']) if meeting['draft_revision_id'] else None
         completion = _document(ops.db, 'pm_meeting_completions', 'completion_id', meeting['completion_id']) if meeting['completion_id'] else None
-        coverage = {kind: pm_sprints._coverage(0, entries) for kind, entries in rows.items()}
+        coverage = {'notes': pm_sprints._coverage(0, rows['notes']),
+                    'follow_ups': pm_sprints._coverage(follow_up_after, rows['follow_ups'])}
         result = _checked_read({'version': 1, 'workspace_id': workspace_id, 'meeting': meeting, 'context': context,
                 'snapshot': snapshot, 'draft': draft, 'completion': completion,
                 'notes': [], 'follow_up_events': [],

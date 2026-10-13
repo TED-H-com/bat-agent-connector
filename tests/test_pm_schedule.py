@@ -16,6 +16,7 @@ from bat_agent_connector import (
     pm_runs,
     pm_schedule,
     pm_source_lineage,
+    pm_work_packages,
     work_items,
 )
 from bat_agent_connector.api_auth import Principal
@@ -730,6 +731,61 @@ async def test_hidden_work_is_absent_on_http_rpc_and_mcp(served, mock, monkeypat
         await fleet.close()
 
 
+async def test_http_and_rpc_walk_every_page_with_hidden_data_and_a_byte_cut(served, monkeypatch):
+    daemon_under_test, port = served
+    production = daemon_under_test.ops.actions.pop("pm.plan.adopt", None)
+    try:
+        target, plan, work, *_ = await mapped(daemon_under_test.ops)
+    finally:
+        if production is not None:
+            daemon_under_test.ops.actions["pm.plan.adopt"] = production
+    service = daemon_under_test.ops
+    wid = target["workspace_id"]
+    pid = work_items._get_item(service.db, work["work_item_id"])["project_id"]
+    for index in range(2):
+        extra = {"workspace_id": wid, "work_item_id": await item(service, pid, title=f"Visible deliverable {index}")}
+        await bind_work(service, extra, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    hidden = {"workspace_id": wid, "work_item_id": await item(service, pid, title="HIDDEN TITLE")}
+    await bind_work(service, hidden, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    operation = await source_operation(service)
+    await link(service, hidden, "operation", operation["operation_id"])
+    withdraw(service, "work_item", hidden["work_item_id"])
+    hidden_id, operation_id = hidden["work_item_id"], operation["operation_id"]
+    expected = ordered_ids(check(schedule(service, wid), wid))
+    assert hidden_id not in expected and operation_id not in "".join(expected)
+    full_size = len(json.dumps(schedule(service, wid), ensure_ascii=False).encode())
+    monkeypatch.setattr(pm_schedule, "MAX_BYTES", full_size - 1)
+    auth = token(daemon_under_test, OWNER.actor, *OWNER.scopes)
+    path = f"/api/v1/pm/workspaces/{wid}/schedule"
+    seen, cursor, pages = [], None, []
+    while len(pages) < 30:
+        suffix = "?limit=100" if cursor is None else "?limit=100&after=" + cursor
+        status, body = await http(port, "GET", path + suffix, tok=auth)
+        assert status == 200
+        raw = json.dumps(body, ensure_ascii=False)
+        assert hidden_id not in raw and operation_id not in raw and "HIDDEN TITLE" not in raw
+        assert hidden_id not in exposed_cursor(body)
+        assert len(raw.encode()) <= pm_schedule.MAX_BYTES
+        page_ids = ordered_ids(body)
+        assert page_ids
+        seen.extend(page_ids)
+        pages.append(body)
+        if body["next_cursor"] is None:
+            assert body["partial"] is False
+            break
+        assert body["partial"] is True
+        cursor = body["next_cursor"]
+    else:
+        raise AssertionError("schedule walk did not finish")
+    assert len(pages) >= 2 and seen == expected
+    rpc = await daemon_under_test.call_api(
+        "pm_schedule_get", {"workspace_id": wid, "after": pages[0]["next_cursor"], "limit": 100}, OWNER)
+    assert stable(rpc) == stable(pages[1])
+    raw_rpc = json.dumps(rpc, ensure_ascii=False)
+    assert hidden_id not in raw_rpc and operation_id not in raw_rpc and "HIDDEN TITLE" not in raw_rpc
+    assert hidden_id not in exposed_cursor(rpc)
+
+
 async def test_hidden_work_cannot_be_recovered_from_status_codes(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid, work_id = target["workspace_id"], work["work_item_id"]
@@ -901,6 +957,124 @@ async def test_issue_rows_keep_titles_cancelled_state_and_plan_revision(ops, mon
     assert not any(node["kind"] == "issue" for node in nodes(hidden))
 
 
+def _tracked_issue(service, wid, work_id, binding, title, *, mapping_id, package_id, revision_id, operation_id,
+                  evidence_refs=None):
+    """Insert one digest-valid package and issue revision that list_mappings can read."""
+    row = service.db.execute("SELECT * FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?",
+                             (wid, binding["binding_id"])).fetchone()
+    parsed = {**dict(row), "requirement_ids": json.loads(row["requirement_ids"])}
+    plan = pm_plans.get_plan(service, OWNER, wid, row["plan_revision_id"])["plan"]
+    plan_ref = pm_work_packages._plan_ref(plan)
+    item_row = work_items._get_item(service.db, work_id)
+    project = work_items._get_project(service.db, item_row["project_id"])
+    server_id = service.db.execute("SELECT server_id FROM pm_workspaces WHERE workspace_id=?", (wid,)).fetchone()[0]
+    context = {"server_id": server_id, "plan_ref": plan_ref,
+               "work_ref": {"binding_id": binding["binding_id"], "work_item_id": work_id,
+                            "project_id": item_row["project_id"],
+                            "binding_document_digest": pm_work_packages._digest(parsed),
+                            "work_version": item_row["version"], "work_fingerprint": work_items.fingerprint(item_row),
+                            "project_version": project["version"]},
+               "evidence_refs": list(evidence_refs or []), "dod_ref": None, "git_binding": None}
+    package_op = "op_" + package_id[-32:]
+    document = {"workspace_id": wid, "package_id": package_id, "work_item_id": work_id,
+                "previous_package_id": None, "operation_id": package_op, "context": context}
+    pm_work_packages.schema(service.journal)
+    pm_issue_mappings.schema(service.journal)
+    service.db.execute("""INSERT INTO pm_work_packages(package_id,workspace_id,work_item_id,previous_package_id,
+        document_digest,document,actor,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?,?)""",
+        (package_id, wid, work_id, None, pm_work_packages._digest(document), pm_work_packages._json(document),
+         OWNER.actor, 1.0, package_op))
+    issue = {"revision_id": revision_id, "mapping_id": mapping_id, "workspace_id": wid, "work_item_id": work_id,
+             "operation_id": operation_id, "state": "tracking",
+             "issue": {"id": 1, "number": 7, "repository": "o/r", "repository_id": 1},
+             "selected": {"public_title": title},
+             "relation": {"work_item_id": work_id, "binding_id": binding["binding_id"], "requirement_ids": ["login"],
+                          "repository_id": 1, "repository": "o/r"},
+             "package_ref": {"package_id": package_id, "document_digest": pm_work_packages._digest(document)}}
+    service.db.execute("""INSERT INTO pm_issue_revisions(revision_id,mapping_id,workspace_id,work_item_id,
+        previous_revision_id,document,document_digest,operation_id,created_at,actor) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (revision_id, mapping_id, wid, work_id, None, pm_work_packages._json(issue), pm_work_packages._digest(issue),
+         operation_id, 1.0, OWNER.actor))
+
+
+async def test_hidden_work_issue_does_not_consume_the_issue_cap(ops, monkeypatch):
+    target, plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    hidden = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Hidden deliverable")}
+    hidden_binding = await bind_work(ops, hidden, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    _tracked_issue(ops, wid, hidden["work_item_id"], hidden_binding, "Hidden issue",
+                   mapping_id="pmim_" + "a" * 32, package_id="pmwp_" + "a" * 32,
+                   revision_id="pmir_" + "a" * 32, operation_id="op_" + "a" * 16)
+    _tracked_issue(ops, wid, work["work_item_id"], binding, "Visible issue",
+                   mapping_id="pmim_" + "b" * 32, package_id="pmwp_" + "b" * 32,
+                   revision_id="pmir_" + "b" * 32, operation_id="op_" + "b" * 16)
+    withdraw(ops, "work_item", hidden["work_item_id"])
+    monkeypatch.setattr(pm_schedule, "MAX_ISSUES", 1)
+    listed = pm_issue_mappings.list_mappings(ops, OWNER, wid)
+    assert [row["mapping_id"] for row in listed["mappings"]] == ["pmim_" + "a" * 32, "pmim_" + "b" * 32]
+    body = check(schedule(ops, wid), wid)
+    assert f"issue:pmim_{'b' * 32}" in by_id(body)
+    assert f"issue:pmim_{'a' * 32}" not in by_id(body)
+    assert hidden["work_item_id"] not in json.dumps(body)
+    assert body["coverage"]["issues_truncated"] is False and body["partial"] is False
+    assert body["coverage"]["visibility_filtered"] is True
+
+
+def corrupt_plan_digest(service, revision_id):
+    service.db.execute("DROP TRIGGER IF EXISTS pm_plan_revisions_update_immutable")
+    service.db.execute("UPDATE pm_plan_revisions SET document_digest=? WHERE revision_id=?", ("0" * 64, revision_id))
+    service.db.execute("CREATE TRIGGER pm_plan_revisions_update_immutable BEFORE UPDATE ON pm_plan_revisions "
+                       "BEGIN SELECT RAISE(ABORT, 'PM plan history is immutable'); END")
+
+
+async def test_a_corrupt_plan_is_hidden_instead_of_failing_the_read(ops):
+    target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
+        {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
+    wid, rev = target["workspace_id"], saved["revision_id"]
+    work = await work_for(ops, target)
+    await bind_work(ops, work, plan_revision_id=rev, requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone({"revision_id": rev}, requirement_ids=["login", "billing"])])
+    corrupt_plan_digest(ops, rev)
+    body = check(schedule(ops, wid), wid)
+    assert f"requirement:{rev}:login" not in by_id(body)
+    assert f"requirement:{rev}:billing" not in by_id(body)
+    assert "milestone:release" in by_id(body)
+    assert body["coverage"]["visibility_filtered"] is True
+    assert body["partial"] is False
+
+
+async def test_one_lineage_limit_hides_one_issue_mapping(ops):
+    target, plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pm_source_lineage.schema(ops.journal)
+    pm_evidence_id = "pme_" + "c" * 32
+    ref = "mock-host/lineage-session"
+    for index in range(65):
+        original = "op_" + f"{index:032x}"
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('session',?,?,?)", (ref, original, original))
+    server_id = ops.db.execute("SELECT server_id FROM pm_workspaces WHERE workspace_id=?", (wid,)).fetchone()[0]
+    ops.db.execute("""INSERT INTO pm_evidence(evidence_id,server_id,workspace_id,source_kind,source_id,fact_digest,
+        source_observed_at,captured_at,journal_cursor,document,access_operations) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        (pm_evidence_id, server_id, wid, "session_observation", ref, "e" * 64, 1.0, 1.0, 1,
+         json.dumps({"facts": {"resource_id": ref}}), "[]"))
+    _tracked_issue(ops, wid, work["work_item_id"], binding, "Blocked by lineage",
+                   mapping_id="pmim_" + "c" * 32, package_id="pmwp_" + "c" * 32,
+                   revision_id="pmir_" + "c" * 32, operation_id="op_" + "c" * 16,
+                   evidence_refs=[{"evidence_id": pm_evidence_id, "fact_digest": "e" * 64}])
+    _tracked_issue(ops, wid, work["work_item_id"], binding, "Visible issue",
+                   mapping_id="pmim_" + "d" * 32, package_id="pmwp_" + "d" * 32,
+                   revision_id="pmir_" + "d" * 32, operation_id="op_" + "d" * 16)
+    listed = pm_issue_mappings.list_mappings(ops, OWNER, wid)
+    assert [row["mapping_id"] for row in listed["mappings"]] == ["pmim_" + "d" * 32]
+    assert listed["coverage"]["visibility_filtered"] is True
+    body = check(schedule(ops, wid), wid)
+    assert f"issue:pmim_{'d' * 32}" in by_id(body)
+    assert f"issue:pmim_{'c' * 32}" not in by_id(body)
+    assert body["coverage"]["visibility_filtered"] is True
+    assert body["partial"] is False
+
+
 async def test_schedule_cursor_round_trips_any_session_id(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid = target["workspace_id"]
@@ -916,6 +1090,23 @@ async def test_schedule_cursor_round_trips_any_session_id(ops):
     assert cursor and all(char not in cursor for char in "+/=")
     resumed = schedule(ops, wid, after=cursor)
     assert ordered_ids(first) + ordered_ids(resumed) == seen
+
+
+async def test_schedule_cursor_round_trips_a_session_id_with_a_tab(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "mock\tsession")
+    await link(ops, work, "session", ref)
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    full = ordered_ids(schedule(ops, wid))
+    position = next(index for index, row_id in enumerate(full) if "mock\tsession" in row_id)
+    page = schedule(ops, wid, limit=position + 1)
+    cursor = page["next_cursor"]
+    decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
+    assert "\t" in decoded
+    resumed = schedule(ops, wid, after=cursor)
+    assert ordered_ids(page) + ordered_ids(resumed) == full
 
 
 async def test_hidden_run_does_not_change_the_visible_run(ops):
@@ -950,6 +1141,157 @@ async def test_hidden_run_does_not_change_the_visible_run(ops):
     assert ("attempt.run_id", "run_index_truncated") not in reasons(schedule(ops, wid))
 
 
+def _run_row(service, wid, thread, generation, run, operation, binding, created):
+    service.db.execute("""INSERT INTO pm_runs(run_id,operation_id,workspace_id,thread_id,generation,requester,
+        request_authority,execution_authority,adapter,purpose,thread_version,context,context_digest,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (run, operation, wid, thread, generation, OWNER.actor, "{}", "{}", "fixture", "analysis", 1, "{}", "0" * 64, created))
+    service.db.execute("INSERT INTO pm_run_state(run_id,status,session_binding,gaps,updated_at) VALUES(?,?,?,?,?)",
+                       (run, "running", json.dumps(binding), "[]", created))
+
+
+async def test_older_hidden_runs_do_not_remove_the_visible_run(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    bound = {"host": "mock-host", "session_id": "run-session"}
+    visible_run = "pmr_" + "f" * 32
+    _run_row(ops, wid, thread, 1, visible_run, "op_" + "f" * 32, bound, 9.0)
+    row_id = f"attempt:session:{work['work_item_id']}:{ref}"
+    for generation in (2, 3, 4):
+        hidden_op = f"op_{generation:032x}"
+        _run_row(ops, wid, thread, generation, f"pmr_{generation:032x}", hidden_op, bound, float(generation - 1))
+        withdraw(ops, "operation", hidden_op)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[row_id]
+    assert row["refs"]["run_id"] == visible_run
+    assert ("attempt.run_id", "multiple_explicit_runs") not in reasons(body)
+    assert ("attempt.run_id", "run_lookup_truncated") not in reasons(body)
+    assert body["partial"] is False
+
+
+async def test_a_second_visible_run_omits_run_id(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    bound = {"host": "mock-host", "session_id": "run-session"}
+    first, last = "pmr_" + "1" * 32, "pmr_" + "9" * 32
+    _run_row(ops, wid, thread, 1, first, "op_" + "1" * 32, bound, 1.0)
+    for generation in (2, 3):
+        hidden_op = f"op_{generation:032x}"
+        _run_row(ops, wid, thread, generation, f"pmr_{generation:032x}", hidden_op, bound, float(generation))
+        withdraw(ops, "operation", hidden_op)
+    _run_row(ops, wid, thread, 4, last, "op_" + "9" * 32, bound, 4.0)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]
+    assert "run_id" not in row["refs"]
+    assert ("attempt.run_id", "multiple_explicit_runs") in reasons(body)
+    assert body["partial"] is False
+
+
+async def test_run_scan_bound_omits_run_id_before_a_decision(ops, monkeypatch):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    bound = {"host": "mock-host", "session_id": "run-session"}
+    monkeypatch.setattr(pm_schedule, "_RUN_SCAN", 1)
+    _run_row(ops, wid, thread, 1, "pmr_" + "1" * 32, "op_" + "1" * 32, bound, 1.0)
+    hidden_op = "op_" + "2" * 32
+    _run_row(ops, wid, thread, 2, "pmr_" + "2" * 32, hidden_op, bound, 2.0)
+    withdraw(ops, "operation", hidden_op)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]
+    assert "run_id" not in row["refs"]
+    assert ("attempt.run_id", "multiple_explicit_runs") not in reasons(body)
+    assert ("attempt.run_id", "run_lookup_truncated") in reasons(body)
+
+
+async def test_run_visibility_receives_the_workspace_id(ops, monkeypatch):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    seen = []
+
+    def visible(db, principal, run):
+        seen.append(run)
+        return True
+
+    monkeypatch.setattr(pm_runs, "source_visible", visible)
+    _run_row(ops, wid, thread, 1, "pmr_" + "1" * 32, "op_" + "1" * 32,
+             {"host": "mock-host", "session_id": "run-session"}, 1.0)
+    body = check(schedule(ops, wid), wid)
+    assert seen and all(row["workspace_id"] == wid and isinstance(row["context"], dict) for row in seen)
+    assert by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]["refs"]["run_id"] == "pmr_" + "1" * 32
+
+
+async def test_hidden_operation_links_do_not_consume_the_per_work_cap(ops, monkeypatch):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    hidden = []
+    for _ in range(2):
+        operation_id = (await source_operation(ops))["operation_id"]
+        attach(ops, work_id, "operation", operation_id)
+        hidden.append(operation_id)
+    visible = (await source_operation(ops))["operation_id"]
+    attach(ops, work_id, "operation", visible)
+    for operation_id in hidden:
+        withdraw(ops, "operation", operation_id)
+    monkeypatch.setattr(pm_schedule, "MAX_LINKS_PER_WORK", 2)
+    body = check(schedule(ops, wid), wid)
+    attempt_id = f"attempt:operation:{work_id}:{visible}"
+    assert attempt_id in by_id(body)
+    assert by_id(body)[f"work:{work_id}"]["actual"] is not None
+    assert body["coverage"]["attempts_truncated"] is False and body["partial"] is False
+    assert ("work.actual", "attempt_links_truncated") not in reasons(body)
+    assert body["coverage"]["visibility_filtered"] is True
+
+
+async def test_hidden_links_do_not_consume_the_total_cap_across_works(ops, monkeypatch):
+    target, plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    pid = work_items._get_item(ops.db, work_id)["project_id"]
+    other = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Second deliverable")}
+    await bind_work(ops, other, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    other_id = other["work_item_id"]
+    hidden = []
+    for _ in range(2):
+        operation_id = (await source_operation(ops))["operation_id"]
+        attach(ops, work_id, "operation", operation_id)
+        hidden.append(operation_id)
+    first = (await source_operation(ops))["operation_id"]
+    second = (await source_operation(ops))["operation_id"]
+    attach(ops, work_id, "operation", first)
+    attach(ops, other_id, "operation", second)
+    for operation_id in hidden:
+        withdraw(ops, "operation", operation_id)
+    monkeypatch.setattr(pm_schedule, "MAX_LINKS_TOTAL", 2)
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert f"attempt:operation:{work_id}:{first}" in found
+    assert f"attempt:operation:{other_id}:{second}" in found
+    assert body["coverage"]["attempts_truncated"] is False and body["partial"] is False
+    third = (await source_operation(ops))["operation_id"]
+    attach(ops, other_id, "operation", third)
+    capped = check(schedule(ops, wid), wid)
+    capped_ids = by_id(capped)
+    assert f"attempt:operation:{work_id}:{first}" in capped_ids
+    assert f"attempt:operation:{other_id}:{third}" not in capped_ids
+    assert capped["coverage"]["attempts_truncated"] is True and capped["partial"] is True
+    assert ("work.actual", "attempt_links_truncated") in reasons(capped)
+
+
 async def test_a_lineage_error_hides_one_session_or_task_and_keeps_the_page(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid = target["workspace_id"]
@@ -977,6 +1319,34 @@ async def test_a_lineage_error_hides_one_session_or_task_and_keeps_the_page(ops)
     withdraw(ops, "session", "mock-host/task-session")
     gone = check(schedule(ops, wid), wid)
     assert source["task_id"] not in json.dumps(gone) and "task-session" not in json.dumps(gone)
+
+
+async def test_an_oversized_attempt_does_not_change_work_dates_or_status(ops, monkeypatch):
+    monkeypatch.setattr(pm_package_handoff, "source_visible", lambda db, principal, operation: True)
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    tid = source["task_id"]
+    await link(ops, work, "task", tid)
+    ops.db.execute("UPDATE tasks SET session_id=? WHERE task_id=?", ("split-session", tid))
+    pm_source_lineage.schema(ops.journal)
+    originals = [(await source_operation(ops, action="fixture.root"))["operation_id"] for _ in range(4)]
+    session_ref = "mock-host/split-session"
+    for operation_id in originals[:2]:
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('session',?,?,?)", (session_ref, operation_id, operation_id))
+    for operation_id in originals[2:]:
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('execution',?,?,?)", (tid, operation_id, operation_id))
+    monkeypatch.setattr(pm_source_lineage, "MAX_ROOTS", 3)
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert f"work:{work_id}" in found
+    assert f"attempt:task:{work_id}:{tid}" not in found
+    work_row = found[f"work:{work_id}"]
+    assert work_row["status"] == "not_started"
+    assert "actual" not in work_row
+    assert body["coverage"]["visibility_filtered"] is True
+    assert body["coverage"]["attempts_truncated"] is False
+    assert body["partial"] is False
 
 
 async def test_scope_filter_runs_before_the_binding_cap(ops, monkeypatch):
@@ -1035,6 +1405,48 @@ async def test_waiting_since_uses_the_latest_state_event(ops):
     assert ("waiting.since", "state_time_unrecorded") in reasons(stale)
 
 
+async def test_named_task_events_set_waiting_since(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    tid = source["task_id"]
+    await link(ops, work, "task", tid)
+    journal = ops.journal
+    journal.change(tid, "dispatching")
+    journal.change(tid, "running")
+    journal.change(tid, "waiting_permission")
+    journal.change(tid, "uncertain", event="permissions_uncertain")
+    journal.change(tid, "waiting_permission", event="permissions_receipts_recovered")
+    events = ops.db.execute("SELECT event_id FROM events WHERE task_id=? ORDER BY event_id", (tid,)).fetchall()
+    for index, row in enumerate(events):
+        ops.db.execute("UPDATE events SET created_at=? WHERE event_id=?", (1_700_000_000 + 1000 * index, row["event_id"]))
+    latest = 1_700_000_000 + 1000 * (len(events) - 1)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:task:{work_id}:{tid}"]
+    assert row["status"] == "waiting"
+    assert row["waiting"]["since"] == instant(latest)
+    assert ("waiting.since", "state_time_unrecorded") not in reasons(body)
+
+
+async def test_verification_failure_records_waiting_since(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    tid = source["task_id"]
+    await link(ops, work, "task", tid)
+    journal = ops.journal
+    journal.change(tid, "dispatching")
+    journal.change(tid, "running")
+    journal.change(tid, "verifying")
+    journal.change(tid, "needs_ted", event="verification_failed")
+    stamp = ops.db.execute(
+        "SELECT created_at FROM events WHERE task_id=? AND kind='verification_failed'", (tid,)).fetchone()[0]
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:task:{work_id}:{tid}"]
+    assert row["waiting"] == {"reason": "human", "since": instant(stamp)}
+    assert ("waiting.since", "state_time_unrecorded") not in reasons(body)
+
+
 async def test_finished_attempt_note_requires_a_terminal_end(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid, work_id = target["workspace_id"], work["work_item_id"]
@@ -1065,9 +1477,49 @@ async def test_failed_operation_ends_at_its_terminal_step(ops):
     ops.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,response,started_at,finished_at)
         VALUES(?,1,'work','succeeded','{}','{}',?,?),(?,2,'give-up','failed','{}',NULL,?,?)""",
         (operation["operation_id"], EARLY_AT, 2000, operation["operation_id"], 2000, LATE_AT))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.failed',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "running", "to": "failed"}), OWNER.actor, LATE_AT))
     row = by_id(schedule(ops, wid))[f"attempt:operation:{work_id}:{operation['operation_id']}"]
     assert row["actual"]["end"] == instant(LATE_AT)
     assert row["actual"]["start"] == instant(EARLY_AT)
+
+
+async def test_cancelled_operation_ends_at_the_status_event(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    operation = await source_operation(ops, action="fixture.cancel")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='cancelled', created_at=? WHERE operation_id=?",
+                   (EARLY_AT, operation["operation_id"]))
+    ops.db.execute("DELETE FROM operation_steps WHERE operation_id=?", (operation["operation_id"],))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.cancelled',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "running", "to": "cancelled"}), OWNER.actor, LATE_AT))
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:operation:{work_id}:{operation['operation_id']}"]
+    assert row["actual"]["end"] == instant(LATE_AT)
+    assert ("actual.end", "terminal_time_unrecorded") not in reasons(body)
+
+
+async def test_failed_operation_without_a_failed_step_ends_at_the_status_event(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    operation = await source_operation(ops, action="fixture.fail-outside")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='failed', created_at=? WHERE operation_id=?",
+                   (EARLY_AT, operation["operation_id"]))
+    ops.db.execute("DELETE FROM operation_steps WHERE operation_id=?", (operation["operation_id"],))
+    ops.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,response,started_at,finished_at)
+        VALUES(?,1,'work','succeeded','{}','{}',?,?)""", (operation["operation_id"], EARLY_AT, 2000))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.failed',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "accepted", "to": "failed"}), OWNER.actor, LATE_AT))
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:operation:{work_id}:{operation['operation_id']}"]
+    assert row["actual"]["start"] == instant(EARLY_AT)
+    assert row["actual"]["end"] == instant(LATE_AT)
+    assert ("actual.end", "terminal_time_unrecorded") not in reasons(body)
 
 
 async def test_work_end_before_start_is_cleared(ops):
@@ -1123,3 +1575,43 @@ async def test_schedule_read_uses_a_deferred_snapshot(ops):
         ops.db.set_trace_callback(None)
     assert not any(line.startswith("BEGIN IMMEDIATE") for line in statements)
     assert any(line == "BEGIN" or line.startswith("BEGIN DEFERRED") for line in statements)
+
+
+async def test_schedule_page_walk_stays_under_the_statement_bound(ops, monkeypatch):
+    """Five pages of the reviewer's fixture. The same walk without the request memo is about 2600 statements."""
+    monkeypatch.setattr(pm_package_handoff, "source_visible", lambda db, principal, operation: True)
+    target, plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    pm_source_lineage.schema(ops.journal)
+    owners = [work]
+    for index in range(2):
+        extra = {"workspace_id": wid, "work_item_id": await item(ops, pid, title=f"work {index}")}
+        await bind_work(ops, extra, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+        owners.append(extra)
+    for owner in owners:
+        for _ in range(5):
+            operation_id = (await source_operation(ops, action="fixture.root"))["operation_id"]
+            ops.db.execute("INSERT INTO pm_source_lineage VALUES('operation',?,?,?)",
+                           (operation_id, operation_id, operation_id))
+            attach(ops, owner["work_item_id"], "operation", operation_id)
+        await link(ops, owner, "task", task(ops)["task_id"])
+    await link(ops, owners[0], "session", session(ops, "m10-session"))
+    counts, after, rows = [], None, []
+    while len(counts) < 30:
+        statements = []
+        ops.db.set_trace_callback(statements.append)
+        try:
+            page = schedule(ops, wid, limit=5, after=after)
+        finally:
+            ops.db.set_trace_callback(None)
+        counts.append(len(statements))
+        rows.extend(node["id"] for node in nodes(page))
+        after = page["next_cursor"]
+        if after is None:
+            break
+    else:
+        raise AssertionError("schedule walk did not finish")
+    assert len(rows) == 24 and len(rows) == len(set(rows))
+    assert len(counts) == 5 and sum(counts) < 1600
+    assert all(count < 400 for count in counts)

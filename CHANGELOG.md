@@ -22,11 +22,6 @@
   Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
   expose reports and lifecycle through header menus without changing durable actions.
 
-- Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
-  startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
-  Installed-app UI tests retry transient UI Automation reads within the existing
-  readiness deadline and keep bounded, text-free attempt diagnostics.
-
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
   immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
@@ -38,13 +33,18 @@
 
 - Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
   with adopted-requirement progress, explicit blockers, decisions, schedule/quality
-  deviations, current review/proposal state, rollback evidence and bounded source
-  coverage. Hidden or oversized sources stay partial; source references respect
-  the whole document's limit. Reads share a snapshot and request-local source cache.
+  deviations that retain revoked acceptance until reacceptance, current review/proposal
+  state, rollback evidence and bounded source
+  coverage. Hidden lifecycle transitions and filtered pending operations remain
+  incomplete. Hidden or oversized sources stay partial with distinct unavailability
+  and size-limit reasons; source references respect
+  the whole document's limit without withdrawing complete source counts. Reads share a snapshot and request-local source cache.
   Saved reports retain their fixed snapshot semantics.
 - Bind up to eight original context items when creating a PM discussion and rename
   threads with durable version checks while preserving title-only proposal adoption.
-  Version 3 profiles retain compatibility with version 2 plan documents. Bound
+  Renaming waits for any in-flight adoption to finish, protecting its original children.
+  Proposal views publish the same adoptability rule used by admission; the shared
+  UI uses it after a rename. Version 3 profiles retain compatibility with version 2 plan documents. Bound
   analysis references use each original revision's operation. Source withdrawal redacts chips and
   protects analysis derived from their frozen context; English and Traditional
   Chinese validation messages accompany the new context errors.
@@ -52,9 +52,19 @@
 - Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
   Each row keeps its source record's identity and canonical status. Totals, open-item age, the
   last 12 weeks and blocking reasons are included only when every source that matches the active
-  type filter was read completely. A hidden or oversized record is left out of that page; it does
-  not fail the register or change the counts. Row ids are path-safe (`governance.pmgov_…`) and
-  cursors are opaque sequence tokens. The projection adds no write actions.
+  type filter was read completely. One skipped 409 or 413 record stays out of that source and
+  marks it partial, so the totals and the summary are null; the other readable records stay
+  listed. A withdrawn source leaves the remaining rows and the counts together. Detail
+  timelines follow each stored foreign key one hop in both directions. A hidden target is
+  skipped. A target that returns 409 or 413 stays off the timeline and marks that source
+  partial. A lineage-hidden repair does not remove a visible finding's repair action.
+  A meeting read that starts after a follow-up sequence reports that cutoff in
+  `coverage.histories.follow_ups.after`. Adopted plan rows are ordered by the
+  immutable plan revision sequence.
+  A hidden row is
+  omitted from rows, counts and summary together and does not fail the page. Row ids are
+  path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
+  no write actions.
 
 - Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
   `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
@@ -66,6 +76,18 @@
   opaque base64url keyset, so the next page resumes without gaps. Requirement text is kept
   verbatim. Withdrawn work items, runs, operations, sessions, and tasks leave together with
   the dates derived from them, and their ids do not appear in rows or cursors.
+  A hidden run does not take a session's run slot or remove the visible `run_id`. The
+  per-session scan stops at a second visible run, or after 64 rows when that choice is
+  still open, and then omits `run_id`. A hidden issue mapping does not consume the
+  200-row issue cap or mark the page partial. A link to a hidden operation, task,
+  or session does not consume the attempt-link caps or withhold a visible attempt.
+  A task's `waiting.since` uses the latest transition into the current state,
+  including named task events. Every schedule cursor the server issues is accepted
+  back, including a row id that contains a control character. A plan or one issue
+  mapping that lineage refuses is hidden; it does not fail the schedule read.
+  A cancelled or failed operation ends at the matching status event, including a
+  failure that never recorded a failed step. An attempt whose own lineage does not
+  fit is omitted before its work's dates and status are derived.
   See `docs/design/pm-schedule.md`.
 
 - Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
@@ -77,6 +99,11 @@
   refinement can still land on its first-fragment day, so `complete` is settled coverage
   rather than a frozen total. Missing counters and uncovered days stay null, and withdrawn
   sources omit buckets together with their totals.
+
+- Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
+  startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
+  Installed-app UI tests retry transient UI Automation reads within the existing
+  readiness deadline and keep bounded, text-free attempt diagnostics.
 
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
@@ -108,10 +135,16 @@
   source inventory; require resolved-source verification, an optimized iterator
   regression, and a packaged release WebView smoke test in desktop CI.
 
+- Date/time inputs are validated the same way on every supported Python version; an
+  hour of 24 is rejected.
+
 - Add published-version starts through explicit repository/host/workspace bindings. Preview the
   exact branch head, fetch its fixed SHA into a fresh managed carrier, and recover the original
   operation after lost replies. Shared browser/Tauri UI, CLI, MCP and canonical workflow `.9`
   preserve the same request; human checkouts and remote refs remain unchanged.
+
+- Windows Fleet core tests give PowerShell fixtures their own bounded startup phase before the unchanged work
+  deadline, and start them one at a time.
 
 - Add central durable `session.start`, exact workspace discovery and a shared start form. Save
   the original request before submission; reconcile unknown start/send outcomes and preserve retained
