@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Reveal and focus the accepted PM revision when its link opens the mobile Plan
+  sheet, after the sheet establishes its focus boundary.
+
 - Preserve the central Adopted status and accepted-revision link immediately after
   a PM proposal adoption, including recovery of its original receipt.
 

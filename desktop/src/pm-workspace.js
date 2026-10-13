@@ -733,7 +733,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
         proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
-          thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {discussionTools.open('plan'); revisions?.open(id);},
+          thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {
+            discussionTools.open('plan');
+            // Let a new mobile sheet establish its focus boundary first.
+            queueMicrotask(() => {try {alive();} catch {return;} revisions?.open(id);});
+          },
           onFollowUp: () => text.focus(), onAnswer: value => {if (!value || noteForm.locked()) return; noteForm.set('content', [text.value, value].filter(Boolean).join('\n\n')); void noteForm.submit();}});
         column.querySelector('.pd-transcript').append(proposalReview.box);
       }

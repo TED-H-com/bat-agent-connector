@@ -492,17 +492,18 @@ test('refresh reads one proposal list and only its selected document, with revis
   expect(revisions()).toHaveLength(2);
 });
 
-for (const locale of ['en', 'zh-TW']) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+for (const locale of ['en', 'zh-TW']) for (const width of [390, 1440]) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}}), page = await context.newPage();
   const f = demoFixture({locale, discussions: true}); await mountConversation(page, false, f.dispatch);
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadFollow}`); await page.reload();
   const card = page.locator('[data-pm-plan-proposals]');
   await expect(card.locator('[data-status=adopted]')).toHaveText(locale === 'en' ? 'Adopted' : '已採用');
   await expect(card.locator('[data-proposal-again], [data-proposal-review]')).toHaveCount(0);
-  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-adopted-${locale}-1440.png`});
+  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-adopted-${locale}-${width}.png`});
   await card.locator('[data-proposal-adopted-revision]').click();
   await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
   await expect(page.locator(`[data-pm-revision="${f.ids.planV3}"] [data-pm-revision-open]`)).toBeFocused();
+  await expect(page.locator(`[data-pm-revision="${f.ids.planV3}"] [data-pm-revision-open]`)).toBeInViewport();
   expect(f.discussion.writes).toHaveLength(0); await context.close();
 });
 

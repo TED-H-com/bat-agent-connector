@@ -35937,7 +35937,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					backLink,
 					onRevision: (id) => {
 						discussionTools.open("plan");
-						revisions?.open(id);
+						queueMicrotask(() => {
+							try {
+								alive();
+							} catch {
+								return;
+							}
+							revisions?.open(id);
+						});
 					},
 					onFollowUp: () => text.focus(),
 					onAnswer: (value) => {

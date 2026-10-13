@@ -310,6 +310,8 @@ to show Adopted and open the accepted revision in Plan, without another adoption
 Ask PM again action. Raw reason codes stay in Details.
 Successful receipt recovery refreshes this same central adopted view; a local
 success message must not replace its accepted-revision link.
+On mobile, that link focuses and reveals the accepted revision after the Plan
+sheet establishes its focus boundary.
 The clock runs only during actual operation checks. Exhausted polling shows Status
 not checked; refresh and PM events re-read the known original operation ID and reset
 the backoff. Only label changes update the live region; elapsed time is hidden from
