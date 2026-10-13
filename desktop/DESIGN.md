@@ -141,8 +141,8 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 | Agents | Resource observations; AHP |
 | Board | Kanban; work batches |
 
-Secondary tools use collapsed section disclosures. They keep their original forms
-and refresh/withdrawal behavior. Do not rebuild view contents just to move sections.
+Secondary tools use collapsed disclosures or the view's tool drawer. They keep their
+original forms and refresh/withdrawal behavior. Do not rebuild contents to move sections.
 
 Routes are `#/pm/<workspace>/<view>` and
 `#/pm/<workspace>/discussions/<thread>`. A workspace-only route restores its last
