@@ -12536,6 +12536,7 @@ function workspaceOverview(options) {
 			header();
 		},
 		dispose() {
+			active = false;
 			serial++;
 			closeReader();
 		}

@@ -325,6 +325,6 @@ export function workspaceOverview(options) {
       if (!value) {preference.scroll = window.scrollY; closeReader();}
       else if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
       header();},
-    dispose() {serial++; closeReader();},
+    dispose() {active = false; serial++; closeReader();},
   };
 }
