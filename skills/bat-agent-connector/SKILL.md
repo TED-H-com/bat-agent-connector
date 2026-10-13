@@ -1576,7 +1576,7 @@ or phase rows from names, paths, titles, or time. Manual sessions stay `read_onl
 A session that stopped producing output is not ended; do not use the last message time.
 
 `limit` is 1–100. `after` is the previous page's opaque `next_cursor` (base64url, not a raw
-row id). Preserve it and read further pages. A page may also end early so its lineage roots
+row id). Preserve it and read further pages. The server accepts every cursor it issued. A page may also end early so its lineage roots
 stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id

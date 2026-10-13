@@ -982,6 +982,23 @@ async def test_schedule_cursor_round_trips_any_session_id(ops):
     assert ordered_ids(first) + ordered_ids(resumed) == seen
 
 
+async def test_schedule_cursor_round_trips_a_session_id_with_a_tab(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "mock\tsession")
+    await link(ops, work, "session", ref)
+    source = task(ops)
+    await link(ops, work, "task", source["task_id"])
+    full = ordered_ids(schedule(ops, wid))
+    position = next(index for index, row_id in enumerate(full) if "mock\tsession" in row_id)
+    page = schedule(ops, wid, limit=position + 1)
+    cursor = page["next_cursor"]
+    decoded = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
+    assert "\t" in decoded
+    resumed = schedule(ops, wid, after=cursor)
+    assert ordered_ids(page) + ordered_ids(resumed) == full
+
+
 async def test_hidden_run_does_not_change_the_visible_run(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid = target["workspace_id"]

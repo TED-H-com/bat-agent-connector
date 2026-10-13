@@ -90,8 +90,6 @@ def _cursor(after):
     kind, sep, rest = text.partition(":")
     if sep != ":" or kind not in _RANK or not rest or len(text) > _CURSOR_RAW_MAX:
         raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
-    if any(ord(char) < 32 or ord(char) == 127 for char in text):
-        raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
     return _RANK[kind], text
 
 

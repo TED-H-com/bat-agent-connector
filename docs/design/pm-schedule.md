@@ -11,7 +11,7 @@
 - RPC / MCP：`pm_schedule_get`
 - 能力：`features.pm_schedule`（`version: 1`，`read_only: true`）
 - 每次讀取都要 `observe`，並檢查目前的 workspace 成員。非成員是 404「Workspace not found」，沒有 observe 是 403。回應不含該專案的列或標題。
-- 查詢只有 `limit`（1–100，預設 100）與 `after`。`after` 必須是上一頁的 `next_cursor`：不透明的 base64url（`A–Z`、`a–z`、`0–9`、`_`、`-`，沒有 `+`、`/`、`=`），解出來是該列的穩定 id。空值、重複、未知參數，或不是這種游標，是 422。它不是整數游標，也不能把列 id 直接放進查詢。回應裡的 `id` 仍是明碼。
+- 查詢只有 `limit`（1–100，預設 100）與 `after`。`after` 必須是上一頁的 `next_cursor`：不透明的 base64url（`A–Z`、`a–z`、`0–9`、`_`、`-`，沒有 `+`、`/`、`=`），解出來是該列的穩定 id。空值、重複、未知參數，或不是這種游標，是 422。它不是整數游標，也不能把列 id 直接放進查詢。回應裡的 `id` 仍是明碼。伺服器發出的游標都收得回來，列 id 裡的控制字元不會讓 `after` 變成 422。
 - 一次讀取用一個 deferred read snapshot，不開寫入鎖，也不配置 schema `user_version`。同一次請求裡重複的 lineage、計畫與可見性查詢會重用；下一頁是另一次讀取。
 
 ## 時間

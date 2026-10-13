@@ -18,7 +18,8 @@
   200-row issue cap or mark the page partial. A link to a hidden operation, task,
   or session does not consume the attempt-link caps or withhold a visible attempt.
   A task's `waiting.since` uses the latest transition into the current state,
-  including named task events.
+  including named task events. Every schedule cursor the server issues is accepted
+  back, including a row id that contains a control character.
   See `docs/design/pm-schedule.md`.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):

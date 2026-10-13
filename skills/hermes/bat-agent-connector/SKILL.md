@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "ecae773695e5f8583dab8bafac9c7d88c864d565313d94914c610d2dae718f80"
+  canonical_sha256: "da9a3e2f46e7f9bad0b34c5c65d7ed1cb01166e48d1c3dae3f3a4943ac63873f"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1599,7 +1599,7 @@ or phase rows from names, paths, titles, or time. Manual sessions stay `read_onl
 A session that stopped producing output is not ended; do not use the last message time.
 
 `limit` is 1–100. `after` is the previous page's opaque `next_cursor` (base64url, not a raw
-row id). Preserve it and read further pages. A page may also end early so its lineage roots
+row id). Preserve it and read further pages. The server accepts every cursor it issued. A page may also end early so its lineage roots
 stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id
