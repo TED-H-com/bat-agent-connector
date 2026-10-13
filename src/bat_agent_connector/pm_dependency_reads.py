@@ -62,8 +62,9 @@ def _visible_record(ops, principal, wid, revision_id):
 
 
 _PEER_PAGE = 64
-# Candidate heads examined per capture, visible or not. It bounds capture work only.
-MAX_PEER_SCAN = 1024
+# Candidate heads examined per capture, visible or not. Keep this synchronous
+# scan small: the journal connection belongs to the event-loop thread.
+MAX_PEER_SCAN = 128
 
 
 def _peer_candidates(ops, principal, wid, cursor, limit):

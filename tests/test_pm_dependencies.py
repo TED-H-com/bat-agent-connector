@@ -487,6 +487,26 @@ async def test_capture_peer_scan_bound_records_a_reason(pm, mock, monkeypatch):
     assert impact["cross_repository"]["selection_reasons"] == ["peer_scan_limit"]
 
 
+def test_peer_filters_and_byte_budget_run_before_the_accepted_peer_cap(monkeypatch):
+    # Ineligible heads span several SQL pages before the two accepted peers.
+    candidates = [{'workspace_id': f'ws_{i:032x}', 'revision_id': f'pmdep_{i:032x}'} for i in range(7)]
+    documents = [{'repository': repository} for repository in ('o/own', 'o/a', 'o/a', 'o/hidden', 'o/large', 'o/b', 'o/c')]
+    monkeypatch.setattr(pm_dependency_reads, '_PEER_PAGE', 2)
+    monkeypatch.setattr(pm_dependency_reads, 'MAX_REPOSITORIES', 2)
+    monkeypatch.setattr(pm_dependency_reads, 'MAX_PEER_BYTES', 100)
+    monkeypatch.setattr(pm_dependency_reads, '_peer_candidates', lambda ops, principal, wid, cursor, limit:
+        [row for row in candidates if (row['workspace_id'], row['revision_id']) > cursor][:limit])
+    monkeypatch.setattr(pm_dependency_reads, '_current', lambda ops, principal, wid:
+        None if wid == candidates[3]['workspace_id'] else {'target': {'repository': 'o/own'}})
+    monkeypatch.setattr(pm_dependency_reads, '_visible_record', lambda ops, principal, wid, rid:
+        {'document': documents[int(wid[3:], 16)], 'document_digest': 'digest'})
+    monkeypatch.setattr(pm_dependency_reads, '_size', lambda doc: 101 if doc['repository'] == 'o/large' else 40)
+    reasons = []
+    peers = pm_dependency_reads.discover_peers(None, OWNER, 'own', reasons)
+    assert [row['workspace_id'] for row in peers] == [candidates[1]['workspace_id'], candidates[5]['workspace_id']]
+    assert reasons == ['peer_byte_budget']
+
+
 async def test_impact_before_capture_says_why_and_reads_have_their_own_403(pm):
     ops, wid, key = pm["d"].ops, pm["workspace_id"], dependency_key("python", "httpx")
     unavailable = pm_dependency_reads.impact(ops, OWNER, wid, dependency=key)
