@@ -85,6 +85,7 @@ export function discussionFeedback({t, request, node, eligible}) {
 }
 export function discussionPanel({t, namespace, workspaceId, panes}) {
   const state = viewState(namespace, workspaceId, 'discussion-panel');
+  if (!Object.hasOwn(panes, state.tab)) state.tab = Object.keys(panes)[0];
   const home = h('aside', {class: 'pd-panel-home'}), body = h('div', {class: 'pd-panel', 'data-discussion-panel': ''});
   const select = key => {state.tab = key; for (const [id, node] of Object.entries(panes)) node.hidden = id !== key;};
   const controls = tabs({label: t('pd_panel'), value: state.tab || 'context',

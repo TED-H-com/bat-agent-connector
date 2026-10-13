@@ -45,6 +45,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     const rename = page.locator('[data-pm-action="pm.thread.rename"]');
     await rename.getByLabel(zh ? '討論標題' : 'Discussion title').fill(zh ? '解除復原阻礙' : 'Unblock recovery');
     await rename.getByRole('button', {name: zh ? '儲存' : 'Save', exact: true}).click();
+    await expect(rename).toBeHidden();
+    await expect(page.locator('[data-discussion-title]')).toHaveText(zh ? '解除復原阻礙' : 'Unblock recovery');
     await expect(page.locator('[data-proposal-review]')).toBeInViewport();
     const send = await page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true}).boundingBox();
     const ask = await page.locator('[data-discussion-ask]').boundingBox();
@@ -297,4 +299,18 @@ for (const locale of ['en', 'zh-TW']) test(`missing PM adapter occupies only the
   await expect(status.getByRole('link')).toHaveAttribute('href', '#/settings');
   await expect(page.locator('[data-discussion-ask]')).toBeHidden();
   expect(f.discussion.writes).toHaveLength(0); await context.close();
+});
+
+test('a new multi-context draft opens Context after leaving the Plan tab', async ({page}) => {
+  const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.getByRole('tab', {name: 'Plan', exact: true}).click();
+  const refs = Array.from({length: 5}, (_, i) => ({kind: 'governance', id: 'pmgov_' + String(i).repeat(32)}));
+  const href = discussHref({workspaceId: f.ids.workspaceId, refs, title: 'Review five decisions', from: 'overview'});
+  await page.evaluate(href => {location.hash = href;}, href);
+  await expect(page.locator('[data-discussion-composer]')).toBeFocused();
+  await expect(page.getByRole('tab', {name: 'Context', exact: true})).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-discussion-tab=context]')).toBeVisible();
+  await expect(page.locator('[data-discussion-tab=context] [data-discussion-context]')).toHaveCount(5);
+  expect(f.discussion.writes).toHaveLength(0);
 });

@@ -9660,6 +9660,7 @@ function discussionFeedback({ t, request, node, eligible }) {
 }
 function discussionPanel({ t, namespace, workspaceId, panes }) {
 	const state = viewState(namespace, workspaceId, "discussion-panel");
+	if (!Object.hasOwn(panes, state.tab)) state.tab = Object.keys(panes)[0];
 	const home = h$1("aside", { class: "pd-panel-home" }), body = h$1("div", {
 		class: "pd-panel",
 		"data-discussion-panel": ""
