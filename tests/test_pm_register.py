@@ -708,6 +708,126 @@ async def test_review_history_cap_keeps_the_newest_event(ops, monkeypatch):
     assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]
 
 
+def _newest_page(rows, key, after, limit):
+    visible = [row for row in rows if row["sequence"] > after]
+    page = visible[:limit]
+    return {key: page, "next_cursor": page[-1]["sequence"] if len(visible) > limit else None}
+
+
+async def test_review_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    _force_table(monkeypatch, "pm_maintenance_reviews")
+    reviews = [{"review_id": f"pmrevw_{index:032x}", "sequence": index, "status": "completed",
+                "title": f"Review {index}", "created_at": index} for index in (1, 2, 3)]
+
+    def get_review(service, principal, workspace_id, review_id, *, history_limit=1):
+        review = next(row for row in reviews if row["review_id"] == review_id)
+        return {"review": review, "completion": {"actor": OWNER.actor, "created_at": 2, "document": {
+            "direction": "accepted", "follow_ups": []}}, "events": []}
+
+    monkeypatch.setattr(pm_maintenance_review, "list_reviews",
+                        lambda *args, after=0, limit=20, **kwargs: _newest_page(reviews, "reviews", after, limit))
+    monkeypatch.setattr(pm_maintenance_review, "list_events", lambda *args, **kwargs: {"events": [], "next_cursor": None})
+    monkeypatch.setattr(pm_maintenance_review, "get_review", get_review)
+    data = await prepared(ops)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="decision")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "meeting"]
+    assert kept == [reviews[-1]["review_id"]]
+    assert view["coverage"]["complete"] is False and "review" in view["coverage"]["sources"]
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]
+
+
+async def test_intake_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_follow_up
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    _force_table(monkeypatch, "pm_follow_up_intakes")
+    intakes = [{"intake_id": f"pmfu_{index:032x}", "sequence": index, "created_at": index, "document": {}}
+               for index in (1, 2, 3)]
+    monkeypatch.setattr(pm_follow_up, "list_intakes",
+                        lambda *args, after=0, limit=50, **kwargs: _newest_page(intakes, "intakes", after, limit))
+    monkeypatch.setattr(pm_follow_up, "get_intake",
+                        lambda *args, **kwargs: {"intake": next(row for row in intakes if row["intake_id"] == args[3])})
+    data = await prepared(ops)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="action")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "follow_up"]
+    assert kept == [intakes[-1]["intake_id"]]
+    assert view["coverage"]["complete"] is False and "follow_up" in view["coverage"]["sources"]
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "follow_up" not in risks["coverage"]["sources"]
+
+
+async def test_proposal_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_conversation_proposals
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    _force_table(monkeypatch, "pm_conversation_proposals")
+    proposals = [{"proposal_id": f"pmcp_{index:032x}", "sequence": index, "created_at": index,
+                  "document": {"title": f"Proposal {index}"}, "validation": {"status": "proposed"}}
+                 for index in (1, 2, 3)]
+    monkeypatch.setattr(pm_conversation_proposals, "list_proposals",
+                        lambda *args, after=0, limit=50, **kwargs: _newest_page(proposals, "proposals", after, limit))
+    monkeypatch.setattr(pm_conversation_proposals, "get_proposal",
+                        lambda *args, **kwargs: {"proposal": next(row for row in proposals if row["proposal_id"] == args[3])})
+    data = await prepared(ops)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="change")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "proposal"]
+    assert kept == [proposals[-1]["proposal_id"]]
+    assert view["coverage"]["complete"] is False and "proposal" in view["coverage"]["sources"]
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "proposal" not in risks["coverage"]["sources"]
+
+
+async def test_mapping_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_issue_mappings
+    monkeypatch.setattr(pm_register, "MAX_SCAN", 2)
+    data = await prepared(ops)
+    version = ops.db.execute("PRAGMA user_version").fetchone()[0]
+    ops.db.execute("""CREATE TABLE IF NOT EXISTS pm_issue_revisions (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, revision_id TEXT NOT NULL UNIQUE,
+        mapping_id TEXT NOT NULL, workspace_id TEXT NOT NULL, work_item_id TEXT NOT NULL,
+        previous_revision_id TEXT UNIQUE, document TEXT NOT NULL, document_digest TEXT NOT NULL,
+        operation_id TEXT NOT NULL UNIQUE, created_at REAL NOT NULL, actor TEXT NOT NULL)""")
+    assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
+    mappings = []
+    for index in (1, 2, 3):
+        mapping_id = f"pmim_{index:032x}"
+        mappings.append({"mapping_id": mapping_id, "sequence": index, "created_at": float(index),
+                         "document": {"state": "tracking", "selected": {"public_title": f"Issue {index}"}}})
+        ops.db.execute("""INSERT INTO pm_issue_revisions(
+            revision_id,mapping_id,workspace_id,work_item_id,document,document_digest,operation_id,created_at,actor)
+            VALUES(?,?,?,?,?,?,?,?,?)""",
+            (f"pmir_{index:032x}", mapping_id, data["wid"], f"wi_{index:020x}", "{}", "digest",
+             f"op_{index:032x}", index, OWNER.actor))
+    monkeypatch.setattr(pm_issue_mappings, "list_mappings",
+                        lambda *args, after=0, limit=50, **kwargs: _newest_page(mappings, "mappings", after, limit))
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="issue")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "issue_mapping"]
+    assert kept == [mappings[2]["mapping_id"], mappings[1]["mapping_id"]]
+    assert view["coverage"]["complete"] is False and "issue_mapping" in view["coverage"]["sources"]
+    assert view["coverage"]["scan_limit_per_source"] == 2
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "issue_mapping" not in risks["coverage"]["sources"]
+
+
+async def test_governance_history_cap_marks_only_the_detail(ops, monkeypatch):
+    data = await prepared(ops)
+    made = await record(ops, data, title="First title", root_cause_key="history-cap")
+    await change(ops, made, "revise", **fields(data, title="Second title"))
+    await change(ops, made, "revise", **fields(data, title="Third title"))
+    open_detail = pm_register.get_register(ops, OWNER, data["wid"], "governance." + made["record_id"])
+    assert open_detail["timeline_coverage"]["complete"] is True
+    monkeypatch.setattr(pm_register, "MAX_SCAN", 1)
+    listed = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert [row["source"]["id"] for row in listed["rows"]] == [made["record_id"]]
+    assert listed["coverage"]["complete"] is True
+    capped = pm_register.get_register(ops, OWNER, data["wid"], "governance." + made["record_id"])
+    assert capped["timeline_coverage"]["complete"] is False
+    assert capped["timeline_coverage"]["sources"] == ["governance"]
+    assert capped["timeline_coverage"]["partial_reason"] == "incomplete"
+    assert any(step.get("title") == "Third title" for step in capped["timeline"])
+
+
 async def test_hidden_repairs_do_not_change_coverage_counts_or_actions(ops, monkeypatch):
     monkeypatch.setattr(pm_register, "MAX_SCAN", 1)
     data = await prepared(ops)
