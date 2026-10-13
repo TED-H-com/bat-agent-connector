@@ -1,3 +1,4 @@
+import {qualityReviews} from './quality.ts';
 import {overview, overviewGovernance} from './overview.ts';
 import {discussionDemo} from './discussions.ts';
 // One dispatcher for the member sign-in demo. Shapes come from the current central reads.
@@ -40,6 +41,7 @@ function segment(value: string) {
 
 function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   if (rest === '' || rest === '/') return ok({workspace: workspaceRecord(project)});
+  if (rest === '/quality-reviews') return ok(qualityReviews(project, url));
   if (rest === '/overview') return ok(overview(project));
   if (rest === '/governance') return ok({version: 1, workspace_id: project.ids.workspaceId, records: overviewGovernance(project), next_cursor: null});
   const governance = rest.match(/^\/governance\/([^/]+)$/);

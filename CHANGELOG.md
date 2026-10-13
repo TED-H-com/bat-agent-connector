@@ -84,7 +84,16 @@
 - Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
   with list rows on narrow screens and readable columns beside the docked inspector. Board adds
   filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in
-  drawers.
+  drawers. Requirements distinguishes accepted, unassessed and unknown quality coverage, marks
+  partial delivery evidence, and shows the requirement traceability chain. Auxiliary failures stay
+  local; live inspector actions retain focus and open menus. Board cards expose their recorded facts
+  to assistive technology, retain selected delivery pages across refreshes, and restore selection
+  and focus on return. Empty Boards show one empty state; paged lanes label counts as loaded.
+  Requirement inspectors show saved verification evidence when no qualifying review is available.
+  Withdrawal clears selection and returns focus to the view heading; snapshot conflicts expose raw
+  codes only in Details and offer a local retry. Live refresh of a Requirements milestone selection
+  preserves search and group-heading focus. Requirements work links open authorized unassigned work
+  even before a plan is adopted.
 - Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
   baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
   evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.

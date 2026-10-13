@@ -59,6 +59,9 @@ test('filters, expanded rows and selection survive other views and Settings with
   await page.locator('.workspace-nav-footer a[href="#/settings"]').click(); await page.locator('[data-pm-view=requirements]').click();
   await expect(filter).toHaveValue('login'); await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
   f.pm.state.denyIssues = true; await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
+  await expect(page.locator('[data-pm-rtm]')).not.toContainText('Issue #41');
+  f.pm.state.denyWork = true; await page.locator('[data-pm-refresh]').click();
   await expect(page.locator('[data-work-inspector]')).toBeHidden(); await expect(page.locator('[data-pm-rtm]')).not.toContainText('PR #10');
 });
 for (const kind of ['pm_evidence', 'project']) test(`binding withdrawal removes Work rows live on ${kind}; workspace names never imply bindings`, async ({page}) => {

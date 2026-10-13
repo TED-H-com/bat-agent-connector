@@ -35,7 +35,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(board.locator('.pm-board-state')).toHaveCount(0);
   const card = board.locator(`[data-pm-kanban-work="${ids.work.audit}"]`);
   await expect(card.locator('.pm-board-blocker')).toHaveAttribute('title', locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
-  await card.focus(); await page.keyboard.press('Enter');
+  await card.locator('[data-board-open]').focus(); await page.keyboard.press('Enter');
   const inspector = page.locator('[data-work-inspector]');
   await expect(inspector.locator('[data-work-section=status] [data-status=read_only]')).toBeVisible();
   await expect(inspector.locator('.ui-inspector-body > :not([data-work-section])')).toHaveCount(0);
@@ -55,21 +55,21 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     await expect.poll(fullyVisible).toBe(true);
     await expect(board.locator('.pm-board-content')).toHaveClass(/pm-board-clipped-end/);
     expect(await board.locator('.pm-board-content').evaluate(node => getComputedStyle(node, '::after').opacity)).toBe('1');
-    await card.focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
-    const focused = board.locator('[data-pm-kanban-work]:focus'); await expect(focused).toHaveCount(1);
+    await card.locator('[data-board-open]').focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
+    const focused = board.locator('[data-pm-kanban-work]:has([data-board-open]:focus)'); await expect(focused).toHaveCount(1);
     expect(await focused.evaluate(node => {const c = node.closest('.pm-kanban-list')!.getBoundingClientRect(), b = node.getBoundingClientRect(); return b.left >= c.left && b.right <= c.right;})).toBe(true);
-    await card.focus(); await card.press('Enter'); await expect.poll(fullyVisible).toBe(true);
+    await card.locator('[data-board-open]').focus(); await card.locator('[data-board-open]').press('Enter'); await expect.poll(fullyVisible).toBe(true);
     await expect(inspector.locator('[data-work-section=blocker]')).toContainText(locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
   }
   await page.screenshot({path: `${out}/board-inspector-${locale}-${width}.png`, fullPage: false});
-  await page.keyboard.press('Escape'); await expect(card).toBeFocused();
-  await card.click();
+  await page.keyboard.press('Escape'); await expect(card.locator('[data-board-open]')).toBeFocused();
+  await card.locator('[data-board-open]').click();
   await inspector.locator('[data-work-actions]').getByRole('button').click();
   await inspector.locator('[data-menu-key=ui_publication]').click();
   await expect(page.locator('[data-pm-issue-mappings]')).toBeVisible();
   await expect(inspector).toHaveCount(0);
-  await page.keyboard.press('Escape'); await expect(card).toBeFocused();
-  await page.keyboard.press('ArrowLeft'); await expect(card).not.toBeFocused();
+  await page.keyboard.press('Escape'); await expect(card.locator('[data-board-open]')).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); await expect(card.locator('[data-board-open]')).not.toBeFocused();
   if (width < 800) {
     const lanes = board.locator('[data-pm-kanban-column]');
     const boxes = await lanes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x)); expect(new Set(boxes).size).toBe(1);

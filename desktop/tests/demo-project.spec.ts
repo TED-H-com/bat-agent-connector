@@ -200,7 +200,7 @@ for (const {locale, width} of cases) {
     test.setTimeout(60_000);
     const fixture = demoFixture({locale});
     const {copy, ids, dates} = fixture;
-    const accepted = locale === 'zh-TW' ? '已記錄受理' : 'Acceptance recorded';
+    const accepted = locale === 'zh-TW' ? '已記錄受理' : 'Send accepted';
     const context = await browser.newContext({locale, baseURL, viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage();
     const errors: string[] = [];
@@ -259,7 +259,7 @@ for (const {locale, width} of cases) {
     await expect(board.locator('[data-pm-kanban-column="waiting"]')).toContainText(copy.work.audit);
     await expect(board.locator('[data-pm-kanban-column="backlog"]')).toContainText(copy.work.a11y);
     const email = board.locator(`[data-pm-kanban-work="${ids.work.email}"]`);
-    await email.click();
+    await email.locator('[data-board-open]').click();
     const workInspector = page.locator('[data-work-inspector]');
     await expect(workInspector.locator('[data-work-attempt]')).toHaveCount(3);
     await expect.poll(async () => (await workInspector.innerText()).split(accepted).length - 1).toBe(2);
