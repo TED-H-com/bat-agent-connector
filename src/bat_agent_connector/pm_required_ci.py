@@ -1,10 +1,10 @@
 """Explicit native required-check proof within the existing bounded GitHub reader."""
 from __future__ import annotations
 
-import datetime as dt
 from urllib.parse import quote
 
 from . import pm_github_sources as github
+from .iso_time import parse_datetime
 from .pm_workload_sources import digest
 
 PROFILE = 'github_required_status_checks_v1'
@@ -102,7 +102,7 @@ def project(row, kind, scope, sha=None):
     if kind == 'required_statuses':
         value = github.project(row, 'statuses', scope, sha)
         try:
-            stamp = dt.datetime.fromisoformat(row['created_at'].replace('Z', '+00:00'))
+            stamp = parse_datetime(row['created_at'])
             if stamp.tzinfo is None:
                 raise ValueError
         except (KeyError, TypeError, AttributeError, ValueError):
