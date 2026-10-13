@@ -1,5 +1,7 @@
 // Persistent navigation over central IDs. Workspace labels never assign a project.
 import {groupedSessions, sessionActivity} from './state/sessions.js';
+import {joinLabel} from './label-text.js';
+import {railPresentation} from './global-labels.js';
 import {icon} from './ui/icons.js';
 import {iconButton} from './ui/components.js';
 
@@ -29,13 +31,16 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const alive = () => {guard(); if (disposed) throw new Error('Navigation disposed');};
   const persist = () => {try {sessionStorage.setItem(key, JSON.stringify([...expanded]));} catch { /* optional */ }};
   const link = (href, label, state = null, reading = null) => {
-    const statusText = [state ? t(state.key) : '', reading?.unread_count > 0
-      ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete ? '' : '+') : ''].filter(Boolean).join(' · ');
-    const full = [label, statusText].filter(Boolean).join(' · ');
+    const presented = railPresentation(state);
+    const statusText = presented ? t(presented.labelKey) : '';
+    const unread = reading?.unread_count > 0
+      ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete ? '' : '+') : '';
+    const full = joinLabel([label, statusText, unread]);
     return h('a', {href, class: 'workspace-tree-link', 'data-tree-key': href, title: full, 'aria-label': full,
       'aria-current': selected === href ? 'page' : null}, h('span', {class: 'workspace-tree-label', title: label}, label),
-      statusText ? h('span', {class: 'workspace-tree-state', 'aria-hidden': 'true'},
-        h('span', {class: `workspace-dot ${state?.tone || ''}`}), h('span', {class: 'workspace-tree-state-label'}, statusText)) : null);
+      presented ? h('span', {class: 'workspace-tree-state', 'aria-hidden': 'true'},
+        h('span', {class: `workspace-dot ${presented.tone || ''}`}),
+        presented.loud ? h('span', {class: 'workspace-tree-state-label'}, statusText) : null) : null);
   };
   const workLink = (pid, item) => link(`#/work/${[pid, item.kind, item.id].map(encodeURIComponent).join('/')}`,
     item.title || item.branch || item.action || item.id, sessionActivity(item.session || {}), item.reading);
@@ -155,7 +160,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
           }
           const focused = sessionRows.contains(document.activeElement) ? document.activeElement.getAttribute('href') : null;
           sessionRows.replaceChildren(...groupedSessions([...rows.values()]).map(group => h('div', {},
-            h('p', {class: 'muted workspace-session-group'}, group.host, ' · ', group.name || group.id || t('obs_unknown')),
+            h('p', {class: 'muted workspace-session-group'}, joinLabel([group.host, group.name || group.id || t('obs_unknown')])),
             ...group.sessions.map(session => link(`#/session/${[session.host, session.session_id].map(encodeURIComponent).join('/')}`,
               session.title || session.session_id, sessionActivity(session), session.reading)))),
             h('p', {class: 'muted'}, t('attention_loaded', {count: rows.size})));

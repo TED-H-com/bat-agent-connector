@@ -1,4 +1,5 @@
 import {uiStrings} from './ui/ui-strings.js';
+import {globalStrings} from './global-strings.js';
 import {ahpObserverStrings} from './pm-ahp-observer-strings.js';
 import {pmMaintenanceRepairsStrings} from './pm-maintenance-repairs-strings.js';
 import {pmQualityReviewsStrings} from './pm-quality-reviews-strings.js';
@@ -20,6 +21,7 @@ const STRINGS = {
   "zh-TW": {
     ...pmStrings["zh-TW"],
     ...uiStrings["zh-TW"],
+    ...globalStrings["zh-TW"],
     ...ahpObserverStrings["zh-TW"],
     ...qualityProjectionStrings["zh-TW"],
     ...pmQualityReviewsStrings["zh-TW"],
@@ -764,10 +766,10 @@ const STRINGS = {
     nav_settings: "連線",
     tab_needs_you: "需要你處理", tab_to_confirm: "待確認",
     attention_tab_needs: "需要你處理", attention_tab_active: "執行中操作", attention_tab_unread: "未讀工作更新",
-    attention_replies: "待回覆與權限", attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
-    attention_completion: "完成確認", attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
-    attention_problems: "需處理的操作", attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
-    attention_hosts: "主機連線", attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
+    attention_replies: "提問", attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
+    attention_completion: "待你確認", attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
+    attention_problems: "失敗的操作", attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
+    attention_hosts: "主機", attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
     attention_active: "執行中操作", attention_active_note: "已受理、執行中或等待外部條件的操作；這不是工作完成確認。",
     attention_unread: "未讀工作更新", attention_unread_note: "尚未標記已讀的工作項目版本，包含先前已有的項目；不代表未讀訊息數。",
     attention_loaded: "已載入 {count} 筆（非總數）", attention_empty: "這一類目前沒有項目。",
@@ -909,6 +911,7 @@ const STRINGS = {
   en: {
     ...pmStrings.en,
     ...uiStrings.en,
+    ...globalStrings.en,
     ...ahpObserverStrings.en,
     ...qualityProjectionStrings.en,
     ...pmQualityReviewsStrings.en,
@@ -1645,10 +1648,10 @@ const STRINGS = {
     nav_settings: "Connection",
     tab_needs_you: "Needs you", tab_to_confirm: "To confirm",
     attention_tab_needs: "Needs you", attention_tab_active: "Active operations", attention_tab_unread: "Unread work updates",
-    attention_replies: "Replies and permissions", attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
-    attention_completion: "Completion review", attention_completion_note: "Work reported done or with every step checked still needs your decision.",
-    attention_problems: "Operations needing attention", attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
-    attention_hosts: "Host connections", attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
+    attention_replies: "Questions", attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
+    attention_completion: "Reviews", attention_completion_note: "Work reported done or with every step checked still needs your decision.",
+    attention_problems: "Failed operations", attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
+    attention_hosts: "Hosts", attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
     attention_active: "Active operations", attention_active_note: "Accepted, running or waiting for external conditions. These are not work completion reviews.",
     attention_unread: "Unread work updates", attention_unread_note: "Work-item versions you have not marked read, including existing items. This is not an unread message count.",
     attention_loaded: "{count} loaded (not a total)", attention_empty: "No items in this category.",
