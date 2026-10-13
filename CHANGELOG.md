@@ -20,7 +20,10 @@
   `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
   Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
   The read does not compute a forecast, a critical path, phase rows, or per-work token use.
-  Withdrawn sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
+  A visible session link with no observation stays an unknown read-only attempt. A linked
+  operation or task with no record is omitted, marked partial, and does not publish the id.
+  The page is cut by encoded size so the next cursor resumes without gaps. Withdrawn
+  sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
 
 - Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
   an optional IANA `tz` (default UTC) and returns per-source local days for the selected

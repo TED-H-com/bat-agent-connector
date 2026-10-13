@@ -72,6 +72,7 @@ def check(body, wid):
     assert body["coverage"]["forecast"] == "recorded_revision_only"
     assert body["coverage"]["basis"] == "explicit_roadmap_scope_and_links"
     assert isinstance(body["coverage"]["visibility_filtered"], bool)
+    assert isinstance(body["coverage"]["attempts_unavailable"], bool)
     keys = set()
 
     def walk(value):
@@ -387,6 +388,98 @@ async def test_membership_and_scope_hide_the_projection(ops):
     owner = stable(schedule(ops, wid))
     reader = stable(schedule(ops, wid, READER))
     assert reader == owner
+
+
+def attach(service, work_id, kind, ref):
+    service.db.execute("""INSERT INTO work_item_links(work_item_id,kind,ref,linked_by,linked_at,link_operation)
+        VALUES(?,?,?,?,?,?)""", (work_id, kind, ref, OWNER.actor, 1.0, "op_" + "ef" * 16))
+
+
+def ordered_ids(body):
+    rank = {"milestone": 0, "requirement": 1, "issue": 2, "work": 3, "attempt": 4}
+    return [node["id"] for node in sorted(nodes(body), key=lambda node: (rank[node["kind"]], node["id"]))]
+
+
+async def test_byte_cap_resumes_after_the_last_returned_row(ops, monkeypatch):
+    built = await lined(ops)
+    wid = built["wid"]
+    full = schedule(ops, wid)
+    expected = ordered_ids(full)
+    assert len(expected) >= 3
+    full_size = len(json.dumps(full, ensure_ascii=False).encode())
+    # One byte under the complete page. A single row still fits; the whole page must be cut.
+    monkeypatch.setattr(pm_schedule, "MAX_BYTES", full_size - 1)
+    builds = {"n": 0}
+    original = pm_schedule._body
+
+    def wrapped(*args, **kwargs):
+        builds["n"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(pm_schedule, "_body", wrapped)
+    seen, cursor, pages = [], None, 0
+    while pages < 20:
+        body = check(schedule(ops, wid, after=cursor), wid)
+        assert len(json.dumps(body, ensure_ascii=False).encode()) <= pm_schedule.MAX_BYTES
+        page = ordered_ids(body)
+        assert page == expected[len(seen):len(seen) + len(page)]
+        seen.extend(page)
+        pages += 1
+        if body["next_cursor"] is None:
+            break
+        assert body["partial"] is True and body["truncated"] is True and body["range_scope"] == "returned_page"
+        assert body["next_cursor"] == page[-1]
+        cursor = body["next_cursor"]
+    assert seen == expected and pages >= 2
+    assert builds["n"] == pages
+    monkeypatch.setattr(pm_schedule, "MAX_BYTES", 80)
+    with pytest.raises(OperationError, match="PM_SCHEDULE_TOO_LARGE") as too_big:
+        schedule(ops, wid)
+    assert too_big.value.status == 413
+
+
+async def test_missing_operation_and_task_records_stay_partial_without_ids(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    present = await source_operation(ops, action="fixture.present")
+    await link(ops, work, "operation", present["operation_id"])
+    missing_op = "op_" + "ab" * 16
+    missing_task = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    attach(ops, work_id, "operation", missing_op)
+    attach(ops, work_id, "task", missing_task)
+    body = check(schedule(ops, wid), wid)
+    raw = json.dumps(body)
+    assert missing_op not in raw and missing_task not in raw
+    assert present["operation_id"] in raw
+    assert body["coverage"]["attempts_unavailable"] is True
+    assert body["coverage"]["visibility_filtered"] is False
+    assert body["partial"] is True and body["truncated"] is True
+    assert body["next_cursor"] is None and body["range_scope"] == "returned_page"
+    assert ("attempt.operation", "operation_record_missing") in reasons(body)
+    assert ("attempt.task", "task_record_missing") in reasons(body)
+
+
+async def test_visible_unobserved_session_stays_an_unknown_attempt(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    visible = session(ops, "pending-session")
+    hidden = session(ops, "hidden-unobserved")
+    retitle(ops, "pending-session", access="managed", provenance="observed", runtime="running")
+    await link(ops, work, "session", visible)
+    await link(ops, work, "session", hidden)
+    ops.db.execute("DELETE FROM sessions_observed WHERE session_id IN ('pending-session','hidden-unobserved')")
+    withdraw(ops, "session", hidden)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:session:{work_id}:{visible}"]
+    assert row["status"] == "unknown" and row["title"] == "pending-session"
+    assert row["parent_id"] == f"work:{work_id}" and row["depends_on"] == [] and row["waiting"] is None
+    assert row["refs"]["session"] == {"host": "mock-host", "session_id": "pending-session", "read_only": True}
+    assert "baseline" not in row and "forecast" not in row and "actual" not in row
+    assert row in body["unscheduled"]
+    assert ("attempt.session", "session_not_observed") in reasons(body)
+    assert "hidden-unobserved" not in json.dumps(body)
+    assert body["coverage"]["visibility_filtered"] is True
+    assert "managed" not in json.dumps(row)
 
 
 async def test_withdrawn_sources_leave_with_the_dates_they_produced(ops):
