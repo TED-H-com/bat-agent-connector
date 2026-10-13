@@ -75,7 +75,9 @@ uv run python -m scripts.ci_durations "$TMPDIR/pytest-artifacts"
 
 Commit the refreshed `tests/ci_durations.json`. Required local full checks are unchanged:
 ruff, the full Python suite, and Python 3.10 for backend changes. Use `pytest-disktmp`
-for local pytest and the shared `heavy` lock for full suites on a shared host.
+(the development host wrapper) or a unique disk-backed `--basetemp`, and remove the
+temporary directory after the run. Never use `/dev/shm` or another tmpfs. Run full
+suites one at a time.
 
 ## Working after the October 10, 2026 history rewrite
 
