@@ -2,7 +2,7 @@
 // Upstream references: Project Hub PR #2 (sidebar-resize.js) and mobile.js.
 // Strictly maintains central authority, DOM structure, local drafts, focus, and bounded layout constraints.
 
-export const DEFAULT_SIDEBAR_WIDTH = 260;
+export const DEFAULT_SIDEBAR_WIDTH = 248;
 export const MIN_SIDEBAR_WIDTH = 200;
 export const MAX_SIDEBAR_WIDTH = 500;
 export const MIN_MAIN_WIDTH = 360;
@@ -13,7 +13,7 @@ export const KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
 
 function isMobileLayout() {
   if (typeof window === "undefined") return false;
-  return (window.innerWidth || document.documentElement?.clientWidth || 0) <= 800;
+  return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1000;
 }
 
 export function calcSidebarBounds(windowWidth = window.innerWidth) {
@@ -25,7 +25,7 @@ export function calcSidebarBounds(windowWidth = window.innerWidth) {
 export function setupSidebarResizer({ aside, workspace, t }) {
   if (!aside || !workspace) return { dispose() {} };
 
-  let savedWidth = DEFAULT_SIDEBAR_WIDTH;
+  let savedWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH;
   try {
     const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
     if (raw !== null) {

@@ -1,3 +1,6 @@
+import {dashboardShell} from './shell.js';
+import {lastWorkspace, lastProjectView, projectViewIds} from './pm-workbench.js';
+import {pageHeader} from './ui/components.js';
 import {h as dom} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
@@ -610,7 +613,7 @@ async function streamEvents() {
   const live = document.getElementById("live");
   for (;;) {
     if (state.nativeBusy || !state.token || !state.viewReady) {
-      live.className = "live down"; live.textContent = state.token ? t("sync_waiting") : "";
+      live.className = "live " + (state.token ? 'reconnecting' : 'down'); live.textContent = t(state.token ? 'ui_reconnecting' : 'ui_offline'); live.title = t('sync_waiting'); live.dataset.connection = state.token ? 'reconnecting' : 'offline';
       await sleep(1000); continue;
     }
     const epoch = state.epoch, view = generation;
@@ -623,7 +626,7 @@ async function streamEvents() {
       cycle = {error: null}; state.refreshCycle = cycle;
       // A deferred render is not a connection failure: keep version-checked form saves usable.
       // Actual event/read failures below pause mutations until a successful replay.
-      live.className = "live down"; live.textContent = t("sync_waiting");
+      live.className = 'live reconnecting'; live.textContent = t('ui_reconnecting'); live.title = t('sync_waiting'); live.dataset.connection = 'reconnecting';
       const cursor = await consumePageAsync(page, before, ev => {
         return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))));
       });
@@ -638,13 +641,13 @@ async function streamEvents() {
       saveCursor();
       state.refreshCycle = null;
       updateOnline(true);
-      live.className = "live ok"; live.textContent = t("desktop_polling");
+      live.className = "live ok"; live.textContent = t('ui_connected'); live.title = t('desktop_polling'); live.dataset.connection = 'connected';
       if (!page.has_more || cursor <= before) await sleep(1000);
     } catch (error) {
       if (epoch !== state.epoch || view !== generation) continue;
       if (state.refreshCycle === cycle) state.refreshCycle = null;
       updateOnline(false);
-      live.className = "live down"; live.textContent = t("offline_actions_paused");
+      live.className = "live down"; live.textContent = t('ui_offline'); live.title = t('offline_actions_paused'); live.dataset.connection = 'offline';
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
         const accessChanged = error.reason === "access_changed";
@@ -653,7 +656,7 @@ async function streamEvents() {
           // in their original principal namespace, even when bootstrap is unavailable.
           generation++; state.viewReady = false;
           teardown?.(); teardown = null; freshPage();
-          workspaceSidebar?.dispose(); workspaceSidebar = null;
+          shell?.dispose(); shell = null; workspaceSidebar?.dispose(); workspaceSidebar = null;
           workspaceNav?.dispose(); workspaceNav = null; workspaceIdentity = "";
           document.getElementById("main").replaceChildren(h("p", {class: "muted"}, t("sync_waiting")));
         }
@@ -792,7 +795,7 @@ function opRow(op) {
 // ------------------------------------------------------------------ views
 async function viewHome(main) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  return attentionView({main, h, t, api, caps: state.caps, storageKey: `batc.attention.${connection.namespace}`,
+  return attentionView({main, h, t, api, onPending: value => shell?.pending(value), caps: state.caps, storageKey: `batc.attention.${connection.namespace}`,
     guard: () => assertView(connection), route, onEvents, debounceRefresh, errorBox, sessionRow, workItemRow, opRow});
 }
 
@@ -813,7 +816,7 @@ async function viewSessions(main) {
   const scope = h("details", {class: "panel session-scope", open: matchMedia("(min-width: 901px)").matches},
     h("summary", {}, t("sessions_workspaces")), h("p", {class: "muted"}, t("sessions_scope_note")), navigation,
     h("a", {class: "session-project-link", href: "#/projects"}, t("sessions_projects")));
-  main.append(h("div", {class: "session-heading"}, h("h1", {}, t("sessions_title")),
+  main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title")}),
     state.caps?.actions?.some(a => a.action === "session.start") ? h("a", {href: "#/start"}, t("start_title_page")) : null,
     state.caps?.features?.repository_sync?.length ? h("a", {href: "#/published"}, t("pub_title")) : null,
     state.caps?.actions?.some(a => Object.values(orchestrationActions).includes(a.action)) ? h("a", {href: "#/orchestrate/relay"}, t("orch_title")) : null),
@@ -1565,7 +1568,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
     groups.get(key).push(r);
   }
   const environments = [...groups.values()].map(environmentCard);
-  main.append(h("h1", {}, t("nav_delivery")), ...environments.map(e => e.card));
+  main.append(pageHeader({title: t("nav_delivery")}), ...environments.map(e => e.card));
   if (source) main.append(h("p", {class: "note"}, t("delivery_source_context"), " ", h("code", {}, source.id)));
   let selectedMethod = "";
   let reviewedPreview = null;
@@ -2164,7 +2167,7 @@ async function viewOperations(main, filter = "all") {
   const statuses = {attention: "needs_attention,uncertain", active: "accepted,running,waiting_checks,waiting_external"}[filter];
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const list = operationList({h, t, api, guard: () => assertView(connection), row: opRow, statuses});
-  main.append(h("h1", {}, t("nav_operations")),
+  main.append(pageHeader({title: t("nav_operations")}),
     h("div", {class: "actions"}, ...[["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([id, label]) =>
       h("a", {href: `#/operations/${id}`, class: filter === id ? "on" : ""}, t(label)))), list.box);
   await list.load().catch(() => {});
@@ -2299,7 +2302,7 @@ function viewSettings(main) {
   if (state.caps?.managed_installation) return viewManagedSettings(main);
   if (nativeDesktop) return viewNativeSettings(main);
   if (state.token && state.caps && state.token === browserSessionToken) {
-    main.append(h("h1", {}, t("nav_settings")), h("section", {class: "panel"},
+    main.append(pageHeader({title: t("nav_settings")}), h("section", {class: "panel"},
       h("h2", {}, t("managed_browser_connected")),
       h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})),
       h("p", {class: "muted"}, t("managed_browser_help")),
@@ -2311,7 +2314,7 @@ function viewSettings(main) {
   const info = h("p", { class: "muted" });
   if (state.caps) info.textContent = t("connected_as", { actor: state.caps.actor, scopes: state.caps.scopes.join(", ") });
   else if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
-  main.append(h("h1", {}, t("nav_settings")), h("div", { class: "panel" },
+  main.append(pageHeader({title: t("nav_settings")}), h("div", { class: "panel" },
     h("div", { class: "filters connection-controls" }, h("label", {class: "connection-token"}, t("token"), input),
       h("button", { class: "primary", onclick: async () => {
         disconnect();
@@ -2338,7 +2341,7 @@ async function viewManagedSettings(main) {
     h("details", {"data-managed-locations": ""}, h("summary", {}, t("managed_locations")),
       h("p", {class: "muted"}, t("managed_locations_central")),
       h("p", {class: "muted"}, t("managed_locations_work"))), status);
-  main.append(h("h1", {}, t("nav_settings")), local);
+  main.append(pageHeader({title: t("nav_settings")}), local);
   const setup = managedSetupPanel({h, t, api, guard, namespace: state.namespace, errorBox, opStatus, caps: () => state.caps,
     onConfigured: async () => {const caps = await api("GET", "/capabilities"); guard(); state.caps = caps;}});
   main.append(setup.box);
@@ -2476,7 +2479,7 @@ async function viewNativeSettings(main) {
     h("ol", {}, h("li", {}, t("delivery_setup_central")), h("li", {}, t("delivery_setup_identity")), h("li", {}, t("delivery_setup_mode"))));
   const localDetails = h("details", {class: "panel"}, h("summary", {}, t("desktop_local")),
     h("p", {class: "muted"}, t("desktop_dashboard_only")));
-  main.append(h("h1", {}, t("nav_settings")), h("section", {class: "panel native-connection", "aria-label": t("desktop_connection")},
+  main.append(pageHeader({title: t("nav_settings")}), h("section", {class: "panel native-connection", "aria-label": t("desktop_connection")},
     h("h2", {}, t("desktop_connection")),
     setup, details, platform, actions, info, connectionDetails, introduction, saved), localDetails, fleetRoot, updateRoot);
   const showInfo = () => {
@@ -2676,7 +2679,7 @@ async function viewProjects(main) {
     namespace: connection.namespace, kind: "project", errorBox, opStatus,
     onCreated: async op => {location.hash = `#/project/${op.result.project_id}`;}});
   const showArchived = h("input", { type: "checkbox" });
-  main.append(h("h1", {}, t("nav_projects")), h("p", { class: "muted" }, t("projects_help")), manageNote() || "",
+  main.append(pageHeader({title: t("nav_projects")}), h("p", { class: "muted" }, t("projects_help")), manageNote() || "",
     create.box, out, tree,
     h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
   const render = async (fromEvent = false) => {
@@ -3370,7 +3373,7 @@ async function viewCleanup(main, section, ident) {
       } }, t("more")));
     } catch (e) { fill(retainedOut, errorBox(e)); }
   }
-  main.append(h("h1", {}, t("nav_cleanup")), h("p", { class: "muted" }, t("cleanup_intro")),
+  main.append(pageHeader({title: t("nav_cleanup")}), h("p", { class: "muted" }, t("cleanup_intro")),
     section === "task" || supportsTask ? h("p", {class: "muted"}, t("cleanup_task_help")) : "");
   if (section === "resource") {
     try {
@@ -3402,7 +3405,7 @@ async function viewApprovals(main) {
   const panel = approvalsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus,
     storageKey: `batc.approvals.${connection.namespace}`});
-  main.append(h("a", {href: "#/sessions"}, t("sessions_title")), h("h1", {}, t("bulk_title")), panel.box);
+  main.append(h("a", {href: "#/sessions"}, t("sessions_title")), pageHeader({title: t("bulk_title")}), panel.box);
   try {await panel.refresh();} catch { /* panel retains its fixed intent and displays the read error */ }
   return onEvents(event => event.resource_type === "operation" ? panel.refresh(true) : panel.update());
 }
@@ -3413,7 +3416,7 @@ async function viewStart(main) {
     submitPreference: submit,
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus,
     storageKey: `batc.start.${connection.namespace}`});
-  main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), h("h1", {}, t("start_title_page")),
+  main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), pageHeader({title: t("start_title_page")}),
     h("p", {class: "muted"}, t("start_intro")),
     ...(state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", {href: "#/published"}, t("pub_title")))] : []), panel.box);
   try {await panel.init();} catch { /* panel retains the original intent and shows the read error */ }
@@ -3428,7 +3431,7 @@ async function viewOrchestration(main, selectedMode = "relay", host, sid) {
   const panel = orchestrationPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus, mode, context,
     storageKey: `batc.orchestrate.${connection.namespace}.${mode}.${JSON.stringify(context)}`});
-  main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), h("h1", {}, t("orch_title")),
+  main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), pageHeader({title: t("orch_title")}),
     h("nav", {class: "orch-modes", "aria-label": t("orch_title")}, ...Object.keys(orchestrationActions).map(key =>
       h("a", {href: `#/orchestrate/${key}`, "aria-current": key === mode ? "page" : null}, t("orch_" + key)))),
     h("h2", {}, t("orch_" + mode)), panel.box);
@@ -3443,7 +3446,7 @@ async function viewPublished(main) {
     submitPreference: submit,
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus, storageKey: `batc.published.${connection.namespace}`,
     attachmentFactory: (prompt, changed) => attachmentDraft("published", prompt, [], false, changed)});
-  main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), h("h1", {}, t("pub_title")),
+  main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), pageHeader({title: t("pub_title")}),
     h("p", {class: "muted"}, t("pub_intro")), panel.box);
   try {await panel.init();} catch { /* original intent and read error remain visible */ }
   assertView(connection);
@@ -3476,7 +3479,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus, project: pid,
     storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
     attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)});
-  main.append(h("a", {href: `#/project/${pid}`}, t("dispatch_back")), h("h1", {}, t("dispatch_title")),
+  main.append(h("a", {href: `#/project/${pid}`}, t("dispatch_back")), pageHeader({title: t("dispatch_title")}),
     repairSeed ? h("p", {class: "muted"}, t("repair_dispatch_help")) : '', panel.box);
   try {await panel.init();} catch { /* original intent and project read failure remain visible */ }
   try {assertView(connection);} catch {return;}
@@ -3546,50 +3549,51 @@ async function viewProjectWork(main, pid, kind, id) {
   }
 }
 
-async function viewPmWorkspace(main, workspaceId, threadId) {
+async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
+  const threadId = viewOrThread === 'discussions' ? thread : viewOrThread?.startsWith('pmt_') ? viewOrThread : null;
+  const view = threadId ? 'discussions' : projectViewIds.includes(viewOrThread) ? viewOrThread : lastProjectView(state.namespace, workspaceId);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
     guard: () => assertView(connection), namespace: connection.namespace,
-    workspaceId, threadId, onEvents, errorBox});
+    workspaceId: workspaceId === 'new' ? null : workspaceId, threadId, view, onEvents, errorBox,
+    onContext: context => shell?.update(context), openCreate: workspaceId === 'new'});
 }
 
-const NAV = [["home", "nav_home"], ["projects", "nav_projects"], ["sessions", "nav_sessions"], ["artifact-review", "ar_nav"], ["delivery", "nav_delivery"],
-  ["operations", "nav_operations"], ["cleanup", "nav_cleanup"], ["settings", "nav_settings"]];
-let workspaceNav = null, workspaceIdentity = "", workspaceSidebar = null;
+let workspaceNav = null, workspaceIdentity = "", workspaceSidebar = null, shell = null;
 function mountWorkspace(name) {
   const identity = state.token ? `${state.epoch}:${state.namespace}` : "";
   if (workspaceIdentity !== identity) {
-    workspaceSidebar?.dispose(); workspaceSidebar = null;
+    shell?.dispose(); shell = null; workspaceSidebar?.dispose(); workspaceSidebar = null;
     workspaceNav?.dispose(); workspaceNav = null; workspaceIdentity = identity;
     if (identity) {
       const connection = {epoch: state.epoch, namespace: state.namespace};
       workspaceNav = workspaceNavigation({h, t, api, guard: () => assertConnection(connection), onEvents,
         namespace: state.namespace, errorBox});
       document.getElementById("workspace").prepend(workspaceNav.box);
-      workspaceSidebar = setupSidebarResizer({ aside: workspaceNav.box, workspace: document.getElementById("workspace"), t });
+      workspaceSidebar = setupSidebarResizer({aside: workspaceNav.box, workspace: document.getElementById("workspace"), t});
+      shell = dashboardShell({navigation: workspaceNav, namespace: state.namespace, caps: () => state.caps,
+        api, guard: () => assertConnection(connection), onEvents, errorBox});
+      shell.setRoute(name); void shell.refresh();
     }
   }
   document.body.classList.toggle("has-workspace", Boolean(state.token));
   document.body.classList.toggle("pm-mode", Boolean(state.token) && name === "pm");
   document.getElementById("main").className = ["session", "work"].includes(name) ? "session-view" : name === "pm" ? "pm-view" : "";
-  const menu = document.getElementById("workspace-menu");
-  menu.hidden = !state.token; menu.textContent = t("workspace_navigation");
-  menu.onclick = () => {
-    const open = document.body.classList.toggle("workspace-nav-open"); menu.setAttribute("aria-expanded", String(open));
-  };
-  document.body.classList.remove("workspace-nav-open"); menu.setAttribute("aria-expanded", "false");
-  workspaceNav?.select(location.hash || "#/home");
-  const tools = h("details", {class: "workspace-tools"}, h("summary", {}, t("workspace_tools")),
-    h("div", {}, ...NAV.filter(([key]) => !["home", "settings", "projects"].includes(key)).map(([key, label]) =>
-      h("a", {href: `#/${key}`, "aria-current": name === key ? "page" : null}, t(label)))));
-  document.getElementById("nav").replaceChildren(...(state.token ? [
-    h("a", {href: "#/home", class: name === "home" ? "on" : ""}, t("nav_home")),
-    ...(pmAvailable(state.caps) ? [h("a", {href: "#/pm", class: name === "pm" ? "on" : ""}, t("pm_nav"))] : []), tools] : []),
-    h("a", {href: "#/settings", class: !state.token || name === "settings" ? "on" : ""}, t("nav_settings")));
+  document.getElementById("workspace-menu").hidden = !state.token;
+  shell?.setRoute(name); workspaceNav?.select(location.hash || "#/home");
+  if (!state.token) document.getElementById('nav').replaceChildren(h('a', {href: '#/settings'}, t('ui_settings')));
 }
 let teardown = null;
 let generation = 0;
 async function route() {
+  let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
+  if (nextName === 'pm') {
+    if (nextView?.startsWith('pmt_')) {nextThread = nextView; nextView = 'discussions';
+      history.replaceState(null, '', `#/pm/${encodeURIComponent(nextWorkspace)}/discussions/${encodeURIComponent(nextThread)}`);}
+    if (!nextWorkspace && lastWorkspace(state.namespace)) {nextWorkspace = lastWorkspace(state.namespace);
+      history.replaceState(null, '', `#/pm/${encodeURIComponent(nextWorkspace)}`);}
+    if (teardown?.navigate?.(nextWorkspace, nextThread, nextView || lastProjectView(state.namespace, nextWorkspace))) return;
+  }
   const mine = ++generation;
   state.viewReady = false;
   if (teardown) { teardown(); teardown = null; }
@@ -3626,6 +3630,7 @@ async function route() {
     main.append(skills.box);
   }
   teardown = () => {off?.(); preferences?.dispose(); skills?.dispose();};
+  if (off?.navigate) teardown.navigate = off.navigate;
   state.viewReady = true;
 }
 

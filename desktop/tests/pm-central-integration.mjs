@@ -304,7 +304,7 @@ try {
   await expect(page.locator('[data-resource-detail]')).toContainText('fixture-model');
   await expect(page.locator('[data-resource-detail]')).toContainText('Input includes cache');
   await expect(page.locator('[data-resource-quota]')).toContainText('No current quota balance');
-  await page.locator('[data-pm-view="rtm"]').click();
+  await page.locator('[data-pm-view="requirements"]').click();
   await expect(page.locator('[data-pm-rtm]')).toContainText('First useful action');
   await expect(page.locator('[data-pm-rtm]')).toContainText('Unassigned / other plan versions');
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();

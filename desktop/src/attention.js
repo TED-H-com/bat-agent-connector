@@ -1,7 +1,8 @@
+import {pageHeader} from './ui/components.js';
 // Each list has its own cursor and loaded-page count. No client-invented total or
 // completion state, and no read receipts are written by visiting this view.
 export async function attentionView({main, h, t, api, guard, caps, storageKey, route, onEvents, debounceRefresh,
-  errorBox, sessionRow, workItemRow, opRow}) {
+  errorBox, sessionRow, workItemRow, opRow, onPending = () => {}}) {
   const unread = caps?.features?.work_item_reads?.version === 1;
   const saved = sessionStorage.getItem(storageKey) || sessionStorage.getItem("batc.tab");
   const tab = saved === "confirm" || saved === "active" ? "active" : saved === "unread" && unread ? "unread" : "needs";
@@ -30,7 +31,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   };
   const hostRow = x => h("div", {class: "row"}, h("div", {class: "grow"}, h("div", {class: "title"}, x.host),
     h("div", {class: "muted"}, x.error || t("stale_reason_" + x.stale_reason))));
-  main.append(h("h1", {}, t("nav_home")), tabs, empty, ...(tab === "needs" ? [
+  main.append(pageHeader({title: t("nav_home")}), tabs, empty, ...(tab === "needs" ? [
     add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
     add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
     add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {cursor: "next_before", param: "before"}),
@@ -58,14 +59,16 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
         if (cursor !== null && seen.has(cursor)) throw new Error(t("attention_invalid"));
         seen.add(cursor);
       } while (cursor !== null && pages < wanted);
-      section.pages = pages; section.size = items.size;
+      section.pages = pages; section.size = items.size; section.partial = cursor !== null;
       section.list.replaceChildren(...(items.size ? [...items.values()].map(section.row)
         : [h("p", {class: "muted"}, t("attention_empty"))]));
       section.count.textContent = t("attention_loaded", {count: items.size});
       section.status.replaceChildren(); section.more.hidden = cursor === null;
       section.section.dataset.fresh = "true";
+      if (tab === 'needs') onPending(sections.every(item => item.section.dataset.fresh === 'true')
+        ? {count: sections.reduce((sum, item) => sum + item.size, 0), partial: sections.some(item => item.partial)} : {});
     } catch (error) {
-      guard(); section.section.dataset.fresh = "false";
+      guard(); section.section.dataset.fresh = "false"; onPending({});
       section.status.replaceChildren(errorBox(error), h("p", {class: "muted"}, t("attention_not_updated")));
       throw error;
     } finally {

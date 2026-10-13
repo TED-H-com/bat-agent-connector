@@ -14,7 +14,7 @@ test.describe('Workspace Layout Controls', () => {
     await expect(resizer).toHaveAttribute('aria-orientation', 'vertical');
 
     const initialVal = await resizer.getAttribute('aria-valuenow');
-    expect(Number(initialVal)).toBe(260);
+    expect(Number(initialVal)).toBe(248);
 
     // 1. Pointer drag to resize sidebar
     const box = await resizer.boundingBox();
@@ -28,8 +28,8 @@ test.describe('Workspace Layout Controls', () => {
     await page.mouse.up();
 
     const resizedVal = Number(await resizer.getAttribute('aria-valuenow'));
-    expect(resizedVal).toBeGreaterThanOrEqual(310);
-    expect(resizedVal).toBeLessThanOrEqual(330);
+    expect(resizedVal).toBeGreaterThanOrEqual(Number(initialVal) + 50);
+    expect(resizedVal).toBeLessThanOrEqual(Number(initialVal) + 70);
     await page.screenshot({ path: 'test-results/workspace-desktop-resized-sidebar-1200.png', fullPage: true });
 
     // Verify persisted in localStorage across reload
@@ -84,9 +84,9 @@ test.describe('Workspace Layout Controls', () => {
     // Desktop main min size (360px): 1200 - 360 = 840, clamped to max 500
     expect(maxVal).toBe(500);
 
-    // Double-click resets to default 260px
+    // Double-click resets to default 248px
     await resizer.dblclick();
-    expect(Number(await resizer.getAttribute('aria-valuenow'))).toBe(260);
+    expect(Number(await resizer.getAttribute('aria-valuenow'))).toBe(248);
   });
 
   test('sidebar mobile disabled at 390px width', async ({ page }) => {

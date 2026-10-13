@@ -23,7 +23,7 @@ function fixture(){
   return {state,dispatch};
 }
 const resources=(page:any)=>page.locator('[data-pm-resources]');
-async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="agents"]').click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
+async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);if((page.viewportSize()?.width||1440)<1000)await page.locator('#workspace-menu').click();await page.locator('[data-pm-view="agents"]').click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
 
 for(const native of [false,true])test.describe(native?'native resources':'web resources',()=>{
   test('lazy resource read, distinct model evidence, missing counters and quota',async({page})=>{
@@ -53,7 +53,7 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
     const f=fixture();await page.clock.install();await open(page,native,f);await resources(page).getByRole('button',{name:'Pause updates',exact:true}).click();
     const count=f.state.reads.length;await page.clock.fastForward(120000);expect(f.state.reads).toHaveLength(count);
     await resources(page).getByRole('button',{name:'Resume updates',exact:true}).click();await expect.poll(()=>f.state.reads.length).toBe(count+1);
-    await page.locator('[data-pm-view="charter"]').click();await page.clock.fastForward(120000);expect(f.state.reads).toHaveLength(count+1);
+    await page.locator('[data-pm-view="overview"]').click();await page.clock.fastForward(120000);expect(f.state.reads).toHaveLength(count+1);
   });
   test('empty sources remain unknown and model text is inert',async({page})=>{
     const f=fixture();f.state.data.rows[0].configurations[0].requested_model='<img src=x onerror=alert(1)>';

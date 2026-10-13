@@ -185,5 +185,5 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     finally{if(historyRequest===ticket)historyRequest=null;}
   }
   history.addEventListener('toggle',()=>{if(history.open&&!historyLoaded)void loadHistory();});
-  return {element,refresh,withdraw,newActionAllowed:canAction};
+  return {element,refresh,withdraw,newActionAllowed:canAction,phase:()=>current?.lifecycle?.stage};
 }

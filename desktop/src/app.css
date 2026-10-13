@@ -345,7 +345,7 @@ button.mini.on { color: var(--warn); border-color: var(--warn); }
 [data-session-labels] .chip, .session-entry-meta .chip { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
 
 /* Project workspace: one persistent tree, conversation first, evidence alongside it. */
-:root { --workspace-sidebar-width: 260px; }
+
 .has-workspace #workspace { display: grid; grid-template-columns: var(--workspace-sidebar-width, 260px) minmax(360px, 1fr); position: relative; }
 .has-workspace main { width: 100%; min-width: 360px; margin: 0; max-width: none; padding: 20px 24px; }
 .workspace-resizer { position: absolute; top: 0; right: -5px; width: 10px; height: 100%; cursor: col-resize; z-index: 10; touch-action: none; user-select: none; }
@@ -485,8 +485,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .model-current { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* PM shares the operational console's tokens; discussion, evidence and draft stay together. */
-.has-workspace.pm-mode #workspace { display: block; }
-.pm-mode #workspace > .workspace-nav, .pm-mode .workspace-resizer { display: none; }
+
+
 .has-workspace main.pm-view { padding: 0; }
 .pm-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: calc(100dvh - 57px); }
 .pm-shell > aside { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px;

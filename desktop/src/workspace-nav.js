@@ -6,6 +6,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   let saved = [], hasPreference = false;
   try {const raw = sessionStorage.getItem(key); saved = JSON.parse(raw || '[]'); hasPreference = raw !== null;} catch { /* local preference only */ }
   const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
+  let pmWorkspace = null, bindingSource = false, globalTree = false, contextVersion = 0;
   let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
   const status = h('div', {class: 'workspace-tree-status', role: 'status'});
   const tree = h('div', {class: 'workspace-tree'});
@@ -66,7 +67,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     });
     const nodes = projectNodes(roots);
     tree.replaceChildren(h('ul', {}, ...nodes));
-    if (!nodes.length) tree.append(h('p', {class: 'muted'}, t(query ? 'workspace_no_match' : 'no_projects')));
+    if (!nodes.length) tree.append(h('p', {class: 'muted'}, t(query ? 'workspace_no_match' : pmWorkspace && !globalTree ? 'ui_no_bound_projects' : 'no_projects')));
     if (focus) [...tree.querySelectorAll('[data-tree-key]')].find(node => node.dataset.treeKey === focus)?.focus({preventScroll: true});
     filterSessions();
   };
@@ -79,11 +80,34 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     }
   };
   const refresh = () => {
+    const version = contextVersion;
     const run = serial.catch(() => {}).then(async () => {
-      alive();
+      const current = () => {alive(); if (version !== contextVersion) throw new Error('Navigation context changed');};
+      current();
       try {
-        const data = await api('GET', '/projects'); alive();
-        roots = data.projects || [];
+        const data = await api('GET', '/projects'); current();
+        let nextRoots = data.projects || [];
+        if (pmWorkspace && !globalTree) {
+          const ids = new Set();
+          if (bindingSource) {
+            let after = 0;
+            for (let page = 0; page < 20; page++) {
+              const data = await api('GET', `/pm/workspaces/${encodeURIComponent(pmWorkspace)}/projects?after=${after}&limit=100`); current();
+              if (data.workspace_id !== pmWorkspace || !Array.isArray(data.bindings)) throw Error(t('pm_scope_mismatch'));
+              for (const binding of data.bindings) {
+                if (binding.workspace_id !== pmWorkspace) throw Error(t('pm_scope_mismatch'));
+                ids.add(binding.project_id);
+              }
+              if (data.next_cursor == null) break;
+              if (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after || page === 19) throw Error(t('pm_partial'));
+              after = data.next_cursor;
+            }
+          }
+          // A parent binding grants no inferred binding to its children.
+          const flatten = rows => rows.flatMap(row => [row, ...flatten(row.children || [])]);
+          nextRoots = flatten(nextRoots).filter(row => ids.has(row.project_id)).map(row => ({...row, children: []}));
+        }
+        current(); roots = nextRoots;
         if (!roots.length) projects.clear();
         if (!hasPreference && !expanded.size && roots.length) {expanded.add(roots[0].project_id); hasPreference = true; persist();}
         const ids = new Set();
@@ -101,14 +125,14 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         for (const id of projects.keys()) if (!ids.has(id) || !expanded.has(id)) projects.delete(id);
         // Lazy project reads bound work to expanded projects, not every session on every host.
         for (const id of expanded) if (ids.has(id)) {
-          const detail = await api('GET', `/projects/${encodeURIComponent(id)}`); alive(); projects.set(id, detail);
+          const detail = await api('GET', `/projects/${encodeURIComponent(id)}`); current(); projects.set(id, detail);
         }
         if (!roots.length && !sessionsLoaded && ['#/home', '#/sessions', '#/', ''].includes(selected)) sessionTree.open = true;
-        if (sessionTree.open) {
+        if (sessionTree.open && (!pmWorkspace || globalTree)) {
           const rows = new Map(), cursors = new Set();
           let cursor = null;
           for (let page = 0; page < sessionPages; page++) {
-            const data = await api('GET', '/sessions?order=id&include_gone=true&limit=50' + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '')); alive();
+            const data = await api('GET', '/sessions?order=id&include_gone=true&limit=50' + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '')); current();
             for (const session of data.sessions || []) rows.set(JSON.stringify([session.host, session.session_id]), session);
             cursor = data.next_cursor;
             if (!cursor) break;
@@ -126,7 +150,9 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         }
         status.replaceChildren(); render();
       } catch (error) {
-        alive(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('workspace_stale')),
+        if (version !== contextVersion || disposed) return;
+        alive(); if ([403, 404].includes(error.status)) {roots = []; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
+        status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('workspace_stale')),
           h('button', {class: 'mini', onclick: () => refresh().catch(() => {})}, t('workspace_refresh')));
         throw error;
       }
@@ -151,10 +177,16 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     }
   };
   document.addEventListener('keydown', escape);
-  const off = onEvents(event => ['project', 'work_item', 'session', 'execution', 'task', 'operation', 'integration'].includes(event.resource_type)
+  const off = onEvents(event => ['project', 'work_item', 'session', 'execution', 'task', 'operation', 'integration', 'pm_workspace', 'pm_evidence'].includes(event.resource_type)
     ? refresh() : undefined);
   refresh().catch(() => {});
-  return {box, select(hash) {
+  return {box, setWorkspace(id, source, all = false) {
+    if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
+    pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++;
+    roots = []; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false;
+    sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
+    render(); refresh().catch(() => {});
+  }, select(hash) {
     selected = hash;
     const [type, pid] = hash.replace(/^#\//, '').split('/');
     if (['project', 'dispatch', 'work'].includes(type) && pid) {
