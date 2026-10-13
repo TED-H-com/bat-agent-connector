@@ -731,6 +731,61 @@ async def test_hidden_work_is_absent_on_http_rpc_and_mcp(served, mock, monkeypat
         await fleet.close()
 
 
+async def test_http_and_rpc_walk_every_page_with_hidden_data_and_a_byte_cut(served, monkeypatch):
+    daemon_under_test, port = served
+    production = daemon_under_test.ops.actions.pop("pm.plan.adopt", None)
+    try:
+        target, plan, work, *_ = await mapped(daemon_under_test.ops)
+    finally:
+        if production is not None:
+            daemon_under_test.ops.actions["pm.plan.adopt"] = production
+    service = daemon_under_test.ops
+    wid = target["workspace_id"]
+    pid = work_items._get_item(service.db, work["work_item_id"])["project_id"]
+    for index in range(2):
+        extra = {"workspace_id": wid, "work_item_id": await item(service, pid, title=f"Visible deliverable {index}")}
+        await bind_work(service, extra, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    hidden = {"workspace_id": wid, "work_item_id": await item(service, pid, title="HIDDEN TITLE")}
+    await bind_work(service, hidden, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    operation = await source_operation(service)
+    await link(service, hidden, "operation", operation["operation_id"])
+    withdraw(service, "work_item", hidden["work_item_id"])
+    hidden_id, operation_id = hidden["work_item_id"], operation["operation_id"]
+    expected = ordered_ids(check(schedule(service, wid), wid))
+    assert hidden_id not in expected and operation_id not in "".join(expected)
+    full_size = len(json.dumps(schedule(service, wid), ensure_ascii=False).encode())
+    monkeypatch.setattr(pm_schedule, "MAX_BYTES", full_size - 1)
+    auth = token(daemon_under_test, OWNER.actor, *OWNER.scopes)
+    path = f"/api/v1/pm/workspaces/{wid}/schedule"
+    seen, cursor, pages = [], None, []
+    while len(pages) < 30:
+        suffix = "?limit=100" if cursor is None else "?limit=100&after=" + cursor
+        status, body = await http(port, "GET", path + suffix, tok=auth)
+        assert status == 200
+        raw = json.dumps(body, ensure_ascii=False)
+        assert hidden_id not in raw and operation_id not in raw and "HIDDEN TITLE" not in raw
+        assert hidden_id not in exposed_cursor(body)
+        assert len(raw.encode()) <= pm_schedule.MAX_BYTES
+        page_ids = ordered_ids(body)
+        assert page_ids
+        seen.extend(page_ids)
+        pages.append(body)
+        if body["next_cursor"] is None:
+            assert body["partial"] is False
+            break
+        assert body["partial"] is True
+        cursor = body["next_cursor"]
+    else:
+        raise AssertionError("schedule walk did not finish")
+    assert len(pages) >= 2 and seen == expected
+    rpc = await daemon_under_test.call_api(
+        "pm_schedule_get", {"workspace_id": wid, "after": pages[0]["next_cursor"], "limit": 100}, OWNER)
+    assert stable(rpc) == stable(pages[1])
+    raw_rpc = json.dumps(rpc, ensure_ascii=False)
+    assert hidden_id not in raw_rpc and operation_id not in raw_rpc and "HIDDEN TITLE" not in raw_rpc
+    assert hidden_id not in exposed_cursor(rpc)
+
+
 async def test_hidden_work_cannot_be_recovered_from_status_codes(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid, work_id = target["workspace_id"], work["work_item_id"]
@@ -1520,3 +1575,43 @@ async def test_schedule_read_uses_a_deferred_snapshot(ops):
         ops.db.set_trace_callback(None)
     assert not any(line.startswith("BEGIN IMMEDIATE") for line in statements)
     assert any(line == "BEGIN" or line.startswith("BEGIN DEFERRED") for line in statements)
+
+
+async def test_schedule_page_walk_stays_under_the_statement_bound(ops, monkeypatch):
+    """Five pages of the reviewer's fixture. The same walk without the request memo is about 2600 statements."""
+    monkeypatch.setattr(pm_package_handoff, "source_visible", lambda db, principal, operation: True)
+    target, plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    pm_source_lineage.schema(ops.journal)
+    owners = [work]
+    for index in range(2):
+        extra = {"workspace_id": wid, "work_item_id": await item(ops, pid, title=f"work {index}")}
+        await bind_work(ops, extra, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+        owners.append(extra)
+    for owner in owners:
+        for _ in range(5):
+            operation_id = (await source_operation(ops, action="fixture.root"))["operation_id"]
+            ops.db.execute("INSERT INTO pm_source_lineage VALUES('operation',?,?,?)",
+                           (operation_id, operation_id, operation_id))
+            attach(ops, owner["work_item_id"], "operation", operation_id)
+        await link(ops, owner, "task", task(ops)["task_id"])
+    await link(ops, owners[0], "session", session(ops, "m10-session"))
+    counts, after, rows = [], None, []
+    while len(counts) < 30:
+        statements = []
+        ops.db.set_trace_callback(statements.append)
+        try:
+            page = schedule(ops, wid, limit=5, after=after)
+        finally:
+            ops.db.set_trace_callback(None)
+        counts.append(len(statements))
+        rows.extend(node["id"] for node in nodes(page))
+        after = page["next_cursor"]
+        if after is None:
+            break
+    else:
+        raise AssertionError("schedule walk did not finish")
+    assert len(rows) == 24 and len(rows) == len(set(rows))
+    assert len(counts) == 5 and sum(counts) < 1600
+    assert all(count < 400 for count in counts)
