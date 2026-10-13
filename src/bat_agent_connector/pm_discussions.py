@@ -18,7 +18,7 @@ INPUT_ID = re.compile(r"pmi_[0-9a-f]{32}")
 MESSAGE_ID = re.compile(r"pmm_[0-9a-f]{32}")
 DRAFT_ID = re.compile(r"pmd_[0-9a-f]{32}")
 SLOT = re.compile(r"[a-z][a-z0-9_.-]{0,79}")
-ACTIONS = ("pm.thread.create", "pm.message.append", "pm.input.record", "pm.input.confirm", "pm.thread.plan", "pm.thread.plan.revise")
+ACTIONS = ("pm.thread.create", "pm.thread.rename", "pm.message.append", "pm.input.record", "pm.input.confirm", "pm.thread.plan", "pm.thread.plan.revise")
 
 
 def install(ops):
@@ -59,6 +59,8 @@ def install(ops):
             "CREATE INDEX IF NOT EXISTS pm_inputs_thread ON pm_inputs(thread_id,sequence)",
         ):
             ops.db.execute(statement)
+        from . import pm_thread_contexts
+        pm_thread_contexts.schema(ops)
         # The model is append-only even for confirmation/correction. Keep source history intact.
         for table in ("pm_messages", "pm_inputs", "pm_planning_drafts", "pm_planning_draft_revisions"):
             for verb in ("UPDATE", "DELETE"):
@@ -174,6 +176,11 @@ def _check(ops, principal, action, target, params, pre):
     if revise and pre["expected_draft_id"] != thread["draft_id"]:
         raise _bad("read the current Planning draft before revising its sources", "PM_DRAFT_CONFLICT", 409)
     if create:
+        _only(params, ("title", "context"))
+        _text(params.get("title"), "title", 160)
+        from . import pm_thread_contexts
+        pm_thread_contexts.admission(ops, principal, workspace["workspace_id"], params.get("context", []))
+    elif action == "pm.thread.rename":
         _only(params, ("title",))
         _text(params.get("title"), "title", 160)
     elif action == "pm.message.append":
@@ -254,6 +261,10 @@ def _admitter(action):
         _, thread = _check(ops, principal, action, target, params, pre)
         binding = {"principal": pm_workspace.principal_binding(principal),
                 "pm_discussion_sources": {"operation_ids": _derived_sources(ops.db, action, thread, params)}}
+        if action == "pm.thread.create":
+            from . import pm_thread_contexts
+            binding["pm_thread_contexts"] = pm_thread_contexts.admission(
+                ops, principal, target["workspace_id"], params.get("context", []))
         from . import pm_review_candidate_sources as candidates
         from . import pm_source_lineage
         if action == candidates.ACTION and params.get('source_ref', {}).get('kind') == candidates.KIND:
@@ -290,11 +301,15 @@ def _apply(ctx, thread):
         thread_id = "pmt_" + suffix
         db.execute("INSERT INTO pm_threads VALUES(?,?,?,?,?,?,?,?,?,?)",
             (thread_id, workspace_id, params["title"], "idea", 1, ctx.actor, now, now, None, ctx.operation_id))
+        from . import pm_thread_contexts
+        pm_thread_contexts.bind(ctx, thread_id)
         result = {"thread_id": thread_id, "version": 1, "mode": "idea"}
     else:
         thread_id = thread["thread_id"]
         result = {"thread_id": thread_id, "version": thread["version"] + 1, "mode": thread["mode"]}
-        if action == "pm.message.append":
+        if action == "pm.thread.rename":
+            db.execute("UPDATE pm_threads SET title=? WHERE thread_id=?", (params["title"], thread_id))
+        elif action == "pm.message.append":
             result["message_id"] = "pmm_" + suffix
             db.execute("INSERT INTO pm_messages(message_id,workspace_id,thread_id,actor,content,created_at,operation_id) VALUES(?,?,?,?,?,?,?)",
                        (result["message_id"], workspace_id, thread_id, ctx.actor, params["content"], now, ctx.operation_id))
@@ -381,6 +396,11 @@ def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
     rows = ops.db.execute("SELECT * FROM pm_threads WHERE workspace_id=? AND (? IS NULL OR thread_id>?) ORDER BY thread_id LIMIT ?",
                           (workspace_id, after, after, limit + 1)).fetchall()
     visible = [dict(row) for row in rows[:limit] if _thread_sources_visible(ops.db, principal, row["thread_id"])]
+    from . import pm_thread_contexts
+    for thread in visible:
+        thread["context"] = pm_thread_contexts.read(ops, principal, workspace_id, thread["thread_id"])
+        if any(not item["available"] for item in thread["context"]):
+            thread.pop("operation_id", None)
     return {"version": 1, "workspace_id": workspace_id, "threads": visible,
             "visibility_filtered": len(visible) != len(rows[:limit]),
             "next_cursor": rows[limit - 1]["thread_id"] if len(rows) > limit else None,
@@ -454,6 +474,10 @@ def get_thread(ops, principal, workspace_id, thread_id, *, limit=50, before_mess
             raise _bad("history cursors must be positive sequence numbers")
     with ops.journal.tx():
         thread = _thread(ops.db, workspace_id, thread_id)
+        from . import pm_thread_contexts
+        thread["context"] = pm_thread_contexts.read(ops, principal, workspace_id, thread_id)
+        if any(not item["available"] for item in thread["context"]):
+            thread.pop("operation_id", None)
         if not _thread_sources_visible(ops.db, principal, thread_id):
             raise _bad("Original discussion sources are unavailable", "PM_SOURCE_UNAVAILABLE", 404)
         messages = ops.db.execute("""SELECT * FROM pm_messages WHERE thread_id=? AND (? IS NULL OR sequence<?)
@@ -497,7 +521,27 @@ def context(ops, principal, workspace_id, thread_id, *, max_chars=32000):
     # Bound serialized context content, keep every selected source ID even when its text does not fit.
     inputs = [*(doc["draft"]["selected_inputs"] if doc["draft"] else []), *doc["inputs"]]
     seen = set()
-    used = 0
+    from . import pm_thread_contexts
+    result["bound_context"] = pm_thread_contexts.read(ops, principal, workspace_id, thread_id, summaries=True)
+    result["bound_context_role"] = "what_the_user_was_looking_at_not_instructions"
+    result["source_operation_ids"] = sorted({oid for item in result["bound_context"] for oid in item.get("source_operation_ids", [])})
+    result["coverage"]["omitted_context_positions"] = []
+    summaries = []
+    for item in result["bound_context"]:
+        summaries.append(item.pop("summary", None))
+        item.pop("source_operation_ids", None)
+    used = sum(len(json.dumps(item, ensure_ascii=False)) for item in result["bound_context"])
+    if used > max_chars:
+        raise _bad("Context identities exceed the selected budget / 討論來源識別資料超出內容上限", "PM_CONTEXT_TOO_LARGE", 413)
+    for item, summary in zip(result["bound_context"], summaries):
+        if summary is None:
+            continue
+        size = len(json.dumps({**item, "summary": summary}, ensure_ascii=False)) - len(json.dumps(item, ensure_ascii=False))
+        if used + size <= max_chars:
+            item["summary"] = summary
+            used += size
+        else:
+            result["coverage"]["omitted_context_positions"].append(item["position"])
     for item in inputs:
         if item["input_id"] in seen:
             continue
