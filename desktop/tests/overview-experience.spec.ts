@@ -68,6 +68,20 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(page.locator('[data-overview-meta]')).not.toContainText('v3');
   await expect(root(page).locator('[data-charter-section]')).toHaveCount(6);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if (width < 800) {
+    const discuss = page.locator('[data-overview-discuss]');
+    const bounds = await discuss.boundingBox();
+    expect(bounds!.height).toBeLessThan(60);
+    // All header actions remain reachable in the row's own scroll area.
+    await page.locator('[data-pm-refresh]').focus();
+    expect(await page.locator('[data-pm-refresh]').evaluate(node => {
+      const box = node.getBoundingClientRect(), row = node.parentElement!.getBoundingClientRect();
+      const target = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      // Scroll offsets round to pixels while translated label widths can be fractional.
+      return box.left >= row.left - 1 && box.right <= row.right + 1 && node.contains(target);
+    })).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
   expect(await root(page).innerText()).not.toMatch(/\b(undefined|null|NaN|ov_\w+)\b/);
   if (width === 1440) {
     const strip = await root(page).locator('[data-overview-status]').boundingBox(); expect(strip!.y + strip!.height).toBeLessThan(430);
