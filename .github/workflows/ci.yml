@@ -8,13 +8,38 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # Unique push groups also preserve pending main runs, not just running ones.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - name: Sync (locked)
+        run: uv sync --locked --extra dev
+      - name: Lint
+        run: uv run ruff check .
+      - name: Generated agent skills
+        run: uv run python scripts/generate_agent_skills.py --check
+      - name: Public content boundaries
+        run: uv run python scripts/check_public_content.py
+
+  pytest:
+    name: pytest ${{ matrix.python }} (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,14 +49,43 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Sync (locked)
         run: uv sync --locked --extra dev
-      - name: Lint
-        run: uv run ruff check .
-      - name: Generated agent skills
-        run: uv run python scripts/generate_agent_skills.py --check
-      - name: Public content boundaries
-        run: uv run python scripts/check_public_content.py
-      - name: Tests (mock server only; live tests are skipped without BATC_LIVE)
-        run: uv run pytest -q
+      - name: Tests (mock server only; existing live-test policy unchanged)
+        run: >-
+          uv run pytest -q -p tests.ci_shard_plugin
+          --ci-shard-index=${{ matrix.shard }} --ci-shard-count=5
+          --ci-shard-manifest=ci-results/manifest.json
+          --junitxml=ci-results/junit.xml -o junit_family=xunit1 --durations=15
+      - name: Preserve collection proof and JUnit results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: pytest-${{ matrix.python }}-${{ matrix.shard }}
+          path: ci-results/
+          retention-days: 7
+          if-no-files-found: error
+
+  pytest-complete:
+    needs: pytest
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          pattern: pytest-*
+          path: ci-results
+      - name: Require successful shards and an exact partition on every Python version
+        if: always()
+        env:
+          SHARDS_RESULT: ${{ needs.pytest.result }}
+        run: >-
+          uv run --no-project python -m scripts.ci_complete ci-results
+          --python 3.10 3.11 3.12 3.13 --shards 5 --shards-result "$SHARDS_RESULT"
 
   secrets-scan:
     runs-on: ubuntu-latest
