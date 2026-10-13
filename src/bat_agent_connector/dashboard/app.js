@@ -7010,6 +7010,15 @@ var STRINGS = {
 		message_latest: "回到最新訊息",
 		message_new: "新訊息",
 		message_you: "你",
+		message_person: "使用者",
+		message_seconds: "{s} 秒",
+		message_minutes: "{m} 分 {s} 秒",
+		message_minutes_even: "{m} 分",
+		message_window_one: "1 則訊息",
+		message_window_count: "{count} 則訊息",
+		message_window_latest: "最近 {count} 則訊息",
+		message_window_failed: "無法載入訊息",
+		message_window_stale: "訊息尚未更新",
 		message_system: "系統",
 		message_window: "最近 30 則訊息",
 		message_window_showing: "顯示最近 30 則",
@@ -8513,6 +8522,15 @@ var STRINGS = {
 		message_latest: "Back to latest",
 		message_new: "New messages",
 		message_you: "You",
+		message_person: "Person",
+		message_seconds: "{s} s",
+		message_minutes: "{m} min {s} s",
+		message_minutes_even: "{m} min",
+		message_window_one: "1 message",
+		message_window_count: "{count} messages",
+		message_window_latest: "Latest {count} messages",
+		message_window_failed: "Messages unavailable",
+		message_window_stale: "Messages not updated",
 		message_system: "System",
 		message_window: "Latest 30 messages",
 		message_window_showing: "Showing latest 30",
@@ -38711,6 +38729,15 @@ async function readArtifactContent(reference, size, token, signal) {
 }
 //#endregion
 //#region src/conversation.js
+function messageDuration(t, ms) {
+	if (!(typeof ms === "number" && Number.isFinite(ms) && ms >= 0)) return "";
+	if (ms < 6e4) return t("message_seconds", { s: String(Number((ms / 1e3).toFixed(1))) });
+	const total = Math.round(ms / 1e3), m = Math.floor(total / 60), s = total % 60;
+	return s ? t("message_minutes", {
+		m,
+		s
+	}) : t("message_minutes_even", { m });
+}
 function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
@@ -38736,9 +38763,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				run(() => readingActions.latest());
 				return;
 			}
-			viewport.scrollTop = viewport.scrollHeight;
+			follow();
 			notice.hidden = true;
-			indicator();
+			viewport.focus({ preventScroll: true });
 		}
 	}, t("message_latest"));
 	const progress = h("span", {
@@ -38775,11 +38802,12 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		hidden: true,
 		onclick: () => run(() => readingActions.older())
 	}, t("message_load_earlier"));
-	const caption = h("p", { class: "muted conversation-window" }, t("message_window"));
+	const caption = h("p", { class: "muted conversation-window" });
 	const captionRow = h("div", { class: "conversation-caption" }, caption);
 	const readingBar = readingActions ? h("div", { class: "actions" }, progress, mark, remember) : null;
 	const box = h("section", { class: "panel conversation" }, captionRow, notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingBar, fallback);
 	let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
+	let pinned = true, unseen = 0, userLabel = null, last = null, resizing = false;
 	const alive = () => {
 		if (disposed) return false;
 		try {
@@ -38799,13 +38827,20 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		});
 	};
 	const indicator = () => {
-		latest.textContent = olderWindow ? t("message_latest") : t("message_new");
-		latest.hidden = !olderWindow && atBottom();
+		if (pinned) unseen = 0;
+		latest.textContent = !olderWindow && unseen ? t("message_new") : t("message_latest");
+		latest.hidden = !olderWindow && (pinned || !rows.size);
 		if (memory && initialized) memory.scrollTop = viewport.scrollTop;
 		if (!readingActions) return;
 		mark.disabled = busy || !visible().some((row) => row.reading?.can_mark && row.reading?.unread);
 		remember.disabled = busy || !visible().some((row) => row.reading);
 		older.disabled = busy;
+	};
+	const follow = () => {
+		pinned = true;
+		unseen = 0;
+		viewport.scrollTop = viewport.scrollHeight;
+		indicator();
 	};
 	const run = async (action) => {
 		if (!alive() || busy) return;
@@ -38821,9 +38856,29 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			if (alive()) indicator();
 		}
 	};
-	viewport.addEventListener("scroll", indicator, { passive: true });
+	const onScroll = () => {
+		if (initialized && !resizing) pinned = atBottom();
+		indicator();
+	};
+	viewport.addEventListener("scroll", onScroll, { passive: true });
+	viewport.addEventListener("focusin", () => requestAnimationFrame(onScroll));
 	window.addEventListener("scroll", indicator, { passive: true });
-	window.addEventListener("resize", indicator);
+	const onResize = () => {
+		resizing = true;
+		requestAnimationFrame(() => {
+			if (!alive()) return;
+			if (pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+			requestAnimationFrame(() => {
+				resizing = false;
+				indicator();
+			});
+		});
+	};
+	window.addEventListener("resize", onResize);
+	const resized = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+		if (alive() && pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+	}) : null;
+	resized?.observe(viewport);
 	const copy = async (text) => {
 		if (!alive()) return;
 		const attempt = ++copyAttempt;
@@ -38853,16 +38908,22 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			input.select();
 		}
 	};
+	const countCaption = (count, more) => count === 1 && !more ? t("message_window_one") : more ? t("message_window_latest", { count }) : t("message_window_count", { count });
 	const update = (messages, state = null) => {
 		if (!alive()) return;
+		last = {
+			messages,
+			state
+		};
 		const top = viewport.getBoundingClientRect().top;
 		const anchor = [...rows.entries()].find(([, row]) => row.node.getBoundingClientRect().bottom > top);
 		const selection = window.getSelection();
 		const readingSelection = selection && !selection.isCollapsed && viewport.contains(selection.anchorNode);
 		const savedScroll = !initialized && memory && Number.isFinite(memory.scrollTop) && !state?.restore && !state?.latest;
-		const follow = !savedScroll && (!initialized || !state?.preserve && atBottom() && !readingSelection);
+		const followNow = !savedScroll && (!initialized || !state?.preserve && pinned && !readingSelection);
 		const offset = anchor ? anchor[1].node.getBoundingClientRect().top - top : 0, scrollTop = viewport.scrollTop;
 		const next = new Map(), occurrences = new Map();
+		let added = 0;
 		for (const message of messages) {
 			const text = typeof message.text === "string" ? message.text : "";
 			const identity = JSON.stringify(message.id != null ? ["id", message.id] : [
@@ -38876,6 +38937,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			const key = JSON.stringify([identity, occurrence]);
 			let row = rows.get(key);
 			if (!row) {
+				added += 1;
 				row = {
 					text: null,
 					meta: null,
@@ -38906,22 +38968,28 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			}
 			const extras = [];
 			const pillKey = message.role !== "tool" && typeof message.status !== "string" ? "" : message.denied ? "blocked" : message.deferred ? "waiting" : message.status === "completed" ? "done" : message.status === "failed" || message.status === "error" ? "failed" : message.status === "running" ? "running" : "unknown";
+			const agent = typeof message.agent === "string" && message.agent ? message.agent : "";
+			const whoName = message.role === "user" ? userLabel || t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : agent || t("agent");
 			const chip = [];
-			if (typeof message.agent === "string") chip.push(message.agent);
-			if (typeof message.model === "string") chip.push(message.model);
-			if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0) extras.push(t("message_duration", { ms: message.duration_ms }));
-			const whoName = message.role === "user" ? t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : message.agent || t("agent");
+			if (agent && whoName !== agent) chip.push(agent);
+			if (typeof message.model === "string" && message.model) chip.push(message.model);
+			const duration = messageDuration(t, message.duration_ms);
+			if (duration) extras.push(duration);
 			const stamp = when(message.ts);
 			const meta = JSON.stringify([
+				message.role,
 				whoName,
+				agent,
 				stamp,
 				chip,
 				extras,
 				pillKey
 			]);
 			if (row.meta !== meta) {
-				const glyphs = Array.from(whoName);
-				row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
+				if (message.role === "tool") row.mark.replaceChildren(icon("wrench"));
+				else if (message.role === "system") row.mark.replaceChildren(icon("settings"));
+				else if (message.role === "user") row.mark.textContent = Array.from(whoName)[0]?.toUpperCase() || "";
+				else row.mark.textContent = agentMark(agent).textContent;
 				row.name.textContent = whoName;
 				row.time.textContent = stamp;
 				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
@@ -38946,6 +39014,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.text = null;
 				row.tool = folded;
 				row.toolDetails = null;
+				row.pill = void 0;
 			}
 			if (folded && !row.toolDetails) {
 				row.toolContent = h("div", {});
@@ -38958,16 +39027,16 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.toolDetails.classList.add("message-tool");
 				row.toolDetails.addEventListener("toggle", indicator);
 				row.body.append(row.toolDetails);
-			}
-			if (tool && !completed) row.toolDetails.open = true;
+			} else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
+			row.pill = pillKey;
 			if (row.text !== text) {
+				if (row.text !== null) added += 1;
 				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
 				if (folded && row.toolDetails) {
-					const summary = row.toolDetails.querySelector("summary");
-					const label = (text.includes("\n") ? text.split("\n").find((item) => item.trim()) : "") || t(tool ? "message_tool_details" : "message_system");
+					const label = text.split("\n").find((item) => item.trim())?.trim() || t(tool ? "message_tool_details" : "message_system");
 					row.toolLabel.textContent = label;
-					summary.title = text || label;
+					row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
 				}
 			}
 			next.set(key, row);
@@ -38982,9 +39051,15 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			position = old.nextSibling;
 			old.remove();
 		}
-		if (!next.size) viewport.replaceChildren(h("p", { class: "muted" }, t("no_messages")));
-		if (follow) {
+		if (!next.size) viewport.replaceChildren(emptyState({
+			icon: "message-square",
+			title: t("no_messages")
+		}));
+		if (initialized && !followNow && added) unseen += added;
+		if (followNow) {
 			viewport.scrollTop = viewport.scrollHeight;
+			pinned = true;
+			unseen = 0;
 			notice.hidden = true;
 		} else if (savedScroll) {
 			viewport.scrollTop = memory.scrollTop;
@@ -39009,33 +39084,80 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		if (state?.latest) {
 			viewport.scrollTop = viewport.scrollHeight;
 			notice.hidden = true;
+			viewport.focus({ preventScroll: true });
 		}
+		const more = state?.next_offset != null;
 		if (readingActions && state) {
 			reading = state.reading;
 			olderWindow = Boolean(state.olderWindow);
-			const canOlder = state.next_offset != null;
-			older.hidden = !canOlder;
+			older.hidden = !more;
 			older.textContent = t("message_load_earlier");
-			if (canOlder) caption.replaceChildren(t("message_window_showing") + "\xA0· ", older);
+			if (more) caption.replaceChildren(t("message_window_latest", { count: next.size }) + "\xA0· ", older);
 			else {
 				if (older.parentElement === caption) readingBar?.append(older);
-				caption.textContent = t("message_window");
+				caption.textContent = countCaption(next.size, false);
 			}
 			progress.textContent = reading?.unread_count == null ? t("conversation_unknown") : t(reading.complete ? "conversation_unread" : "conversation_partial", { count: reading.unread_count });
 			progress.title = t("conversation_count_note");
-		}
+		} else caption.textContent = countCaption(next.size, more);
+		if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
 		initialized = true;
 		indicator();
+	};
+	const fail = ({ title, retry }) => {
+		if (!alive()) return;
+		const action = retry ? h("button", {
+			class: "ui-button secondary ui-sm",
+			type: "button",
+			onclick: retry
+		}, t("ui_retry")) : null;
+		if (!rows.size) {
+			viewport.replaceChildren(h("div", {
+				class: "conversation-state",
+				"data-conversation-state": "error"
+			}, emptyState({
+				icon: "circle-alert",
+				title,
+				action
+			})));
+			caption.textContent = t("message_window_failed");
+		} else caption.replaceChildren(t("message_window_stale"), action ? "\xA0· " : "", action || "");
+		indicator();
+	};
+	const clear = () => {
+		rows = new Map();
+		viewport.replaceChildren();
+		caption.textContent = "";
+		notice.hidden = true;
+		status.textContent = "";
+		fallback.replaceChildren();
+		last = null;
+		unseen = 0;
+		indicator();
+	};
+	const setUserLabel = (label) => {
+		if (label === userLabel) return;
+		userLabel = label;
+		if (last && initialized) update(last.messages, last.state ? {
+			...last.state,
+			restore: null,
+			latest: false
+		} : null);
 	};
 	return {
 		box,
 		update,
+		fail,
+		clear,
+		follow,
+		setUserLabel,
 		dispose() {
 			disposed = true;
 			if (memory) memory.scrollTop = viewport.scrollTop;
-			viewport.removeEventListener("scroll", indicator);
+			resized?.disconnect();
+			viewport.removeEventListener("scroll", onScroll);
 			window.removeEventListener("scroll", indicator);
-			window.removeEventListener("resize", indicator);
+			window.removeEventListener("resize", onResize);
 		}
 	};
 }
@@ -48051,6 +48173,7 @@ async function viewSession(main, host, sid, context = null) {
 				}, {}, scope);
 				assertView(connection);
 				paintSend(op);
+				if (op.status === "succeeded") conversation.follow();
 				if (op.status === "succeeded" && box.value === submitted) {
 					box.value = "";
 					try {
@@ -48527,6 +48650,7 @@ async function viewSession(main, host, sid, context = null) {
 		if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
 		if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
 		const managed = row.api_access === "managed";
+		conversation.setUserLabel(managed && row.provenance === "connector_managed" ? t("message_you") : t("message_person"));
 		artifactSlot.replaceChildren();
 		if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) artifactSlot.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
 		paintDiscuss(data.work_items);
@@ -48615,7 +48739,7 @@ async function viewSession(main, host, sid, context = null) {
 			restore,
 			latest,
 			olderWindow: offset > 0
-		} : null);
+		} : { next_offset: read.next_offset });
 	};
 	const refresh = async (fromEvent = false) => {
 		if (refreshInFlight) {

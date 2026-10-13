@@ -1322,6 +1322,7 @@ async function viewSession(main, host, sid, context = null) {
       const op = await submit("session.send", { host, session_id: sid }, { text: submitted, queue: queue.checked }, {}, scope);
       assertView(connection);
       paintSend(op);
+      if (op.status === "succeeded") conversation.follow();
       if (op.status === "succeeded" && box.value === submitted) {
         box.value = ""; try { localStorage.removeItem(draftKey); } catch { /* unavailable */ }
         mobileLayout?.updateDraft();
@@ -1558,6 +1559,7 @@ async function viewSession(main, host, sid, context = null) {
     if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
     if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
     const managed = row.api_access === "managed";
+    conversation.setUserLabel(managed && row.provenance === "connector_managed" ? t("message_you") : t("message_person"));
     artifactSlot.replaceChildren();
     if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file)
       artifactSlot.append(h("p", {}, h("a", {href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`}, t("ar_open"))));
@@ -1618,7 +1620,7 @@ async function viewSession(main, host, sid, context = null) {
       if (request !== messageRequest) return;
     }
     messageOffset = offset; nextMessageOffset = read.next_offset; firstMessages = false;
-    conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : null);
+    conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : {next_offset: read.next_offset});
   };
   const refresh = async (fromEvent = false) => {
     if (refreshInFlight) {

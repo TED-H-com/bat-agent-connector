@@ -547,11 +547,16 @@ menu. A manual or unconfirmed session shows Read-only and has no send, answer, o
 interrupt control.
 
 The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
-body column for the name, compact time, chip, text, and disclosure. Agent and model
-share one inline chip that stays on the name row when it fits. Copy original is an
-icon at the row's right edge. The window caption is quiet. A tool event is one row
+body column for the name, compact time, chip, text, and disclosure. Agent marks use the same vocabulary as the header; tools and system rows use icons.
+The model chip adds only the model when the name already identifies the agent.
+Manual-session user turns say Person. Durations use seconds or minutes. Copy original is an
+icon at the row's right edge. The window caption counts received messages and says Latest only for a partial window.
+An empty transcript uses the shared empty state; an empty toolbar takes no space. A tool event is one row
 (name, compact time, status pill) and its command is a disclosure. New messages
-while the reader is scrolled up show a jump control and do not move the visible row.
+while the reader is scrolled up show New messages and do not move the visible row.
+Scrolling up without new content shows Back to latest. Activating either restores
+transcript focus. A pinned reader follows layout changes and a successful own send.
+Tool disclosures preserve the reader's toggle until the tool changes state.
 Approval prompts sit above the composer and keep their original operation keys. The
 last send is one short line; the operation id stays in Details. On a narrow window
 the info and composer collapse icons sit on the caption row and the queue row.

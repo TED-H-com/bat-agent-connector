@@ -302,7 +302,7 @@ const crafted = [
   {id: 'm-tool-run', role: 'tool', tool: 'Bash', status: 'running', ts: at(40), text: 'npm run e2e -- --project=chromium'},
   {id: 'm-system', role: 'system', ts: at(20), text: 'Context compacted\nThe earlier conversation was summarised.'},
   {id: 'm-noagent', role: 'assistant', ts: at(10), text: 'An assistant row without an agent name.', duration_ms: 4200},
-  {id: 'm-slow', role: 'assistant', agent: 'claude', model: 'example-claude', ts: at(2), text: 'Last message.', duration_ms: 65_000},
+  {id: 'm-slow', role: 'assistant', agent: 'claude', model: 'example-claude', ts: at(2), text: 'Last message.\n'.repeat(20), duration_ms: 65_000},
 ];
 
 test('transcript rows: marks, tool labels, durations and collapsed rows that stay collapsed', async ({browser}) => {
@@ -336,6 +336,7 @@ test('transcript rows: marks, tool labels, durations and collapsed rows that sta
   const scroller = page.locator('.conversation-scroll');
   await scroller.evaluate(el => {const r = el.querySelector('[data-message-id="m-tool-fail"]')!;
     el.scrollTop += r.getBoundingClientRect().top - el.getBoundingClientRect().top - 10;});
+  await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeGreaterThan(48);
   const before = await row('m-system').evaluate(el => Math.round(el.getBoundingClientRect().top));
   const reads = s.reads('/sessions/demo-host/signin-implement/messages');
   s.sessionEvent('implement');

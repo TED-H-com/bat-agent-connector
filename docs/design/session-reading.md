@@ -48,10 +48,15 @@ effect 與 receipt 同一交易，其他 principal 不可借同 actor replay／r
 ## 訊息來源與工具細節
 
 Dashboard 使用同一中央 transcript 載入工具列；已完成的工具輸入／結果預設折疊，
-error、running、denied、deferred 與未知狀態保持展開，狀態一直顯示在訊息表頭。
+error、running、denied、deferred 與未知狀態初次出現或狀態改變時展開；同狀態刷新保留使用者的收合選擇。狀態一直顯示在訊息表頭。
 保留原工具結果文字，輸入摘要與整份訊息仍受既有長度限制；工具紀錄不參與未讀標記。
 
 原 BAT `ClaudeMessage` 契約通常只提供 role/content/timestamp，不能從 session 當前模型
 推算歷史訊息的 agent、model 或耗時。中央僅保留原訊息本身明確提供且有效的
 `agent`、`model`、`durationMs`；工具耗時只由其真實 timestamp/completedAt 計算。
 缺少的欄位不補值，也不把訂閱額度或 session 累計 token/cost 當成單則訊息資料。
+
+共用對話視窗依實際收到的訊息數顯示標題，有較早頁才標示「最近」。空視窗使用空狀態。
+捲離底部而沒有新內容時顯示「回到最新訊息」；有新增或串流修訂才顯示「新訊息」。
+回到最新會把鍵盤焦點放回對話；置底閱讀在視窗縮放、回覆區高度改變及自己的成功送出後保持置底。
+人工 BAT 工作階段中的 user 回合標為「使用者」，不推定為目前登入者。

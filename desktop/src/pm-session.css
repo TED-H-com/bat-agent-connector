@@ -55,6 +55,8 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-workspace .message-tool > summary { max-width: 100%; min-width: 0; color: var(--text-2); min-height: 32px; }
 .session-workspace .message-tool-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-workspace .conversation-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
+.session-workspace .conversation-toolbar { min-height: 0; margin: 0; }
+.session-workspace .conversation-toolbar:not(:has([role="status"]:not(:empty))) { height: 0; }
 .session-workspace .workspace-composer { flex: none; background: var(--bg); margin-top: var(--space-2); }
 .session-asking { display: grid; gap: var(--space-2); }
 .session-asking .title { display: flex; align-items: center; gap: var(--space-2); }

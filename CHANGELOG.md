@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Keep Session transcript position and tool disclosures stable during live updates and
+  resizing; restore focus on Back to latest and follow successful replies. Show received
+  message counts, consistent agent marks, compact durations and Person on manual turns.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
