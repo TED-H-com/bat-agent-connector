@@ -13,7 +13,8 @@
   Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
   See the [overview contract](docs/design/pm-overview-discussion-context.md).
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
-  `pm_conversation_proposal_get` exposes adoptability that survives title-only renames.
+  `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
+  proposal reads include visible adoption receipts and list titles.
   Withdrawn context is redacted and access to analysis derived from it remains protected.
   See the [discussion contract](docs/design/pm-overview-discussion-context.md).
 
