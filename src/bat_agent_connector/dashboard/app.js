@@ -34872,7 +34872,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	if (lifecycle && !threadId) body.insertBefore(lifecycle.element, content);
 	const qualitySelections = new Map();
 	const qualitySelection = !threadId && caps()?.features?.pm_workspaces?.quality_reviews?.version === 1 ? (id) => qualitySelections.get(id) || null : null;
-	const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence ? workspaceEvidence({
+	const evidence = workspaceId && threadId !== "new" && caps()?.features?.pm_workspaces?.work_evidence ? workspaceEvidence({
 		h,
 		t,
 		api,
@@ -35099,7 +35099,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		qualitySelection
 	}) : null;
 	if (sprints) body.insertBefore(sprints.box, content);
-	const meetings = workspaceId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
+	const meetings = workspaceId && threadId !== "new" && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
 		h,
 		t,
 		api,
@@ -35190,7 +35190,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		queueMicrotask(() => focusForm(host));
 	};
-	const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources ? specSources({
+	const specifications = workspaceId && threadId !== "new" && caps()?.features?.pm_workspaces?.spec_sources ? specSources({
 		h,
 		t,
 		api,
@@ -35202,7 +35202,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (threadId) body.append(specifications.element);
 		else body.insertBefore(specifications.element, content);
 	}
-	const followUp = workspaceId && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
+	const followUp = workspaceId && threadId !== "new" && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
 		h,
 		t,
 		api,

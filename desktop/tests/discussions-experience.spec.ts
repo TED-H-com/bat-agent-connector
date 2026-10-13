@@ -4,6 +4,26 @@ import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {discussHref, parseDiscussRefs} from '../src/pm-discuss-link.js';
 
+for (const locale of ['en', 'zh-TW']) test(`new discussion stays focused when central exposes all thread tools ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+  const page = await context.newPage(), f = demoFixture({locale, discussions: true});
+  await mountConversation(page, false, async input => {
+    if (input.path.startsWith(`/pm/workspaces/${f.ids.workspaceId}/projects?`)) return {status: 200,
+      data: {workspace_id: f.ids.workspaceId, bindings: [], next_cursor: null}};
+    const result = await f.dispatch(input);
+    const caps = input.path === '/bootstrap' ? result.data.capabilities : input.path === '/capabilities' ? result.data : null;
+    if (caps) Object.assign(caps.features.pm_workspaces, {meetings: true, work_evidence: true, spec_sources: true, follow_up_prepare: true});
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/new`);
+  await expect(page.locator('[data-discussion-composer]')).toBeFocused();
+  await expect(page.locator('[data-discussion-composer]')).toBeInViewport();
+  await expect(page.locator('[data-pm-action]:visible')).toHaveCount(1);
+  await expect(page.locator('.pm-main > [data-pm-follow-up], .pm-main > [data-pm-meetings], .pm-main > .pm-evidence, .pm-main > .pm-spec-sources')).toHaveCount(0);
+  expect(f.discussion.writes).toHaveLength(0);
+  await context.close();
+});
+
 for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
   test(`discussion with context, review and return ${locale} ${width}`, async ({browser, baseURL}) => {
     test.setTimeout(60000);

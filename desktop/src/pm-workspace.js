@@ -340,7 +340,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const qualitySelections = new Map();
   const qualitySelection = !threadId && caps()?.features?.pm_workspaces?.quality_reviews?.version === 1
     ? id => qualitySelections.get(id) || null : null;
-  const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
+  const evidence = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.work_evidence
     ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox, qualitySelection}) : null;
   if (evidence) body.append(evidence.box);
   let workbench = null;
@@ -400,7 +400,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
-  const meetings = workspaceId && caps()?.features?.pm_workspaces?.meetings
+  const meetings = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.meetings
     ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
@@ -449,13 +449,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (fold instanceof HTMLDetailsElement) {fold.open = true; queueMicrotask(() => focusForm(fold)); return;}
     queueMicrotask(() => focusForm(host));
   };
-  const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources
+  const specifications = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.spec_sources
     ? specSources({h,t,api,alive,workspaceId,errorBox}) : null;
   if (specifications) {
     if (threadId) body.append(specifications.element);
     else body.insertBefore(specifications.element, content);
   }
-  const followUp = workspaceId && caps()?.features?.pm_workspaces?.follow_up_prepare
+  const followUp = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.follow_up_prepare
     ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace}) : null;
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
   const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping

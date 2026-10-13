@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Keep unsent PM discussions focused on their draft; defer thread tools until the
+  central discussion is created, even when all PM capabilities are available.
+
 - Reveal and focus the accepted PM revision when its link opens the mobile Plan
   sheet, after the sheet establishes its focus boundary.
 

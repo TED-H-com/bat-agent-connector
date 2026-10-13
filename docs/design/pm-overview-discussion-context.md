@@ -174,7 +174,9 @@ journal sequence 顯示版本。未知值保留破折號；來源掃描不完整
 先完成目的頁的清單讀取，再選取固定來源；撤回與晚到回覆沿用原序號檢查。
 
 `desktop/src/pm-discuss-link.js` 解析 new 討論 URL；開啟時只建立本機草稿，第一次
-傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。建立回執後保存 thread
+傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。草稿頁只呈現討論草稿
+與清單；會議、後續準備、交付證據與規格工具等中央 thread 建立後才掛載，避免完整
+中央能力讓尚未傳送的草稿被次要工具擠出畫面。建立回執後保存 thread
 ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key，只有已知 operation ID
 可自動查回。來源 chip 使用本次讀取的 label，舊 bound_label 只放提示；不可用的來源
 不保留 ID、標題或快取內容。右側脈絡／資訊／計畫分頁保留原操作與草稿。
