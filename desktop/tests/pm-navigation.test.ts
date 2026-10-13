@@ -9,6 +9,8 @@ test('thread navigation keeps every independently available secondary source rea
   ]) assert.deepEqual(views(capability), ['discussions', 'requirements']);
   assert.deepEqual(views({maintenance_policy: {version: 1}}), ['discussions', 'dependencies']);
   assert.deepEqual(views({maintenance_review: {version: 1}}), ['discussions', 'issues']);
+  assert.deepEqual(availableProjectViews({features: {pm_register: {version: 1}}}), ['issues']);
+  assert.deepEqual(availableProjectViews({features: {pm_register: {version: 2}}}), []);
   assert.deepEqual(views({ahp_observation: {contract: 'ahp_observer_v1'}}), ['discussions', 'agents']);
   assert.deepEqual(views({work_batches: {version: 1}}), ['discussions', 'board']);
 });

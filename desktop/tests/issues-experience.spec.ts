@@ -1,0 +1,273 @@
+import {mkdirSync} from 'node:fs';
+import {expect, test, type Page} from '@playwright/test';
+import {mountConversation} from './conversation-fixture.ts';
+import {demoFixture, demoRoute} from './demo/index.ts';
+import {demoProject} from './demo/project.ts';
+import {REGISTER_PAGE_CURSOR, registerIds, registerLabels} from './demo/register.ts';
+import {parseDiscussRefs} from '../src/pm-discuss-link.js';
+
+const locales = ['en', 'zh-TW'] as const;
+type Locale = typeof locales[number];
+
+function shotDir() {
+  return `${process.env.TMPDIR || '/tmp'}/shots`;
+}
+
+async function openView(page: Page, id: string) {
+  await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
+  const entry = page.locator(`[data-pm-view="${id}"]`);
+  const narrow = (page.viewportSize()?.width ?? 0) < 1000;
+  if (!await entry.isVisible()) {
+    await page.locator('#workspace-menu').click();
+    await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal', 'true');
+  }
+  await entry.click();
+  await expect(page.locator(`[data-pm-region="${id}"]`)).toBeVisible();
+  if (narrow) await expect(page.locator('.workspace-nav')).toBeHidden();
+}
+
+async function expectNoOverflow(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+}
+
+async function expectNoJunk(page: Page) {
+  const text = await page.locator('#main, .workspace-nav').evaluateAll(nodes => nodes.map(node => (node as HTMLElement).innerText).join('\n'));
+  expect(text, text.slice(0, 500)).not.toMatch(/(?:^|[^\p{L}\p{N}_])(?:undefined|null|NaN|\[object Object\])(?![\p{L}\p{N}_])/u);
+}
+
+function textFor(locale: Locale) {
+  const zh = locale === 'zh-TW';
+  const project = demoProject(locale);
+  return {
+    zh, project, labels: registerLabels(project), rows: registerIds(project),
+    title: zh ? '問題與變更' : 'Issues & changes',
+    totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決定'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])
+      .map((label, index) => `${label} ${counts[index]}`).join(' · '),
+    shown: (n: number) => zh ? `顯示 ${n} 筆` : `${n} shown`,
+    none: zh ? '目前沒有顯示' : 'None shown',
+    empty: zh ? '沒有符合的紀錄' : 'No matching records',
+    unavailable: zh ? '來源無法取得' : 'Source unavailable',
+    loadMore: zh ? '載入更多' : 'Load more',
+    noReasons: zh ? '沒有記下原因欄位' : 'No reason fields recorded',
+    blocked: zh ? '沒有記錄原因 · 1' : 'No reason recorded · 1',
+    age: zh ? '1 筆沒有已知時間' : '1 without a known age',
+    repair: zh ? '轉成工作' : 'Turn into work',
+    change: zh ? '變更：' : 'Change: ',
+    search: zh ? '預算' : 'budget',
+  };
+}
+
+async function boot(browser: import('@playwright/test').Browser, baseURL: string | undefined, locale: Locale, width: number, options: {dark?: boolean, gate?: boolean} = {}) {
+  const fixture = demoFixture({locale});
+  const calls: string[] = [];
+  const gate = {denyList: false, held: 0, release: null as null | (() => void), lateUsed: false};
+  const dispatch = async (input: {method?: string, path: string}) => {
+    calls.push(input.path);
+    const url = new URL(input.path, 'http://fixture');
+    const list = url.pathname.endsWith('/register');
+    if (options.gate && list && url.searchParams.get('owner') === 'late-reader' && !gate.lateUsed) {
+      gate.lateUsed = true;
+      gate.held += 1;
+      await new Promise<void>(resolve => {gate.release = resolve;});
+      url.searchParams.delete('owner');
+      url.searchParams.delete('status');
+      return fixture.dispatch({...input, path: `${url.pathname}?${url.searchParams}`});
+    }
+    if (options.gate && list && gate.denyList) return {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Register withdrawn'}}};
+    return fixture.dispatch(input);
+  };
+  const context = await browser.newContext({
+    locale, baseURL, viewport: {width, height: width === 390 ? 844 : 900},
+    colorScheme: options.dark ? 'dark' : 'light', reducedMotion: 'reduce',
+  });
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
+  await mountConversation(page, false, dispatch);
+  await page.goto(demoRoute());
+  return {page, context, errors, calls, gate, fixture, copy: textFor(locale)};
+}
+
+for (const locale of locales) {
+  test(`issues register experience (${locale})`, async ({browser, baseURL}) => {
+    test.setTimeout(60_000);
+    const {page, context, errors, calls, copy} = await boot(browser, baseURL, locale, 1440);
+    await openView(page, 'issues');
+    await expect(page.getByRole('heading', {level: 1})).toHaveText(copy.title);
+    const meta = page.locator('[data-pm-header-meta]');
+    await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
+    await expect(page.locator('[data-reg-summary]')).toBeVisible();
+    await expect(page.locator('[data-reg-age="0-7d"]')).toContainText('2');
+    await expect(page.locator('[data-reg-unknown-age]')).toHaveText(copy.age);
+    await expect(page.locator('[data-reg-blocked]')).toHaveText(copy.blocked);
+    await expect(page.locator('.reg-week').first()).toHaveAttribute('aria-label', /.+/);
+    const table = page.locator('[data-pm-register] tbody tr');
+    await expect(table).toHaveCount(3);
+    await expect(page.locator('[data-pm-register]')).toContainText(copy.labels.finding);
+    await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.risk);
+    await expect(page.locator('[data-reg-count]')).toHaveText(copy.shown(3));
+    await page.locator('[data-reg-more]').click();
+    await expect.poll(() => calls.some(path => path.includes(`/register?`) && path.includes(`after=${REGISTER_PAGE_CURSOR}`))).toBe(true);
+    await expect(table).toHaveCount(6);
+    await expect(page.locator('[data-pm-register]')).toContainText(copy.labels.risk);
+    await expect(page.locator('[data-reg-more]')).toHaveCount(0);
+    await expect(page.locator('[data-reg-count]')).toHaveCount(0);
+    await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
+
+    await page.locator('[data-reg-type="decision"]').click();
+    await expect(meta).toHaveText(copy.totals([0, 0, 0, 0, 1]));
+    await expect(table).toHaveCount(1);
+    await expect(page.locator('[data-pm-register]')).toContainText(copy.project.copy.decisions.budget);
+    await expect(page.locator('[data-reg-summary]')).toBeVisible();
+    await page.locator(`[data-row-key="${copy.rows.decision}"]`).click();
+    const bound = parseDiscussRefs((await page.locator('[data-reg-discuss]').getAttribute('href'))!.split('?')[1]);
+    expect(bound.refs).toEqual([{kind: 'plan_revision', id: copy.project.ids.planV3}]);
+    expect(bound.from).toBe('issues');
+    expect(bound.title).toBe(copy.project.copy.decisions.budget);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+
+    await page.locator('[data-reg-type="change"]').click();
+    await expect(page.locator('[data-reg-no-reasons]')).toHaveText(copy.noReasons);
+    await expect(page.locator('[data-reg-blocked]')).toHaveCount(0);
+    await expect(page.locator('[data-pm-register]')).not.toContainText(/0 blocked|0 個受阻/);
+
+    await page.locator('[data-reg-type=""]').click();
+    await page.locator('[data-reg-search]').fill(copy.search);
+    await expect(table).toHaveCount(1);
+    await expect(page.locator('[data-pm-register]')).toContainText(copy.project.copy.decisions.budget);
+    await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.finding);
+    await page.locator('[data-reg-search]').fill('');
+    await expect(table).toHaveCount(3);
+
+    await page.locator('[data-reg-owner]').fill('unavailable-source');
+    await expect(page.locator('[data-reg-summary]')).toBeHidden();
+    await expect(meta).toHaveText(copy.shown(2));
+    await expect(meta).not.toContainText(copy.zh ? '風險' : 'Risk');
+    await page.locator('[data-reg-owner]').fill('empty-source');
+    await expect(meta).toHaveText(copy.none);
+    await expect(page.getByRole('heading', {level: 2, name: copy.empty})).toBeVisible();
+    await expect(page.locator('[data-reg-summary]')).toBeHidden();
+    await page.locator('[data-reg-owner]').fill('');
+    await expect(table).toHaveCount(3);
+    await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
+
+    const finding = page.locator(`[data-row-key="${copy.rows.finding}"]`);
+    await finding.focus();
+    await finding.press('ArrowDown');
+    await expect(page.locator(`[data-row-key="${copy.rows.decision}"]`)).toBeFocused();
+    await page.locator(`[data-row-key="${copy.rows.decision}"]`).press('ArrowUp');
+    await finding.press('Enter');
+    await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+    const steps = page.locator('[data-reg-timeline] [data-reg-step]');
+    await expect(steps).toHaveCount(3);
+    await expect(steps.nth(0)).toHaveAttribute('data-reg-step', 'finding');
+    await expect(steps.nth(1)).toHaveAttribute('data-reg-step', 'action');
+    await expect(steps.nth(2)).toHaveAttribute('data-reg-step', 'work');
+    const unbound = parseDiscussRefs((await page.locator('[data-reg-discuss]').getAttribute('href'))!.split('?')[1]);
+    expect(unbound.refs).toEqual([]);
+    expect(unbound.from).toBe('issues');
+    expect(unbound.title).toBe(copy.labels.finding);
+    const proposed = parseDiscussRefs((await page.locator('[data-reg-propose]').getAttribute('href'))!.split('?')[1]);
+    expect(proposed.refs).toEqual([]);
+    expect(proposed.title.startsWith(copy.change)).toBe(true);
+    expect(proposed.title).toContain(copy.labels.finding);
+    await expect(page.locator('[data-reg-inspector] [data-reg-pr]')).toHaveAttribute('href', 'https://github.com/example/membership/pull/87');
+    await page.locator('[data-reg-action="pm.maintenance.repair"]').click();
+    await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+    await expect(page.locator('[data-reg-action="pm.maintenance.repair"]')).toHaveText(copy.repair);
+    await page.keyboard.press('Escape');
+    await expect(finding).toBeFocused();
+    await finding.press('Enter');
+    await page.locator('[data-reg-inspector] [data-reg-step="work"] [data-reg-work]').click();
+    await expect(page.locator('[data-pm-view="requirements"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator(`[data-rtm-select="${copy.project.ids.work.email}"]`)).toHaveAttribute('aria-pressed', 'true');
+
+    await openView(page, 'issues');
+    await page.locator('[data-reg-type="decision"]').click();
+    await expect(page.locator('[data-reg-type="decision"]')).toHaveAttribute('aria-checked', 'true');
+    await openView(page, 'board');
+    await openView(page, 'issues');
+    await expect(page.locator('[data-reg-type="decision"]')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('[data-pm-register]')).toContainText(copy.project.copy.decisions.budget);
+    await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.finding);
+    await expectNoJunk(page);
+    await expectNoOverflow(page);
+    expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    await context.close();
+  });
+
+  test(`issues register layout (${locale})`, async ({browser, baseURL}) => {
+    test.setTimeout(60_000);
+    const {page, context, errors, copy} = await boot(browser, baseURL, locale, 1440);
+    mkdirSync(shotDir(), {recursive: true});
+    await openView(page, 'issues');
+    await expect(page.locator('[data-reg-summary]')).toBeVisible();
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+      await expect(page.locator('[data-pm-register] tbody tr').first()).toBeVisible();
+      await expectNoOverflow(page);
+      await page.screenshot({path: `${shotDir()}/issues-${locale}-${width}.png`, fullPage: true});
+    }
+    await page.setViewportSize({width: 390, height: 844});
+    await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+    await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+    await expectNoOverflow(page);
+    await page.screenshot({path: `${shotDir()}/issues-${locale}-390-inspector.png`});
+    await expectNoJunk(page);
+    expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    await context.close();
+  });
+
+  test(`issues register withdrawal (${locale})`, async ({browser, baseURL}) => {
+    test.setTimeout(60_000);
+    const {page, context, errors, gate, copy} = await boot(browser, baseURL, locale, 1440, {gate: true});
+    await openView(page, 'issues');
+    await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+    await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+    gate.denyList = true;
+    await page.locator('.ui-page-header').getByRole('button', {name: copy.zh ? '重新整理' : 'Refresh'}).click();
+    await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+    await expect(page.getByRole('heading', {level: 2, name: copy.unavailable})).toBeVisible();
+    await expect(page.getByRole('heading', {level: 1})).toHaveText(copy.title);
+    await expect(page.locator('[data-pm-header-meta]')).toBeHidden();
+    await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.finding);
+    await expect(page.locator('[data-reg-summary]')).toBeHidden();
+    await expectNoJunk(page);
+    expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    await context.close();
+  });
+}
+
+test('a late register page does not restore withdrawn rows', async ({browser, baseURL}) => {
+  test.setTimeout(60_000);
+  const {page, context, errors, gate, copy} = await boot(browser, baseURL, 'en', 1440, {gate: true});
+  await openView(page, 'issues');
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(3);
+  await page.locator('[data-reg-owner]').fill('late-reader');
+  await expect.poll(() => gate.held).toBe(1);
+  gate.denyList = true;
+  await page.locator('[data-reg-status]').selectOption('blocked');
+  await expect(page.getByRole('heading', {level: 2, name: copy.unavailable})).toBeVisible();
+  gate.release?.();
+  // The held 200 still carries the unfiltered rows. It must not paint them after the 403.
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(0);
+  await expect(page.getByRole('heading', {level: 2, name: copy.unavailable})).toBeVisible();
+  await expect(page.locator('[data-pm-header-meta]')).toBeHidden();
+  await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.finding);
+  expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+  await context.close();
+});
+
+test('issues register dark layout', async ({browser, baseURL}) => {
+  const {page, context, errors} = await boot(browser, baseURL, 'en', 1440, {dark: true});
+  mkdirSync(shotDir(), {recursive: true});
+  await openView(page, 'issues');
+  await expect(page.locator('[data-reg-summary]')).toBeVisible();
+  await expectNoOverflow(page);
+  await page.screenshot({path: `${shotDir()}/issues-en-1440-dark.png`, fullPage: true});
+  expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+  await context.close();
+});

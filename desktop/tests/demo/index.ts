@@ -8,6 +8,7 @@ import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
+import {registerDetail, registerList} from './register.ts';
 import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
 
 export interface DemoRequest {
@@ -90,6 +91,9 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const detail = proposalDetail(project);
     return segment(proposal[1]) === detail.proposal.proposal_id ? ok(detail) : notFound();
   }
+  if (rest === '/register') return registerList(project, url);
+  const registerRow = rest.match(/^\/register\/([^/]+)$/);
+  if (registerRow) return registerDetail(project, segment(registerRow[1]));
   if (rest === '/threads') return ok(threadList(project, url));
   const thread = rest.match(/^\/threads\/([^/]+)$/);
   if (thread) {
