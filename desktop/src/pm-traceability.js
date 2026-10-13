@@ -127,12 +127,12 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         },
         columns: [
           {key: 'title', label: t('wv_requirement')},
-          {key: 'milestone', label: t('wv_milestone'), render: milestoneLabel},
+          {key: 'milestone', secondary:true, label: t('wv_milestone'), render: milestoneLabel},
           {key: 'work', label: t('wv_work'), numeric: true, render: req => cursors.work != null ? t('wv_loaded', {n: linked(req).length}) : String(linked(req).length)},
           {key: 'pr', label: t('wv_pr'), render: req => h('div', {class: 'pm-work-inline'}, ...prPills(deliverySource(req)))},
           {key: 'acceptance', label: t('wv_acceptance'), render: acceptancePill},
           {key: 'deploy', label: t('wv_deploy'), render: deployPill},
-          {key: 'blocker', label: t('wv_next_blocker'), render: req => {const card = linked(req).find(blockedWork); return card ? blockerText(t, card) : h('span', {class: 'ui-meta'}, t('ui_status_unknown'));}},
+          {key: 'blocker', secondary:true, label: t('wv_next_blocker'), render: req => {const card = linked(req).find(blockedWork); return card ? blockerText(t, card) : h('span', {class: 'ui-meta'}, t('ui_status_unknown'));}},
         ]});
       for (const row of table.querySelectorAll('[data-row-key]')) {row.dataset.rtmRequirement = row.dataset.rowKey; row.querySelector('button').dataset.rtmToggle = row.dataset.rowKey;}
       return table;

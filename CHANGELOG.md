@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Fit shared search and filters to their columns, with measured select fallback for segmented controls.
+- Hide secondary table columns beside inspectors, keep identifiers intact, use mobile operation list rows, and extend the selected navigation rail through long pages.
+
 - Align Discuss actions, link focus states and header metadata across project views.
 
 - Keep context chips on one line with complete labels and larger invisible touch targets.

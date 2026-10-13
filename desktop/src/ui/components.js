@@ -297,7 +297,7 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
   const keyFor = row => typeof rowKey === 'function' ? rowKey(row) : row[rowKey];
   const hasSelection = rows.some(row => keyFor(row) === selected);
   const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-label': t('ui_more')}) : null,
-    ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
+    ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, 'data-secondary': column.secondary || null, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
   const root = h('div', {class: 'ui-data-table' + (compactRow ? ' ui-data-table-responsive' : ''), tabindex: compactRow ? null : 0}, table), controls = [];
   rows.forEach((row, i) => {
     const key = keyFor(row), active = key === selected;
@@ -321,7 +321,7 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
       if (compactRow) tr.setAttribute('aria-expanded', String(open));
       tr.append(h('td', {}, toggle)); tbody.append(tr, detail);
     } else tbody.append(tr);
-    tr.append(...columns.map(column => h('td', {'data-column': column.key, class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));
+    tr.append(...columns.map(column => h('td', {'data-column': column.key, 'data-secondary': column.secondary || null, class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));
     if (compactRow) tr.append(h('td', {class: 'ui-data-table-compact', colspan: columns.length + (expandable ? 1 : 0)},
       expandable ? drawIcon('chevron-right') : null, compactRow(row)));
     tr.addEventListener('keydown', event => {
@@ -337,6 +337,7 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
     tr.addEventListener('focus', () => controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1;}));
     controls.push(tr);
   });
+  for (const cell of table.querySelectorAll('th, td:not(.ui-data-table-compact)')) if (!cell.title) cell.title = cell.textContent;
   root.addEventListener('keydown', event => {
     if (event.target !== root || !controls.length) return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;

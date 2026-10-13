@@ -33,9 +33,8 @@
   .pm-requirements .ui-data-table .ui-data-table-detail:not([hidden]) { display: block; }
   .pm-requirements .ui-data-table .ui-data-table-detail > td { display: block; width: 100%; }
 }
-@media (min-width: 1200px) {
-  .pm-requirements .pm-work-layout:has(> .pm-work-inspector) .ui-data-table { --requirement-columns: 40px minmax(0, 1fr) 64px 148px 116px 100px; }
-  .pm-requirements .pm-work-layout:has(> .pm-work-inspector) .ui-data-table :is([data-column=milestone], [data-column=blocker]) { display: none; }
+@container ui-table (max-width: 900px) {
+  .pm-requirements .ui-data-table tr:not([hidden], .ui-data-table-detail) { grid-template-columns: 40px minmax(0, 1fr) 64px 148px 116px 100px; }
 }
 @media (max-width: 799px) {
   .pm-requirements-toolbar .pm-work-search { flex-basis: 100%; }

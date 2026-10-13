@@ -10715,6 +10715,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
 		scope: "col",
 		"data-column": column.key,
+		"data-secondary": column.secondary || null,
 		class: column.numeric ? "numeric" : ""
 	}, column.label)))), tbody);
 	const root = h$1("div", {
@@ -10771,6 +10772,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		} else tbody.append(tr);
 		tr.append(...columns.map((column) => h$1("td", {
 			"data-column": column.key,
+			"data-secondary": column.secondary || null,
 			class: column.numeric ? "numeric" : ""
 		}, column.render ? column.render(row) : row[column.key] ?? "—")));
 		if (compactRow) tr.append(h$1("td", {
@@ -10807,6 +10809,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		}));
 		controls.push(tr);
 	});
+	for (const cell of table.querySelectorAll("th, td:not(.ui-data-table-compact)")) if (!cell.title) cell.title = cell.textContent;
 	root.addEventListener("keydown", (event) => {
 		if (event.target !== root || !controls.length) return;
 		if (![
@@ -11013,18 +11016,20 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		"data-pending-count": ""
 	});
 	const pendingCounts = [countBadge(), countBadge()];
-	const right = h$1("div", { class: "shell-top-actions" }, h$1("a", {
+	const pending = h$1("a", {
 		href: "#/home",
 		class: "ui-button ghost shell-pending",
 		"aria-label": t("ui_pending"),
 		title: t("ui_pending")
-	}, icon("inbox"), pendingCounts[0]), document.getElementById("live"));
+	}, icon("inbox"), pendingCounts[0]);
+	const right = h$1("div", { class: "shell-top-actions" }, pending, document.getElementById("live"));
 	top.append(right);
 	const tools = menu({
 		button: button({
 			variant: "ghost",
 			icon: "wrench",
-			label: t("ui_tools")
+			label: t("ui_tools"),
+			"data-shell-tools": ""
 		}),
 		items: [
 			["operations", "nav_operations"],
@@ -11041,17 +11046,22 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			href: "#/pm/new"
 		}] : [])
 	});
+	tools.querySelector(":scope > button").append(icon("chevron-down"));
 	aside.querySelector(".workspace-nav-footer").replaceChildren(h$1("a", {
 		href: "#/home",
 		"data-shell-pending": "",
 		"aria-label": t("ui_pending")
-	}, icon("inbox"), h$1("span", {}, t("ui_pending")), pendingCounts[1]), tools, h$1("a", { href: "#/settings" }, icon("settings"), h$1("span", {}, t("ui_settings"))));
+	}, icon("inbox"), h$1("span", {}, t("ui_pending")), pendingCounts[1]), tools, h$1("a", {
+		href: "#/settings",
+		"data-shell-settings": ""
+	}, icon("settings"), h$1("span", {}, t("ui_settings"))));
 	function switcher(label, className) {
 		const control = menu({
 			button: button({
 				variant: "ghost",
 				label: h$1("span", { class: "shell-workspace-name" }, label),
 				icon: "chevron-down",
+				iconPosition: "end",
 				class: className,
 				title: label,
 				"aria-label": `${t("ui_switch_workspace")}: ${label}`
@@ -11135,6 +11145,16 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 				title: workspace.name
 			}, h$1("span", { class: "shell-workspace-name" }, workspace.name)));
 		} else delete workspaceBlock.dataset.workspaceId;
+		for (const link of aside.querySelectorAll(".workspace-nav-footer > a")) link.setAttribute("aria-current", link.getAttribute("href") === "#/" + currentRoute ? "page" : "false");
+		tools.querySelector(":scope > button").setAttribute("aria-current", [
+			"operations",
+			"op",
+			"delivery",
+			"artifact-review",
+			"cleanup",
+			"sessions"
+		].includes(currentRoute) ? "page" : "false");
+		pending.setAttribute("aria-current", currentRoute === "home" ? "page" : "false");
 		const routeKey = {
 			pm: "ui_" + (currentView || "discussions"),
 			home: "ui_pending",
@@ -13367,32 +13387,42 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			},
 			columns: [
 				{
+					key: "source",
 					label: t("res_source"),
 					render: sourceCell
 				},
 				{
+					key: "model",
+					secondary: true,
 					label: t("res_model_col"),
 					render: modelCell
 				},
 				{
+					key: "role",
+					secondary: true,
 					label: t("res_role"),
 					render: (row) => roleLabel(row.role)
 				},
 				{
+					key: "tokens",
 					label: h("span", { title: t("res_tokens_hint") }, t("res_tokens_col")),
 					numeric: true,
 					render: tokensCell
 				},
 				{
+					key: "messages",
+					secondary: true,
 					label: t("res_calls_col"),
 					numeric: true,
 					render: (row) => isReadable(row) && finite(row.calls) != null ? finite(row.calls).toLocaleString() : EM
 				},
 				{
+					key: "seen",
 					label: t("res_seen"),
 					render: seenCell
 				},
 				{
+					key: "status",
 					label: t("res_status"),
 					render: statusNode
 				}
@@ -18091,6 +18121,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					},
 					{
 						key: "milestone",
+						secondary: true,
 						label: t("wv_milestone"),
 						render: milestoneLabel
 					},
@@ -18117,6 +18148,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					},
 					{
 						key: "blocker",
+						secondary: true,
 						label: t("wv_next_blocker"),
 						render: (req) => {
 							const card = linked(req).find(blockedWork);
@@ -22251,26 +22283,31 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			},
 			{
 				key: "impact",
+				secondary: true,
 				label: t("reg_col_impact"),
 				render: (row) => dash(row.impact)
 			},
 			{
 				key: "owner",
+				secondary: true,
 				label: t("reg_col_owner"),
 				render: (row) => h("span", { class: "reg-owner-cell" }, dash(row.owner))
 			},
 			{
 				key: "due",
+				secondary: true,
 				label: t("reg_col_due"),
 				render: (row) => day(row.due) || "—"
 			},
 			{
 				key: "next",
+				secondary: true,
 				label: t("reg_col_next"),
 				render: (row) => h("span", { class: "reg-clamp" }, dash(row.next_step))
 			},
 			{
 				key: "related",
+				secondary: true,
 				label: t("reg_col_related"),
 				render: (row) => relatedChips(row, 2)
 			}
@@ -42761,6 +42798,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		},
 		{
 			key: "target",
+			secondary: true,
 			label: t("global_col_target"),
 			render: (op) => operationTargetText(op) || "—"
 		},
@@ -42771,11 +42809,13 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		},
 		{
 			key: "actor",
+			secondary: true,
 			label: t("actor"),
 			render: (op) => op.actor || "—"
 		},
 		{
 			key: "started",
+			secondary: true,
 			label: t("created"),
 			render: (op) => timeStamp(op.created_at)
 		},
@@ -42882,6 +42922,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			rows: shown,
 			rowKey: "operation_id",
 			selected: memory.selected,
+			compactRow: (op) => h("div", { class: "global-op-compact" }, h("div", { class: "global-op-compact-title" }, h("strong", {}, actionLabel(op.action)), statusPill(operationStatusKey(op.status))), h("div", { class: "ui-meta" }, operationTargetText(op), op.actor ? " · " + op.actor : null, op.created_at ? [" · ", timeStamp(op.created_at)] : null)),
 			onSelect: (key, row) => {
 				memory.selected = key;
 				fill(row).catch(() => {});

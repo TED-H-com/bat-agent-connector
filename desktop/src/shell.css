@@ -151,3 +151,11 @@ body.pm-mode #main { padding: 0; }
 }
 
 .workspace-project-row .workspace-tree-state .workspace-dot { display: block; }
+
+/* The sticky rail's surface continues through the entire document. */
+@media (min-width: 1000px) {
+  body.has-workspace #workspace::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--workspace-sidebar-width, 248px); background: var(--surface); border-right: 1px solid var(--line); pointer-events: none; }
+}
+@media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
+.workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
+.workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }

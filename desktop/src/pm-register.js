@@ -273,11 +273,11 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       {key: 'title', label: t('reg_col_title'), render: row => h('span', {class: 'reg-clamp'}, dash(displayTitle(row)))},
       {key: 'status', label: t('reg_col_status'), render: row => statusNode(row.status)},
       {key: 'priority', label: t('reg_col_priority'), render: row => dash(row.priority)},
-      {key: 'impact', label: t('reg_col_impact'), render: row => dash(row.impact)},
-      {key: 'owner', label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
-      {key: 'due', label: t('reg_col_due'), render: row => day(row.due) || '—'},
-      {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
-      {key: 'related', label: t('reg_col_related'), render: row => relatedChips(row, 2)},
+      {key: 'impact', secondary:true, label: t('reg_col_impact'), render: row => dash(row.impact)},
+      {key: 'owner', secondary:true, label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
+      {key: 'due', secondary:true, label: t('reg_col_due'), render: row => day(row.due) || '—'},
+      {key: 'next', secondary:true, label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
+      {key: 'related', secondary:true, label: t('reg_col_related'), render: row => relatedChips(row, 2)},
     ];
     tableHost.replaceChildren(dataTable({columns, rows, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
     if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll: true});

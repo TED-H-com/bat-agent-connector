@@ -126,3 +126,12 @@
   .pm-shell [data-pm-register] .reg-owner { flex: 0 0 6rem; width: 6rem; min-width: 6rem; }
   .pm-shell [data-pm-register] .reg-search input { padding-right: 6px; }
 }
+.reg-main .ui-data-table th[data-column=title] { width: 22%; }
+.reg-main .ui-data-table th[data-column=next] { width: 14%; }
+.reg-main .ui-data-table th[data-column=related] { width: 14%; }
+@container ui-table (max-width: 900px) {
+  .reg-main .ui-data-table th[data-column=type] { width: 16%; }
+  .reg-main .ui-data-table th[data-column=title] { width: 50%; }
+  .reg-main .ui-data-table th[data-column=status] { width: 22%; }
+  .reg-main .ui-data-table th[data-column=priority] { width: 12%; }
+}

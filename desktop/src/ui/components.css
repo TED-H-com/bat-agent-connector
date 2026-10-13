@@ -164,3 +164,13 @@
 :root body .ui-search > input { width: 100%; min-width: 0; height: 32px; min-height: 32px; padding: 4px 8px 4px 30px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
 :root body :is(.filters, [class$=toolbar], [class*=toolbar-], .global-ops-tools, .dep-toolbar, .ui-segmented) select { min-height: 32px; height: 32px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding-block: 4px; }
 @media (max-width: 800px) { :root body .ui-search > input { font-size: 16px; } }
+
+/* Secondary columns relinquish space inside the remaining main column. */
+.ui-data-table { container-type: inline-size; container-name: ui-table; }
+:root body .ui-data-table table { table-layout: fixed; }
+:root body .ui-data-table :is(th, td:not(.ui-data-table-compact)) { overflow-wrap: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+:root body .ui-data-table th { white-space: nowrap; }
+:root body .ui-data-table :is(code, .mono) { overflow-wrap: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container ui-table (max-width: 900px) { .ui-data-table :is(th, td)[data-secondary] { display: none; } }
+.global-op-compact-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.global-op-compact > .ui-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

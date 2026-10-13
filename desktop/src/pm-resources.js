@@ -355,13 +355,13 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       rowAttrs: row => ({'data-resource-row': row.source_id, 'data-resource-select': row.source_id}),
       onSelect(key) {selected = key; preference.selected = selected; signature = currentSignature(); renderInspector();},
       columns: [
-        {label: t('res_source'), render: sourceCell},
-        {label: t('res_model_col'), render: modelCell},
-        {label: t('res_role'), render: row => roleLabel(row.role)},
-        {label: h('span', {title: t('res_tokens_hint')}, t('res_tokens_col')), numeric: true, render: tokensCell},
-        {label: t('res_calls_col'), numeric: true, render: row => isReadable(row) && finite(row.calls) != null ? finite(row.calls).toLocaleString() : EM},
-        {label: t('res_seen'), render: seenCell},
-        {label: t('res_status'), render: statusNode},
+        {key:'source', label: t('res_source'), render: sourceCell},
+        {key:'model', secondary:true, label: t('res_model_col'), render: modelCell},
+        {key:'role', secondary:true, label: t('res_role'), render: row => roleLabel(row.role)},
+        {key:'tokens', label: h('span', {title: t('res_tokens_hint')}, t('res_tokens_col')), numeric: true, render: tokensCell},
+        {key:'messages', secondary:true, label: t('res_calls_col'), numeric: true, render: row => isReadable(row) && finite(row.calls) != null ? finite(row.calls).toLocaleString() : EM},
+        {key:'seen', label: t('res_seen'), render: seenCell},
+        {key:'status', label: t('res_status'), render: statusNode},
       ],
     });
   }

@@ -201,7 +201,7 @@ for (const locale of locales) {
     // filter and keeps that view's selection, expansion and keyboard focus behavior.
     await page.locator('[data-pm-rtm] input[type=search]').fill('no-matching-requirement');
     await openView(page, 'issues');
-    await page.locator(`[data-reg-requirement="${copy.project.ids.requirements.email}"]`).first().click();
+    await page.locator(`[data-reg-requirement="${copy.project.ids.requirements.email}"]:visible`).first().click();
     await expect(page.locator('[data-pm-view="requirements"]')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('[data-pm-rtm] input[type=search]')).toHaveValue('');
     const requirement = page.locator(`[data-rtm-requirement="${copy.project.ids.requirements.email}"]`);

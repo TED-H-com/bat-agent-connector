@@ -45,13 +45,14 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   const pendingCounts = [countBadge(), countBadge()];
   const pending = h('a', {href: '#/home', class: 'ui-button ghost shell-pending', 'aria-label': t('ui_pending'), title: t('ui_pending')}, icon('inbox'), pendingCounts[0]);
   const right = h('div', {class: 'shell-top-actions'}, pending, document.getElementById('live')); top.append(right);
-  const tools = menu({button: button({variant: 'ghost', icon: 'wrench', label: t('ui_tools')}), items: [
+  const tools = menu({button: button({variant: 'ghost', icon: 'wrench', label: t('ui_tools'), 'data-shell-tools':''}), items: [
     ['operations', 'nav_operations'], ['delivery', 'nav_delivery'], ['artifact-review', 'ar_nav'], ['cleanup', 'nav_cleanup'], ['sessions', 'nav_sessions'],
   ].map(([id, key]) => ({label: t(key), href: '#/' + id})).concat(caps()?.features?.pm_workspaces ? [{key: 'create-workspace', label: t('ui_new_workspace'), href: '#/pm/new'}] : [])});
+  tools.querySelector(':scope > button').append(icon('chevron-down'));
   aside.querySelector('.workspace-nav-footer').replaceChildren(h('a', {href: '#/home', 'data-shell-pending': '', 'aria-label': t('ui_pending')}, icon('inbox'), h('span', {}, t('ui_pending')), pendingCounts[1]), tools,
-    h('a', {href: '#/settings'}, icon('settings'), h('span', {}, t('ui_settings'))));
+    h('a', {href: '#/settings', 'data-shell-settings':''}, icon('settings'), h('span', {}, t('ui_settings'))));
   function switcher(label, className) {
-    const trigger = button({variant: 'ghost', label: h('span', {class: 'shell-workspace-name'}, label), icon: 'chevron-down',
+    const trigger = button({variant: 'ghost', label: h('span', {class: 'shell-workspace-name'}, label), icon: 'chevron-down', iconPosition:'end',
       class: className, title: label, 'aria-label': `${t('ui_switch_workspace')}: ${label}`});
     const control = menu({button: trigger, items: [...workspaces.map(row => ({label: row.name, href: `#/pm/${row.workspace_id}`})),
       ...(creator && currentRoute === 'pm' ? [{label: t('ui_new_workspace'), icon: 'plus', onSelect: () => {
@@ -81,6 +82,9 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
       delete workspaceBlock.dataset.workspaceId;
 
     }
+    for (const link of aside.querySelectorAll('.workspace-nav-footer > a')) link.setAttribute('aria-current', link.getAttribute('href') === '#/' + currentRoute ? 'page' : 'false');
+    tools.querySelector(':scope > button').setAttribute('aria-current', ['operations','op','delivery','artifact-review','cleanup','sessions'].includes(currentRoute) ? 'page' : 'false');
+    pending.setAttribute('aria-current', currentRoute === 'home' ? 'page' : 'false');
     const routeKey = {pm: 'ui_' + (currentView || 'discussions'), home: 'ui_pending', settings: 'ui_settings',
       operations: 'nav_operations', delivery: 'nav_delivery', cleanup: 'nav_cleanup', 'artifact-review': 'ar_nav',
       projects: 'ui_all_projects', project: 'ui_project', sessions: 'nav_sessions', session: 'nav_sessions',

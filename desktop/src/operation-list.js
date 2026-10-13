@@ -26,10 +26,10 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
   };
   const columns = [
     {key: 'action', label: t('global_col_action'), render: op => actionLabel(op.action)},
-    {key: 'target', label: t('global_col_target'), render: op => operationTargetText(op) || '—'},
+    {key: 'target', secondary:true, label: t('global_col_target'), render: op => operationTargetText(op) || '—'},
     {key: 'status', label: t('global_col_status'), render: op => statusPill(operationStatusKey(op.status))},
-    {key: 'actor', label: t('actor'), render: op => op.actor || '—'},
-    {key: 'started', label: t('created'), render: op => timeStamp(op.created_at)},
+    {key: 'actor', secondary:true, label: t('actor'), render: op => op.actor || '—'},
+    {key: 'started', secondary:true, label: t('created'), render: op => timeStamp(op.created_at)},
     {key: 'duration', label: t('global_col_duration'), render: op => operationDuration(op, Date.now() / 1000) || '—'},
   ];
   const focusRow = id => {
@@ -112,6 +112,9 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     else if (!shown.length) list.replaceChildren(emptyState({title: t('global_no_match')}));
     else list.replaceChildren(dataTable({
       columns, rows: shown, rowKey: 'operation_id', selected: memory.selected,
+      compactRow: op => h('div', {class:'global-op-compact'},
+        h('div', {class:'global-op-compact-title'}, h('strong', {}, actionLabel(op.action)), statusPill(operationStatusKey(op.status))),
+        h('div', {class:'ui-meta'}, operationTargetText(op), op.actor ? ' · ' + op.actor : null, op.created_at ? [' · ', timeStamp(op.created_at)] : null)),
       onSelect: (key, row) => {memory.selected = key; fill(row).catch(() => {});},
     }));
     if (focus) list.querySelector(`[data-row-key="${CSS.escape(focus)}"]`)?.focus({preventScroll: true});

@@ -597,3 +597,5 @@ Session and the page offers Back to that view. Discuss uses the shared discussio
 link, binding only exact work item refs.
 
 搜尋欄統一使用 `searchField()`，保留輸入節點與草稿，32px 高、前置搜尋圖示，提示為 Search／搜尋。工具列篩選器使用相同 32px 邊框樣式，空間不足時在自己的欄內換行。`segmented()` 以共享 ResizeObserver 測量容器與選项寬度；不足時改為保留相同選項與狀態的 select，寬度恢復後還原按鈕與鍵盤焦點。
+
+共享 `dataTable()` 以 `secondary: true` 標記次要欄。`ui-table` 容器小於 900px 時收起，詳細資料仍保留在 inspector；標題與識別碼不在字中斷行，完整欄位內容置於 title。Operations 在 800px 以下改為單一互動列。全寬 sheet 不留左側邊線，rail 背景延伸至文件底，頁尾目的地以 aria-current 顯示目前頁面。
