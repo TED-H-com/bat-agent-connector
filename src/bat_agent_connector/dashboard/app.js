@@ -9847,6 +9847,57 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/state/events.ts
+function consumePage(page, cursor, emit) {
+	if (page.reset_required || page.reset || page.head_cursor < cursor) {
+		emit({
+			seq: 0,
+			kind: "reset",
+			resource_type: "reset"
+		});
+		cursor = 0;
+	}
+	for (const event of page.events) {
+		if (event.seq <= cursor) continue;
+		emit(event);
+		cursor = event.seq;
+	}
+	if (Number.isSafeInteger(page.next_cursor) && page.next_cursor >= cursor && page.next_cursor <= page.head_cursor) cursor = page.next_cursor;
+	return cursor;
+}
+async function consumePageAsync(page, cursor, emit) {
+	if (page.reset_required || page.reset || page.head_cursor < cursor) {
+		await emit({
+			seq: 0,
+			kind: "reset",
+			resource_type: "reset"
+		});
+		cursor = 0;
+	}
+	const pending = [];
+	const next = consumePage({
+		...page,
+		reset: false,
+		reset_required: false
+	}, cursor, (event) => {
+		pending.push(Promise.resolve().then(() => emit(event)));
+	});
+	await settleRefreshes(pending);
+	return next;
+}
+async function settleRefreshes(pending) {
+	const results = await Promise.allSettled(pending);
+	for (const result of results) if (result.status === "rejected") throw result.reason;
+}
+function storageScope(endpoint, actor, server = "legacy", principal = actor) {
+	return [
+		endpoint,
+		server,
+		principal,
+		actor
+	].map(encodeURIComponent).join(":");
+}
+//#endregion
 //#region src/ui/view-state.js
 var states$1 = new Map();
 function viewState(namespace, workspaceId, view) {
@@ -12306,6 +12357,7 @@ function workspaceOverview(options) {
 		meta,
 		reportTools,
 		refresh,
+		refreshProjection: () => mode === "live" ? refreshLive() : void 0,
 		withdraw,
 		prepareReports,
 		openRelated,
@@ -30547,7 +30599,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	initialReadComplete = true;
 	updateForms();
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
-	let eventReads = Promise.resolve();
+	const pendingReads = new Map();
+	function eventRead(key, read) {
+		if (!pendingReads.has(key)) pendingReads.set(key, Promise.resolve().then(() => {
+			pendingReads.delete(key);
+			alive();
+			return read();
+		}));
+		return pendingReads.get(key);
+	}
 	const off = onEvents((event) => {
 		if ([
 			"pm_workspace",
@@ -30578,49 +30638,38 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_maintenance_repair",
 			"pm_ahp_observation",
 			"pm_dependencies"
-		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(() => load());
-			return eventReads;
-		}
-		if (handoff && ["project", "work_item"].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(() => load());
-			return eventReads;
-		}
-		if ((liveOverview || deliveries || workBatches || qualityReviews || maintenanceRepairs || schedule) && [
+		].includes(event.resource_type)) return eventRead(load, load);
+		const reads = [], kind = event.resource_type;
+		if (liveOverview && [
+			"work_item",
 			"operation",
 			"deployment",
 			"integration"
-		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(async () => {
-				if (liveOverview) await brief?.refresh();
-				await deliveries?.refresh();
-				await workBatches?.refresh();
-				await qualityReviews?.refresh();
-				await maintenanceRepairs?.refresh();
-				await kanban?.refresh();
-				await traceability?.refresh();
-				await schedule?.refresh();
-			});
-			return eventReads;
-		}
-		if ((liveOverview || kanban || qualityReviews || maintenanceRepairs || schedule) && [
+		].includes(kind)) reads.push(eventRead(brief, () => brief?.refreshProjection?.()));
+		if (handoff && kind === "project") reads.push(eventRead(load, load));
+		if (handoff && kind === "work_item") reads.push(eventRead(handoff, () => handoff.refresh()));
+		const deliveryEvent = [
+			"operation",
+			"deployment",
+			"integration"
+		].includes(kind);
+		if (deliveryEvent || [
 			"work_item",
 			"project",
 			"task",
 			"command",
-			"operation",
 			"session"
-		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(async () => {
-				if (liveOverview) await brief?.refresh();
-				await qualityReviews?.refresh();
-				await maintenanceRepairs?.refresh();
-				await kanban?.refresh();
-				await traceability?.refresh();
-				await schedule?.refresh();
-			});
-			return eventReads;
+		].includes(kind)) {
+			for (const section of [
+				...deliveryEvent ? [deliveries, workBatches] : [],
+				qualityReviews,
+				maintenanceRepairs,
+				kanban,
+				traceability,
+				schedule
+			]) if (section) reads.push(eventRead(section, () => section.refresh()));
 		}
+		return settleRefreshes(reads);
 	});
 	const dispose = () => {
 		if (threadId && mountedThread === threadId) {
@@ -39462,57 +39511,6 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		content.dispose();
 		off();
 	};
-}
-//#endregion
-//#region src/state/events.ts
-function consumePage(page, cursor, emit) {
-	if (page.reset_required || page.reset || page.head_cursor < cursor) {
-		emit({
-			seq: 0,
-			kind: "reset",
-			resource_type: "reset"
-		});
-		cursor = 0;
-	}
-	for (const event of page.events) {
-		if (event.seq <= cursor) continue;
-		emit(event);
-		cursor = event.seq;
-	}
-	if (Number.isSafeInteger(page.next_cursor) && page.next_cursor >= cursor && page.next_cursor <= page.head_cursor) cursor = page.next_cursor;
-	return cursor;
-}
-async function consumePageAsync(page, cursor, emit) {
-	if (page.reset_required || page.reset || page.head_cursor < cursor) {
-		await emit({
-			seq: 0,
-			kind: "reset",
-			resource_type: "reset"
-		});
-		cursor = 0;
-	}
-	const pending = [];
-	const next = consumePage({
-		...page,
-		reset: false,
-		reset_required: false
-	}, cursor, (event) => {
-		pending.push(Promise.resolve().then(() => emit(event)));
-	});
-	await settleRefreshes(pending);
-	return next;
-}
-async function settleRefreshes(pending) {
-	const results = await Promise.allSettled(pending);
-	for (const result of results) if (result.status === "rejected") throw result.reason;
-}
-function storageScope(endpoint, actor, server = "legacy", principal = actor) {
-	return [
-		endpoint,
-		server,
-		principal,
-		actor
-	].map(encodeURIComponent).join(":");
 }
 //#endregion
 //#region src/app.js

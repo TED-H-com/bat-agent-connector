@@ -11,12 +11,12 @@ const root = (page: Page) => page.locator('[data-pm-overview]');
 const metric = (page: Page, key: string) => root(page).locator(`[data-overview-metric="${key}"]`);
 function fixture(locale = 'en') {
   const base = demoFixture({locale}), data: any = overview(demoProject(locale));
-  const state = {data, cursor: 0, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
+  const state = {data, cursor: 0, events: [] as any[], extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
   return {...base, state, dispatch: async (input: any) => {
     state.reads.push(input.path); if (input.method !== 'GET') state.writes.push(input);
     const url = new URL(input.path, 'http://fixture');
     if (url.pathname === '/events') return {status: 200, data: {
-      events: Number(url.searchParams.get('after')) < state.cursor ? [{seq: state.cursor, resource_type: 'pm_evidence', resource_id: base.ids.workspaceId, kind: 'pm.evidence.updated'}] : [],
+      events: state.events.length ? state.events.filter(event => event.seq > Number(url.searchParams.get('after'))) : Number(url.searchParams.get('after')) < state.cursor ? [{seq: state.cursor, resource_type: 'pm_evidence', resource_id: base.ids.workspaceId, kind: 'pm.evidence.updated'}] : [],
       next_cursor: state.cursor, head_cursor: state.cursor, has_more: false, sync: {checkpoint: {cursor: state.cursor, token: `demo-${state.cursor}`}},
     }};
     if (input.path.endsWith('/overview')) {
@@ -229,4 +229,59 @@ test('report pages survive refresh and comparisons reauthorize both snapshots', 
   expect(f.state.reads.slice(readStart).some(path => path.endsWith('/snapshots/' + f.ids.snap1))).toBe(true);
   expect(f.state.reads.slice(readStart).some(path => path.endsWith('/snapshots/' + f.ids.snap2))).toBe(true);
   await page.keyboard.press('Escape'); expect(f.state.writes).toEqual([]);
+});
+
+
+test('event bursts coalesce projection reads without rebuilding publication', async ({page}) => {
+  const f = fixture(); await boot(page, f); await openPmSection(page, 'requirements');
+  await page.locator('[data-pm-section="ui_publication"] > details > summary').click();
+  const mappings = page.locator('[data-pm-issue-mappings]'); await expect(mappings).toBeVisible();
+  await mappings.evaluate(node => { (window as any).removedMappings = 0;
+    new MutationObserver(changes => {for (const change of changes) (window as any).removedMappings += change.removedNodes.length;}).observe(node, {childList: true, subtree: true}); });
+  for (const kind of ['session', 'task', 'command', 'operation', 'work_item', 'deployment', 'integration']) {
+    const start = f.state.reads.length;
+    f.state.events = Array.from({length: 20}, (_, i) => ({seq: f.state.cursor + i + 1, resource_type: kind, resource_id: 'fixture-event', kind: kind + '.updated'}));
+    f.state.cursor += 20;
+    await expect.poll(() => f.state.reads.slice(start).some(path => path.startsWith(`/events?after=${f.state.cursor}&`))).toBe(true);
+    const reads = f.state.reads.slice(start);
+    expect(reads.filter(path => path.endsWith('/overview')).length).toBeLessThanOrEqual(['session', 'task', 'command'].includes(kind) ? 0 : 2);
+    expect(reads.filter(path => path === '/pm/workspaces')).toHaveLength(0);
+    expect(await page.evaluate(() => (window as any).removedMappings)).toBe(0);
+  }
+  expect(f.state.writes).toEqual([]);
+});
+
+test('an event starts a newer withdrawal read while an earlier projection is held', async ({page}) => {
+  const f = fixture(); await boot(page, f);
+  let release!: () => void;
+  f.state.held = new Promise<void>(resolve => {release = resolve;});
+  const before = f.state.reads.filter(path => path.endsWith('/overview')).length;
+  await refresh(page);
+  await expect.poll(() => f.state.reads.filter(path => path.endsWith('/overview')).length).toBe(before + 1);
+  f.state.denied = true;
+  f.state.events = [{seq: ++f.state.cursor, resource_type: 'operation', resource_id: 'fixture-operation', kind: 'operation.updated'}];
+  try {
+    await expect(metric(page, 'progress')).toContainText('—Unknown');
+    expect(f.state.reads.filter(path => path.endsWith('/overview')).length).toBeGreaterThanOrEqual(before + 2);
+    // An authorization failure withdraws data but must not advance the event ACK.
+    expect(f.state.reads.some(path => path.startsWith(`/events?after=${f.state.cursor}&`))).toBe(false);
+  } finally {release();}
+  await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
+  await expect(root(page)).not.toContainText(f.copy.goal); expect(f.state.writes).toEqual([]);
+});
+
+
+test('event ACK waits for the shared projection read to finish', async ({page}) => {
+  const f = fixture(); await boot(page, f);
+  let release!: () => void;
+  f.state.held = new Promise<void>(resolve => {release = resolve;});
+  const before = f.state.reads.filter(path => path.endsWith('/overview')).length;
+  f.state.events = Array.from({length: 20}, (_, i) => ({seq: i + 1, resource_type: 'operation', resource_id: 'fixture-operation', kind: 'operation.updated'}));
+  f.state.cursor = 20;
+  try {
+    await expect.poll(() => f.state.reads.filter(path => path.endsWith('/overview')).length).toBe(before + 1);
+    expect(f.state.reads.some(path => path.startsWith('/events?after=20&'))).toBe(false);
+  } finally {release();}
+  await expect.poll(() => f.state.reads.some(path => path.startsWith('/events?after=20&'))).toBe(true);
+  expect(f.state.reads.filter(path => path.endsWith('/overview')).length).toBe(before + 1); expect(f.state.writes).toEqual([]);
 });

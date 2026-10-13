@@ -1,3 +1,4 @@
+import {settleRefreshes} from './state/events.ts';
 import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
@@ -852,25 +853,31 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   // Do not expose forms that would freeze an unsent intent while that gate is closed.
   initialReadComplete = true; updateForms();
   if (openCreate || !workspaceId && !lastList.length) showCreate();
-  let eventReads = Promise.resolve();
+  // Coalesce only reads that have not started. Every event's ACK waits for a
+  // post-event read, while a held older read cannot block a newer withdrawal.
+  const pendingReads = new Map();
+  function eventRead(key, read) {
+    if (!pendingReads.has(key)) pendingReads.set(key, Promise.resolve().then(() => {
+      pendingReads.delete(key); alive(); return read();
+    }));
+    return pendingReads.get(key);
+  }
   const off = onEvents(event => {
     if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair','pm_ahp_observation','pm_dependencies'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
-      eventReads = eventReads.catch(() => {}).then(() => load());
-      return eventReads;
+      return eventRead(load, load);
     }
-    if(handoff&&['project','work_item'].includes(event.resource_type)) {
-      eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
+    const reads = [], kind = event.resource_type;
+    if (liveOverview && ['work_item', 'operation', 'deployment', 'integration'].includes(kind))
+      reads.push(eventRead(brief, () => brief?.refreshProjection?.()));
+    if (handoff && kind === 'project') reads.push(eventRead(load, load));
+    if (handoff && kind === 'work_item') reads.push(eventRead(handoff, () => handoff.refresh()));
+    const deliveryEvent = ['operation', 'deployment', 'integration'].includes(kind);
+    if (deliveryEvent || ['work_item', 'project', 'task', 'command', 'session'].includes(kind)) {
+      for (const section of [...(deliveryEvent ? [deliveries, workBatches] : []), qualityReviews, maintenanceRepairs, kanban, traceability, schedule])
+        if (section) reads.push(eventRead(section, () => section.refresh()));
     }
-    // Refresh live projections together without locking the workspace Refresh control.
-    // A held row read must still permit a newer read to withdraw its source.
-    if ((liveOverview||deliveries||workBatches||qualityReviews||maintenanceRepairs||schedule) && ['operation','deployment','integration'].includes(event.resource_type)) {
-      eventReads=eventReads.catch(()=>{}).then(async()=>{if (liveOverview) await brief?.refresh();await deliveries?.refresh();await workBatches?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});return eventReads;
-    }
-    if ((liveOverview||kanban||qualityReviews||maintenanceRepairs||schedule) && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
-      eventReads = eventReads.catch(() => {}).then(async () => {if (liveOverview) await brief?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});
-      return eventReads;
-    }
+    return settleRefreshes(reads);
   });
   const dispose = () => {
     if (threadId && mountedThread === threadId) {

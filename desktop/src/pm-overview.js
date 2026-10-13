@@ -284,7 +284,7 @@ export function workspaceOverview(options) {
     if (!reportRead) reportRead = reports.refresh().finally(() => {reportRead = null;});
     return reportRead;
   }
-  return {box, primary, meta, reportTools, refresh, withdraw, prepareReports, openRelated, closeRelated: () => {if (relatedSelection) closeReader();},
+  return {box, primary, meta, reportTools, refresh, refreshProjection: () => mode === 'live' ? refreshLive() : undefined, withdraw, prepareReports, openRelated, closeRelated: () => {if (relatedSelection) closeReader();},
     reportActions: {compare: () => {if (mode !== 'saved') {mode = preference.mode = 'saved'; saved = reports.current(); signature = ''; render();} return reports.comparePrevious();}, print: () => window.print()},
     setActive(value) {if (active === value) {header(); return;} active = value; if (!value) {preference.scroll = window.scrollY; closeReader();} else if (preference.scroll) window.scrollTo(0, preference.scroll); header();},
     dispose() {serial++; closeReader();},

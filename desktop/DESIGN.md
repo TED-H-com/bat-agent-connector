@@ -199,6 +199,11 @@ browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle reso
 
 ## Overview
 
+Event pages coalesce reads that have not started. Session, task and command events
+do not refresh Overview; work, operation and delivery events refresh its projection
+without rebuilding workspace sections. ACK waits for a post-event read, and an older
+held read cannot block a newer withdrawal.
+
 Overview defaults to the central `pm_overview` live projection. The shared header
 shows the plan title, adoption date, live/report mode and visible lifecycle stage;
 the plan journal sequence is never displayed as a version. Four equal status
