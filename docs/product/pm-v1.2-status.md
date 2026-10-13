@@ -9,7 +9,7 @@
 ## 目前整合狀態
 
 - **Charter／RTM 已合併：#121／`8bc6cf3`。** 總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯已進主線。精確候選 `0d718f3` 的 Python 3.10–3.13、五個 desktop jobs 與 1,978 項 UI 通過；沒有 owner 安裝或 live 宣稱。
-- **Agent 資源第一段已合併：#122／`2bf152d`。** 新增中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。候選 `dc92f99` 的四版後端與五個 desktop jobs 通過；合併後主線 Windows synthetic PowerShell fixture 逾時，後端矩陣仍待收齊，不能宣稱主線全綠。精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。同一讀取另附每日用量桶（`buckets`，可選 IANA `tz`，預設 UTC）：只含仍計入總量的來源；整日 `complete` 僅在既有 cursor 已讀到檔尾且成功時間蓋過該本地日。缺欄位與未涵蓋日是 null，不是 0。圖表 UI 尚未接上。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
+- **Agent 資源：本機觀測已在 #122 進主線。** 中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。同一讀取在帶 `buckets=day` 時才附每日用量桶（最多 92 個本地日；`tz` 須為精確 IANA 名稱且只能一併帶上，預設 UTC）：只含仍計入總量的來源。整日 `complete` 僅在該次讀取的起始時間已過本地日結束加上 settle（至少 15 分鐘或 3 倍間隔）、cursor 已到檔尾，且視窗含整天。較晚的 Claude 修正仍可能回到第一片段那天。缺欄位與未涵蓋日是 null，不是 0。未要求分桶時回應不含 `buckets`。圖表 UI 尚未接上。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
 - **專案時程讀取（後端讀取）：** `GET /api/v1/pm/workspaces/{id}/schedule` 與 `pm_schedule_get` 回傳已記錄的 baseline、forecast 與 actual。沒有甘特圖 UI、推算預測、critical path、階段資料或依工作項目的 token 歸因。合約見 [pm-schedule.md](../design/pm-schedule.md)。
 
 - **新的管理工作台方向已記錄，尚未完成：**[六視圖合約](../design/pm-project-control-center.md)

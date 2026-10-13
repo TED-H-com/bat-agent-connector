@@ -245,17 +245,18 @@ async def test_reselection_invalidates_queued_plan_draft_without_changing_existi
     assert pm_plans.head(ops.db, target["workspace_id"])["latest_revision_id"] == original["revision_id"]
 
 
-async def test_profile_upgrade_and_reselection_leave_frozen_run_context_unchanged(ops, monkeypatch):
+@pytest.mark.parametrize("prior_version", [1, 2])
+async def test_profile_upgrade_and_reselection_leave_frozen_run_context_unchanged(ops, monkeypatch, prior_version):
     target, confirmed, *_ = await planning(ops)
     with monkeypatch.context() as prior:
-        prior.setattr(pm_profiles, "VERSION", 1)
+        prior.setattr(pm_profiles, "VERSION", prior_version)
         run = create_run(ops, target)
     frozen = copy.deepcopy(run["context"])
     await revise(ops, target, [confirmed])
-    assert pm_profiles.VERSION == 2 and read(ops, target)["profile"]["version"] == 2
+    assert pm_profiles.VERSION == 3 and read(ops, target)["profile"]["version"] == 3
     loaded = pm_runs.get(ops.db, run["run_id"])
     assert loaded["context"] == frozen and loaded["context_digest"] == run["context_digest"]
-    assert loaded["context"]["profile"]["version"] == 1
+    assert loaded["context"]["profile"]["version"] == prior_version
     assert loaded["context"]["draft_id"] != read(ops, target)["draft"]["draft_id"]
 
 

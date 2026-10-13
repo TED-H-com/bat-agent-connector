@@ -280,3 +280,100 @@ def test_removed_commitments_require_explicit_original_ids_and_cycles_are_reject
     assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "format_valid"
     doc["requirements"][0]["depends_on"] = ["member.recovery"]
     assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "needs_review"
+
+
+@pytest.mark.parametrize('renames', [1, 105])
+async def test_title_only_rename_preserves_proposal_adoption(proposal_world, renames):
+    from bat_agent_connector import pm_overview
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    ref = {'kind': 'proposal', 'id': proposal['proposal_id']}
+    for index in range(renames):
+        await plans.act(w, 'pm.thread.rename', {'title': f'Owner discussion title / 討論名稱 {index}'})
+    assert any(a['ref'] == ref for a in pm_overview.read(ops, OWNER, w['workspace_id'])['attention'])
+    done = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
+    assert done['status'] == 'succeeded', done
+    assert not any(a['ref'] == ref for a in pm_overview.read(ops, OWNER, w['workspace_id'])['attention'])
+    assert pm_plans.accepted_plan(ops, OWNER, w['workspace_id'])['plan']['revision_id'] == done['result']['revision_id']
+
+
+async def test_new_message_invalidates_proposal_and_pending_decision(proposal_world):
+    from bat_agent_connector import pm_overview
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    await plans.act(w, 'pm.message.append', {'content': 'Also support enterprise identities.'})
+    with pytest.raises(OperationError, match='VERSION_CONFLICT'):
+        ops.create(OWNER, **adoption_request(w, proposal))
+    out = pm_overview.read(ops, OWNER, w['workspace_id'])
+    assert not any(a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']} for a in out['attention'])
+
+
+async def test_stale_proposal_history_does_not_consume_pending_budget(proposal_world):
+    from bat_agent_connector import pm_overview
+    w, ops = proposal_world, proposal_world['d'].ops
+    for _ in range(51):
+        await proposed(w)
+    await plans.act(w, 'pm.message.append', {'content': 'Clarification for the next proposal.'})
+    current = await proposed(w)
+    out = pm_overview.read(ops, OWNER, w['workspace_id'])
+    assert out['coverage']['sources']['proposals']['complete']
+    assert [a['ref']['id'] for a in out['attention'] if a['ref']['kind'] == 'proposal'] == [current['proposal_id']]
+    assert out['attention_counts']['decision'] is not None
+
+
+@pytest.mark.parametrize('status', [None, 409, 413])
+async def test_overview_reads_stored_proposal_title_and_degrades_limits(proposal_world, monkeypatch, status):
+    from bat_agent_connector import pm_overview
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    def full_read(*a, **kw):
+        pytest.fail('Overview must not reconstruct a full proposal for its title')
+    monkeypatch.setattr(proposals, 'get_proposal', full_read)
+    if status:
+        def limited(*a):
+            raise OperationError('LIMIT', 'Fixture proposal source limit', status)
+        monkeypatch.setattr(proposals, 'require_visible', limited)
+    out = pm_overview.read(ops, OWNER, w['workspace_id'])
+    if status:
+        assert not out['coverage']['sources']['proposals']['complete']
+        assert out['attention_counts']['decision'] is None
+    else:
+        item = next(a for a in out['attention'] if a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']})
+        assert item['title'] == proposal['document']['title']
+
+
+async def test_bound_plan_source_reference_uses_revision_operation(proposal_world, monkeypatch):
+    from tests.test_pm_thread_contexts import create
+    w, ops = proposal_world, proposal_world['d'].ops
+    rid = w['revision']['revision_id']
+    primary = pm_plans.get_plan(ops, OWNER, w['workspace_id'], rid)['plan']['operation_id']
+    actual = pm_plans.source_operation_ids
+    def reordered(*a, **kw):
+        return sorted(actual(*a, **kw), key=lambda oid: oid == primary)
+    monkeypatch.setattr(pm_plans, 'source_operation_ids', reordered)
+    refs = [{'kind': 'plan_revision', 'id': rid}]
+    thread, _ = await create(ops, w['workspace_id'], refs, who=OWNER)
+    env = propose_request(w)
+    env['target']['thread_id'] = thread['result']['thread_id']
+    env['preconditions']['expected_version'] = 1
+    op = ops.create(OWNER, **env)[0]
+    context = op['external_refs']['admission_binding']['conversation_proposal']['context']
+    assert context['source_references']['context.0']['operation_id'] == primary
+    assert primary in context['source_operation_ids']
+    await complete(w, op)
+
+
+async def test_runtime_imported_message_invalidates_pending_proposal(proposal_world):
+    from bat_agent_connector import pm_overview
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    analysis = native.request(ops, plans.target(w), params={'purpose': 'Analyze the latest conversation'},
+        version=plans.version(w), who=OWNER)
+    done = await complete(w, analysis)
+    assert done['status'] == 'succeeded', done
+    assert done['result']['outcome']['message_id']
+    await plans.act(w, 'pm.thread.rename', {'title': 'Analysis discussion / 分析討論'})
+    with pytest.raises(OperationError, match='VERSION_CONFLICT'):
+        ops.create(OWNER, **adoption_request(w, proposal))
+    out = pm_overview.read(ops, OWNER, w['workspace_id'])
+    assert not any(a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']} for a in out['attention'])

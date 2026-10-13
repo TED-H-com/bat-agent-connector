@@ -38,10 +38,14 @@
 
 - Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
   with adopted-requirement progress, explicit blockers, decisions, schedule/quality
-  deviations, visible delivery evidence and bounded source coverage. Saved reports
-  retain their fixed snapshot semantics.
+  deviations, current review/proposal state, rollback evidence and bounded source
+  coverage. Hidden or oversized sources stay partial; source references respect
+  the whole document's limit. Reads share a snapshot and request-local source cache.
+  Saved reports retain their fixed snapshot semantics.
 - Bind up to eight original context items when creating a PM discussion and rename
-  threads with durable version checks. Current source withdrawal redacts chips and
+  threads with durable version checks while preserving title-only proposal adoption.
+  Version 3 profiles retain compatibility with version 2 plan documents. Bound
+  analysis references use each original revision's operation. Source withdrawal redacts chips and
   protects analysis derived from their frozen context; English and Traditional
   Chinese validation messages accompany the new context errors.
 
@@ -59,11 +63,15 @@
   The page is cut by encoded size so the next cursor resumes without gaps. Withdrawn
   sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
 
-- Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
-  an optional IANA `tz` (default UTC) and returns per-source local days for the selected
-  window. A day is complete only when the stored cursor had reached EOF at or after that
-  day; missing counters and uncovered days stay null, and withdrawn sources omit buckets
-  together with their totals.
+- Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
+  returns per-source local days only when `buckets=day` is set; `tz` is then an exact IANA
+  name and defaults to UTC. The window is still at most 366 days. Daily buckets additionally
+  cover at most 92 local dates. A day is complete only when the collector's read started at
+  or after that local day's end plus a settle margin (`max(15 minutes, 3 × interval)`), the
+  stored cursor had reached EOF, and the window contains the whole day. A later Claude
+  refinement can still land on its first-fragment day, so `complete` is settled coverage
+  rather than a frozen total. Missing counters and uncovered days stay null, and withdrawn
+  sources omit buckets together with their totals.
 
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
