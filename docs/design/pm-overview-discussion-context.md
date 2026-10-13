@@ -22,12 +22,22 @@
 | `attention` | 最多 20 筆 `{key, kind, title, severity, since, context, ref}`；先嚴重度再年齡，穩定 key 打破同序；未知年齡排最後 |
 | `attention_counts` | blocker／decision／deviation／risk 各自的可見來源筆數；該種類來源不完整時為 null，不能以顯示的 20 筆當總數 |
 | `attention_truncated` | 來源掃描未完成或顯示上限截斷時為 true |
+| `recent_decisions` | 最多五筆 `{key, title, decided_at, actor, status, ref, operation_id}`，依決策時間由新到舊；key 與 register row_id 相同 |
+| `recent_decisions_count` | 完整掃描後的可見已決來源數；來源或輸出參照不完整時為 null，不以顯示筆數當總數 |
+| `recent_decisions_complete` | 已決來源及輸出參照的涵蓋是否完整；不是所有決策都已產生預期效果 |
+| `recent_decisions_truncated` | 可見來源超過五筆、掃描未完成或輸出參照被省略時為 true |
 | `recent_deliveries` | 最多三個不同 work ID，依中央證據時間排序，狀態為 accepted／merged／deployed／rolled_back；另附 `recent_deliveries_complete` |
 | `coverage` | `{complete, sources, basis, network_checked: false}`；每一 source 有 `complete`、`next_cursor` |
 | `unknown` | `[{field, reason}]`；缺資料保留 null 與機器可讀原因，不補零 |
 
-Goal 只取已採用文件中 status 為 `user_confirmed` 或 `repo_evidence` 的 value／goal／problem input，
-換行改為空白；只有未確認輸入時為 null 與 `goal_unconfirmed`，完全缺少時為 null 與 `no_explicit_goal`，不從標題或任意 Markdown 猜測。沒有採用計畫時 `progress: null`，
+Goal 的唯一取值規則：按已採用文件 `selected_inputs` 的原順序，取第一個 slot **完全等於**
+`value`、`goal`、`problem` 或 `governance.goal`，且 status 為 `user_confirmed` 或 `repo_evidence` 的 value。
+`pm.conversation.adopt` 把審閱後的 candidate 記為 `domain.key`；governance domain 的 goal candidate
+因此是 `governance.goal`。同一 input 保留在 `selected_inputs` 與 `sections.governance`，採用文件沒有丟失目標；
+總覽讀取這個明確 slot，不改 adoption、input 身分或 immutable revision。
+既有 profile version 2 的 accepted revisions 使用相同規則，不需資料重寫。
+不接受任意 `.goal` 後綴、其他 domain 或自由文字；未選入與已排除的 input 不參與。
+換行改為空白；只有未確認的符合 slot 輸入時為 null 與 `goal_unconfirmed`，完全缺少時為 null 與 `no_explicit_goal`，不從標題或任意 Markdown 猜測。沒有採用計畫時 `progress: null`，
 原因 `no_adopted_plan`；來源撤回則為 `source_unavailable`。
 
 進度分母僅是已採用版本的 distinct requirements。每條需求只進一類，優先順序為：
@@ -49,6 +59,47 @@ Attention 只使用明確中央關係：未決 change、仍可採用的 conversa
 只有目前有效驗收會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
 blocker／品質撤回／生命週期待處理為 high，一般決策／治理風險／日期偏差為 medium；
 finding 沿用原 severity，未提供則 low。這不是模型風險評分。
+
+`attention_counts.decision` 與 decision attention 仍只表示待處理決策。採用後的提案從 pending 移除，
+不以已完成的決策補回 attention 或增加 pending count。
+`recent_decisions` 另外讀取原 `pm_plan_adoptions` receipt 與 `pm.governance.decide` revision：
+每個 register identity 保留最近一次已記錄決策，包含已被較新 plan 取代的 adopted revision，以及其後 revise
+清除目前 decision 的治理紀錄。重複決定同一治理紀錄不增加來源數；完整決策歷史仍在 register inspector。
+ref 分別是 `{kind: "plan_revision", id: "pmrev_…"}` 與 `{kind: "governance", id: "pmgov_…"}`，
+開啟 `pm_register_get(workspace_id, key)` 的同一 inspector。採用的 proposal／discussion 依原外鍵從 inspector 查回，
+不從最新 head、時間接近或標題推測。這個欄位的來源範圍是計畫採用與治理決策，不是所有會議的摘要。
+`decided_at` 是原採用 receipt／decide revision 的 UTC epoch seconds，actor 使用原 adopted_by／recorded_by；
+status 是 `adopted`、`adopted_direction` 或 `rejected`。採方向不代表 scope 已採用，採用計畫也不代表工作已執行或驗收。
+
+兩個來源各最多掃描 50 個最近已決 identity；以記錄的決策時間降序掃描，最終同時刻以 key 排序。
+先重查當下來源與原決策 operation 的可見性，再排序、計數與套用五筆顯示上限。
+隱藏／撤回來源的列、actor、時間、ref、operation_id 與計數貢獻一起移除；下一次請求重新驗證，不沿用上次可見結果。
+來源名稱為 `coverage.sources.decided_plans`／`decided_governance`；缺表為 `source_unavailable`，
+409／413 為 `source_incomplete`。超過 50 筆為 `scan_limit`，complete 為 false，總數為 null。
+這個反向時間掃描沒有可交給既有順向來源清單的 cursor，next_cursor 維持 null；不代表來源完整。
+已決歷史不得擠掉原 attention／delivery 參照；超過整份輸出的 64 roots 時略過該歷史列，
+以 `coverage.sources.decided_references` 記錄 `source_limit`，已決總數為 null、truncated 為 true。
+pending decision counts／attention_truncated 與原進度、交付涵蓋判定保持獨立。
+
+例如使用者保留目標「會員可以登入並重設密碼」，採用「重設連結效期為 15 分鐘」後，
+plan.goal 仍是保留目標，pending decision count 可降為 0，已決欄位則包含（下列為合約示例）：
+
+```json
+{
+  "recent_decisions": [{
+    "key": "plan_revision.pmrev_11111111111111111111111111111111",
+    "title": "重設連結效期為 15 分鐘",
+    "decided_at": 1791892800.0,
+    "actor": "project-owner",
+    "status": "adopted",
+    "ref": {"kind": "plan_revision", "id": "pmrev_11111111111111111111111111111111"},
+    "operation_id": "op_22222222222222222222222222222222"
+  }],
+  "recent_decisions_count": 1,
+  "recent_decisions_complete": true,
+  "recent_decisions_truncated": false
+}
+```
 
 每次掃描最多 50 個目前 work bindings、50 個 SQL 篩選後的未解決 governance records、50 個 quality review heads（每個最多加讀一筆撤回來源）、
 50 個仍可採用的 proposals；每個 work 最多 20 個 delivery records；生命週期最多 20 個 inflight；

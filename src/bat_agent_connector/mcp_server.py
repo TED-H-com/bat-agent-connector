@@ -761,7 +761,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
 
     async def pm_overview_get(workspace_id: str) -> dict[str, Any]:
-        """Read live visible project status, separately from fixed saved reports."""
+        """Read live visible project status: confirmed adopted goal, progress, pending attention and up to five recent decided plan/governance items with register refs. Incomplete decision totals stay null; inspect coverage. Separate from fixed saved reports; never collects or dispatches."""
         return await pm_daemon("pm_overview_get", workspace_id=workspace_id)
 
     async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None,

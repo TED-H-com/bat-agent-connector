@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "597ea0a9f967720a211a1dc323855e9c84a5b41b6b2d389f3cfc514602149d78"
+  canonical_sha256: "6f56a0554d675a946fb8b29cafa12ccf690439952d3107fe0aee78e1d7a383ec"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1675,6 +1675,26 @@ were omitted to respect the whole document's lineage bound. Reference trimming i
 reported in coverage.sources.attention_references, independently of source scan
 completeness and progress/counts; inspect it before describing displayed deliveries.
 Source cursors belong to existing source-list tools, not to the overview call.
+The adopted goal uses the first selected, user_confirmed/repo_evidence input whose
+slot is exactly value, goal, problem or governance.goal. Conversation adoption
+records the reviewed governance goal as governance.goal; preserve its attribution.
+Never infer a goal from Markdown, a suffix or an unselected/unconfirmed input.
+recent_decisions lists up to five decided plan adoptions/governance directions,
+newest first, with key, title, decided_at (UTC epoch seconds), actor, status, ref
+and original operation_id. Each key is the same pm_register_get row_id; the
+inspector retains original proposal/discussion links and decision history.
+There is one latest recorded decision per register identity, including older
+adopted revisions and decisions whose current governance head was later revised.
+These rows do not change pending attention_counts.decision. adopted_direction
+does not mean the plan was adopted or work executed. Hidden/withdrawn sources
+lose rows and counts together. recent_decisions_count is a visible total only
+when recent_decisions_complete is true; a display cap alone leaves that total
+known. Read recent_decisions_truncated and coverage.sources.decided_plans,
+decided_governance and decided_references. Each source scans at most 50 newest
+decided identities; scan_limit leaves the total null and next_cursor null (the
+reverse time scan has no existing source-list continuation). Missing sources and
+409/413 also leave totals unknown. History source_limit omissions cannot displace
+pending attention/delivery refs or change their counts/completeness.
 Hidden lifecycle inflight sources remain incomplete, including rows filtered by
 the source list; omitted is null when the transition itself is unavailable.
 409/413 size or lineage limits are source_incomplete, including pending operations
