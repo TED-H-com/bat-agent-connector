@@ -18,6 +18,7 @@ concurrency:
 jobs:
   frontend:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: desktop
@@ -40,6 +41,7 @@ jobs:
   browser-ui:
     name: browser-ui (${{ matrix.shard }}/3)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -73,6 +75,11 @@ jobs:
           npx playwright install-deps chromium
           sudo apt-get install -y fonts-dejavu-core fonts-dejavu-extra
       - run: npx playwright install chromium
+      - name: Font environment diagnostics
+        run: |
+          fc-match system-ui
+          fc-match sans-serif
+          fc-list | wc -l
       # The static server reads the committed dashboard assets; no Vite/native build needed.
       - name: Shared browser and native-transport UI tests
         run: npx playwright test --shard=${{ matrix.shard }}/3 --reporter=line,html
