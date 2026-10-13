@@ -220,10 +220,10 @@ for (const width of [390, 1440]) test(`context chips stay compact and open all r
     const box = (await chip.boundingBox())!; expect(box.height).toBeLessThanOrEqual(24); expect(box.width).toBeLessThanOrEqual(width === 390 ? 240 : 280);
     const text = await chip.textContent(); await expect(chip).toHaveAttribute('aria-label', text!); await expect(chip).toHaveAttribute('title', new RegExp('Original decision'));
   }
-  await header.getByRole('button', {name: '2 more context items'}).press('Enter');
+  await header.getByRole('button', {name: '+2 more context items', exact: true}).press('Enter');
   await expect(page.getByRole('tab', {name: 'Context', exact: true})).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.pd-context-details [data-discussion-context]')).toHaveCount(5);
-  if (width === 390) {await expect(page.locator('.pd-panel-overlay')).toBeVisible(); await page.keyboard.press('Escape'); await expect(header.getByRole('button', {name: '2 more context items'})).toBeFocused();}
+  if (width === 390) {await expect(page.locator('.pd-panel-overlay')).toBeVisible(); await page.keyboard.press('Escape'); await expect(header.getByRole('button', {name: '+2 more context items', exact: true})).toBeFocused();}
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

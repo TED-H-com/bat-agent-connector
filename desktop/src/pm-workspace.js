@@ -958,7 +958,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       schedule?.setActive(workbench?.selected() === 'schedule');
       if (dependencies) await dependencies.setActive(workbench?.selected() === 'dependencies');
       updateForms();
-      if (initialReadComplete) for (const value of forms) value.recheck();
+      if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck();}
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
@@ -980,7 +980,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const initialTranscript = content.querySelector('.pd-transcript');
   if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
   if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
-  for (const value of forms) value.recheck();
+  proposalReview?.recheck(); nativeAnalysis?.recheck();
   if (firstMessagePending) setTimeout(() => {
     if (!disposed) {firstMessagePending = false; void noteForm.submit();}
   }, 0);

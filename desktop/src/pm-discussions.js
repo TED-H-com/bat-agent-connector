@@ -19,7 +19,7 @@ export function discussionContext(t, refs = [], {limit = refs.length, onMore} = 
     return chip;
   });
   if (refs.length > limit && onMore) chips.push(button({size: 'sm', variant: 'ghost', label: '+' + (refs.length - limit),
-    'aria-label': '+' + (refs.length - limit) + ' ' + t('pd_more_context', {count: refs.length - limit}), 'data-discussion-more-context': '', onClick: onMore}));
+    'aria-label': t('pd_more_context', {count: refs.length - limit}), 'data-discussion-more-context': '', onClick: onMore}));
   return chips;
 }
 

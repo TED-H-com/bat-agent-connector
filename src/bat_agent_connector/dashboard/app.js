@@ -2635,7 +2635,7 @@ var discussionStrings = {
 		pd_cancel: "Cancel",
 		pd_finished: "PM finished",
 		pd_retry: "Retry",
-		pd_more_context: "{count} more context items",
+		pd_more_context: "+{count} more context items",
 		pd_new: "New discussion",
 		pd_search: "Search",
 		pd_message: "Message the PM…",
@@ -2706,7 +2706,7 @@ var discussionStrings = {
 		pd_cancel: "取消",
 		pd_finished: "PM 已完成",
 		pd_retry: "重試",
-		pd_more_context: "還有 {count} 個脈絡項目",
+		pd_more_context: "+{count} 個脈絡項目",
 		pd_new: "新增討論",
 		pd_search: "搜尋",
 		pd_message: "傳訊息給 PM…",
@@ -10061,7 +10061,7 @@ function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
 		size: "sm",
 		variant: "ghost",
 		label: "+" + (refs.length - limit),
-		"aria-label": "+" + (refs.length - limit) + " " + t("pd_more_context", { count: refs.length - limit }),
+		"aria-label": t("pd_more_context", { count: refs.length - limit }),
 		"data-discussion-more-context": "",
 		onClick: onMore
 	}));
@@ -15684,7 +15684,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			detail.append(h("p", {}, p.document?.summary || ""), confirmation);
 			if (adopt.locked()) {
 				adopt.box.firstElementChild.hidden = true;
-				adopt.box.append(adopt.box.querySelector(".actions"));
+				adopt.box.append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
 				detail.append(h("details", {}, h("summary", {}, t("pd_details")), adopt.box));
 			}
 			return;
@@ -15921,7 +15921,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			content.append(technical);
 		} else content.append(raw);
 		adopt.box.firstElementChild.hidden = false;
-		if (reviewShell) adopt.box.querySelector("[data-proposal-owner-review]").append(adopt.box.querySelector(".actions"));
+		if (reviewShell) adopt.box.querySelector("[data-proposal-owner-review]").append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
 		detail.append(adopt.box);
 		if (conversation && !reviewShell) {
 			reviewShell = true;
@@ -16108,6 +16108,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		composer,
 		refresh,
 		withdraw,
+		recheck: () => prepare.recheck(),
 		update(value = {}) {
 			if (value.capabilities) {
 				capability = value.capabilities;
@@ -29418,6 +29419,9 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	return {
 		box,
 		update,
+		recheck() {
+			for (const { request } of requests) request.recheck();
+		},
 		composer(textarea) {
 			ask = h("button", {
 				type: "button",
@@ -31577,7 +31581,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			schedule?.setActive(workbench?.selected() === "schedule");
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
 			updateForms();
-			if (initialReadComplete) for (const value of forms) value.recheck();
+			if (initialReadComplete) {
+				proposalReview?.recheck();
+				nativeAnalysis?.recheck();
+			}
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
 				loaded = false;
@@ -31630,7 +31637,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	if (threadId === "new") setTimeout(() => {
 		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
 	}, 0);
-	for (const value of forms) value.recheck();
+	proposalReview?.recheck();
+	nativeAnalysis?.recheck();
 	if (firstMessagePending) setTimeout(() => {
 		if (!disposed) {
 			firstMessagePending = false;

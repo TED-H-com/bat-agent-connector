@@ -146,7 +146,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
         // Central adoption does not erase an unresolved original operation.
         // Keep only its existing recovery controls in Details, not a new review.
         adopt.box.firstElementChild.hidden=true;
-        adopt.box.append(adopt.box.querySelector('.actions'));
+        adopt.box.append(adopt.box.querySelector('button[type=submit]').closest('.actions'));
         detail.append(h('details',{},h('summary',{},t('pd_details')),adopt.box));
       }
       return;
@@ -217,7 +217,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const raw=h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply));
     if(conversation){technical.append(raw);content.append(technical);}else content.append(raw);
     adopt.box.firstElementChild.hidden=false;
-    if(reviewShell) adopt.box.querySelector('[data-proposal-owner-review]').append(adopt.box.querySelector('.actions'));
+    if(reviewShell) adopt.box.querySelector('[data-proposal-owner-review]').append(adopt.box.querySelector('button[type=submit]').closest('.actions'));
     detail.append(adopt.box);
     if(conversation&&!reviewShell){
       reviewShell=true;
@@ -265,7 +265,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     updateControls();return composerNode;
   }
   ready=true;updateControls();
-  return {box,tools,composer,refresh,withdraw,update(value={}){
+  return {box,tools,composer,refresh,withdraw,recheck:()=>prepare.recheck(),update(value={}){
     if(value.capabilities){
       capability=value.capabilities;
       if(conversation&&!adapterInitialized){

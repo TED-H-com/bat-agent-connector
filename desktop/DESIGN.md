@@ -254,8 +254,7 @@ composer draft and intent, consumes the handoff, and submits it once. A non-empt
 composer is never overwritten. Later mounts only recover the original request; they
 never auto-send. A new launch always keeps its own route and context. Completed
 launch draft keys are removed; a bounded index retains the last 40 return origins.
-Opening or reloading an unsent draft performs no write. Thread
-origins retain the project-view route and fixed report ID through draft reloads; returning
+Opening or reloading an unsent draft performs no write. Thread origins retain the project-view route and fixed report ID through draft reloads; returning
 to a report restores both its ID and Overview's saved mode. Source views retain their own
 preference state.
 
@@ -272,10 +271,12 @@ Ask PM again action. Raw reason codes stay in Details.
 The clock runs only during actual operation checks. Exhausted polling shows Status
 not checked; refresh and PM events re-read the known original operation ID and reset
 the backoff. Only label changes update the live region; elapsed time is hidden from
-announcements. Original-key recovery is retained. Saved proposals, runtime options, planning inputs, immutable revisions,
+announcements. Original-key recovery is retained. Saved proposals, runtime options,
+planning inputs, immutable revisions,
 context packages, meetings, follow-ups and Brief remain in the thread panel.
 Each proposal refresh reads one list and its selected document; picker titles and
-status come directly from list rows. Proposal titles replace raw IDs in the picker; plan name, revision and status replace
+status come directly from list rows. Proposal titles replace raw IDs in the picker;
+plan name, revision and status replace
 commit digests in the reading surface. Identifiers and copyable digests are in Details.
 All thread tools use shared chevron disclosures, including retained lazy controls.
 The Plan tab lists revision rows with centrally read Accepted / Draft / Historical

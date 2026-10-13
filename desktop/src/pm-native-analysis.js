@@ -99,7 +99,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   }
   ready = true;
   update();
-  return {box, update, composer(textarea) {
+  return {box, update, recheck() {for (const {request} of requests) request.recheck();}, composer(textarea) {
     ask = h('button', {type: 'button', class: 'secondary', 'data-discussion-ask': '', onclick: () => {
       const request = requests.find(row => row.spec.key === selected)?.request;
       if (!request) return;
