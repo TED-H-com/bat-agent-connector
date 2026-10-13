@@ -513,3 +513,17 @@ async def test_capture_http_and_mcp_share_the_original_operation_key(pm, monkeyp
         await fleet.close()
         server.close()
         await server.wait_closed()
+
+
+async def test_unicode_path_json_expansion_stays_inside_existing_runner_ceiling(pm):
+    prefix = "/".join(["界" * 50] * 8)
+    files = {f"{prefix}/requirements-{i:03}.txt": "#" for i in range(128)}
+    files[f"{prefix}/requirements-000.txt"] = "#" + "x" * 399999
+    files[f"{prefix}/requirements-001.txt"] = "#" + "x" * 239999
+    await prepare(pm, files)
+    op = await run(pm)
+    assert op["status"] == "succeeded", op
+    result = read(pm)
+    assert len(result["files"]) == 128 and result["partial"]
+    assert any(f["reason"] == "selection_wire_budget" for f in result["files"])
+    assert any(f["status"] == "read" and f["size"] == 400000 for f in result["files"])
