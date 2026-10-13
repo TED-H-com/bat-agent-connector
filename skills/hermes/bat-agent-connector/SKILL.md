@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "0935d87320d935a13363c117b42c7457d39446e71fdecdb6ffef02ce3871a682"
+  canonical_sha256: "ebea330a897fa8b1737e0d94322e9508fb4dc233ac1fe4843063732d47d87e83"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1610,4 +1610,15 @@ A session that stopped producing output is not ended; do not use the last messag
 honor `truncated`, `partial`, and `range_scope`. Withdrawn sources disappear from rows
 and derived dates together; do not refill them from memory. Unknown fields stay null
 with a reason in `unknown`. See `docs/design/pm-schedule.md`.
+
+### Issues, actions and changes
+
+Use `pm_register_list(workspace_id, type?, status?, owner?, q?, after?, limit?)` and
+`pm_register_get(workspace_id, row_id)` with your own observe principal. The register
+is a read-only projection of existing governance, finding, repair, follow-up, proposal,
+issue-mapping, meeting and plan-adoption records. It does not discuss, propose, repair
+or dispatch. Pass `after` back as `next_cursor`. Totals and the summary are present
+only when `coverage.complete` is true; a hidden or withdrawn source is omitted from
+rows and counts together. Do not invent links the timeline does not return.
+See `docs/design/pm-register.md` for the record mapping.
 <!-- END CANONICAL WORKFLOW -->

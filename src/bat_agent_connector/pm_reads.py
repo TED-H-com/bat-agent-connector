@@ -9,6 +9,8 @@ from .operations import OperationError
 FIELDS = {
     "pm_resources_get": ("workspace_id", "since", "until", "tz"),
     "pm_schedule_get": ("workspace_id", "after", "limit"),
+    "pm_register_list": ("workspace_id", "type", "status", "owner", "q", "after", "limit"),
+    "pm_register_get": ("workspace_id", "row_id"),
     "pm_ahp_adapters_list": ("workspace_id",),
     "pm_ahp_observations_list": ("workspace_id", "after", "limit"),
     "pm_ahp_observation_current_get": ("workspace_id",),
@@ -121,6 +123,13 @@ def read(ops, principal, method, params):
     if method == "pm_schedule_get":
         from .pm_schedule import read as schedule
         return schedule(ops, principal, workspace_id, after=params.get("after"), limit=params.get("limit"))
+    if method == "pm_register_list":
+        from .pm_register import list_register
+        return list_register(ops, principal, workspace_id, row_type=params.get("type"), status=params.get("status"),
+                             owner=params.get("owner"), q=params.get("q"), after=params.get("after"), limit=params.get("limit", 50))
+    if method == "pm_register_get":
+        from .pm_register import get_register
+        return get_register(ops, principal, workspace_id, params.get("row_id"))
     if method == "pm_context_bundle_preview":
         from .pm_context_bundles import preview
         return preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))
