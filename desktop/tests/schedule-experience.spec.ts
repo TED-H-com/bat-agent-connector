@@ -7,9 +7,9 @@ import {schedulePage} from './demo/schedule.ts';
 import {fixture as roadmapFixture, path as roadmapPath} from './pm-roadmap-fixture.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
-async function start(page: Page, locale = 'en', options: {native?: boolean; withoutBrief?: boolean; pageSize?: number; mutate?: (data: any) => void} = {}) {
+async function start(page: Page, locale = 'en', options: {native?: boolean; withoutBrief?: boolean; pageSize?: number; initialView?: string; mutate?: (data: any) => void} = {}) {
   const fixture = demoFixture({locale}), project = demoProject(locale);
-  const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, eventType: 'work_item', completed: 0, overviewReads: 0};
+  const calls: string[] = [], writes: any[] = [], state = {deny: false, tooLarge: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, eventType: 'work_item', completed: 0, overviewReads: 0};
   await page.clock.setFixedTime(DEMO_NOW);
   await mountConversation(page, options.native || false, async input => {
     if (input.method !== 'GET') writes.push(input);
@@ -18,10 +18,11 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     if (url.pathname.endsWith('/schedule')) {
       calls.push(input.path);
       const data = schedulePage(project, url, options.pageSize); options.mutate?.(data);
-      const denied = state.deny;
+      const denied = state.deny, tooLarge = state.tooLarge;
       if (state.defer) {state.defer = false; await new Promise<void>(resolve => {state.pending = resolve;});}
       // Snapshot the response before a later read revokes the source.
       state.completed++;
+      if (tooLarge) return {status: 413, data: {error: {code: 'PM_SCHEDULE_TOO_LARGE', message: 'Schedule exceeds limit'}}};
       return denied ? {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}} : {status: 200, data};
     }
     if (url.pathname === `/pm/workspaces/${fixture.ids.workspaceId}` && state.workspaceDeny) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
@@ -35,8 +36,9 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     }
     return result;
   });
-  await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/schedule`);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
+  const view = options.initialView || 'schedule';
+  await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/${view}`);
+  if (view === 'schedule') await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
   await expect(page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
   return {...fixture, state, calls, writes};
 }
@@ -498,6 +500,74 @@ test('Propose change uses Change: {firstLine} and omits milestone ref when miles
     report: '',
   });
 });
+
+test('hidden Schedule does not fetch until active, live updates keep focus in Unscheduled and Details, and 413 renders without Retry', async ({page}) => {
+  let version = 1;
+  const f = await start(page, 'en', {initialView: 'overview', mutate: data => {
+    data.unknown.push({field: `rev_${version}`, reason: 'session_not_observed'});
+  }});
+  await expect(page.locator('[data-pm-overview]')).toBeVisible();
+  expect(f.calls).toHaveLength(0);
+  f.state.cursor++;
+  await page.waitForTimeout(300);
+  expect(f.calls).toHaveLength(0);
+
+  await page.evaluate(id => {location.hash = `#/pm/${id}/schedule`;}, f.ids.workspaceId);
+  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
+  expect(f.calls).toHaveLength(1);
+
+  const region = page.locator('[data-pm-schedule]');
+  await region.locator('.schedule-unscheduled summary').click();
+  const unscheduledBtn = region.locator('.schedule-unscheduled [data-schedule-select]').first();
+  await unscheduledBtn.focus();
+  await expect(unscheduledBtn).toBeFocused();
+  version++;
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBe(2);
+  await expect(unscheduledBtn).toBeFocused();
+
+  const metaSummary = region.locator('.schedule-meta summary');
+  await metaSummary.focus();
+  await expect(metaSummary).toBeFocused();
+  version++;
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBe(3);
+  await expect(metaSummary).toBeFocused();
+
+  f.state.tooLarge = true;
+  await page.locator('.pm-main > header').getByRole('button', {name: 'Refresh', exact: true}).click();
+  const alert = region.locator('[role="alert"]');
+  await expect(alert).toContainText('Schedule exceeds the size limit.');
+  await expect(alert.locator('button')).toHaveCount(0);
+});
+
+test('UTC calendar days render identical ticks, bars, and meta in Pacific/Honolulu and Asia/Taipei', async ({browser, baseURL}) => {
+  const snapshots: Record<string, any> = {};
+  for (const timezoneId of ['Pacific/Honolulu', 'Asia/Taipei']) {
+    const context = await browser.newContext({locale: 'en', baseURL, viewport: {width: 1440, height: 900}, timezoneId}), page = await context.newPage();
+    await start(page, 'en');
+    snapshots[timezoneId] = await page.evaluate(() => ({
+      offset: new Date().getTimezoneOffset(),
+      meta: document.querySelector('.schedule-meta')?.textContent,
+      ticks: [...document.querySelectorAll('.schedule-tick')].map(el => ({text: el.textContent, left: (el as HTMLElement).style.left})),
+      bars: [...document.querySelectorAll('.schedule-bar')].map(el => ({
+        track: (el.closest('[data-schedule-track]') as HTMLElement)?.dataset.scheduleTrack,
+        kind: (el as HTMLElement).dataset.scheduleBar,
+        left: (el as HTMLElement).style.left,
+        width: (el as HTMLElement).style.width,
+        title: el.getAttribute('title'),
+      })),
+    }));
+    await context.close();
+  }
+  expect(snapshots['Pacific/Honolulu'].offset).toBe(600);
+  expect(snapshots['Asia/Taipei'].offset).toBe(-480);
+  expect(snapshots['Pacific/Honolulu'].meta).toBe(snapshots['Asia/Taipei'].meta);
+  expect(snapshots['Pacific/Honolulu'].ticks).toEqual(snapshots['Asia/Taipei'].ticks);
+  expect(snapshots['Pacific/Honolulu'].bars).toEqual(snapshots['Asia/Taipei'].bars);
+});
+
+
 
 
 

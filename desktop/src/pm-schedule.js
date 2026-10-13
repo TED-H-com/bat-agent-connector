@@ -221,10 +221,15 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     restoreScroll(); markSelection();
     if (focused) focusRow(focused);
   }
+  let stale = false, pendingRefresh = null;
   function renderData() {
     const next = JSON.stringify([data.rows, data.range, data.partial, data.reasons, data.unknown]);
     if (next !== signature) {
       saveScroll(); signature = next;
+      const activeEl = document.activeElement;
+      const focusMetaSummary = meta.contains(activeEl) && activeEl?.tagName === 'SUMMARY';
+      const focusUnscheduledSummary = unscheduled.contains(activeEl) && activeEl?.tagName === 'SUMMARY';
+      const focusUnscheduledId = unscheduled.contains(activeEl) ? activeEl?.closest('[data-schedule-select]')?.dataset.scheduleSelect : null;
       const details = disclosure({label: t('sched_details'), key: `${namespace}:${workspaceId}:schedule:details`, body: h('div', {},
         h('p', {}, t('sched_as_of', {date: data.as_of})),
         ...[...data.reasons.map(reason => ({reason})), ...data.unknown].map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))))});
@@ -238,31 +243,46 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
         row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null)));
       unscheduled.replaceChildren(...(data.unscheduled.length ? [disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list})] : []));
       draw();
+      if (focusMetaSummary) meta.querySelector('summary')?.focus({preventScroll: true});
+      else if (focusUnscheduledSummary) unscheduled.querySelector('summary')?.focus({preventScroll: true});
+      else if (focusUnscheduledId) unscheduled.querySelector(`[data-schedule-select="${CSS.escape(focusUnscheduledId)}"]`)?.focus({preventScroll: true});
     }
     if (selected && !data.rows.some(row => row.id === selected)) {closePanel(); selected = null; remember();}
     showPanel();
   }
   function withdraw() {
-    serial++; closePanel(); selected = null; remember(); data = null; signature = ''; domain = null;
+    serial++; stale = false; pendingRefresh = null; closePanel(); selected = null; remember(); data = null; signature = ''; domain = null;
     chart.replaceChildren(); meta.replaceChildren(); unscheduled.replaceChildren(); error.replaceChildren();
   }
-  async function refresh() {
+  async function refresh(force = false) {
     if (!canRead()) {withdraw(); return;}
+    if (!force && element.closest('[hidden]')) {stale = true; return;}
+    stale = false;
     const ticket = ++serial;
-    if (!data) chart.replaceChildren(skeleton(6));
-    const check = () => {alive(); if (ticket !== serial || !canRead()) throw Error('PM_SCHEDULE_RETIRED');};
-    try {
-      const next = await readSchedule(api, workspaceId, check); check();
-      // Retain existing sibling order during live updates. New rows append within their parent.
-      if (data) {const order = new Map(data.rows.map((row, index) => [row.id, index])); next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));}
-      data = next; error.replaceChildren(); renderData();
-    } catch (failure) {
-      try {alive(); if (ticket !== serial) return;} catch {return;}
-      withdraw(); error.append(inlineError({error: t(failure.message === 'PM_SCHEDULE_CHANGED' ? 'sched_changed' : 'sched_error'), retry: refresh}));
-    }
+    const run = (async () => {
+      if (!data) chart.replaceChildren(skeleton(6));
+      const check = () => {alive(); if (ticket !== serial || !canRead()) throw Error('PM_SCHEDULE_RETIRED');};
+      try {
+        const next = await readSchedule(api, workspaceId, check); check();
+        // Retain existing sibling order during live updates. New rows append within their parent.
+        if (data) {const order = new Map(data.rows.map((row, index) => [row.id, index])); next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));}
+        data = next; error.replaceChildren(); renderData();
+      } catch (failure) {
+        try {alive(); if (ticket !== serial) return;} catch {return;}
+        withdraw();
+        const tooLarge = failure.status === 413 || failure.code === 'PM_SCHEDULE_TOO_LARGE';
+        error.append(inlineError({
+          error: t(tooLarge ? 'sched_too_large' : failure.message === 'PM_SCHEDULE_CHANGED' ? 'sched_changed' : 'sched_error'),
+          retry: tooLarge ? null : () => refresh(),
+        }));
+      }
+    })();
+    pendingRefresh = run;
+    try {await run;} finally {if (pendingRefresh === run) pendingRefresh = null;}
   }
   async function openRef(ref) {
-    if (!data) await refresh();
+    if (pendingRefresh) await pendingRefresh;
+    else if (!data || stale) await refresh(true);
     if (!active || !data) return;
     const row = data.rows.find(row => {const identity = scheduleRef(row, data);
       return identity?.kind === ref.kind && identity.id === ref.id && identity.revision_id === ref.revision_id;});
@@ -276,6 +296,10 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   }
   return {element, refresh, withdraw, openRef, setActive(value) {
     active = value;
-    if (!value) {saveScroll(); closePanel(false);} else if (data) {restoreScroll(); showPanel();}
-  }, dispose() {saveScroll(); remember(); active = false; serial++; closePanel(false); data = null;}};
+    if (!value) {saveScroll(); closePanel(false);}
+    else {
+      if (data) {restoreScroll(); showPanel();}
+      if (stale && !element.closest('[hidden]')) void refresh();
+    }
+  }, dispose() {saveScroll(); remember(); active = false; stale = false; pendingRefresh = null; serial++; closePanel(false); data = null;}};
 }

@@ -208,6 +208,7 @@ var scheduleStrings = {
 		sched_change_title: "Change: {title}",
 		sched_roadmap: "Roadmap",
 		sched_error: "Schedule unavailable",
+		sched_too_large: "Schedule exceeds the size limit.",
 		sched_changed: "Schedule changed during loading. Refresh to read it again.",
 		sched_dates: "Recorded dates",
 		sched_partial: "Some schedule data is partial.",
@@ -253,6 +254,7 @@ var scheduleStrings = {
 		sched_change_title: "變更：{title}",
 		sched_roadmap: "路線圖",
 		sched_error: "無法取得時程",
+		sched_too_large: "時程資料超過大小上限。",
 		sched_changed: "載入期間時程已變更，請重新整理。",
 		sched_dates: "已記錄日期",
 		sched_partial: "部分時程資料尚不完整。",
@@ -28920,6 +28922,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		markSelection();
 		if (focused) focusRow(focused);
 	}
+	let stale = false, pendingRefresh = null;
 	function renderData() {
 		const next = JSON.stringify([
 			data.rows,
@@ -28931,6 +28934,10 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (next !== signature) {
 			saveScroll();
 			signature = next;
+			const activeEl = document.activeElement;
+			const focusMetaSummary = meta.contains(activeEl) && activeEl?.tagName === "SUMMARY";
+			const focusUnscheduledSummary = unscheduled.contains(activeEl) && activeEl?.tagName === "SUMMARY";
+			const focusUnscheduledId = unscheduled.contains(activeEl) ? activeEl?.closest("[data-schedule-select]")?.dataset.scheduleSelect : null;
 			const details = disclosure({
 				label: t("sched_details"),
 				key: `${namespace}:${workspaceId}:schedule:details`,
@@ -28952,6 +28959,9 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				body: list
 			})] : []);
 			draw();
+			if (focusMetaSummary) meta.querySelector("summary")?.focus({ preventScroll: true });
+			else if (focusUnscheduledSummary) unscheduled.querySelector("summary")?.focus({ preventScroll: true });
+			else if (focusUnscheduledId) unscheduled.querySelector(`[data-schedule-select="${CSS.escape(focusUnscheduledId)}"]`)?.focus({ preventScroll: true });
 		}
 		if (selected && !data.rows.some((row) => row.id === selected)) {
 			closePanel();
@@ -28962,6 +28972,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function withdraw() {
 		serial++;
+		stale = false;
+		pendingRefresh = null;
 		closePanel();
 		selected = null;
 		remember();
@@ -28973,43 +28985,58 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		unscheduled.replaceChildren();
 		error.replaceChildren();
 	}
-	async function refresh() {
+	async function refresh(force = false) {
 		if (!canRead()) {
 			withdraw();
 			return;
 		}
+		if (!force && element.closest("[hidden]")) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
-		if (!data) chart.replaceChildren(skeleton(6));
-		const check = () => {
-			alive();
-			if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
-		};
-		try {
-			const next = await readSchedule(api, workspaceId, check);
-			check();
-			if (data) {
-				const order = new Map(data.rows.map((row, index) => [row.id, index]));
-				next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
-			}
-			data = next;
-			error.replaceChildren();
-			renderData();
-		} catch (failure) {
-			try {
+		const run = (async () => {
+			if (!data) chart.replaceChildren(skeleton(6));
+			const check = () => {
 				alive();
-				if (ticket !== serial) return;
-			} catch {
-				return;
+				if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
+			};
+			try {
+				const next = await readSchedule(api, workspaceId, check);
+				check();
+				if (data) {
+					const order = new Map(data.rows.map((row, index) => [row.id, index]));
+					next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+				}
+				data = next;
+				error.replaceChildren();
+				renderData();
+			} catch (failure) {
+				try {
+					alive();
+					if (ticket !== serial) return;
+				} catch {
+					return;
+				}
+				withdraw();
+				const tooLarge = failure.status === 413 || failure.code === "PM_SCHEDULE_TOO_LARGE";
+				error.append(inlineError({
+					error: t(tooLarge ? "sched_too_large" : failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
+					retry: tooLarge ? null : () => refresh()
+				}));
 			}
-			withdraw();
-			error.append(inlineError({
-				error: t(failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
-				retry: refresh
-			}));
+		})();
+		pendingRefresh = run;
+		try {
+			await run;
+		} finally {
+			if (pendingRefresh === run) pendingRefresh = null;
 		}
 	}
 	async function openRef(ref) {
-		if (!data) await refresh();
+		if (pendingRefresh) await pendingRefresh;
+		else if (!data || stale) await refresh(true);
 		if (!active || !data) return;
 		const row = data.rows.find((row) => {
 			const identity = scheduleRef(row, data);
@@ -29039,15 +29066,20 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			if (!value) {
 				saveScroll();
 				closePanel(false);
-			} else if (data) {
-				restoreScroll();
-				showPanel();
+			} else {
+				if (data) {
+					restoreScroll();
+					showPanel();
+				}
+				if (stale && !element.closest("[hidden]")) refresh();
 			}
 		},
 		dispose() {
 			saveScroll();
 			remember();
 			active = false;
+			stale = false;
+			pendingRefresh = null;
 			serial++;
 			closePanel(false);
 			data = null;
