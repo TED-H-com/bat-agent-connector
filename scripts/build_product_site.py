@@ -197,7 +197,7 @@ parts.append(
     "</ol>"
     + bi(
         "Adoption needs the PM-owned Git worktree and owner authority. It does not start work or accept a requirement. Passing tests, merging and deployment retain their own evidence.",
-        "採用需要 PM 自有 Git 工作區及 owner 權限。採用不會直接開工或完成需求驗收；測試、合併與部署各自保留證據。",
+        "採用需要 PM 自有 Git 工作區及工作空間擁有者權限。採用不會直接開工或完成需求驗收；測試、合併與部署各自保留證據。",
         "p",
         "section-note",
     )
