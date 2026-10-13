@@ -53,3 +53,43 @@ export const uiStrings = {
     ui_batches: '工作批次', ui_observations: 'AHP 觀察'},
 };
 for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]['ui_status_' + key] = row[lang];
+
+// Projection reason vocabulary. Raw codes belong only in a Details disclosure.
+export const reasonVocabulary = Object.freeze({
+  not_available: ['Not available', '無法取得'],
+  schedule_page_partial: ['A source page is partial', '來源分頁不完整'],
+  schedule_page_limit: ['Refresh page limit reached', '已達單次載入頁數上限'],
+  attempts_truncated: ['Some attempts were not loaded', '部分執行嘗試尚未載入'],
+  attempts_unavailable: ['Attempt records unavailable', '無法取得執行嘗試紀錄'],
+  work_bindings_truncated: ['Some work links were not loaded', '部分工作連結尚未載入'],
+  issues_truncated: ['Some issues were not loaded', '部分議題尚未載入'],
+  no_explicit_phase_records: ['No phase records', '尚無階段紀錄'],
+  no_explicit_blocked_record: ['No blocker record', '尚無受阻紀錄'],
+  no_explicit_check_binding: ['No linked check evidence', '尚無連結的檢查證據'],
+  no_explicit_attribution: ['Usage is not attributed', '用量尚未歸屬'],
+  no_adopted_schedule_baseline: ['No adopted baseline', '尚無已採用的時程基準'],
+  no_explicit_finish_evidence: ['No finish evidence', '尚無結束證據'],
+  forecast_baseline_mismatch: ['Forecast uses another baseline', '預測使用不同基準'],
+  no_work_dependency_contract: ['Work dependencies unavailable', '無法取得工作相依'],
+  requirement_text_unavailable: ['Requirement text unavailable', '無法取得需求文字'],
+  multiple_explicit_milestones: ['Linked to several milestones', '已連結多個里程碑'],
+  requirement_dependency_outside_baseline: ['Dependency outside this baseline', '相依項目不在此基準內'],
+  binding_page_truncated: ['Some work links were not loaded', '部分工作連結尚未載入'],
+  work_item_unavailable: ['Work item unavailable', '無法取得工作項目'],
+  attempt_links_truncated: ['Some attempt links were not loaded', '部分執行嘗試連結尚未載入'],
+  operation_record_missing: ['Operation record unavailable', '無法取得操作紀錄'],
+  task_record_missing: ['Task record unavailable', '無法取得任務紀錄'],
+  multiple_explicit_runs: ['Several runs are linked', '已連結多筆執行紀錄'],
+  session_not_observed: ['Not observed yet', '尚未觀察到'],
+  terminal_time_unrecorded: ['End time not recorded', '尚無結束時間紀錄'],
+  state_time_unrecorded: ['State time not recorded', '尚無狀態時間紀錄'],
+  multiple_explicit_parents: ['Linked to several parents', '已連結多個上層項目'],
+  attempt_finished_is_not_work_completion: ['Attempt finished; work completion unknown', '執行嘗試已結束，工作是否完成仍未知'],
+  inconsistent_dates: ['End precedes start; end omitted', '結束早於開始，已省略結束日期'],
+  mapping_page_truncated: ['Some issues were not loaded', '部分議題尚未載入'],
+  issue_title_unavailable: ['Issue title unavailable', '無法取得議題標題'],
+});
+export function reasonLabel(reason, locale = globalThis.navigator?.language || 'zh-TW') {
+  const labels = Object.hasOwn(reasonVocabulary, reason) ? reasonVocabulary[reason] : reasonVocabulary.not_available;
+  return labels[locale.toLowerCase().startsWith('zh') ? 1 : 0];
+}

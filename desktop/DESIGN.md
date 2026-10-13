@@ -201,3 +201,29 @@ When the resources projection includes `buckets`, the usage trend is one stacked
 per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
 The resources read includes `buckets` only when the request sets `buckets=day`.
 Omit the chart when the projection has no buckets.
+
+## Schedule
+
+Schedule uses the central `pm_schedule` projection. Day / Week / Month zoom, Today,
+and a shared legend sit above a sticky tree and time axis. The tree follows explicit
+`parent_id` relationships; there are no phase rows. Undated ancestors retain the tree
+structure, and the Unscheduled disclosure includes every loaded undated item.
+Baseline is dashed, forecast outlined with a solid stroke, and actual filled. An actual
+without end evidence has a short fading marker labelled Open, never a finish at today.
+Only a `blocked` status produces hatching. Milestone delta compares recorded dates.
+
+Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
+range uses all loaded rows; any partial/truncated page keeps a Partial pill and a
+reason in Details. Unknown reasons use the shared reason vocabulary with a neutral
+fallback. Counts describe loaded items only. Source withdrawal clears the chart,
+counts and inspector together and invalidates pending reads.
+
+The inspector keeps the Requirements section order and a narrow
+`pm-schedule-inspector.render(row, context)` interface for shared-inspector integration.
+Session attempts have no dates or bars; their read-only session links and attempts
+remain available in the inspector and Unscheduled. Propose change uses `discussHref`
+with the exact context identity. Missing result and delivery evidence stays unavailable.
+Roadmap and Sprints keep their original durable forms in the header overflow drawer.
+Zoom, selection, expansion and scroll preferences are bounded and connection/workspace
+keyed. Below 800px, rows become a list with date ranges and independently scrolling
+mini timelines; the document never scrolls horizontally.

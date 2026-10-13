@@ -35,6 +35,98 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
+//#region src/pm-schedule-strings.js
+var scheduleStrings = {
+	en: {
+		sched_day: "Day",
+		sched_week: "Week",
+		sched_month: "Month",
+		sched_zoom: "Timeline zoom",
+		sched_today: "Today",
+		sched_baseline: "Baseline",
+		sched_forecast: "Forecast",
+		sched_actual: "Actual",
+		sched_milestone: "Milestone",
+		sched_legend: "Schedule legend",
+		sched_tree: "Schedule items",
+		sched_timeline: "Timeline",
+		sched_item: "Milestone / work",
+		sched_unassigned: "Not under a milestone",
+		sched_unscheduled: "Unscheduled ({n})",
+		sched_loaded: "{n} loaded",
+		sched_empty: "No scheduled dates",
+		sched_empty_unscheduled: "No unscheduled items",
+		sched_details: "Details",
+		sched_open: "Open",
+		sched_no_dates: "No dates recorded",
+		sched_not_observed: "Not observed yet",
+		sched_delta: "{n}d",
+		sched_requirement: "Requirement served",
+		sched_status: "Status & session",
+		sched_result: "Latest result",
+		sched_blocker: "Blocker & next step",
+		sched_delivery: "Delivery",
+		sched_attempts: "Attempts",
+		sched_agent: "Agent unknown",
+		sched_unavailable: "Not available",
+		sched_session: "Open session",
+		sched_run: "Open run",
+		sched_requirements: "Open in Requirements",
+		sched_propose: "Propose change",
+		sched_roadmap: "Roadmap",
+		sched_error: "Schedule unavailable",
+		sched_changed: "Schedule changed during loading. Refresh to read it again.",
+		sched_dates: "Recorded dates",
+		sched_partial: "Some schedule data is partial.",
+		sched_as_of: "As of {date}",
+		sched_view: "Schedule"
+	},
+	"zh-TW": {
+		sched_day: "日",
+		sched_week: "週",
+		sched_month: "月",
+		sched_zoom: "時間刻度",
+		sched_today: "今天",
+		sched_baseline: "基準",
+		sched_forecast: "預測",
+		sched_actual: "實際",
+		sched_milestone: "里程碑",
+		sched_legend: "時程圖例",
+		sched_tree: "時程項目",
+		sched_timeline: "時間軸",
+		sched_item: "里程碑／工作",
+		sched_unassigned: "未歸屬里程碑",
+		sched_unscheduled: "未排期（{n}）",
+		sched_loaded: "已載入 {n} 筆",
+		sched_empty: "尚無排定日期",
+		sched_empty_unscheduled: "沒有未排期項目",
+		sched_details: "詳細資訊",
+		sched_open: "未結束",
+		sched_no_dates: "尚無日期紀錄",
+		sched_not_observed: "尚未觀察到",
+		sched_delta: "{n} 天",
+		sched_requirement: "對應需求",
+		sched_status: "狀態與工作階段",
+		sched_result: "最新結果",
+		sched_blocker: "阻礙與下一步",
+		sched_delivery: "交付",
+		sched_attempts: "執行嘗試",
+		sched_agent: "Agent 未知",
+		sched_unavailable: "無法取得",
+		sched_session: "開啟工作階段",
+		sched_run: "開啟執行紀錄",
+		sched_requirements: "在需求中開啟",
+		sched_propose: "提議變更",
+		sched_roadmap: "路線圖",
+		sched_error: "無法取得時程",
+		sched_changed: "載入期間時程已變更，請重新整理。",
+		sched_dates: "已記錄日期",
+		sched_partial: "部分時程資料尚不完整。",
+		sched_as_of: "資料時間：{date}",
+		sched_view: "時程"
+	}
+};
+//#endregion
 //#region src/ui/ui-strings.js
 var statusVocabulary = Object.freeze({
 	not_started: {
@@ -268,6 +360,43 @@ var uiStrings = {
 	}
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
+var reasonVocabulary = Object.freeze({
+	not_available: ["Not available", "無法取得"],
+	schedule_page_partial: ["A source page is partial", "來源分頁不完整"],
+	schedule_page_limit: ["Refresh page limit reached", "已達單次載入頁數上限"],
+	attempts_truncated: ["Some attempts were not loaded", "部分執行嘗試尚未載入"],
+	attempts_unavailable: ["Attempt records unavailable", "無法取得執行嘗試紀錄"],
+	work_bindings_truncated: ["Some work links were not loaded", "部分工作連結尚未載入"],
+	issues_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
+	no_explicit_phase_records: ["No phase records", "尚無階段紀錄"],
+	no_explicit_blocked_record: ["No blocker record", "尚無受阻紀錄"],
+	no_explicit_check_binding: ["No linked check evidence", "尚無連結的檢查證據"],
+	no_explicit_attribution: ["Usage is not attributed", "用量尚未歸屬"],
+	no_adopted_schedule_baseline: ["No adopted baseline", "尚無已採用的時程基準"],
+	no_explicit_finish_evidence: ["No finish evidence", "尚無結束證據"],
+	forecast_baseline_mismatch: ["Forecast uses another baseline", "預測使用不同基準"],
+	no_work_dependency_contract: ["Work dependencies unavailable", "無法取得工作相依"],
+	requirement_text_unavailable: ["Requirement text unavailable", "無法取得需求文字"],
+	multiple_explicit_milestones: ["Linked to several milestones", "已連結多個里程碑"],
+	requirement_dependency_outside_baseline: ["Dependency outside this baseline", "相依項目不在此基準內"],
+	binding_page_truncated: ["Some work links were not loaded", "部分工作連結尚未載入"],
+	work_item_unavailable: ["Work item unavailable", "無法取得工作項目"],
+	attempt_links_truncated: ["Some attempt links were not loaded", "部分執行嘗試連結尚未載入"],
+	operation_record_missing: ["Operation record unavailable", "無法取得操作紀錄"],
+	task_record_missing: ["Task record unavailable", "無法取得任務紀錄"],
+	multiple_explicit_runs: ["Several runs are linked", "已連結多筆執行紀錄"],
+	session_not_observed: ["Not observed yet", "尚未觀察到"],
+	terminal_time_unrecorded: ["End time not recorded", "尚無結束時間紀錄"],
+	state_time_unrecorded: ["State time not recorded", "尚無狀態時間紀錄"],
+	multiple_explicit_parents: ["Linked to several parents", "已連結多個上層項目"],
+	attempt_finished_is_not_work_completion: ["Attempt finished; work completion unknown", "執行嘗試已結束，工作是否完成仍未知"],
+	inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
+	mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
+	issue_title_unavailable: ["Issue title unavailable", "無法取得議題標題"]
+});
+function reasonLabel(reason, locale = globalThis.navigator?.language || "zh-TW") {
+	return (Object.hasOwn(reasonVocabulary, reason) ? reasonVocabulary[reason] : reasonVocabulary.not_available)[locale.toLowerCase().startsWith("zh") ? 1 : 0];
+}
 //#endregion
 //#region src/pm-ahp-observer-strings.js
 var ahpObserverStrings = {
@@ -5278,6 +5407,7 @@ var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
 		...uiStrings["zh-TW"],
+		...scheduleStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
@@ -6743,6 +6873,7 @@ var STRINGS = {
 	en: {
 		...pmStrings.en,
 		...uiStrings.en,
+		...scheduleStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
@@ -8488,11 +8619,73 @@ function iconButton({ icon, label, ...attrs }) {
 		class: "ui-button ghost ui-icon-button"
 	});
 }
+function choices({ options, value, onChange = () => {}, label }, isTabs) {
+	const root = h$1("div", {
+		class: isTabs ? "ui-tabs" : "ui-segmented",
+		role: isTabs ? "tablist" : "radiogroup",
+		"aria-label": label
+	});
+	const buttons = options.map((option) => h$1("button", {
+		type: "button",
+		role: isTabs ? "tab" : "radio",
+		id: option.id || uid(),
+		"aria-controls": isTabs ? option.panel : null,
+		disabled: option.disabled,
+		onclick: () => select(option.value)
+	}, option.label));
+	function select(next, notify = true) {
+		value = next;
+		buttons.forEach((node, i) => {
+			const active = options[i].value === value;
+			node.tabIndex = active ? 0 : -1;
+			node.setAttribute(isTabs ? "aria-selected" : "aria-checked", String(active));
+		});
+		if (notify) onChange(value);
+	}
+	root.addEventListener("keydown", (event) => {
+		if (![
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const enabled = buttons.filter((node) => !node.disabled), current = enabled.indexOf(document.activeElement);
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		next.focus();
+		next.click();
+	});
+	root.append(...buttons);
+	select(options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value, false);
+	root.setValue = (next) => select(next, false);
+	return root;
+}
+var segmented = (options) => choices(options, false);
+function statusPill(status) {
+	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
+	return h$1("span", {
+		class: `ui-pill tone-${statusVocabulary[key].tone}`,
+		"data-status": key
+	}, t("ui_status_" + key));
+}
 function pageHeader({ title, pill, meta, actions = [], overflow } = {}) {
 	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, h$1("h1", {}, title), pill), meta ? h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
 }
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
+}
+function emptyState({ icon, title, text, action }) {
+	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
+}
+function skeleton(rows = 3) {
+	return h$1("div", {
+		class: "ui-skeleton",
+		role: "status",
+		"aria-label": t("ui_loading")
+	}, ...Array.from({ length: Math.min(100, Math.max(0, rows)) }, () => h$1("div", { "aria-hidden": "true" })));
 }
 var disclosures = new Map();
 function disclosure({ label, body, open = false, key }) {
@@ -8507,6 +8700,33 @@ function disclosure({ label, body, open = false, key }) {
 		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
 	});
 	return root;
+}
+function inlineError({ error, retry }) {
+	return h$1("div", {
+		class: "ui-inline-error",
+		role: "alert"
+	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+		size: "sm",
+		variant: "ghost",
+		label: t("ui_retry"),
+		onClick: retry
+	}) : null);
+}
+function agentMark(cli) {
+	const [initials, label] = {
+		codex: ["CX", "Codex"],
+		claude: ["CL", "Claude"],
+		grok: ["GK", "Grok"],
+		gemini: ["GM", "Gemini"],
+		bat: ["BT", "BAT"],
+		pm: ["PM", "PM"]
+	}[String(cli).toLowerCase()] || ["?", t("ui_status_unknown")];
+	return h$1("span", {
+		class: "ui-agent-mark",
+		role: "img",
+		"aria-label": label,
+		title: label
+	}, initials);
 }
 function menu({ button: trigger, items }) {
 	const panel = h$1("div", {
@@ -8713,7 +8933,7 @@ function availableProjectViews(caps) {
 		overview: pm.brief_snapshots || pm.lifecycle?.version === 1,
 		discussions: pm.version === 1,
 		requirements: pm.work_evidence || pm.work_package_prepare || pm.spec_sources || pm.quality_reviews?.version === 1 || pm.spec_materialization?.version === 1 || pm.package_handoff?.available || pm.issue_mapping || pm.engineering_delivery?.contract === "pm-engineering-delivery/v1" || pm.plan_drafting && pm.kanban && pm.brief_snapshots,
-		schedule: pm.roadmap || pm.sprints,
+		schedule: caps?.features?.pm_schedule?.version === 1 || pm.roadmap || pm.sprints,
 		dependencies: pm.maintenance_policy?.version === 1 || pm.release_baselines,
 		issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare,
 		agents: caps?.features?.pm_resources || pm.ahp_observation?.contract === "ahp_observer_v1",
@@ -8737,7 +8957,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
+function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -19914,6 +20134,746 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	};
 }
 //#endregion
+//#region src/pm-schedule-model.js
+var DAY = 864e5;
+var ZOOM = {
+	day: 48,
+	week: 24,
+	month: 8
+};
+function dayNumber(value) {
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value)) return null;
+	const n = Date.parse(value.slice(0, 10) + "T00:00:00Z");
+	return Number.isFinite(n) ? n / DAY : null;
+}
+var firstLine = (row) => String(row.title || "").split(/\r?\n/)[0];
+var sessionAttempt = (row) => row.kind === "attempt" && row.id.startsWith("attempt:session:");
+function spans(row) {
+	if (sessionAttempt(row)) return [];
+	return [
+		"baseline",
+		"forecast",
+		"actual"
+	].flatMap((kind) => {
+		const span = row[kind];
+		if (!span) return [];
+		const start = dayNumber(span.start), end = dayNumber(span.end);
+		if (start === null && end === null) return [];
+		return [{
+			kind,
+			start,
+			end: start !== null && end !== null && end < start ? null : end,
+			open: kind === "actual" && (end === null || start !== null && end < start),
+			recordedOpen: span.open
+		}];
+	});
+}
+function chartRange(rows) {
+	const days = rows.flatMap((row) => spans(row).flatMap((span) => [span.start, span.end])).filter((n) => n !== null);
+	return days.length ? {
+		start: Math.min(...days),
+		end: Math.max(...days)
+	} : null;
+}
+function milestoneDelta(row) {
+	const baseline = dayNumber(row.baseline?.start), forecast = dayNumber(row.forecast?.start);
+	return baseline === null || forecast === null ? null : forecast - baseline;
+}
+function scheduleRef(row, data) {
+	const refs = row.refs || {};
+	if (row.kind === "milestone") return {
+		kind: "milestone",
+		id: refs.milestone_id,
+		revision_id: data.baseline?.revision_id
+	};
+	if (row.kind === "requirement") return {
+		kind: "requirement",
+		id: refs.requirement_id,
+		revision_id: refs.plan_revision_id
+	};
+	if (row.kind === "issue") return {
+		kind: "issue_mapping",
+		id: row.id.slice(6)
+	};
+	const workId = refs.work_item_id || (row.kind === "attempt" && row.parent_id?.startsWith("work:") ? row.parent_id.slice(5) : null);
+	return workId ? {
+		kind: "work_item",
+		id: workId
+	} : null;
+}
+async function readSchedule(api, workspaceId, check) {
+	const all = new Map(), notes = new Map(), reasons = new Set();
+	let after, frame, partial = false;
+	for (let page = 0; page < 10; page++) {
+		const query = new URLSearchParams({ limit: "100" });
+		if (after) query.set("after", after);
+		const next = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/schedule?${query}`);
+		check();
+		if (next?.workspace_id !== workspaceId || !Array.isArray(next.rows) || !Array.isArray(next.unscheduled)) throw Error("PM_SCHEDULE_INVALID");
+		if (frame && JSON.stringify([frame.baseline, frame.forecast]) !== JSON.stringify([next.baseline, next.forecast])) throw Error("PM_SCHEDULE_CHANGED");
+		frame = next;
+		for (const row of [...next.rows, ...next.unscheduled]) all.set(row.id, row);
+		for (const note of next.unknown || []) notes.set(JSON.stringify(note), note);
+		if (next.partial || next.truncated) {
+			partial = true;
+			reasons.add("schedule_page_partial");
+		}
+		for (const key of [
+			"attempts_truncated",
+			"attempts_unavailable",
+			"work_bindings_truncated",
+			"issues_truncated"
+		]) if (next.coverage?.[key]) reasons.add(key);
+		if (next.next_cursor === null) break;
+		if (typeof next.next_cursor !== "string" || !next.next_cursor || after === next.next_cursor) throw Error("PM_SCHEDULE_INVALID");
+		after = next.next_cursor;
+		if (page === 9) {
+			partial = true;
+			reasons.add("schedule_page_limit");
+		}
+	}
+	const rows = [...all.values()];
+	return {
+		...frame,
+		rows,
+		unscheduled: rows.filter((row) => !spans(row).length),
+		range: chartRange(rows),
+		unknown: [...notes.values()],
+		partial,
+		reasons: [...reasons]
+	};
+}
+function scheduleTree(rows, collapsed) {
+	const byId = new Map(rows.map((row) => [row.id, row])), included = new Set();
+	for (const row of rows.filter((row) => spans(row).length)) {
+		let next = row;
+		const path = new Set();
+		while (next && !path.has(next.id)) {
+			included.add(next.id);
+			path.add(next.id);
+			next = byId.get(next.parent_id);
+		}
+	}
+	const children = new Map();
+	for (const row of rows.filter((row) => included.has(row.id) && !sessionAttempt(row))) {
+		const parent = included.has(row.parent_id) ? row.parent_id : row.kind === "milestone" ? null : "unassigned";
+		if (!children.has(parent)) children.set(parent, []);
+		children.get(parent).push(row);
+	}
+	const visible = [], visited = new Set();
+	function add(row, depth, parent) {
+		if (visited.has(row.id)) return;
+		visited.add(row.id);
+		const nested = children.get(row.id) || [];
+		visible.push({
+			row,
+			depth,
+			parent,
+			expandable: nested.length > 0
+		});
+		if (!collapsed.has(row.id)) for (const child of nested) add(child, depth + 1, row.id);
+	}
+	for (const row of children.get(null) || []) add(row, 1, null);
+	if (children.has("unassigned")) add({
+		id: "unassigned",
+		kind: "group",
+		title: "",
+		status: "unknown"
+	}, 1, null);
+	for (const row of rows.filter((row) => included.has(row.id))) if (!visited.has(row.id) && !byId.has(row.parent_id)) add(row, 1, null);
+	return visible;
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews.has(from) ? from : "",
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+//#endregion
+//#region src/pm-schedule-inspector.js
+function notObserved(row, data) {
+	return sessionAttempt(row) && row.status === "unknown" && !row.refs?.recorded_state && !row.refs?.agent && (data.unknown || []).some((note) => note.reason === "session_not_observed");
+}
+function rowStatus(row, data) {
+	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
+}
+function dateRange(span) {
+	if (!span) return t("sched_no_dates");
+	const start = span.start?.slice(0, 10), end = span.end?.slice(0, 10);
+	return [start || "—", end && (!start || end >= start) ? end : t("sched_open")].join(" → ");
+}
+var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
+var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
+function render(row, { workspaceId, data }) {
+	const refs = row.refs || {}, work = row.kind === "attempt" ? data.rows.find((value) => value.id === row.parent_id) : row;
+	const served = work?.refs || refs;
+	const requirements = data.rows.filter((value) => value.kind === "requirement" && value.refs?.plan_revision_id === served.plan_revision_id && (served.requirement_ids || [served.requirement_id]).includes(value.refs?.requirement_id));
+	const attempts = data.rows.filter((value) => value.kind === "attempt" && value.parent_id === (work?.id || row.id));
+	const sessions = row.kind === "attempt" ? [row] : attempts;
+	const status = section("status", rowStatus(row, data));
+	for (const attempt of sessions) {
+		const agent = attempt.refs?.agent, session = attempt.refs?.session;
+		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
+	}
+	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", {}, attempt.title), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
+	if (attempts.length) status.append(disclosure({
+		label: t("sched_attempts"),
+		body: attemptList,
+		open: true
+	}));
+	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || row.id;
+	const links = h$1("div", { class: "schedule-inspector-actions" }, h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")), h$1("a", {
+		class: "ui-button secondary",
+		href: discussHref({
+			workspaceId,
+			refs: [scheduleRef(row, data)],
+			title: row.title,
+			from: "schedule"
+		}),
+		"data-schedule-discuss": ""
+	}, t("sched_propose")));
+	const notes = [...data.unknown || [], ...row.notes || []];
+	const details = disclosure({
+		label: t("sched_details"),
+		body: h$1("div", {}, h$1("div", { class: "schedule-full-title" }, row.title), ...[
+			"baseline",
+			"forecast",
+			"actual"
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(note.reason), h$1("code", {}, note.reason))), h$1("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			id: row.id,
+			refs,
+			baseline: data.baseline,
+			forecast: data.forecast,
+			as_of: data.as_of
+		}, null, 2)))
+	});
+	details.dataset.scheduleSection = "details";
+	return h$1("div", { class: "schedule-inspector-content" }, section("requirement", ...requirements.length ? requirements.map((value) => h$1("p", { class: "schedule-full-title" }, value.title)) : [unknown()]), status, section("result", unknown()), section("blocker", ["blocked", "waiting"].includes(row.status) ? statusPill(row.status) : unknown(), links), section("delivery", [
+		"accepted",
+		"merged",
+		"deployed"
+	].includes(row.status) ? statusPill(row.status) : unknown()), details);
+}
+//#endregion
+//#region src/pm-schedule.js
+function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
+	const preference = viewState(namespace, workspaceId, "schedule");
+	let zoom = Object.hasOwn(ZOOM, preference.zoom) ? preference.zoom : "week";
+	const collapsed = new Set(preference.collapsed || []);
+	let selected = preference.selected || null, active = false, serial = 0, data = null, panel = null, panelSignature = "", signature = "";
+	let domain, scale, visible = [], focusId = null;
+	const viewport = h$1("div", {
+		class: "schedule-viewport",
+		tabindex: 0,
+		role: "region",
+		"aria-label": t("sched_timeline")
+	});
+	const chart = h$1("div", { class: "schedule-chart" }), meta = h$1("div", {
+		class: "schedule-meta",
+		"aria-live": "polite"
+	});
+	const unscheduled = h$1("div", { class: "schedule-unscheduled" }), error = h$1("div");
+	const main = h$1("div", { class: "schedule-main" }, meta, error, viewport, unscheduled);
+	viewport.append(chart);
+	const legend = h$1("div", {
+		class: "schedule-legend",
+		"aria-label": t("sched_legend")
+	}, ...[
+		"baseline",
+		"forecast",
+		"actual",
+		"milestone"
+	].map((kind) => h$1("span", {}, h$1("i", {
+		class: `schedule-swatch ${kind}`,
+		"aria-hidden": "true"
+	}, kind === "milestone" ? "◆" : null), t("sched_" + kind))));
+	const toolbar = h$1("div", { class: "schedule-toolbar" }, segmented({
+		label: t("sched_zoom"),
+		options: Object.keys(ZOOM).map((value) => ({
+			value,
+			label: t("sched_" + value)
+		})),
+		value: zoom,
+		onChange: (value) => {
+			saveScroll();
+			zoom = value;
+			preference.zoom = zoom;
+			draw();
+		}
+	}), button({
+		label: t("sched_today"),
+		variant: "ghost",
+		onClick: today
+	}), legend);
+	const layout = h$1("div", { class: "schedule-layout" }, main);
+	const element = h$1("section", {
+		"data-pm-schedule": "",
+		class: "pm-schedule"
+	}, toolbar, layout);
+	viewport.addEventListener("scroll", saveScroll, { passive: true });
+	function remember() {
+		Object.assign(preference, {
+			selected,
+			zoom,
+			collapsed: [...collapsed].slice(0, 1e3)
+		});
+	}
+	function saveScroll() {
+		if (!domain || !viewport.clientWidth) return;
+		preference.anchor = domain.start + viewport.scrollLeft / scale;
+		preference.top = viewport.scrollTop;
+	}
+	function restoreScroll() {
+		viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		viewport.scrollTop = preference.top || 0;
+	}
+	function today() {
+		if (!domain) return;
+		const x = (dayNumber(new Date().toISOString()) - domain.start) * scale;
+		viewport.scrollLeft = Math.max(0, x - Math.max(0, viewport.clientWidth - 328) / 2);
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = Math.max(0, x - mini.clientWidth / 2);
+		saveScroll();
+	}
+	function closePanel(clear = true) {
+		const old = selected;
+		if (!clear) selected = null;
+		panel?.close();
+		panel = null;
+		panelSignature = "";
+		if (!clear) {
+			selected = old;
+			remember();
+		}
+	}
+	function showPanel() {
+		const row = data?.rows.find((row) => row.id === selected);
+		if (!row || !active) {
+			closePanel(!row);
+			return;
+		}
+		const next = JSON.stringify([
+			row,
+			data.rows.filter((value) => value.parent_id === row.id || value.kind === "requirement"),
+			data.unknown,
+			data.baseline,
+			data.forecast
+		]);
+		if (panel && next === panelSignature) return;
+		if (!panel) {
+			panel = inspector({
+				title: firstLine(row),
+				onClose: () => {
+					const previous = selected;
+					panel = null;
+					panelSignature = "";
+					selected = null;
+					remember();
+					markSelection();
+					if (active && previous) element.querySelector(`[data-schedule-select="${CSS.escape(previous)}"]`)?.focus({ preventScroll: true });
+				}
+			});
+			panel.dataset.scheduleInspector = "";
+			layout.append(panel);
+		}
+		panel.querySelector("h2").textContent = firstLine(row);
+		const opened = [...panel.body.querySelectorAll("details")].map((node) => node.open), scroll = panel.scrollTop;
+		const focus = panel.contains(document.activeElement) ? document.activeElement?.getAttribute("data-schedule-discuss") : null;
+		panel.body.replaceChildren(render(row, {
+			workspaceId,
+			data
+		}));
+		panelSignature = next;
+		[...panel.body.querySelectorAll("details")].forEach((node, i) => {
+			if (opened[i] !== void 0) node.open = opened[i];
+		});
+		panel.scrollTop = scroll;
+		if (focus !== null) panel.querySelector("[data-schedule-discuss]")?.focus({ preventScroll: true });
+	}
+	function markSelection() {
+		for (const node of element.querySelectorAll("[data-schedule-select]")) {
+			const current = node.dataset.scheduleSelect === selected;
+			node.setAttribute("aria-selected", String(current));
+			node.closest(".schedule-row")?.classList.toggle("selected", current);
+		}
+	}
+	function select(id, opener) {
+		opener?.focus({ preventScroll: true });
+		if (panel && id !== selected) closePanel();
+		selected = id;
+		focusId = id;
+		remember();
+		markSelection();
+		showPanel();
+	}
+	const label = (row) => row.kind === "group" ? t("sched_unassigned") : firstLine(row);
+	function toggle(id) {
+		collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
+		remember();
+		draw();
+	}
+	function focusRow(id) {
+		focusId = id;
+		for (const node of chart.querySelectorAll("[role=treeitem]")) node.tabIndex = node.dataset.scheduleSelect === id ? 0 : -1;
+		chart.querySelector(`[data-schedule-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+	}
+	function keydown(event, item, index) {
+		if (event.target.closest("button")) return;
+		const { row, expandable, parent } = item;
+		if (![
+			"ArrowDown",
+			"ArrowUp",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End",
+			"Enter",
+			" "
+		].includes(event.key)) return;
+		event.preventDefault();
+		if (event.key === "Enter" || event.key === " ") {
+			if (row.kind === "group") toggle(row.id);
+			else select(row.id, event.currentTarget);
+			return;
+		}
+		if (event.key === "ArrowRight") {
+			if (expandable && collapsed.has(row.id)) {
+				toggle(row.id);
+				focusRow(row.id);
+			} else if (expandable) focusRow(visible[index + 1]?.row.id);
+			return;
+		}
+		if (event.key === "ArrowLeft") {
+			if (expandable && !collapsed.has(row.id)) {
+				toggle(row.id);
+				focusRow(row.id);
+			} else if (parent) focusRow(parent);
+			return;
+		}
+		const next = event.key === "Home" ? 0 : event.key === "End" ? visible.length - 1 : Math.max(0, Math.min(visible.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
+		focusRow(visible[next]?.row.id);
+	}
+	function track(row, axis = false) {
+		const node = h$1("div", {
+			class: "schedule-track" + (axis ? " schedule-axis" : ""),
+			"data-schedule-track": row?.id
+		});
+		node.style.width = `${(domain.end - domain.start + 1) * scale}px`;
+		const todayDay = dayNumber(new Date().toISOString());
+		if (zoom === "day") {
+			for (let date = domain.start; date <= domain.end; date++) if ([0, 6].includes(new Date(date * 864e5).getUTCDay())) {
+				const weekend = h$1("span", {
+					class: "schedule-weekend",
+					"aria-hidden": "true"
+				});
+				weekend.style.left = `${(date - domain.start) * scale}px`;
+				weekend.style.width = `${scale}px`;
+				node.append(weekend);
+			}
+		}
+		if (axis) {
+			const ticks = Math.max(zoom === "day" ? 1 : zoom === "week" ? 7 : 30, Math.ceil((domain.end - domain.start) / 300));
+			for (let date = domain.start; date <= domain.end; date += ticks) {
+				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
+					month: "short",
+					day: zoom === "month" ? void 0 : "numeric",
+					timeZone: "UTC"
+				}).format(new Date(date * DAY)));
+				tick.style.left = `${(date - domain.start) * scale}px`;
+				node.append(tick);
+			}
+		} else if (row) {
+			const rowSpans = spans(row);
+			for (const span of rowSpans) {
+				const start = span.start ?? span.end, end = span.end ?? start;
+				const marker = row.kind === "milestone";
+				const bar = h$1("span", {
+					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
+					"data-schedule-bar": span.kind,
+					"data-open": span.open ? "true" : null,
+					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${span.open ? t("sched_open") : row[span.kind].end || "—"}`
+				}, marker ? "◆" : null);
+				bar.style.left = `${(start - domain.start) * scale}px`;
+				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
+				if (span.open) bar.append(h$1("span", { class: "schedule-bar-label" }, t("sched_open")));
+				else if (["waiting", "blocked"].includes(row.status)) bar.append(h$1("span", { class: "schedule-bar-label" }, t("ui_status_" + row.status)));
+				node.append(bar);
+			}
+			const delta = milestoneDelta(row);
+			if (row.kind === "milestone" && delta !== null && delta !== 0) {
+				const value = h$1("span", {
+					class: "schedule-delta",
+					"data-schedule-delta": ""
+				}, t("sched_delta", { n: delta > 0 ? "+" + delta : delta }));
+				value.style.left = `${(dayNumber(row.forecast.start) - domain.start) * scale + 20}px`;
+				node.append(value);
+			}
+		}
+		const line = h$1("span", {
+			class: "schedule-today",
+			"aria-label": axis ? t("sched_today") : null,
+			"aria-hidden": axis ? null : "true"
+		});
+		line.style.left = `${(todayDay - domain.start) * scale}px`;
+		node.append(line);
+		return node;
+	}
+	function draw() {
+		if (!data) return;
+		const focused = chart.contains(document.activeElement) ? document.activeElement.closest("[data-schedule-select]")?.dataset.scheduleSelect : null;
+		const now = dayNumber(new Date().toISOString());
+		domain = {
+			start: Math.min(data.range?.start ?? now, now) - 3,
+			end: Math.max(data.range?.end ?? now, now) + 5
+		};
+		scale = Math.min(ZOOM[zoom], 12e4 / (domain.end - domain.start + 1));
+		chart.style.setProperty("--schedule-width", `${(domain.end - domain.start + 1) * scale}px`);
+		visible = scheduleTree(data.rows, collapsed);
+		const axis = h$1("div", { class: "schedule-row schedule-head" }, h$1("div", { class: "schedule-tree-cell" }, t("sched_item")), h$1("div", { class: "schedule-lane" }, track(null, true)));
+		const tree = h$1("div", {
+			role: "tree",
+			"aria-label": t("sched_tree")
+		});
+		visible.forEach((item, index) => {
+			const { row, depth, expandable } = item;
+			const expand = expandable ? button({
+				icon: "chevron-right",
+				variant: "ghost",
+				label: null,
+				"aria-label": t(collapsed.has(row.id) ? "ui_expand" : "ui_collapse", { title: label(row) }),
+				tabindex: -1,
+				"aria-expanded": String(!collapsed.has(row.id)),
+				onClick: (event) => {
+					event.stopPropagation();
+					toggle(row.id);
+					focusRow(row.id);
+				}
+			}) : h$1("span", { class: "schedule-indent" });
+			const dates = [
+				"baseline",
+				"forecast",
+				"actual"
+			].filter((key) => row[key]).map((key) => `${t("sched_" + key)} ${row[key].start?.slice(0, 10) || "—"}${row[key].end && row[key].end !== row[key].start ? " → " + row[key].end.slice(0, 10) : ""}`);
+			const cell = h$1("div", {
+				class: "schedule-tree-cell",
+				role: "treeitem",
+				"aria-level": depth,
+				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
+				"aria-label": label(row),
+				tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
+				"data-schedule-select": row.id,
+				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
+				onkeydown: (event) => keydown(event, item, index)
+			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
+				class: "schedule-title",
+				title: row.title
+			}, label(row)), h$1("span", { class: "schedule-date-range" }, dates.join(" · ") || t("sched_no_dates"))), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
+			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
+			const lane = h$1("div", {
+				class: "schedule-lane",
+				tabindex: 0,
+				role: "region",
+				"aria-label": `${t("sched_timeline")} · ${label(row)}`
+			}, track(row));
+			lane.addEventListener("scroll", () => {
+				if (lane.clientWidth) {
+					preference.mini ||= {};
+					preference.mini[row.id] = domain.start + lane.scrollLeft / scale;
+				}
+			});
+			const line = h$1("div", {
+				class: "schedule-row",
+				"data-schedule-row": row.id
+			}, cell, lane);
+			tree.append(line);
+		});
+		chart.replaceChildren(axis, tree);
+		if (!visible.length) chart.replaceChildren(emptyState({ title: t("sched_empty") }));
+		restoreScroll();
+		markSelection();
+		for (const lane of chart.querySelectorAll(".schedule-lane")) {
+			const id = lane.firstElementChild?.dataset.scheduleTrack;
+			if (preference.mini?.[id] !== void 0) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
+		}
+		if (focused) focusRow(focused);
+	}
+	function renderData() {
+		const next = JSON.stringify([
+			data.rows,
+			data.range,
+			data.partial,
+			data.reasons,
+			data.unknown
+		]);
+		if (next !== signature) {
+			saveScroll();
+			signature = next;
+			const details = disclosure({
+				label: t("sched_details"),
+				key: `${namespace}:${workspaceId}:schedule:details`,
+				body: h$1("div", {}, h$1("p", {}, t("sched_as_of", { date: data.as_of })), ...[...data.reasons.map((reason) => ({ reason })), ...data.unknown].map((note) => h$1("p", {}, reasonLabel(note.reason), h$1("code", {}, note.reason))))
+			});
+			meta.replaceChildren(h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
+				variant: "ghost",
+				label: firstLine(row),
+				"data-schedule-select": row.id,
+				title: row.title,
+				onClick: (event) => select(row.id, event.currentTarget)
+			}), rowStatus(row, data))));
+			unscheduled.replaceChildren(disclosure({
+				label: t("sched_unscheduled", { n: data.unscheduled.length }),
+				key: `${namespace}:${workspaceId}:schedule:unscheduled`,
+				body: list
+			}));
+			draw();
+		}
+		if (selected && !data.rows.some((row) => row.id === selected)) {
+			closePanel();
+			selected = null;
+			remember();
+		}
+		showPanel();
+	}
+	function withdraw() {
+		serial++;
+		closePanel();
+		selected = null;
+		remember();
+		data = null;
+		signature = "";
+		domain = null;
+		chart.replaceChildren();
+		meta.replaceChildren();
+		unscheduled.replaceChildren();
+		error.replaceChildren();
+	}
+	async function refresh() {
+		if (!canRead()) {
+			withdraw();
+			return;
+		}
+		const ticket = ++serial;
+		if (!data) chart.replaceChildren(skeleton(6));
+		const check = () => {
+			alive();
+			if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
+		};
+		try {
+			const next = await readSchedule(api, workspaceId, check);
+			check();
+			if (data) {
+				const order = new Map(data.rows.map((row, index) => [row.id, index]));
+				next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+			}
+			data = next;
+			error.replaceChildren();
+			renderData();
+		} catch (failure) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			withdraw();
+			error.append(inlineError({
+				error: t(failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
+				retry: refresh
+			}));
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		setActive(value) {
+			active = value;
+			if (!value) {
+				saveScroll();
+				closePanel(false);
+			} else if (data) {
+				restoreScroll();
+				showPanel();
+			}
+		},
+		dispose() {
+			saveScroll();
+			remember();
+			active = false;
+			serial++;
+			closePanel(false);
+			data = null;
+		}
+	};
+}
+//#endregion
 //#region src/pm-roadmap.js
 function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -25721,6 +26681,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (roadmap) body.insertBefore(roadmap.box, content);
+	const schedule = workspaceId && !threadId && caps()?.features?.pm_schedule?.version === 1 ? workspaceSchedule({
+		api,
+		alive,
+		namespace,
+		workspaceId,
+		canRead: () => loaded && Boolean(workspace)
+	}) : null;
+	if (schedule) body.insertBefore(schedule.element, content);
 	const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban ? workspaceKanban({
 		h,
 		t,
@@ -26031,6 +26999,25 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}] : []]
 	});
 	if (lifecycle || evidence) headerActions.append(overflow);
+	const scheduleTools = schedule && (roadmap || sprints) ? menu({
+		button: iconButton({
+			icon: "more-horizontal",
+			label: t("ui_more"),
+			"data-schedule-tools": ""
+		}),
+		items: [...roadmap ? [{
+			label: t("sched_roadmap"),
+			onSelect: () => openPanel(t("sched_roadmap"), roadmap.box)
+		}] : [], ...sprints ? [{
+			label: t("ui_sprints"),
+			onSelect: () => openPanel(t("ui_sprints"), sprints.box)
+		}] : []]
+	}) : null;
+	if (scheduleTools) {
+		headerActions.append(scheduleTools);
+		if (roadmap) drawersHome.append(roadmap.box);
+		if (sprints) drawersHome.append(sprints.box);
+	}
 	function secondary(label, node) {
 		if (!node) return null;
 		const card = sectionCard({ body: disclosure({
@@ -26074,8 +27061,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"schedule",
-				roadmap?.box,
-				[["ui_sprints", sprints?.box]]
+				schedule?.element || roadmap?.box,
+				schedule ? [] : [["ui_sprints", sprints?.box]]
 			],
 			[
 				"dependencies",
@@ -26116,7 +27103,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sections: [region]
 			});
 		}
-		workbench = projectViews({
+		workbench = projectViews$1({
 			h,
 			t,
 			namespace,
@@ -26126,6 +27113,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			onSelect: (id) => {
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
+				schedule?.setActive(id === "schedule");
+				if (scheduleTools) {
+					scheduleTools.hidden = id !== "schedule";
+					overflow.hidden = id === "schedule";
+				}
 				window.scrollTo(0, 0);
 				if (id === "requirements") traceability?.activate();
 				detailPanel?.close();
@@ -26135,6 +27127,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		});
 		workbench.apply();
+		if (scheduleTools) {
+			scheduleTools.hidden = workbench.selected() !== "schedule";
+			overflow.hidden = workbench.selected() === "schedule";
+		}
 		if (view && view !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		if (primary) primary.hidden = workbench.selected() !== "overview";
 		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
@@ -26142,6 +27138,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const sourceSections = () => [
 		...groups.flatMap((group) => group.sections),
 		content,
+		schedule?.element,
 		resources?.element,
 		traceability?.element,
 		ahp?.element,
@@ -26841,6 +27838,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				maintenanceReview,
 				qualityReviews,
 				roadmap,
+				schedule,
 				kanban,
 				sprints,
 				meetings,
@@ -26874,6 +27872,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			publishContext();
 			if (workbench?.selected() === "requirements") await traceability?.activate();
 			resources?.setActive(workbench?.selected() === "agents");
+			schedule?.setActive(workbench?.selected() === "schedule");
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -26884,6 +27883,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				brief?.withdraw();
 				traceability?.withdraw();
 				resources?.withdraw();
+				schedule?.withdraw();
 				qualityReviews?.withdraw();
 				proposalReview?.withdraw();
 				qualitySelections.clear();
@@ -26957,7 +27957,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
 		}
-		if ((deliveries || workBatches || qualityReviews || maintenanceRepairs) && [
+		if ((deliveries || workBatches || qualityReviews || maintenanceRepairs || schedule) && [
 			"operation",
 			"deployment",
 			"integration"
@@ -26969,10 +27969,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
 				await traceability?.refresh();
+				await schedule?.refresh();
 			});
 			return eventReads;
 		}
-		if ((kanban || qualityReviews || maintenanceRepairs) && [
+		if ((kanban || qualityReviews || maintenanceRepairs || schedule) && [
 			"work_item",
 			"project",
 			"task",
@@ -26985,6 +27986,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
 				await traceability?.refresh();
+				await schedule?.refresh();
 			});
 			return eventReads;
 		}
@@ -27009,6 +28011,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		overflow.dispose();
 		traceability?.dispose();
 		resources?.dispose();
+		schedule?.dispose();
+		scheduleTools?.dispose();
 		proposalReview?.dispose();
 		ahp?.dispose();
 		for (const value of forms) value.dispose();

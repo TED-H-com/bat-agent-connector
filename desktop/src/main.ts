@@ -1,6 +1,7 @@
 import "./ui/tokens.css";
 import "./ui/components.css";
 import "./pm-workbench.css";
+import "./pm-schedule.css";
 import "./pm-maintenance-review.css";
 import "./pm-work-batches.css";
 import "./pm-spec-materialization.css";

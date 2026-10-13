@@ -1,3 +1,4 @@
+import {scheduleStrings} from './pm-schedule-strings.js';
 import {uiStrings} from './ui/ui-strings.js';
 import {ahpObserverStrings} from './pm-ahp-observer-strings.js';
 import {pmMaintenanceRepairsStrings} from './pm-maintenance-repairs-strings.js';
@@ -20,6 +21,7 @@ const STRINGS = {
   "zh-TW": {
     ...pmStrings["zh-TW"],
     ...uiStrings["zh-TW"],
+    ...scheduleStrings["zh-TW"],
     ...ahpObserverStrings["zh-TW"],
     ...qualityProjectionStrings["zh-TW"],
     ...pmQualityReviewsStrings["zh-TW"],
@@ -909,6 +911,7 @@ const STRINGS = {
   en: {
     ...pmStrings.en,
     ...uiStrings.en,
+    ...scheduleStrings.en,
     ...ahpObserverStrings.en,
     ...qualityProjectionStrings.en,
     ...pmQualityReviewsStrings.en,
