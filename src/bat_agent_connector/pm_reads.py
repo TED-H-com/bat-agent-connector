@@ -11,7 +11,7 @@ FIELDS = {
     "pm_dependencies_revisions_list": ("workspace_id", "after", "limit"),
     "pm_dependencies_impact_get": ("workspace_id", "dependency"),
     "pm_overview_get": ("workspace_id",),
-    "pm_resources_get": ("workspace_id", "since", "until", "tz"),
+    "pm_resources_get": ("workspace_id", "since", "until", "buckets", "tz"),
     "pm_schedule_get": ("workspace_id", "after", "limit"),
     "pm_register_list": ("workspace_id", "type", "status", "owner", "q", "after", "limit"),
     "pm_register_get": ("workspace_id", "row_id"),
@@ -133,7 +133,7 @@ def read(ops, principal, method, params):
     if method == "pm_resources_get":
         from .pm_resources import read as resources
         return resources(ops, principal, workspace_id, since=params.get("since"), until=params.get("until"),
-                         tz=params.get("tz"))
+                         tz=params.get("tz"), buckets=params.get("buckets"))
     if method == "pm_schedule_get":
         from .pm_schedule import read as schedule
         return schedule(ops, principal, workspace_id, after=params.get("after"), limit=params.get("limit"))
