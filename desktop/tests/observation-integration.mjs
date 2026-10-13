@@ -49,7 +49,7 @@ try {
   await expect(page.getByRole("heading", {name: "h1 · Discovery coverage"})).toBeVisible();
   await expect(page.getByText("Outside this scan", {exact: true})).toBeVisible();
   await page.getByRole('button', {name: 'Tools', exact: true}).click();
-  await page.getByRole("link", {name: "Sessions", exact: true}).click();
+  await page.getByRole("menuitem", {name: "Sessions", exact: true}).click();
   const inventoryRow = page.locator('[data-resource-id="h1/sess-claude-0001"]');
   await expect(inventoryRow).toBeVisible();
   await expect(inventoryRow).toContainText("Connector-managed");

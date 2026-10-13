@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- Add shared UX v2 light/dark tokens, accessible UI primitives and local Lucide icons.
+- Unify the Web/Tauri workspace shell with compact navigation, explicit bound work,
+  a mobile drawer, canonical PM view routes and namespace-scoped view preferences.
+- Organize existing PM tools into Overview, Discussions, Requirements, Schedule,
+  Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
+  expose reports and lifecycle through header menus without changing durable actions.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.

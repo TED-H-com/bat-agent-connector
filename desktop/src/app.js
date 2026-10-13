@@ -607,6 +607,7 @@ const onlineListeners = new Set();
 function onOnline(fn) { onlineListeners.add(fn); return () => onlineListeners.delete(fn); }
 function updateOnline(value) {
   state.online = value;
+  if (!value) shell?.pending({});
   for (const fn of onlineListeners) fn();
 }
 async function streamEvents() {

@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,pmRoute} from './pm-fixture.ts';
@@ -50,19 +51,19 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(statement).toBeVisible();await expect(statement).toBeEnabled();
     await expect(statement).toHaveValue('Keep an unsubmitted research question');expect(f.base.state.writes).toHaveLength(0);
   });
-  test('work and Sprint remain on one page with no repeated delivery count',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+  test('work and Sprint keep their sources across views without repeated delivery counts',async({page})=>{
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     await expect(page.locator('[data-pm-kanban]')).toHaveCount(1);await expect(page.locator('[data-pm-sprints]')).toHaveCount(1);await expect(page.locator('[data-pm-meetings]')).toHaveCount(1);
     await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await expect(card).not.toContainText('3 accepted sends');
-    await card.getByText('Execution and sources',{exact:true}).click();
+    await openPmSection(page,'board');await card.getByText('Execution and sources',{exact:true}).click();
     await expect(card).toContainText('3 accepted sends');
     await expect(page.locator('[data-pm-sprints]')).toContainText('A returning member can sign in');
     await expect(page.getByRole('tab')).toHaveCount(0);expect(f.kanban.state.writes).toHaveLength(0);
   });
   test('another client’s work and Sprint changes are read from central events',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     const card=page.locator(`[data-pm-kanban-work="${workId(1)}"]`);await expect(card).toContainText('Member login');
     f.kanban.state.cards[0].work.title='Login after review';f.publish('work_item');
     await expect(card).toContainText('Login after review',{timeout:10000});
@@ -72,9 +73,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(page.locator('[data-pm-meetings]')).toContainText('Discussion updated in another client',{timeout:10000});
   });
   test('failed workspace authorization hides previous facts and recovers the local draft',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);const region=page.locator('[data-pm-sprints]');
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');const region=page.locator('[data-pm-sprints]');
     await expect(region).toContainText('A returning member can sign in');
-    await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});await draft.fill('Keep this unsent direction');
     f.base.state.failRead=true;f.publish('pm_workspace');
@@ -84,9 +85,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(draft).toHaveValue('Keep this unsent direction');expect(f.sprint.state.writes).toHaveLength(0);
   });
   for(const bootstrapFails of [false,true])test(`access reset clears focused private facts and preserves drafts (bootstrap failure: ${bootstrapFails})`,async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     const region=page.locator('[data-pm-sprints]');await expect(region).toContainText('A returning member can sign in');
-    await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});
     await draft.fill('Preserve an unsubmitted direction');await expect(draft).toBeFocused();
@@ -96,14 +97,14 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(region).toBeHidden();expect(f.sprint.state.writes).toHaveLength(0);
     f.bootstrapFailure(false);f.base.state.failRead=false;f.changeAccess();
     await expect(region).toBeVisible({timeout:15000});
-    await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     await expect(draft).toHaveValue('Preserve an unsubmitted direction');expect(f.sprint.state.writes).toHaveLength(0);
   });
   test('discussion draft and explicit completion recover the original command after reload',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
-    await openAction(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('We reviewed the evidence and retained the current direction.');
+    await openPmSection(page,'discussions','ui_meetings');await openAction(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('We reviewed the evidence and retained the current direction.');
     await reason(page,'note');await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();
     await expect(page.locator('[data-pm-meetings]')).toContainText('We reviewed the evidence');
     await openAction(page,'draft');const editor=action(page,'draft');
@@ -117,16 +118,16 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await reason(page,'complete');f.meetings.state.lost=true;
     await action(page,'complete').getByRole('button',{name:'Complete discussion',exact:true}).click();
     await expect(action(page,'complete')).toContainText('Reply unavailable');const original=structuredClone(f.meetings.state.writes.at(-1));
-    await page.reload();await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
+    await page.reload();await openPmSection(page,'discussions','ui_meetings');await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
     expect(f.meetings.state.writes.at(-1)).toEqual(original);expect(f.meetings.state.ops.size).toBe(3);
     await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
     expect(f.sprint.state.writes).toHaveLength(0);expect(f.kanban.state.writes).toHaveLength(0);
   });
   test('an older child response cannot reveal facts after a newer workspace read fails',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     const card=page.locator(`[data-pm-kanban-work="${workId(1)}"]`);await expect(card).toContainText('Member login');
     f.kanban.state.cards[0].work.title='Older response held after revoke';f.kanban.state.holdNext=true;
-    await page.locator('.pm-main > .pm-heading').getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.locator('.pm-main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true}).click();
     await expect.poll(()=>f.kanban.state.held.length).toBe(1);
     f.base.state.failRead=true;f.publish('pm_workspace');await expect(page.locator('[data-pm-kanban]')).toBeHidden({timeout:10000});
     f.kanban.state.held.shift()();await expect(card).toContainText('Older response held after revoke');
@@ -136,7 +137,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`management workspace ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'board');
   await expect(page.locator('[data-pm-sprints] h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
   await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');

@@ -125,6 +125,7 @@ var statusVocabulary = Object.freeze({
 });
 var uiStrings = {
 	en: {
+		ui_search_work: "Search work",
 		ui_report_versions: "Versions",
 		ui_save_snapshot: "Save snapshot",
 		ui_compare: "Compare",
@@ -191,6 +192,7 @@ var uiStrings = {
 		ui_deliveries: "Work deliveries"
 	},
 	"zh-TW": {
+		ui_search_work: "搜尋工作",
 		ui_report_versions: "版本",
 		ui_save_snapshot: "儲存快照",
 		ui_compare: "比較",
@@ -8466,18 +8468,23 @@ function menu({ button: trigger, items }) {
 		role: "menuitem",
 		"data-menu-key": item.key,
 		tabindex: -1,
-		disabled: item.disabled,
-		onclick: () => {
+		disabled: item.href ? null : item.disabled,
+		"aria-disabled": item.disabled ? "true" : null,
+		onclick: (event) => {
+			if (item.disabled) {
+				event.preventDefault();
+				return;
+			}
 			close();
 			item.onSelect?.();
 		}
 	}, nodeIcon(item.icon), item.label));
 	panel.append(...controls);
+	const enabledControls = () => controls.filter((node) => node.getAttribute("aria-disabled") !== "true");
 	function close(restore = true) {
 		panel.hidden = true;
 		trigger.setAttribute("aria-expanded", "false");
 		document.removeEventListener("pointerdown", outside);
-		document.removeEventListener("keydown", keys);
 		if (restore && root.isConnected) trigger.focus();
 	}
 	function outside(event) {
@@ -8496,22 +8503,22 @@ function menu({ button: trigger, items }) {
 			"End"
 		].includes(event.key)) {
 			event.preventDefault();
-			const enabled = controls.filter((node) => !node.disabled), at = enabled.indexOf(document.activeElement);
+			const enabled = enabledControls(), at = enabled.indexOf(document.activeElement);
 			enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (at + (event.key === "ArrowUp" ? -1 : 1) + enabled.length) % enabled.length]?.focus();
 		}
 	}
-	function open() {
+	panel.addEventListener("keydown", keys);
+	function open(last = false) {
 		panel.hidden = false;
 		trigger.setAttribute("aria-expanded", "true");
-		controls.find((node) => !node.disabled)?.focus();
+		enabledControls().at(last ? -1 : 0)?.focus();
 		document.addEventListener("pointerdown", outside);
-		document.addEventListener("keydown", keys);
 	}
 	trigger.addEventListener("click", () => panel.hidden ? open() : close());
 	trigger.addEventListener("keydown", (event) => {
 		if (["ArrowDown", "ArrowUp"].includes(event.key)) {
 			event.preventDefault();
-			open();
+			open(event.key === "ArrowUp");
 		}
 	});
 	root.close = close;
@@ -8776,7 +8783,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	aside.addEventListener("click", (event) => {
 		if (event.target.closest("a, [data-pm-view]") && !scrim.hidden) {
 			closeDrawer(false);
-			main.focus();
+			main.focus({ preventScroll: true });
 		}
 	});
 	const pendingCount = h$1("span", {
@@ -8826,10 +8833,14 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			items: [...workspaces.map((row) => ({
 				label: row.name,
 				href: `#/pm/${row.workspace_id}`
-			})), ...creator ? [{
+			})), ...creator && currentRoute === "pm" ? [{
 				label: t("ui_new_workspace"),
 				icon: "plus",
-				onSelect: creator
+				onSelect: () => {
+					closeDrawer(false);
+					if (!media.matches) toggle.focus();
+					creator?.();
+				}
 			}] : [{
 				label: t("ui_new_workspace"),
 				href: "#/pm/new"
@@ -8973,7 +8984,18 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			});
 		}
 	}
-	const off = onEvents((event) => ["pm_workspace", "pm_lifecycle"].includes(event.resource_type) ? refresh() : void 0);
+	const off = onEvents((event) => {
+		if ([
+			"session",
+			"work_item",
+			"operation",
+			"host"
+		].includes(event.resource_type)) {
+			pendingCount.hidden = true;
+			pendingCount.textContent = "";
+		}
+		return ["pm_workspace", "pm_lifecycle"].includes(event.resource_type) ? refresh() : void 0;
+	});
 	render();
 	return {
 		update,
@@ -25348,8 +25370,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		label: t("pm_refresh"),
 		onClick: () => void load()
 	});
+	const phasePill = h("span", {
+		class: "ui-pill tone-neutral",
+		hidden: true
+	});
 	const heading = pageHeader({
 		title,
+		pill: phasePill,
 		actions: [refresh]
 	});
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
@@ -25374,6 +25401,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	let lastList = [], lastThreadList = null;
 	function publishContext() {
+		const stage = lifecycle?.phase?.();
+		phasePill.hidden = ![
+			"idea",
+			"planning",
+			"development",
+			"maintain",
+			"paused",
+			"closed"
+		].includes(stage);
+		phasePill.textContent = phasePill.hidden ? "" : t("ui_phase_" + stage);
 		onContext({
 			workspace,
 			workspaces: lastList,
@@ -25777,12 +25814,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (resources) body.insertBefore(resources.element, content);
-	const drawersHome = h("div", { hidden: true }), phasePill = h("span", {
-		class: "ui-pill tone-neutral",
-		hidden: true
-	});
+	const drawersHome = h("div", { hidden: true });
 	body.append(drawersHome);
-	heading.querySelector(".ui-title-row").append(phasePill);
 	let detailPanel = null;
 	function openPanel(label, node) {
 		if (!node || !loaded) return;
@@ -25801,7 +25834,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	if (lifecycle) drawersHome.append(lifecycle.element);
 	const headerActions = heading.querySelector(".ui-header-actions");
-	const primary = brief?.box.querySelector(":scope > header .primary");
+	const primary = charter ? brief?.box.querySelector(":scope > header .primary") : null;
 	if (primary) {
 		headerActions.prepend(primary);
 		brief.box.querySelector(":scope > header")?.remove();
@@ -25812,6 +25845,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	});
 	if (charter && brief) {
 		for (const node of brief.box.querySelectorAll(":scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]")) reportTools.append(node);
+		drawersHome.append(reportTools);
+	} else if (brief && !threadId) {
+		const header = brief.box.querySelector(":scope > header");
+		if (header?.lastElementChild) reportTools.append(header.lastElementChild);
+		header?.remove();
+		for (const node of brief.box.querySelectorAll(":scope > details, :scope > [data-pm-brief-export]")) reportTools.append(node);
 		drawersHome.append(reportTools);
 	}
 	const reportMenu = reportTools.children.length ? menu({
@@ -25830,14 +25869,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				label: t("ui_save_snapshot"),
 				onSelect: () => openPanel(t("ui_report"), reportTools)
 			},
-			{
+			...charter ? [{
 				label: t("ui_compare"),
 				onSelect: () => reportTools.querySelector("button[data-report-compare]")?.click()
-			},
-			{
+			}, {
 				label: t("ui_print"),
 				onSelect: () => reportTools.querySelector("button[data-report-print]")?.click()
-			},
+			}] : [],
 			{
 				label: t("ui_export_brief"),
 				onSelect: () => openPanel(t("ui_report"), reportTools)
@@ -25958,6 +25996,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			onSelect: (id) => {
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
+				window.scrollTo(0, 0);
 				if (id === "requirements") traceability?.activate();
 				detailPanel?.close();
 				if (primary) primary.hidden = id !== "overview";
@@ -26525,6 +26564,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
 				loaded = false;
+				lastThreadList = null;
+				workspace = null;
+				publishContext();
+				detailPanel?.close();
 				brief?.withdraw();
 				lifecycle?.withdraw();
 				proposalReview?.withdraw();
@@ -26952,7 +26995,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	const search = h("input", {
 		type: "search",
 		"aria-label": t("workspace_search"),
-		placeholder: t("workspace_search")
+		placeholder: t("ui_search_work")
 	});
 	const box = h("aside", {
 		class: "workspace-nav",
@@ -28101,6 +28144,12 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			guard();
 			section.section.dataset.fresh = "false";
 			onPending({});
+			if ([403, 404].includes(error.status)) {
+				section.list.replaceChildren();
+				section.count.replaceChildren();
+				section.size = null;
+				section.more.hidden = true;
+			}
 			section.status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("attention_not_updated")));
 			throw error;
 		} finally {
@@ -36523,6 +36572,7 @@ function onOnline(fn) {
 }
 function updateOnline(value) {
 	state.online = value;
+	if (!value) shell?.pending({});
 	for (const fn of onlineListeners) fn();
 }
 async function streamEvents() {

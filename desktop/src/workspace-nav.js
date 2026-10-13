@@ -15,7 +15,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const more = h('button', {class: 'mini', hidden: true, onclick: () => {sessionPages++; refresh().catch(() => {});}}, t('load_more'));
   const sessionTree = h('details', {class: 'workspace-session-tree'},
     h('summary', {}, t('nav_sessions')), sessionRows, more);
-  const search = h('input', {type: 'search', 'aria-label': t('workspace_search'), placeholder: t('workspace_search')});
+  const search = h('input', {type: 'search', 'aria-label': t('workspace_search'), placeholder: t('ui_search_work')});
   const box = h('aside', {class: 'workspace-nav', 'aria-label': t('workspace_navigation')},
     h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')),
       h('a', {href: '#/projects', title: t('workspace_manage'), 'aria-label': t('workspace_manage')}, '+')),

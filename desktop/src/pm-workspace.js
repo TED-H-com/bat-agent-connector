@@ -228,7 +228,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       h('details', {}, h('summary', {}, t('pm_repositories_optional')), labelled('pm_repositories', repositories), h('p', {class: 'muted'}, t('pm_repository_help'))))});
   const title = h('span', {}, t('pm_title'));
   const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), onClick: () => void load()});
-  const heading = pageHeader({title, actions: [refresh]});
+  const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
+  const heading = pageHeader({title, pill: phasePill, actions: [refresh]});
   const content = h('div', {class: 'pm-content'}), body = h('section', {class: 'pm-main'}, heading, status, content);
   const creationHome = h('div', {hidden: true}, workspaceForm.box);
   main.append(h('div', {class: 'pm-shell'}, body, creationHome));
@@ -241,6 +242,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   let lastList = [], lastThreadList = null;
   function publishContext() {
+    const stage = lifecycle?.phase?.();
+    phasePill.hidden = !['idea','planning','development','maintain','paused','closed'].includes(stage);
+    phasePill.textContent = phasePill.hidden ? '' : t('ui_phase_' + stage);
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',
       views: threadId ? availableProjectViews(caps()) : workbench?.views || (workspace ? ['discussions'] : []), create: showCreate,
       phase: lifecycle?.phase?.() && ['idea','planning','development','maintain','paused','closed'].includes(lifecycle.phase()) ? t('ui_phase_' + lifecycle.phase()) : null,
@@ -334,8 +338,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const resources = !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox}) : null;
   if (resources) body.insertBefore(resources.element, content);
-  const drawersHome = h('div', {hidden: true}), phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
-  body.append(drawersHome); heading.querySelector('.ui-title-row').append(phasePill);
+  const drawersHome = h('div', {hidden: true});
+  body.append(drawersHome);
   let detailPanel = null;
   function openPanel(label, node) {
     if (!node || !loaded) return;
@@ -346,18 +350,26 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   if (lifecycle) drawersHome.append(lifecycle.element);
   const headerActions = heading.querySelector('.ui-header-actions');
-  const primary = brief?.box.querySelector(':scope > header .primary');
+  const primary = charter ? brief?.box.querySelector(':scope > header .primary') : null;
   if (primary) {headerActions.prepend(primary); brief.box.querySelector(':scope > header')?.remove();}
   const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
   if (charter && brief) {
     for (const node of brief.box.querySelectorAll(':scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]')) reportTools.append(node);
     drawersHome.append(reportTools);
+  } else if (brief && !threadId) {
+    // Older central capabilities expose the immutable brief without the Charter.
+    // Move the complete durable form, including its submit control and recovery state.
+    const header = brief.box.querySelector(':scope > header');
+    if (header?.lastElementChild) reportTools.append(header.lastElementChild);
+    header?.remove();
+    for (const node of brief.box.querySelectorAll(':scope > details, :scope > [data-pm-brief-export]')) reportTools.append(node);
+    drawersHome.append(reportTools);
   }
   const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down'}), items: [
     {key: 'versions', label: t('ui_report_versions'), onSelect: () => openPanel(t('ui_report'), reportTools)},
     {label: t('ui_save_snapshot'), onSelect: () => openPanel(t('ui_report'), reportTools)},
-    {label: t('ui_compare'), onSelect: () => reportTools.querySelector('button[data-report-compare]')?.click()},
-    {label: t('ui_print'), onSelect: () => reportTools.querySelector('button[data-report-print]')?.click()},
+    ...(charter ? [{label: t('ui_compare'), onSelect: () => reportTools.querySelector('button[data-report-compare]')?.click()},
+      {label: t('ui_print'), onSelect: () => reportTools.querySelector('button[data-report-print]')?.click()}] : []),
     {label: t('ui_export_brief'), onSelect: () => openPanel(t('ui_report'), reportTools)},
   ]}) : null;
   if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
@@ -397,6 +409,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents');
+      window.scrollTo(0, 0);
       if (id === 'requirements') void traceability?.activate();
       detailPanel?.close(); if (primary) primary.hidden = id !== 'overview';
       if (reportMenu) reportMenu.hidden = id !== 'overview';
@@ -686,7 +699,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
-        loaded = false; brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
+        loaded = false; lastThreadList = null; workspace = null; publishContext(); detailPanel?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
       }

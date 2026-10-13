@@ -31,7 +31,7 @@ body.has-workspace .workspace-nav { display: flex; position: sticky; top: 48px; 
 .workspace-nav.has-pm-context .workspace-tree-empty { font-size: var(--fs-small); }
 .pm-project-views { display: flex; flex-direction: column; gap: var(--space-1); border: 0; margin: 0; padding: 0; }
 .pm-project-views button { display: flex; justify-content: flex-start; gap: var(--space-3); text-align: left; min-height: 36px; width: 100%; padding: 6px 8px; color: var(--text-2); border: 0; background: transparent; font-size: var(--fs-body); }
-.pm-project-views button[aria-current=page] { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.pm-project-views button[aria-current=page], .pm-project-views button[aria-current=page]:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .shell-all-projects { display: block; padding: 8px; font-size: var(--fs-small); text-decoration: none; color: var(--text-2); }
 body.has-workspace main { min-width: 0; max-width: 1600px; width: 100%; margin: 0 auto; padding: var(--space-6); }
 body.pm-mode #main { padding: 0; }

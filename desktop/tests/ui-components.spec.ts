@@ -56,3 +56,16 @@ for (const locale of ['en', 'zh-TW']) test(`canonical vocabulary ${locale} and t
   await page.evaluate(async () => {const {button} = await import('/src/ui/components.js'); document.body.append(button({label: '<img src=x onerror=alert(1)>'}));});
   await expect(page.locator('img')).toHaveCount(0); await expect(page.locator('[style]')).toHaveCount(0); await context.close();
 });
+test('nested menu Escape closes only the menu and disabled links cannot activate', async ({page}) => {
+  await mount(page); await page.getByRole('button', {name: 'Inspect', exact: true}).click();
+  await page.evaluate(async () => {
+    const ui = await import('/src/ui/components.js');
+    document.querySelector('.ui-inspector-body')!.append(ui.menu({button: ui.button({label: 'Panel actions'}),
+      items: [{label: 'Unavailable', href: '#forbidden', disabled: true}, {label: 'Available'}]}));
+  });
+  const trigger = page.getByRole('button', {name: 'Panel actions'});
+  await trigger.focus(); await page.keyboard.press('ArrowUp'); await expect(page.getByRole('menuitem', {name: 'Available', exact: true})).toBeFocused();
+  await expect(page.getByRole('menuitem', {name: 'Unavailable', exact: true})).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector')).toBeVisible(); await expect(trigger).toBeFocused();
+  await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector')).toHaveCount(0);
+});

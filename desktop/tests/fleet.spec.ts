@@ -103,7 +103,7 @@ test("delayed settings status cannot mount Fleet into a later route", async ({pa
   await setup(page, {connected: true, delayStatus: true});
   await expect.poll(() => page.evaluate(() => typeof (window as any).__fleet.releaseStatus)).toBe("function");
   await page.getByRole('button', {name: 'Tools', exact: true}).click();
-  await page.getByRole("link", {name: "Sessions", exact: true}).click();
+  await page.getByRole("menuitem", {name: "Sessions", exact: true}).click();
   await expect(page.getByRole("heading", {name: "Sessions", exact: true})).toBeVisible();
   await page.evaluate(async () => {(window as any).__fleet.releaseStatus(); await new Promise(resolve => requestAnimationFrame(resolve));});
   await expect(page.getByRole("region", {name: "Local Fleet connections"})).toHaveCount(0);

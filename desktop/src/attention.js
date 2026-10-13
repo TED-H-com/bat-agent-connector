@@ -69,6 +69,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
         ? {count: sections.reduce((sum, item) => sum + item.size, 0), partial: sections.some(item => item.partial)} : {});
     } catch (error) {
       guard(); section.section.dataset.fresh = "false"; onPending({});
+      if ([403, 404].includes(error.status)) {section.list.replaceChildren(); section.count.replaceChildren(); section.size = null; section.more.hidden = true;}
       section.status.replaceChildren(errorBox(error), h("p", {class: "muted"}, t("attention_not_updated")));
       throw error;
     } finally {

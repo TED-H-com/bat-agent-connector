@@ -35,7 +35,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     if (event.key === 'Escape') {event.preventDefault(); closeDrawer();} else trapFocus(aside, event);}
   function resize() {if (media.matches) closeDrawer(false);}
   document.addEventListener('keydown', keydown); media.addEventListener('change', resize);
-  aside.addEventListener('click', event => {if (event.target.closest('a, [data-pm-view]') && !scrim.hidden) {closeDrawer(false); main.focus();}});
+  aside.addEventListener('click', event => {if (event.target.closest('a, [data-pm-view]') && !scrim.hidden) {closeDrawer(false); main.focus({preventScroll: true});}});
   const pendingCount = h('span', {class: 'shell-count', hidden: true, 'data-pending-count': ''});
   const pending = h('a', {href: '#/home', class: 'ui-button ghost shell-pending'}, icon('inbox'), h('span', {}, t('ui_pending')), pendingCount);
   const settings = h('a', {href: '#/settings', class: 'ui-button ghost ui-icon-button', 'aria-label': t('ui_settings'), title: t('ui_settings')}, icon('settings'));
@@ -48,7 +48,9 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   function switcher(label, className) {
     const trigger = button({variant: 'ghost', label, icon: 'chevron-down', class: className, 'aria-label': t('ui_switch_workspace')});
     const control = menu({button: trigger, items: [...workspaces.map(row => ({label: row.name, href: `#/pm/${row.workspace_id}`})),
-      ...(creator ? [{label: t('ui_new_workspace'), icon: 'plus', onSelect: creator}] : [{label: t('ui_new_workspace'), href: '#/pm/new'}])]});
+      ...(creator && currentRoute === 'pm' ? [{label: t('ui_new_workspace'), icon: 'plus', onSelect: () => {
+        closeDrawer(false); if (!media.matches) toggle.focus(); creator?.();
+      }}] : [{label: t('ui_new_workspace'), href: '#/pm/new'}])]});
     menus.push(control); return control;
   }
   function render() {
@@ -102,7 +104,10 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
       update({workspace: data.workspace, workspaces: list.workspaces, view: lastProjectView(namespace, id)});
     } catch (error) {if (disposed || serial !== ticket) return; update({workspace: null, workspaces: [], threadCount: null, phase: null});}
   }
-  const off = onEvents(event => ['pm_workspace', 'pm_lifecycle'].includes(event.resource_type) ? refresh() : undefined);
+  const off = onEvents(event => {
+    if (['session','work_item','operation','host'].includes(event.resource_type)) {pendingCount.hidden = true; pendingCount.textContent = '';}
+    return ['pm_workspace', 'pm_lifecycle'].includes(event.resource_type) ? refresh() : undefined;
+  });
   render();
   return {update, refresh, setRoute(name) {currentRoute = name; serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();},
     pending({count, partial} = {}) {pendingCount.hidden = !Number.isSafeInteger(count); pendingCount.textContent = count === undefined ? '' : String(count) + (partial ? '+' : '');

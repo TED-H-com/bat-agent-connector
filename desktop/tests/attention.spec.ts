@@ -48,7 +48,7 @@ for (const native of [false, true]) {
     expect(fixture.data.writes[0].idempotency_key).not.toBe(fixture.data.writes[1].idempotency_key);
     await expect(page.getByRole('button', {name: 'Accept as done'})).toBeDisabled(); // observe is not approve
     expect(fixture.data.items[0].completion.pending).toBe(true);
-    await page.getByRole('link', {name: 'Pending', exact: true}).click();
+    await page.locator('.shell-pending').click();
     await expect(page.getByRole('region', {name: 'Completion review'})).toContainText('Review delivery');
     await expect(page.getByRole('region', {name: 'Replies and permissions'})).toContainText('Question from agent');
   });
@@ -121,7 +121,7 @@ test('a delayed reading response cannot repaint another view', async ({page}) =>
   await page.goto('/dashboard/#/item/' + fixture.data.items[0].work_item_id);
   await page.getByRole('button', {name: 'Mark this version read'}).click();
   await expect.poll(() => requested).toBe(true);
-  await page.getByRole('link', {name: 'Pending', exact: true}).click();
+  await page.locator('.shell-pending').click();
   await expect(page.getByRole('heading', {name: 'Completion review'})).toBeVisible();
   release();
   await expect.poll(() => fixture.data.writes.length).toBe(1);
@@ -151,4 +151,18 @@ test('marking the displayed version read preserves an open work-item draft', asy
   await expect(title).toBeVisible();
   expect(fixture.data.writes).toHaveLength(1);
   expect(fixture.data.writes[0].body.preconditions.expected_version).toBe(1);
+});
+test('pending badge reflects only loaded attention evidence and withdraws with a forbidden source', async ({page}) => {
+  const fixture=attentionFixture(); let denied=false;
+  await mountAttention(page,false,fixture,async input=>{
+    if(denied && input.path.startsWith('/work-items?')) return {status:403,data:{error:{code:'FORBIDDEN',message:'Source access removed'}}};
+    const result=await fixture.dispatch(input);
+    if(input.path.startsWith('/work-items?pending')) result.data.next_cursor='more';
+    return result;
+  });
+  await page.goto('/dashboard/');const count=page.locator('[data-pending-count]');
+  await expect(count).toHaveText('5+'); await expect(count).toHaveAttribute('title','5 pending loaded+');
+  denied=true;fixture.data.cursor++;
+  await expect(page.getByRole('region',{name:'Completion review'})).not.toContainText('Review delivery');
+  await expect(count).toBeHidden(); expect(fixture.data.writes).toEqual([]);
 });

@@ -605,7 +605,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-evidence select {max-width:100%;}
 .pm-evidence-rows > details {padding:.65rem 0; border-bottom:1px solid var(--line);}
 .pm-evidence-rows summary {cursor:pointer; overflow-wrap:anywhere;}
-.pm-evidence-fields {display:grid; grid-template-columns:minmax(7rem,1fr) minmax(0,3fr); gap:.35rem .75rem; font-size:.85rem;}
+.pm-evidence-fields {display:grid; grid-template-columns:minmax(7rem,1fr) minmax(0,3fr); gap:.35rem .75rem; font-size: var(--fs-small);}
 .pm-evidence-fields dd {margin:0; overflow-wrap:anywhere; white-space:pre-wrap;}
 .pm-evidence-fields dt {overflow-wrap:anywhere;}
 
@@ -613,10 +613,10 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-brief h2 {margin:0;}
 .pm-brief .pm-heading form {max-width:22rem;}
 .pm-brief-row {display:grid; grid-template-columns:8rem minmax(0,1fr); gap:1rem; padding:.65rem 0; border-top:1px solid var(--line);}
-.pm-brief-row h3 {font-size:.95rem; margin:.25rem 0;}
+.pm-brief-row h3 {font-size: var(--fs-read); margin:.25rem 0;}
 .pm-brief-values p {margin:.25rem 0 .5rem;}
 .pm-brief-values summary {cursor:pointer; overflow-wrap:anywhere; padding:.25rem 0;}
-.pm-brief-proof {max-height:18rem; overflow:auto; overflow-wrap:anywhere; white-space:pre-wrap; font-size:.8rem;}
+.pm-brief-proof {max-height:18rem; overflow:auto; overflow-wrap:anywhere; white-space:pre-wrap; font-size: var(--fs-caption);}
 .pm-brief-trace {margin-top:.75rem;}
 @media(max-width:600px){.pm-brief .pm-heading{display:block}.pm-brief-row{grid-template-columns:5rem minmax(0,1fr);gap:.5rem}.pm-brief .pm-heading form{max-width:none}}
 
@@ -629,14 +629,14 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 [data-pm-brief-export] summary {cursor:pointer;min-height:28px;}
 @media(max-width:640px){[data-pm-brief-export] :is(summary,select,button){min-height:44px}[data-pm-brief-export] select{font-size: var(--fs-input-mobile)}}
 .pm-inspector .pm-brief .pm-heading p {margin-bottom:.5rem;}
-.pm-inspector .pm-brief-date {font-size:.85rem;}
+.pm-inspector .pm-brief-date {font-size: var(--fs-small);}
 
 .pm-roadmap {margin:1.5rem 0;min-width:0;}
-.pm-roadmap h2 {font-size:1.15rem;margin-bottom:.4rem;}
+.pm-roadmap h2 {font-size: var(--fs-section);margin-bottom:.4rem;}
 .pm-roadmap-scroll {max-width:100%;overflow-x:auto;}
-.pm-roadmap-table {width:100%;border-collapse:collapse;font-size:.9rem;}
+.pm-roadmap-table {width:100%;border-collapse:collapse;font-size: var(--fs-body);}
 .pm-roadmap-table th,.pm-roadmap-table td {text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:.7rem .6rem;}
-.pm-roadmap-table thead th {font-size:.8rem;font-weight:600;color:var(--muted);}
+.pm-roadmap-table thead th {font-size: var(--fs-caption);font-weight:600;color:var(--muted);}
 .pm-roadmap-table th:first-child {width:32%;}
 .pm-roadmap > details {border-bottom:1px solid var(--line);padding:.75rem 0;}
 .pm-roadmap summary {cursor:pointer;}
@@ -644,7 +644,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-roadmap form {max-width:46rem;padding-top:.5rem;}
 .pm-roadmap-editor fieldset {border:1px solid var(--line);border-radius: var(--r-sm);margin:1rem 0;padding:.75rem;min-width:0;}
 .pm-roadmap-editor fieldset > details {margin:.6rem 0;}
-.pm-roadmap-choices label {display:flex;align-items:baseline;gap:.35rem;font-size:.9rem;}
+.pm-roadmap-choices label {display:flex;align-items:baseline;gap:.35rem;font-size: var(--fs-body);}
 .pm-roadmap-choices input {width:auto;}
 @media(max-width:600px){.pm-roadmap-table {min-width:34rem}.pm-roadmap-table th,.pm-roadmap-table td {padding:.5rem}}
 :root .pm-ahp { margin-block: 12px; }

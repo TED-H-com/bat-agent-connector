@@ -1,3 +1,4 @@
+import {openPmPanel} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -62,8 +63,8 @@ try {
   await page.getByRole('button', {name:'Discuss with PM', exact:true}).click();
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
   await page.getByRole('button', {name:'Start discussion', exact:true}).click();
-  await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/pmt_[a-f0-9]{32}$/);
-  const [workspaceId, threadId] = page.url().split('/').slice(-2);
+  await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/pmt_[a-f0-9]{32}$/);
+  const [workspaceId, , threadId] = page.url().split('/').slice(-3);
   const read = async () => {
     const response = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/threads/${threadId}`, {headers:{Authorization:'Bearer '+fixture.token}});
     assert.equal(response.status, 200); return response.json();
@@ -268,6 +269,7 @@ try {
   assert.deepEqual(await repeatedResponse.json(),fixedComparison);
   await page.reload();
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+  await openPmPanel(page, 'ui_change_phase');
   const activity=page.locator('[data-pm-lifecycle]');
   await expect(activity.locator('.pm-lifecycle-stage')).toHaveText('Idea');
   // Discussion planning did not change the independent workspace management stage.
@@ -293,7 +295,7 @@ try {
   const history=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/lifecycle/transitions`,{headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.deepEqual(history.transitions.map(row=>row.to_stage),['paused','closed','development']);
   // The workspace now opens its fixed Charter, while RTM reads the same central work.
-  await page.goto(origin + '/dashboard/#/pm/' + workspaceId);
+  await page.goto(origin + '/dashboard/#/pm/' + workspaceId + '/overview');
   await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
   await expect(page.locator('[data-pm-charter]')).toContainText('No adopted plan in this summary');
   child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');
