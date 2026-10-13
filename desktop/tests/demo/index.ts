@@ -9,6 +9,7 @@ import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
 import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
+import {dependencyDocument, dependencyImpact, dependencyRevisions} from './dependencies.ts';
 
 export interface DemoRequest {
   method?: string;
@@ -90,6 +91,13 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const detail = proposalDetail(project);
     return segment(proposal[1]) === detail.proposal.proposal_id ? ok(detail) : notFound();
   }
+  if (rest === '/dependencies/revisions') return ok(dependencyRevisions(project, url));
+  if (rest === '/dependencies/impact') {
+    const key = url.searchParams.get('dependency') || '';
+    if (!/^pmdepkey_[0-9a-f]{32}$/.test(key)) return {status: 400, data: {error: {code: 'BAD_REQUEST', message: 'Invalid dependency'}}};
+    return ok(dependencyImpact(project, key));
+  }
+  if (rest === '/dependencies') return ok(dependencyDocument(project));
   if (rest === '/threads') return ok(threadList(project, url));
   const thread = rest.match(/^\/threads\/([^/]+)$/);
   if (thread) {
