@@ -371,6 +371,8 @@ class Inventory:
         eco = c["ecosystem"]
         if eco == "python":
             project = value["project"]
+            if not isinstance(project.get("dependencies", []), list) or not isinstance(value.get("build-system", {}).get("requires", []), list):
+                raise ValueError("dependency_list_required")
             for raw in project.get("dependencies", []):
                 name, version = requirement(raw)
                 self.add(c, name, version, "runtime", basis="project.dependencies")
@@ -381,6 +383,8 @@ class Inventory:
                 self.add(c, "python", project["requires-python"], "build", basis="requires-python", ecosystem="toolchain", resolved=False)
             groups = {**project.get("optional-dependencies", {}), **value.get("dependency-groups", {})}
             for group, values in groups.items():
+                if not isinstance(values, list):
+                    raise ValueError("dependency_list_required")
                 for raw in values:
                     if isinstance(raw, dict) and set(raw) == {"include-group"}:
                         continue  # The included group's own declarations are already present.

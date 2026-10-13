@@ -133,3 +133,11 @@ def test_unreadable_nearest_lock_does_not_borrow_an_ancestor_resolution():
     assert result["edges"][0]["resolved"] is None
     assert result["edges"][0]["evidence_level"] == "declared"
     assert next(f for f in result["files"] if f["path"] == "app/package-lock.json")["status"] == "unparsable"
+
+
+def test_python_requirement_fields_must_be_lists_not_strings():
+    for fragment in ('dependencies="bad"', '[build-system]\nrequires="bad"',
+                     '[project.optional-dependencies]\ntest="bad"', '[dependency-groups]\ndev="bad"'):
+        result = inventory({"pyproject.toml": '[project]\nname="sample"\n' + fragment})
+        assert result["components"] == result["edges"] == result["dependencies"] == []
+        assert result["files"][0]["status"] == "unparsable"
