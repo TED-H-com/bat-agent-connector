@@ -1,11 +1,13 @@
 import {renderMessage} from "./message-format.js";
+import {disclosure, statusPill} from "./ui/components.js";
+import {icon} from "./ui/icons.js";
 
 // Scrolling never marks messages read. Personal receipts require an explicit action.
-export function conversationPanel({h, t, when, guard, readingActions = null}) {
+export function conversationPanel({h, t, when, guard, readingActions = null, memory = null}) {
   const viewport = h("div", {class: "conversation-scroll", tabindex: "0", role: "region", "aria-label": t("messages")});
   const status = h("span", {class: "muted", role: "status"}), fallback = h("div", {class: "conversation-copy"});
   const notice = h("p", {class: "muted", role: "status", hidden: true}, t("message_anchor_missing"));
-  const latest = h("button", {class: "mini", type: "button", hidden: true, onclick: () => {
+  const latest = h("button", {class: "mini conversation-jump", type: "button", hidden: true, onclick: () => {
     if (olderWindow && readingActions) {run(() => readingActions.latest()); return;}
     viewport.scrollTop = viewport.scrollHeight; notice.hidden = true; indicator();
   }}, t("message_latest"));
@@ -20,12 +22,15 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
     if (row?.reading) run(() => readingActions.remember({message_id: row.id, revision: row.reading.revision,
       offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)}, reading?.position?.version || 0));
   }}, t("conversation_remember"));
-  const older = h("button", {class: "mini", type: "button", hidden: true,
-    onclick: () => run(() => readingActions.older())}, t("conversation_older"));
+  const older = h("button", {class: "conversation-earlier", type: "button", hidden: true,
+    onclick: () => run(() => readingActions.older())}, t("message_load_earlier"));
+  const caption = h("p", {class: "muted conversation-window"}, t("message_window"));
+  const captionRow = h("div", {class: "conversation-caption"}, caption);
+  const readingBar = readingActions ? h("div", {class: "actions"}, progress, mark, remember) : null;
   const box = h("section", {class: "panel conversation"},
-    h("div", {class: "muted"}, t("message_window")), notice, viewport,
+    captionRow, notice, viewport,
     h("div", {class: "conversation-toolbar"}, status, latest),
-    readingActions ? h("div", {class: "actions"}, progress, mark, remember, older) : null, fallback);
+    readingBar, fallback);
   let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
   const alive = () => {if (disposed) return false; try {guard(); return true;} catch {return false;}};
   const atBottom = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 48;
@@ -38,7 +43,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
     });
   };
   const indicator = () => {
+    latest.textContent = olderWindow ? t("message_latest") : t("message_new");
     latest.hidden = !olderWindow && atBottom();
+    if (memory && initialized) memory.scrollTop = viewport.scrollTop;
     if (!readingActions) return;
     mark.disabled = busy || !visible().some(row => row.reading?.can_mark && row.reading?.unread);
     remember.disabled = busy || !visible().some(row => row.reading);
@@ -80,7 +87,8 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
     const anchor = [...rows.entries()].find(([, row]) => row.node.getBoundingClientRect().bottom > top);
     const selection = window.getSelection();
     const readingSelection = selection && !selection.isCollapsed && viewport.contains(selection.anchorNode);
-    const follow = !initialized || !state?.preserve && atBottom() && !readingSelection;
+    const savedScroll = !initialized && memory && Number.isFinite(memory.scrollTop) && !state?.restore && !state?.latest;
+    const follow = !savedScroll && (!initialized || !state?.preserve && atBottom() && !readingSelection);
     const offset = anchor ? anchor[1].node.getBoundingClientRect().top - top : 0, scrollTop = viewport.scrollTop;
     const next = new Map(), occurrences = new Map();
     for (const message of messages) {
@@ -90,33 +98,74 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
       const key = JSON.stringify([identity, occurrence]);
       let row = rows.get(key);
       if (!row) {
-        row = {text: null, meta: null, body: h("div", {class: "message-body"}), who: h("span", {class: "who"})};
-        row.node = h("article", {class: "msg"}, h("div", {class: "message-meta"}, row.who,
-          h("button", {class: "mini", type: "button", onclick: () => copy(row.text)}, t("message_copy"))), row.body);
+        row = {text: null, meta: null, body: h("div", {class: "message-body"}),
+          mark: h("span", {class: "ui-agent-mark", "aria-hidden": "true"}),
+          name: h("span", {class: "message-name"}), time: h("time", {class: "message-time"}),
+          status: h("span", {class: "message-status"}),
+          extra: h("span", {class: "message-extra"}), who: h("span", {class: "who"})};
+        row.chipText = h("span", {class: "message-chip-text"});
+        row.chip = h("span", {class: "message-chip", hidden: true}, row.chipText);
+        row.who.append(row.name, row.time, row.status, row.chip, row.extra);
+        row.node = h("article", {class: "msg"}, row.mark,
+          h("div", {class: "message-meta"}, row.who,
+            h("button", {class: "message-copy", type: "button", "aria-label": t("message_copy"), title: t("message_copy"),
+              onclick: () => copy(row.text)}, icon("clipboard"))), row.body);
       }
-      const metadata = [message.role || "", when(message.ts)];
-      if (message.role === "tool") metadata.push(message.tool || t("obs_unknown"),
-        t("message_tool_status", {status: message.denied ? "denied" : message.deferred ? "deferred" : message.status || t("obs_unknown")}));
-      else if (typeof message.status === "string") metadata.push(t("message_tool_status", {status: message.status}));
-      if (typeof message.agent === "string") metadata.push(t("message_agent", {agent: message.agent}));
-      if (typeof message.model === "string") metadata.push(t("message_model", {model: message.model}));
+      const extras = [];
+      const pillKey = message.role !== "tool" && typeof message.status !== "string" ? ""
+        : message.denied ? "blocked" : message.deferred ? "waiting"
+        : message.status === "completed" ? "done"
+        : message.status === "failed" || message.status === "error" ? "failed"
+        : message.status === "running" ? "running" : "unknown";
+      const chip = [];
+      if (typeof message.agent === "string") chip.push(message.agent);
+      if (typeof message.model === "string") chip.push(message.model);
       if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0)
-        metadata.push(t("message_duration", {ms: message.duration_ms}));
-      const meta = metadata.join(" · ");
-      if (row.meta !== meta) {row.who.textContent = meta; row.meta = meta;}
+        extras.push(t("message_duration", {ms: message.duration_ms}));
+      const whoName = message.role === "user" ? t("message_you")
+        : message.role === "tool" ? (message.tool || t("message_tool_details"))
+        : message.role === "system" ? t("message_system")
+        : (message.agent || t("agent"));
+      const stamp = when(message.ts);
+      const meta = JSON.stringify([whoName, stamp, chip, extras, pillKey]);
+      if (row.meta !== meta) {
+        const glyphs = Array.from(whoName);
+        row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
+        row.name.textContent = whoName;
+        row.time.textContent = stamp;
+        row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
+        const chipText = chip.join(" · ");
+        row.chipText.textContent = chipText;
+        row.chip.hidden = !chipText;
+        if (chipText) row.chip.title = chipText; else row.chip.removeAttribute("title");
+        row.status.replaceChildren(...(pillKey ? [statusPill(pillKey)] : []));
+        row.extra.textContent = extras.join(" · ");
+        row.meta = meta;
+      }
       row.node.className = `msg${message.role === "user" ? " user" : ""}`;
       row.id = message.id; row.reading = message.reading;
       row.node.dataset.messageId = typeof message.id === "string" ? message.id : "";
-      const tool = message.role === "tool", completed = tool && message.status === "completed" && !message.denied && !message.deferred;
-      if (row.tool !== tool) {row.body.replaceChildren(); row.text = null; row.tool = tool; row.toolDetails = null;}
-      if (tool && !row.toolDetails) {
+      const tool = message.role === "tool", system = message.role === "system";
+      const completed = tool && message.status === "completed" && !message.denied && !message.deferred;
+      const folded = tool || system;
+      if (row.tool !== folded) {row.body.replaceChildren(); row.text = null; row.tool = folded; row.toolDetails = null;}
+      if (folded && !row.toolDetails) {
         row.toolContent = h("div", {});
-        row.toolDetails = h("details", {class: "message-tool", open: !completed}, h("summary", {}, t("message_tool_details")), row.toolContent);
+        row.toolLabel = h("span", {class: "message-tool-label"});
+        row.toolDetails = disclosure({label: row.toolLabel, body: row.toolContent, open: tool ? !completed : false});
+        row.toolDetails.classList.add("message-tool");
         row.toolDetails.addEventListener("toggle", indicator); row.body.append(row.toolDetails);
       }
       if (tool && !completed) row.toolDetails.open = true; // errors, pending and unknown never fold out of sight
       if (row.text !== text) {
-        (tool ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy)); row.text = text;
+        (folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy)); row.text = text;
+        if (folded && row.toolDetails) {
+          const summary = row.toolDetails.querySelector("summary");
+          const line = text.includes("\n") ? text.split("\n").find(item => item.trim()) : "";
+          const label = line || t(tool ? "message_tool_details" : "message_system");
+          row.toolLabel.textContent = label;
+          summary.title = text || label;
+        }
       }
       next.set(key, row);
     }
@@ -131,6 +180,7 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
     while (position) {const old = position; position = old.nextSibling; old.remove();}
     if (!next.size) viewport.replaceChildren(h("p", {class: "muted"}, t("no_messages")));
     if (follow) {viewport.scrollTop = viewport.scrollHeight; notice.hidden = true;}
+    else if (savedScroll) {viewport.scrollTop = memory.scrollTop; notice.hidden = true;}
     else if (anchor && next.has(anchor[0])) viewport.scrollTop += next.get(anchor[0]).node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset;
     else {viewport.scrollTop = scrollTop; if (anchor) notice.hidden = false;}
     rows = next;
@@ -143,7 +193,12 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
     }
     if (state?.latest) {viewport.scrollTop = viewport.scrollHeight; notice.hidden = true;}
     if (readingActions && state) {
-      reading = state.reading; older.hidden = state.next_offset == null; olderWindow = Boolean(state.olderWindow);
+      reading = state.reading; olderWindow = Boolean(state.olderWindow);
+      const canOlder = state.next_offset != null;
+      older.hidden = !canOlder;
+      older.textContent = t("message_load_earlier");
+      if (canOlder) caption.replaceChildren(t("message_window_showing") + "\u00a0· ", older);
+      else {if (older.parentElement === caption) readingBar?.append(older); caption.textContent = t("message_window");}
       progress.textContent = reading?.unread_count == null ? t("conversation_unknown")
         : t(reading.complete ? "conversation_unread" : "conversation_partial", {count: reading.unread_count});
       progress.title = t("conversation_count_note");
@@ -151,7 +206,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null}) {
     initialized = true; indicator();
   };
   return {box, update, dispose() {
-    disposed = true; viewport.removeEventListener("scroll", indicator);
+    disposed = true;
+    if (memory) memory.scrollTop = viewport.scrollTop;
+    viewport.removeEventListener("scroll", indicator);
     window.removeEventListener("scroll", indicator); window.removeEventListener("resize", indicator);
   }};
 }

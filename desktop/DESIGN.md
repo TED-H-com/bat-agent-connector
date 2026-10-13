@@ -78,7 +78,7 @@ Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 view
 | `contextChip` | `{icon,text,onRemove}`; optional named removal control |
 | `agentMark` | CLI name; local initials for Codex, Claude, Grok, Gemini, BAT, PM |
 | `menu` | `{button,items:[{label,icon,href,onSelect,disabled,key}]}`; arrows, Escape, outside click, focus return; dispose on unmount |
-| `inspector` | `{title,onClose,returnFocus}`; append returned node, then append content to `.body`; `.close()`/`.dispose()` release listeners and restore focus |
+| `inspector` | `{title,onClose,returnFocus,dock}`; append returned node, then append content to `.body`; `.close()` restores focus; ordinary panels dispose by closing; docked panels retain mounting on narrow close and destroy on dispose |
 | `dataTable` | `{columns:[{key,label,numeric,render}],rows,rowKey,selected,onSelect,expandable}`; sticky headers, 44px rows, keyboard row navigation and optional expansion |
 
 The inspector occupies 400px at ≥1200px, overlays from the right at 800–1199px,
@@ -532,3 +532,35 @@ PR chip titles retain merge evidence, with full receipts in the inspector. A sub
 edge fade signals clipped desktop lanes. Opening a card or navigating with arrows
 scrolls it into view inside the board. Inspector facts state unknown/absent values
 once; a recorded blocker retains both its status and reason.
+
+## Session workspace
+
+Opened from Work or a project tree. The page header shows the session title and agent
+mark, one status pill, and one quiet meta line: project, host, and a compact observed
+time (relative within a day, otherwise a short local time with no seconds). Send stays
+the only primary action, on the composer's queue row. Interrupt is a danger button.
+Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
+menu. A manual or unconfirmed session shows Read-only and has no send, answer, or
+interrupt control.
+
+The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
+body column for the name, compact time, chip, text, and disclosure. Agent and model
+share one inline chip that stays on the name row when it fits. Copy original is an
+icon at the row's right edge. The window caption is quiet. A tool event is one row
+(name, compact time, status pill) and its command is a disclosure. New messages
+while the reader is scrolled up show a jump control and do not move the visible row.
+Approval prompts sit above the composer and keep their original operation keys. The
+last send is one short line; the operation id stays in Details. On a narrow window
+the info and composer collapse icons sit on the caption row and the queue row.
+
+Results stay in the docked inspector at 1200px and wider, and in a drawer or sheet
+below that. Changes (only when it has its own content), Checkpoints, Delivery, and
+Result sources sit in that one panel, separated by hairlines, with one title style.
+Checkpoints say when this host cannot record a version, and keep the longer note in
+Details. Permissions, labels, and observation history use the same disclosure. Labels
+show one state line; the reason, and Edit labels when saving is possible, stay in
+Details. A linked work item reads Work · title. Delivery pills come only from saved
+receipts, and pull-request links use the normal link. Identifiers and raw timestamps
+stay in Details. From a project view, the shell breadcrumb is Workspace / Work /
+Session and the page offers Back to that view. Discuss uses the shared discussion
+link, binding only exact work item refs.

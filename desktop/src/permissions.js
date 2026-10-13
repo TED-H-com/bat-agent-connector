@@ -1,3 +1,4 @@
+import {disclosure} from "./ui/components.js";
 // This form records requested policy, never an inferred live permission mode.
 const record = value => value && typeof value === "object" && !Array.isArray(value);
 const modeValue = value => ["default", "allow_all"].includes(value);
@@ -81,10 +82,12 @@ export function permissionsPanel({h, t, api, caps, guard, errorBox, opStatus, st
     if (!current() || busy || refreshing || readFailed || !(terminal(operation) || saved.intent?.refused) || !writable()) return;
     saved = {mode: "default"}; mode.value = saved.mode; operation = null; persist(); message.replaceChildren(); update();
   }}, t("permissions_new"));
-  const box = h("details", {class: "permissions", "data-permissions": ""}, h("summary", {}, t("permissions_title")),
+  const box = disclosure({label: t("permissions_title"), body: h("div", {},
     h("p", {class: "muted"}, t("permissions_help")),
     h("label", {class: "permission-mode"}, t("permissions_mode"), mode), explanation,
-    h("div", {class: "actions"}, apply, check, another), restriction, result, message);
+    h("div", {class: "actions"}, apply, check, another), restriction, result, message)});
+  box.classList.add("permissions");
+  box.dataset.permissions = "";
   mode.addEventListener("change", () => {
     if (!current() || saved.intent) {mode.value = saved.mode; return;}
     saved.mode = modeValue(mode.value) ? mode.value : "default"; persist(); update();

@@ -1,0 +1,127 @@
+/* Session workspace. Scoped so other views keep their own layout. */
+.session-workspace { min-width: 0; }
+main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: hidden; }
+main.session-view > .workspace-session-heading { flex: none; }
+main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+.workspace-session-heading .ui-page-header { margin-bottom: 0; width: 100%; }
+.workspace-session-heading .session-mark { display: inline-flex; }
+.workspace-session-heading .session-mark .ui-agent-mark { width: 28px; height: 28px; }
+.session-back { margin: 0 0 var(--space-2); }
+.session-back a { color: var(--text-2); font-size: var(--fs-small); text-decoration: none; }
+.session-back a:hover { color: var(--text); }
+.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: auto; max-width: 760px; }
+.session-workspace .msg,
+.session-workspace .workspace-conversation .msg.user {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 8px; row-gap: var(--space-1);
+  align-items: start; max-width: 760px; margin-left: 0; padding: var(--space-3) 0; background: transparent; border: 0;
+  font-size: var(--fs-read); line-height: 1.55; }
+.session-workspace .msg > .ui-agent-mark { grid-column: 1; grid-row: 1; width: 24px; height: 24px; flex: none; overflow: hidden; font-size: 11px; }
+.session-workspace .message-meta { grid-column: 2; grid-row: 1; display: flex; align-items: flex-start; flex-wrap: nowrap;
+  gap: var(--space-2); margin: 0; min-width: 0; font-size: var(--fs-small); color: var(--text-2); }
+.session-workspace .message-meta .who { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2);
+  row-gap: 2px; min-width: 0; flex: 1; }
+.session-workspace .message-meta .mini { margin-left: auto; flex: none; }
+.session-workspace .message-name { font-weight: 600; color: var(--text); }
+.session-workspace .message-name::after { content: "\00a0·"; font-weight: 400; color: var(--text-3); }
+.session-workspace .message-time { color: var(--text-3); white-space: nowrap; }
+.session-workspace .message-extra:empty, .session-workspace .message-status:empty { display: none; }
+.session-workspace .message-status { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; }
+.session-workspace .message-status:not(:empty)::before { content: "·"; color: var(--text-3); font-weight: 400; }
+.session-workspace .message-extra:not(:empty) { color: var(--text-3); font-size: var(--fs-caption); font-weight: 400; }
+.session-workspace .message-chip {
+  display: inline-flex; align-items: center; width: fit-content; max-width: 100%; min-width: 0; flex: none;
+  min-height: 20px; padding: 0 8px; border-radius: var(--r-pill); background: var(--surface-2);
+  color: var(--text-3); font-size: var(--fs-caption); font-weight: 400; line-height: 1.4; }
+.session-workspace .message-chip-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.session-workspace .message-copy {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  margin-left: auto; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--text-3); cursor: pointer; flex: none; align-self: flex-start; }
+.session-workspace .message-copy:hover, .session-workspace .message-copy:focus-visible {
+  background: var(--surface-2); color: var(--text); }
+.session-workspace .message-body { grid-column: 2; grid-row: 2; min-width: 0; max-width: none; }
+.workspace-session-heading .workspace-session-meta { display: block; line-height: 1.45; }
+.workspace-session-heading .workspace-session-meta a { color: var(--text-3); text-decoration: none; }
+.workspace-session-heading .workspace-session-meta a:hover,
+.workspace-session-heading .workspace-session-meta a:focus-visible { text-decoration: underline; }
+.workspace-session-heading .session-meta-tail,
+.workspace-session-heading .session-meta-time { white-space: nowrap; }
+.workspace-session-heading .composer-shortcut { display: grid; gap: var(--space-1); margin: 0; }
+.workspace-session-heading .composer-shortcut label { display: grid; gap: 2px; margin: 0; }
+.workspace-session-heading .composer-shortcut select { width: 100%; max-width: 100%; }
+.workspace-session-heading .composer-shortcut .muted { margin: 0; color: var(--text-3); font-size: var(--fs-caption); }
+.session-workspace .message-tool > summary { max-width: 100%; min-width: 0; color: var(--text-2); min-height: 32px; }
+.session-workspace .message-tool-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-workspace .conversation-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
+.session-workspace .workspace-composer { flex: none; background: var(--bg); margin-top: var(--space-2); }
+.session-asking { display: grid; gap: var(--space-2); }
+.session-asking .title { display: flex; align-items: center; gap: var(--space-2); }
+.session-send-reason { margin: var(--space-1) 0; }
+.session-workspace .ui-inspector-body > .session-section {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  margin: 0; padding: var(--space-3) 0; border-top: 1px solid var(--line); }
+.session-workspace .ui-inspector-body > .session-section:first-child,
+.session-workspace .ui-inspector-body > .session-section[hidden] + .session-section { border-top: 0; padding-top: 0; }
+.session-workspace .ui-inspector-body .ui-disclosure > summary {
+  font-size: var(--fs-small); font-weight: 500; color: var(--text-2); }
+.session-workspace .ui-inspector-body .permissions,
+.session-workspace .ui-inspector-body .session-labels,
+.session-workspace .ui-inspector-body .observation-panel {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; margin: 0;
+  padding: var(--space-3) 0 0; border-top: 1px solid var(--line); }
+.session-workspace .session-label-state { margin: 0; color: var(--text-2); }
+.session-workspace .session-label-tags { margin-top: 0; }
+.session-workspace .session-section-title {
+  display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2);
+  font-size: var(--fs-section); font-weight: 600; }
+.session-workspace .session-section-title .ui-icon { width: 16px; height: 16px; }
+.session-workspace .session-subsection { margin: var(--space-2) 0 var(--space-1); font-size: var(--fs-section); font-weight: 600; }
+.session-workspace .session-checkpoint-state, .session-workspace .session-quiet { margin: 0; color: var(--text-3); font-weight: 400; text-align: start; }
+.session-workspace .ui-inspector .panel { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+.session-workspace .ui-inspector-body .permissions,
+.session-workspace .ui-inspector-body .session-labels,
+.session-workspace .ui-inspector-body .observation-panel,
+.session-workspace .ui-inspector-body > .workspace-evidence {
+  margin: 0; padding: var(--space-3) 0 0; border-top: 1px solid var(--line); background: transparent; box-shadow: none; }
+.session-workspace .session-bat { border-top: 0; margin-top: 0; padding-top: 0; }
+.session-workspace .session-bat:has(.actions) {
+  border-top: 1px solid var(--line); margin-top: var(--space-3); padding-top: var(--space-3); }
+.session-workspace .conversation-caption { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-1); min-width: 0; }
+.session-workspace .conversation-window { margin: 0; flex: 1; min-width: 0; font-size: var(--fs-caption); color: var(--text-3); }
+.session-workspace .conversation-earlier {
+  border: 0; background: transparent; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.session-workspace .composer-row { display: flex; align-items: center; flex-wrap: nowrap; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
+.session-workspace .composer-queue { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; min-width: 0; flex: 1 1 auto; color: var(--text-2); }
+.session-workspace .composer-row .primary { flex: none; margin-left: auto; }
+.session-workspace .session-send-line { margin: var(--space-2) 0 0; }
+.session-workspace .session-retry { border: 0; background: transparent; padding: 0; color: var(--bad); font: inherit; cursor: pointer; text-decoration: underline; }
+.session-workspace .session-send-record { margin-top: var(--space-1); }
+.session-workspace .ui-menu-group .muted { margin: 0; color: var(--text-3); font-size: var(--fs-caption); }
+.session-workspace .ui-section-card header h2 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.session-workspace .ui-section-card .panel { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+.session-delivery-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.session-delivery-row a { color: var(--accent); text-decoration: none; background: transparent; border: 0; padding: 0; font-weight: 400; }
+.session-delivery-row a:hover, .session-delivery-row a:focus-visible { text-decoration: underline; }
+.session-workspace > .ui-inspector { width: auto; max-width: 100%; }
+@media (min-width: 1200px) {
+  .session-workspace.workspace-session { grid-template-columns: minmax(0, 1fr) 400px; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .session-workspace .message-copy { opacity: 0; }
+  .session-workspace .msg:hover .message-copy,
+  .session-workspace .msg:focus-within .message-copy { opacity: 1; }
+}
+@media (max-width: 800px) {
+  .session-workspace .message-tool > summary,
+  .session-workspace .workspace-composer .ui-button,
+  .session-workspace .message-copy { min-height: 44px; }
+  .session-workspace .message-copy { width: 44px; min-width: 44px; opacity: 1; }
+  .workspace-session-heading .composer-shortcut select { font-size: var(--fs-input-mobile); min-height: 44px; }
+  .session-workspace .workspace-info-toggle,
+  .session-workspace .workspace-composer-toggle {
+    width: 44px; min-width: 44px; max-width: 44px; height: 44px; margin-left: auto;
+    justify-content: center; padding: 0;
+  }
+}

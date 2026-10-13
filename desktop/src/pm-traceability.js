@@ -65,7 +65,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   };
   const selectionTarget = id => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find(node => node.getClientRects().length);
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
-  function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
+  function closeRetaining() {detailSerial++; preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw() {
     pendingFocus = null; pendingNavigation = null; currentRequirement = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); signature = '';
     closeRetaining(); tables.replaceChildren(); meta.replaceChildren(); status.replaceChildren();
@@ -253,7 +253,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       return;
     }
     if (ref.kind !== 'requirement' || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some(row => row.id === ref.id)) return;
-    closeRetaining(); currentRequirement = ref.id;
+    closeRetaining(); selected = null; preference.selected = null; currentRequirement = ref.id;
     expanded.add(ref.id); preference.expanded = [...expanded]; filter.value = ''; preference.filter = ''; renderTable();
     const row = tables.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
     const target = matchMedia('(max-width: 799px)').matches ? row : row?.querySelector('[data-rtm-toggle]');

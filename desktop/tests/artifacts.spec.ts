@@ -92,7 +92,7 @@ for (const native of [false, true]) {
   test(`continuation retry keeps reviewed source after reopening (${native ? "native" : "browser"})`, async ({page}) => {
     const state = await fixture(page, native);
     await page.goto("/dashboard/#/session/demo/session-1");
-    await page.getByRole("button", {name: "Start agent work from this version", exact: true}).click();
+    await page.getByRole("button", {name: "Start from here", exact: true}).click();
     await expect.poll(() => state.sourceReads).toBe(1);
     await page.getByPlaceholder("What should the agent do next…").fill("Use the original attached input");
     await page.getByRole("combobox", {name: "Agent"}).selectOption("codex");
@@ -100,7 +100,7 @@ for (const native of [false, true]) {
     await expect(page.getByText("LOST Lost apply reply")).toBeVisible();
     state.source = "2".repeat(40);
     await page.reload();
-    await page.getByRole("button", {name: "Start agent work from this version", exact: true}).click();
+    await page.getByRole("button", {name: "Start from here", exact: true}).click();
     await expect.poll(() => state.sourceReads).toBe(2);
     await expect(page.getByPlaceholder("What should the agent do next…")).toHaveValue("Use the original attached input");
     await expect(page.getByRole("combobox", {name: "Agent"})).toHaveValue("codex");

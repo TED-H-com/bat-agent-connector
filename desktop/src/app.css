@@ -463,7 +463,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
   .workspace-composer-toggle.has-draft {
     border-color: var(--accent); color: var(--accent);
   }
-  .workspace-composer-collapsed > #workspace-message-input {
+  .workspace-composer-collapsed > #workspace-message-input > textarea {
     display: none !important;
   }
   body.mobile-keyboard .workspace-conversation .conversation-scroll {

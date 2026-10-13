@@ -72,6 +72,9 @@ export async function permissionFixture(page: Page, native: boolean, options: an
 }
 export async function openPermissions(page: Page) {
   await page.goto('/dashboard/#/session/demo/managed-session-1');
+  await expect(page.locator('[data-session-view]')).toBeVisible();
+  const opener = page.getByRole('button', {name: /^(Results|成果)$/, exact: true});
+  if (await opener.isVisible()) await opener.click();
   const section = page.locator('[data-permissions]');
   await expect(section).toBeVisible();
   await section.locator('summary').click();

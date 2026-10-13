@@ -66,9 +66,10 @@ export function statusPill(status) {
   const key = Object.hasOwn(statusVocabulary, status) ? status : 'unknown';
   return h('span', {class: `ui-pill tone-${statusVocabulary[key].tone}`, 'data-status': key}, t('ui_status_' + key));
 }
-export function pageHeader({title, pill, meta, actions = [], overflow} = {}) {
+export function pageHeader({title, mark, pill, meta, actions = [], overflow} = {}) {
   return h('header', {class: 'ui-page-header'}, h('div', {class: 'ui-page-heading'},
-    h('div', {class: 'ui-title-row'}, h('h1', {}, title), pill), meta ? h('p', {class: 'ui-meta'}, meta) : null),
+    h('div', {class: 'ui-title-row'}, mark, h('h1', {}, title), pill),
+    meta ? (meta instanceof Node ? meta : h('p', {class: 'ui-meta'}, meta)) : null),
   h('div', {class: 'ui-header-actions'}, ...actions, overflow));
 }
 export function sectionCard({title, actions = [], body} = {}) {
@@ -121,9 +122,10 @@ export function menu({button: trigger, items}) {
   const root = h('div', {class: 'ui-menu'}, trigger, panel);
   trigger.setAttribute('aria-haspopup', 'menu'); trigger.setAttribute('aria-controls', panel.id); trigger.setAttribute('aria-expanded', 'false');
   const controls = items.map(item => {
+    if (item.content) return h('div', {class: 'ui-menu-group', role: 'group', 'aria-label': item.label, 'data-menu-key': item.key}, item.content);
     let node;
     node = h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem', 'data-menu-key': item.key,
-      tabindex: -1, disabled: item.href ? null : item.disabled, 'aria-disabled': item.disabled ? 'true' : null,
+      tabindex: -1, title: item.title, disabled: item.href ? null : item.disabled, 'aria-disabled': item.disabled ? 'true' : null,
       onclick: event => {
         // Read the live control. An item created disabled and enabled later must still run.
         if (node.disabled || node.getAttribute('aria-disabled') === 'true') {event.preventDefault(); return;}
@@ -132,7 +134,7 @@ export function menu({button: trigger, items}) {
     return node;
   });
   panel.append(...controls);
-  const enabledControls = () => controls.filter(node => node.getAttribute('aria-disabled') !== 'true');
+  const enabledControls = () => [...panel.querySelectorAll('[role="menuitem"], select:not(:disabled)')].filter(node => !node.disabled && node.getAttribute('aria-disabled') !== 'true' && node.getClientRects().length && !node.closest('[hidden], [inert]'));
   function close(restore = true) {panel.hidden = true; trigger.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outside);
     if (restore && root.isConnected) trigger.focus();}
@@ -140,7 +142,7 @@ export function menu({button: trigger, items}) {
   function keys(event) {
     if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); close();}
     else if (event.key === 'Tab') close(false);
-    else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    else if (!event.target?.matches?.('select, input, textarea') && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); const enabled = enabledControls(), at = enabled.indexOf(document.activeElement);
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? enabled.length - 1 : (at + (event.key === 'ArrowUp' ? -1 : 1) + enabled.length) % enabled.length;
       enabled[next]?.focus();
@@ -161,20 +163,22 @@ export function trapFocus(root, event) {
   else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {event.preventDefault(); last.focus();}
   else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {event.preventDefault(); first.focus();}
 }
-export function inspector({title, onClose = () => {}, returnFocus} = {}) {
+export function inspector({title, onClose = () => {}, returnFocus, dock = false} = {}) {
   const opener = document.activeElement, media = matchMedia('(min-width: 1200px)'), titleId = uid();
   const body = h('div', {class: 'ui-inspector-body'});
-  const closeButton = iconButton({icon: 'x', label: t('ui_close'), onClick: close});
-  const back = button({variant: 'ghost', icon: 'chevron-left', label: t('ui_back'), onClick: close, class: 'ui-button ghost ui-inspector-back'});
-  const root = h('aside', {class: 'ui-inspector', tabindex: -1, 'aria-labelledby': titleId},
+  const closeButton = iconButton({icon: 'x', label: t('ui_close'), onClick: () => close()});
+  const back = button({variant: 'ghost', icon: 'chevron-left', label: t('ui_back'), onClick: () => close(), class: 'ui-button ghost ui-inspector-back'});
+  const root = h('aside', {class: dock ? 'ui-inspector ui-inspector-dock' : 'ui-inspector', tabindex: -1, 'aria-labelledby': titleId},
     h('header', {}, back, h('h2', {id: titleId}, title), closeButton), body);
-  const scrim = h('div', {class: 'ui-inspector-scrim', onclick: close});
+  const scrim = h('div', {class: 'ui-inspector-scrim', onclick: () => close()});
   const inerted = [];
   function release() {for (const node of inerted.splice(0)) node.inert = false;}
   function resize() {
-    release(); root.setAttribute('role', media.matches ? 'complementary' : 'dialog');
-    if (media.matches) {root.removeAttribute('aria-modal'); scrim.remove();}
-    else {root.setAttribute('aria-modal', 'true'); root.before(scrim);
+    release();
+    if (dock && !media.matches && root.hidden) {scrim.remove(); root.removeAttribute('aria-modal'); return;}
+    root.setAttribute('role', media.matches ? 'complementary' : 'dialog');
+    if (media.matches || root.hidden) {root.removeAttribute('aria-modal'); scrim.remove();}
+    else {root.setAttribute('aria-modal', 'true'); if (!scrim.isConnected) root.before(scrim);
       // Inert siblings up to the document; never inert the sheet's own ancestors.
       let node = root;
       while (node.parentElement && node.parentElement !== document.documentElement) {
@@ -183,19 +187,51 @@ export function inspector({title, onClose = () => {}, returnFocus} = {}) {
       }
     }
   }
-  function keys(event) {if (event.key === 'Escape') {event.preventDefault(); close();} else if (!media.matches) trapFocus(root, event);}
+  function keys(event) {
+    if (dock && (root.hidden || media.matches)) return;
+    if (event.key === 'Escape') {event.preventDefault(); close();}
+    else if (!media.matches) trapFocus(root, event);
+  }
   let closed = false;
-  function close() {if (closed) return; closed = true; release(); scrim.remove(); root.remove();
-    document.removeEventListener('keydown', keys); media.removeEventListener('change', resize); onClose();
+  function restoreFocus() {
     let target = null;
     try { target = typeof returnFocus === 'function' ? returnFocus() : returnFocus; } catch { target = null; }
     const rendered = node => node?.isConnected && node.getClientRects().length && !node.closest('[hidden], [inert]');
     if (rendered(target)) target.focus();
     else if (rendered(opener)) opener.focus();
   }
-  queueMicrotask(() => {if (closed || !root.isConnected) return; resize(); (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
-    document.addEventListener('keydown', keys); media.addEventListener('change', resize);});
-  return Object.assign(root, {body, close, dispose: close});
+  function destroy() {
+    if (closed) return; closed = true; release(); scrim.remove(); root.remove();
+    document.removeEventListener('keydown', keys); media.removeEventListener('change', onMedia);
+  }
+  function close() {
+    if (closed) return;
+    if (dock && !media.matches) {
+      root.hidden = true; release(); scrim.remove(); root.removeAttribute('aria-modal');
+      onClose(); restoreFocus();
+      return;
+    }
+    if (dock && media.matches) return;
+    destroy(); onClose(); restoreFocus();
+  }
+  function open() {
+    if (closed) return;
+    root.hidden = false; resize();
+    (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
+  }
+  function onMedia() {
+    if (dock && !media.matches) root.hidden = true;
+    if (dock && media.matches) root.hidden = false;
+    resize();
+  }
+  queueMicrotask(() => {
+    if (closed || !root.isConnected) return;
+    if (dock && !media.matches) root.hidden = true;
+    resize();
+    if (!dock) (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
+    document.addEventListener('keydown', keys); media.addEventListener('change', onMedia);
+  });
+  return Object.assign(root, {body, close, open, dispose: dock ? destroy : close});
 }
 export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs} = {}) {
   const compact = () => compactRow && matchMedia('(max-width: 799px)').matches;

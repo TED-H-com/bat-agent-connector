@@ -3,8 +3,13 @@ import {iso, unix, type DemoProject} from './project.ts';
 
 export function capabilities(project: DemoProject, buckets = true) {
   return {
-    actor: project.ids.actor, scopes: ['observe'], api_version: 1, contract_version: '2026-10-08',
-    hosts: [{host: project.ids.host, writes: false, observe: true}], actions: [],
+    actor: project.ids.actor, scopes: ['observe', 'operate'], api_version: 1, contract_version: '2026-10-08',
+    hosts: [{host: project.ids.host, writes: true, observe: true}],
+    actions: [
+      {action: 'session.send', allowed: true},
+      {action: 'session.answer', allowed: true},
+      {action: 'session.interrupt', allowed: true},
+    ],
     features: {pm_overview: {version: 1, read_only: true}, pm_workspaces: {version: 1, plan_drafting: true, plan_adoption: true, brief_snapshots: true, kanban: true, governance: true,
       issue_mapping: true, engineering_delivery: {contract: 'pm-engineering-delivery/v1'}, roadmap: true,
       conversation_proposals: {version: 1}, maintenance_repairs: {version: 1}}, pm_resources: buckets ? {version: 1, buckets: {granularity: 'day' as const}} : {version: 1},

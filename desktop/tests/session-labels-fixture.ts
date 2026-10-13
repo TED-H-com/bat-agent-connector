@@ -60,5 +60,8 @@ export async function labelsFixture(page:Page,native:boolean,options:any={}) {
 }
 export async function openLabels(page:Page){
  await page.goto('/dashboard/#/session/demo/manual-full-session');
+ await expect(page.locator('[data-session-view]')).toBeVisible();
+ const opener=page.getByRole('button',{name:/^(Results|成果)$/,exact:true});
+ if(await opener.isVisible())await opener.click();
  const panel=page.locator('[data-session-labels]');await expect(panel).toBeVisible();await panel.locator('summary').click();return panel;
 }

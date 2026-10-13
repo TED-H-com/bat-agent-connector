@@ -339,11 +339,13 @@ for (const {locale, width} of cases) {
     await page.goto(demoRoute('manual'));
     await expect(page.locator('h1')).toContainText(copy.manualTitle);
     await expectProjectName(page, width, copy.name);
-    await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? 'API 唯讀' : 'API read-only');
-    await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '人工建立（BAT）' : 'created in BAT');
-    await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '這個 session 由人在 BAT 建立' : 'A person created this session in BAT');
+    await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '這個工作階段由人在 BAT 建立' : 'A person created this session in BAT');
     await expect(page.locator('#main')).toContainText(copy.manualNote);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
+    if (width < 1200) await page.getByRole('button', {name: locale === 'zh-TW' ? '成果' : 'Results', exact: true}).click();
+    await page.locator('[data-session-details] > summary').click();
+    await expect(page.locator('[data-session-details]')).toContainText(locale === 'zh-TW' ? 'API 唯讀' : 'API read-only');
+    await expect(page.locator('[data-session-details]')).toContainText(locale === 'zh-TW' ? '人工建立（BAT）' : 'created in BAT');
     await expectNoJunk(page);
     await shot(page, `manual-${locale}-${width}`);
     // Web boot probes a managed browser session. This demo is a bearer-token client, so the

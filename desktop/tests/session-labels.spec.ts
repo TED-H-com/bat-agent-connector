@@ -69,8 +69,13 @@ for(const native of [false,true]){
  });
  for(const options of [{scopes:['observe']},{allowed:null},{allowed:false},{metadata:null},{metadata:{version:1,labels:'wrong'}}])
  test(`${name}: positive capability and readable metadata gate ${JSON.stringify(options)}`,async({page})=>{
-  const state=await labelsFixture(page,native,options);const panel=await openLabels(page);
-  await expect(panel.getByRole('button',{name:'Save labels',exact:true})).toBeDisabled();expect(state.posts).toHaveLength(0);
+  const state=await labelsFixture(page,native,options);
+  await page.goto('/dashboard/#/session/demo/manual-full-session');
+  const panel=page.locator('[data-session-labels]');
+  await expect(panel).toBeVisible();
+  await expect(panel.locator('summary')).not.toContainText('Edit labels');
+  await expect(panel.locator('.session-label-editor button')).toHaveCount(0);
+  expect(state.posts).toHaveLength(0);
  });
  test(`${name}: unknown operation stays readback-only`,async({page})=>{
   const state=await labelsFixture(page,native,{status:'uncertain'}),panel=await openLabels(page);
@@ -133,7 +138,9 @@ for(const native of [false,true])for(const retained of [false,true])test(`${nati
   await panel.getByRole('textbox').fill('History');await panel.getByRole('button',{name:'Save labels',exact:true}).click();
   await expect(panel).toContainText('This label change was saved');expect(state.posts[0].body.target).toEqual(target);
  }else{
-  await expect(panel.getByRole('button',{name:'Save labels',exact:true})).toBeDisabled();expect(state.posts).toHaveLength(0);
+  await expect(panel.locator('summary')).not.toContainText('Edit labels');
+  await expect(panel.locator('.session-label-editor button')).toHaveCount(0);
+  expect(state.posts).toHaveLength(0);
  }
  expect(state.errors).toEqual([]);
 });

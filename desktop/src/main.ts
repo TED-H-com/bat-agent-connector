@@ -23,4 +23,5 @@ import "./pm-discussions.css";
 import "./global-screens.css";
 import "./pm-requirements.css";
 import "./pm-work-inspector.css";
+import "./pm-session.css";
 import "./app.js";

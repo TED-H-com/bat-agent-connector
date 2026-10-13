@@ -88,7 +88,10 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
       published: 'pub_title', orchestrate: 'orch_title', op: 'link_operation', host: 'host', task: 'task_title',
       worktree: 'obs_worktree', dispatch: 'dispatch_title'}[currentRoute];
     const routeTitle = routeKey ? t(routeKey) : '';
-    if (routeTitle) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, routeTitle));
+    const workSession = workspace && ['session', 'item', 'work'].includes(currentRoute);
+    if (workSession) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_work')),
+      h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_session')));
+    else if (routeTitle) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, routeTitle));
     crumb.append(h('button', {type: 'button', class: 'shell-mobile-name', title: workspace?.name || routeTitle,
       'aria-label': workspace?.name || routeTitle || t('ui_menu'), 'aria-controls': 'workspace-sidebar', 'aria-expanded': 'false', onclick: openDrawer}, workspace?.name || routeTitle));
     workspaceBlock.hidden = !workspaceBlock.children.length; projectNav.hidden = !projectNav.children.length;

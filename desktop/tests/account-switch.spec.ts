@@ -42,6 +42,7 @@ for (const pause of ["digest", "lookup"]) {
     const send = page.getByRole("button", {name: "Send", exact: true});
     if (pause === "lookup") {
       await send.click();
+      await page.locator(".session-send-record summary").click();
       await expect(page.getByText("op_" + "c".repeat(32), {exact: true})).toBeVisible();
     } else await page.evaluate(() => { (window as any).__pauseDigest = true; });
     await send.click();

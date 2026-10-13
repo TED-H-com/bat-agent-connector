@@ -50,8 +50,8 @@ test('disclosure remembers open state; table rows navigate and expand; unknown d
 });
 for (const locale of ['en', 'zh-TW']) test(`canonical vocabulary ${locale} and text-only content`, async ({browser}) => {
   const context = await browser.newContext({locale}); const page = await context.newPage(); await mount(page);
-  const expected = locale === 'en' ? ['Not started','In progress','Waiting','In review','Accepted','Blocked','Done','Merged','Deployed','Rolled back','Unconfirmed','Unknown','Not assessed','Partial','Stale','Read-only','Draft','Adopted','Historical']
-    : ['未開始','進行中','等待中','審閱中','已驗收','受阻','完成','已合併','已部署','已回復','待確認','未知','未評估','部分','過期','唯讀','草稿','已採用','歷史'];
+  const expected = locale === 'en' ? ['Not started','In progress','Waiting','In review','Accepted','Blocked','Done','Merged','Deployed','Rolled back','Unconfirmed','Unknown','Not assessed','Partial','Stale','Read-only','Running','Failed','Needs you','Asking you','Stopped','Draft','Adopted','Historical']
+    : ['未開始','進行中','等待中','審閱中','已驗收','受阻','完成','已合併','已部署','已回復','待確認','未知','未評估','部分','過期','唯讀','執行中','失敗','需要你','正在詢問','已停止','草稿','已採用','歷史'];
   await expect(page.locator('#fixture > [data-status]')).toHaveText(expected);
   await page.evaluate(async () => {const {button} = await import('/src/ui/components.js'); document.body.append(button({label: '<img src=x onerror=alert(1)>'}));});
   await expect(page.locator('img')).toHaveCount(0); await expect(page.locator('[style]')).toHaveCount(0); await context.close();
@@ -217,4 +217,36 @@ test('compact table rows have one target and preserve expansion when resized', a
   await page.setViewportSize({width: 1440, height: 900});
   await expect(row.locator('button')).toHaveAttribute('aria-expanded', 'true');
   await row.focus(); await page.keyboard.press('Enter'); await expect(page.locator('body')).toHaveAttribute('data-selection', 'compact');
+});
+
+for (const form of ['element', 'callback']) test(`docked inspector uses ${form} return focus when its mobile sheet closes`, async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844}); await mount(page);
+  await page.evaluate(async form => {
+    const {inspector} = await import('/src/ui/components.js');
+    const target = document.createElement('button'); target.textContent = 'Results trigger'; document.getElementById('fixture')!.append(target);
+    const panel = inspector({title: 'Docked results', dock: true, returnFocus: form === 'callback' ? () => target : target});
+    document.getElementById('fixture')!.append(panel);
+    target.addEventListener('click', () => panel.open());
+  }, form);
+  const target = page.getByRole('button', {name: 'Results trigger', exact: true});
+  await expect(page.locator('.ui-inspector-dock')).toBeHidden();
+  await target.click(); await expect(page.locator('.ui-inspector-dock')).toHaveAttribute('aria-modal', 'true');
+  await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector-dock')).toBeHidden(); await expect(target).toBeFocused();
+  await target.click(); await expect(page.locator('.ui-inspector-dock')).toBeVisible();
+});
+
+test('menu grouped selects retain arrow keys and Escape restores the trigger', async ({page}) => {
+  await mount(page); await page.evaluate(async () => {
+    const {menu, button} = await import('/src/ui/components.js'), {h} = await import('/src/ui/dom.js');
+    document.getElementById('fixture')!.append(menu({button: button({label: 'Session options'}), items: [
+      {key: 'shortcut', label: 'Shortcut', content: h('select', {'aria-label': 'Send shortcut'}, h('option', {}, 'Enter'), h('option', {}, 'Control Enter'))},
+    ]}));
+  });
+  const trigger = page.getByRole('button', {name: 'Session options', exact: true}); await trigger.click();
+  const select = page.getByLabel('Send shortcut', {exact: true}); await expect(select).toBeFocused();
+  expect(await select.evaluate(node => {
+    const event = new KeyboardEvent('keydown', {key: 'ArrowDown', bubbles: true, cancelable: true});
+    node.dispatchEvent(event); return event.defaultPrevented;
+  })).toBe(false);
+  await page.keyboard.press('Escape'); await expect(select).toBeHidden(); await expect(trigger).toBeFocused();
 });

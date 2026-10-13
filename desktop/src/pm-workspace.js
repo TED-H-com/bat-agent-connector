@@ -286,9 +286,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const title = h('span', {}, t('pm_title'));
   const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), 'data-pm-refresh': '', onClick: () => void load()});
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
-  const viewMeta = h('span', {'data-pm-work-meta': ''});
+  const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
   const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [refresh]});
-  viewMeta.parentElement.hidden = true;
+  viewMeta.hidden = true;
   const headerMeta = h('p', {class: 'ui-meta', 'data-dependencies-meta': '', hidden: true});
   const headerPills = h('span', {class: 'dep-header-pills', hidden: true});
   heading.querySelector('.ui-title-row')?.append(headerPills);
@@ -582,7 +582,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   function updateWorkView(id) {
     traceability?.setActive(id === 'requirements'); kanban?.setActive(id === 'board');
     const meta = id === 'requirements' ? traceability?.meta : id === 'board' ? kanban?.meta : null;
-    viewMeta.replaceChildren(...(meta ? [meta] : [])); viewMeta.parentElement.hidden = !meta;
+    viewMeta.replaceChildren(...(meta ? [meta] : [])); viewMeta.hidden = !meta;
     for (const [viewId, control] of viewToolMenus) {control.hidden = viewId !== id; if (control.hidden) control.close(false);}
   }
   function secondary(label, node) {

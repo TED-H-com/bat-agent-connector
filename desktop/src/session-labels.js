@@ -1,3 +1,4 @@
+import {disclosure} from "./ui/components.js";
 // Only Connector metadata changes. Labels never grant control over a BAT session.
 const object = v => v && typeof v === 'object' && !Array.isArray(v);
 const version = v => Number.isSafeInteger(v) && v >= 0;
@@ -32,7 +33,7 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
   const terminal=()=>['succeeded','failed','cancelled'].includes(operation?.status);
   const input=h('textarea',{'aria-label':t('labels_input'),rows:3,maxlength:1000});
   input.value=saved.text||'';
-  const tags=h('div',{class:'actions'}), message=h('div',{role:'status'}), result=h('div'), restriction=h('p',{class:'muted'});
+  const tags=h('div',{class:'actions session-label-tags'}), message=h('div',{role:'status'}), result=h('div'), restriction=h('p',{class:'muted'});
   const error=e=>{if(live()){message.replaceChildren(errorBox(e));update();}};
   const parsed=()=>input.value.trim()===''?[]:input.value.split('\n').map(v=>v.trim());
   const accept=candidate=>{
@@ -78,20 +79,37 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
     if(!live() || saved.intent || !readable){input.value=saved.text||'';return;}
     saved={text:input.value,base_version:saved.base_version??current.version};try{persist();}catch(e){error(e);}update();
   };
-  const editor=h('details',{},h('summary',{},t('labels_edit')));
+  const editorMount=h('div',{class:'session-label-editor'});
+  const reason=h('p',{class:'muted session-label-reason'});
+  const foldLabel=h('span');
+  const fold=disclosure({label:foldLabel,body:h('div',{},reason,editorMount)});
+  const stateLine=h('p',{class:'muted session-label-state'});
   let mounted=false;
-  editor.addEventListener('toggle',()=>{
-    if(editor.open && !mounted){
-      editor.append(h('p',{class:'muted'},t('labels_help')),h('label',{},t('labels_input'),input),
-        h('p',{class:'muted'},t('labels_limits')),h('div',{class:'actions'},apply,check,renew),restriction,result,message);
-      mounted=true;update();
-    }
-  });
-  const box=h('section',{class:'panel','data-session-labels':''},h('h2',{},t('labels_title')),tags,editor);
+  const mountEditor=()=>{
+    if(mounted)return;
+    editorMount.append(h('p',{class:'muted'},t('labels_help')),h('label',{},t('labels_input'),input),
+      h('p',{class:'muted'},t('labels_limits')),h('div',{class:'actions'},apply,check,renew),restriction,result,message);
+    mounted=true;
+  };
+  fold.addEventListener('toggle',()=>{if(fold.open)update();});
+  const box=h('section',{class:'session-labels','data-session-labels':''},stateLine,tags,fold);
   function update(){
     if(!live())return;
     const fixed=Boolean(saved.intent);
-    tags.replaceChildren(...(current?.labels.length?current.labels.map(v=>h('span',{class:'chip'},v)):[h('span',{class:'muted'},t(current?'labels_empty':'labels_unreadable'))]));
+    const canSave=readable && permitted() && !damaged;
+    const showEdit=canSave || fixed || damaged || (readable && Object.hasOwn(saved,'text'));
+    const chips=current?.labels.length?current.labels.map(v=>h('span',{class:'chip'},v)):[];
+    tags.replaceChildren(...chips);
+    tags.hidden=!chips.length;
+    stateLine.hidden=Boolean(chips.length);
+    stateLine.textContent=t(readable?'labels_empty':'labels_unavailable');
+    foldLabel.textContent=t(showEdit?'labels_edit':'session_details');
+    const why=!readable?t('labels_unreadable'):!permitted()?t('labels_scope'):'';
+    reason.hidden=showEdit||!why;
+    reason.textContent=why;
+    fold.hidden=!showEdit && !why;
+    editorMount.hidden=!showEdit;
+    if(showEdit && fold.open)mountEditor();
     input.disabled=fixed||busy||Boolean(refreshing)||!readable||!permitted()||damaged;
     apply.hidden=Boolean(saved.intent?.operation_id||saved.intent?.refused);
     apply.disabled=busy||Boolean(refreshing)||!readable||!permitted()||damaged||Boolean(fixed&&!saved.intent.request)||!validLabels(parsed());

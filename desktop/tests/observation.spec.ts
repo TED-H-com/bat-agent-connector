@@ -271,6 +271,9 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
     const fixture = historyFixture(); await mount(page, false, fixture.read);
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto("/dashboard/#/session/demo/session-1");
+    await expect(page.locator("[data-session-view]")).toBeVisible();
+    const opener = page.getByRole("button", {name: /^(Results|成果)$/, exact: true});
+    if (await opener.isVisible()) await opener.click();
     await page.locator(".workspace-evidence > summary").click();
     await page.locator(".observation-evidence > summary").click();
     await page.locator('[data-observation="history"] > summary').click();
@@ -278,6 +281,8 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({path: `test-results/observation-${locale}-${width}.png`, fullPage: true});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const sheet = page.getByRole("dialog");
+    if (await sheet.isVisible()) {await page.keyboard.press("Escape"); await expect(sheet).toBeHidden();}
     await page.locator(".workspace-session-heading").getByRole("link", {name: "demo", exact: true}).click();
     await expect(page.getByText("profile-fixture", {exact: true})).toBeVisible();
     await expect(page.getByText("not_enumerable", {exact: true})).toBeVisible();
