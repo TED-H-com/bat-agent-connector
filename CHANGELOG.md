@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Requirements distinguishes accepted, unassessed and unknown quality coverage,
+  marks partial delivery evidence, and shows the requirement traceability chain.
+  Auxiliary failures stay local; live inspector actions retain focus and open menus.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,

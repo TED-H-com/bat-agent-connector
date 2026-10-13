@@ -262,12 +262,32 @@ var scheduleStrings = {
 //#region src/pm-work-view-strings.js
 var workViewStrings = {
 	en: {
+		wv_load_more: "Load more",
+		wv_retry: "Retry",
+		wv_acceptance_unknown: "Acceptance unknown",
+		wv_delivery_unknown: "Delivery unknown",
+		wv_session_unavailable: "Session unavailable",
+		wv_source_unavailable: "Source unavailable",
+		wv_source_mismatch: "The source does not match this workspace.",
+		wv_detail_unavailable: "Work unavailable",
+		wv_earlier_plan: "Earlier plan",
+		wv_from_earlier_plan: "From an earlier plan",
+		wv_ci_times_missing: "CI and attempt times not recorded",
+		wv_bound_work: "Bound work",
+		wv_quality_review: "Quality review",
+		wv_decisions_changes: "Decisions and changes",
+		wv_decisions_unknown: "Related records unknown",
+		wv_no_decisions: "No related decisions recorded",
+		wv_related_record: "Related record",
+		wv_not_in_plan: "Not in the current plan",
+		wv_show_board: "Show on Board",
+		wv_lane_loaded: "{n} loaded, more may exist",
 		wv_open_requirement: "Open requirement",
 		wv_not_recorded: "Not recorded",
 		wv_compact_prs_unknown: "PRs unknown",
-		wv_compact_work: "{n} work",
+		wv_compact_work: "{n} work items",
 		wv_compact_prs: "{n} PRs",
-		wv_compact_work_loaded: "{n} work loaded",
+		wv_compact_work_loaded: "{n} work items loaded",
 		wv_compact_prs_loaded: "{n} PRs loaded",
 		wv_requirements_unavailable: "Requirement records unavailable",
 		wv_board_unavailable: "Work records unavailable",
@@ -325,6 +345,26 @@ var workViewStrings = {
 		wv_refresh: "Refresh"
 	},
 	"zh-TW": {
+		wv_load_more: "載入更多",
+		wv_retry: "重試",
+		wv_acceptance_unknown: "驗收狀態未知",
+		wv_delivery_unknown: "交付狀態未知",
+		wv_session_unavailable: "無法取得工作階段",
+		wv_source_unavailable: "無法取得來源",
+		wv_source_mismatch: "來源與這個工作區不相符。",
+		wv_detail_unavailable: "無法取得工作",
+		wv_earlier_plan: "較早的計畫",
+		wv_from_earlier_plan: "來自較早的計畫",
+		wv_ci_times_missing: "尚無 CI 與嘗試起訖時間紀錄",
+		wv_bound_work: "關聯工作",
+		wv_quality_review: "品質審閱",
+		wv_decisions_changes: "決策與變更",
+		wv_decisions_unknown: "相關紀錄未知",
+		wv_no_decisions: "尚無相關決策紀錄",
+		wv_related_record: "相關紀錄",
+		wv_not_in_plan: "不在目前的計畫中",
+		wv_show_board: "在看板顯示",
+		wv_lane_loaded: "已載入 {n} 筆，可能還有其他工作",
 		wv_open_requirement: "開啟需求",
 		wv_not_recorded: "未記錄",
 		wv_compact_prs_unknown: "PR 未知",
@@ -3630,9 +3670,9 @@ var workbenchStrings = {
 		wb_close: "Close details",
 		wb_open_work: "Open work and results",
 		wb_more: "Load more work",
-		wb_more_issues: "Load more Issue links",
-		wb_more_reviews: "Load more quality records",
-		wb_receipts_more: "Load more delivery records",
+		wb_more_issues: "More issue links",
+		wb_more_reviews: "More quality records",
+		wb_receipts_more: "More delivery records",
 		wb_issue: "Issue #{number}",
 		wb_attempts: "Execution records",
 		wb_approval: "Plan adoption",
@@ -3702,7 +3742,7 @@ var workbenchStrings = {
 		wb_current: "目前紀錄",
 		wb_requirements: "需求",
 		wb_milestone: "里程碑",
-		wb_work: "Issue／工作",
+		wb_work: "議題／工作",
 		wb_acceptance: "驗收",
 		wb_delivery: "PR／部署",
 		wb_blocker: "下一個阻擋",
@@ -3714,7 +3754,7 @@ var workbenchStrings = {
 		wb_close: "關閉詳情",
 		wb_open_work: "開啟工作與成果",
 		wb_more: "載入更多工作",
-		wb_more_issues: "載入更多 Issue 關聯",
+		wb_more_issues: "載入更多議題關聯",
 		wb_more_reviews: "載入更多品質紀錄",
 		wb_receipts_more: "載入更多交付紀錄",
 		wb_issue: "Issue #{number}",
@@ -5490,7 +5530,7 @@ var pmKanbanStrings = {
 		pm_kanban_attempts: "{count} accepted sends",
 		pm_kanban_attempt_basis: "Returned visible send identities; not a count of completed work.",
 		pm_kanban_no_execution: "No visible linked execution",
-		pm_kanban_quality_unknown: "DoD unassessed",
+		pm_kanban_quality_unknown: "Definition of done not assessed",
 		pm_kanban_detail: "Execution and sources",
 		pm_kanban_detail_loading: "Checking current source access…",
 		pm_kanban_execution: "Current execution read",
@@ -5517,8 +5557,8 @@ var pmKanbanStrings = {
 		pm_kanban_operation: "Operation",
 		pm_kanban_session: "Session",
 		pm_kanban_attempt: "Send identity",
-		pm_kanban_accepted: "Acceptance recorded",
-		pm_kanban_accept_unknown: "Acceptance unknown",
+		pm_kanban_accepted: "Send accepted",
+		pm_kanban_accept_unknown: "Send not confirmed",
 		pm_kanban_stream_unknown: "Live activity unknown",
 		pm_kanban_reopened: "Recorded reopenings",
 		pm_kanban_seconds: "Under 1 minute",
@@ -5593,7 +5633,7 @@ var pmKanbanStrings = {
 		pm_kanban_loaded: "已顯示 {count} 項不同工作",
 		pm_kanban_wip: "最近一頁：{count} 項 WIP・{unknown} 項未知・{cards} 項未封存工作",
 		pm_kanban_wip_basis: "WIP 從記錄的開始時間算至內容核可，封存工作不列入。",
-		pm_kanban_quality: "內容核可不代表符合 DoD、測試通過或部署已驗證。",
+		pm_kanban_quality: "內容核可不代表符合完成定義、測試通過或部署已驗證。",
 		pm_kanban_limits: "這裡尚未設定 WIP 上限、資源容量與工作依賴。",
 		pm_kanban_read_at: "讀取時間",
 		pm_kanban_page_at: "本頁摘要時間",
@@ -5605,7 +5645,7 @@ var pmKanbanStrings = {
 		pm_kanban_attempts: "{count} 次已受理派送",
 		pm_kanban_attempt_basis: "僅計算本次可見派送身分，不是完成工作數。",
 		pm_kanban_no_execution: "沒有可見的關聯執行",
-		pm_kanban_quality_unknown: "DoD 尚未評估",
+		pm_kanban_quality_unknown: "完成定義尚未評估",
 		pm_kanban_detail: "執行與來源",
 		pm_kanban_detail_loading: "正在核對目前來源存取權…",
 		pm_kanban_execution: "目前執行讀取",
@@ -17491,12 +17531,38 @@ function prGroups(deliveries = []) {
 	}
 	return [...groups.values()];
 }
+var deliveryCoverage = (source) => !source || source.available !== true ? "unknown" : source.filtered || source.next != null ? "partial" : "complete";
+function aggregateDelivery(sources, incomplete = false) {
+	const coverage = sources.map(deliveryCoverage);
+	return {
+		deliveries: [...new Map(sources.flatMap((source) => source?.deliveries || []).map((row) => [row.operation_id, row])).values()],
+		available: !coverage.includes("unknown"),
+		filtered: incomplete || coverage.includes("partial"),
+		next: null
+	};
+}
+function deployStatus(source) {
+	const coverage = deliveryCoverage(source);
+	if (coverage !== "complete") return coverage;
+	const groups = prGroups(source.deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
+	return deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown";
+}
 function prPills(source) {
-	return prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
+	const pills = prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
 		class: "pm-work-pr",
 		title: labelSegment(target.repository)
 	}, contextChip({ text: `PR #${target.pull_number}` }), rows.some((row) => row.merge?.merged === true) ? statusPill("merged") : statusPill("unknown")));
+	const coverage = deliveryCoverage(source);
+	if (coverage !== "complete") pills.push(statusPill(coverage));
+	return pills;
 }
+function elapsed(t, value) {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+	if (value < 60) return t("pm_kanban_seconds");
+	const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
+	return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
+}
+var workHref = (binding) => binding?.work_item_id ? `#/item/${encodeURIComponent(binding.work_item_id)}` : null;
 function checkDelivery(data, workspaceId, id, after, t) {
 	if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
 	for (const row of data.deliveries) if (!/^op_[0-9a-f]{32}$/.test(row.operation_id || "") || row.requirement_acceptance !== "not_evaluated_by_delivery") throw Error(t("pm_scope_mismatch"));
@@ -17507,34 +17573,49 @@ async function readWorkSources({ api, workspaceId, cards, caps, valid, t, delive
 	async function read(card) {
 		const id = card.work_item_id, source = {
 			deliveries: [],
+			available: false,
 			next: null,
 			filtered: false,
-			sessions: []
+			sessions: [],
+			errors: []
 		};
-		if (caps?.features?.pm_workspaces?.engineering_delivery) {
+		if (caps?.features?.pm_workspaces?.engineering_delivery) try {
 			let after = 0;
 			for (let index = 0; index < deliveryPages; index++) {
 				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/deliveries?after=${after}&limit=20`), workspaceId, id, after, t);
 				if (!valid()) return;
 				source.deliveries.push(...data.deliveries);
-				source.filtered ||= Boolean(data.source_visibility_filtered);
+				source.filtered ||= Boolean(data.source_visibility_filtered || data.coverage?.byte_limited);
 				source.next = data.next_after ?? null;
 				if (source.next === null) break;
 				after = source.next;
 			}
+			source.available = true;
+		} catch (error) {
+			source.deliveries = [];
+			source.next = null;
+			source.errors.push({
+				kind: "delivery",
+				code: error.code
+			});
 		}
-		if (caps) for (const ref of card.execution?.sessions || []) {
+		const reads = (card.execution?.sessions || []).map((ref) => {
 			const resource = labelSegment(ref.resource_id), slash = resource.indexOf("/");
-			if (slash < 1 || !resource.slice(slash + 1)) continue;
-			const host = resource.slice(0, slash), id = resource.slice(slash + 1);
-			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(id)}`).then((data) => {
-				if (data.session?.host !== host || data.session.session_id !== id) throw Error(t("pm_scope_mismatch"));
+			if (slash < 1 || !resource.slice(slash + 1)) return Promise.reject(Error(t("wv_source_mismatch")));
+			const host = resource.slice(0, slash), sessionId = resource.slice(slash + 1);
+			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}`).then((data) => {
+				if (data.session?.host !== host || data.session.session_id !== sessionId) throw Error(t("wv_source_mismatch"));
 				return data.session;
 			}));
-			const session = await sessions.get(resource);
-			if (!valid()) return;
-			source.sessions.push(session);
-		}
+			return sessions.get(resource);
+		});
+		const settled = await Promise.allSettled(reads);
+		if (!valid()) return;
+		for (const row of settled) if (row.status === "fulfilled") source.sessions.push(row.value);
+		else source.errors.push({
+			kind: "session",
+			code: row.reason?.code
+		});
 		result.set(id, source);
 	}
 	const queue = [...cards];
@@ -17543,8 +17624,8 @@ async function readWorkSources({ api, workspaceId, cards, caps, valid, t, delive
 	}));
 	return result;
 }
-function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [] }) {
-	let panel = null, actions = null, signature = "", selection = null;
+function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [], returnFocus }) {
+	let panel = null, actions = null, signature = "", selection = null, returnTarget = null;
 	const unknown = () => statusPill("unknown");
 	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
 	const stamp = (value) => {
@@ -17559,7 +17640,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		if (!panel) {
 			panel = inspector({
 				title: data.title || t("ui_work_item"),
+				returnFocus: () => returnTarget,
 				onClose: () => {
+					returnTarget = returnFocus?.();
 					actions?.dispose();
 					actions = null;
 					panel = null;
@@ -17573,7 +17656,12 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			panel.dataset.rtmDetail = "";
 			mount.append(panel);
 		}
-		const next = JSON.stringify(data);
+		const next = JSON.stringify(data, (key, value) => [
+			"age_seconds",
+			"waiting_seconds",
+			"observed_at",
+			"updated_at"
+		].includes(key) ? void 0 : value);
 		if (signature === next) return;
 		signature = next;
 		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
@@ -17592,24 +17680,39 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			title: data.title,
 			from
 		});
-		actions?.dispose();
-		panel.querySelector("[data-work-actions]")?.remove();
-		actions = menu({
-			button: iconButton({
-				icon: "more-horizontal",
-				label: t("ui_more")
-			}),
-			items: tools()
-		});
-		const actionRow = h$1("div", {
-			class: "pm-work-inspector-actions",
-			"data-work-actions": ""
-		}, h$1("a", {
-			href,
-			class: "ui-button primary",
-			"data-work-discuss": ""
-		}, t("wv_discuss")), tools().length ? actions : null);
-		panel.querySelector(":scope > header").append(actionRow);
+		let actionRow = panel.querySelector("[data-work-actions]");
+		if (!actionRow) {
+			actionRow = h$1("div", {
+				class: "pm-work-inspector-actions",
+				"data-work-actions": ""
+			}, h$1("a", {
+				href,
+				class: "ui-button primary",
+				"data-work-discuss": ""
+			}, t("wv_discuss")));
+			panel.querySelector(":scope > header").append(actionRow);
+		}
+		if (!actions && tools().length) {
+			actions = menu({
+				button: iconButton({
+					icon: "more-horizontal",
+					label: t("ui_more")
+				}),
+				items: tools()
+			});
+			actionRow.append(actions);
+		}
+		panel.querySelector("[data-work-discuss]").href = href;
+		if (data.error) {
+			panel.body.replaceChildren(h$1("section", { "data-work-section": "error" }, paragraph(t("wv_detail_unavailable")), button({
+				label: t("wv_retry"),
+				onClick: data.onRetry
+			})), disclosure({
+				label: t("wv_details"),
+				body: paragraph(labelSegment(data.error.code))
+			}));
+			return;
+		}
 		const sections = [
 			["requirements", "wv_served"],
 			["status", "wv_status_owner"],
@@ -17618,14 +17721,15 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			["delivery", "wv_delivery"]
 		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
 		const [served, state, result, blocker, delivery] = sections;
-		const requirementRows = requirement ? [requirement] : requirements;
-		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
+		const requirementRows = requirement ? [] : requirements;
+		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(row.id)}` }, firstLabel(row.text, t("wv_earlier_plan")))), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "wv_earlier_plan" : "wv_no_requirement"))]);
 		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
-			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
+			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
 			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
 			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
-			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
+			if (workHref(card.binding)) state.append(h$1("a", { href: workHref(card.binding) }, t("wv_work_details")));
+			if (source.errors?.some((row) => row.kind === "session")) state.append(paragraph(t("wv_session_unavailable")));
 			if (card.quality?.selected_assessment) result.append(qualityFact({
 				h: h$1,
 				t,
@@ -17642,37 +17746,67 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
 				}))));
 			} else result.append(paragraph(t("wv_no_result")));
-			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
+			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null));
 			const groups = prGroups(source.deliveries);
 			for (const { target, rows } of groups) delivery.append(h$1("div", {
 				class: "pm-work-delivery",
 				"data-rtm-pr": target.pull_number
-			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown")), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
 			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
-			if (!(source.deliveries || []).length) delivery.append(paragraph(t("wv_no_delivery")));
+			if (deliveryCoverage(source) === "unknown") delivery.append(paragraph(t("wv_delivery_unknown")));
+			else if (!source.deliveries.length && deliveryCoverage(source) === "complete") delivery.append(paragraph(t("wv_no_delivery")));
 			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
 			if (source.next != null && data.onMore) delivery.append(button({
 				label: t("wb_receipts_more"),
 				onClick: data.onMore
 			}));
-			delivery.append(h$1("h4", {}, t("wb_attempts")), paragraph(t("wv_start_end")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
+			delivery.append(h$1("h4", {}, t("wb_attempts")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
 				class: "pm-work-attempt",
 				"data-work-attempt": row.attempt_id
-			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))), paragraph(h$1("span", { title: t("wv_unknown_times") }, "— – —")))));
-		} else {
-			state.append(statusPill(data.accepted ? "accepted" : "not_assessed"));
-			result.append(paragraph(t("wv_no_result")));
-			blocker.append(data.blocker ? paragraph(statusPill("blocked"), " ", data.blocker) : unknown());
-			delivery.append(paragraph(t("wb_acceptance_separate")));
+			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))))));
+		} else if (requirement) {
+			served.dataset.workSection = "criteria";
+			served.querySelector("h3").textContent = t("wv_criteria");
+			served.replaceChildren(h$1("h3", {}, t("wv_criteria")), statusPill(data.acceptance || "unknown"), h$1("ul", {}, ...(requirement.acceptance || []).map((item) => h$1("li", {}, labelSegment(item.text), " ", statusPill(data.reviews?.length ? "accepted" : data.acceptance === "not_assessed" ? "not_assessed" : "unknown")))));
+			state.dataset.workSection = "work";
+			state.querySelector("h3").textContent = t("wv_bound_work");
+			for (const work of data.work || []) state.append(paragraph(button({
+				variant: "ghost",
+				label: work.work.title,
+				onClick: () => data.onWork?.(work.work_item_id)
+			}), " ", statusPill(workStatus(work))));
+			if (!data.work?.length) state.append(paragraph(t("wb_no_work")));
+			for (const row of data.milestones || []) state.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}` }, row.title)));
+			const review = data.reviews?.at(-1);
+			if (review) result.append(statusPill("accepted"), paragraph(t("wv_quality_review")), h$1("ul", {}, ...(review.assessment?.document?.criteria || []).filter((row) => row.criterion?.requirement_id === requirement.id).map((row) => h$1("li", {}, labelSegment(requirement.acceptance?.find((item) => item.source_input_id === row.criterion.input_id)?.text), " ", statusPill(row.status === "accepted" ? "accepted" : "unknown")))));
+			else {
+				const captures = (data.work || []).map((work) => work.latest_capture).filter(Boolean);
+				result.append(paragraph(t(data.acceptance === "unknown" ? "wv_acceptance_unknown" : captures.length ? "pm_kanban_capture" : "wv_no_result")));
+			}
+			blocker.dataset.workSection = "decisions";
+			blocker.querySelector("h3").textContent = t("wv_decisions_changes");
+			for (const row of data.register?.rows || []) blocker.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/issues?select=${encodeURIComponent(row.row_id)}` }, firstLabel(row.title, t("wv_related_record")))));
+			if (!data.register?.rows.length) blocker.append(paragraph(t(data.register?.complete ? "wv_no_decisions" : "wv_decisions_unknown")));
+			if (data.register && !data.register.complete) blocker.append(statusPill("partial"));
+			delivery.append(statusPill(deployStatus(source)));
+			for (const { target, rows } of prGroups(source.deliveries)) delivery.append(h$1("div", {
+				class: "pm-work-delivery",
+				"data-rtm-pr": target.pull_number
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), " ", statusPill(rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true) ? "deployed" : "unknown")));
+			if (deliveryCoverage(source) === "unknown") delivery.append(paragraph(t("wv_delivery_unknown")));
+			else if (!source.deliveries.length && deliveryCoverage(source) === "complete") delivery.append(paragraph(t("wv_no_delivery")));
 		}
 		const details = disclosure({
 			label: t("wv_details"),
-			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", typeof card.flow?.age_seconds === "number" ? String(card.flow.age_seconds) : t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
+			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", elapsed(t, card.flow?.age_seconds) || t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
 				"tasks",
 				"operations",
 				"sessions",
 				"attempts"
-			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), h$1("pre", { class: "mono" }, JSON.stringify({
+			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), h$1("pre", { class: "mono" }, JSON.stringify({
+				reviews: data.reviews,
+				register: data.register,
+				errors: source.errors,
 				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
 				binding: card?.binding,
 				work: card?.work,
@@ -17686,6 +17820,8 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			open: panel.body.querySelector("[data-work-section=\"details\"]")?.open || false
 		});
 		details.dataset.workSection = "details";
+		const keys = new Set([...sections, details].map((node) => node.dataset.workSection));
+		for (const node of panel.body.querySelectorAll("[data-work-section]")) if (!keys.has(node.dataset.workSection)) node.remove();
 		for (const node of [...sections, details]) {
 			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
 			if (!previous) panel.body.append(node);
@@ -17718,6 +17854,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
+	let qualityComplete = false, catalogueErrors = [], stale = true;
 	let selected = preference.selected || null, signature = "", deliveryPages = 1, preserveSelection = false, tools = () => [];
 	const pages = {
 		work: 1,
@@ -17756,17 +17893,18 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		type: "button",
 		class: "ui-button secondary",
 		hidden: true,
+		"aria-label": t(kind === "work" ? "wb_more" : kind === "issues" ? "wb_more_issues" : "wb_more_reviews"),
 		onclick: () => {
 			pages[kind]++;
 			refresh();
 		}
-	}, t(kind === "work" ? "wb_more" : kind === "issues" ? "wb_more_issues" : "wb_more_reviews"))]));
+	}, t("wv_load_more"))]));
 	const element = h$1("section", {
 		"data-pm-rtm": "",
 		class: "pm-requirements"
 	}, h$1("div", { class: "pm-requirements-toolbar" }, h$1("label", { class: "pm-work-search" }, icon("search"), filter), h$1("label", {}, t("wv_group"), group)), status, layout, h$1("div", { class: "actions" }, ...Object.values(moreButtons)), disclosure({
 		label: t("wb_sources"),
-		body: h$1("div", {}, h$1("p", {}, t("wb_acceptance_separate")), h$1("p", {}, t("wb_no_phase")))
+		body: h$1("div", {}, h$1("p", {}, t("wb_no_phase")))
 	}));
 	const detail = workInspector({
 		t,
@@ -17774,6 +17912,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		from: "requirements",
 		mount: layout,
 		tools: () => tools(),
+		returnFocus: () => selectionTarget(selected) || viewHeading(),
 		onClose: () => {
 			detailSerial++;
 			if (!preserveSelection) {
@@ -17800,14 +17939,12 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	};
 	const issuesFor = (card) => issues.filter((row) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
 	const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
-	const deliverySource = (req) => ({ deliveries: [...new Map(linked(req).flatMap((card) => sources.get(card.work_item_id)?.deliveries || []).map((row) => [row.operation_id, row])).values()] });
+	const deliverySource = (req) => aggregateDelivery(linked(req).map((card) => sources.get(card.work_item_id)), cursors.work != null);
 	const milestoneFor = (req) => milestones.filter((row) => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
 	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wv_issue", { number: row.document.issue.number })]);
-	const acceptancePill = (req) => statusPill(requirementReviews(plan, req, reviews).length ? "accepted" : "not_assessed");
-	const deployPill = (req) => {
-		const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
-		return statusPill(deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown");
-	};
+	const acceptance = (req) => requirementReviews(plan, req, reviews).length ? "accepted" : qualityComplete ? "not_assessed" : "unknown";
+	const acceptancePill = (req) => statusPill(acceptance(req));
+	const deployPill = (req) => statusPill(deployStatus(deliverySource(req)));
 	const milestoneLabel = (req) => {
 		const label = milestoneFor(req).map((row) => labelSegment(row.title)).filter(Boolean).join(" · ");
 		return h$1("span", {
@@ -17817,6 +17954,19 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}, label || "—");
 	};
 	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
+	const viewHeading = () => {
+		const heading = element.closest("main")?.querySelector("h1");
+		if (heading) heading.tabIndex = -1;
+		return heading;
+	};
+	function writeSelection(id) {
+		const [path, query] = location.hash.split("?");
+		if (!path.endsWith("/requirements")) return;
+		const params = new URLSearchParams(query);
+		if (id) params.set("select", id);
+		else params.delete("select");
+		history.replaceState(null, "", path + (params.size ? "?" + params : ""));
+	}
 	function controls() {
 		for (const [kind, button] of Object.entries(moreButtons)) {
 			button.disabled = busy;
@@ -17882,10 +18032,10 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			"data-rtm-select": card.work_item_id,
 			"aria-pressed": String(selected === card.work_item_id),
 			onclick: () => void select(card.work_item_id)
-		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), h$1("span", {
+		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), count !== 0 ? h$1("span", {
 			class: "ui-meta",
 			title: t("wv_attempts", { n: count })
-		}, `×${count}`), ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
+		}, `×${count}`) : null, ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
 	}
 	function renderTable() {
 		const focused = tables.contains(document.activeElement) ? [
@@ -17931,7 +18081,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					tables.querySelector(`[data-row-key="${CSS.escape(id)}"]`)?.focus();
 					select(id);
 				},
-				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h3", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), h$1("button", {
+				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h2", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), h$1("button", {
 					type: "button",
 					class: "ui-button ghost pm-requirement-open",
 					"data-rtm-select": req.id,
@@ -17939,11 +18089,11 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
 				compactRow: (req) => {
 					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
-					const partialPRs = work.some((card) => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
+					const coverage = deliveryCoverage(source);
 					return h$1("div", { class: "pm-requirement-summary" }, h$1("span", {
 						class: "pm-requirement-title",
 						title: labelSegment(req.text)
-					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", { "aria-label": t("wv_acceptance") }, acceptancePill(req)), h$1("span", { "aria-label": t("wv_deploy") }, deployPill(req)), h$1("span", {}, t(cursors.work != null ? "wv_compact_work_loaded" : "wv_compact_work", { n: work.length })), h$1("span", {}, t(!feature("engineering_delivery") ? "wv_compact_prs_unknown" : partialPRs ? "wv_compact_prs_loaded" : "wv_compact_prs", { n: prGroups(source.deliveries).length })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
+					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", {}, t("wv_acceptance") + ": ", acceptancePill(req)), h$1("span", {}, t("wv_deploy") + ": ", deployPill(req)), h$1("span", {}, t(cursors.work != null ? "wv_compact_work_loaded" : "wv_compact_work", { n: work.length })), h$1("span", {}, t(coverage === "unknown" ? "wv_compact_prs_unknown" : coverage === "partial" ? "wv_compact_prs_loaded" : "wv_compact_prs", { n: prGroups(source.deliveries).length })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
 				},
 				columns: [
 					{
@@ -18051,7 +18201,11 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		};
 	}
 	async function refresh() {
-		if (!active) return;
+		if (!active || !visible) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
 		detailSerial++;
 		busy = true;
@@ -18061,19 +18215,36 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 			if (accepted.head?.workspace_id !== workspaceId || accepted.plan && (accepted.plan.workspace_id !== workspaceId || accepted.plan.revision_id !== accepted.head.accepted_revision_id)) throw Error(t("pm_scope_mismatch"));
-			const [work, mappings, quality, roadmap] = await Promise.all([
-				catalogue("work", ticket),
-				feature("issue_mapping") ? catalogue("issues", ticket) : null,
-				feature("quality_reviews") ? catalogue("reviews", ticket) : null,
-				feature("roadmap") ? api("GET", `${endpoint}/roadmap`) : null
-			]);
+			const work = await catalogue("work", ticket);
 			alive();
 			if (ticket !== serial) return;
 			work.rows.forEach((row) => cardCheck(row));
-			if (new Set(work.rows.map((row) => row.work_item_id)).size !== work.rows.length) throw Error(t("pm_scope_mismatch"));
-			for (const row of mappings?.rows || []) if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.work_item_id !== row.work_item_id || row.document.relation?.work_item_id !== row.work_item_id || !row.document.issue?.repository || !Number.isSafeInteger(row.document.issue.number)) throw Error(t("pm_scope_mismatch"));
-			for (const row of quality?.rows || []) if (row.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-			if (roadmap) scope(roadmap);
+			if (new Set(work.rows.map((row) => row.work_item_id)).size !== work.rows.length) throw Error(t("wv_source_mismatch"));
+			const settled = await Promise.allSettled([
+				feature("issue_mapping") ? catalogue("issues", ticket) : null,
+				feature("quality_reviews") ? catalogue("reviews", ticket) : null,
+				feature("roadmap") ? api("GET", `${endpoint}/roadmap`).then(scope) : null
+			]);
+			alive();
+			if (ticket !== serial) return;
+			catalogueErrors = settled.flatMap((row, i) => row.status === "rejected" ? [{
+				kind: [
+					"issues",
+					"reviews",
+					"roadmap"
+				][i],
+				code: row.reason?.code
+			}] : []);
+			let [mappings, quality, roadmap] = settled.map((row) => row.status === "fulfilled" ? row.value : null);
+			if (mappings?.rows.some((row) => row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.work_item_id !== row.work_item_id || row.document.relation?.work_item_id !== row.work_item_id || !row.document.issue?.repository || !Number.isSafeInteger(row.document.issue.number))) {
+				mappings = null;
+				catalogueErrors.push({ kind: "issues" });
+			}
+			if (quality?.rows.some((row) => row.workspace_id !== workspaceId)) {
+				quality = null;
+				catalogueErrors.push({ kind: "reviews" });
+			}
+			qualityComplete = Boolean(quality && !quality.filtered && quality.next == null);
 			const read = await readWorkSources({
 				api,
 				workspaceId,
@@ -18112,10 +18283,16 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				]),
 				issues,
 				reviews,
+				qualityComplete,
+				cursors,
 				milestones,
 				[...sources].map(([id, source]) => [
 					id,
 					source.deliveries,
+					source.available,
+					source.filtered,
+					source.next,
+					source.errors,
 					workAgents(source)
 				])
 			]);
@@ -18123,7 +18300,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				signature = next;
 				renderTable();
 			}
-			const requirements = plan?.document?.requirements || [], partial = [
+			const requirements = plan?.document?.requirements || [], partial = !qualityComplete || catalogueErrors.length > 0 || [
 				work,
 				mappings,
 				quality
@@ -18133,9 +18310,13 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				feature("quality_reviews") ? t("wv_accepted_count", { n: requirements.filter((req) => requirementReviews(plan, req, reviews).length).length }) : null,
 				requirements.some((req) => linked(req).some(blockedWork)) ? t(requirements.filter((req) => linked(req).some(blockedWork)).length === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: requirements.filter((req) => linked(req).some(blockedWork)).length }) : null
 			]);
-			status.replaceChildren(...partial ? [h$1("span", { class: "ui-meta" }, t("wb_partial"))] : []);
+			status.replaceChildren(...partial ? [h$1("span", { class: "ui-meta" }, t("wb_partial"))] : [], ...catalogueErrors.map((row) => h$1("span", {}, t(row.kind === "reviews" ? "wv_acceptance_unknown" : "wv_source_unavailable"))), ...catalogueErrors.length ? [h$1("button", {
+				type: "button",
+				class: "ui-button secondary",
+				onclick: () => void refresh()
+			}, t("wv_retry"))] : []);
 			const routeSelection = new URLSearchParams(location.hash.split("?")[1]).get("select");
-			if (visible && routeSelection && routeSelection !== selected) await select(routeSelection, true);
+			if (visible && routeSelection && routeSelection !== selected && routeSelection !== currentRequirement) await select(routeSelection, true);
 			else if (visible && selected) await select(selected, false, true);
 			busy = false;
 			if (pendingFocus) await applyPending();
@@ -18154,14 +18335,49 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}
 	}
 	async function select(id, scroll = false, retain = false) {
+		if (id.startsWith("milestone:")) {
+			const milestone = milestones.find((row) => row.milestone_id === id.slice(10));
+			selected = null;
+			preference.selected = null;
+			currentRequirement = null;
+			closeRetaining();
+			if (!milestone) {
+				markSelection();
+				status.textContent = t("wv_not_in_plan");
+				return;
+			}
+			group.value = "milestone";
+			preference.group = "milestone";
+			filter.value = "";
+			preference.filter = "";
+			renderTable();
+			const heading = [...tables.querySelectorAll(".pm-requirement-group")].find((node) => node.textContent === milestone.title);
+			if (heading) {
+				heading.tabIndex = -1;
+				heading.focus();
+				heading.scrollIntoView({ block: "nearest" });
+			}
+			return;
+		}
 		const card = cards.find((row) => row.work_item_id === id), requirement = plan?.document?.requirements?.find((row) => row.id === id);
 		if (!card && !requirement) {
+			const withdrawn = selected === id;
+			selected = null;
+			preference.selected = null;
+			currentRequirement = null;
 			closeRetaining();
+			markSelection();
+			status.textContent = t("wv_not_in_plan");
+			if (withdrawn) {
+				writeSelection(null);
+				viewHeading()?.focus();
+			}
 			return;
 		}
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
+		writeSelection(id);
 		if (scroll) {
 			scrollGeneration++;
 			filter.value = "";
@@ -18183,14 +18399,39 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			detail.element.body.replaceChildren(h$1("p", { role: "status" }, t("wb_detail_loading")));
 		}
 		if (requirement) {
-			const blocked = linked(requirement).find(blockedWork);
+			let register = null;
+			if (caps()?.features?.pm_register?.version === 1) try {
+				const data = scope(await api("GET", `${endpoint}/register?limit=100`));
+				alive();
+				if (ticket !== detailSerial || generation !== serial) return;
+				if (!Array.isArray(data.rows)) throw Error(t("wv_source_mismatch"));
+				register = {
+					rows: data.rows.filter((row) => [
+						"decision",
+						"change",
+						"action",
+						"issue",
+						"risk"
+					].includes(row.type) && row.related?.requirement_ids?.includes(id)),
+					complete: data.coverage?.complete === true && data.next_cursor == null
+				};
+			} catch {
+				register = null;
+			}
+			alive();
+			if (ticket !== detailSerial || generation !== serial) return;
 			detail.show({
 				title: requirement.text,
 				plan,
 				requirement,
+				acceptance: acceptance(requirement),
+				reviews: requirementReviews(plan, requirement, reviews),
+				register,
+				work: linked(requirement),
+				source: deliverySource(requirement),
 				milestones: milestoneFor(requirement),
-				blocker: blocked ? blockerText(t, blocked) : null,
-				accepted: requirementReviews(plan, requirement, reviews).length > 0
+				onWork: (id) => void select(id),
+				onRetry: () => void refresh()
 			});
 			return;
 		}
@@ -18231,25 +18472,40 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				}
 			});
 		} catch (error) {
-			if (ticket === detailSerial) fail(error, generation);
+			if (ticket === detailSerial && generation === serial) {
+				if ([403, 404].includes(error.status)) {
+					cards = cards.filter((row) => row.work_item_id !== id);
+					sources.delete(id);
+					renderTable();
+				}
+				detail.show({
+					title: card.work.title,
+					error,
+					onRetry: () => void refresh()
+				});
+			}
 		}
 	}
 	function setActive(value) {
 		if (visible === value) {
 			if (value) {
 				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
-				if (id && id !== selected) select(id, true);
+				if (id && (id !== selected || !detail.element)) select(id, true);
 			}
 			return;
 		}
 		visible = value;
 		if (!value) {
+			active = false;
+			stale = true;
+			serial++;
+			detailSerial++;
 			preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
 			activate();
-			if (selected && cards.length) select(selected, false, true);
+			if (!stale && selected && cards.length) select(selected, false, true);
 			requestAnimationFrame(() => {
 				if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);
 			});
@@ -18278,11 +18534,19 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 			return;
 		}
-		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some((row) => row.id === ref.id)) return;
+		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some((row) => row.id === ref.id)) {
+			selected = null;
+			currentRequirement = null;
+			closeRetaining();
+			markSelection();
+			status.textContent = t("wv_not_in_plan");
+			return;
+		}
 		closeRetaining();
 		selected = null;
 		preference.selected = null;
 		currentRequirement = ref.id;
+		writeSelection(ref.id);
 		expanded.add(ref.id);
 		preference.expanded = [...expanded];
 		filter.value = "";
@@ -27079,7 +27343,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				const node = contextChip({ text: `PR #${target.pull_number}` });
 				node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
 				return node;
-			}), blockedWork(card) ? h$1("span", {
+			}), deliveryCoverage(source) !== "complete" ? statusPill(deliveryCoverage(source)) : null, blockedWork(card) ? h$1("span", {
 				class: "pm-board-blocker",
 				tabindex: 0,
 				title: blockerText(t, card),

@@ -3,7 +3,7 @@ import {pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, 
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
-import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources} from './pm-work-inspector.js';
+import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
@@ -93,7 +93,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(' · ') : t('wv_no_requirement'))])),
       h('div', {class: 'pm-kanban-card-meta'}, ...workAgents(source).map(agentMark).filter(mark => mark.textContent !== '?'),
         ...prGroups(source?.deliveries).map(({target, rows}) => {const node = contextChip({text: `PR #${target.pull_number}`});
-          node.title = joinLabel([target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]); return node;}), blockedWork(card) ? h('span', {class: 'pm-board-blocker', tabindex: 0, title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), t('ui_status_blocked')) : null,
+          node.title = joinLabel([target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]); return node;}), deliveryCoverage(source) !== 'complete' ? statusPill(deliveryCoverage(source)) : null, blockedWork(card) ? h('span', {class: 'pm-board-blocker', tabindex: 0, title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), t('ui_status_blocked')) : null,
         group.value !== 'status' ? h('span', {class: 'pm-board-state'}, statusPill(workStatus(card))) : null,
         age ? h('span', {class: 'pm-board-age', title: t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age')}, age) : null),
       coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h('span', {class: 'ui-meta'}, t('pm_kanban_partial_sources')) : null].filter(Boolean);

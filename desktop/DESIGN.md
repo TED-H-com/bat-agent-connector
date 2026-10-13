@@ -330,7 +330,11 @@ Milestone/phase grouping does not infer missing associations. Unassigned work an
 issue mappings remain in a final disclosure. Search includes exact issue numbers
 and omits missing label fragments. Header totals require complete catalogues;
 partial reads say “loaded”. Content approval, merge, deployment and requirement
-acceptance are separate states. An unknown blocker is never counted as zero.
+acceptance are separate states. Acceptance is Accepted when an exact qualifying review
+exists, Not assessed only after a complete unfiltered quality catalogue, and Unknown
+otherwise. Missing delivery capability or failed reads stays Unknown; paged or filtered
+receipts stay Partial in rows, compact summaries, inspectors and Board chips.
+An unknown blocker is never counted as zero.
 
 Below 800px the shared table's optional `compactRow` renders each requirement as
 one expandable summary target: two-line title, wrapping acceptance/deployment pills,
@@ -342,12 +346,16 @@ remain in the inspector. Explicit column tracks reclaim that width, milestones
 ellipsis with full titles, PR pills wrap, and Work remains numeric and right-aligned.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
-six ordered sections: Requirements served; Status & ownership; Latest result;
+six ordered work sections: Requirements served; Status & ownership; Latest result;
 Blocker & next step; Delivery; Details. Discuss uses exact context objects through
 `discussHref`. Managed and manual session links use central session identity and
 access metadata; manual sessions carry Read-only. Missing attempt start/end times
 and CI results remain unknown; observation or send-acceptance time does not imply
-execution duration. Technical records and source times appear in Details.
+execution duration. Technical records and source times appear in Details. A requirement instead shows
+Criteria, Bound work, Latest result, Decisions and changes, Delivery, then Details.
+Auxiliary source failures clear only their own facts and offer Retry; plan and work
+catalogue withdrawal clears the view. Inspector actions retain their nodes across live
+age updates, and closing returns to the current selection.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
 intact into drawers reached from the Requirements overflow and work inspector;
