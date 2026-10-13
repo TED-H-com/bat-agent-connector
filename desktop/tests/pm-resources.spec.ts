@@ -48,7 +48,7 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
   });
   test('source withdrawal removes details, quota and counts',async({page})=>{
     const f=fixture();await open(page,native,f);await resources(page).locator('[data-resource-row="Implementation"]').click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
-    f.state.deny=true;await resources(page).getByRole('button',{name:'Update records',exact:true}).click();
+    f.state.deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(resources(page)).toContainText('Your token lacks this scope');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(0);
     await expect(resources(page).locator('[data-resource-detail]')).toBeHidden();await expect(resources(page)).not.toContainText('25%');await expect(resources(page)).not.toContainText('1,000');
   });
@@ -68,7 +68,7 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
   test('empty sources remain unknown and model text is inert',async({page})=>{
     const f=fixture();f.state.data.rows[0].configurations[0].requested_model='<img src=x onerror=alert(1)>';
     await open(page,native,f);await expect(resources(page)).toContainText('<img src=x');await expect(resources(page).locator('img')).toHaveCount(0);
-    f.state.data.rows=[];f.state.data.quota_pools=[];await resources(page).getByRole('button',{name:'Update records',exact:true}).click();
+    f.state.data.rows=[];f.state.data.quota_pools=[];await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(resources(page)).toContainText('No usage sources are connected');await expect(resources(page)).toContainText('No current quota balance');
   });
 });

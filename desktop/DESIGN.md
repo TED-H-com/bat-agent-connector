@@ -192,17 +192,24 @@ warn 4.93 / 6.30, bad 4.83 / 5.55, info 5.23 / 5.61, review 5.34 / 5.91,
 neutral 5.19 / 5.44. All meet 4.5:1. The icon legal comment must remain in both
 browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle resource.
 
-Agent resources keeps the shell title and adds one meta line for the observed range.
-Metrics show sourced tokens (partial when a day or a total is incomplete), current
-sources out of the total, and the next reported quota reset. Unknown stays an em dash
-with the Unknown pill. The usage trend is drawn only when the read includes daily
-buckets. It asks for `buckets=day` together with the browser time zone, retries once
-as UTC if that zone is rejected, and labels the axis with the zone the server used.
-Each bar stacks `tokens.total` by CLI. A null total is a gap, a covered zero is a
-baseline tick, and an incomplete day is marked in progress or settling. The 60-second
-table refresh may omit buckets and keep the last trend. The table separates reported
-and requested models. An unreadable source shows its label and status only; the adapter
-stays in the inspector. Quota is one block per pool and window, as used percent, and
-is never added across pools. An unconfirmed pool has no percent. Filters, period and
-the open inspector stay put across background reads. Pause freezes those updates and
-does not stop collection. A 403 or 404 withdraws rows, counts and the inspector together.
+Agent resources keeps the shell title. Its meta line sits under that title and shows
+the observed local range, the server time zone, and when the read was updated. Metrics
+show sourced tokens (partial when a day or a total is incomplete), current sources out
+of the total, and the next reported quota reset. At 640px and below the three metrics
+stay on one row. Unknown stays an em dash with the Unknown pill. The usage trend is
+drawn only when the read includes daily buckets. It asks for `buckets=day` together
+with the browser time zone and retries once as UTC if that zone is rejected. Date
+labels and the 0 / rounded-maximum scale are HTML at 12px, so the plot never stretches
+text. Each bar stacks `tokens.total` by CLI. A null total is a dashed gap with no zero
+bar, a covered zero is a baseline tick, and an incomplete day keeps its colours at
+reduced opacity with one marker (in progress or settling) directly above the bar. The
+60-second refresh may omit buckets and keep the last trend. The table separates
+reported and requested models and shows token totals; the labelled breakdown is in the
+inspector and the cell tooltip. Below 800px the same rows become a list. An unreadable
+source shows its label and status only; the adapter stays in the inspector. Quota is
+one block per pool and window, titled by the CLI or source and the window length, as
+used percent, and is never added across pools. The pool id stays in that pool's
+details. An unconfirmed pool has no percent. The page-header refresh is the only
+reload control. Filters, period and the open inspector stay put across background
+reads. Pause freezes those updates and does not stop collection. A 403 or 404
+withdraws rows, counts and the inspector together.

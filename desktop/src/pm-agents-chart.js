@@ -1,8 +1,9 @@
-// Stacked daily bars. Null totals are gaps; a covered zero is a baseline tick.
+// Stacked daily bars. Dates and the y scale are HTML so the plot never stretches text.
 import {disclosure} from './ui/components.js';
 import {cliClass, cliName, stackDailyBuckets} from './pm-agents-trend.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
+const liveCharts = new Set();
 
 function svgEl(tag, attrs) {
   const el = document.createElementNS(SVG, tag);
@@ -21,47 +22,69 @@ function dayState(day, t) {
   return parts.join(' · ');
 }
 
-function slotFor(count) {
-  if (count > 48) return 12;
-  if (count > 20) return 18;
-  return 36;
+function labelEvery(count, slot) {
+  const fitted = Math.max(1, Math.ceil(32 / Math.max(slot, 1)));
+  let step = 1;
+  if (count > 12) step = 3;
+  if (count > 24) step = 7;
+  if (count > 60) step = 14;
+  return Math.max(step, fitted);
 }
 
-function labelStep(count) {
-  if (count > 60) return 14;
-  if (count > 24) return 7;
-  if (count > 12) return 3;
-  return 1;
+function niceMax(value) {
+  if (!(value > 0)) return 0;
+  if (value < 1000) {
+    const step = 10 ** Math.floor(Math.log10(value));
+    return Math.ceil(value / step) * step;
+  }
+  return Math.ceil(value / 100) * 100;
+}
+
+function axisLabel(value) {
+  if (value >= 1000) {
+    const thousands = value / 1000;
+    const rounded = Math.round(thousands * 10) / 10;
+    const text = Math.abs(rounded - Math.round(rounded)) < 1e-6 ? String(Math.round(rounded)) : rounded.toFixed(1);
+    return text + 'k';
+  }
+  return String(Math.round(value));
+}
+
+function partText(part, t) {
+  return part.total == null ? `${cliName(part.cli)} · ${t('res_no_data')}` : `${cliName(part.cli)} ${part.total.toLocaleString()}`;
 }
 
 export function usageChart({h, t, buckets, now = new Date(), exactKey} = {}) {
   const stacked = stackDailyBuckets(buckets, now);
   if (!stacked || !stacked.days.length) return null;
-  const {tz, clis, days} = stacked;
+  const {clis, days} = stacked;
   const shown = clis.filter(cli => days.some(day => day.parts.some(part => part.cli === cli && part.total != null)));
-  const padTop = 18;
+  const markerLane = 14;
   const plotH = 112;
-  const padBottom = 22;
-  const height = padTop + plotH + padBottom;
-  const baseline = padTop + plotH;
-  const slot = slotFor(days.length);
-  const width = Math.max(days.length * slot, slot);
-  const barW = Math.max(2, slot - (slot > 16 ? 10 : 4));
-  const max = days.reduce((peak, day) => Math.max(peak, day.parts.reduce((sum, part) => sum + (part.total > 0 ? part.total : 0), 0)), 0);
-  const heightOf = value => max > 0 ? (value / max) * plotH : 0;
+  const topLine = markerLane;
+  const baseline = topLine + plotH;
+  const height = baseline + 1;
+  const usable = plotH - 2;
+  const peak = days.reduce((best, day) => Math.max(best, day.parts.reduce((sum, part) => sum + (part.total > 0 ? part.total : 0), 0)), 0);
+  const scaleMax = niceMax(peak);
+  const heightOf = value => scaleMax > 0 ? (value / scaleMax) * usable : 0;
   const host = h('figure', {class: 'pm-agents-chart', 'data-resource-chart': ''});
-  host.style.setProperty('--chart-min', width + 'px');
-  const scroll = h('div', {class: 'pm-agents-chart-scroll'});
-  const svg = svgEl('svg', {viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', role: 'img', 'aria-label': t('res_trend')});
-  svg.append(svgEl('line', {class: 'grid', x1: 0, x2: width, y1: baseline, y2: baseline}));
-  const step = labelStep(days.length);
+  host.style.setProperty('--plot-h', height + 'px');
+  host.style.setProperty('--line-top', topLine + 'px');
+  host.style.setProperty('--line-base', baseline + 'px');
+  const yscale = h('div', {class: 'pm-agents-yscale'});
+  const svg = svgEl('svg', {role: 'img', 'aria-label': t('res_trend'), preserveAspectRatio: 'xMinYMin meet'});
+  const labels = h('div', {class: 'pm-agents-xlabels'});
+  const plot = h('div', {class: 'pm-agents-plot-main'}, svg, labels);
   const tip = h('div', {class: 'pm-agents-tip', role: 'tooltip', hidden: true});
+  let drawn = 0;
+
   function show(day, event) {
     tip.hidden = false;
     tip.replaceChildren(...[
       h('div', {}, day.date),
       dayState(day, t) ? h('div', {}, dayState(day, t)) : null,
-      ...day.parts.map(part => h('div', {'data-tip-cli': part.cli}, `${cliName(part.cli)} ${part.total == null ? '—' : part.total.toLocaleString()}`)),
+      ...day.parts.map(part => h('div', {'data-tip-cli': part.cli}, partText(part, t))),
     ].filter(Boolean));
     const bounds = host.getBoundingClientRect();
     const point = Number.isFinite(event?.clientX) ? event.clientX : bounds.left + bounds.width / 2;
@@ -70,49 +93,91 @@ export function usageChart({h, t, buckets, now = new Date(), exactKey} = {}) {
     tip.style.left = left + 'px';
     tip.style.top = '4px';
   }
-  days.forEach((day, index) => {
-    const x0 = index * slot;
-    const x = x0 + (slot - barW) / 2;
-    const gaps = day.parts.filter(part => part.total == null).map(part => part.cli);
-    const zeros = day.parts.filter(part => part.total === 0).map(part => part.cli);
-    const group = svgEl('g', {
-      class: 'day', tabindex: '-1', 'data-date': day.date,
-      'data-incomplete': day.mark || null, 'data-partial': day.partial ? 'true' : null,
-      'data-gap': gaps.join(' ') || null, 'data-zero': zeros.join(' ') || null,
-      'aria-label': [day.date, dayState(day, t), ...day.parts.map(part => `${cliName(part.cli)} ${part.total == null ? '—' : part.total}`)].filter(Boolean).join(' · '),
-    });
-    let y = baseline;
-    for (const part of day.parts) {
-      if (part.total == null) continue;
-      const tone = `cli-${cliClass(part.cli)}`;
-      if (part.total === 0) {
-        group.append(svgEl('rect', {class: `tick ${tone}`, x, y: baseline - 2, width: barW, height: 2}));
-        continue;
-      }
-      const barH = Math.max(1, heightOf(part.total));
-      y -= barH;
-      group.append(svgEl('rect', {class: `bar ${tone}`, x, y, width: barW, height: barH}));
-    }
-    if (day.mark) group.append(svgEl('circle', {class: `mark ${day.mark}`, cx: x + barW / 2, cy: 8, r: 2.5}));
-    if (day.partial) group.append(svgEl('rect', {class: 'mark partial', x: x + barW / 2 + (day.mark ? 4 : -2), y: day.mark ? 11 : 4, width: 4, height: 4}));
-    if (index % step === 0 || index === days.length - 1) {
+
+  function draw(width) {
+    const slot = width / days.length;
+    const barW = Math.max(2, Math.min(slot * 0.62, Math.max(2, slot - 4)));
+    const step = labelEvery(days.length, slot);
+    const maxText = scaleMax > 0 ? axisLabel(scaleMax) : '';
+    yscale.replaceChildren(...[
+      h('span', {class: 'sizer', 'aria-hidden': 'true'}, maxText || '0'),
+      maxText ? h('span', {class: 'max'}, maxText) : null,
+      h('span', {class: 'zero'}, '0'),
+    ].filter(Boolean));
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.style.width = width + 'px';
+    svg.style.height = height + 'px';
+    svg.replaceChildren(svgEl('line', {class: 'grid zero', x1: 0, x2: width, y1: baseline, y2: baseline}));
+    if (scaleMax > 0) svg.append(svgEl('line', {class: 'grid max', x1: 0, x2: width, y1: topLine, y2: topLine}));
+    labels.replaceChildren(...days.map((day, index) => {
+      const showLabel = index === days.length - 1 || (index % step === 0 && days.length - 1 - index >= step);
       const [, month, date] = day.date.split('-');
-      const label = svgEl('text', {class: 'axis', x: x0 + slot / 2, y: height - 6, 'text-anchor': 'middle'});
-      label.textContent = `${Number(month)}/${Number(date)}`;
-      group.append(label);
+      return h('span', {}, showLabel ? `${Number(month)}/${Number(date)}` : '');
+    }));
+    days.forEach((day, index) => {
+      const x0 = index * slot;
+      const x = x0 + (slot - barW) / 2;
+      const gaps = day.parts.filter(part => part.total == null).map(part => part.cli);
+      const zeros = day.parts.filter(part => part.total === 0).map(part => part.cli);
+      const group = svgEl('g', {
+        class: 'day', tabindex: '-1', 'data-date': day.date,
+        'data-incomplete': day.mark || null, 'data-partial': day.partial ? 'true' : null,
+        'data-gap': gaps.join(' ') || null, 'data-zero': zeros.join(' ') || null,
+        'aria-label': [day.date, dayState(day, t), ...day.parts.map(part => partText(part, t))].filter(Boolean).join(' · '),
+      });
+      if (gaps.length) group.append(svgEl('rect', {class: 'gap', x: x0 + 1, y: baseline - 9, width: Math.max(2, slot - 2), height: 8}));
+      let y = baseline - 1;
+      for (const part of day.parts) {
+        if (part.total == null) continue;
+        const tone = `cli-${cliClass(part.cli)}`;
+        const open = day.mark ? ' open' : '';
+        if (part.total === 0) {
+          group.append(svgEl('rect', {class: `tick ${tone}${open}`, x, y: baseline - 2, width: barW, height: 2}));
+          continue;
+        }
+        const barH = Math.max(1, heightOf(part.total));
+        y -= barH;
+        group.append(svgEl('rect', {class: `bar ${tone}${open}`, x, y, width: barW, height: barH}));
+      }
+      if (day.mark) {
+        const cx = x + barW / 2;
+        const markerBottom = y - 3;
+        if (day.mark === 'settling') group.append(svgEl('rect', {class: 'marker settling', x: cx - 3, y: markerBottom - 6, width: 6, height: 6, rx: 1}));
+        else group.append(svgEl('circle', {class: 'marker in_progress', cx, cy: markerBottom - 3, r: 3}));
+      }
+      group.append(svgEl('rect', {class: 'band', x: x0, y: 0, width: slot, height}));
+      group.addEventListener('pointerenter', event => show(day, event));
+      group.addEventListener('focus', event => show(day, event));
+      svg.append(group);
+    });
+  }
+
+  function layout() {
+    if (!host.isConnected) return;
+    const width = Math.round(plot.clientWidth);
+    if (width < 8 || width === drawn) return;
+    drawn = width;
+    draw(width);
+  }
+  const observer = new ResizeObserver(() => layout());
+  observer.observe(plot);
+  const tracker = {host, observer};
+  liveCharts.add(tracker);
+  queueMicrotask(() => {
+    for (const item of [...liveCharts]) {
+      if (!item.host.isConnected) {item.observer.disconnect(); liveCharts.delete(item);}
     }
-    group.append(svgEl('rect', {class: 'band', x: x0, y: 0, width: slot, height}));
-    group.addEventListener('pointerenter', event => show(day, event));
-    group.addEventListener('focus', event => show(day, event));
-    svg.append(group);
+    layout();
   });
+
   svg.addEventListener('pointerleave', () => {tip.hidden = true;});
-  scroll.append(svg);
   const legend = h('ul', {class: 'pm-agents-legend'},
     ...shown.map(cli => h('li', {}, h('span', {class: `swatch cli-${cliClass(cli)}`, 'aria-hidden': 'true'}), cliName(cli))),
-    days.some(day => day.mark === 'in_progress') ? h('li', {}, h('span', {class: 'swatch mark-open', 'aria-hidden': 'true'}), t('ui_status_in_progress')) : null,
-    days.some(day => day.mark === 'settling') ? h('li', {}, h('span', {class: 'swatch mark-settle', 'aria-hidden': 'true'}), t('res_settling')) : null,
-    days.some(day => day.partial) ? h('li', {}, h('span', {class: 'swatch mark-partial', 'aria-hidden': 'true'}), t('ui_status_partial')) : null);
+    days.some(day => day.mark === 'in_progress') ? h('li', {}, h('span', {class: 'swatch marker in_progress', 'aria-hidden': 'true'}), t('ui_status_in_progress')) : null,
+    days.some(day => day.mark === 'settling') ? h('li', {}, h('span', {class: 'swatch marker settling', 'aria-hidden': 'true'}), t('res_settling')) : null,
+    days.some(day => day.parts.some(part => part.total == null)) ? h('li', {}, h('span', {class: 'swatch gap', 'aria-hidden': 'true'}), t('res_no_data')) : null);
   const table = h('table', {},
     h('thead', {}, h('tr', {}, h('th', {scope: 'col'}, t('res_seen')), ...clis.map(cli => h('th', {scope: 'col'}, cliName(cli))), h('th', {scope: 'col'}, t('res_status')))),
     h('tbody', {}, ...days.map(day => {
@@ -125,7 +190,7 @@ export function usageChart({h, t, buckets, now = new Date(), exactKey} = {}) {
         ...day.parts.map(part => h('td', {'data-cli': part.cli}, part.total == null ? '—' : part.total.toLocaleString())),
         h('td', {}, dayState(day, t)));
     })));
-  host.append(scroll, h('p', {class: 'ui-meta', 'data-tz': tz}, tz), legend, tip,
+  host.append(h('div', {class: 'pm-agents-plot'}, yscale, plot), legend, tip,
     disclosure({label: t('res_exact'), body: h('div', {class: 'pm-agents-exact'}, table), key: exactKey}));
   return host;
 }

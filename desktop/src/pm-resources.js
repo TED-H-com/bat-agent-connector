@@ -1,9 +1,10 @@
 import {viewState} from './ui/view-state.js';
-import {agentMark, button, dataTable, disclosure, emptyState, iconButton, inspector, menu, metric, sectionCard, segmented, skeleton, statusPill} from './ui/components.js';
+import {agentMark, button, dataTable, disclosure, emptyState, inspector, menu, metric, sectionCard, segmented, skeleton, statusPill} from './ui/components.js';
+import {icon} from './ui/icons.js';
 import {reasonPresentation} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
 import {usageChart} from './pm-agents-chart.js';
-import {browserTimeZone, cliName, dayKey, isBucketPayload, stackDailyBuckets} from './pm-agents-trend.js';
+import {browserTimeZone, cliClass, cliName, dayKey, isBucketPayload, stackDailyBuckets} from './pm-agents-trend.js';
 
 const PERIODS = ['1', '7', '30', '90'];
 const READABLE = new Set(['current', 'catching_up', 'stale']);
@@ -32,17 +33,23 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       void refresh({trend: true});
     },
   });
-  const pause = button({variant: 'ghost', size: 'sm', label: t(paused ? 'res_resume' : 'res_pause'), 'aria-pressed': String(paused), onclick: () => {
+  const pause = button({variant: 'ghost', size: 'sm', 'aria-pressed': String(paused), onclick: () => {
     paused = !paused; preference.paused = paused;
-    pause.textContent = t(paused ? 'res_resume' : 'res_pause');
-    pause.setAttribute('aria-pressed', String(paused));
+    paintPause();
     if (paused) clearTimeout(timer); else void refresh({trend: false});
   }});
-  const refreshButton = iconButton({icon: 'refresh-cw', label: t('res_refresh'), class: 'pm-agents-refresh', onclick: () => void refresh({trend: true})});
-  // iconButton overwrites class, so the refresh pin is applied on the returned node.
-  refreshButton.classList.add('pm-agents-refresh');
-  const toolbar = h('div', {class: 'pm-agents-toolbar'}, periodControl, h('div', {class: 'pm-agents-filter-host'}), pause, refreshButton);
-  const element = h('section', {'data-pm-resources': '', class: 'pm-agents'}, meta, toolbar, status, layout);
+  function paintPause() {
+    const label = t(paused ? 'res_resume' : 'res_pause');
+    pause.replaceChildren(icon(paused ? 'play' : 'pause'), label);
+    pause.setAttribute('aria-pressed', String(paused));
+    pause.setAttribute('aria-label', label);
+  }
+  paintPause();
+  const listMedia = window.matchMedia('(max-width: 799px)');
+  function onListChange() {if (active && data) render(true);}
+  listMedia.addEventListener('change', onListChange);
+  const toolbar = h('div', {class: 'pm-agents-toolbar'}, periodControl, h('div', {class: 'pm-agents-toolbar-actions'}, h('div', {class: 'pm-agents-filter-host'}), pause));
+  const element = h('section', {'data-pm-resources': '', class: 'pm-agents'}, toolbar, status, layout);
   syncFilterMenu();
 
   function finite(value) {return typeof value === 'number' && Number.isFinite(value) ? value : null;}
@@ -90,11 +97,6 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     const date = new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric'}).format(when);
     const time = new Intl.DateTimeFormat(locale, {hour: 'numeric', minute: '2-digit'}).format(when);
     return h('span', {class: 'pm-agents-seen'}, date, h('span', {}, time));
-  }
-  function metricText(value) {
-    if (finite(value?.value) != null) return finite(value.value).toLocaleString();
-    if (finite(value?.observed) != null) return t('res_partial', {count: finite(value.observed).toLocaleString()});
-    return t('res_unknown');
   }
   function roleLabel(role) {return role === 'unassigned' ? t('wb_unassigned') : (role || EM);}
   function filterLabel() {
@@ -145,9 +147,10 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   }
   function labelFilterButton() {
     const trigger = element.querySelector('[data-resource-filter]');
-    if (!trigger) return;
+    const slot = trigger?.querySelector('[data-filter-label]');
+    if (!trigger || !slot) return;
     const label = filterLabel();
-    trigger.textContent = label;
+    slot.textContent = label;
     trigger.setAttribute('aria-label', label);
   }
   function syncFilterMenu() {
@@ -158,7 +161,8 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     const host = element.querySelector('.pm-agents-filter-host');
     host.querySelector('.ui-menu')?.dispose?.();
     const label = filterLabel();
-    const trigger = button({variant: 'ghost', size: 'sm', label, 'aria-label': label, title: t('res_filter'), 'data-resource-filter': ''});
+    const trigger = button({variant: 'secondary', size: 'sm', label: h('span', {'data-filter-label': ''}, label), 'aria-label': label, title: t('res_filter'), 'data-resource-filter': ''});
+    trigger.append(icon('chevron-down'));
     const items = [{key: 'all', label: t('res_filter_all'), onSelect: () => setFilter({kind: 'all'})},
       ...filterOptions().map(option => ({key: option.kind + ':' + option.value, label: option.label, onSelect: () => setFilter(option)}))];
     host.replaceChildren(menu({button: trigger, items}));
@@ -177,17 +181,28 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     return h('div', {class: 'pm-agents-model'}, actual, requested,
       items.length > 1 ? h('div', {class: 'pm-agents-requested'}, t('res_more_models', {count: items.length - 1})) : null);
   }
-  function tokensCell(row) {
-    if (!isReadable(row)) return EM;
+  function tokenHeadline(row) {
+    const total = row.metrics?.total;
+    if (finite(total?.value) != null) return finite(total.value).toLocaleString();
+    if (finite(total?.observed) != null) return t('res_partial', {count: finite(total.observed).toLocaleString()});
+    return EM;
+  }
+  function tokenBreakdown(row) {
     const metrics = row.metrics || {};
     const read = finite(metrics.cache_read?.value), write = finite(metrics.cache_write?.value);
     const cache = read == null || write == null ? EM : (read + write).toLocaleString();
     const part = value => finite(value?.value) == null ? EM : finite(value.value).toLocaleString();
-    const total = metrics.total;
-    const headline = finite(total?.value) != null ? finite(total.value).toLocaleString()
-      : finite(total?.observed) != null ? t('res_partial', {count: finite(total.observed).toLocaleString()}) : EM;
-    return h('div', {}, h('div', {class: 'tabular'}, headline),
-      h('div', {class: 'pm-agents-tokens-detail'}, [part(metrics.input), cache, part(metrics.output), part(metrics.reasoning)].join(' · ')));
+    return [[t('res_input'), part(metrics.input)], [t('res_cached'), cache], [t('res_output'), part(metrics.output)], [t('res_reasoning'), part(metrics.reasoning)]];
+  }
+  function tokenTitle(row) {return tokenBreakdown(row).map(([label, value]) => `${label} ${value}`).join(' · ');}
+  function tokensCell(row) {
+    if (!isReadable(row)) return EM;
+    return h('span', {class: 'tabular', title: tokenTitle(row)}, tokenHeadline(row));
+  }
+  function modelName(row) {
+    const first = (row.configurations || [])[0];
+    if (!first) return t('res_unknown');
+    return first.actual_model || first.requested_model || t('res_unknown');
   }
   function sourceCell(row) {
     const cli = cliOf(row);
@@ -214,7 +229,18 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     }
     const parsed = Date.parse(data?.as_of);
     const ago = Number.isFinite(parsed) ? relativePast(Date.now() - parsed) : '';
-    meta.textContent = start && end ? (ago ? t('res_observed', {start, end, ago}) : t('res_observed_range', {start, end})) : '';
+    if (!(start && end)) {meta.replaceChildren(); meta.hidden = true; mountMeta(); return;}
+    const text = t(ago ? 'res_observed' : 'res_observed_range', {start, end, zone, ago});
+    const at = text.indexOf(zone);
+    if (at < 0) meta.textContent = text;
+    else meta.replaceChildren(text.slice(0, at), h('span', {'data-tz': zone}, zone), text.slice(at + zone.length));
+    meta.hidden = false;
+    mountMeta();
+  }
+  function mountMeta() {
+    if (!active) {meta.remove(); return;}
+    const heading = element.closest('.pm-main')?.querySelector('.ui-page-heading');
+    if (heading && meta.parentNode !== heading) heading.append(meta);
   }
   function tokenMetric() {
     const readable = (data?.rows || []).filter(isReadable);
@@ -249,27 +275,73 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     if (!blocks.length) return [h('p', {class: 'ui-meta'}, t('res_quota_unknown'))];
     return [sectionCard({title: t('res_quota_heading'), body: h('div', {class: 'pm-agents-quotas'}, ...blocks)})];
   }
+  function windowLabel(minutes) {
+    const value = finite(minutes);
+    if (value == null) return '';
+    if (value >= 60 && value % 60 === 0) return t('res_window_hours', {hours: value / 60});
+    return t('res_window_short', {minutes: value});
+  }
+  function poolLabel(pool) {
+    const rows = (pool?.sources || []).map(id => (data?.rows || []).find(row => row.source_id === id)).filter(Boolean);
+    const names = [...new Set(rows.filter(isReadable).map(row => cliClass(cliOf(row)) === cliOf(row) ? cliName(cliOf(row)) : '').filter(Boolean))];
+    if (names.length === 1) return names[0];
+    if (rows.length === 1) return rows[0].source_id;
+    const only = (pool?.sources || []).filter(Boolean);
+    return only.length === 1 ? only[0] : EM;
+  }
   function quotaBlock(pool, item) {
     const used = item ? finite(item.used_percent) : null;
     const confirmed = pool.status === 'reported' && item && used != null;
     const bar = h('div', {class: 'pm-agents-used', role: 'img', 'aria-label': confirmed ? t('res_used') + ' ' + used + '%' : t('res_unconfirmed')}, h('span'));
     if (confirmed) bar.querySelector('span').style.width = Math.max(0, Math.min(100, used)) + '%';
-    const bits = [];
-    if (finite(item?.window_minutes) != null) bits.push(t('res_window_short', {minutes: item.window_minutes}));
+    const windowText = windowLabel(item?.window_minutes);
+    let reset = '';
     if (finite(item?.resets_at) != null) {
       const at = item.resets_at * 1000;
-      bits.push(t('res_resets_in', {when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString())}));
+      reset = t('res_resets_in', {when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString())});
     }
     return h('article', {class: 'pm-agents-quota', 'data-resource-pool': pool.pool_id || ''},
       h('div', {class: 'pm-agents-quota-head'},
-        h('div', {}, h('div', {class: 'pm-agents-pool-id'}, pool.pool_id || EM), pool.limit_id ? h('div', {class: 'ui-meta'}, pool.limit_id) : null),
+        h('div', {}, h('div', {class: 'pm-agents-pool-name'}, poolLabel(pool)), windowText ? h('div', {class: 'ui-meta'}, windowText) : null),
         confirmed ? h('div', {class: 'tabular'}, t('res_used') + ' ' + used + '%') : h('span', {class: 'ui-pill tone-neutral'}, t('res_unconfirmed'))),
       confirmed ? bar : null,
-      bits.length ? h('div', {class: 'ui-meta'}, bits.join(' · ')) : null);
+      reset ? h('div', {class: 'ui-meta'}, reset) : null,
+      disclosure({label: t('res_details'), key: `agents-pool:${workspaceId}:${pool.pool_id || poolLabel(pool)}`,
+        body: h('p', {class: 'pm-agents-pool-id'}, h('code', {class: 'mono'}, pool.pool_id || EM))}));
+  }
+  function choose(id) {
+    selected = id; preference.selected = selected; signature = currentSignature();
+    for (const node of layout.querySelectorAll('.pm-agents-list-row')) {
+      const on = node.getAttribute('data-resource-row') === id;
+      node.setAttribute('aria-selected', String(on));
+      node.tabIndex = on ? 0 : -1;
+    }
+    renderInspector();
+  }
+  function listRow(row, index) {
+    const readable = isReadable(row);
+    const cli = cliOf(row);
+    const on = row.source_id === selected;
+    const node = h('div', {
+      class: 'pm-agents-list-row', role: 'listitem', tabindex: on || (selected == null && index === 0) ? 0 : -1,
+      'aria-selected': String(Boolean(on)), 'data-resource-row': row.source_id, 'data-resource-select': row.source_id,
+    }, h('div', {class: 'pm-agents-list-mark'}, readable && cli ? agentMark(cli) : null),
+      h('div', {class: 'pm-agents-list-id'}, h('span', {class: 'pm-agents-list-name'}, row.source_id),
+        readable && cli ? h('span', {class: 'pm-agents-list-cli'}, cliName(cli)) : null),
+      h('div', {class: 'pm-agents-list-tokens tabular', title: readable ? tokenTitle(row) : null}, readable ? tokenHeadline(row) : EM),
+      h('div', {class: 'pm-agents-list-meta'}, readable ? `${modelName(row)} · ${roleLabel(row.role)}` : roleLabel(row.role)),
+      h('div', {class: 'pm-agents-list-status'}, statusNode(row)));
+    node.addEventListener('click', event => {if (!event.target.closest('a, button, input, select')) choose(row.source_id);});
+    node.addEventListener('keydown', event => {
+      if (event.target !== node) return;
+      if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); choose(row.source_id);}
+    });
+    return node;
   }
   function tableFor(visible) {
     if (!data?.rows?.length) return emptyState({title: t('res_empty')});
     if (!visible.length) return h('p', {class: 'ui-meta'}, t('res_no_match'));
+    if (listMedia.matches) return h('div', {class: 'pm-agents-list', role: 'list'}, ...visible.map(listRow));
     return dataTable({
       rows: visible, rowKey: 'source_id', selected,
       rowAttrs: row => ({'data-resource-row': row.source_id, 'data-resource-select': row.source_id}),
@@ -331,10 +403,11 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
         [t('res_version'), item.cli_version || t('res_unknown')],
       ])));
       nodes.push(facts([
-        ['input', 'cache_read', 'cache_write', 'output', 'reasoning', 'total'].map(key => [t('res_' + key), metricText(row.metrics?.[key])]),
+        ...tokenBreakdown(row),
+        [t('res_tokens_col'), tokenHeadline(row)],
         [t('res_calls'), finite(row.calls) == null ? t('res_unknown') : finite(row.calls).toLocaleString()],
         [t('res_observations'), finite(row.observations) == null ? t('res_unknown') : finite(row.observations).toLocaleString()],
-      ].flat()));
+      ]));
     }
     const reason = reasonPresentation(row.status);
     nodes.push(disclosure({
@@ -411,9 +484,9 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     if (!preserveSelection) selected = null;
     clearInspector();
     main.replaceChildren();
-    meta.textContent = '';
+    meta.replaceChildren();
+    meta.hidden = true;
     status.replaceChildren();
-    refreshButton.disabled = false;
   }
   function savePreference() {
     const scroller = main.querySelector('.ui-data-table');
@@ -422,7 +495,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   async function refresh({trend = false} = {}) {
     if (!active) return;
     const ticket = ++serial;
-    busy = true; refreshButton.disabled = true;
+    busy = true;
     if (!data) main.replaceChildren(skeleton(4));
     const until = new Date(), since = new Date(until.getTime() - Number(period) * 86400000);
     const params = new URLSearchParams({since: since.toISOString(), until: until.toISOString()});
@@ -448,14 +521,14 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       try {alive(); if (ticket !== serial) return;} catch {return;}
       withdraw(); status.replaceChildren(errorBox(error));
     } finally {
-      if (ticket === serial || !data) {busy = false; refreshButton.disabled = false; schedule();}
+      if (ticket === serial || !data) {busy = false; schedule();}
     }
   }
   return {element, refresh, withdraw, setActive(value) {
     active = value; clearTimeout(timer);
-    if (active) {if (!busy) void refresh({trend: true});}
-    else {serial++; busy = false; refreshButton.disabled = false;}
-  }, dispose() {savePreference(); active = false; clearTimeout(timer); withdraw();}};
+    if (active) {if (data) updateMeta(); else mountMeta(); if (!busy) void refresh({trend: true});}
+    else {serial++; busy = false; meta.remove();}
+  }, dispose() {savePreference(); active = false; clearTimeout(timer); listMedia.removeEventListener('change', onListChange); meta.remove(); withdraw();}};
 }
 
 function savedFilter(value) {

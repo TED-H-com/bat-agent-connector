@@ -2193,6 +2193,8 @@ var resourceStrings = {
 		res_refresh: "Update records",
 		res_pause: "Pause updates",
 		res_resume: "Resume updates",
+		res_no_data: "No data",
+		res_cached: "Cached",
 		res_source: "Source / CLI",
 		res_model: "Model records",
 		res_role: "Role",
@@ -2244,8 +2246,9 @@ var resourceStrings = {
 		res_period_7: "7d",
 		res_period_30: "30d",
 		res_period_90: "90d",
-		res_observed: "Observed {start} – {end} · updated {ago}",
-		res_observed_range: "Observed {start} – {end}",
+		res_observed: "{start} – {end} · {zone} · updated {ago}",
+		res_observed_range: "{start} – {end} · {zone}",
+		res_window_hours: "{hours}-hour window",
 		res_just_now: "just now",
 		res_min_ago: "{n} min ago",
 		res_hr_ago: "{n} hr ago",
@@ -2289,7 +2292,9 @@ var resourceStrings = {
 		res_days: "最近 {days} 天",
 		res_refresh: "更新紀錄",
 		res_pause: "暫停更新",
-		res_resume: "恢復更新",
+		res_resume: "繼續更新",
+		res_no_data: "無資料",
+		res_cached: "快取",
 		res_source: "來源／CLI",
 		res_model: "模型紀錄",
 		res_role: "角色",
@@ -2341,8 +2346,9 @@ var resourceStrings = {
 		res_period_7: "7 天",
 		res_period_30: "30 天",
 		res_period_90: "90 天",
-		res_observed: "觀測 {start}–{end} · {ago}更新",
-		res_observed_range: "觀測 {start}–{end}",
+		res_observed: "{start}–{end} · {zone} · {ago}更新",
+		res_observed_range: "{start}–{end} · {zone}",
+		res_window_hours: "{hours} 小時區間",
 		res_just_now: "剛剛",
 		res_min_ago: "{n} 分鐘前",
 		res_hr_ago: "{n} 小時前",
@@ -8349,7 +8355,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 The following Lucide icons are derived from the Feather project:
 
-airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, pause, play, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
 
 The MIT License (MIT) (for the icons listed above)
 
@@ -8553,7 +8559,19 @@ var paths = {
 		["path", { "d": "M4 5h16" }],
 		["path", { "d": "M4 12h16" }],
 		["path", { "d": "M4 19h16" }]
-	]
+	],
+	"pause": [["rect", {
+		"x": "6",
+		"y": "4",
+		"width": "4",
+		"height": "16"
+	}], ["rect", {
+		"x": "14",
+		"y": "4",
+		"width": "4",
+		"height": "16"
+	}]],
+	"play": [["polygon", { "points": "5 3 19 12 5 21 5 3" }]]
 };
 function icon(name, { label, size = 16 } = {}) {
 	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -9732,6 +9750,7 @@ function stackDailyBuckets(buckets, now = new Date()) {
 //#endregion
 //#region src/pm-agents-chart.js
 var SVG = "http://www.w3.org/2000/svg";
+var liveCharts = new Set();
 function svgEl(tag, attrs) {
 	const el = document.createElementNS(SVG, tag);
 	for (const [key, value] of Object.entries(attrs || {})) {
@@ -9747,61 +9766,71 @@ function dayState(day, t) {
 	if (day.partial) parts.push(t("ui_status_partial"));
 	return parts.join(" · ");
 }
-function slotFor(count) {
-	if (count > 48) return 12;
-	if (count > 20) return 18;
-	return 36;
+function labelEvery(count, slot) {
+	const fitted = Math.max(1, Math.ceil(32 / Math.max(slot, 1)));
+	let step = 1;
+	if (count > 12) step = 3;
+	if (count > 24) step = 7;
+	if (count > 60) step = 14;
+	return Math.max(step, fitted);
 }
-function labelStep(count) {
-	if (count > 60) return 14;
-	if (count > 24) return 7;
-	if (count > 12) return 3;
-	return 1;
+function niceMax(value) {
+	if (!(value > 0)) return 0;
+	if (value < 1e3) {
+		const step = 10 ** Math.floor(Math.log10(value));
+		return Math.ceil(value / step) * step;
+	}
+	return Math.ceil(value / 100) * 100;
+}
+function axisLabel(value) {
+	if (value >= 1e3) {
+		const thousands = value / 1e3;
+		const rounded = Math.round(thousands * 10) / 10;
+		return (Math.abs(rounded - Math.round(rounded)) < 1e-6 ? String(Math.round(rounded)) : rounded.toFixed(1)) + "k";
+	}
+	return String(Math.round(value));
+}
+function partText(part, t) {
+	return part.total == null ? `${cliName(part.cli)} · ${t("res_no_data")}` : `${cliName(part.cli)} ${part.total.toLocaleString()}`;
 }
 function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 	const stacked = stackDailyBuckets(buckets, now);
 	if (!stacked || !stacked.days.length) return null;
-	const { tz, clis, days } = stacked;
+	const { clis, days } = stacked;
 	const shown = clis.filter((cli) => days.some((day) => day.parts.some((part) => part.cli === cli && part.total != null)));
-	const plotH = 112;
-	const height = 152;
-	const baseline = 130;
-	const slot = slotFor(days.length);
-	const width = Math.max(days.length * slot, slot);
-	const barW = Math.max(2, slot - (slot > 16 ? 10 : 4));
-	const max = days.reduce((peak, day) => Math.max(peak, day.parts.reduce((sum, part) => sum + (part.total > 0 ? part.total : 0), 0)), 0);
-	const heightOf = (value) => max > 0 ? value / max * plotH : 0;
+	const topLine = 14;
+	const baseline = 126;
+	const height = 127;
+	const usable = 110;
+	const scaleMax = niceMax(days.reduce((best, day) => Math.max(best, day.parts.reduce((sum, part) => sum + (part.total > 0 ? part.total : 0), 0)), 0));
+	const heightOf = (value) => scaleMax > 0 ? value / scaleMax * usable : 0;
 	const host = h("figure", {
 		class: "pm-agents-chart",
 		"data-resource-chart": ""
 	});
-	host.style.setProperty("--chart-min", width + "px");
-	const scroll = h("div", { class: "pm-agents-chart-scroll" });
+	host.style.setProperty("--plot-h", "127px");
+	host.style.setProperty("--line-top", "14px");
+	host.style.setProperty("--line-base", "126px");
+	const yscale = h("div", { class: "pm-agents-yscale" });
 	const svg = svgEl("svg", {
-		viewBox: `0 0 ${width} ${height}`,
-		preserveAspectRatio: "none",
 		role: "img",
-		"aria-label": t("res_trend")
+		"aria-label": t("res_trend"),
+		preserveAspectRatio: "xMinYMin meet"
 	});
-	svg.append(svgEl("line", {
-		class: "grid",
-		x1: 0,
-		x2: width,
-		y1: baseline,
-		y2: baseline
-	}));
-	const step = labelStep(days.length);
+	const labels = h("div", { class: "pm-agents-xlabels" });
+	const plot = h("div", { class: "pm-agents-plot-main" }, svg, labels);
 	const tip = h("div", {
 		class: "pm-agents-tip",
 		role: "tooltip",
 		hidden: true
 	});
+	let drawn = 0;
 	function show(day, event) {
 		tip.hidden = false;
 		tip.replaceChildren(...[
 			h("div", {}, day.date),
 			dayState(day, t) ? h("div", {}, dayState(day, t)) : null,
-			...day.parts.map((part) => h("div", { "data-tip-cli": part.cli }, `${cliName(part.cli)} ${part.total == null ? "—" : part.total.toLocaleString()}`))
+			...day.parts.map((part) => h("div", { "data-tip-cli": part.cli }, partText(part, t)))
 		].filter(Boolean));
 		const bounds = host.getBoundingClientRect();
 		const point = Number.isFinite(event?.clientX) ? event.clientX : bounds.left + bounds.width / 2;
@@ -9810,101 +9839,161 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 		tip.style.left = left + "px";
 		tip.style.top = "4px";
 	}
-	days.forEach((day, index) => {
-		const x0 = index * slot;
-		const x = x0 + (slot - barW) / 2;
-		const gaps = day.parts.filter((part) => part.total == null).map((part) => part.cli);
-		const zeros = day.parts.filter((part) => part.total === 0).map((part) => part.cli);
-		const group = svgEl("g", {
-			class: "day",
-			tabindex: "-1",
-			"data-date": day.date,
-			"data-incomplete": day.mark || null,
-			"data-partial": day.partial ? "true" : null,
-			"data-gap": gaps.join(" ") || null,
-			"data-zero": zeros.join(" ") || null,
-			"aria-label": [
-				day.date,
-				dayState(day, t),
-				...day.parts.map((part) => `${cliName(part.cli)} ${part.total == null ? "—" : part.total}`)
-			].filter(Boolean).join(" · ")
-		});
-		let y = baseline;
-		for (const part of day.parts) {
-			if (part.total == null) continue;
-			const tone = `cli-${cliClass(part.cli)}`;
-			if (part.total === 0) {
-				group.append(svgEl("rect", {
-					class: `tick ${tone}`,
-					x,
-					y: 128,
-					width: barW,
-					height: 2
-				}));
-				continue;
-			}
-			const barH = Math.max(1, heightOf(part.total));
-			y -= barH;
-			group.append(svgEl("rect", {
-				class: `bar ${tone}`,
-				x,
-				y,
-				width: barW,
-				height: barH
-			}));
-		}
-		if (day.mark) group.append(svgEl("circle", {
-			class: `mark ${day.mark}`,
-			cx: x + barW / 2,
-			cy: 8,
-			r: 2.5
+	function draw(width) {
+		const slot = width / days.length;
+		const barW = Math.max(2, Math.min(slot * .62, Math.max(2, slot - 4)));
+		const step = labelEvery(days.length, slot);
+		const maxText = scaleMax > 0 ? axisLabel(scaleMax) : "";
+		yscale.replaceChildren(...[
+			h("span", {
+				class: "sizer",
+				"aria-hidden": "true"
+			}, maxText || "0"),
+			maxText ? h("span", { class: "max" }, maxText) : null,
+			h("span", { class: "zero" }, "0")
+		].filter(Boolean));
+		svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+		svg.setAttribute("width", String(width));
+		svg.setAttribute("height", String(height));
+		svg.style.width = width + "px";
+		svg.style.height = "127px";
+		svg.replaceChildren(svgEl("line", {
+			class: "grid zero",
+			x1: 0,
+			x2: width,
+			y1: baseline,
+			y2: baseline
 		}));
-		if (day.partial) group.append(svgEl("rect", {
-			class: "mark partial",
-			x: x + barW / 2 + (day.mark ? 4 : -2),
-			y: day.mark ? 11 : 4,
-			width: 4,
-			height: 4
+		if (scaleMax > 0) svg.append(svgEl("line", {
+			class: "grid max",
+			x1: 0,
+			x2: width,
+			y1: topLine,
+			y2: topLine
 		}));
-		if (index % step === 0 || index === days.length - 1) {
+		labels.replaceChildren(...days.map((day, index) => {
+			const showLabel = index === days.length - 1 || index % step === 0 && days.length - 1 - index >= step;
 			const [, month, date] = day.date.split("-");
-			const label = svgEl("text", {
-				class: "axis",
-				x: x0 + slot / 2,
-				y: 146,
-				"text-anchor": "middle"
-			});
-			label.textContent = `${Number(month)}/${Number(date)}`;
-			group.append(label);
-		}
-		group.append(svgEl("rect", {
-			class: "band",
-			x: x0,
-			y: 0,
-			width: slot,
-			height
+			return h("span", {}, showLabel ? `${Number(month)}/${Number(date)}` : "");
 		}));
-		group.addEventListener("pointerenter", (event) => show(day, event));
-		group.addEventListener("focus", (event) => show(day, event));
-		svg.append(group);
+		days.forEach((day, index) => {
+			const x0 = index * slot;
+			const x = x0 + (slot - barW) / 2;
+			const gaps = day.parts.filter((part) => part.total == null).map((part) => part.cli);
+			const zeros = day.parts.filter((part) => part.total === 0).map((part) => part.cli);
+			const group = svgEl("g", {
+				class: "day",
+				tabindex: "-1",
+				"data-date": day.date,
+				"data-incomplete": day.mark || null,
+				"data-partial": day.partial ? "true" : null,
+				"data-gap": gaps.join(" ") || null,
+				"data-zero": zeros.join(" ") || null,
+				"aria-label": [
+					day.date,
+					dayState(day, t),
+					...day.parts.map((part) => partText(part, t))
+				].filter(Boolean).join(" · ")
+			});
+			if (gaps.length) group.append(svgEl("rect", {
+				class: "gap",
+				x: x0 + 1,
+				y: 117,
+				width: Math.max(2, slot - 2),
+				height: 8
+			}));
+			let y = 125;
+			for (const part of day.parts) {
+				if (part.total == null) continue;
+				const tone = `cli-${cliClass(part.cli)}`;
+				const open = day.mark ? " open" : "";
+				if (part.total === 0) {
+					group.append(svgEl("rect", {
+						class: `tick ${tone}${open}`,
+						x,
+						y: 124,
+						width: barW,
+						height: 2
+					}));
+					continue;
+				}
+				const barH = Math.max(1, heightOf(part.total));
+				y -= barH;
+				group.append(svgEl("rect", {
+					class: `bar ${tone}${open}`,
+					x,
+					y,
+					width: barW,
+					height: barH
+				}));
+			}
+			if (day.mark) {
+				const cx = x + barW / 2;
+				const markerBottom = y - 3;
+				if (day.mark === "settling") group.append(svgEl("rect", {
+					class: "marker settling",
+					x: cx - 3,
+					y: markerBottom - 6,
+					width: 6,
+					height: 6,
+					rx: 1
+				}));
+				else group.append(svgEl("circle", {
+					class: "marker in_progress",
+					cx,
+					cy: markerBottom - 3,
+					r: 3
+				}));
+			}
+			group.append(svgEl("rect", {
+				class: "band",
+				x: x0,
+				y: 0,
+				width: slot,
+				height
+			}));
+			group.addEventListener("pointerenter", (event) => show(day, event));
+			group.addEventListener("focus", (event) => show(day, event));
+			svg.append(group);
+		});
+	}
+	function layout() {
+		if (!host.isConnected) return;
+		const width = Math.round(plot.clientWidth);
+		if (width < 8 || width === drawn) return;
+		drawn = width;
+		draw(width);
+	}
+	const observer = new ResizeObserver(() => layout());
+	observer.observe(plot);
+	const tracker = {
+		host,
+		observer
+	};
+	liveCharts.add(tracker);
+	queueMicrotask(() => {
+		for (const item of [...liveCharts]) if (!item.host.isConnected) {
+			item.observer.disconnect();
+			liveCharts.delete(item);
+		}
+		layout();
 	});
 	svg.addEventListener("pointerleave", () => {
 		tip.hidden = true;
 	});
-	scroll.append(svg);
 	const legend = h("ul", { class: "pm-agents-legend" }, ...shown.map((cli) => h("li", {}, h("span", {
 		class: `swatch cli-${cliClass(cli)}`,
 		"aria-hidden": "true"
 	}), cliName(cli))), days.some((day) => day.mark === "in_progress") ? h("li", {}, h("span", {
-		class: "swatch mark-open",
+		class: "swatch marker in_progress",
 		"aria-hidden": "true"
 	}), t("ui_status_in_progress")) : null, days.some((day) => day.mark === "settling") ? h("li", {}, h("span", {
-		class: "swatch mark-settle",
+		class: "swatch marker settling",
 		"aria-hidden": "true"
-	}), t("res_settling")) : null, days.some((day) => day.partial) ? h("li", {}, h("span", {
-		class: "swatch mark-partial",
+	}), t("res_settling")) : null, days.some((day) => day.parts.some((part) => part.total == null)) ? h("li", {}, h("span", {
+		class: "swatch gap",
 		"aria-hidden": "true"
-	}), t("ui_status_partial")) : null);
+	}), t("res_no_data")) : null);
 	const table = h("table", {}, h("thead", {}, h("tr", {}, h("th", { scope: "col" }, t("res_seen")), ...clis.map((cli) => h("th", { scope: "col" }, cliName(cli))), h("th", { scope: "col" }, t("res_status")))), h("tbody", {}, ...days.map((day) => {
 		const gaps = day.parts.filter((part) => part.total == null).map((part) => part.cli);
 		const zeros = day.parts.filter((part) => part.total === 0).map((part) => part.cli);
@@ -9916,10 +10005,7 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 			"data-zero": zeros.join(" ") || null
 		}, h("td", {}, day.date), ...day.parts.map((part) => h("td", { "data-cli": part.cli }, part.total == null ? "—" : part.total.toLocaleString())), h("td", {}, dayState(day, t)));
 	})));
-	host.append(scroll, h("p", {
-		class: "ui-meta",
-		"data-tz": tz
-	}, tz), legend, tip, disclosure({
+	host.append(h("div", { class: "pm-agents-plot" }, yscale, plot), legend, tip, disclosure({
 		label: t("res_exact"),
 		body: h("div", { class: "pm-agents-exact" }, table),
 		key: exactKey
@@ -9973,28 +10059,31 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	const pause = button({
 		variant: "ghost",
 		size: "sm",
-		label: t(paused ? "res_resume" : "res_pause"),
 		"aria-pressed": String(paused),
 		onclick: () => {
 			paused = !paused;
 			preference.paused = paused;
-			pause.textContent = t(paused ? "res_resume" : "res_pause");
-			pause.setAttribute("aria-pressed", String(paused));
+			paintPause();
 			if (paused) clearTimeout(timer);
 			else refresh({ trend: false });
 		}
 	});
-	const refreshButton = iconButton({
-		icon: "refresh-cw",
-		label: t("res_refresh"),
-		class: "pm-agents-refresh",
-		onclick: () => void refresh({ trend: true })
-	});
-	refreshButton.classList.add("pm-agents-refresh");
+	function paintPause() {
+		const label = t(paused ? "res_resume" : "res_pause");
+		pause.replaceChildren(icon(paused ? "play" : "pause"), label);
+		pause.setAttribute("aria-pressed", String(paused));
+		pause.setAttribute("aria-label", label);
+	}
+	paintPause();
+	const listMedia = window.matchMedia("(max-width: 799px)");
+	function onListChange() {
+		if (active && data) render(true);
+	}
+	listMedia.addEventListener("change", onListChange);
 	const element = h("section", {
 		"data-pm-resources": "",
 		class: "pm-agents"
-	}, meta, h("div", { class: "pm-agents-toolbar" }, periodControl, h("div", { class: "pm-agents-filter-host" }), pause, refreshButton), status, layout);
+	}, h("div", { class: "pm-agents-toolbar" }, periodControl, h("div", { class: "pm-agents-toolbar-actions" }, h("div", { class: "pm-agents-filter-host" }), pause)), status, layout);
 	syncFilterMenu();
 	function finite(value) {
 		return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -10061,11 +10150,6 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			hour: "numeric",
 			minute: "2-digit"
 		}).format(when)));
-	}
-	function metricText(value) {
-		if (finite(value?.value) != null) return finite(value.value).toLocaleString();
-		if (finite(value?.observed) != null) return t("res_partial", { count: finite(value.observed).toLocaleString() });
-		return t("res_unknown");
 	}
 	function roleLabel(role) {
 		return role === "unassigned" ? t("wb_unassigned") : role || EM;
@@ -10137,9 +10221,10 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function labelFilterButton() {
 		const trigger = element.querySelector("[data-resource-filter]");
-		if (!trigger) return;
+		const slot = trigger?.querySelector("[data-filter-label]");
+		if (!trigger || !slot) return;
 		const label = filterLabel();
-		trigger.textContent = label;
+		slot.textContent = label;
 		trigger.setAttribute("aria-label", label);
 	}
 	function syncFilterMenu() {
@@ -10151,13 +10236,14 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		host.querySelector(".ui-menu")?.dispose?.();
 		const label = filterLabel();
 		const trigger = button({
-			variant: "ghost",
+			variant: "secondary",
 			size: "sm",
-			label,
+			label: h("span", { "data-filter-label": "" }, label),
 			"aria-label": label,
 			title: t("res_filter"),
 			"data-resource-filter": ""
 		});
+		trigger.append(icon("chevron-down"));
 		const items = [{
 			key: "all",
 			label: t("res_filter_all"),
@@ -10183,19 +10269,38 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const requested = first.requested_model && first.requested_model !== first.actual_model ? h("div", { class: "pm-agents-requested" }, t("res_requested_short", { model: first.requested_model })) : null;
 		return h("div", { class: "pm-agents-model" }, first.actual_model || (!requested ? t("res_unknown") : null), requested, items.length > 1 ? h("div", { class: "pm-agents-requested" }, t("res_more_models", { count: items.length - 1 })) : null);
 	}
-	function tokensCell(row) {
-		if (!isReadable(row)) return EM;
+	function tokenHeadline(row) {
+		const total = row.metrics?.total;
+		if (finite(total?.value) != null) return finite(total.value).toLocaleString();
+		if (finite(total?.observed) != null) return t("res_partial", { count: finite(total.observed).toLocaleString() });
+		return EM;
+	}
+	function tokenBreakdown(row) {
 		const metrics = row.metrics || {};
 		const read = finite(metrics.cache_read?.value), write = finite(metrics.cache_write?.value);
 		const cache = read == null || write == null ? EM : (read + write).toLocaleString();
 		const part = (value) => finite(value?.value) == null ? EM : finite(value.value).toLocaleString();
-		const total = metrics.total;
-		return h("div", {}, h("div", { class: "tabular" }, finite(total?.value) != null ? finite(total.value).toLocaleString() : finite(total?.observed) != null ? t("res_partial", { count: finite(total.observed).toLocaleString() }) : EM), h("div", { class: "pm-agents-tokens-detail" }, [
-			part(metrics.input),
-			cache,
-			part(metrics.output),
-			part(metrics.reasoning)
-		].join(" · ")));
+		return [
+			[t("res_input"), part(metrics.input)],
+			[t("res_cached"), cache],
+			[t("res_output"), part(metrics.output)],
+			[t("res_reasoning"), part(metrics.reasoning)]
+		];
+	}
+	function tokenTitle(row) {
+		return tokenBreakdown(row).map(([label, value]) => `${label} ${value}`).join(" · ");
+	}
+	function tokensCell(row) {
+		if (!isReadable(row)) return EM;
+		return h("span", {
+			class: "tabular",
+			title: tokenTitle(row)
+		}, tokenHeadline(row));
+	}
+	function modelName(row) {
+		const first = (row.configurations || [])[0];
+		if (!first) return t("res_unknown");
+		return first.actual_model || first.requested_model || t("res_unknown");
 	}
 	function sourceCell(row) {
 		const cli = cliOf(row);
@@ -10221,14 +10326,31 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		}
 		const parsed = Date.parse(data?.as_of);
 		const ago = Number.isFinite(parsed) ? relativePast(Date.now() - parsed) : "";
-		meta.textContent = start && end ? ago ? t("res_observed", {
+		if (!(start && end)) {
+			meta.replaceChildren();
+			meta.hidden = true;
+			mountMeta();
+			return;
+		}
+		const text = t(ago ? "res_observed" : "res_observed_range", {
 			start,
 			end,
+			zone,
 			ago
-		}) : t("res_observed_range", {
-			start,
-			end
-		}) : "";
+		});
+		const at = text.indexOf(zone);
+		if (at < 0) meta.textContent = text;
+		else meta.replaceChildren(text.slice(0, at), h("span", { "data-tz": zone }, zone), text.slice(at + zone.length));
+		meta.hidden = false;
+		mountMeta();
+	}
+	function mountMeta() {
+		if (!active) {
+			meta.remove();
+			return;
+		}
+		const heading = element.closest(".pm-main")?.querySelector(".ui-page-heading");
+		if (heading && meta.parentNode !== heading) heading.append(meta);
 	}
 	function tokenMetric() {
 		const readable = (data?.rows || []).filter(isReadable);
@@ -10277,6 +10399,20 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			body: h("div", { class: "pm-agents-quotas" }, ...blocks)
 		})];
 	}
+	function windowLabel(minutes) {
+		const value = finite(minutes);
+		if (value == null) return "";
+		if (value >= 60 && value % 60 === 0) return t("res_window_hours", { hours: value / 60 });
+		return t("res_window_short", { minutes: value });
+	}
+	function poolLabel(pool) {
+		const rows = (pool?.sources || []).map((id) => (data?.rows || []).find((row) => row.source_id === id)).filter(Boolean);
+		const names = [...new Set(rows.filter(isReadable).map((row) => cliClass(cliOf(row)) === cliOf(row) ? cliName(cliOf(row)) : "").filter(Boolean))];
+		if (names.length === 1) return names[0];
+		if (rows.length === 1) return rows[0].source_id;
+		const only = (pool?.sources || []).filter(Boolean);
+		return only.length === 1 ? only[0] : EM;
+	}
 	function quotaBlock(pool, item) {
 		const used = item ? finite(item.used_percent) : null;
 		const confirmed = pool.status === "reported" && item && used != null;
@@ -10286,20 +10422,66 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			"aria-label": confirmed ? t("res_used") + " " + used + "%" : t("res_unconfirmed")
 		}, h("span"));
 		if (confirmed) bar.querySelector("span").style.width = Math.max(0, Math.min(100, used)) + "%";
-		const bits = [];
-		if (finite(item?.window_minutes) != null) bits.push(t("res_window_short", { minutes: item.window_minutes }));
+		const windowText = windowLabel(item?.window_minutes);
+		let reset = "";
 		if (finite(item?.resets_at) != null) {
 			const at = item.resets_at * 1e3;
-			bits.push(t("res_resets_in", { when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString()) }));
+			reset = t("res_resets_in", { when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString()) });
 		}
 		return h("article", {
 			class: "pm-agents-quota",
 			"data-resource-pool": pool.pool_id || ""
-		}, h("div", { class: "pm-agents-quota-head" }, h("div", {}, h("div", { class: "pm-agents-pool-id" }, pool.pool_id || EM), pool.limit_id ? h("div", { class: "ui-meta" }, pool.limit_id) : null), confirmed ? h("div", { class: "tabular" }, t("res_used") + " " + used + "%") : h("span", { class: "ui-pill tone-neutral" }, t("res_unconfirmed"))), confirmed ? bar : null, bits.length ? h("div", { class: "ui-meta" }, bits.join(" · ")) : null);
+		}, h("div", { class: "pm-agents-quota-head" }, h("div", {}, h("div", { class: "pm-agents-pool-name" }, poolLabel(pool)), windowText ? h("div", { class: "ui-meta" }, windowText) : null), confirmed ? h("div", { class: "tabular" }, t("res_used") + " " + used + "%") : h("span", { class: "ui-pill tone-neutral" }, t("res_unconfirmed"))), confirmed ? bar : null, reset ? h("div", { class: "ui-meta" }, reset) : null, disclosure({
+			label: t("res_details"),
+			key: `agents-pool:${workspaceId}:${pool.pool_id || poolLabel(pool)}`,
+			body: h("p", { class: "pm-agents-pool-id" }, h("code", { class: "mono" }, pool.pool_id || EM))
+		}));
+	}
+	function choose(id) {
+		selected = id;
+		preference.selected = selected;
+		signature = currentSignature();
+		for (const node of layout.querySelectorAll(".pm-agents-list-row")) {
+			const on = node.getAttribute("data-resource-row") === id;
+			node.setAttribute("aria-selected", String(on));
+			node.tabIndex = on ? 0 : -1;
+		}
+		renderInspector();
+	}
+	function listRow(row, index) {
+		const readable = isReadable(row);
+		const cli = cliOf(row);
+		const on = row.source_id === selected;
+		const node = h("div", {
+			class: "pm-agents-list-row",
+			role: "listitem",
+			tabindex: on || selected == null && index === 0 ? 0 : -1,
+			"aria-selected": String(Boolean(on)),
+			"data-resource-row": row.source_id,
+			"data-resource-select": row.source_id
+		}, h("div", { class: "pm-agents-list-mark" }, readable && cli ? agentMark(cli) : null), h("div", { class: "pm-agents-list-id" }, h("span", { class: "pm-agents-list-name" }, row.source_id), readable && cli ? h("span", { class: "pm-agents-list-cli" }, cliName(cli)) : null), h("div", {
+			class: "pm-agents-list-tokens tabular",
+			title: readable ? tokenTitle(row) : null
+		}, readable ? tokenHeadline(row) : EM), h("div", { class: "pm-agents-list-meta" }, readable ? `${modelName(row)} · ${roleLabel(row.role)}` : roleLabel(row.role)), h("div", { class: "pm-agents-list-status" }, statusNode(row)));
+		node.addEventListener("click", (event) => {
+			if (!event.target.closest("a, button, input, select")) choose(row.source_id);
+		});
+		node.addEventListener("keydown", (event) => {
+			if (event.target !== node) return;
+			if (event.key === "Enter" || event.key === " ") {
+				event.preventDefault();
+				choose(row.source_id);
+			}
+		});
+		return node;
 	}
 	function tableFor(visible) {
 		if (!data?.rows?.length) return emptyState({ title: t("res_empty") });
 		if (!visible.length) return h("p", { class: "ui-meta" }, t("res_no_match"));
+		if (listMedia.matches) return h("div", {
+			class: "pm-agents-list",
+			role: "list"
+		}, ...visible.map(listRow));
 		return dataTable({
 			rows: visible,
 			rowKey: "source_id",
@@ -10429,17 +10611,11 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				[t("res_version"), item.cli_version || t("res_unknown")]
 			])));
 			nodes.push(facts([
-				[
-					"input",
-					"cache_read",
-					"cache_write",
-					"output",
-					"reasoning",
-					"total"
-				].map((key) => [t("res_" + key), metricText(row.metrics?.[key])]),
+				...tokenBreakdown(row),
+				[t("res_tokens_col"), tokenHeadline(row)],
 				[t("res_calls"), finite(row.calls) == null ? t("res_unknown") : finite(row.calls).toLocaleString()],
 				[t("res_observations"), finite(row.observations) == null ? t("res_unknown") : finite(row.observations).toLocaleString()]
-			].flat()));
+			]));
 		}
 		const reason = reasonPresentation(row.status);
 		nodes.push(disclosure({
@@ -10548,9 +10724,9 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (!preserveSelection) selected = null;
 		clearInspector();
 		main.replaceChildren();
-		meta.textContent = "";
+		meta.replaceChildren();
+		meta.hidden = true;
 		status.replaceChildren();
-		refreshButton.disabled = false;
 	}
 	function savePreference() {
 		const scroller = main.querySelector(".ui-data-table");
@@ -10566,7 +10742,6 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (!active) return;
 		const ticket = ++serial;
 		busy = true;
-		refreshButton.disabled = true;
 		if (!data) main.replaceChildren(skeleton(4));
 		const until = new Date(), since = new Date(until.getTime() - Number(period) * 864e5);
 		const params = new URLSearchParams({
@@ -10611,7 +10786,6 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		} finally {
 			if (ticket === serial || !data) {
 				busy = false;
-				refreshButton.disabled = false;
 				schedule();
 			}
 		}
@@ -10624,17 +10798,21 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			active = value;
 			clearTimeout(timer);
 			if (active) {
+				if (data) updateMeta();
+				else mountMeta();
 				if (!busy) refresh({ trend: true });
 			} else {
 				serial++;
 				busy = false;
-				refreshButton.disabled = false;
+				meta.remove();
 			}
 		},
 		dispose() {
 			savePreference();
 			active = false;
 			clearTimeout(timer);
+			listMedia.removeEventListener("change", onListChange);
+			meta.remove();
 			withdraw();
 		}
 	};
