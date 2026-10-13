@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import shlex
 import zlib
 from importlib import resources
@@ -11,7 +12,14 @@ from importlib import resources
 from . import pm_spec_sources as carrier
 from . import repository_sync
 from .operations import OperationError
-from .pm_dependency_paths import MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES, MAX_WIRE_BYTES, allowed_path
+from .pm_dependency_paths import (
+    MAX_FILE_BYTES,
+    MAX_FILES,
+    MAX_TOTAL_BYTES,
+    MAX_WIRE_BYTES,
+    allowed_path,
+    safe_path,
+)
 
 
 def invalid():
@@ -39,7 +47,7 @@ def _file(row):
     result = {"path": row["path"], "blob_sha": blob, "size": size, "sha256": None, "status": "read", "reason": None}
     if reason is not None:
         statuses = {"missing_at_commit": "missing", "document_too_large": "too_large",
-                    "selection_byte_budget": "too_large", "selection_wire_budget": "too_large", "symlink_or_nonregular_blob": "unparsable"}
+                    "selection_byte_budget": "too_large", "selection_wire_budget": "too_large", "symlink_or_nonregular_blob": "unparsable", "blob_unavailable": "unparsable"}
         if reason not in statuses or reason == "missing_at_commit" and (blob is not None or size is not None):
             raise invalid()
         return {**result, "status": statuses[reason], "reason": reason}, None
@@ -83,16 +91,41 @@ async def collect(ops, principal, wid, binding):
         envelope = json.loads(raw)
     except (ValueError, RecursionError):
         raise invalid() from None
-    if not isinstance(envelope, dict) or "error" in envelope:
+    if not isinstance(envelope, dict):
         raise invalid()
+    if "error" in envelope:
+        code = envelope["error"]
+        if not isinstance(code, str) or not re.fullmatch(r"(?:PM_SPEC_|REPOSITORY_)[A-Z0-9_]{1,80}", code):
+            code = "PM_DEPENDENCIES_SOURCE_UNAVAILABLE"
+        raise OperationError(code, "Pinned Git source unavailable; no worktree was modified / 固定 Git 來源無法讀取，工作樹未被修改", 409)
     value = envelope.get("result")
     if (not isinstance(value, dict) or any(value.get(k) != v for k, v in {
             "workspace_id": wid, "repository_id": binding["repository_id"], "binding_digest": binding["binding_digest"],
             "commit_sha": binding["source_sha"]}.items()) or not isinstance(value.get("tree_sha"), str)
             or not repository_sync.SHA.fullmatch(value["tree_sha"]) or not isinstance(value.get("files"), list)
             or len(value["files"]) > MAX_FILES or not isinstance(value.get("catalog_reasons"), list)
-            or any(r not in {"tree_limit", "entry_limit", "depth_limit", "file_limit"} for r in value["catalog_reasons"])):
+            or any(r not in {"tree_limit", "entry_limit", "depth_limit", "file_limit", "tree_too_large", "tree_unavailable",
+                            "path_encoding_unsupported", "path_unsafe", "unreadable_limit"} for r in value["catalog_reasons"])):
         raise invalid()
+    unreadable = value.get("unreadable_paths", [])
+    if not isinstance(unreadable, list) or len(unreadable) > MAX_FILES:
+        raise invalid()
+    for row in unreadable:
+        if not isinstance(row, dict) or not isinstance(row.get("object_sha"), str) or not repository_sync.SHA.fullmatch(row["object_sha"]):
+            raise invalid()
+        if row.get("kind") == "tree":
+            if (set(row) != {"kind", "path", "object_sha", "status", "reason"} or row["path"] != "." and not safe_path(row["path"])
+                    or row["reason"] not in {"tree_too_large", "tree_unavailable"}
+                    or row["status"] != ("too_large" if row["reason"] == "tree_too_large" else "unparsable")):
+                raise invalid()
+        elif row.get("kind") == "entry":
+            if (set(row) != {"kind", "path", "object_sha", "status", "reason", "parent_path", "name_bytes_sha256"}
+                    or row["path"] is not None or row["parent_path"] != "." and not safe_path(row["parent_path"])
+                    or row["reason"] not in {"path_encoding_unsupported", "path_unsafe"} or row["status"] != "unparsable"
+                    or not isinstance(row["name_bytes_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", row["name_bytes_sha256"])):
+                raise invalid()
+        else:
+            raise invalid()
     rows, contents = [], {}
     for raw_row in value["files"]:
         row, content = _file(raw_row)
@@ -102,4 +135,5 @@ async def collect(ops, principal, wid, binding):
         contents[row["path"]] = content
     if sum(r["size"] or 0 for r in rows if r["sha256"]) > MAX_TOTAL_BYTES:
         raise invalid()
-    return {"files": rows, "contents": contents, "tree_sha": value["tree_sha"], "catalog_reasons": value["catalog_reasons"]}
+    return {"files": rows, "contents": contents, "tree_sha": value["tree_sha"],
+            "unreadable_paths": unreadable, "catalog_reasons": value["catalog_reasons"]}

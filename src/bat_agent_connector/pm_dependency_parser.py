@@ -9,6 +9,7 @@ import re
 import shlex
 import sys
 
+from .pm_dependency_budget import MAX_COMMAND_BYTES
 from .pm_dependency_paths import MAX_EDGES, safe_path
 
 if sys.version_info >= (3, 11):
@@ -173,7 +174,8 @@ def member_path(relative, patterns):
         if pattern[0] == "**":
             return matches(parts, pattern[1:]) or bool(parts) and matches(parts[1:], pattern)
         return bool(parts) and fnmatch.fnmatchcase(parts[0], pattern[0]) and matches(parts[1:], pattern[1:])
-    return isinstance(patterns, list) and any(isinstance(p, str) and matches(relative.split("/"), p.rstrip("/").split("/")) for p in patterns)
+    return isinstance(patterns, list) and any(isinstance(p, str) and len(p) <= 800 and len(p.split("/")) <= 16
+        and matches(relative.split("/"), p.rstrip("/").split("/")) for p in patterns)
 
 
 def _go(content, sums=False):
@@ -217,6 +219,12 @@ class Inventory:
 
     def ref(self, path, **extra):
         row = next(row for row in self.files if row["path"] == path)
+        if "command" in extra:
+            raw = extra["command"].encode("utf-8")
+            if len(raw) > MAX_COMMAND_BYTES:
+                extra.update(command=raw[:MAX_COMMAND_BYTES].decode("utf-8", errors="ignore"),
+                             command_truncated=True, command_sha256=hashlib.sha256(raw).hexdigest())
+                self.reasons.add("evidence_command_truncated")
         return {"repository": self.repository, "path": path, "commit_sha": self.commit, "blob_sha": row["blob_sha"], **extra}
 
     def parse(self):
@@ -344,7 +352,7 @@ class Inventory:
             root, _ = self.cargo_workspace(component)
             if root and posixpath.dirname(root) == posixpath.dirname(path):
                 return True, [self.ref(root, basis="workspace_membership")]
-            return any(p.get("name") == component["name"] and p.get("version") == component["version"] and "source" not in p
+            return any(isinstance(component["version"], str) and p.get("name") == component["name"] and p.get("version") == component["version"] and "source" not in p
                        for p in lock.get("package", [])), []
         if eco == "python":
             root = posixpath.join(posixpath.dirname(path), "pyproject.toml")
@@ -434,9 +442,11 @@ class Inventory:
             if relation and set(bins) & binaries(command):
                 evidence.append((relation, self.ref(component["manifest_path"], script=script, command=command)))
         for path, step in self.steps(component):
-            for relation in self.step_relations(component, step):
-                if set(bins) & binaries(step["command"]):
-                    evidence.append((relation, self.ref(path, job_id=step["job_id"], line=step["line"], command=step["command"])))
+            for words in _commands(step["command"]):
+                command = shlex.join(words)
+                if set(bins) & binaries(command):
+                    for relation in self.step_relations(component, {"command": command}):
+                        evidence.append((relation, self.ref(path, job_id=step["job_id"], line=step["line"], command=command)))
         if evidence:
             for relation, ref in evidence:
                 self.add(component, name, version, relation, basis=basis, refs=[manifest_ref, ref])

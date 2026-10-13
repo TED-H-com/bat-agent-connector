@@ -1,17 +1,20 @@
 """Current-authority dependency projections. Reads never contact the host or scan files."""
 from __future__ import annotations
 
+import json
 import re
 
 from . import pm_dependencies as dep
 from . import pm_maintenance_policy, pm_workspace
 from .operations import OperationError
+from .pm_dependency_budget import MAX_READ_BYTES, bounded
 from .pm_dependency_parser import KINDS, package_name, stable
-from .pm_release_baselines import _bounded, _snapshot_read
+from .pm_release_baselines import _size, _snapshot_read
 
 MAX_REPOSITORIES = 32
 MAX_PEER_BYTES = 1_000_000
 MAX_LINKS = 2000
+FRESHNESS = {"stale": None, "stale_reason": "repository_head_not_observed"}
 
 
 def _current(ops, principal, wid):
@@ -28,8 +31,8 @@ def _current(ops, principal, wid):
 def _empty(wid):
     return {"workspace_id": wid, "version": None, "workspace_version": None, "source": None,
             "capture": {"revision_id": None, "commit_sha": None, "captured_at": None, "status": "unknown"},
-            "stale": None, "partial": True, "reason": "source_unavailable", "components": [],
-            "dependencies": {kind: [] for kind in KINDS}, "edges": [], "declared": [], "files": [],
+            **FRESHNESS, "partial": True, "reason": "source_unavailable", "components": [],
+            "dependencies": {kind: [] for kind in KINDS}, "edges": [], "declared": [], "files": [], "unreadable_paths": [],
             "verification_hints": [], "counts": None, "maintenance_owner": None, "maintenance_owner_reason": "not_available",
             "cross_repository": {"status": "bounded", "complete": False}, "cross_repository_edges": [], "external_components": []}
 
@@ -71,7 +74,6 @@ def discover_peers(ops, principal, wid):
                 continue
             repository = record["document"]["repository"]
             # Freeze this bounded selection; later readers never refill hidden slots.
-            from .pm_release_baselines import _size
             length = _size(record["document"])
             if repository in repositories or size + length > MAX_PEER_BYTES:
                 continue
@@ -96,17 +98,17 @@ def _related(ops, principal, wid, doc):
                 continue
         except OperationError:
             continue
-        peers.append({"workspace_id": peer_id, "stale": record["document"]["commit_sha"] != binding["source_sha"], **record["document"]})
+        peers.append({"workspace_id": peer_id, **record["document"], **FRESHNESS})
     return peers
 
 
-def _links(documents):
+def _links(documents, *, byte_limit=500_000, diagnostics=None):
     components = [c for d in documents for c in d["components"]]
     targets = {}
     for c in components:
         if c["published_name"] is not None:
             targets.setdefault((c["ecosystem"], package_name(c["ecosystem"], c["published_name"])), []).append(c)
-    links = []
+    links, size = [], 2
     for doc in documents:
         lookup = {d["key"]: d for d in doc["dependencies"]}
         sources = {c["component_id"]: c for c in doc["components"]}
@@ -117,16 +119,48 @@ def _links(documents):
                 if source["component_id"] == target["component_id"]:
                     continue
                 if len(links) >= MAX_LINKS:
+                    if diagnostics is not None:
+                        diagnostics["truncated"] = True
                     return links
-                links.append({"link_id": stable("pmdeplink_", edge["edge_id"], target["component_id"]),
+                link = {"link_id": stable("pmdeplink_", edge["edge_id"], target["component_id"]),
                     "component_id": source["component_id"], "target_component_id": target["component_id"],
                     "dependency_key": edge["dependency_key"], "edge_id": edge["edge_id"], "relation": edge["relation"],
                     "version": edge["version"], "resolved": edge["resolved"], "evidence_level": edge["evidence_level"],
                     "version_reason": edge.get("version_reason"), "resolution_reason": edge.get("resolution_reason"),
                     "basis": "exact_published_package", "direction": "component_to_component",
                     "evidence_refs": [*source["evidence_refs"],
-                        *(ref for ref in edge["evidence_refs"] if ref not in source["evidence_refs"]), *target["evidence_refs"]]})
+                        *(ref for ref in edge["evidence_refs"] if ref not in source["evidence_refs"]), *target["evidence_refs"]]}
+                length = _size(link) + 2
+                if size + length > byte_limit:
+                    if diagnostics is not None:
+                        diagnostics["truncated"] = True
+                    return links
+                links.append(link)
+                size += length
     return links
+
+
+def _legacy_budget(result):
+    """Legacy captures remain readable; any omitted collections are explicit.
+
+    New captures reserve projection space before committing. This fallback only
+    handles older documents/declarations that predate those storage limits.
+    """
+    if _size(result) <= MAX_READ_BYTES - 4096:
+        return result
+    result.update(partial=True, reason="projection_byte_budget", counts=None,
+                  projection_omitted_collections=[])
+    for field in ("verification_hints", "declared", "edges", "dependencies", "components", "files", "unreadable_paths"):
+        if field not in result:
+            continue
+        result["projection_omitted_collections"].append(field)
+        result[field] = {kind: [] for kind in KINDS} if field == "dependencies" else []
+        if field == "edges":
+            result["dependencies"] = {kind: [] for kind in KINDS}
+            result["projection_omitted_collections"].append("dependencies")
+        if _size(result) <= MAX_READ_BYTES - 4096:
+            break
+    return bounded(result)
 
 
 @_snapshot_read
@@ -139,7 +173,7 @@ def get(ops, principal, workspace_id):
     current = dep.head(ops.db, wid, dep.source_key(binding))
     result.update(version=current["version"], workspace_version=pm_workspace.require_member(ops.db, principal, wid)["version"],
         source={"repository": binding["target"]["repository"], "commit_sha": binding["source_sha"], "binding_digest": binding["binding_digest"]},
-        reason="not_captured", stale=False)
+        reason="not_captured", **FRESHNESS)
     if current["revision_id"] is None:
         return result
     try:
@@ -157,14 +191,29 @@ def get(ops, principal, workspace_id):
         for kind in dependency["kinds"]:
             grouped[kind].append(dependency)
     result.update({key: value for key, value in doc.items() if key not in {"dependencies", "peer_revisions"}})
-    result.update(dependencies=grouped, declared=declarations, stale=doc["commit_sha"] != binding["source_sha"],
+    result.update(dependencies=grouped, declared=declarations, **FRESHNESS,
         reason=None, maintenance_owner=owner, maintenance_owner_reason=None if owner else "not_named_in_visible_policy",
-        components=[{**c, "maintenance_owner": owner, "maintenance_owner_reason": None if owner else "not_named_in_visible_policy"} for c in doc["components"]],
-        cross_repository_edges=_links([doc, *peers]),
-        external_components=[{**c, "stale": peer["stale"], "capture_revision_id": peer["capture"]["revision_id"]} for peer in peers for c in peer["components"]])
+        components=[{**c, "maintenance_owner": owner, "maintenance_owner_reason": None if owner else "not_named_in_visible_policy"} for c in doc["components"]])
     result["counts"] = {"components": len(doc["components"]), "dependencies": len(doc["dependencies"]),
         "edges": len(doc["edges"]), "declared": len(declarations), "basis": "captured_revision", "partial": doc["partial"]}
-    return _bounded(result)
+    _legacy_budget(result)
+    selected, diagnostics = [], {}
+    size = _size(result)
+    for peer in peers:
+        components = [{**c, **FRESHNESS, "capture_revision_id": peer["capture"]["revision_id"]} for c in peer["components"]]
+        length = _size(components) + 2
+        if size + length > MAX_READ_BYTES - 4096:
+            diagnostics["truncated"] = True
+            continue
+        result["external_components"].extend(components)
+        selected.append(peer)
+        size += length
+    if not result.get("projection_omitted_collections"):
+        result["cross_repository_edges"] = _links([doc, *selected], byte_limit=MAX_READ_BYTES - size - 4096, diagnostics=diagnostics)
+    if diagnostics.get("truncated"):
+        result["partial"] = True
+        result["cross_repository"]["reason"] = "projection_byte_budget"
+    return bounded(result)
 
 
 @_snapshot_read
@@ -172,17 +221,21 @@ def revisions(ops, principal, workspace_id, *, after=0, limit=20):
     if type(after) is not int or not 0 <= after < 2**63 or type(limit) is not int or not 1 <= limit <= 100:
         raise dep.bad()
     binding = _current(ops, principal, workspace_id)
-    result = {"workspace_id": workspace_id, "revisions": [], "next_cursor": None}
+    result = {"workspace_id": workspace_id, "revisions": [], "next_cursor": None, "reason": None}
     if binding is None:
-        return result
-    rows = ops.db.execute("""SELECT revision_id,sequence FROM pm_dependency_revisions
-        WHERE workspace_id=? AND source_key=? AND sequence>? ORDER BY sequence LIMIT ?""",
+        return {**result, "reason": "source_unavailable"}
+    rows = ops.db.execute("""SELECT r.revision_id,r.created_at,r.sequence,s.summary FROM pm_dependency_revisions r
+        LEFT JOIN pm_dependency_revision_summaries s ON s.revision_id=r.revision_id
+        WHERE r.workspace_id=? AND r.source_key=? AND r.sequence>? ORDER BY r.sequence LIMIT ?""",
         (workspace_id, dep.source_key(binding), after, limit + 1)).fetchall()
     for row in rows[:limit]:
-        saved = _visible_record(ops, principal, workspace_id, row["revision_id"])
-        doc = saved["document"]
-        result["revisions"].append({**doc["capture"], "repository": doc["repository"], "binding_digest": doc["binding_digest"],
-            "stale": doc["commit_sha"] != binding["source_sha"], "partial": doc["partial"]})
+        # Source identity/access was checked once above. Old rows have explicit
+        # unknown metadata; no migration or full-document decode happens on reads.
+        summary = json.loads(row["summary"]) if row["summary"] is not None else {
+            "revision_id": row["revision_id"], "captured_at": row["created_at"], "commit_sha": None,
+            "status": "unknown", "partial": True, "reason": "summary_not_recorded",
+            "repository": binding["target"]["repository"], "binding_digest": binding["binding_digest"]}
+        result["revisions"].append({**summary, **FRESHNESS})
     if len(rows) > limit:
         result["next_cursor"] = rows[limit - 1]["sequence"]
     return result
@@ -194,7 +247,7 @@ def impact(ops, principal, workspace_id, *, dependency):
         raise dep.bad()
     current = get(ops, principal, workspace_id)
     result = {"workspace_id": workspace_id, "dependency": dependency, "capture": current["capture"],
-              "stale": current["stale"], "partial": current["partial"], "components": [],
+              **FRESHNESS, "partial": current["partial"], "components": [],
               "coverage": "captured_edges_only", "declared": [], "counts": None}
     if current["capture"]["revision_id"] is None:
         return result
@@ -226,7 +279,7 @@ def impact(ops, principal, workspace_id, *, dependency):
                 continue
             evidence = [e for e in edges if e["component_id"] == cid and e["dependency_key"] == dependency]
             evidence += [link for link in links if link["component_id"] == cid and link["target_component_id"] in reached]
-            result["components"].append({**c, "stale": document.get("stale", False), "distance": reached[cid], "direct": reached[cid] == 1,
+            result["components"].append({**c, **FRESHNESS, "distance": reached[cid], "direct": reached[cid] == 1,
                                           "relations": sorted({e["relation"] for e in evidence}), "edges": evidence})
     result["components"].sort(key=lambda c: (c["distance"], c["component_id"]))
     result["declared"] = [d for d in current["declared"] if d["dependency_key"] == dependency]
@@ -234,4 +287,17 @@ def impact(ops, principal, workspace_id, *, dependency):
     result["reason"] = "bounded_captured_graph"
     result["cross_repository"] = {"status": "bounded", "complete": False}
     result["counts"] = {"components": len(result["components"]), "basis": "visible_captured_graph", "partial": True}
-    return _bounded(result)
+    # Impact may repeat evidence along several paths. Keep a bounded prefix of
+    # complete component rows, with counts explicitly referring to returned rows.
+    base_size = _size({**result, "components": []})
+    rows, size = [], base_size
+    for component in result["components"]:
+        length = _size(component) + 2
+        if size + length > MAX_READ_BYTES - 4096:
+            result["reason"] = "projection_byte_budget"
+            break
+        rows.append(component)
+        size += length
+    result["components"] = rows
+    result["counts"] = {"components": len(rows), "basis": "returned_components", "partial": True}
+    return bounded(result)

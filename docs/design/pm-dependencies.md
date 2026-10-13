@@ -22,6 +22,9 @@ Git blob SHA-1、大小及 SHA-256 在中央重驗。最後一次 guard 到 jour
 `too_large`、`unparsable`；不存在的值為 null。對已發現 manifest 補列缺少的慣用 lockfile；
 同層沒有 lockfile 時可沿用上層；同層檔案存在但無法讀取或解析時，不跳過它借用上層版本。
 超量、非 UTF-8、symlink、格式／結構不支援都不能當成空檔。
+單一無法讀取的 blob 保留 files.unparsable/blob_unavailable；超過 512 KB 或無法列舉的 tree 不阻擋其他 tree。
+unreadable_paths（最多 128 筆）列出 tree path/object_sha/status/reason；無法表示的檔名使用 path=null、parent_path、name_bytes_sha256。
+這些問題與超量都有 catalog reason，capture 必須為 partial。Host 的 PM_SPEC_／REPOSITORY_ 安全代碼保留；未知 host 錯誤為 PM_DEPENDENCIES_SOURCE_UNAVAILABLE，與 identity invalid 分開。
 解析使用 Python stdlib，Python 3.10 沿用既有 tomli；不新增相依套件。
 
 ## 操作契約
@@ -81,6 +84,7 @@ Workflow 為保守的逐行 reader，只處理 jobs、steps、literal run/uses�
 Workflow/job defaults 僅接受 defaults.run.working-directory；step 的目錄只影響該 step。
 同一 command 的 build 與 test 都保留；辨識 npx、pnpm exec、uv run、poetry run 包裝。
 不因共用 CI job 就將 uses action 掛為 component dependency。
+每筆 evidence command 最多 512 UTF-8 bytes；長命令的分類仍使用原始內容，顯示截斷時附 command_truncated=true 與完整 command_sha256，parser reason=evidence_command_truncated。
 CI hints 帶 workflow path、job id、原始 1-based line、command、commit 和 blob；不代表 CI 已成功。
 
 `version` 保存 manifest requirement；未宣告的 workflow tool 版本為 null，搭配 `version_reason`。
@@ -108,16 +112,25 @@ HTTP 三個路由都需要 observe + current workspace membership；RPC/MCP 同�
 | `GET /dependencies/impact?dependency=pmdepkey_…` | `pm_dependencies_impact_get(workspace_id, dependency)` |
 
 Native bridge 只放行上述 GET、精確 query 和既有 `/operations` 寫入入口。
-Read 不連 host、不掃檔、不改 journal；response 上限沿用 PM 2 MB。
+Read 不連 host、不掃檔、不改 journal；response 上限 2 MB。
+新的 capture document 上限 750 KB；有效 owner declarations 合計上限 250 KB，保留 grouping、owner 和 peers 的顯示空間。
+超限寫入使用 PM_DEPENDENCIES_READ_TOO_LARGE（EN／zh-TW 訊息），不產生成功 revision／declaration。
+GET 先保留本 revision，再依剩餘 response bytes 選取固定 peer 集合；link 建立時也逐筆計入 byte budget，避免先膨脹整張圖。
+放不下的 peer 或 link 使 partial=true、cross_repository.reason=projection_byte_budget。
+舊 revision 若本身已超過投影預算，回傳 capture 摘要、counts=null、partial=true、reason=projection_byte_budget，並以 projection_omitted_collections 明列省略集合；不因 peer 膨脹而永久回 413。
+Impact 以完整 component rows 的有界前綴回傳，counts.basis=returned_components，partial=true，不能當全圖總數。
 `after` 是 signed-64-bit 非負 sequence，limit 1–100；最後一頁 `next_cursor=null`。
-Revisions 回傳摘要，沒有把歷史頁筆數當總數。
+Revisions 在 capture 同一 transaction 寫入獨立不可變 summary table，頁面只讀小型 summary，不讀取／rehash inventory document。
+沒有資料搬移或新 user_version；舊 revision 尚無 summary 時 commit_sha=null、status=unknown、partial=true、reason=summary_not_recorded。
+來源不可用時整頁 reason=source_unavailable。Revisions 沒有把歷史頁筆數當總數。
 
 Latest 包含 `version/workspace_version/source/capture/stale/partial/reason`、`components`、
 依 kind 分組的 `dependencies`、`edges`、獨立 `declared`、`files`、`verification_hints`、
 `maintenance_owner`、`counts`。`capture={revision_id,commit_sha,captured_at,status}`；
 時間使用鄰近 PM endpoint 的 UTC epoch seconds。沒有 carrier 或未擷取時 status=unknown、counts=null；
 已完整掃描的空 catalog 才可報 0。Captured status 為 complete／partial；counts 明示只涵蓋該 revision。
-原 bound source commit 移動時 `stale=true`，不替換 captured commit。
+PM carrier binding 固定且目前沒有 repository head 的觀察證據，因此 latest／history／impact／peer components 一律
+`stale=null, stale_reason=repository_head_not_observed`；不把 pinned commit 相等說成對 repository head 而言「最新」。
 
 Capture 同時固定最多 32 個、合計最多 1 MB 的可見其他 carrier revisions 作為跨 repo 比較集合。
 只有 ecosystem + published package name（Python 使用 PEP 503 正規化）對應才建立 `cross_repository_edges`，證據同時包含兩個

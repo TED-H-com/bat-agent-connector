@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Correct dependency inventory coverage, lockfile membership, Python package-name matching,
+  Cargo inheritance and CI attribution. Report freshness as unknown, preserve partial Git
+  reads, bound expanded projections and serve history from immutable summaries.
+
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
   immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share

@@ -285,3 +285,19 @@ def test_uv_ancestor_resolution_requires_recorded_workspace_coverage():
     excluded = inventory({'packages/app/pyproject.toml': manifest, 'uv.lock': lock,
         'pyproject.toml': '[tool.uv.workspace]\nmembers=["packages/*"]\nexclude=["packages/app"]\n'})
     assert excluded['edges'][0]['resolution_reason'] == 'lockfile_does_not_cover_component'
+
+
+def test_evidence_commands_are_capped_with_explicit_truncation():
+    command = 'vite build ' + 'x' * 6000
+    result = inventory({'package.json': json.dumps({'name': 'app', 'devDependencies': {'vite': '^6'}, 'scripts': {'build': command}})})
+    ref = next(r for r in result['edges'][0]['evidence_refs'] if 'command' in r)
+    assert len(ref['command'].encode()) <= 512
+    assert ref['command_truncated'] and len(ref['command_sha256']) == 64
+    assert 'evidence_command_truncated' in result['parser_reasons']
+
+
+def test_mixed_ci_commands_classify_each_dev_binary_by_its_own_call():
+    result = inventory({'package.json': '{"name":"app","devDependencies":{"vite":"^6","vitest":"^3"}}',
+        '.github/workflows/test.yml': 'jobs:\n  checks:\n    steps:\n      - run: vite build && npx vitest run\n'})
+    names = {d['key']: d['name'] for d in result['dependencies']}
+    assert {(names[e['dependency_key']], e['relation']) for e in result['edges'] if e['basis'] == 'npm_script_or_ci'} == {('vite', 'build'), ('vitest', 'test')}

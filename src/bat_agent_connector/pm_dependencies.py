@@ -8,9 +8,10 @@ from urllib.parse import urlsplit
 
 from . import pm_access, pm_runs, pm_spec_sources, pm_workspace
 from .operations import ActionDef, OperationError, OperationService
+from .pm_dependency_budget import MAX_CAPTURE_BYTES, MAX_DECLARATION_BYTES, bounded
 from .pm_dependency_parser import KINDS, RELATIONS, Inventory, dependency_key, stable, text
 from .pm_dependency_paths import MAX_FILES, MAX_TOTAL_BYTES, safe_path
-from .pm_release_baselines import _bounded, _json, _snapshot
+from .pm_release_baselines import _json, _snapshot
 
 ACTIONS = tuple("pm.dependencies." + verb for verb in ("capture", "declare", "retract"))
 MAX_DECLARED = 256
@@ -46,11 +47,13 @@ def schema(journal):
             """CREATE TABLE IF NOT EXISTS pm_dependency_retractions (
                 declaration_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, source_key TEXT NOT NULL,
                 actor TEXT NOT NULL, created_at REAL NOT NULL, operation_id TEXT NOT NULL UNIQUE)""",
+            """CREATE TABLE IF NOT EXISTS pm_dependency_revision_summaries (
+                revision_id TEXT PRIMARY KEY, summary TEXT NOT NULL)""",
             "CREATE INDEX IF NOT EXISTS pm_dependency_history ON pm_dependency_revisions(workspace_id,source_key,sequence)",
             "CREATE INDEX IF NOT EXISTS pm_dependency_declared ON pm_dependency_declarations(workspace_id,source_key,sequence)",
         ):
             journal.db.execute(statement)
-        for table in ("pm_dependency_revisions", "pm_dependency_declarations", "pm_dependency_retractions"):
+        for table in ("pm_dependency_revisions", "pm_dependency_declarations", "pm_dependency_retractions", "pm_dependency_revision_summaries"):
             for verb in ("UPDATE", "DELETE"):
                 journal.db.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_{verb.lower()}_immutable BEFORE {verb} ON {table} "
                     "BEGIN SELECT RAISE(ABORT, 'Dependency evidence is immutable'); END")
@@ -71,7 +74,7 @@ def capabilities():
 
 
 def source_identity(binding):
-    # Commit is intentionally separate: an inventory can be stale for the same source.
+    # Identity of the carrier is separate from the pinned content revision.
     return {k: binding[k] for k in ("pm_workspace_id", "server_id", "target", "repository_id", "binding_digest", "config_digest", "operation_id", "creation_operation_id")}
 
 
@@ -247,7 +250,7 @@ async def _run(ctx):
         inventory = Inventory(binding["target"]["repository"], binding["source_sha"], source["files"], source["contents"]).parse()
         from .pm_dependency_reads import discover_peers
         inventory["peer_revisions"] = discover_peers(ops, principal, wid)
-        inventory.update(files=source["files"], tree_sha=source["tree_sha"], catalog_reasons=source["catalog_reasons"])
+        inventory.update(files=source["files"], tree_sha=source["tree_sha"], catalog_reasons=source["catalog_reasons"], unreadable_paths=source["unreadable_paths"])
         # No await between this final host/workspace frame and the atomic CAS+receipt.
         await pm_spec_sources._guard(ops, principal, wid, binding)
 
@@ -266,10 +269,12 @@ async def _run(ctx):
                              "effective_ci_configuration": "unknown", "go_sum_is_lockfile": False},
                 "capture": {"revision_id": revision_id, "commit_sha": binding["source_sha"], "captured_at": now,
                             "status": "partial" if partial else "complete"}, "partial": partial}
-            _bounded(doc)
+            bounded(doc, limit=MAX_CAPTURE_BYTES)
             ops.db.execute("""INSERT INTO pm_dependency_revisions(revision_id,workspace_id,source_key,document,
                 document_digest,source_binding,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?)""",
                 (revision_id, wid, key, _json(doc), pm_spec_sources._digest(doc), _json(source_identity(binding)), now, ctx.operation_id))
+            summary = {**doc["capture"], "repository": doc["repository"], "binding_digest": doc["binding_digest"], "partial": partial}
+            ops.db.execute("INSERT INTO pm_dependency_revision_summaries VALUES(?,?)", (revision_id, _json(summary)))
             result.update(revision_id=revision_id, status=doc["capture"]["status"])
         elif ctx.op["action"] == ACTIONS[1]:
             did, params = "pmdecl_" + ctx.operation_id[3:], ctx.params
@@ -280,6 +285,7 @@ async def _run(ctx):
                 "version_reason": "not_declared" if dep["version"] is None else None, "resolution_reason": "owner_declaration",
                 "source_ref": intent["source_ref"], "evidence_refs": [intent["source_ref"]], "note": params.get("note"),
                 "actor": ctx.actor, "created_at": now, "capture_revision_id": revision_id}
+            bounded([*declared(ops.db, wid, key), doc], limit=MAX_DECLARATION_BYTES)
             ops.db.execute("""INSERT INTO pm_dependency_declarations(declaration_id,workspace_id,source_key,document,operation_id)
                 VALUES(?,?,?,?,?)""", (did, wid, key, _json(doc), ctx.operation_id))
             result["declaration_id"] = did

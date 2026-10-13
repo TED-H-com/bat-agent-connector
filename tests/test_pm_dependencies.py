@@ -284,7 +284,7 @@ async def test_source_withdrawal_removes_inventory_history_impact_and_operation_
     assert not any(e["kind"].startswith("pm.dependencies.") for e in pm_access.filter_events(db, OWNER, events)["events"])
 
 
-async def test_stale_commit_and_paginated_revisions(pm, monkeypatch):
+async def test_pinned_commit_and_paginated_revisions_do_not_claim_freshness(pm):
     await prepare(pm)
     await run(pm)
     await run(pm)
@@ -293,10 +293,9 @@ async def test_stale_commit_and_paginated_revisions(pm, monkeypatch):
     assert len(first["revisions"]) == 1 and first["next_cursor"] is not None
     second = pm_dependency_reads.revisions(ops, OWNER, wid, after=first["next_cursor"], limit=1)
     assert len(second["revisions"]) == 1 and second["next_cursor"] is None
-    binding = pm_runs.workspace_worktree(ops.db, wid)
-    binding["source_sha"] = "f" * 40
-    monkeypatch.setattr(pm_runs, "workspace_worktree", lambda db, workspace_id: binding)
-    assert read(pm)["stale"] and read(pm)["capture"]["commit_sha"] == pm["sha"]
+    assert read(pm)["stale"] is None and read(pm)["capture"]["commit_sha"] == pm["sha"]
+    assert first["revisions"][0]["stale_reason"] == "repository_head_not_observed"
+
 
 
 async def test_impact_follows_exact_component_edges_transitively(pm):
@@ -529,3 +528,137 @@ async def test_unicode_path_json_expansion_stays_inside_existing_runner_ceiling(
     assert len(result["files"]) == 128 and result["partial"]
     assert any(f["reason"] == "selection_wire_budget" for f in result["files"])
     assert any(f["status"] == "read" and f["size"] == 400000 for f in result["files"])
+
+
+async def test_dynamic_and_unsupported_dependency_fields_capture_as_partial(pm):
+    await prepare(pm, {'pyproject.toml': '[project]\nname="app"\ndynamic=["dependencies"]\n',
+        'uv.lock': 'version=1\n', 'requirements.txt': 'requests==2.31.0\n',
+        'package.json': '{"name":"web","peerDependencies":{"react":"^19"}}',
+        'package-lock.json': '{"lockfileVersion":3,"packages":{}}'})
+    assert (await run(pm))['status'] == 'succeeded'
+    result = read(pm)
+    assert result['capture']['status'] == 'partial' and result['counts']['partial']
+    assert {'python_dynamic_dependencies', 'npm_peer_dependencies_not_captured'} <= set(result['parser_reasons'])
+
+
+async def test_freshness_is_unknown_without_repository_head_observation(pm):
+    await prepare(pm)
+    await run(pm)
+    assert read(pm)['stale'] is None
+    assert read(pm)['stale_reason'] == 'repository_head_not_observed'
+    page = pm_dependency_reads.revisions(pm['d'].ops, OWNER, pm['workspace_id'])
+    assert page['revisions'][0]['stale'] is None
+    impact = pm_dependency_reads.impact(pm['d'].ops, OWNER, pm['workspace_id'], dependency=dependency_key('python', 'httpx'))
+    assert impact['stale'] is None and impact['stale_reason'] == 'repository_head_not_observed'
+
+
+async def test_revision_summaries_do_not_decode_inventory_documents(pm, monkeypatch):
+    from bat_agent_connector import pm_dependencies
+    await prepare(pm)
+    await run(pm)
+    await run(pm)
+    def forbidden(*args, **kwargs):
+        raise AssertionError('History must not decode or hash full inventory documents')
+    monkeypatch.setattr(pm_dependencies, 'record', forbidden)
+    result = pm_dependency_reads.revisions(pm['d'].ops, OWNER, pm['workspace_id'], limit=100)
+    assert len(result['revisions']) == 2 and all(r['commit_sha'] == pm['sha'] for r in result['revisions'])
+    pm['d'].ops.context['github_config'].repos.clear()
+    withdrawn = pm_dependency_reads.revisions(pm['d'].ops, OWNER, pm['workspace_id'])
+    assert withdrawn['revisions'] == [] and withdrawn['reason'] == 'source_unavailable'
+
+
+@pytest.mark.parametrize('change', ['binding', 'member', 'config'])
+async def test_final_guard_refuses_withdrawal_during_peer_discovery(pm, monkeypatch, change):
+    await prepare(pm)
+    def discover(ops, principal, wid):
+        if change == 'binding':
+            original = pm_runs.workspace_worktree
+            monkeypatch.setattr(pm_runs, 'workspace_worktree', lambda db, wid: {**original(db, wid), 'source_sha': 'f' * 40})
+        elif change == 'member':
+            ops.db.execute('DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?', (wid, OWNER.actor))
+        else:
+            ops.context['github_config'].repos.clear()
+        return []
+    monkeypatch.setattr(pm_dependency_reads, 'discover_peers', discover)
+    op = await run(pm)
+    assert op['status'] == 'failed'
+    assert pm['d'].ops.db.execute('SELECT count(*) FROM pm_dependency_revisions').fetchone()[0] == 0
+    assert pm['d'].ops.db.execute('SELECT count(*) FROM pm_dependency_heads').fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('code', ['PM_SPEC_COMMIT_UNAVAILABLE', 'REPOSITORY_BINDING_CHANGED', 'untrusted host text'])
+async def test_host_error_codes_are_preserved_only_from_the_allowlist(pm, code):
+    await prepare(pm)
+    async def failure(*args, **kwargs):
+        return json.dumps({'error': code})
+    pm['runner'].run = failure
+    op = await run(pm)
+    expected = code if code.startswith(('PM_SPEC_', 'REPOSITORY_')) else 'PM_DEPENDENCIES_SOURCE_UNAVAILABLE'
+    assert op['status'] == 'failed' and op['error_code'] == expected
+
+
+async def test_unreadable_git_entries_and_trees_preserve_readable_inventory(pm):
+    # Real pinned Git objects; all scratch stays in the disk-backed fixture.
+    import os
+    with open(os.fsencode(pm["human"]) + b"/bad-\xff", "wb") as stream:
+        stream.write(b"fixture")
+    large = pm["human"] / "huge"
+    large.mkdir()
+    for i in range(4000):
+        (large / (f"entry-{i:05d}-" + "x" * 100)).write_bytes(b"fixture")
+    await prepare(pm, {'pyproject.toml': '[project]\nname="readable"\ndependencies=["lib>=1"]\n'})
+    op = await run(pm)
+    assert op['status'] == 'succeeded', op
+    result = read(pm)
+    assert result['capture']['status'] == 'partial'
+    assert result['components'][0]['name'] == 'readable'
+    assert {row['reason'] for row in result['unreadable_paths']} == {'path_encoding_unsupported', 'tree_too_large'}
+
+
+async def test_peer_expansion_never_makes_a_stored_capture_unreadable(pm, monkeypatch):
+    import copy
+
+    from bat_agent_connector import pm_dependencies, pm_spec_sources
+    from bat_agent_connector.pm_release_baselines import _json, _size
+    await prepare(pm)
+    await run(pm)
+    ops, wid = pm['d'].ops, pm['workspace_id']
+    current = read(pm)
+    saved = pm_dependencies.record(ops.db, wid, current['capture']['revision_id'])
+    doc = copy.deepcopy(saved['document'])
+    edge = next(e for e in doc['edges'] if e['relation'] == 'runtime')
+    # A valid legacy revision close to the previous 2 MB capture ceiling.
+    doc['edges'] = [{**edge, 'edge_id': 'pmde_' + f'{i:032x}', 'version': f'>={i}',
+        'evidence_refs': [{**edge['evidence_refs'][0], 'command': 'x' * 900}]} for i in range(1000)]
+    revision = 'pmdep_' + 'd' * 32
+    doc['capture']['revision_id'] = revision
+    assert 1_000_000 < _size(doc) < 2_000_000
+    ops.db.execute('INSERT INTO pm_dependency_revisions(revision_id,workspace_id,source_key,document,document_digest,source_binding,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?)',
+        (revision, wid, saved['source_key'], _json(doc), pm_spec_sources._digest(doc), _json(saved['source_binding']), saved['created_at'], 'op_' + 'd' * 32))
+    ops.db.execute('UPDATE pm_dependency_heads SET revision_id=? WHERE workspace_id=?', (revision, wid))
+    peer_component = {**copy.deepcopy(doc['components'][0]), 'component_id': 'pmcomp_peer', 'repository': 'o/peer',
+        'name': 'httpx', 'published_name': 'httpx', 'verification_hints': [{'command': 'y' * 800000}]}
+    peer = {**doc, 'components': [peer_component], 'edges': [], 'verification_hints': [], 'files': [], 'dependencies': []}
+    assert _size(peer) < 1_000_000
+    monkeypatch.setattr(pm_dependency_reads, '_related', lambda *args: [peer])
+    result = read(pm)
+    assert _size(result) <= 2_000_000 and result['capture']['revision_id'] == revision
+    assert result['edges'] == doc['edges']
+    assert result['cross_repository']['reason'] == 'projection_byte_budget'
+    assert result['partial']
+    history = pm_dependency_reads.revisions(ops, OWNER, wid)
+    legacy = next(r for r in history['revisions'] if r['revision_id'] == revision)
+    assert legacy['status'] == 'unknown' and legacy['reason'] == 'summary_not_recorded'
+
+
+async def test_capture_budget_error_is_dependency_specific_and_bilingual(pm, monkeypatch):
+    from bat_agent_connector.pm_dependency_parser import Inventory
+    await prepare(pm)
+    original = Inventory.parse
+    def too_large(self):
+        return {**original(self), 'parser_reasons': ['x' * 2_000_001]}
+    monkeypatch.setattr(Inventory, 'parse', too_large)
+    op = await run(pm)
+    assert op['status'] == 'failed' and op['error_code'] == 'PM_DEPENDENCIES_READ_TOO_LARGE'
+    assert '相依' in op['status_reason'] and 'baseline' not in op['status_reason']
+    assert read(pm)['capture']['revision_id'] is None
