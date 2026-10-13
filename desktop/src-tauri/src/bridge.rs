@@ -1411,7 +1411,7 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 }
                 "after" if schedule => {
                     let bytes = value.as_bytes();
-                    (1..=4096).contains(&bytes.len())
+                    (1..=2048).contains(&bytes.len())
                         && bytes
                             .iter()
                             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
@@ -1908,6 +1908,12 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
             return Err("Central query parameter is not allowed".into());
         }
     }
+    if pm && path.ends_with("/dependencies/impact") && !query_keys.contains("dependency") {
+        return Err(
+            "Dependency impact requires a captured dependency key / 相依影響需要已擷取的相依識別碼"
+                .into(),
+        );
+    }
     if pm
         && path.ends_with("/spec-sources")
         && !(query_keys.contains("repository") && query_keys.contains("commit_sha"))
@@ -2031,15 +2037,19 @@ mod tests {
             );
         }
         for suffix in [
+            "/impact",
             "/capture",
             "/declare",
             "/retract",
             "?path=package.json",
             "?limit=1",
             "/revisions?limit=101",
+            "/revisions?limit=0100",
             "/revisions?after=-1",
             "/revisions?limit=1&limit=2",
             "/impact?dependency=name",
+            "/impact?dependency=",
+            "/impact?dependency=pmdepkey_22222222222222222222222222222222&dependency=pmdepkey_33333333333333333333333333333333",
             "/impact?dependency=pmdepkey_22222222222222222222222222222222&host=fixture",
         ] {
             assert!(
@@ -2127,6 +2137,7 @@ mod tests {
             "refresh=1",
             "limit=101",
             "limit=0",
+            "limit=0050",
             "after=milestone:release",
             "after=phase:a",
             "after=../x",
@@ -2147,6 +2158,15 @@ mod tests {
         let maintenance = "/pm/workspaces/ws_11111111111111111111111111111111/maintenance-schedule";
         assert!(validate_request(&get(maintenance)).is_ok());
         assert!(validate_request(&get(&format!("{maintenance}?limit=1"))).is_err());
+    }
+
+    #[test]
+    fn schedule_cursor_matches_the_http_query_length_bound() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/schedule";
+        for (length, allowed) in [(2048, true), (2049, false)] {
+            let path = format!("{root}?after={}", "a".repeat(length));
+            assert_eq!(validate_request(&get(&path)).is_ok(), allowed, "{length}");
+        }
     }
 
     #[test]
@@ -2183,9 +2203,18 @@ mod tests {
         .is_err());
         for query in [
             "type=story",
+            "type=issue&type=risk",
+            "q=one&q=two",
+            "q=",
+            "owner=",
+            "q=a%01b",
+            "q=a%C2%85b",
+            "owner=a%01b",
+            "owner=a%C2%85b",
             "status=Open",
             "limit=0",
             "limit=101",
+            "limit=0100",
             "after=abc.def",
             "after=~governance.pmgov_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "after=abc+def",
@@ -2201,6 +2230,28 @@ mod tests {
         let mut write = get(root);
         write.method = "POST".into();
         assert!(validate_request(&write).is_err());
+    }
+
+    #[test]
+    fn register_query_text_and_cursor_boundaries_are_exact() {
+        let root = "/pm/workspaces/ws_11111111111111111111111111111111/register";
+        for key in ["q", "owner"] {
+            for (length, allowed) in [(200, true), (201, false)] {
+                // Count decoded characters, including multi-byte Traditional Chinese text.
+                let query: String = url::form_urlencoded::Serializer::new(String::new())
+                    .append_pair(key, &"字".repeat(length))
+                    .finish();
+                assert_eq!(
+                    validate_request(&get(&format!("{root}?{query}"))).is_ok(),
+                    allowed,
+                    "{key}: {length}"
+                );
+            }
+        }
+        for (length, allowed) in [(400, true), (401, false)] {
+            let path = format!("{root}?after={}", "a".repeat(length));
+            assert_eq!(validate_request(&get(&path)).is_ok(), allowed, "{length}");
+        }
     }
 
     #[test]

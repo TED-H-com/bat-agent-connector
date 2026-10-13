@@ -501,7 +501,7 @@ plot is a summary image. Exact values is the keyboard path to each day's numbers
 bars themselves are not focused. Date labels use the same local day format as the meta
 line in that table, and a short month/day form on the axis. The y-axis is one step
 above the peak (1, 2, 2.5 or 5 × 10ⁿ) in compact numerals. Open days keep full colour,
-with a hatch and the in-progress or settling marker. A day that starts before the
+with a hatch and the in-progress or settling marker. An incomplete day shows its observed tokens; null metrics stay unknown. A day that starts before the
 window is "Partial day", never Settling. A null total is a dashed stub in that CLI's
 stack position. A covered zero is a baseline tick.
 

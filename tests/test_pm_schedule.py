@@ -853,6 +853,25 @@ async def test_requirement_text_is_kept_and_edges_name_emitted_rows(ops, text):
     assert body["partial"] is False and body["range_scope"] == "complete"
 
 
+@pytest.mark.parametrize("text", ["\tMembers can log in", "Members can log in\n", "\n\tMembers can log in\t\n",
+                                  " Members can log in "])
+async def test_requirement_and_issue_text_keep_surrounding_whitespace(ops, text):
+    target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
+        {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
+    wid, rev = target["workspace_id"], saved["revision_id"]
+    rewrite_requirement(ops, rev, "login", text)
+    work = await work_for(ops, target)
+    binding = await bind_work(ops, work, plan_revision_id=rev, requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone({"revision_id": rev}, requirement_ids=["login", "billing"])])
+    _tracked_issue(ops, wid, work["work_item_id"], binding, text, mapping_id="pmim_" + "e" * 32,
+                   package_id="pmwp_" + "e" * 32, revision_id="pmir_" + "e" * 32, operation_id="op_" + "e" * 16)
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert found[f"requirement:{rev}:login"]["title"] == text
+    assert found[f"issue:pmim_{'e' * 32}"]["title"] == text
+    assert ("requirement", "requirement_text_unavailable") not in reasons(body)
+
+
 async def test_missing_requirement_text_still_emits_the_row(ops):
     target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
         {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
@@ -1021,6 +1040,65 @@ async def test_hidden_work_issue_does_not_consume_the_issue_cap(ops, monkeypatch
     assert body["coverage"]["visibility_filtered"] is True
 
 
+def _stored_issues(service, wid, work_id, binding, total, *, start=0):
+    for index in range(start, start + total):
+        _tracked_issue(service, wid, work_id, binding, f"Issue {index}",
+                       mapping_id=f"pmim_{index:032x}", package_id=f"pmwp_{index:032x}",
+                       revision_id=f"pmir_{index:032x}", operation_id=f"op_{index:032x}")
+
+
+def _all_schedule_pages(service, wid):
+    issues, flags, after = [], [], None
+    while True:
+        body = check(schedule(service, wid, after=after, limit=100), wid)
+        issues += [row["id"] for row in body["rows"] + body["unscheduled"] if row["id"].startswith("issue:")]
+        flags.append((body["coverage"]["issues_truncated"], body["partial"], body["truncated"]))
+        after = body["next_cursor"]
+        if after is None:
+            return issues, flags
+
+
+@pytest.mark.parametrize(("total", "truncated"), [(50, False), (51, True)])
+async def test_issue_cap_on_a_mapping_page_boundary_flags_truncation(ops, monkeypatch, total, truncated):
+    target, _plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    _stored_issues(ops, wid, work["work_item_id"], binding, total)
+    monkeypatch.setattr(pm_schedule, "MAX_ISSUES", 50)
+    issues, flags = _all_schedule_pages(ops, wid)
+    assert len(issues) == len(set(issues)) == 50
+    assert all(flag[0] is truncated for flag in flags)
+    # partial is never reported as total: the final page stays partial while issues were cut off.
+    assert flags[-1][1] is truncated
+
+
+async def test_issue_cap_reached_with_only_hidden_rows_left_is_complete(ops, monkeypatch):
+    target, plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    _stored_issues(ops, wid, work["work_item_id"], binding, 50)
+    hidden = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Hidden deliverable")}
+    hidden_binding = await bind_work(ops, hidden, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    _stored_issues(ops, wid, hidden["work_item_id"], hidden_binding, 1, start=50)
+    withdraw(ops, "work_item", hidden["work_item_id"])
+    monkeypatch.setattr(pm_schedule, "MAX_ISSUES", 50)
+    issues, flags = _all_schedule_pages(ops, wid)
+    assert len(issues) == 50 and f"issue:pmim_{50:032x}" not in issues
+    assert not any(flag[0] for flag in flags) and flags[-1][1] is False
+
+
+@pytest.mark.parametrize("total", [200, 201, 250])
+async def test_real_issue_cap_flags_visible_rows_beyond_the_cap(ops, total):
+    target, _plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    _stored_issues(ops, wid, work["work_item_id"], binding, total)
+    issues, flags = _all_schedule_pages(ops, wid)
+    assert pm_schedule.MAX_ISSUES == 200
+    assert len(issues) == len(set(issues)) == 200
+    beyond = total > pm_schedule.MAX_ISSUES
+    assert all(flag[0] is beyond for flag in flags)
+    assert flags[-1][1] is beyond
+
+
 def corrupt_plan_digest(service, revision_id):
     service.db.execute("DROP TRIGGER IF EXISTS pm_plan_revisions_update_immutable")
     service.db.execute("UPDATE pm_plan_revisions SET document_digest=? WHERE revision_id=?", ("0" * 64, revision_id))
@@ -1067,7 +1145,9 @@ async def test_one_lineage_limit_hides_one_issue_mapping(ops):
                    revision_id="pmir_" + "d" * 32, operation_id="op_" + "d" * 16)
     listed = pm_issue_mappings.list_mappings(ops, OWNER, wid)
     assert [row["mapping_id"] for row in listed["mappings"]] == ["pmim_" + "d" * 32]
-    assert listed["coverage"]["visibility_filtered"] is True
+    # The list reports a mapping it could not check separately from a hidden one.
+    assert listed["coverage"]["source_incomplete"] is True
+    assert listed["coverage"]["visibility_filtered"] is False
     body = check(schedule(ops, wid), wid)
     assert f"issue:pmim_{'d' * 32}" in by_id(body)
     assert f"issue:pmim_{'c' * 32}" not in by_id(body)
