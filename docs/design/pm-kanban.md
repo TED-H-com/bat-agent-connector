@@ -197,3 +197,5 @@ The column board keeps original runtime completion as a concise card summary;
 expanding the card reads the original receipts and manual observation controls.
 A source failure withdraws rows, column counts, board accounting and observer
 controls together; late receipt reads cannot restore them.
+Retained-session runtime labels are localized with the board, including
+Idle / 閒置中; source IDs and host/session identities remain unchanged.

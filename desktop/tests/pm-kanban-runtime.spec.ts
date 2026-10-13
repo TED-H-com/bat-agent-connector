@@ -19,6 +19,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`origin
     await expect(row(page)).toContainText(locale==='en'?'The original execution turn completed.':'原始執行回合已完成。');
     await expect(row(page)).toContainText(locale==='en'?'DoD unassessed':'DoD 尚未評估');
     await expect(row(page)).toContainText('fixture-host/retained-managed');
+    await expect(row(page)).toContainText(locale==='en'?'Session · Idle':'工作階段 · 閒置中');
     await expect(row(page).locator(`[data-runtime-completion="${executionId}"] a`)).toHaveAttribute('href',`#/op/${observerId}`);
     await editor(page).locator('select').selectOption({label:'fixture-host / manual-session-2'});f.state.lost=true;
     await editor(page).getByRole('button',{name:l.check,exact:true}).click();await expect(editor(page)).toContainText('Original reply was lost');

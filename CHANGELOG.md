@@ -11,7 +11,8 @@
 - Integrate the M4 lifecycle evidence and original recovery candidate with the
   Charter, requirements traceability, compact board and local CLI resource workbench.
   Preserve original runtime receipts and manual observation controls in board details,
-  including source withdrawal and original-key recovery. Candidate versions remain
+  including source withdrawal, original-key recovery and localized idle-session
+  evidence. Candidate versions remain
   core 0.2.6 and desktop 0.1.2, upgrading from the fixed core 0.2.5 fixture.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
