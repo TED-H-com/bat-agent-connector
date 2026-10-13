@@ -5,6 +5,9 @@
 - Requirements distinguishes accepted, unassessed and unknown quality coverage,
   marks partial delivery evidence, and shows the requirement traceability chain.
   Auxiliary failures stay local; live inspector actions retain focus and open menus.
+- Board cards expose their recorded facts to assistive technology, retain selected
+  delivery pages across refreshes, and restore selection and focus on return.
+  Empty Boards show one empty state; paged lanes label counts as loaded.
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and

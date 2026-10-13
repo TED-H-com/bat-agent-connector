@@ -3,7 +3,7 @@ import {h} from './ui/dom.js';
 import {dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
-import {workInspector, workStatus, blockedWork, blockerText, workAgents, prPills, prGroups, readWorkSources, aggregateDelivery, deliveryCoverage, deployStatus} from './pm-work-inspector.js';
+import {workInspector, workStatus, blockedWork, blockerText, workAgents, prPills, prGroups, readWorkSources, aggregateDelivery, deliveryCoverage, deployStatus, readEarlierPlans} from './pm-work-inspector.js';
 // Join only central identities, including the exact adopted plan and acceptance inputs.
 export function requirementReviews(plan, requirement, reviews) {
   const ids = (requirement.acceptance || []).map(row => row.source_input_id);
@@ -18,7 +18,7 @@ export function requirementReviews(plan, requirement, reviews) {
 
 export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox}) {
   const preference = viewState(namespace, workspaceId, 'requirements'), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map();
+  let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
   let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
   let qualityComplete = false, catalogueErrors = [], stale = true;
   let selected = preference.selected || null, signature = '', deliveryPages = 1, preserveSelection = false, tools = () => [];
@@ -62,7 +62,8 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     const label = milestoneFor(req).map(row => labelSegment(row.title)).filter(Boolean).join(' · ');
     return h('span', {class: 'pm-requirement-milestone', title: label || t('wv_no_milestone'), 'aria-label': label || t('wv_no_milestone')}, label || '—');
   };
-  const selectionTarget = id => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find(node => node.getClientRects().length);
+  const selectionTarget = id => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"]`),
+    ...tables.querySelectorAll(`[data-row-key="${CSS.escape(id)}"]`)].find(node => node.getClientRects().length);
   const viewHeading = () => {const heading = element.closest('main')?.querySelector('h1'); if (heading) heading.tabIndex = -1; return heading;};
   function writeSelection(id) {
     const [path, query] = location.hash.split('?');
@@ -72,8 +73,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   }
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
   function closeRetaining() {detailSerial++; preserveSelection = true; detail.close(); preserveSelection = false;}
-  function withdraw() {
-    pendingFocus = null; pendingNavigation = null; currentRequirement = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); signature = '';
+  function withdraw({forgetRoute = true} = {}) {
+    pendingFocus = null; pendingNavigation = null; currentRequirement = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
+    if (forgetRoute) writeSelection(null);
     closeRetaining(); tables.replaceChildren(); meta.replaceChildren(); status.replaceChildren();
     for (const kind of Object.keys(pages)) cursors[kind] = null; controls();
   }
@@ -94,6 +96,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         'aria-pressed': String(selected === card.work_item_id), onclick: () => void select(card.work_item_id)}, firstLabel(card.work.title, t('ui_work_item'))),
       h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)), ...workAgents(source).map(agentMark),
         count !== 0 ? h('span', {class: 'ui-meta', title: t('wv_attempts', {n: count})}, `×${count}`) : null, ...prPills(source)),
+      card.binding.plan_revision_id && card.binding.plan_revision_id !== plan?.revision_id ? h('span', {class: 'ui-meta'}, t('wv_from_earlier_plan')) : null,
       ...issuesFor(card).map(row => h('span', {class: 'ui-meta'}, issueLabel(row))));
   }
   function renderTable() {
@@ -202,6 +205,8 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       const read = await readWorkSources({api, workspaceId, cards: work.rows, caps: caps(), t, valid: () => {alive(); return ticket === serial;}});
       const end = await api('GET', `${endpoint}/plans/head`); alive(); if (ticket !== serial) return;
       if (end.head?.workspace_id !== workspaceId || end.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t('wb_plan_changed'));
+      earlierPlans = await readEarlierPlans({api, workspaceId, cards: work.rows, currentId: accepted.plan?.revision_id, valid: () => {alive(); return ticket === serial;}});
+      alive(); if (ticket !== serial) return;
       plan = accepted.plan; cards = work.rows; issues = mappings?.rows || []; reviews = quality?.rows || []; sources = read;
       milestones = roadmap?.baseline?.document?.milestones || [];
       for (const [kind, data] of Object.entries({work, issues: mappings, reviews: quality})) cursors[kind] = data?.next ?? null;
@@ -268,9 +273,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       alive(); if (ticket !== detailSerial || generation !== serial) return;
       const changed = JSON.stringify(sources.get(id)) !== JSON.stringify(read.get(id));
       sources.set(id, read.get(id)); if (changed) renderTable();
-      detail.show({title: data.card.work.title, card: data.card, source: read.get(id), plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : null, issues: issuesFor(data.card),
+      detail.show({title: data.card.work.title, card: data.card, source: read.get(id), plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id), earlierPlan: data.card.binding.plan_revision_id !== plan?.revision_id, issues: issuesFor(data.card),
         milestones: milestones.filter(row => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some(id => data.card.binding.requirement_ids?.includes(id))),
-        requirements: plan?.document?.requirements?.filter(req => data.card.binding.plan_revision_id === plan.revision_id && data.card.binding.requirement_ids?.includes(req.id)) || [],
+        requirements: (data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id))?.document?.requirements?.filter(req => data.card.binding.requirement_ids?.includes(req.id)) || [],
         onMore: () => {deliveryPages++; void select(id, false, true);}});
     } catch (error) {if (ticket === detailSerial && generation === serial) {
       if ([403, 404].includes(error.status)) {cards = cards.filter(row => row.work_item_id !== id); sources.delete(id); renderTable();}
@@ -278,7 +283,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     }}
   }
   function setActive(value) {
-    if (visible === value) {if (value) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (id && (id !== selected || !detail.element)) void select(id, true);} return;}
+    if (visible === value) {if (value && plan) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (id && (id !== selected || !detail.element)) void select(id, true);} return;}
     visible = value;
     if (!value) {active = false; stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
     else {const generation = ++scrollGeneration; void activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);});}
@@ -312,5 +317,5 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       : kind === 'work_item' ? cards.find(row => row.work_item_id === id)?.work?.title : '';
     return typeof value === 'string' ? value : '';
   }
-  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}};
+  return {element, meta, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, setActive, hideInspector: closeRetaining, activate, setTools: value => {tools = value;}, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw({forgetRoute: false});}};
 }

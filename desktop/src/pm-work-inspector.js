@@ -96,6 +96,17 @@ export async function readWorkSources({api, workspaceId, cards, caps, valid, t, 
   return result;
 }
 
+// Historical text comes only from its explicitly bound, reauthorized revision.
+export async function readEarlierPlans({api, workspaceId, cards, currentId, valid}) {
+  const ids = [...new Set(cards.map(card => card.binding?.plan_revision_id).filter(id => id && id !== currentId))];
+  const rows = await Promise.allSettled(ids.map(async id => {
+    const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${encodeURIComponent(id)}`);
+    if (!valid() || data.plan?.workspace_id !== workspaceId || data.plan.revision_id !== id) return null;
+    return [id, data.plan];
+  }));
+  return new Map(rows.flatMap(row => row.status === 'fulfilled' && row.value ? [row.value] : []));
+}
+
 // One inspector API for Requirements, Board and Schedule. It only renders authorized facts.
 export function workInspector({t, workspaceId, from, mount, onClose = () => {}, tools = () => [], returnFocus}) {
   let panel = null, actions = null, signature = '', selection = null, returnTarget = null;
@@ -141,8 +152,10 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     ].map(([key, label]) => h('section', {'data-work-section': key}, h('h3', {}, t(label))));
     const [served, state, result, blocker, delivery] = sections;
     const requirementRows = requirement ? [] : requirements;
-    served.append(...(requirementRows.length ? requirementRows.map(row => h('div', {}, paragraph(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(row.id)}`}, firstLabel(row.text, t('wv_earlier_plan')))),
+    served.append(...(requirementRows.length ? requirementRows.map(row => h('div', {}, paragraph(data.earlierPlan ? firstLabel(row.text, t('wv_earlier_plan')) : h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(row.id)}`}, firstLabel(row.text, t('wv_earlier_plan')))),
       row.acceptance?.length ? h('ul', {}, ...row.acceptance.map(item => h('li', {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? 'wv_earlier_plan' : 'wv_no_requirement'))]));
+    if (data.earlierPlan) served.prepend(paragraph(t('wv_from_earlier_plan')));
+    if (from === 'requirements' && card) state.append(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(card.work_item_id)}`}, t('wv_show_board')));
     if (data.milestones) served.append(paragraph(t('wv_milestone'), ' · ', joinLabel(data.milestones.map(row => row.title)) || t('wv_no_milestone')));
     if (card) {
       state.append(h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)),
@@ -178,7 +191,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       if (deliveryCoverage(source) === 'unknown') delivery.append(paragraph(t('wv_delivery_unknown')));
       else if (!source.deliveries.length && deliveryCoverage(source) === 'complete') delivery.append(paragraph(t('wv_no_delivery')));
       if (source.filtered || source.next != null) delivery.append(statusPill('partial'));
-      if (source.next != null && data.onMore) delivery.append(button({label: t('wb_receipts_more'), onClick: data.onMore}));
+      if (source.next != null && data.onMore) delivery.append(button({label: t('wv_load_more'), 'aria-label': t('wb_receipts_more'), 'data-delivery-more': '', onClick: data.onMore}));
       delivery.append(h('h4', {}, t('wb_attempts')),
         ...(card.execution?.attempts || []).map(row => h('div', {class: 'pm-work-attempt', 'data-work-attempt': row.attempt_id},
           paragraph(row.accepted === true ? t('pm_kanban_accepted') : t('pm_kanban_accept_unknown'), ' · ',

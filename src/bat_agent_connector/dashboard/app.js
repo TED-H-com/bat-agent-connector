@@ -14051,7 +14051,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		if (changes.markdown.replacement) prose.append(h("h4", {}, text("pm_diff_removed")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.removed), h("h4", {}, text("pm_diff_added")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.added));
 		const work = h("div", {}, h("h4", {}, text("pm_diff_impact")));
 		if (!value.impact_candidates.length) work.append(h("p", { class: "muted" }, text("pm_diff_no_impact_selection")));
-		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
+		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/item/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
 		const fixed = detail(text("pm_diff_evidence"), h("p", { class: "pm-source" }, text("pm_diff_from"), ": ", value.from_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_to"), ": ", value.to_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_cursor"), ": ", value.context.journal_cursor), ...[
 			["pm_diff_from_digest", value.from_revision.document_digest],
 			["pm_diff_to_digest", value.to_revision.document_digest],
@@ -17624,6 +17624,15 @@ async function readWorkSources({ api, workspaceId, cards, caps, valid, t, delive
 	}));
 	return result;
 }
+async function readEarlierPlans({ api, workspaceId, cards, currentId, valid }) {
+	const ids = [...new Set(cards.map((card) => card.binding?.plan_revision_id).filter((id) => id && id !== currentId))];
+	const rows = await Promise.allSettled(ids.map(async (id) => {
+		const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${encodeURIComponent(id)}`);
+		if (!valid() || data.plan?.workspace_id !== workspaceId || data.plan.revision_id !== id) return null;
+		return [id, data.plan];
+	}));
+	return new Map(rows.flatMap((row) => row.status === "fulfilled" && row.value ? [row.value] : []));
+}
 function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [], returnFocus }) {
 	let panel = null, actions = null, signature = "", selection = null, returnTarget = null;
 	const unknown = () => statusPill("unknown");
@@ -17722,7 +17731,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
 		const [served, state, result, blocker, delivery] = sections;
 		const requirementRows = requirement ? [] : requirements;
-		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(row.id)}` }, firstLabel(row.text, t("wv_earlier_plan")))), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "wv_earlier_plan" : "wv_no_requirement"))]);
+		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(data.earlierPlan ? firstLabel(row.text, t("wv_earlier_plan")) : h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(row.id)}` }, firstLabel(row.text, t("wv_earlier_plan")))), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "wv_earlier_plan" : "wv_no_requirement"))]);
+		if (data.earlierPlan) served.prepend(paragraph(t("wv_from_earlier_plan")));
+		if (from === "requirements" && card) state.append(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(card.work_item_id)}` }, t("wv_show_board")));
 		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
 			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
@@ -17757,7 +17768,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			else if (!source.deliveries.length && deliveryCoverage(source) === "complete") delivery.append(paragraph(t("wv_no_delivery")));
 			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
 			if (source.next != null && data.onMore) delivery.append(button({
-				label: t("wb_receipts_more"),
+				label: t("wv_load_more"),
+				"aria-label": t("wb_receipts_more"),
+				"data-delivery-more": "",
 				onClick: data.onMore
 			}));
 			delivery.append(h$1("h4", {}, t("wb_attempts")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
@@ -17852,7 +17865,7 @@ function requirementReviews(plan, requirement, reviews) {
 }
 function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map();
+	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
 	let qualityComplete = false, catalogueErrors = [], stale = true;
 	let selected = preference.selected || null, signature = "", deliveryPages = 1, preserveSelection = false, tools = () => [];
@@ -17953,7 +17966,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			"aria-label": label || t("wv_no_milestone")
 		}, label || "—");
 	};
-	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
+	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"]`), ...tables.querySelectorAll(`[data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
 	const viewHeading = () => {
 		const heading = element.closest("main")?.querySelector("h1");
 		if (heading) heading.tabIndex = -1;
@@ -17979,7 +17992,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		detail.close();
 		preserveSelection = false;
 	}
-	function withdraw() {
+	function withdraw({ forgetRoute = true } = {}) {
 		pendingFocus = null;
 		pendingNavigation = null;
 		currentRequirement = null;
@@ -17993,7 +18006,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		reviews = [];
 		milestones = [];
 		sources.clear();
+		earlierPlans.clear();
 		signature = "";
+		if (forgetRoute) writeSelection(null);
 		closeRetaining();
 		tables.replaceChildren();
 		meta.replaceChildren();
@@ -18035,7 +18050,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), count !== 0 ? h$1("span", {
 			class: "ui-meta",
 			title: t("wv_attempts", { n: count })
-		}, `×${count}`) : null, ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
+		}, `×${count}`) : null, ...prPills(source)), card.binding.plan_revision_id && card.binding.plan_revision_id !== plan?.revision_id ? h$1("span", { class: "ui-meta" }, t("wv_from_earlier_plan")) : null, ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
 	}
 	function renderTable() {
 		const focused = tables.contains(document.activeElement) ? [
@@ -18260,6 +18275,18 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 			if (end.head?.workspace_id !== workspaceId || end.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("wb_plan_changed"));
+			earlierPlans = await readEarlierPlans({
+				api,
+				workspaceId,
+				cards: work.rows,
+				currentId: accepted.plan?.revision_id,
+				valid: () => {
+					alive();
+					return ticket === serial;
+				}
+			});
+			alive();
+			if (ticket !== serial) return;
 			plan = accepted.plan;
 			cards = work.rows;
 			issues = mappings?.rows || [];
@@ -18462,10 +18489,11 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				title: data.card.work.title,
 				card: data.card,
 				source: read.get(id),
-				plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : null,
+				plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id),
+				earlierPlan: data.card.binding.plan_revision_id !== plan?.revision_id,
 				issues: issuesFor(data.card),
 				milestones: milestones.filter((row) => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some((id) => data.card.binding.requirement_ids?.includes(id))),
-				requirements: plan?.document?.requirements?.filter((req) => data.card.binding.plan_revision_id === plan.revision_id && data.card.binding.requirement_ids?.includes(req.id)) || [],
+				requirements: (data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id))?.document?.requirements?.filter((req) => data.card.binding.requirement_ids?.includes(req.id)) || [],
 				onMore: () => {
 					deliveryPages++;
 					select(id, false, true);
@@ -18488,7 +18516,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	}
 	function setActive(value) {
 		if (visible === value) {
-			if (value) {
+			if (value && plan) {
 				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
 				if (id && (id !== selected || !detail.element)) select(id, true);
 			}
@@ -18606,7 +18634,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				expanded: [...expanded],
 				filter: filter.value
 			});
-			withdraw();
+			withdraw({ forgetRoute: false });
 		}
 	};
 }
@@ -25668,7 +25696,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		return h("div", { class: "pm-evidence-rows pm-sprint-work-list" }, ...items.length ? items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-work": item.work_item_id
-		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
+		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
 	}
 	function renderView() {
 		view.replaceChildren();
@@ -25695,7 +25723,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		const endingItems = (items) => h("div", { class: "pm-evidence-rows" }, ...items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-ended-work": item.work_item_id
-		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.quality_assessment ? qualityFact({
+		}, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.quality_assessment ? qualityFact({
 			h,
 			t,
 			fact: item.quality_assessment
@@ -27152,12 +27180,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
-	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, milestones = [], pages = 1;
-	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1;
-	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", {
-		class: "pm-kanban-list",
-		"aria-label": t("ui_board")
-	}), boardInfo = h$1("div");
+	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
+	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("wv_refresh"),
@@ -27226,23 +27251,24 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		from: "board",
 		mount: layout,
 		tools: () => toolItems(),
+		returnFocus: () => rows.get(selected)?.node.querySelector("[data-board-open]") || viewHeading(),
 		onClose: () => {
 			detailSerial++;
 			if (!preserveSelection) {
 				selected = null;
 				preference.selected = null;
+				writeSelection(null);
 				markSelection();
 			}
 			requestAnimationFrame(updateEdges);
 		}
 	});
-	const note = (key) => h$1("p", { class: "ui-meta" }, t(key));
-	const elapsed = (value) => {
-		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
-		if (value < 60) return t("pm_kanban_seconds");
-		const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
-		return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
+	const viewHeading = () => {
+		const heading = element.closest("main")?.querySelector("h1");
+		if (heading) heading.tabIndex = -1;
+		return heading;
 	};
+	const note = (key) => h$1("p", { class: "ui-meta" }, t(key));
 	function checkCard(card, expectedId = null) {
 		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
 		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
@@ -27264,12 +27290,20 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t("pm_kanban_scope_error"));
 		return data;
 	}
+	function writeSelection(id) {
+		const [path, query] = location.hash.split("?");
+		if (!path.endsWith("/board")) return;
+		const params = new URLSearchParams(query);
+		if (id) params.set("select", id);
+		else params.delete("select");
+		history.replaceState(null, "", path + (params.size ? "?" + params : ""));
+	}
 	function closeRetaining() {
 		preserveSelection = true;
 		detail.close();
 		preserveSelection = false;
 	}
-	function withdraw() {
+	function withdraw({ forgetRoute = true } = {}) {
 		++serial;
 		++detailSerial;
 		reading = false;
@@ -27278,7 +27312,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		page = null;
 		next = null;
 		plan = null;
+		earlierPlans.clear();
 		milestones = [];
+		if (forgetRoute) writeSelection(null);
 		closeRetaining();
 		list.replaceChildren();
 		meta.replaceChildren();
@@ -27299,7 +27335,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}, t("pm_kanban_retry")));
 	}
 	function requirements(card) {
-		return (plan?.document?.requirements || []).filter((row) => card.binding.plan_revision_id === plan.revision_id && card.binding.requirement_ids?.includes(row.id));
+		return ((card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id))?.document?.requirements || []).filter((row) => card.binding.requirement_ids?.includes(row.id));
 	}
 	function fillFilters() {
 		const fill = (select, all, options, saved) => {
@@ -27312,7 +27348,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			}
 			select.value = current;
 		};
-		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, id)])), preference.requirement);
+		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, t("wv_earlier_plan"))])), preference.requirement);
 		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, agent])), preference.agent);
 	}
 	function renderMetrics() {
@@ -27325,54 +27361,64 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			partial ? note("pm_kanban_partial") : null,
 			page.coverage?.byte_limited ? note("pm_kanban_bounded") : null
 		].filter(Boolean));
+		element.querySelector("[data-board-partial]")?.remove();
+		if (next != null || page.coverage?.byte_limited) more.before(h$1("span", {
+			class: "ui-meta",
+			"data-board-partial": ""
+		}, t("pm_kanban_partial")));
 		more.hidden = next == null;
 		more.disabled = reading;
 	}
 	function preview(card) {
 		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
+		const earlier = card.binding.plan_revision_id !== plan?.revision_id;
 		const chip = (text) => {
 			const node = contextChip({ text });
 			node.title = text;
 			return node;
 		};
-		const age = elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
-		return [
-			h$1("h3", { title: firstLabel(card.work.title, t("ui_work_item")) }, firstLabel(card.work.title, t("ui_work_item"))),
-			h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => chip(firstLabel(req.text, req.id))) : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(" · ") : t("wv_no_requirement"))]),
-			h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
-				const node = contextChip({ text: `PR #${target.pull_number}` });
-				node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
-				return node;
-			}), deliveryCoverage(source) !== "complete" ? statusPill(deliveryCoverage(source)) : null, blockedWork(card) ? h$1("span", {
-				class: "pm-board-blocker",
-				tabindex: 0,
-				title: blockerText(t, card),
-				"aria-label": blockerText(t, card)
-			}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
-				class: "pm-board-age",
-				title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
-			}, age) : null),
-			coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null
-		].filter(Boolean);
+		const coverageState = deliveryCoverage(source);
+		const age = elapsed(t, card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
+		const title = firstLabel(card.work.title, t("ui_work_item")), metaId = `board-facts-${card.work_item_id}`;
+		return [h$1("h3", { title }, h$1("button", {
+			type: "button",
+			class: "pm-board-open",
+			"data-board-open": card.work_item_id,
+			"aria-describedby": metaId
+		}, title)), h$1("div", {
+			id: metaId,
+			class: "pm-board-facts"
+		}, h$1("span", { class: "sr-only" }, t("ui_status_" + workStatus(card))), h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => {
+			const text = firstLabel(req.text, t("wv_earlier_plan"));
+			return earlier ? chip(joinLabel([t("wv_earlier_plan"), text])) : h$1("a", {
+				class: "ui-context-chip",
+				title: text,
+				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`
+			}, text);
+		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+			const node = contextChip({ text: `PR #${target.pull_number}` });
+			node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
+			return node;
+		}), coverageState !== "complete" ? statusPill(coverageState) : null, blockedWork(card) ? h$1("span", {
+			class: "pm-board-blocker",
+			title: blockerText(t, card),
+			"aria-label": blockerText(t, card)
+		}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
+			class: "pm-board-age",
+			title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
+		}, age) : null), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
 	}
 	function makeCard(card) {
 		const node = h$1("article", {
 			class: "pm-kanban-card",
 			"data-pm-kanban-work": card.work_item_id,
-			role: "button",
-			tabindex: 0,
-			"aria-label": firstLabel(card.work.title, t("ui_work_item")),
-			onclick: () => {
-				node.focus();
-				select(card.work_item_id);
-			}
+			role: "listitem"
 		}, ...preview(card));
+		node.addEventListener("click", (event) => {
+			if (event.target.closest("[data-board-open]")) select(card.work_item_id);
+		});
 		node.addEventListener("keydown", (event) => {
-			if (event.target !== node) return;
-			if (["Enter", " "].includes(event.key)) {
-				event.preventDefault();
-				select(card.work_item_id);
-			}
+			if (!event.target.matches("[data-board-open]")) return;
 			if ([
 				"ArrowUp",
 				"ArrowDown",
@@ -27389,11 +27435,17 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					const available = next?.querySelector(".pm-kanban-cards")?.hidden ? [] : [...next?.querySelectorAll("[data-pm-kanban-work]:not([hidden])") || []];
 					target = available[index] || available[0] || next?.querySelector("button");
 				} else target = cards[event.key === "Home" ? 0 : event.key === "End" ? cards.length - 1 : index + (event.key === "ArrowUp" ? -1 : 1)];
-				target?.focus({ preventScroll: true });
+				(target?.querySelector("[data-board-open]") || target)?.focus({ preventScroll: true });
 				if (target) revealCard(target);
 			}
 		});
 		return node;
+	}
+	function patchCard(node, card) {
+		const [title, facts] = preview(card);
+		node.querySelector("h3").title = title.title;
+		node.querySelector("[data-board-open]").textContent = title.textContent;
+		node.querySelector(".pm-board-facts").replaceWith(facts);
 	}
 	const locked = (lane) => lane && (lane.matches(":hover") || lane.contains(document.activeElement));
 	function laneKey(card) {
@@ -27407,7 +27459,11 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		for (const { card } of rows.values()) if (!groupKeys.includes(laneKey(card))) groupKeys.push(laneKey(card));
 		for (const key of groupKeys) if (!currentLanes.has(key)) {
 			const name = group.value === "milestone" ? firstLabel(milestones.find((row) => row.milestone_id === key)?.title, t("wb_unassigned")) : key === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus({ column: key }));
-			const holder = h$1("div", { class: "pm-kanban-cards" }), collapsed = preference.collapsed?.includes(key) === true;
+			const holder = h$1("div", {
+				class: "pm-kanban-cards",
+				role: "list",
+				"aria-label": name
+			}), collapsed = preference.collapsed?.includes(key) === true;
 			const toggle = h$1("button", {
 				type: "button",
 				class: "pm-board-lane-toggle",
@@ -27423,7 +27479,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				class: "pm-kanban-column",
 				"data-pm-kanban-column": key,
 				"aria-label": name
-			}, h$1("header", {}, toggle), holder);
+			}, h$1("header", {}, h$1("h2", {}, toggle)), holder);
 			lane.addEventListener("pointerleave", () => requestAnimationFrame(() => renderColumns()));
 			lane.addEventListener("focusout", () => requestAnimationFrame(() => renderColumns()));
 			currentLanes.set(key, lane);
@@ -27431,8 +27487,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 		for (const entry of rows.values()) {
 			const { card, node } = entry;
-			if ((entry.pending || force) && (!node.contains(document.activeElement) || node === document.activeElement)) {
-				node.replaceChildren(...preview(card));
+			if (entry.pending || force) {
+				patchCard(node, card);
 				entry.pending = false;
 			}
 			node.hidden = !((!query || joinLabel([card.work.title, ...requirements(card).map((req) => req.text)], " ").toLocaleLowerCase().includes(query)) && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value)) && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value)));
@@ -27441,12 +27497,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			else if (!previous) lane.querySelector(".pm-kanban-cards").append(node);
 		}
 		for (const [key, lane] of currentLanes) if (!groupKeys.includes(key) && !lane.querySelector("[data-pm-kanban-work]")) lane.remove();
-		else lane.querySelector(".pm-kanban-count").textContent = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length;
+		else {
+			const count = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length, partial = next != null || page?.coverage?.byte_limited;
+			const label = lane.querySelector(".pm-kanban-count");
+			label.textContent = partial ? t("wv_loaded", { n: count }) : count;
+			if (partial) label.setAttribute("aria-label", t("wv_lane_loaded", { n: count }));
+			else label.removeAttribute("aria-label");
+		}
 		markSelection();
 		requestAnimationFrame(updateEdges);
 	}
 	function markSelection() {
-		for (const { node, card } of rows.values()) node.setAttribute("aria-pressed", String(selected === card.work_item_id));
+		for (const { node, card } of rows.values()) node.querySelector("[data-board-open]").setAttribute("aria-pressed", String(selected === card.work_item_id));
 	}
 	function present(data, append = false) {
 		const ids = new Set(data.cards.map((card) => card.work_item_id));
@@ -27470,27 +27532,39 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				if (previous.signature !== contentSignature) previous.pending = true;
 				previous.signature = contentSignature;
 				previous.card = card;
-				previous.node.setAttribute("aria-label", firstLabel(card.work.title, t("ui_work_item")));
+				previous.node.querySelector("[data-board-open]").textContent = firstLabel(card.work.title, t("ui_work_item"));
 			} else rows.set(card.work_item_id, {
 				node: makeCard(card),
 				card
 			});
 		}
 		page = data;
+		const routeId = new URLSearchParams(location.hash.split("?")[1]).get("select");
+		if (routeId && rows.has(routeId)) {
+			selected = routeId;
+			preference.selected = routeId;
+		}
 		next = data.next_cursor ?? null;
 		fillFilters();
 		renderColumns();
 		renderMetrics();
+		list.hidden = !rows.size;
 		status.replaceChildren(...!rows.size ? [emptyState({ title: t("pm_kanban_empty") })] : []);
-		if (selected && !rows.has(selected)) closeRetaining();
-		else if (selected && active && detail.element) showDetail(rows.get(selected).card);
+		if (selected && !rows.has(selected)) {
+			selected = null;
+			preference.selected = null;
+			writeSelection(null);
+			closeRetaining();
+			viewHeading()?.focus();
+		} else if (selected && active) select(selected, true);
 	}
 	function showDetail(card) {
 		const opening = !detail.element;
 		detail.show({
 			title: card.work.title,
 			card,
-			plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null,
+			plan: card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id),
+			earlierPlan: card.binding.plan_revision_id !== plan?.revision_id,
 			requirements: requirements(card),
 			milestones: milestones.filter((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id))),
 			source: sources.get(card.work_item_id),
@@ -27510,6 +27584,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
+		writeSelection(id);
 		markSelection();
 		const generation = serial, ticket = ++detailSerial;
 		if (!retain) {
@@ -27541,13 +27616,37 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			if (generation !== serial || ticket !== detailSerial) return;
 			sources.set(id, source.get(id));
 			current.card = data.card;
-			current.node.replaceChildren(...preview(data.card));
-			current.node.setAttribute("aria-label", firstLabel(data.card.work.title, t("ui_work_item")));
+			patchCard(current.node, data.card);
 			renderColumns();
 			renderMetrics();
 			showDetail(data.card);
 		} catch (error) {
-			if (generation === serial && ticket === detailSerial) unavailable(error);
+			if (generation === serial && ticket === detailSerial) {
+				if (error.message === t("pm_kanban_scope_error")) {
+					unavailable(error);
+					return;
+				}
+				if ([403, 404].includes(error.status)) try {
+					checkPage(await api("GET", path(0)), 0);
+					alive();
+					if (generation !== serial || ticket !== detailSerial) return;
+				} catch (parentError) {
+					if (generation === serial && ticket === detailSerial) unavailable(parentError);
+					return;
+				}
+				if ([403, 404].includes(error.status)) {
+					current.node.remove();
+					rows.delete(id);
+					sources.delete(id);
+					renderColumns();
+					renderMetrics();
+				}
+				detail.show({
+					title: current.card.work.title,
+					error,
+					onRetry: () => void refresh()
+				});
+			}
 		}
 	}
 	const path = (after) => `${endpoint}/kanban?${new URLSearchParams({
@@ -27556,6 +27655,11 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		limit: String(pageSize)
 	})}`;
 	async function refresh() {
+		if (!active) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
 		detailSerial++;
 		reading = true;
@@ -27577,13 +27681,17 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			const features = caps()?.features?.pm_workspaces;
 			const [accepted, roadmap, read] = await Promise.all([
 				features?.plan_drafting ? api("GET", `${endpoint}/plans/accepted`) : null,
-				features?.roadmap ? api("GET", `${endpoint}/roadmap`) : null,
+				features?.roadmap ? api("GET", `${endpoint}/roadmap`).then((data) => {
+					if (data.workspace_id !== workspaceId) throw Error(t("wv_source_mismatch"));
+					return data;
+				}).catch(() => null) : null,
 				readWorkSources({
 					api,
 					workspaceId,
 					cards: [...combined.values()],
 					caps: caps(),
 					t,
+					deliveryPages,
 					valid: () => {
 						alive();
 						return ticket === serial;
@@ -27593,6 +27701,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			alive();
 			if (ticket !== serial) return;
 			if (accepted && (accepted.head?.workspace_id !== workspaceId || accepted.plan && accepted.plan.workspace_id !== workspaceId) || roadmap && roadmap.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+			earlierPlans = await readEarlierPlans({
+				api,
+				workspaceId,
+				cards: [...combined.values()],
+				currentId: accepted?.plan?.revision_id,
+				valid: () => {
+					alive();
+					return ticket === serial;
+				}
+			});
+			alive();
+			if (ticket !== serial) return;
 			plan = accepted?.plan || null;
 			milestones = roadmap?.baseline?.document?.milestones || [];
 			sources = read;
@@ -27632,20 +27752,34 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		});
 		updateEdges();
 	}
-	const resize = new ResizeObserver(updateEdges);
+	const resize = new ResizeObserver(() => {
+		updateEdges();
+		if (detail.element && selected) {
+			const node = rows.get(selected)?.node;
+			if (node) requestAnimationFrame(() => revealCard(node));
+		}
+	});
 	resize.observe(list);
 	list.addEventListener("scroll", () => {
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
 	function setActive(value) {
-		if (active === value) return;
+		const routeId = new URLSearchParams(location.hash.split("?")[1]).get("select");
+		if (active === value) {
+			if (value && routeId && routeId !== selected) select(routeId);
+			return;
+		}
 		active = value;
 		if (!value) {
+			stale = true;
+			serial++;
+			detailSerial++;
 			preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
-			if (selected && rows.has(selected)) select(selected, true);
+			if (stale || !page) refresh();
+			else if (selected && rows.has(selected)) select(selected, true);
 			list.scrollLeft = preference.laneScroll || 0;
 			requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));
 		}
@@ -27664,7 +27798,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		},
 		dispose: () => {
 			resize.disconnect();
-			withdraw();
+			withdraw({ forgetRoute: false });
 		}
 	};
 }
@@ -29875,7 +30009,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
 				if (source.kind === "plan_input") details.append(h("p", { class: "muted" }, t("pm_brief_plan_source")), h("code", {}, source.revision_id), h("p", {}, source.source_ref?.ref || source.source_ref?.message_id || ""));
 				else if (source.kind === "plan_adoption") details.append(h("p", { class: "muted" }, t("pm_brief_decision_source")), h("code", {}, source.revision_id));
-				else if (source.kind === "work_binding") details.append(h("a", { href: `#/work/${source.work_item_id}` }, t("pm_evidence_open_work")));
+				else if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
 				else if (source.kind === "evidence") {
 					const evidence = (snapshot.evidence || []).find((row) => row.evidence_id === source.evidence_id);
 					if (evidence) details.append(h("p", { class: "muted" }, readable("pm_evidence_kind_", evidence.source_kind), " · ", stamp(evidence.source_observed_at)));
@@ -33902,7 +34036,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		row.addEventListener("toggle", async () => {
 			if (!row.open || opened) return;
 			opened = true;
-			detail.append(h("a", { href: `#/work/${item.work_item_id}` }, t("pm_evidence_open_work")));
+			detail.append(h("a", { href: `#/item/${item.work_item_id}` }, t("pm_evidence_open_work")));
 			if (can(true)) {
 				const editor = h("details", {}, h("summary", {}, t(binding ? "pm_evidence_reassociate" : "pm_evidence_associate_work")));
 				detail.append(editor);

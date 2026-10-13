@@ -544,6 +544,16 @@ edge fade signals clipped desktop lanes. Opening a card or navigating with arrow
 scrolls it into view inside the board. Inspector facts state unknown/absent values
 once; a recorded blocker retains both its status and reason.
 
+Each lane is a list with an H2 heading. Cards are list items with an H3 title
+button, described by their requirement, status and recorded delivery/blocker/age
+facts. Blocker flags are not tab stops. Paged lanes show loaded counts and one
+visible partial marker; an empty Board hides the lanes and shows one empty state.
+Opening the inspector reveals the selected card after docking. Closing restores
+focus to the latest selection, falling back to the view heading after withdrawal.
+Selections use `?select=` in both views and reopen after returning from another
+view. Current requirement chips link to Requirements; earlier-plan text is read
+from its bound revision and never replaced by a raw ID in a chip or filter.
+
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent

@@ -17,9 +17,10 @@ export function reviewFixture(locale = 'en') {
     for (const override of overrides) result = await override(url, result) ?? result;
     return result;
   };
-  return {...fixture, reads, writes, overrides, dispatch,
+  return {...fixture, base: fixture, reads, writes, overrides, dispatch,
     emit() {events.push({seq: events.length + 1, resource_type: 'session', resource_id: `${fixture.ids.host}/${fixture.ids.sessions.manual}`, kind: 'session.updated'});},
     async mount(page: Page, view: string, select = '') {
+      await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), fixture.locale);
       await mountConversation(page, false, dispatch);
       await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/${view}${select ? '?select=' + encodeURIComponent(select) : ''}`);
     },

@@ -41,3 +41,11 @@
 @media (prefers-reduced-motion: reduce) {
   .pm-kanban-card, .pm-board-lane-toggle .ui-icon { transition: none; }
 }
+
+.pm-kanban-list[hidden] { display: none; }
+.pm-kanban-column > header h2 { margin: 0; font-size: var(--fs-section); }
+.pm-board-open { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; padding: 0; width: 100%; cursor: pointer; }
+.pm-board-open:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-1); border-radius: var(--r-xs); }
+.pm-kanban-card:has([aria-pressed=true]) { border-color: var(--accent); background: var(--accent-soft); }
+.pm-board-facts > .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 799px) { .pm-board-open { min-height: 44px; } }

@@ -3,16 +3,16 @@ import {pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, 
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
-import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage} from './pm-work-inspector.js';
+import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
-  let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, milestones = [], pages = 1;
-  let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1;
-  const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list', 'aria-label': t('ui_board')}), boardInfo = h('div');
+  let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
+  let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+  const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list'}), boardInfo = h('div');
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('wv_refresh'), onClick: () => void refresh()});
   const more = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
   const columns = ['backlog', 'in_progress', 'waiting', 'review', 'accepted'];
@@ -27,17 +27,12 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     h('div', {class: 'pm-board-toolbar'}, h('label', {class: 'pm-work-search'}, icon('search'), search), requirementFilter, agentFilter, h('label', {}, t('wv_group'), group)),
     status, layout, h('footer', {class: 'pm-kanban-footer'}, more,
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
-  const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), onClose: () => {
-    detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; markSelection();}
+  const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), returnFocus: () => rows.get(selected)?.node.querySelector('[data-board-open]') || viewHeading(), onClose: () => {
+    detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; writeSelection(null); markSelection();}
     requestAnimationFrame(updateEdges);
   }});
+  const viewHeading = () => {const heading = element.closest('main')?.querySelector('h1'); if (heading) heading.tabIndex = -1; return heading;};
   const note = key => h('p', {class: 'ui-meta'}, t(key));
-  const elapsed = value => {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
-    if (value < 60) return t('pm_kanban_seconds');
-    const [key, divisor] = value < 3600 ? ['minutes', 60] : value < 86400 ? ['hours', 3600] : ['days', 86400];
-    return t('pm_kanban_' + key, {count: Math.floor(value / divisor)});
-  };
   function checkCard(card, expectedId = null) {
     if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || '') || expectedId && card.work_item_id !== expectedId
       || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id
@@ -56,14 +51,21 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t('pm_kanban_scope_error'));
     return data;
   }
+  function writeSelection(id) {
+    const [path, query] = location.hash.split('?'); if (!path.endsWith('/board')) return;
+    const params = new URLSearchParams(query); if (id) params.set('select', id); else params.delete('select');
+    history.replaceState(null, '', path + (params.size ? '?' + params : ''));
+  }
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
-  function withdraw() {
-    ++serial; ++detailSerial; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; milestones = [];
+  function withdraw({forgetRoute = true} = {}) {
+    ++serial; ++detailSerial; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
+    if (forgetRoute) writeSelection(null);
     closeRetaining(); list.replaceChildren(); meta.replaceChildren(); boardInfo.replaceChildren(); more.hidden = true; more.disabled = false; element.removeAttribute('aria-busy');
   }
   function unavailable(error) {withdraw(); status.replaceChildren(errorBox ? errorBox(error) : h('p', {class: 'error'}, error.message),
     h('button', {type: 'button', class: 'ui-button secondary', onclick: () => {pages = 1; void refresh();}}, t('pm_kanban_retry')));}
-  function requirements(card) {return (plan?.document?.requirements || []).filter(row => card.binding.plan_revision_id === plan.revision_id && card.binding.requirement_ids?.includes(row.id));}
+  function requirements(card) {const bound = card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id);
+    return (bound?.document?.requirements || []).filter(row => card.binding.requirement_ids?.includes(row.id));}
   function fillFilters() {
     const fill = (select, all, options, saved) => {
       const current = select.value || saved || '', values = new Map(options);
@@ -72,7 +74,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       if (select.dataset.options !== signature) {select.dataset.options = signature; select.replaceChildren(h('option', {value: ''}, t(all)), ...[...values].map(([value, label]) => h('option', {value}, label)));}
       select.value = current;
     };
-    fill(requirementFilter, 'wv_all_requirements', [...rows.values()].flatMap(({card}) => (card.binding.requirement_ids || []).map(id => [id, firstLabel(requirements(card).find(req => req.id === id)?.text, id)])), preference.requirement);
+    fill(requirementFilter, 'wv_all_requirements', [...rows.values()].flatMap(({card}) => (card.binding.requirement_ids || []).map(id => [id, firstLabel(requirements(card).find(req => req.id === id)?.text, t('wv_earlier_plan'))])), preference.requirement);
     fill(agentFilter, 'wv_all_agents', [...sources.values()].flatMap(source => workAgents(source).map(agent => [agent, agent])), preference.agent);
   }
   function renderMetrics() {
@@ -82,28 +84,34 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     meta.textContent = joinLabel([t(partial ? 'wv_loaded' : 'wv_work_count', {n: rows.size}), blocked ? t(blocked === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: blocked}) : null]);
     boardInfo.replaceChildren(...[h('p', {}, t('pm_kanban_wip', page.wip)),
       partial ? note('pm_kanban_partial') : null, page.coverage?.byte_limited ? note('pm_kanban_bounded') : null].filter(Boolean));
+    element.querySelector('[data-board-partial]')?.remove();
+    if (next != null || page.coverage?.byte_limited) more.before(h('span', {class: 'ui-meta', 'data-board-partial': ''}, t('pm_kanban_partial')));
     more.hidden = next == null; more.disabled = reading;
   }
   function preview(card) {
     const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
+    const earlier = card.binding.plan_revision_id !== plan?.revision_id;
     const chip = text => {const node = contextChip({text}); node.title = text; return node;};
-    const age = elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
-    return [h('h3', {title: firstLabel(card.work.title, t('ui_work_item'))}, firstLabel(card.work.title, t('ui_work_item'))),
-      h('div', {class: 'pm-board-requirements'}, ...(reqs.length ? reqs.map(req => chip(firstLabel(req.text, req.id)))
-        : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(' · ') : t('wv_no_requirement'))])),
+    const coverageState = deliveryCoverage(source);
+    const age = elapsed(t, card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
+    const title = firstLabel(card.work.title, t('ui_work_item')), metaId = `board-facts-${card.work_item_id}`;
+    return [h('h3', {title}, h('button', {type: 'button', class: 'pm-board-open', 'data-board-open': card.work_item_id, 'aria-describedby': metaId}, title)),
+      h('div', {id: metaId, class: 'pm-board-facts'}, h('span', {class: 'sr-only'}, t('ui_status_' + workStatus(card))),
+      h('div', {class: 'pm-board-requirements'}, ...(reqs.length ? reqs.map(req => {const text = firstLabel(req.text, t('wv_earlier_plan'));
+          return earlier ? chip(joinLabel([t('wv_earlier_plan'), text])) : h('a', {class: 'ui-context-chip', title: text, href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`}, text);})
+        : [chip(card.binding.requirement_ids?.length ? t('wv_earlier_plan') : t('wv_no_requirement'))])),
       h('div', {class: 'pm-kanban-card-meta'}, ...workAgents(source).map(agentMark).filter(mark => mark.textContent !== '?'),
         ...prGroups(source?.deliveries).map(({target, rows}) => {const node = contextChip({text: `PR #${target.pull_number}`});
-          node.title = joinLabel([target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]); return node;}), deliveryCoverage(source) !== 'complete' ? statusPill(deliveryCoverage(source)) : null, blockedWork(card) ? h('span', {class: 'pm-board-blocker', tabindex: 0, title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), t('ui_status_blocked')) : null,
+          node.title = joinLabel([target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]); return node;}), coverageState !== 'complete' ? statusPill(coverageState) : null, blockedWork(card) ? h('span', {class: 'pm-board-blocker', title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), t('ui_status_blocked')) : null,
         group.value !== 'status' ? h('span', {class: 'pm-board-state'}, statusPill(workStatus(card))) : null,
         age ? h('span', {class: 'pm-board-age', title: t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age')}, age) : null),
-      coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h('span', {class: 'ui-meta'}, t('pm_kanban_partial_sources')) : null].filter(Boolean);
+      coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h('span', {class: 'ui-meta'}, t('pm_kanban_partial_sources')) : null)];
   }
   function makeCard(card) {
-    const node = h('article', {class: 'pm-kanban-card', 'data-pm-kanban-work': card.work_item_id, role: 'button', tabindex: 0,
-      'aria-label': firstLabel(card.work.title, t('ui_work_item')), onclick: () => {node.focus(); void select(card.work_item_id);}}, ...preview(card));
+    const node = h('article', {class: 'pm-kanban-card', 'data-pm-kanban-work': card.work_item_id, role: 'listitem'}, ...preview(card));
+    node.addEventListener('click', event => {if (event.target.closest('[data-board-open]')) void select(card.work_item_id);});
     node.addEventListener('keydown', event => {
-      if (event.target !== node) return;
-      if (['Enter', ' '].includes(event.key)) {event.preventDefault(); void select(card.work_item_id);}
+      if (!event.target.matches('[data-board-open]')) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
         event.preventDefault(); const lane = node.closest('[data-pm-kanban-column]'), cards = [...lane.querySelectorAll('[data-pm-kanban-work]:not([hidden])')], index = cards.indexOf(node);
         let target;
@@ -112,9 +120,15 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
           const available = next?.querySelector('.pm-kanban-cards')?.hidden ? [] : [...(next?.querySelectorAll('[data-pm-kanban-work]:not([hidden])') || [])];
           target = available[index] || available[0] || next?.querySelector('button');
         } else target = cards[event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : index + (event.key === 'ArrowUp' ? -1 : 1)];
-        target?.focus({preventScroll: true}); if (target) revealCard(target);
+        (target?.querySelector('[data-board-open]') || target)?.focus({preventScroll: true}); if (target) revealCard(target);
       }
     }); return node;
+  }
+  function patchCard(node, card) {
+    const [title, facts] = preview(card);
+    node.querySelector('h3').title = title.title;
+    node.querySelector('[data-board-open]').textContent = title.textContent;
+    node.querySelector('.pm-board-facts').replaceWith(facts);
   }
   const locked = lane => lane && (lane.matches(':hover') || lane.contains(document.activeElement));
   function laneKey(card) {
@@ -128,19 +142,19 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     for (const {card} of rows.values()) if (!groupKeys.includes(laneKey(card))) groupKeys.push(laneKey(card));
     for (const key of groupKeys) if (!currentLanes.has(key)) {
       const name = group.value === 'milestone' ? firstLabel(milestones.find(row => row.milestone_id === key)?.title, t('wb_unassigned')) : key === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus({column: key}));
-      const holder = h('div', {class: 'pm-kanban-cards'}), collapsed = preference.collapsed?.includes(key) === true;
+      const holder = h('div', {class: 'pm-kanban-cards', role: 'list', 'aria-label': name}), collapsed = preference.collapsed?.includes(key) === true;
       const toggle = h('button', {type: 'button', class: 'pm-board-lane-toggle', 'aria-expanded': String(!collapsed), onclick: () => {
         holder.hidden = !holder.hidden; toggle.setAttribute('aria-expanded', String(!holder.hidden));
         preference.collapsed = [...list.children].filter(lane => lane.querySelector('.pm-kanban-cards').hidden).map(lane => lane.dataset.pmKanbanColumn);
       }}, icon('chevron-right'), h('span', {}, name), h('span', {class: 'pm-kanban-count'})); holder.hidden = collapsed;
-      const lane = h('section', {class: 'pm-kanban-column', 'data-pm-kanban-column': key, 'aria-label': name}, h('header', {}, toggle), holder);
+      const lane = h('section', {class: 'pm-kanban-column', 'data-pm-kanban-column': key, 'aria-label': name}, h('header', {}, h('h2', {}, toggle)), holder);
       lane.addEventListener('pointerleave', () => requestAnimationFrame(() => renderColumns()));
       lane.addEventListener('focusout', () => requestAnimationFrame(() => renderColumns()));
       currentLanes.set(key, lane); list.append(lane);
     }
     for (const entry of rows.values()) {
       const {card, node} = entry;
-      if ((entry.pending || force) && (!node.contains(document.activeElement) || node === document.activeElement)) {node.replaceChildren(...preview(card)); entry.pending = false;}
+      if (entry.pending || force) {patchCard(node, card); entry.pending = false;}
       const matches = (!query || joinLabel([card.work.title, ...requirements(card).map(req => req.text)], ' ').toLocaleLowerCase().includes(query))
         && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value))
         && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value));
@@ -151,12 +165,15 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     }
     for (const [key, lane] of currentLanes) {
       if (!groupKeys.includes(key) && !lane.querySelector('[data-pm-kanban-work]')) lane.remove();
-      else lane.querySelector('.pm-kanban-count').textContent = lane.querySelectorAll('[data-pm-kanban-work]:not([hidden])').length;
+      else {const count = lane.querySelectorAll('[data-pm-kanban-work]:not([hidden])').length, partial = next != null || page?.coverage?.byte_limited;
+        const label = lane.querySelector('.pm-kanban-count'); label.textContent = partial ? t('wv_loaded', {n: count}) : count;
+        if (partial) label.setAttribute('aria-label', t('wv_lane_loaded', {n: count})); else label.removeAttribute('aria-label');
+      }
     }
     markSelection();
     requestAnimationFrame(updateEdges);
   }
-  function markSelection() {for (const {node, card} of rows.values()) node.setAttribute('aria-pressed', String(selected === card.work_item_id));}
+  function markSelection() {for (const {node, card} of rows.values()) node.querySelector('[data-board-open]').setAttribute('aria-pressed', String(selected === card.work_item_id));}
   function present(data, append = false) {
     const ids = new Set(data.cards.map(card => card.work_item_id));
     if (!append) for (const [id, {node}] of rows) if (!ids.has(id)) {node.remove(); rows.delete(id);}
@@ -166,17 +183,20 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         // Preserve the card node and focus, even when its facts change.
         const contentSignature = JSON.stringify([card.work.title, card.column, card.flow?.age_seconds, card.flow?.cycle_seconds, blockedWork(card), sources.get(card.work_item_id)]);
         if (previous.signature !== contentSignature) previous.pending = true;
-        previous.signature = contentSignature; previous.card = card; previous.node.setAttribute('aria-label', firstLabel(card.work.title, t('ui_work_item')));
+        previous.signature = contentSignature; previous.card = card; previous.node.querySelector('[data-board-open]').textContent = firstLabel(card.work.title, t('ui_work_item'));
       } else rows.set(card.work_item_id, {node: makeCard(card), card});
     }
-    page = data; next = data.next_cursor ?? null; fillFilters(); renderColumns(); renderMetrics();
+    page = data; const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
+    if (routeId && rows.has(routeId)) {selected = routeId; preference.selected = routeId;}
+    next = data.next_cursor ?? null; fillFilters(); renderColumns(); renderMetrics();
+    list.hidden = !rows.size;
     status.replaceChildren(...(!rows.size ? [emptyState({title: t('pm_kanban_empty')})] : []));
-    if (selected && !rows.has(selected)) closeRetaining();
-    else if (selected && active && detail.element) showDetail(rows.get(selected).card);
+    if (selected && !rows.has(selected)) {selected = null; preference.selected = null; writeSelection(null); closeRetaining(); viewHeading()?.focus();}
+    else if (selected && active) void select(selected, true);
   }
   function showDetail(card) {
     const opening = !detail.element;
-    detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null, requirements: requirements(card),
+    detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id), earlierPlan: card.binding.plan_revision_id !== plan?.revision_id, requirements: requirements(card),
     milestones: milestones.filter(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id))), source: sources.get(card.work_item_id),
     onMore: () => {deliveryPages++; void select(card.work_item_id, true);}});
     if (opening) requestAnimationFrame(() => {const node = rows.get(card.work_item_id)?.node;
@@ -185,7 +205,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   async function select(id, retain = false) {
     const current = rows.get(id); if (!current) return;
     if (selected !== id) deliveryPages = 1;
-    selected = id; preference.selected = id; markSelection();
+    selected = id; preference.selected = id; writeSelection(id); markSelection();
     const generation = serial, ticket = ++detailSerial;
     if (!retain) {detail.show({title: current.card.work.title}); detail.element.body.replaceChildren(note('pm_kanban_detail_loading'));
       requestAnimationFrame(() => {if (selected === id && current.node.isConnected && detail.element) revealCard(current.node);});}
@@ -195,12 +215,22 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       const source = await readWorkSources({api, workspaceId, cards: [data.card], caps: caps(), t, deliveryPages, valid: () => {alive(); return generation === serial && ticket === detailSerial;}});
       alive(); if (generation !== serial || ticket !== detailSerial) return;
       sources.set(id, source.get(id)); current.card = data.card;
-      current.node.replaceChildren(...preview(data.card)); current.node.setAttribute('aria-label', firstLabel(data.card.work.title, t('ui_work_item')));
+      patchCard(current.node, data.card);
       renderColumns(); renderMetrics(); showDetail(data.card);
-    } catch (error) {if (generation === serial && ticket === detailSerial) unavailable(error);}
+    } catch (error) {if (generation === serial && ticket === detailSerial) {
+      if (error.message === t('pm_kanban_scope_error')) {unavailable(error); return;}
+      if ([403, 404].includes(error.status)) {
+        try {checkPage(await api('GET', path(0)), 0); alive(); if (generation !== serial || ticket !== detailSerial) return;}
+        catch (parentError) {if (generation === serial && ticket === detailSerial) unavailable(parentError); return;}
+      }
+      if ([403, 404].includes(error.status)) {current.node.remove(); rows.delete(id); sources.delete(id); renderColumns(); renderMetrics();}
+      detail.show({title: current.card.work.title, error, onRetry: () => void refresh()});
+    }}
   }
   const path = after => `${endpoint}/kanban?${new URLSearchParams({...(projectId ? {project_id: projectId} : {}), after: String(after), limit: String(pageSize)})}`;
   async function refresh() {
+    if (!active) {stale = true; return;}
+    stale = false;
     const ticket = ++serial; detailSerial++; reading = true; refreshButton.disabled = true; more.disabled = true;
     if (!rows.size) status.replaceChildren(note('pm_kanban_loading')); element.setAttribute('aria-busy', 'true');
     try {
@@ -212,11 +242,13 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       }
       const features = caps()?.features?.pm_workspaces;
       const [accepted, roadmap, read] = await Promise.all([features?.plan_drafting ? api('GET', `${endpoint}/plans/accepted`) : null,
-        features?.roadmap ? api('GET', `${endpoint}/roadmap`) : null,
-        readWorkSources({api, workspaceId, cards: [...combined.values()], caps: caps(), t, valid: () => {alive(); return ticket === serial;}})]);
+        features?.roadmap ? api('GET', `${endpoint}/roadmap`).then(data => {if (data.workspace_id !== workspaceId) throw Error(t('wv_source_mismatch')); return data;}).catch(() => null) : null,
+        readWorkSources({api, workspaceId, cards: [...combined.values()], caps: caps(), t, deliveryPages, valid: () => {alive(); return ticket === serial;}})]);
       alive(); if (ticket !== serial) return;
       if (accepted && (accepted.head?.workspace_id !== workspaceId || accepted.plan && accepted.plan.workspace_id !== workspaceId)
         || roadmap && roadmap.workspace_id !== workspaceId) throw Error(t('pm_kanban_scope_error'));
+      earlierPlans = await readEarlierPlans({api, workspaceId, cards: [...combined.values()], currentId: accepted?.plan?.revision_id, valid: () => {alive(); return ticket === serial;}});
+      alive(); if (ticket !== serial) return;
       plan = accepted?.plan || null; milestones = roadmap?.baseline?.document?.milestones || []; sources = read;
       present({...data, cards: [...combined.values()]});
     } catch (error) {if (ticket === serial) unavailable(error);}
@@ -235,12 +267,13 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   function revealCard(node) {
     node.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'instant'}); updateEdges();
   }
-  const resize = new ResizeObserver(updateEdges); resize.observe(list);
+  const resize = new ResizeObserver(() => {updateEdges(); if (detail.element && selected) {const node = rows.get(selected)?.node; if (node) requestAnimationFrame(() => revealCard(node));}}); resize.observe(list);
   list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
   function setActive(value) {
-    if (active === value) return; active = value;
-    if (!value) {preference.scroll = window.scrollY; closeRetaining();}
-    else {if (selected && rows.has(selected)) void select(selected, true); list.scrollLeft = preference.laneScroll || 0; requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));}
+    const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
+    if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
+    if (!value) {stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
+    else {if (stale || !page) void refresh(); else if (selected && rows.has(selected)) void select(selected, true); list.scrollLeft = preference.laneScroll || 0; requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));}
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {resize.disconnect(); withdraw();}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {resize.disconnect(); withdraw({forgetRoute: false});}};
 }
