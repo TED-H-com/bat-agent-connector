@@ -120,6 +120,10 @@ a { color: var(--accent); }
 .ui-menu-panel [role=menuitem] { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--r-xs); min-height: 32px; padding: 6px 10px; font: inherit; text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
 .ui-menu-panel [role=menuitem]:focus, .ui-menu-panel [role=menuitem]:hover { background: var(--surface-2); }
 .ui-inspector { position: sticky; top: 64px; width: 400px; max-width: 100%; max-height: calc(100vh - 80px); overflow: auto; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
+.ui-inspector[hidden] { display: none; }
+@media (min-width: 1200px) {
+  .ui-inspector-dock > header > .ui-icon-button { display: none; }
+}
 .ui-inspector > header { display: flex; align-items: center; gap: var(--space-2); }
 .ui-inspector h2 { flex: 1; font-size: var(--fs-section); margin: 0; }
 .ui-inspector-body { margin-top: var(--space-4); }
@@ -1264,3 +1268,50 @@ body.pm-mode #main { padding: 0; }
 }
 
 .workspace-project-row .workspace-tree-state .workspace-dot { display: block; }
+/* Session workspace. Scoped so other views keep their own layout. */
+.session-workspace { min-width: 0; }
+main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: hidden; }
+main.session-view > .workspace-session-heading { flex: none; }
+main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+.workspace-session-heading .ui-page-header { margin-bottom: 0; width: 100%; }
+.workspace-session-heading .session-mark { display: inline-flex; }
+.workspace-session-heading .session-mark .ui-agent-mark { width: 28px; height: 28px; }
+.session-back { margin: 0 0 var(--space-2); }
+.session-back a { color: var(--text-2); font-size: var(--fs-small); text-decoration: none; }
+.session-back a:hover { color: var(--text); }
+.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: auto; max-width: 760px; }
+.session-workspace .msg { max-width: 760px; margin-left: 0; padding: var(--space-3) 0; background: transparent; border: 0;
+  font-size: var(--fs-read); line-height: 1.55; }
+.session-workspace .msg.user { background: transparent; }
+.session-workspace .message-meta { display: flex; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-1);
+  font-size: var(--fs-small); color: var(--text-2); }
+.session-workspace .message-meta .ui-agent-mark { width: 28px; height: 28px; flex: none; overflow: hidden; font-size: 11px; }
+.session-workspace .message-meta .who { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-2);
+  row-gap: 0; min-width: 0; flex: 1; }
+.session-workspace .message-meta .mini { margin-left: auto; flex: none; }
+.session-workspace .message-name { font-weight: 600; color: var(--text); }
+.session-workspace .message-extra { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+.session-workspace .message-body { max-width: 760px; }
+.workspace-session-heading .workspace-session-meta { gap: var(--space-2) var(--space-3); }
+.workspace-session-heading .workspace-session-meta > :not(:first-child)::before { content: "·"; margin-right: var(--space-2); }
+.session-workspace .message-tool > summary { max-width: 760px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; cursor: pointer; color: var(--text-2); min-height: 32px; line-height: 32px; }
+.session-workspace .conversation-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
+.session-workspace .workspace-composer { flex: none; background: var(--bg); margin-top: var(--space-2); }
+.session-asking { display: grid; gap: var(--space-2); }
+.session-asking .title { display: flex; align-items: center; gap: var(--space-2); }
+.session-send-reason { margin: var(--space-1) 0; }
+.session-workspace .ui-section-card header h2 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.session-workspace .ui-section-card .panel h2 { margin-top: 0; }
+.session-workspace .ui-section-card .panel { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+.session-delivery-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.session-workspace > .ui-inspector { width: auto; max-width: 100%; }
+@media (min-width: 1200px) {
+  .session-workspace.workspace-session { grid-template-columns: minmax(0, 1fr) 400px; }
+}
+@media (max-width: 800px) {
+  .session-workspace .message-tool > summary,
+  .session-workspace .workspace-composer .ui-button { min-height: 44px; }
+}

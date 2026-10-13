@@ -107,6 +107,26 @@ var statusVocabulary = Object.freeze({
 		"zh-TW": "唯讀",
 		tone: "review"
 	},
+	running: {
+		en: "Running",
+		"zh-TW": "執行中",
+		tone: "info"
+	},
+	needs_you: {
+		en: "Needs you",
+		"zh-TW": "需要你",
+		tone: "warn"
+	},
+	asking_you: {
+		en: "Asking you",
+		"zh-TW": "正在詢問",
+		tone: "warn"
+	},
+	stopped: {
+		en: "Stopped",
+		"zh-TW": "已停止",
+		tone: "neutral"
+	},
 	draft: {
 		en: "Draft",
 		"zh-TW": "草稿",
@@ -152,6 +172,7 @@ var uiStrings = {
 		ui_work_item: "Work item",
 		ui_bound_partial: "Some linked projects are unavailable",
 		ui_work: "Work",
+		ui_session: "Session",
 		ui_all_projects: "All projects",
 		ui_settings: "Settings",
 		ui_pending: "Pending",
@@ -223,6 +244,7 @@ var uiStrings = {
 		ui_work_item: "工作項目",
 		ui_bound_partial: "部分連結專案無法取得",
 		ui_work: "工作",
+		ui_session: "工作階段",
 		ui_all_projects: "所有專案",
 		ui_settings: "設定",
 		ui_pending: "待處理",
@@ -5406,7 +5428,7 @@ var STRINGS = {
 		workspace_stale: "工作樹尚未更新，保留上次讀取的資料。",
 		workspace_work_details: "工作與成果",
 		workspace_result: "成果與交付",
-		workspace_result_empty: "尚無明確關聯的成果。可從下方保留 checkpoint。",
+		workspace_result_empty: "尚無明確關聯的成果。可從下方保留檢查點。",
 		workspace_work_missing: "目前專案資料中找不到這筆工作，請重新整理工作樹。",
 		workspace_refresh: "重新讀取工作樹",
 		workspace_resizer: "調整側欄寬度",
@@ -5469,6 +5491,9 @@ var STRINGS = {
 		message_copy_source: "要複製的原文",
 		message_copy_manual: "無法自動複製，請選取並複製以下原文。",
 		message_latest: "回到最新訊息",
+		message_new: "新訊息",
+		message_you: "你",
+		message_system: "系統",
 		message_window: "最近 30 則訊息",
 		message_anchor_missing: "原本閱讀的位置已不在這次載入的訊息中。",
 		tailscale_request: "原開啟請求",
@@ -5851,7 +5876,7 @@ var STRINGS = {
 		ar_original_preview: "原始擷取預覽與來源證據",
 		capture_title: "擷取遠端檔案",
 		capture_host: "來源主機",
-		capture_session: "完整人工 Session ID",
+		capture_session: "完整人工工作階段 ID",
 		capture_path: "遠端相對檔案路徑",
 		capture_help: "輸入一個相對於所選人工 session 資料夾的檔案路徑。讀取過程不會更動來源。",
 		capture_preview: "預覽來源檔案",
@@ -6383,8 +6408,8 @@ var STRINGS = {
 		parent_id: "上層",
 		remove: "移除",
 		new_step: "新步驟",
-		link_session: "Session",
-		link_checkpoint: "版本",
+		link_session: "工作階段",
+		link_checkpoint: "檢查點",
 		link_operation: "操作",
 		link_task: "任務",
 		link_pull_request: "PR",
@@ -6463,6 +6488,13 @@ var STRINGS = {
 		message_model: "訊息模型：{model}",
 		message_duration: "訊息耗時：{ms} ms",
 		results_waiting: "等待回覆或權限",
+		message_status_completed: "已完成",
+		message_status_error: "錯誤",
+		message_status_running: "執行中",
+		message_status_unknown: "未知",
+		message_status_failed: "失敗",
+		message_status_denied: "已拒絕",
+		message_status_deferred: "已延後",
 		results_title: "自己與子工作的成果來源",
 		results_refresh: "更新成果來源",
 		results_more: "載入更多子工作",
@@ -6556,7 +6588,7 @@ var STRINGS = {
 		stale_reason_gone: "已不存在",
 		stale_reason_never_observed: "尚未觀測",
 		read_only: "API 唯讀",
-		managed: "Connector 管理",
+		managed: "受管理",
 		provenance_manual: "人工建立（BAT）",
 		provenance_connector_managed: "Connector 建立",
 		provenance_unknown: "來源不明",
@@ -6574,34 +6606,46 @@ var STRINGS = {
 		observed: "觀測時間",
 		all_hosts: "全部主機",
 		all_access: "全部",
-		only_managed: "只看 Connector 管理",
+		only_managed: "只看受管理",
 		only_read_only: "只看唯讀",
 		load_more: "載入更多",
+		session_results: "成果",
+		session_changes: "變更",
+		session_delivery: "交付",
+		session_sources: "成果來源",
+		session_sources_empty: "尚無成果來源",
+		session_details: "詳細資料",
+		session_discuss: "與專案討論",
+		session_back: "返回{view}",
+		session_send_waiting: "正在讀取最新內容。",
+		session_send_scope: "這個登入不能送出訊息。",
+		session_send_host: "這台主機不接受寫入。",
+		session_send_denied: "目前不允許送出。",
 		messages: "對話",
 		send: "送出",
-		send_placeholder: "給這個 managed session 的訊息…",
+		send_placeholder: "給這個受管理工作階段的訊息…",
 		interrupt: "中斷這一輪",
 		answer: "回答",
 		allow: "允許",
 		deny: "拒絕",
-		read_only_note: "這個 session 由人在 BAT 建立，API 永久唯讀：不送字、不回答、不中斷。要讓 agent 接續，請從它的 commit 另開 managed 工作。",
-		continue_from_checkpoint: "從此版本建立 agent 工作",
-		checkpoints: "版本（checkpoint）",
-		checkpoint_help: "記下這個 session 目前的 commit 與最近對話（只讀，不改動原 session 或資料夾）。從版本開始的 agent 工作會在 Connector 自己的 clone 裡用新的 branch 與 session 進行。",
-		create_checkpoint: "記下這個版本",
-		no_checkpoints: "還沒有記下的版本。",
+		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
+		continue_from_checkpoint: "從這個檢查點建立代理工作",
+		checkpoints: "檢查點",
+		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的 clone 裡用新的 branch 與工作階段進行。",
+		create_checkpoint: "記下這個檢查點",
+		no_checkpoints: "還沒有記下的檢查點。",
 		excerpt_count: "{n} 則對話",
-		commit: "Commit",
+		commit: "提交",
 		checkpoint_note_placeholder: "接下來要做什麼（原文，會一併記下，選填）…",
 		dirty_unknown: "未提交的修改：未觀測（這台主機沒有 SSH alias）；不會帶入新工作。",
-		source_advanced: "來源已有更新的 commit；這個版本仍固定在原 commit。要帶入新版本請再記一次。",
-		started_from: "這個 session 從版本 {commit} 開出：",
-		source_session: "來源 session",
+		source_advanced: "來源已有更新的提交；這個檢查點仍固定在原提交。要帶入新版本請再記一次。",
+		started_from: "這個工作階段從提交 {commit} 開出：",
+		source_session: "來源工作階段",
 		dirty_warning: "記錄時有 {n} 個未提交的修改，不會帶入新工作。",
 		continue_placeholder: "要 agent 接著做什麼…",
-		start_agent_work: "開始 agent 工作",
-		open_new_session: "開啟新 session",
-		checkpoint_unavailable: "這台主機尚未設定 managed_roots、SSH alias 或 write／orchestrate 權限，不能從版本開工。",
+		start_agent_work: "開始代理工作",
+		open_new_session: "開啟新工作階段",
+		checkpoint_unavailable: "這台主機尚未設定 managed_roots、SSH alias 或 write／orchestrate 權限，不能從檢查點開工。",
 		needs_start_scope: "你的 token 沒有 start 權限，不能開新的 agent 工作；用 --scope start 重新發 token。",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
@@ -6935,6 +6979,9 @@ var STRINGS = {
 		message_copy_source: "Original text to copy",
 		message_copy_manual: "Automatic copy is unavailable. Select and copy the original text below.",
 		message_latest: "Back to latest",
+		message_new: "New messages",
+		message_you: "You",
+		message_system: "System",
 		message_window: "Latest 30 messages",
 		message_anchor_missing: "Your previous reading position is outside the messages currently loaded.",
 		tailscale_request: "Original opening request",
@@ -7929,6 +7976,13 @@ var STRINGS = {
 		message_model: "Message model: {model}",
 		message_duration: "Message duration: {ms} ms",
 		results_waiting: "waiting for an answer or permission",
+		message_status_completed: "completed",
+		message_status_error: "error",
+		message_status_running: "running",
+		message_status_unknown: "unknown",
+		message_status_failed: "failed",
+		message_status_denied: "denied",
+		message_status_deferred: "deferred",
 		results_title: "Own and child result sources",
 		results_refresh: "Refresh result sources",
 		results_more: "Load more child work",
@@ -8043,6 +8097,18 @@ var STRINGS = {
 		only_managed: "Connector-managed only",
 		only_read_only: "Read-only only",
 		load_more: "Load more",
+		session_results: "Results",
+		session_changes: "Changes",
+		session_delivery: "Delivery",
+		session_sources: "Result sources",
+		session_sources_empty: "No result sources",
+		session_details: "Details",
+		session_discuss: "Discuss with PM",
+		session_back: "Back to {view}",
+		session_send_waiting: "Waiting for a fresh read.",
+		session_send_scope: "This sign-in cannot send.",
+		session_send_host: "This host does not accept writes.",
+		session_send_denied: "Sending is not allowed.",
 		messages: "Messages",
 		send: "Send",
 		send_placeholder: "Message for this managed session…",
@@ -8488,11 +8554,21 @@ function iconButton({ icon, label, ...attrs }) {
 		class: "ui-button ghost ui-icon-button"
 	});
 }
-function pageHeader({ title, pill, meta, actions = [], overflow } = {}) {
-	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, h$1("h1", {}, title), pill), meta ? h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
+function statusPill(status) {
+	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
+	return h$1("span", {
+		class: `ui-pill tone-${statusVocabulary[key].tone}`,
+		"data-status": key
+	}, t("ui_status_" + key));
+}
+function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
+	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, h$1("h1", {}, title), pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
 }
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
+}
+function emptyState({ icon, title, text, action }) {
+	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
 }
 var disclosures = new Map();
 function disclosure({ label, body, open = false, key }) {
@@ -8507,6 +8583,22 @@ function disclosure({ label, body, open = false, key }) {
 		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
 	});
 	return root;
+}
+function agentMark(cli) {
+	const [initials, label] = {
+		codex: ["CX", "Codex"],
+		claude: ["CL", "Claude"],
+		grok: ["GK", "Grok"],
+		gemini: ["GM", "Gemini"],
+		bat: ["BT", "BAT"],
+		pm: ["PM", "PM"]
+	}[String(cli).toLowerCase()] || ["?", t("ui_status_unknown")];
+	return h$1("span", {
+		class: "ui-agent-mark",
+		role: "img",
+		"aria-label": label,
+		title: label
+	}, initials);
 }
 function menu({ button: trigger, items }) {
 	const panel = h$1("div", {
@@ -8597,29 +8689,30 @@ function trapFocus(root, event) {
 		first.focus();
 	}
 }
-function inspector({ title, onClose = () => {} }) {
-	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
+function inspector({ title, onClose = () => {}, dock = false } = {}) {
+	let opener = document.activeElement;
+	const media = matchMedia("(min-width: 1200px)"), titleId = uid();
 	const body = h$1("div", { class: "ui-inspector-body" });
 	const closeButton = iconButton({
 		icon: "x",
 		label: t("ui_close"),
-		onClick: close
+		onClick: () => close()
 	});
 	const back = button({
 		variant: "ghost",
 		icon: "chevron-left",
 		label: t("ui_back"),
-		onClick: close,
+		onClick: () => close(),
 		class: "ui-button ghost ui-inspector-back"
 	});
 	const root = h$1("aside", {
-		class: "ui-inspector",
+		class: dock ? "ui-inspector ui-inspector-dock" : "ui-inspector",
 		tabindex: -1,
 		"aria-labelledby": titleId
 	}, h$1("header", {}, back, h$1("h2", { id: titleId }, title), closeButton), body);
 	const scrim = h$1("div", {
 		class: "ui-inspector-scrim",
-		onclick: close
+		onclick: () => close()
 	});
 	const inerted = [];
 	function release() {
@@ -8627,13 +8720,18 @@ function inspector({ title, onClose = () => {} }) {
 	}
 	function resize() {
 		release();
+		if (dock && !media.matches && root.hidden) {
+			scrim.remove();
+			root.removeAttribute("aria-modal");
+			return;
+		}
 		root.setAttribute("role", media.matches ? "complementary" : "dialog");
-		if (media.matches) {
+		if (media.matches || root.hidden) {
 			root.removeAttribute("aria-modal");
 			scrim.remove();
 		} else {
 			root.setAttribute("aria-modal", "true");
-			root.before(scrim);
+			if (!scrim.isConnected) root.before(scrim);
 			let node = root;
 			while (node.parentElement && node.parentElement !== document.documentElement) {
 				for (const sibling of node.parentElement.children) if (sibling !== node && sibling !== scrim && !sibling.inert) {
@@ -8645,34 +8743,63 @@ function inspector({ title, onClose = () => {} }) {
 		}
 	}
 	function keys(event) {
+		if (dock && (root.hidden || media.matches)) return;
 		if (event.key === "Escape") {
 			event.preventDefault();
 			close();
 		} else if (!media.matches) trapFocus(root, event);
 	}
 	let closed = false;
-	function close() {
+	function destroy() {
 		if (closed) return;
 		closed = true;
 		release();
 		scrim.remove();
 		root.remove();
 		document.removeEventListener("keydown", keys);
-		media.removeEventListener("change", resize);
+		media.removeEventListener("change", onMedia);
+	}
+	function close() {
+		if (closed) return;
+		if (dock && !media.matches) {
+			root.hidden = true;
+			release();
+			scrim.remove();
+			root.removeAttribute("aria-modal");
+			onClose();
+			if (opener?.isConnected) opener.focus();
+			return;
+		}
+		if (dock && media.matches) return;
+		destroy();
 		onClose();
 		if (opener?.isConnected) opener.focus();
 	}
-	queueMicrotask(() => {
-		if (closed || !root.isConnected) return;
+	function open() {
+		if (closed) return;
+		opener = document.activeElement;
+		root.hidden = false;
 		resize();
 		(matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
+	}
+	function onMedia() {
+		if (dock && !media.matches) root.hidden = true;
+		if (dock && media.matches) root.hidden = false;
+		resize();
+	}
+	queueMicrotask(() => {
+		if (closed || !root.isConnected) return;
+		if (dock && !media.matches) root.hidden = true;
+		resize();
+		if (!dock) (matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
 		document.addEventListener("keydown", keys);
-		media.addEventListener("change", resize);
+		media.addEventListener("change", onMedia);
 	});
 	return Object.assign(root, {
 		body,
 		close,
-		dispose: close
+		open,
+		dispose: destroy
 	});
 }
 //#endregion
@@ -8737,7 +8864,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
+function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -9006,7 +9133,18 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			dispatch: "dispatch_title"
 		}[currentRoute];
 		const routeTitle = routeKey ? t(routeKey) : "";
-		if (routeTitle) crumb.append(h$1("span", {
+		if (workspace && [
+			"session",
+			"item",
+			"work"
+		].includes(currentRoute)) crumb.append(h$1("span", {
+			class: "shell-breadcrumb-divider",
+			"aria-hidden": "true"
+		}, "/"), h$1("span", { class: "shell-crumb-view" }, t("ui_work")), h$1("span", {
+			class: "shell-breadcrumb-divider",
+			"aria-hidden": "true"
+		}, "/"), h$1("span", { class: "shell-crumb-view" }, t("ui_session")));
+		else if (routeTitle) crumb.append(h$1("span", {
 			class: "shell-breadcrumb-divider",
 			"aria-hidden": "true"
 		}, "/"), h$1("span", { class: "shell-crumb-view" }, routeTitle));
@@ -9136,6 +9274,93 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		}
 	};
 }
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews.has(from) ? from : "",
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+//#endregion
+//#region src/ui/view-state.js
+var states$1 = new Map();
+function viewState(namespace, workspaceId, view) {
+	const key = JSON.stringify([
+		namespace,
+		workspaceId,
+		view
+	]);
+	const value = states$1.get(key) || {};
+	states$1.delete(key);
+	states$1.set(key, value);
+	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
+	return value;
+}
 //#endregion
 //#region src/pr-selector.js
 function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
@@ -9257,21 +9482,6 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 		container,
 		loadList
 	};
-}
-//#endregion
-//#region src/ui/view-state.js
-var states$1 = new Map();
-function viewState(namespace, workspaceId, view) {
-	const key = JSON.stringify([
-		namespace,
-		workspaceId,
-		view
-	]);
-	const value = states$1.get(key) || {};
-	states$1.delete(key);
-	states$1.set(key, value);
-	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
-	return value;
 }
 //#endregion
 //#region src/pm-resources.js
@@ -26116,7 +26326,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sections: [region]
 			});
 		}
-		workbench = projectViews({
+		workbench = projectViews$1({
 			h,
 			t,
 			namespace,
@@ -27095,6 +27305,17 @@ function sessionActivity(session) {
 		key: "sessions_activity_unknown",
 		tone: ""
 	};
+}
+function sessionStatus(session) {
+	if (session?.api_access !== "managed") return "read_only";
+	const kind = session.pending?.kind;
+	if (kind === "permission" || kind === "ask_user") return "asking_you";
+	if (session.pending) return "needs_you";
+	if (session.state?.lifecycle === "ended" || session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return "stopped";
+	if (runtimeStale(session)) return "stale";
+	if (session.streaming === true) return "running";
+	if (session.streaming === false) return "waiting";
+	return "unknown";
 }
 //#endregion
 //#region src/workspace-nav.js
@@ -28677,7 +28898,7 @@ async function readArtifactContent(reference, size, token, signal) {
 }
 //#endregion
 //#region src/conversation.js
-function conversationPanel({ h, t, when, guard, readingActions = null }) {
+function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
 		tabindex: "0",
@@ -28694,7 +28915,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null }) {
 		hidden: true
 	}, t("message_anchor_missing"));
 	const latest = h("button", {
-		class: "mini",
+		class: "mini conversation-jump",
 		type: "button",
 		hidden: true,
 		onclick: () => {
@@ -28762,7 +28983,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null }) {
 		});
 	};
 	const indicator = () => {
+		latest.textContent = olderWindow ? t("message_latest") : t("message_new");
 		latest.hidden = !olderWindow && atBottom();
+		if (memory && initialized) memory.scrollTop = viewport.scrollTop;
 		if (!readingActions) return;
 		mark.disabled = busy || !visible().some((row) => row.reading?.can_mark && row.reading?.unread);
 		remember.disabled = busy || !visible().some((row) => row.reading);
@@ -28820,7 +29043,8 @@ function conversationPanel({ h, t, when, guard, readingActions = null }) {
 		const anchor = [...rows.entries()].find(([, row]) => row.node.getBoundingClientRect().bottom > top);
 		const selection = window.getSelection();
 		const readingSelection = selection && !selection.isCollapsed && viewport.contains(selection.anchorNode);
-		const follow = !initialized || !state?.preserve && atBottom() && !readingSelection;
+		const savedScroll = !initialized && memory && Number.isFinite(memory.scrollTop) && !state?.restore && !state?.latest;
+		const follow = !savedScroll && (!initialized || !state?.preserve && atBottom() && !readingSelection);
 		const offset = anchor ? anchor[1].node.getBoundingClientRect().top - top : 0, scrollTop = viewport.scrollTop;
 		const next = new Map(), occurrences = new Map();
 		for (const message of messages) {
@@ -28840,49 +29064,86 @@ function conversationPanel({ h, t, when, guard, readingActions = null }) {
 					text: null,
 					meta: null,
 					body: h("div", { class: "message-body" }),
+					mark: h("span", {
+						class: "ui-agent-mark",
+						"aria-hidden": "true"
+					}),
+					name: h("span", { class: "message-name" }),
+					time: h("time", { class: "message-time" }),
+					extra: h("span", { class: "message-extra" }),
 					who: h("span", { class: "who" })
 				};
-				row.node = h("article", { class: "msg" }, h("div", { class: "message-meta" }, row.who, h("button", {
+				row.who.append(row.name, row.time, row.extra);
+				row.node = h("article", { class: "msg" }, h("div", { class: "message-meta" }, row.mark, row.who, h("button", {
 					class: "mini",
 					type: "button",
 					onclick: () => copy(row.text)
 				}, t("message_copy"))), row.body);
 			}
-			const metadata = [message.role || "", when(message.ts)];
-			if (message.role === "tool") metadata.push(message.tool || t("obs_unknown"), t("message_tool_status", { status: message.denied ? "denied" : message.deferred ? "deferred" : message.status || t("obs_unknown") }));
-			else if (typeof message.status === "string") metadata.push(t("message_tool_status", { status: message.status }));
-			if (typeof message.agent === "string") metadata.push(t("message_agent", { agent: message.agent }));
-			if (typeof message.model === "string") metadata.push(t("message_model", { model: message.model }));
-			if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0) metadata.push(t("message_duration", { ms: message.duration_ms }));
-			const meta = metadata.join(" · ");
+			const extras = [];
+			const knownStatus = new Set([
+				"completed",
+				"error",
+				"running",
+				"unknown",
+				"failed",
+				"denied",
+				"deferred"
+			]);
+			const statusWord = (value) => knownStatus.has(value) ? t("message_status_" + value) : value;
+			if (message.role === "tool") extras.push(message.tool || t("obs_unknown"), t("message_tool_status", { status: statusWord(message.denied ? "denied" : message.deferred ? "deferred" : message.status || "unknown") }));
+			else if (typeof message.status === "string") extras.push(t("message_tool_status", { status: statusWord(message.status) }));
+			if (typeof message.agent === "string") extras.push(t("message_agent", { agent: message.agent }));
+			if (typeof message.model === "string") extras.push(t("message_model", { model: message.model }));
+			if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0) extras.push(t("message_duration", { ms: message.duration_ms }));
+			const whoName = message.role === "user" ? t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : message.agent || t("agent");
+			const stamp = when(message.ts);
+			const meta = JSON.stringify([
+				whoName,
+				stamp,
+				extras
+			]);
 			if (row.meta !== meta) {
-				row.who.textContent = meta;
+				const glyphs = Array.from(whoName);
+				row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
+				row.name.textContent = whoName;
+				row.time.textContent = stamp;
+				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
+				row.extra.textContent = extras.length ? " · " + extras.join(" · ") : "";
 				row.meta = meta;
 			}
 			row.node.className = `msg${message.role === "user" ? " user" : ""}`;
 			row.id = message.id;
 			row.reading = message.reading;
 			row.node.dataset.messageId = typeof message.id === "string" ? message.id : "";
-			const tool = message.role === "tool", completed = tool && message.status === "completed" && !message.denied && !message.deferred;
-			if (row.tool !== tool) {
+			const tool = message.role === "tool", system = message.role === "system";
+			const completed = tool && message.status === "completed" && !message.denied && !message.deferred;
+			const folded = tool || system;
+			if (row.tool !== folded) {
 				row.body.replaceChildren();
 				row.text = null;
-				row.tool = tool;
+				row.tool = folded;
 				row.toolDetails = null;
 			}
-			if (tool && !row.toolDetails) {
+			if (folded && !row.toolDetails) {
 				row.toolContent = h("div", {});
+				const summary = t(tool ? "message_tool_details" : "message_system");
 				row.toolDetails = h("details", {
 					class: "message-tool",
-					open: !completed
-				}, h("summary", {}, t("message_tool_details")), row.toolContent);
+					open: tool ? !completed : false
+				}, h("summary", { title: summary }, summary), row.toolContent);
 				row.toolDetails.addEventListener("toggle", indicator);
 				row.body.append(row.toolDetails);
 			}
 			if (tool && !completed) row.toolDetails.open = true;
 			if (row.text !== text) {
-				(tool ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
+				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
+				if (folded && row.toolDetails) {
+					const summary = row.toolDetails.querySelector("summary");
+					summary.textContent = (text.includes("\n") ? text.split("\n").find((item) => item.trim()) : "") || t(tool ? "message_tool_details" : "message_system");
+					summary.title = text || summary.textContent;
+				}
 			}
 			next.set(key, row);
 		}
@@ -28899,6 +29160,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null }) {
 		if (!next.size) viewport.replaceChildren(h("p", { class: "muted" }, t("no_messages")));
 		if (follow) {
 			viewport.scrollTop = viewport.scrollHeight;
+			notice.hidden = true;
+		} else if (savedScroll) {
+			viewport.scrollTop = memory.scrollTop;
 			notice.hidden = true;
 		} else if (anchor && next.has(anchor[0])) viewport.scrollTop += next.get(anchor[0]).node.getBoundingClientRect().top - viewport.getBoundingClientRect().top - offset;
 		else {
@@ -28936,6 +29200,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null }) {
 		update,
 		dispose() {
 			disposed = true;
+			if (memory) memory.scrollTop = viewport.scrollTop;
 			viewport.removeEventListener("scroll", indicator);
 			window.removeEventListener("scroll", indicator);
 			window.removeEventListener("resize", indicator);
@@ -37600,13 +37865,38 @@ async function viewHostDiscovery(main, host) {
 	};
 }
 async function viewSession(main, host, sid, context = null) {
+	const queryAt = String(sid).indexOf("?");
+	let fromQuery = "";
+	if (queryAt >= 0) {
+		fromQuery = new URLSearchParams(String(sid).slice(queryAt + 1)).get("from") || "";
+		sid = String(sid).slice(0, queryAt);
+	}
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
 		generation
 	};
 	const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
+	const projectViews = new Set([
+		"overview",
+		"discussions",
+		"requirements",
+		"schedule",
+		"dependencies",
+		"issues",
+		"agents",
+		"board"
+	]);
+	const originView = () => projectViews.has(fromQuery) ? fromQuery : projectViews.has(sessionFromMemory) ? sessionFromMemory : "";
 	const head = h("div", { class: "workspace-session-heading" });
+	const titleNode = h("span");
+	const markSlot = h("span", { class: "session-mark" });
+	const pillSlot = h("span", { class: "session-pill" });
+	const meta = h("p", { class: "ui-meta workspace-session-meta" });
+	const backSlot = h("p", {
+		class: "session-back",
+		hidden: true
+	});
 	const metadata = h("div", { class: "workspace-metadata" });
 	const result = h("section", {
 		class: "workspace-result",
@@ -37628,6 +37918,7 @@ async function viewSession(main, host, sid, context = null) {
 		t,
 		when,
 		guard: () => assertView(connection),
+		memory: viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`),
 		readingActions: readingSupported ? {
 			mark: (messages) => saveReading("session.read", { messages }),
 			remember: (position, version) => saveReading("session.position", position, { expected_version: version }),
@@ -37690,10 +37981,13 @@ async function viewSession(main, host, sid, context = null) {
 			}
 		}
 	}, t("send"));
-	const stop = h("button", {
-		class: "danger",
+	const stop = button({
+		variant: "danger",
+		size: "sm",
+		label: t("interrupt"),
 		disabled: true,
-		onclick: async () => {
+		hidden: true,
+		onClick: async () => {
 			try {
 				assertView(connection);
 				const op = await submit("session.interrupt", {
@@ -37706,7 +38000,7 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(errorBox(e));
 			}
 		}
-	}, t("interrupt"));
+	});
 	const shortcut = composerShortcut({
 		h,
 		t,
@@ -37715,14 +38009,18 @@ async function viewSession(main, host, sid, context = null) {
 		storageKey: `batc.composer-shortcut.${connection.namespace}`,
 		guard: () => assertView(connection)
 	});
+	const sendReason = h("p", {
+		class: "muted session-send-reason",
+		hidden: true
+	});
 	const composer = h("div", {
 		hidden: true,
 		id: "workspace-message-input"
-	}, box, h("div", { class: "actions" }, send, stop, h("label", { class: "muted" }, queue, " ", t("queue_behind"))), shortcut.box);
+	}, box, h("div", { class: "actions" }, send, h("label", { class: "muted" }, queue, " ", t("queue_behind"))), shortcut.box);
 	const readonly = h("p", { class: "note" }, t("session_access_unknown"));
-	let capture, permissions, batHandoff;
-	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div");
-	const controls = h("div", { class: "panel workspace-composer" }, pending, readonly, composer, status);
+	let capture, permissions, batHandoff, sourcesPanel;
+	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
+	const controls = h("div", { class: "panel workspace-composer" }, pending, readonly, sendReason, composer, status);
 	const labels = sessionLabelsPanel({
 		h,
 		t,
@@ -37752,10 +38050,84 @@ async function viewSession(main, host, sid, context = null) {
 	instructions?.box.addEventListener("toggle", () => {
 		if (instructions.box.open) instructions.refresh();
 	});
-	const inspector = h("details", {
-		class: "workspace-inspector",
-		open: true
-	}, h("summary", {}, t("workspace_work_details")), context?.itemBox, result, batSlot, h("details", { class: "workspace-evidence" }, h("summary", {}, t("sessions_details")), metadata), instructions?.box, labels.box, permissionsSlot, captureSlot, cps.box, observations.box);
+	const deliveryPills = h("div", { class: "session-delivery-pills" });
+	const sourcesBody = h("div", { "data-session-sources": "" }, emptyState({ title: t("session_sources_empty") }));
+	const details = disclosure({
+		label: t("session_details"),
+		body: metadata,
+		key: `session-details:${connection.namespace}:${host}:${sid}`
+	});
+	details.classList.add("workspace-evidence");
+	details.dataset.sessionDetails = "";
+	const results = inspector({
+		title: t("session_results"),
+		dock: true
+	});
+	const openResults = iconButton({
+		icon: "inbox",
+		label: t("session_results"),
+		onClick: () => results.open()
+	});
+	const wide = matchMedia("(min-width: 1200px)");
+	const syncWide = () => {
+		openResults.hidden = wide.matches;
+	};
+	syncWide();
+	wide.addEventListener("change", syncWide);
+	const overflow = menu({
+		button: iconButton({
+			icon: "more-horizontal",
+			label: t("ui_more")
+		}),
+		items: [{
+			key: "discuss",
+			label: t("session_discuss"),
+			href: "#",
+			icon: "message-square"
+		}]
+	});
+	const header = pageHeader({
+		title: titleNode,
+		mark: markSlot,
+		pill: pillSlot,
+		meta,
+		actions: [stop, openResults],
+		overflow
+	});
+	head.append(backSlot, header);
+	results.body.append(...[
+		context?.itemBox,
+		sectionCard({
+			title: [
+				icon("folder"),
+				" ",
+				t("session_changes")
+			],
+			body: h("div", {}, captureSlot, cps.box, artifactSlot)
+		}),
+		sectionCard({
+			title: [
+				icon("check"),
+				" ",
+				t("session_delivery")
+			],
+			body: result
+		}),
+		sectionCard({
+			title: [
+				icon("inbox"),
+				" ",
+				t("session_sources")
+			],
+			body: sourcesBody
+		}),
+		batSlot,
+		permissionsSlot,
+		labels.box,
+		instructions?.box,
+		observations.box,
+		details
+	].filter(Boolean));
 	const lane = h("section", {
 		class: "workspace-conversation",
 		"aria-label": t("messages")
@@ -37768,7 +38140,88 @@ async function viewSession(main, host, sid, context = null) {
 		guard: () => assertView(connection)
 	});
 	if (context?.picker) main.append(context.picker);
-	main.append(head, h("div", { class: "workspace-session" }, lane, inspector));
+	main.append(head, h("div", {
+		class: "workspace-session session-workspace",
+		"data-session-view": ""
+	}, lane, results));
+	const paintOrigin = () => {
+		const view = originView(), workspaceId = lastWorkspace(connection.namespace);
+		backSlot.replaceChildren();
+		if (!view || !workspaceId) {
+			backSlot.hidden = true;
+			return;
+		}
+		backSlot.hidden = false;
+		backSlot.append(h("a", {
+			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
+			"data-session-back": view
+		}, t("session_back", { view: t("ui_" + view) })));
+	};
+	const paintDiscuss = (items) => {
+		const link = overflow.querySelector("[data-menu-key=discuss]");
+		const workspaceId = lastWorkspace(connection.namespace);
+		if (!link) return;
+		if (!workspaceId) {
+			link.hidden = true;
+			link.setAttribute("aria-disabled", "true");
+			return;
+		}
+		const refs = (items || []).map((item) => ({
+			kind: "work_item",
+			id: item.work_item_id
+		})).filter(isContextRef);
+		link.hidden = false;
+		link.removeAttribute("aria-disabled");
+		link.setAttribute("href", discussHref({
+			workspaceId,
+			refs,
+			title: row?.title || sid,
+			from: originView()
+		}));
+	};
+	let deliveryTicket = 0;
+	const loadDelivery = async (items) => {
+		const ticket = ++deliveryTicket;
+		deliveryPills.replaceChildren();
+		const workspaceId = lastWorkspace(connection.namespace);
+		const linked = (items || []).filter((item) => isContextRef({
+			kind: "work_item",
+			id: item.work_item_id
+		}));
+		if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && linked[0]) {
+			sourcesPanel = resultSourcesPanel({
+				h,
+				t,
+				api,
+				guard: () => assertView(connection),
+				workItemId: linked[0].work_item_id,
+				linkTarget,
+				onEvents,
+				errorBox
+			});
+			sourcesBody.replaceChildren(sourcesPanel.box);
+		}
+		if (!workspaceId || !linked.length) return;
+		for (const item of linked) try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(item.work_item_id)}/deliveries?limit=20`);
+			assertView(connection);
+			if (ticket !== deliveryTicket) return;
+			for (const receipt of data.deliveries || []) {
+				const pull = receipt.target?.pull_number;
+				const bits = [];
+				if (pull && receipt.target?.repository) bits.push(h("a", {
+					href: `https://github.com/${receipt.target.repository}/pull/${pull}`,
+					target: "_blank",
+					rel: "noopener"
+				}, `PR #${pull}`));
+				if (receipt.merge?.merged === true) bits.push(statusPill("merged"));
+				if (receipt.deployment?.verified === true && receipt.deployment?.is_current === true) bits.push(statusPill("deployed"));
+				if (bits.length) deliveryPills.append(h("div", { class: "session-delivery-row" }, ...bits));
+			}
+		} catch {
+			if (ticket !== deliveryTicket) return;
+		}
+	};
 	const renderPending = () => {
 		const pend = row.api_access === "managed" ? row.pending : null;
 		const current = identity(pend);
@@ -37803,7 +38256,7 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(errorBox(e));
 			}
 		};
-		const card = h("div", { class: "panel" }, h("div", { class: "title" }, t("pending_" + pend.kind)));
+		const card = h("div", { class: "panel session-asking" }, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
 		if (pend.kind === "permission") card.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "msg" }, pend.input_preview || ""), h("div", { class: "actions" }, h("button", {
 			class: "primary",
 			"data-answer-action": "",
@@ -37855,7 +38308,17 @@ async function viewSession(main, host, sid, context = null) {
 		permissions?.update();
 		send.disabled = !allowed("session.send") || sending;
 		stop.disabled = !allowed("session.interrupt");
-		for (const button of pending.querySelectorAll("[data-answer-action]")) button.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
+		stop.hidden = row?.api_access !== "managed";
+		let reason = "";
+		if (row?.api_access === "managed" && send.disabled && !sending) {
+			if (!readReady) reason = t("session_send_waiting");
+			else if (!may("operate")) reason = t("session_send_scope");
+			else if (state.caps?.hosts?.find((item) => item.host === host)?.writes === false) reason = t("session_send_host");
+			else if (state.caps?.actions?.find((item) => item.action === "session.send")?.allowed === false) reason = t("session_send_denied");
+		}
+		sendReason.hidden = !reason;
+		sendReason.textContent = reason;
+		for (const control of pending.querySelectorAll("[data-answer-action]")) control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
 	};
 	const applyObservation = (data) => {
 		const first = !row;
@@ -37873,20 +38336,22 @@ async function viewSession(main, host, sid, context = null) {
 			...data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : []
 		]);
 		if (first) queue.checked = Boolean(row.streaming);
-		const activity = sessionActivity(row);
-		head.replaceChildren(h("div", {}, context?.project ? h("a", {
-			class: "muted",
-			href: `#/project/${encodeURIComponent(context.project.project_id)}`
-		}, context.project.name) : null, pageHeader({ title: row.title || sid })), h("div", { class: "workspace-session-meta" }, chip(t(activity.key), activity.tone), h("span", { class: "muted" }, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("a", {
-			class: "muted",
-			href: `#/host/${encodeURIComponent(host)}`
-		}, row.host), chip(t(row.api_access === "managed" ? "managed" : "read_only"), row.api_access === "managed" ? "managed" : "readonly")));
+		titleNode.textContent = row.title || sid;
+		markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
+		pillSlot.replaceChildren(statusPill(sessionStatus(row)));
+		const metaParts = [];
+		if (context?.project?.name) metaParts.push(h("a", { href: `#/project/${encodeURIComponent(context.project.project_id)}` }, context.project.name));
+		else if (row.workspace) metaParts.push(h("span", {}, row.workspace));
+		metaParts.push(h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host || host));
+		if (row.observed_at) metaParts.push(h("time", {}, when(typeof row.observed_at === "number" ? new Date(row.observed_at * 1e3).toISOString() : row.observed_at)));
+		meta.replaceChildren(...metaParts);
+		paintOrigin();
 		mobileLayout?.updateInfo();
 		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"
-		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, observationTime(row.observed_at))), observationState(row), confinementDetails(row));
+		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, observationTime(row.observed_at), row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
 		if (!batHandoff) batHandoff = sessionBatPanel({
 			h,
 			t,
@@ -37903,7 +38368,9 @@ async function viewSession(main, host, sid, context = null) {
 		if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
 		if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
 		const managed = row.api_access === "managed";
-		if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) metadata.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
+		artifactSlot.replaceChildren();
+		if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) artifactSlot.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
+		paintDiscuss(data.work_items);
 		if (managed && row.provenance === "connector_managed") {
 			const links = [];
 			if (state.caps?.actions?.some((a) => a.action === "session.relay")) links.push(h("a", { href: `#/orchestrate/relay/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("orch_relay")));
@@ -37959,7 +38426,9 @@ async function viewSession(main, host, sid, context = null) {
 			assertView(connection);
 			work = (detail.worktree?.work || []).filter((item) => item.host === host && item.session_id === sid);
 		}
-		fill(result, h("h2", {}, t("workspace_result")), ...work.map((item) => deliveryWork(item, repositories, true)), !work.length ? h("p", { class: "muted" }, t("workspace_result_empty")) : null, data.work_items?.length ? linkedItems(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		fill(result, deliveryPills, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? linkedItems(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		await loadDelivery(data.work_items);
+		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", { class: "muted" }, t("workspace_result_empty")));
 	};
 	const loadMessages = async (offset = messageOffset, latest = false) => {
 		if (offset == null) return;
@@ -38054,6 +38523,10 @@ async function viewSession(main, host, sid, context = null) {
 		conversation.dispose();
 		mobileLayout?.dispose();
 		shortcut.dispose();
+		results.dispose();
+		overflow.dispose();
+		sourcesPanel?.dispose();
+		wide.removeEventListener("change", syncWide);
 	};
 }
 function checkpointPanel(host, sid) {
@@ -41388,6 +41861,21 @@ var workspaceNav = null;
 var workspaceIdentity = "";
 var workspaceSidebar = null;
 var shell = null;
+var PROJECT_VIEWS = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+var lastAppRoute = {
+	name: "",
+	view: ""
+};
+var sessionFromMemory = "";
 function mountWorkspace(name) {
 	const identity = state.token ? `${state.epoch}:${state.namespace}` : "";
 	if (workspaceIdentity !== identity) {
@@ -41456,7 +41944,15 @@ async function route() {
 			nextWorkspace = lastWorkspace(state.namespace);
 			history.replaceState(null, "", `#/pm/${encodeURIComponent(nextWorkspace)}`);
 		}
-		if (teardown?.navigate?.(nextWorkspace, nextThread, nextView || lastProjectView(state.namespace, nextWorkspace))) return;
+		if (teardown?.navigate?.(nextWorkspace, nextThread, nextView || lastProjectView(state.namespace, nextWorkspace))) {
+			const explicit = nextView === "discussions" || String(nextView || "").startsWith("pmt_") ? "discussions" : nextView;
+			const remembered = PROJECT_VIEWS.has(explicit) ? explicit : lastProjectView(state.namespace, nextWorkspace);
+			lastAppRoute = {
+				name: "pm",
+				view: PROJECT_VIEWS.has(remembered) ? remembered : "overview"
+			};
+			return;
+		}
 	}
 	const mine = ++generation;
 	state.viewReady = false;
@@ -41467,6 +41963,23 @@ async function route() {
 	freshPage();
 	let [name, ...rest] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (name === "home" && state.token && state.caps?.managed_installation && !state.caps.hosts?.length) name = "settings";
+	if (lastAppRoute.name === "pm" && [
+		"session",
+		"item",
+		"work"
+	].includes(name) && PROJECT_VIEWS.has(lastAppRoute.view)) sessionFromMemory = lastAppRoute.view;
+	if (name === "pm") sessionFromMemory = "";
+	if (name === "pm") {
+		const explicit = rest[1] === "discussions" || String(rest[1] || "").startsWith("pmt_") ? "discussions" : rest[1];
+		const remembered = PROJECT_VIEWS.has(explicit) ? explicit : lastProjectView(state.namespace, rest[0]);
+		lastAppRoute = {
+			name,
+			view: PROJECT_VIEWS.has(remembered) ? remembered : "overview"
+		};
+	} else lastAppRoute = {
+		name,
+		view: lastAppRoute.view
+	};
 	mountWorkspace(name);
 	paintConnection(true);
 	const main = document.getElementById("main");

@@ -136,6 +136,9 @@ test('navigation while launch reply held preserves original for later readback',
 });
 for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`session handoff ${locale} ${width}`,async({browser})=>{
  const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();await setup(page);
+ await expect(page.locator('[data-session-view]')).toBeVisible();
+ const opener=page.getByRole('button',{name:/^(Results|成果)$/,exact:true});
+ if(await opener.isVisible())await opener.click();
  const open=page.locator('.session-bat .actions button').nth(2);await open.click();
  const picker=page.locator('.session-bat select');await expect(picker).toBeEnabled();await picker.selectOption('profile-1');
  await page.locator('.session-bat').getByRole('button',{name:locale==='zh-TW'?'預覽所選 profile':'Review selected profile',exact:true}).click();

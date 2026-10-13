@@ -49,7 +49,7 @@ for (const native of [false,true]) {
     expect(await page.evaluate(()=>String(window.getSelection()))).toBe(selected);
     await expect(row.getByRole('button',{name:'Copy original'})).toBeFocused(); await expect(draft).toHaveValue('Keep this draft');
     await page.evaluate(()=>window.getSelection()?.removeAllRanges());
-    await page.getByRole('button',{name:'Back to latest',exact:true}).click();
+    await page.getByRole('button',{name:'New messages',exact:true}).click();
     await expect.poll(()=>bottom(page)).toBeLessThanOrEqual(1);
     data.messages.at(-1)!.text += '\nMore streamed content.'.repeat(20); data.cursor++;
     await expect.poll(()=>saved(page)).toEqual(checkpoint(2)); await expect.poll(()=>bottom(page)).toBeLessThanOrEqual(1);
@@ -78,7 +78,7 @@ for (const native of [false,true]) {
     data.messages.at(-1)!.text+='\nnew output'; release();
     await expect.poll(()=>saved(page)).toEqual(checkpoint(1));
     expect(await page.locator('.conversation-scroll').evaluate(el=>el.scrollTop)).toBe(100);
-    await expect(page.getByRole('button',{name:'Back to latest',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'New messages',exact:true})).toBeVisible();
   });
   test(`messages without IDs preserve duplicate rows and a retained anchor when older rows leave (${platform})`, async ({page}) => {
     const {data,dispatch}=conversationFixture();

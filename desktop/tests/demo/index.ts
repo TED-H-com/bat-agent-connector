@@ -8,7 +8,8 @@ import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
-import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
+import {bootstrap, capabilities, projectDetail, projectList, workItems, workspaceRecord} from './sessions.ts';
+import {sessionWorkspace} from './session-workspace.ts';
 
 export interface DemoRequest {
   method?: string;
@@ -101,18 +102,22 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
 
 export function demoFixture({locale, now}: {locale?: string, now?: number} = {}) {
   const project = demoProject(locale, now);
+  const sessions = sessionWorkspace(project);
   const root = `/pm/workspaces/${project.ids.workspaceId}`;
   const dispatch = async (input: DemoRequest) => {
     const method = input.method || 'GET';
     const url = new URL(input.path, 'http://fixture');
     const path = url.pathname;
+    if (path === '/browser-session') return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'no such route'}}};
+    const action = input.body && typeof input.body === 'object' && 'action' in input.body ? String((input.body as {action?: unknown}).action || '') : '';
+    if (method === 'POST' && path === '/operations' && ['session.send', 'session.answer', 'session.interrupt'].includes(action))
+      return sessions.operate(input);
     if (method !== 'GET') throw new Error(`Demo fixture does not perform ${method} ${input.path}`);
     // Web boot probes a managed browser session. This demo uses the bearer token, so the
     // central answer is the ordinary missing-route 404 (no csrf, no managed session).
-    if (path === '/browser-session') return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'no such route'}}};
     if (path === '/capabilities') return ok(capabilities(project));
     if (path === '/bootstrap') return ok(bootstrap(project));
-    if (path === '/events') return ok(events(url));
+    if (path === '/events') return ok(sessions.events(url));
     if (path === '/projects') return ok(projectList(project));
     if (path === `/projects/${project.ids.projectId}`) return ok(projectDetail(project));
     if (path.startsWith('/projects/')) return notFound();
@@ -124,18 +129,19 @@ export function demoFixture({locale, now}: {locale?: string, now?: number} = {})
     if (path === '/work-items') return ok(workItems(project, url));
     const messages = path.match(/^\/sessions\/([^/]+)\/([^/]+)\/messages$/);
     if (messages) {
-      const page = sessionMessages(project, segment(messages[1]), segment(messages[2]));
+      const page = sessions.messages(segment(messages[1]), segment(messages[2]));
       return page ? ok(page) : notFound();
     }
     const session = path.match(/^\/sessions\/([^/]+)\/([^/]+)$/);
     if (session) {
-      const page = sessionGet(project, segment(session[1]), segment(session[2]));
+      const page = sessions.document(segment(session[1]), segment(session[2]));
       return page ? ok(page) : notFound();
     }
     if (path === '/checkpoints') return ok({checkpoints: []});
     throw new Error(`Unknown demo fixture route ${method} ${input.path}`);
   };
-  return {dispatch, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates};
+  return {dispatch, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates,
+    appendSession: sessions.append};
 }
 
 // Workbench view names are in-memory. They are not URL selections, so charter/rtm/board/agents

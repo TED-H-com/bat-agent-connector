@@ -200,3 +200,24 @@ background reads; the toolbar can pause view updates without stopping collection
 When the resources projection includes `buckets`, the usage trend is one stacked bar
 per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
 Omit the chart when the projection has no buckets.
+
+## Session workspace
+
+Opened from Work or a project tree. The page header shows the session title and agent
+mark, one status pill, and one meta line (project, host, observed time). Send stays
+the only primary action, in the composer. Interrupt is a danger button. Discuss and
+other rare actions sit in the overflow menu. A manual or unconfirmed session shows
+Read-only and has no send, answer, or interrupt control.
+
+The conversation uses the same message rhythm as Discussions: mark, name, time, and
+a 15px measure of at most 760px. Tool and system events stay one-line disclosures.
+New messages while the reader is scrolled up show a jump control and do not move
+the visible row. Approval prompts sit above the composer and keep their original
+operation keys.
+
+Results stay in the docked inspector at 1200px and wider, and in a drawer or sheet
+below that. Sections are Changes, Delivery, and Result sources. Delivery pills come
+only from saved receipts. Identifiers and raw timestamps stay in Details. From a
+project view, the shell breadcrumb is Workspace / Work / Session and the page offers
+Back to that view. Discuss uses the shared discussion link, binding only exact work
+item refs.
