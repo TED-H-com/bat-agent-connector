@@ -372,10 +372,15 @@ than an inferred package assembled from a selected row.
 Schedule uses the central `pm_schedule` projection. Day / Week / Month zoom, Today,
 and a shared legend sit above a sticky tree and time axis. The tree follows explicit
 `parent_id` relationships; there are no phase rows. Undated ancestors retain the tree
-structure, and the Unscheduled disclosure includes every loaded undated item.
+structure. Unscheduled lists only loaded rows that are not already in that tree, and
+the disclosure is omitted when none remain. Requirement rows do not show a status pill.
 Baseline is dashed, forecast outlined with a solid stroke, and actual filled. An actual
-without end evidence has a short fading marker labelled Open, never a finish at today.
-Only a `blocked` status produces hatching. Milestone delta compares recorded dates.
+the projection marks open has a short fading marker labelled Open, never a finish at
+today. A terminal attempt with no recorded end says End time not recorded and is not
+drawn as open. Waiting and blocked stay visible on an open bar. Only a `blocked`
+status produces hatching. Milestone delta compares recorded dates. Recorded baseline,
+forecast and actual dates stay visible in the inspector. Day labels are spaced so they
+do not collide, and the Today mark sits under the axis text.
 
 Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
 range uses all loaded rows; any partial/truncated page keeps a Partial pill and a
@@ -387,11 +392,16 @@ The inspector keeps the Requirements section order and a narrow
 `pm-schedule-inspector.render(row, context)` interface for shared-inspector integration.
 Session attempts have no dates or bars; their read-only session links and attempts
 remain available in the inspector and Unscheduled. Propose change uses `discussHref`
-with the exact context identity. Missing result and delivery evidence stays unavailable.
-Roadmap and Sprints keep their original durable forms in the header overflow drawer.
-Zoom, selection, expansion and scroll preferences are bounded and connection/workspace
-keyed. Below 800px, rows become a list with date ranges and independently scrolling
-mini timelines; the document never scrolls horizontally.
+with the exact context identity and a title of Change: {first line}. A milestone ref
+is sent only with the baseline revision that milestone belongs to. Missing result and
+delivery evidence stays unavailable. Roadmap and Sprints keep their original durable
+forms in the header overflow drawer. A live refresh does not open the schedule
+inspector beside that drawer. Zoom, selection, expansion and scroll preferences are
+bounded and connection/workspace keyed. A hidden Schedule does not fetch until the
+view is active; live updates keep focus in Unscheduled and Details. A response that
+exceeds the size limit says so. The schedule region does not nest a second vertical
+scroller. Below 800px, rows become a list with date ranges and one shared horizontal
+origin, so bars and the Today line line up; the document never scrolls horizontally.
 
 ## Dependencies
 

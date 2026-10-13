@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Schedule shows "End time not recorded" for a terminal attempt with no end time,
+  and "Open" only when the projection marks the span open. Unscheduled omits rows
+  already in the tree. The tree keeps one tab stop. A hidden Schedule does not fetch.
+  Day labels and the Today mark do not collide, and narrow layouts share one timeline
+  origin.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
