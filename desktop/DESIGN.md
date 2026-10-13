@@ -65,6 +65,10 @@ plan identity remain distinct. Report sources and full plan text expand on deman
 RTM uses an expandable table with a work inspector; source IDs wrap below titles.
 Keep requirement order, expanded rows and filters stable during source refreshes.
 Remove withdrawn source facts from rows, counts and the inspector together.
+Composed labels drop a missing segment. A Brief section without a recorded status
+says Unknown, and an issue link uses the repository name on the mapping or, when
+that field is absent, the name copied onto the published issue. It never prints
+a missing value as text.
 
 Agent resources uses the same compact navigation, table and inspector. Separate
 source-reported models from requested model context, and observed tokens from current
