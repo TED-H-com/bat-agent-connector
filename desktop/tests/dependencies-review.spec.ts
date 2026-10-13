@@ -278,3 +278,71 @@ test('M2: relation form labels source and declaration with a single primary acti
   await expect(retract.locator('button[type=submit]')).toHaveClass(/secondary/);
   await expect(page.locator('[data-dep-record] button.primary[type=submit]')).toHaveCount(1);
 });
+
+for (const filter of ['relation', 'evidence', 'search']) test(`BLOCKER-6: graph filters cross-repository nodes by ${filter}`, async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page);
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  await expect(page.locator(`[data-dep-node="c:${ids.billing}"]`)).toBeVisible();
+  if (filter === 'relation') for (const relation of ['runtime', 'build', 'contract', 'reference']) await page.locator(`[data-dep-relation=${relation}]`).click();
+  if (filter === 'evidence') await page.locator('[data-dep-evidence=declared]').click();
+  if (filter === 'search') await page.locator('[data-dep-view]').getByRole('searchbox').fill('pytest');
+  await expect(page.locator(`[data-dep-node="c:${ids.billing}"]`)).toHaveCount(0);
+  await expect(page.locator('[data-dep-graph] path.dep-rel-contract')).toHaveCount(0);
+  await expect(page.locator(`[data-dep-node="d:${ids.keys.pytest}"]`)).toBeVisible();
+});
+
+function largeDocument(doc: Document) {
+  doc.components = Array.from({length: 520}, (_, index) => ({...doc.components[index % 2], component_id: `pmcomp_${(100 + index).toString(16).padStart(32, '0')}`, name: `service-${String(index + 1).padStart(3, '0')}`}));
+  const samples = doc.edges;
+  doc.edges = doc.components.map((row, index) => ({...samples[index % samples.length], component_id: row.component_id, edge_id: `pmde_${(100 + index).toString(16).padStart(32, '0')}`}));
+  for (let index = 10; index < 25; index++) {
+    const key = `pmdepkey_${index.toString(16).padStart(32, '0')}`;
+    doc.dependencies.runtime_library.push({key, name: `pkg-${index}`, ecosystem: 'python', kinds: ['runtime_library']});
+    doc.edges.push({...samples[1], dependency_key: key, component_id: doc.components[0].component_id});
+  }
+  doc.declared = []; doc.cross_repository_edges = []; doc.external_components = [];
+  doc.counts = {...doc.counts, components: 520, dependencies: 22, edges: doc.edges.length, declared: 0};
+  return doc;
+}
+
+test('SF-2: matrix column cap keeps every shown component represented', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page, {projection: largeDocument});
+  await expect(page.locator('[data-dep-matrix] tbody tr')).toHaveCount(12);
+  await expect(page.locator('[data-dep-matrix] thead button')).toHaveCount(12);
+  const represented = await page.locator('[data-dep-matrix] tbody tr').evaluateAll(rows => rows.every(row => row.querySelector('[data-dep-cell]')));
+  expect(represented).toBe(true);
+  await expect(page.locator('[data-dep-coverage]')).toContainText('12 of 520 loaded components shown');
+  await expect(page.locator('[data-dep-coverage]')).toContainText('12 of 22 loaded dependencies shown');
+  await expect(page.locator('[data-dep-show-all]')).toHaveText('All columns (22)');
+  await page.locator('[data-dep-show-all]').click();
+  await expect(page.locator('[data-dep-matrix] thead button')).toHaveCount(22);
+  await expect(page.locator('[data-dep-list] .dep-group')).toHaveCount(0);
+});
+
+for (const width of [1440, 390]) test(`SF-2: bounded graph and list expose loaded limits at ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  await mount(page, {projection: largeDocument});
+  if (width === 390) {
+    await expect(page.locator('[data-dep-list] .dep-group')).toHaveCount(12);
+    await expect(page.locator('[data-dep-show-rows]')).toBeVisible();
+    await expect(page.locator('[data-dep-coverage]')).toContainText('12 of 520 loaded components shown');
+  }
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  expect(await page.locator('[data-dep-node]').count()).toBeLessThanOrEqual(60);
+  expect(Number(await page.locator('[data-dep-graph] svg').getAttribute('height'))).toBeLessThan(3500);
+  await expect(page.locator('[data-dep-coverage]')).toContainText('of 542 loaded nodes shown');
+  await expect(page.locator('[data-dep-coverage]')).toContainText('Search or filter to narrow');
+  await expect(page.locator('[data-dep-legend]')).toBeVisible();
+  await expect(page.locator('[data-dep-show-rows]')).toBeVisible();
+});
+
+test('SF-7: graph shows relation and evidence legend', async ({page}) => {
+  await mount(page);
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  await expect(page.locator('[data-dep-legend]')).toBeVisible();
+  await expect(page.locator('[data-dep-legend]')).toContainText('Contract');
+  await expect(page.locator('[data-dep-legend]')).toContainText('Outline declared');
+  await expect(page.locator('[data-dep-legend]')).toContainText('Dashed inferred');
+});

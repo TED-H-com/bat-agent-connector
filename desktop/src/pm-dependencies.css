@@ -73,7 +73,7 @@
 .dep-capture-hint { margin: 0; max-width: 16rem; color: var(--text-3); font-size: 12px; line-height: 1.3; }
 .dep-view form[data-pm-action="pm.dependencies.capture"]:not(:has([role=status]:not(:empty), .pm-receipt:not(:empty))) { display: none; }
 @media (max-width: 800px) {
-  .dep-matrix-scroll, .dep-show-all, .dep-show-rows, .dep-legend { display: none; }
+  .dep-matrix-scroll, .dep-show-all { display: none; }
   .dep-list { display: block; }
   .dep-pick { min-height: 44px; }
   .dep-search { height: 44px; flex-basis: 100%; width: auto; }

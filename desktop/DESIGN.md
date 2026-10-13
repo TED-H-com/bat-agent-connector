@@ -416,17 +416,17 @@ they are omitted without a capture or a count object. An uncaptured workspace ha
 no Partial pill or freshness claim. Details includes parser/catalog reasons, omitted
 collections, cross-repository selection gaps and unreadable parent paths.
 
-The matrix lists every captured component. More than twelve rows start with the first
-twelve and Show all (M). Columns group dependencies by kind. A capture of twelve
-columns or fewer shows every dependency, so a second component is not an empty row.
-More than twelve columns start as the focused component's direct dependencies, with
-Show transitive. A cell mark is
-R, B, T, C, or Ref. A legend above the matrix names those marks and the evidence styles:
-solid verified, outline declared, dashed inferred. The accessible name is the dependency,
-relation, version, and evidence. At 800px and below the same rows become a list. The graph
-uses the width of the view and centres a drawing that is narrower than that width. It is
-labelled Loaded and is not a fleet-wide graph. Selecting a node keeps its upstream and
-downstream visible.
+Matrix and narrow list start with twelve loaded components. Show all (M) expands
+those rows. Matrix columns group by kind and start with at most twelve dependencies,
+covering each shown component before filling the budget; All columns (N) reveals the
+rest. These controls describe direct columns, not transitive impact. View limits say
+how many of the loaded components/dependencies are shown and offer search/filtering.
+Hidden desktop lists are not populated. Graph uses the same relation, evidence and
+search predicates for local and cross-repository links; external nodes appear only
+with matching links. It starts with the same row prefix and always caps drawing at
+sixty nodes, retaining the focused key where present. Its limit describes shown nodes
+out of matching loaded nodes, never a complete graph total. Relation/evidence legends
+are visible in both matrix and graph. Selecting a node keeps upstream/downstream visible.
 
 The inspector shows a pinned version only when this capture resolved one, plus the
 allowed range, the evidence location, and the maintenance owner or the recorded reason.

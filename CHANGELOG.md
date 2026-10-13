@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Apply Dependencies graph filters to cross-repository links and bound large matrix,
+  graph and narrow list views with explicit shown-versus-loaded counts and legends.
+
 - Clear Dependencies form options and hide source surfaces on failed reads, while
   retaining drafts and original operation keys. Refresh open impact inspectors and
   restore inferred relation drafts in both languages.

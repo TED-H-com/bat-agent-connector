@@ -2990,8 +2990,12 @@ var dependencyStrings = {
 		dep_inferred: "Inferred",
 		dep_filter_relation: "Relation",
 		dep_filter_evidence: "Evidence",
-		dep_show_transitive: "Show transitive",
-		dep_show_direct: "Direct only",
+		dep_all_columns: "All columns ({n})",
+		dep_fewer_columns: "Fewer columns",
+		dep_components_shown: "{shown} of {loaded} loaded components shown",
+		dep_dependencies_shown: "{shown} of {loaded} loaded dependencies shown",
+		dep_nodes_shown: "{shown} of {loaded} loaded nodes shown",
+		dep_narrow: "Search or filter to narrow",
 		dep_show_all_rows: "Show all ({n})",
 		dep_show_fewer: "Show fewer",
 		dep_legend_verified: "Solid verified",
@@ -3088,8 +3092,12 @@ var dependencyStrings = {
 		dep_inferred: "推測",
 		dep_filter_relation: "關係",
 		dep_filter_evidence: "證據",
-		dep_show_transitive: "顯示間接相依",
-		dep_show_direct: "只顯示直接",
+		dep_all_columns: "全部欄位（{n}）",
+		dep_fewer_columns: "精簡欄位",
+		dep_components_shown: "顯示已載入的 {loaded} 個元件中的 {shown} 個",
+		dep_dependencies_shown: "顯示已載入的 {loaded} 個相依中的 {shown} 個",
+		dep_nodes_shown: "顯示已載入的 {loaded} 個節點中的 {shown} 個",
+		dep_narrow: "可用搜尋或篩選縮小範圍",
 		dep_show_all_rows: "顯示全部（{n}）",
 		dep_show_fewer: "少顯示一些",
 		dep_legend_verified: "實線為已核對",
@@ -16034,6 +16042,29 @@ function workspaceOverview(options) {
 }
 //#endregion
 //#region src/pm-dependencies-layout.js
+function limitColumns(rows, columns, edges, limit) {
+	const picked = new Set();
+	for (const row of rows) {
+		const key = columns.find((key) => edges.some((edge) => edge.component_id === row.component_id && edge.dependency_key === key));
+		if (key && picked.size < limit) picked.add(key);
+	}
+	for (const key of columns) {
+		if (picked.size >= limit) break;
+		picked.add(key);
+	}
+	return columns.filter((key) => picked.has(key));
+}
+function boundGraph(nodes, links, { limit = 60, required = [] } = {}) {
+	const ids = new Set(required.filter((id) => nodes.some((node) => node.id === id)).slice(0, limit));
+	for (const node of nodes) {
+		if (ids.size >= limit) break;
+		ids.add(node.id);
+	}
+	return {
+		nodes: nodes.filter((node) => ids.has(node.id)),
+		links: links.filter((link) => ids.has(link.from) && ids.has(link.to))
+	};
+}
 function layoutGraph(nodes, links) {
 	const ids = [];
 	const seen = new Set();
@@ -16212,7 +16243,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	let selection = preference.selection && typeof preference.selection === "object" ? preference.selection : null;
 	let focusId = typeof preference.focus === "string" ? preference.focus : "";
 	let zoom = Number.isFinite(preference.zoom) ? Math.min(1.8, Math.max(.6, preference.zoom)) : 1;
-	let panel = null;
+	let panel = null, graphRows = [];
 	const levelText = (level) => EVIDENCE.includes(level) ? t("dep_" + level) : reasonText(t, level);
 	const remember = () => Object.assign(preference, {
 		mode,
@@ -16275,9 +16306,19 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		});
 		return rows;
 	}
-	function filteredEdges() {
+	function matchesFilters(edge) {
 		const query = search.value.trim().toLocaleLowerCase();
-		return allEdges().filter((edge) => relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || componentName(edge.component_id).toLocaleLowerCase().includes(query) || dependencyName(edge.dependency_key).toLocaleLowerCase().includes(query)));
+		return relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || [
+			componentName(edge.component_id),
+			dependencyName(edge.dependency_key),
+			componentName(edge.target_component_id)
+		].some((name) => name.toLocaleLowerCase().includes(query)));
+	}
+	function filteredEdges() {
+		return allEdges().filter(matchesFilters);
+	}
+	function filteredCrossEdges() {
+		return (data?.cross_repository_edges || []).filter(matchesFilters);
 	}
 	const selectedKey = () => selection?.type === "dependency" || selection?.type === "edge" ? selection.dependencyKey : "";
 	const selectionEdges = () => allEdges().filter((edge) => selection?.type === "component" ? edge.component_id === selection.componentId : selection?.type === "edge" ? edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey : edge.dependency_key === selection?.dependencyKey);
@@ -16332,7 +16373,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		};
 	}
 	const showAllButton = button({
-		label: t("dep_show_transitive"),
+		label: t("dep_all_columns", { n: 0 }),
 		"data-dep-show-all": ""
 	});
 	showAllButton.classList.add("dep-show-all");
@@ -16369,6 +16410,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	});
 	const filterGroup = (name, chips) => h("div", { class: "dep-filter" }, h("span", { class: "dep-filter-label" }, t(name)), h("div", { class: "dep-chips" }, ...chips.map((chip) => chip.node)));
 	const toolbar = h("div", { class: "dep-toolbar" }, modeSwitch, h("div", { class: "dep-filters" }, filterGroup("dep_filter_relation", relationChips), filterGroup("dep_filter_evidence", evidenceChips)), searchWrap, showAllButton, showRowsButton);
+	const coverage = h("p", {
+		class: "dep-note",
+		"data-dep-coverage": "",
+		hidden: true
+	});
 	const statusBox = h("div", { role: "status" });
 	const matrixScroll = h("div", {
 		class: "dep-matrix-scroll",
@@ -16384,7 +16430,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"data-dep-legend": "",
 		hidden: true
 	});
-	const matrixHost = h("div", { "data-dep-matrix-host": "" }, legend, matrixScroll, listHost);
+	const matrixHost = h("div", { "data-dep-matrix-host": "" }, matrixScroll, listHost);
 	const graphScroll = h("div", {
 		class: "dep-graph-scroll",
 		"data-dep-graph": ""
@@ -16675,7 +16721,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	const element = h("section", {
 		class: "dep-view",
 		"data-dep-view": ""
-	}, toolbar, statusBox, captureForm.box, matrixHost, graphHost, details, holder);
+	}, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 	function fillComponents() {
 		const value = componentSelect.value;
 		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
@@ -17033,18 +17079,21 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				name: dependencyName(edge.dependency_key) || edge.dependency_key
 			});
 		}
-		const visible = new Set([...nodes.keys()].map((id) => id.slice(2)));
 		const cross = [];
-		for (const link of data?.cross_repository_edges || []) {
-			if (!visible.has(link.component_id) && !visible.has(link.target_component_id)) continue;
-			const target = data.external_components?.find((row) => row.component_id === link.target_component_id) || data.components?.find((row) => row.component_id === link.target_component_id);
-			if (target) nodes.set("c:" + link.target_component_id, {
-				id: "c:" + link.target_component_id,
-				name: target.name || link.target_component_id
+		for (const link of filteredCrossEdges()) {
+			const source = componentName(link.component_id), target = componentName(link.target_component_id);
+			if (!source || !target) continue;
+			nodes.set("c:" + link.component_id, {
+				id: "c:" + link.component_id,
+				name: source
 			});
-			if (nodes.has("c:" + link.component_id) && nodes.has("c:" + link.target_component_id)) cross.push(link);
+			nodes.set("c:" + link.target_component_id, {
+				id: "c:" + link.target_component_id,
+				name: target
+			});
+			cross.push(link);
 		}
-		const links = [...edges.map((edge) => ({
+		const fullLinks = [...edges.map((edge) => ({
 			from: "d:" + edge.dependency_key,
 			to: "c:" + edge.component_id,
 			relation: edge.relation,
@@ -17055,6 +17104,22 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			relation: link.relation,
 			level: link.evidence_level
 		}))];
+		const rows = new Set(graphRows.map((row) => "c:" + row.component_id));
+		const rowLinks = fullLinks.filter((link) => rows.has(link.to));
+		const candidateIds = new Set(rowLinks.flatMap((link) => [link.from, link.to]));
+		const previous = document.activeElement?.getAttribute?.("data-dep-node");
+		const bounded = boundGraph([...nodes.values()].filter((node) => candidateIds.has(node.id)), rowLinks, { required: previous ? [previous] : [] });
+		const loadedNodes = nodes.size;
+		nodes.clear();
+		for (const node of bounded.nodes) nodes.set(node.id, node);
+		const links = bounded.links;
+		if (mode === "graph") {
+			coverage.hidden = nodes.size >= loadedNodes;
+			coverage.textContent = t("dep_nodes_shown", {
+				shown: nodes.size,
+				loaded: loadedNodes
+			}) + " · " + t("dep_narrow");
+		}
 		const layout = layoutGraph([...nodes.values()], links);
 		const placed = new Map(layout.positions.map((position) => [position.id, position]));
 		const width = Math.max(1, 40 + (layout.layers ? layout.layers * NODE_W + (layout.layers - 1) * GAP_X : 0));
@@ -17110,6 +17175,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			const mid = (x1 + x2) / 2;
 			const path = svg("path", {
 				d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`,
+				"data-dep-edge": "",
 				class: `dep-edge dep-rel-${link.relation}${link.level === "inferred" ? " evidence-inferred" : ""}`
 			});
 			path.dataset.depMark = markOf(link.from) === "dim" && markOf(link.to) === "dim" ? "dim" : "";
@@ -17178,24 +17244,34 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const names = new Map();
 		for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
 		showAllButton.hidden = mode !== "matrix" || names.size <= COLUMN_LIMIT;
-		showAllButton.textContent = t(showAll ? "dep_show_direct" : "dep_show_transitive");
-		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
-		showRowsButton.hidden = mode !== "matrix" || components.length <= ROW_LIMIT;
+		showAllButton.textContent = showAll ? t("dep_fewer_columns") : t("dep_all_columns", { n: names.size });
+		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id) || mode === "graph" && filteredCrossEdges().some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
+		showRowsButton.hidden = components.length <= ROW_LIMIT;
 		showRowsButton.textContent = showAllRows ? t("dep_show_fewer") : t("dep_show_all_rows", { n: components.length });
 		const visibleRows = !showAllRows && components.length > ROW_LIMIT ? components.slice(0, ROW_LIMIT) : components;
 		if (!focusId || !components.some((row) => row.component_id === focusId)) focusId = components[0]?.component_id || focusId;
-		let columns = [...names.keys()];
-		if (mode === "matrix" && !showAll && columns.length > COLUMN_LIMIT && focusId) {
-			const direct = new Set(edges.filter((edge) => edge.component_id === focusId).map((edge) => edge.dependency_key));
-			const limited = columns.filter((key) => direct.has(key));
-			if (limited.length) columns = limited;
-		}
-		const columnDeps = columns.map((key) => ({
+		graphRows = visibleRows;
+		let columnDeps = [...names.keys()].map((key) => ({
 			key,
 			...dependencyByKey().get(key) || { name: key }
 		}));
 		columnDeps.sort((a, b) => KINDS.findIndex((kind) => (a.kinds || []).includes(kind)) - KINDS.findIndex((kind) => (b.kinds || []).includes(kind)) || String(a.name).localeCompare(String(b.name)));
-		legend.hidden = mode !== "matrix" || !visibleRows.length;
+		if (!showAll && columnDeps.length > COLUMN_LIMIT) {
+			const kept = new Set(limitColumns(visibleRows, columnDeps.map((dep) => dep.key), edges, COLUMN_LIMIT));
+			columnDeps = columnDeps.filter((dep) => kept.has(dep.key));
+		}
+		const summaries = [];
+		if (visibleRows.length < components.length) summaries.push(t("dep_components_shown", {
+			shown: visibleRows.length,
+			loaded: components.length
+		}));
+		if (!narrow() && columnDeps.length < names.size) summaries.push(t("dep_dependencies_shown", {
+			shown: columnDeps.length,
+			loaded: names.size
+		}));
+		coverage.hidden = !data || !summaries.length;
+		coverage.textContent = [...summaries, t("dep_narrow")].join(" · ");
+		legend.hidden = mode === "matrix" && narrow() || !edges.length && !filteredCrossEdges().length;
 		if (!legend.hidden) paintLegend();
 		if (!data || !visibleRows.length) {
 			const reason = data?.reason === "not_captured" ? t("dep_not_captured") : data && data.capture?.status === "complete" && data.counts?.components === 0 ? t("dep_empty") : data?.reason ? reasonText(t, data.reason) : data ? t("dep_no_match") : "";
@@ -17293,7 +17369,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			matrixScroll.replaceChildren(h("table", { class: "dep-matrix" }, h("thead", {}, headKind, headName), body));
 			matrixScroll.scrollLeft = preference.matrixLeft || 0;
 			matrixScroll.scrollTop = preference.matrixTop || 0;
-			listHost.replaceChildren(...components.map((component) => {
+			listHost.replaceChildren(...(narrow() && mode === "matrix" ? visibleRows : []).map((component) => {
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
 				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
@@ -17471,6 +17547,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		syncChrome();
 		return refresh();
 	}
+	const media = matchMedia("(max-width: 800px)");
+	const onResize = () => render();
+	media.addEventListener("change", onResize);
 	render();
 	return {
 		element,
@@ -17478,6 +17557,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		setActive,
 		withdraw,
 		dispose() {
+			media.removeEventListener("change", onResize);
 			active = false;
 			serial++;
 			impactTicket++;
