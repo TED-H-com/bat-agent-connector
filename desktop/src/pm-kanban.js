@@ -1,5 +1,5 @@
 import {h} from './ui/dom.js';
-import {pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState} from './ui/components.js';
+import {searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
@@ -24,7 +24,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const content = h('div', {class: 'pm-board-content'}, list), layout = h('div', {class: 'pm-work-layout'}, content);
   const element = h('section', {class: 'pm-kanban', 'data-pm-kanban': ''},
     !embedded ? pageHeader({title: t('ui_board'), meta, actions: [refreshButton]}) : null,
-    h('div', {class: 'pm-board-toolbar'}, h('label', {class: 'pm-work-search'}, icon('search'), search), requirementFilter, agentFilter, h('label', {}, t('wv_group'), group)),
+    h('div', {class: 'pm-board-toolbar'}, searchField(search, {class:'pm-work-search'}), requirementFilter, agentFilter, h('label', {}, t('wv_group'), group)),
     status, layout, h('footer', {class: 'pm-kanban-footer'}, more,
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), onClose: () => {

@@ -1,6 +1,6 @@
 import {timeStamp} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {searchField, discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -62,7 +62,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   [...typeControl.querySelectorAll('button')].forEach((node, index) => node.setAttribute('data-reg-type', index ? TYPES[index - 1] : ''));
   const filters = h('div', {class: 'reg-toolbar'}, typeControl,
     h('div', {class: 'reg-toolbar-filters'}, statusSelect, ownerInput, ownerList,
-      h('div', {class: 'reg-search'}, icon('search', {size: 16}), searchInput)));
+      searchField(searchInput, {class:'reg-search'})));
   const mainCol = h('div', {class: 'reg-main'}, filters, trends, statusLine, tableHost, footer);
   const layout = h('div', {class: 'reg-layout'}, mainCol);
   const element = h('section', {'data-pm-register': ''}, layout);

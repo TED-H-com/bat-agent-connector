@@ -1,6 +1,6 @@
 import {viewState} from './ui/view-state.js';
 import {h} from './ui/dom.js';
-import {dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
+import {searchField, dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatus, blockedWork, blockerText, workAgents, prPills, prGroups, readWorkSources} from './pm-work-inspector.js';
@@ -31,7 +31,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   const moreButtons = Object.fromEntries(['work', 'issues', 'reviews'].map(kind => [kind, h('button', {type: 'button', class: 'ui-button secondary', hidden: true,
     onclick: () => {pages[kind]++; void refresh();}}, t(kind === 'work' ? 'wb_more' : kind === 'issues' ? 'wb_more_issues' : 'wb_more_reviews'))]));
   const element = h('section', {'data-pm-rtm': '', class: 'pm-requirements'},
-    h('div', {class: 'pm-requirements-toolbar'}, h('label', {class: 'pm-work-search'}, icon('search'), filter), h('label', {}, t('wv_group'), group)),
+    h('div', {class: 'pm-requirements-toolbar'}, searchField(filter, {class:'pm-work-search'}), h('label', {}, t('wv_group'), group)),
     status, layout, h('div', {class: 'actions'}, ...Object.values(moreButtons)),
     disclosure({label: t('wb_sources'), body: h('div', {}, h('p', {}, t('wb_acceptance_separate')), h('p', {}, t('wb_no_phase')))}));
   const detail = workInspector({t, workspaceId, from: 'requirements', mount: layout, tools: () => tools(), onClose: () => {

@@ -3,7 +3,7 @@ import {groupedSessions, sessionActivity} from './state/sessions.js';
 import {joinLabel} from './label-text.js';
 import {railPresentation} from './global-labels.js';
 import {icon} from './ui/icons.js';
-import {iconButton} from './ui/components.js';
+import {searchField, iconButton} from './ui/components.js';
 
 export function workspaceNavigation({h, t, api, guard, onEvents, namespace, errorBox}) {
   const key = `batc.tree.${namespace}`;
@@ -24,7 +24,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const box = h('aside', {class: 'workspace-nav', 'aria-label': t('workspace_navigation')},
     h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')),
       h('a', {href: '#/projects', title: t('workspace_manage'), 'aria-label': t('workspace_manage')}, '+')),
-    h('div', {class: 'workspace-search'}, icon('search', {size: 16}), search), status, bindingNote, h('div', {class: 'workspace-tree-scroll'}, tree, sessionTree),
+    searchField(search, {class:'workspace-search'}), status, bindingNote, h('div', {class: 'workspace-tree-scroll'}, tree, sessionTree),
     h('div', {class: 'workspace-nav-footer'},
       h('a', {href: '#/sessions'}, t('workspace_all_sessions')),
       h('a', {href: '#/projects'}, t('workspace_manage'))));

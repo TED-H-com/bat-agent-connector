@@ -519,6 +519,7 @@ var statusVocabulary = Object.freeze({
 var uiStrings = {
 	en: {
 		ui_discuss: "Discuss",
+		ui_search: "Search",
 		ui_reason_detail: "{label} ({code})",
 		ui_search_work: "Search work",
 		ui_report_versions: "Versions",
@@ -594,6 +595,7 @@ var uiStrings = {
 	},
 	"zh-TW": {
 		ui_discuss: "討論",
+		ui_search: "搜尋",
 		ui_reason_detail: "{label}（{code}）",
 		ui_search_work: "搜尋工作",
 		ui_report_versions: "版本",
@@ -10239,6 +10241,52 @@ function iconButton({ icon, label, ...attrs }) {
 		class: "ui-button ghost ui-icon-button"
 	});
 }
+function searchField(input, attrs = {}) {
+	input.type = "search";
+	input.placeholder = t("ui_search");
+	return h$1("div", {
+		...attrs,
+		class: `ui-search ${attrs.class || ""}`
+	}, icon("search"), input);
+}
+var choiceObserver;
+var choiceMounts;
+var choiceFits = new WeakMap();
+var choiceParents = new Map();
+function watchChoice(root, measure) {
+	choiceFits.set(root, measure);
+	root.dataset.choiceAdaptive = "";
+	if (!choiceObserver) {
+		choiceObserver = new ResizeObserver((entries) => {
+			for (const { target } of entries) for (const control of choiceParents.get(target) || []) choiceFits.get(control)?.();
+		});
+		const reconcile = () => {
+			for (const [parent, controls] of choiceParents) {
+				for (const control of controls) if (!control.isConnected || control.parentElement !== parent) controls.delete(control);
+				if (!controls.size) {
+					choiceObserver.unobserve(parent);
+					choiceParents.delete(parent);
+				}
+			}
+			for (const control of document.querySelectorAll("[data-choice-adaptive]")) {
+				const parent = control.parentElement;
+				if (!choiceFits.has(control) || choiceParents.get(parent)?.has(control)) continue;
+				if (!choiceParents.has(parent)) {
+					choiceParents.set(parent, new Set());
+					choiceObserver.observe(parent);
+				}
+				choiceParents.get(parent).add(control);
+				choiceFits.get(control)();
+			}
+		};
+		choiceMounts = new MutationObserver(reconcile);
+		choiceMounts.observe(document.documentElement, {
+			childList: true,
+			subtree: true
+		});
+		document.fonts?.ready.then(reconcile);
+	}
+}
 function choices({ options, value, onChange = () => {}, label }, isTabs) {
 	const root = h$1("div", {
 		class: isTabs ? "ui-tabs" : "ui-segmented",
@@ -10253,6 +10301,15 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 		disabled: option.disabled,
 		onclick: () => select(option.value)
 	}, option.label));
+	const fallback = isTabs ? null : h$1("select", {
+		"aria-label": label,
+		"data-choice-select": "",
+		hidden: true,
+		onchange: () => select(options[fallback.selectedIndex].value)
+	}, ...options.map((option, index) => h$1("option", {
+		value: String(index),
+		disabled: option.disabled
+	}, option.label)));
 	if (isTabs) options.forEach((option, index) => {
 		if (!option.panel || typeof option.panel === "string") return;
 		const panel = option.panel;
@@ -10263,6 +10320,7 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 	});
 	function select(next, notify = true) {
 		value = next;
+		if (fallback) fallback.value = String(options.findIndex((option) => option.value === value));
 		buttons.forEach((node, i) => {
 			const active = options[i].value === value;
 			node.tabIndex = active ? 0 : -1;
@@ -10271,6 +10329,7 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 		if (notify) onChange(value);
 	}
 	root.addEventListener("keydown", (event) => {
+		if (event.target === fallback) return;
 		if (![
 			"ArrowLeft",
 			"ArrowRight",
@@ -10294,8 +10353,22 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 			if (choiceFocus === ticket) choiceFocus = null;
 		}, 80);
 	});
-	root.append(...buttons);
+	root.append(...buttons, ...fallback ? [fallback] : []);
 	select(options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value, false);
+	if (fallback) watchChoice(root, () => {
+		if (!root.isConnected) return;
+		const focused = document.activeElement, parent = root.parentElement, css = getComputedStyle(parent);
+		fallback.hidden = true;
+		buttons.forEach((node) => node.hidden = false);
+		root.removeAttribute("data-choice-overflow");
+		const overflow = root.scrollWidth > parent.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) + 1;
+		fallback.hidden = !overflow;
+		buttons.forEach((node) => node.hidden = overflow);
+		root.toggleAttribute("data-choice-overflow", overflow);
+		root.setAttribute("role", overflow ? "group" : "radiogroup");
+		if (overflow && (buttons.includes(focused) || focused === fallback)) fallback.focus({ preventScroll: true });
+		else if (!overflow && focused === fallback) buttons.find((node) => node.getAttribute("aria-checked") === "true")?.focus({ preventScroll: true });
+	});
 	if (choiceFocus?.label === label) {
 		choiceFocus = null;
 		const focusChecked = () => {
@@ -11849,27 +11922,30 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 		placeholder: t("delivery_search_prs"),
 		oninput: () => render()
 	});
-	const refresh = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => loadList()
-	}, t("delivery_refresh_prs"));
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("delivery_refresh_prs"),
+		onClick: () => loadList()
+	});
 	const list = h("div", {
 		class: "pr-list",
 		"aria-live": "polite"
 	});
-	const container = h("div", { class: "pr-selector" }, h("div", { class: "filters" }, search, filter, refresh), list);
+	const container = h("div", { class: "pr-selector" }, h("div", { class: "filters" }, searchField(search), filter, refresh), list);
 	function render() {
 		if (!alive()) return;
 		list.replaceChildren();
 		refresh.disabled = busy;
-		if (busy) list.append(h("p", { class: "muted" }, t("loading")));
+		if (busy) list.append(skeleton(2));
 		if (error) list.append(h("p", { class: "note warn" }, error));
 		if (scope) list.append(h("p", { class: "muted" }, `${scope} · ${t("delivery_pr_page", { page })}`));
 		if (stale && cached.length) list.append(h("p", { class: "note warn" }, t("delivery_pr_stale")));
 		const query = search.value.trim().toLocaleLowerCase();
 		const rows = cached.filter((pr) => pr.title.toLocaleLowerCase().includes(query) || String(pr.number).includes(query));
-		if (!rows.length && !busy) list.append(h("p", { class: "muted" }, t("delivery_no_prs")));
+		if (!rows.length && !busy) list.append(emptyState({
+			icon: "git-pull-request",
+			title: t("delivery_no_prs")
+		}));
 		for (const pr of rows) {
 			const loaded = scope, revision = serial;
 			const select = h("button", {
@@ -16329,7 +16405,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		remember();
 		render();
 	});
-	const searchWrap = h("div", { class: "dep-search" }, icon("search", { size: 16 }), search);
+	const searchWrap = searchField(search, { class: "dep-search" });
 	const relationChips = RELATIONS.map((value) => makeChip("relation", value));
 	const evidenceChips = EVIDENCE.map((value) => makeChip("evidence", value));
 	function makeChip(kind, value) {
@@ -17827,7 +17903,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	const element = h$1("section", {
 		"data-pm-rtm": "",
 		class: "pm-requirements"
-	}, h$1("div", { class: "pm-requirements-toolbar" }, h$1("label", { class: "pm-work-search" }, icon("search"), filter), h$1("label", {}, t("wv_group"), group)), status, layout, h$1("div", { class: "actions" }, ...Object.values(moreButtons)), disclosure({
+	}, h$1("div", { class: "pm-requirements-toolbar" }, searchField(filter, { class: "pm-work-search" }), h$1("label", {}, t("wv_group"), group)), status, layout, h$1("div", { class: "actions" }, ...Object.values(moreButtons)), disclosure({
 		label: t("wb_sources"),
 		body: h$1("div", {}, h$1("p", {}, t("wb_acceptance_separate")), h$1("p", {}, t("wb_no_phase")))
 	}));
@@ -21821,7 +21897,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}))]
 	});
 	[...typeControl.querySelectorAll("button")].forEach((node, index) => node.setAttribute("data-reg-type", index ? TYPES[index - 1] : ""));
-	const layout = h("div", { class: "reg-layout" }, h("div", { class: "reg-main" }, h("div", { class: "reg-toolbar" }, typeControl, h("div", { class: "reg-toolbar-filters" }, statusSelect, ownerInput, ownerList, h("div", { class: "reg-search" }, icon("search", { size: 16 }), searchInput))), trends, statusLine, tableHost, footer));
+	const layout = h("div", { class: "reg-layout" }, h("div", { class: "reg-main" }, h("div", { class: "reg-toolbar" }, typeControl, h("div", { class: "reg-toolbar-filters" }, statusSelect, ownerInput, ownerList, searchField(searchInput, { class: "reg-search" }))), trends, statusLine, tableHost, footer));
 	const element = h("section", { "data-pm-register": "" }, layout);
 	const wideQuery = matchMedia("(min-width: 801px)");
 	function onWide() {
@@ -26985,7 +27061,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		title: t("ui_board"),
 		meta,
 		actions: [refreshButton]
-	}) : null, h$1("div", { class: "pm-board-toolbar" }, h$1("label", { class: "pm-work-search" }, icon("search"), search), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
+	}) : null, h$1("div", { class: "pm-board-toolbar" }, searchField(search, { class: "pm-work-search" }), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
 		label: t("pm_kanban_board_details"),
 		body: h$1("div", {}, boardInfo, h$1("p", {}, t("pm_kanban_wip_basis")), h$1("p", {}, t("pm_kanban_quality")), h$1("p", {}, t("pm_kanban_limits")))
 	})));
@@ -36477,7 +36553,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				});
 			}
 			const scroll = workspaceList.scrollTop;
-			if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h("div", { class: "pd-list-header" }, threadSearch, iconButton({
+			if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h("div", { class: "pd-list-header" }, searchField(threadSearch), iconButton({
 				icon: "plus",
 				label: t("pd_new"),
 				"data-discussion-new": "",
@@ -36972,7 +37048,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		href: "#/projects",
 		title: t("workspace_manage"),
 		"aria-label": t("workspace_manage")
-	}, "+")), h("div", { class: "workspace-search" }, icon("search", { size: 16 }), search), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
+	}, "+")), searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
 	const alive = () => {
 		guard();
 		if (disposed) throw new Error("Navigation disposed");
@@ -47350,7 +47426,7 @@ async function viewSessions(main) {
 	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
 		label: t("global_details"),
 		body: h("p", {}, t("sessions_intro"))
-	}), h("div", { class: "filters session-filters" }, search, hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
+	}), h("div", { class: "filters session-filters" }, searchField(search), hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
 		"aria-label": t("sessions_title"),
 		class: "session-results"
 	}, count, list, h("div", { class: "session-pagination" }, more, h("span", { class: "muted" }, t("sessions_page_note"))))));
@@ -49704,7 +49780,7 @@ async function viewOperations(main, filter = "all") {
 		value: memory.query || ""
 	});
 	search.addEventListener("input", () => list.filter(search.value));
-	const searchField = h("div", { class: "workspace-search global-ops-search" }, icon("search", { size: 16 }), search);
+	const searchWrap = searchField(search, { class: "workspace-search global-ops-search" });
 	const filters = segmented({
 		label: t("global_ops_filter"),
 		value: selected,
@@ -49731,7 +49807,7 @@ async function viewOperations(main, filter = "all") {
 	main.append(pageHeader({
 		title: t("nav_operations"),
 		actions: [refresh]
-	}), h("div", { class: "global-ops-tools" }, filters, searchField), list.box);
+	}), h("div", { class: "global-ops-tools" }, filters, searchWrap), list.box);
 	if (memory.query) list.filter(memory.query);
 	await list.load().catch(() => {});
 	const reload = debounceRefresh(() => list.load(), 500);

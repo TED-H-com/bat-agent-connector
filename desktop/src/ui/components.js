@@ -20,11 +20,45 @@ export function discussLink(context, attrs = {}) {
 export function iconButton({icon, label, ...attrs}) {
   return button({variant: 'ghost', icon, 'aria-label': label, title: label, ...attrs, class: 'ui-button ghost ui-icon-button'});
 }
+export function searchField(input, attrs = {}) {
+  input.type = 'search'; input.placeholder = t('ui_search');
+  return h('div', {...attrs, class: `ui-search ${attrs.class || ''}`}, drawIcon('search'), input);
+}
+// One observer manages connected controls. View replacements release their parents,
+// so switching pages does not accumulate per-view resize subscriptions.
+let choiceObserver, choiceMounts;
+const choiceFits = new WeakMap(), choiceParents = new Map();
+function watchChoice(root, measure) {
+  choiceFits.set(root, measure); root.dataset.choiceAdaptive = '';
+  if (!choiceObserver) {
+    choiceObserver = new ResizeObserver(entries => {
+      for (const {target} of entries) for (const control of choiceParents.get(target) || []) choiceFits.get(control)?.();
+    });
+    const reconcile = () => {
+      for (const [parent, controls] of choiceParents) {
+        for (const control of controls) if (!control.isConnected || control.parentElement !== parent) controls.delete(control);
+        if (!controls.size) {choiceObserver.unobserve(parent); choiceParents.delete(parent);}
+      }
+      for (const control of document.querySelectorAll('[data-choice-adaptive]')) {
+        const parent = control.parentElement;
+        if (!choiceFits.has(control) || choiceParents.get(parent)?.has(control)) continue;
+        if (!choiceParents.has(parent)) {choiceParents.set(parent, new Set()); choiceObserver.observe(parent);}
+        choiceParents.get(parent).add(control); choiceFits.get(control)();
+      }
+    };
+    choiceMounts = new MutationObserver(reconcile);
+    choiceMounts.observe(document.documentElement, {childList: true, subtree: true});
+    document.fonts?.ready.then(reconcile);
+  }
+}
 function choices({options, value, onChange = () => {}, label}, isTabs) {
   const root = h('div', {class: isTabs ? 'ui-tabs' : 'ui-segmented', role: isTabs ? 'tablist' : 'radiogroup', 'aria-label': label});
   const buttons = options.map(option => h('button', {type: 'button', role: isTabs ? 'tab' : 'radio',
     id: option.id || uid(), 'aria-controls': isTabs && typeof option.panel === 'string' ? option.panel : null, disabled: option.disabled,
     onclick: () => select(option.value)}, option.label));
+  const fallback = isTabs ? null : h('select', {'aria-label':label, 'data-choice-select':'', hidden:true,
+    onchange: () => select(options[fallback.selectedIndex].value)},
+    ...options.map((option, index) => h('option', {value:String(index), disabled:option.disabled}, option.label)));
   if (isTabs) options.forEach((option, index) => {
     if (!option.panel || typeof option.panel === 'string') return;
     const panel = option.panel;
@@ -34,11 +68,13 @@ function choices({options, value, onChange = () => {}, label}, isTabs) {
   });
   function select(next, notify = true) {
     value = next;
+    if (fallback) fallback.value = String(options.findIndex(option => option.value === value));
     buttons.forEach((node, i) => {const active = options[i].value === value;
       node.tabIndex = active ? 0 : -1; node.setAttribute(isTabs ? 'aria-selected' : 'aria-checked', String(active));});
     if (notify) onChange(value);
   }
   root.addEventListener('keydown', event => {
+    if (event.target === fallback) return;
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     const enabled = buttons.filter(node => !node.disabled), current = enabled.indexOf(document.activeElement);
@@ -50,7 +86,18 @@ function choices({options, value, onChange = () => {}, label}, isTabs) {
     next.focus(); next.click();
     setTimeout(() => { if (choiceFocus === ticket) choiceFocus = null; }, 80);
   });
-  root.append(...buttons); select(options.some(o => o.value === value && !o.disabled) ? value : options.find(o => !o.disabled)?.value, false);
+  root.append(...buttons, ...(fallback ? [fallback] : [])); select(options.some(o => o.value === value && !o.disabled) ? value : options.find(o => !o.disabled)?.value, false);
+  if (fallback) watchChoice(root, () => {
+    if (!root.isConnected) return;
+    const focused = document.activeElement, parent = root.parentElement, css = getComputedStyle(parent);
+    fallback.hidden = true; buttons.forEach(node => node.hidden = false); root.removeAttribute('data-choice-overflow');
+    const needed = root.scrollWidth, available = parent.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+    const overflow = needed > available + 1;
+    fallback.hidden = !overflow; buttons.forEach(node => node.hidden = overflow);
+    root.toggleAttribute('data-choice-overflow', overflow); root.setAttribute('role', overflow ? 'group' : 'radiogroup');
+    if (overflow && (buttons.includes(focused) || focused === fallback)) fallback.focus({preventScroll:true});
+    else if (!overflow && focused === fallback) buttons.find(node => node.getAttribute('aria-checked') === 'true')?.focus({preventScroll:true});
+  });
   if (choiceFocus?.label === label) {
     choiceFocus = null;
     const focusChecked = () => {

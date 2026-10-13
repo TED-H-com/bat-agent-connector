@@ -595,3 +595,5 @@ receipts, and pull-request links use the normal link. Identifiers and raw timest
 stay in Details. From a project view, the shell breadcrumb is Workspace / Work /
 Session and the page offers Back to that view. Discuss uses the shared discussion
 link, binding only exact work item refs.
+
+搜尋欄統一使用 `searchField()`，保留輸入節點與草稿，32px 高、前置搜尋圖示，提示為 Search／搜尋。工具列篩選器使用相同 32px 邊框樣式，空間不足時在自己的欄內換行。`segmented()` 以共享 ResizeObserver 測量容器與選项寬度；不足時改為保留相同選項與狀態的 select，寬度恢復後還原按鈕與鍵盤焦點。

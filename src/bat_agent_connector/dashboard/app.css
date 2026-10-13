@@ -80,6 +80,11 @@ a { color: var(--accent); }
 .ui-button.ui-icon-button { width: 32px; height: 32px; min-width: 32px; padding: 0; }
 .ui-segmented, .ui-tabs { display: flex; gap: var(--space-1); max-width: 100%; flex-wrap: wrap; }
 .ui-segmented { padding: 2px; border-radius: var(--r-sm); background: var(--surface-2); width: fit-content; }
+.ui-segmented { flex-wrap: nowrap; }
+.ui-segmented > button { flex: none; white-space: nowrap; }
+.ui-segmented[data-choice-overflow] { display: block; padding: 0; background: transparent; width: 100%; }
+.ui-segmented [hidden] { display: none !important; }
+.ui-segmented > select { width: 100%; }
 .ui-segmented button, .ui-tabs button { cursor: pointer; background: transparent; color: var(--text-2); font: inherit; border: 1px solid transparent; padding: 4px 12px; min-height: 28px; border-radius: var(--r-xs); }
 .ui-segmented [aria-checked=true] { background: var(--surface); border-color: var(--line); color: var(--text); font-weight: 600; }
 .ui-tabs { border-bottom: 1px solid var(--line); }
@@ -117,6 +122,7 @@ a { color: var(--accent); }
 .ui-empty { display: grid; justify-items: center; text-align: center; gap: var(--space-3); padding: var(--space-8); }
 .ui-empty > .ui-icon { width: 24px; height: 24px; color: var(--text-3); }
 .ui-empty h2, .ui-empty p { margin: 0; }
+.ui-empty h2 { font-size: var(--fs-body); font-weight: 600; }
 .ui-skeleton { display: grid; gap: var(--space-3); }
 .ui-skeleton > div { height: 32px; background: var(--surface-2); border-radius: var(--r-xs); }
 .ui-disclosure > summary { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--fs-small); font-weight: 500; color: var(--text-2); min-height: 32px; list-style: none; }
@@ -172,7 +178,7 @@ a { color: var(--accent); }
   .ui-inspector { position: fixed; inset: 0 0 0 auto; max-height: none; z-index: 50; box-shadow: var(--shadow-overlay); }
 }
 @media (max-width: 799px) {
-  .ui-inspector { width: 100%; }
+  .ui-inspector { width: 100%; border-left: 0; }
   .ui-inspector-back { display: inline-flex; }
   .ui-inspector > header > .ui-icon-button { display: none; }
   .ui-button, .ui-button.ui-md, .ui-button.ui-sm, .ui-button.ui-icon-button, .ui-menu-panel [role=menuitem], .ui-tabs button, .ui-segmented button, .ui-disclosure > summary { min-height: 44px; }
@@ -220,6 +226,13 @@ a { color: var(--accent); }
 .ui-page-heading > .ui-meta > .ui-meta { margin-top: 0; }
 .ui-page-heading > .ui-meta > :is(.schedule-meta, .ui-meta) { margin-bottom: 0; }
 :root body .ui-page-heading:has(> .ui-meta:not([hidden])) { row-gap: var(--space-1); }
+
+/* Search chrome preserves each input node and its draft/listeners. */
+:root body .ui-search { display: flex; align-items: center; position: relative; height: 32px; min-width: 8rem; max-width: 100%; }
+:root body .ui-search > .ui-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-3); }
+:root body .ui-search > input { width: 100%; min-width: 0; height: 32px; min-height: 32px; padding: 4px 8px 4px 30px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
+:root body :is(.filters, [class$=toolbar], [class*=toolbar-], .global-ops-tools, .dep-toolbar, .ui-segmented) select { min-height: 32px; height: 32px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding-block: 4px; }
+@media (max-width: 800px) { :root body .ui-search > input { font-size: 16px; } }
 .pm-project-views { gap: var(--space-1); border-bottom: 1px solid var(--line); padding-bottom: var(--space-3); margin-bottom: var(--space-4); }
 .pm-project-views button { background: transparent; border-color: transparent; }
 .pm-project-views button[aria-current="page"] { color: var(--accent); background: var(--panel); border-color: var(--line); font-weight: 650; }
@@ -1468,12 +1481,12 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .reg-main { flex: 1; display: grid; gap: var(--space-3); }
 .reg-main > * { min-width: 0; }
 
-.pm-shell [data-pm-register] .reg-toolbar { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.pm-shell [data-pm-register] .reg-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
 .pm-shell [data-pm-register] .reg-toolbar .ui-segmented { flex: none; width: auto; max-width: 100%; }
-.pm-shell [data-pm-register] .reg-toolbar-filters { display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 0; }
+.pm-shell [data-pm-register] .reg-toolbar-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); flex: 1; min-width: 0; }
 .pm-shell [data-pm-register] .reg-toolbar-filters > select,
 .pm-shell [data-pm-register] .reg-owner { width: auto; flex: 0 1 11rem; min-width: 7rem; }
-.reg-search { position: relative; display: flex; align-items: center; flex: 1 1 0%; min-width: 0; }
+.reg-search { position: relative; display: flex; align-items: center; flex: 1 1 8rem; min-width: 8rem; }
 .reg-search .ui-icon { position: absolute; left: var(--space-2); top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .pm-shell [data-pm-register] .reg-search input { width: 100%; min-width: 0; padding-left: 28px; }
 
@@ -1588,7 +1601,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
   .pm-shell [data-pm-register] .reg-toolbar-filters > select,
   .pm-shell [data-pm-register] .reg-owner { padding-inline: 6px; }
   .pm-shell [data-pm-register] .reg-toolbar-filters > select { flex: 0 0 7.75rem; width: 7.75rem; min-width: 7.75rem; max-width: 7.75rem; }
-  .pm-shell [data-pm-register] .reg-owner { flex: 0 0 5rem; width: 5rem; min-width: 5rem; }
+  .pm-shell [data-pm-register] .reg-owner { flex: 0 0 6rem; width: 6rem; min-width: 6rem; }
   .pm-shell [data-pm-register] .reg-search input { padding-right: 6px; }
 }
 /* Shared shell. Views keep their content; navigation lives in one persistent rail. */

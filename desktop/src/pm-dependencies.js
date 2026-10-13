@@ -1,6 +1,6 @@
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {discussLink, button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {searchField, discussLink, button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {discussHref} from './pm-discuss-link.js';
 import {layoutGraph} from './pm-dependencies-layout.js';
@@ -109,7 +109,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const search = h('input', {type: 'search', 'aria-label': t('dep_search'), placeholder: t('dep_search')});
   search.value = typeof preference.query === 'string' ? preference.query : '';
   search.addEventListener('input', () => {remember(); render();});
-  const searchWrap = h('div', {class: 'dep-search'}, icon('search', {size: 16}), search);
+  const searchWrap = searchField(search, {class:'dep-search'});
   const relationChips = RELATIONS.map(value => makeChip('relation', value));
   const evidenceChips = EVIDENCE.map(value => makeChip('evidence', value));
   function makeChip(kind, value) {

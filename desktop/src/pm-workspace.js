@@ -4,7 +4,7 @@ import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {viewState} from './ui/view-state.js';
 import {settleRefreshes} from './state/events.ts';
-import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState} from './ui/components.js';
+import {searchField, pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
 import {workspaceOverview} from './pm-overview.js';
@@ -1009,7 +1009,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         threadSearch.addEventListener('input', () => {uiState.search = threadSearch.value; filterThreads();});
       }
       const scroll = workspaceList.scrollTop;
-      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h('div', {class: 'pd-list-header'}, threadSearch, iconButton({icon: 'plus', label: t('pd_new'), 'data-discussion-new': '', onClick: () => {location.hash = discussHref({workspaceId});}})), threadRows);
+      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h('div', {class: 'pd-list-header'}, searchField(threadSearch), iconButton({icon: 'plus', label: t('pd_new'), 'data-discussion-new': '', onClick: () => {location.hash = discussHref({workspaceId});}})), threadRows);
       threadRows.replaceChildren(...(threadList?.threads || []).map(thread => h('a', {class: 'pm-thread-link',
           href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
           'aria-current': thread.thread_id === threadId ? 'page' : null, onclick: () => rememberOrigin(thread.thread_id, {from: 'discussions'})}, h('strong', {title: thread.title}, thread.title),

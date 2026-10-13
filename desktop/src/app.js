@@ -1,6 +1,6 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
+import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, workStatusKey} from './global-labels.js';
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
@@ -889,7 +889,7 @@ async function viewSessions(main) {
     state.caps?.features?.repository_sync?.length ? h("a", {href: "#/published"}, t("pub_title")) : null,
     state.caps?.actions?.some(a => Object.values(orchestrationActions).includes(a.action)) ? h("a", {href: "#/orchestrate/relay"}, t("orch_title")) : null),
     disclosure({label: t("global_details"), body: h("p", {}, t("sessions_intro"))}),
-    h("div", {class: "filters session-filters"}, search, hostSel, accessSel,
+    h("div", {class: "filters session-filters"}, searchField(search), hostSel, accessSel,
       state.caps?.actions?.some(a => a.action === "session.approve_pending") ? h("a", {href: "#/approvals"}, t("bulk_title")) : null), status,
     h("div", {class: "session-layout"}, scope, h("section", {"aria-label": t("sessions_title"), class: "session-results"}, count, list,
       h("div", {class: "session-pagination"}, more, h("span", {class: "muted"}, t("sessions_page_note"))))));
@@ -2376,7 +2376,7 @@ async function viewOperations(main, filter = "all") {
   const memory = viewState(state.namespace || "", "", "operations:" + (statuses || "all"));
   const search = h("input", {type: "search", "aria-label": t("global_search_operations"), placeholder: t("global_search_operations"), value: memory.query || ""});
   search.addEventListener("input", () => list.filter(search.value));
-  const searchField = h("div", {class: "workspace-search global-ops-search"}, icon("search", {size: 16}), search);
+  const searchWrap = searchField(search, {class:"workspace-search global-ops-search"});
   const filters = segmented({
     label: t("global_ops_filter"), value: selected,
     options: [["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([value, label]) => ({value, label: t(label)})),
@@ -2385,7 +2385,7 @@ async function viewOperations(main, filter = "all") {
   const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => list.load().catch(() => {})});
   list.onBusy(busy => { refresh.disabled = busy; });
   main.append(pageHeader({title: t("nav_operations"), actions: [refresh]}),
-    h("div", {class: "global-ops-tools"}, filters, searchField), list.box);
+    h("div", {class: "global-ops-tools"}, filters, searchWrap), list.box);
   if (memory.query) list.filter(memory.query);
   await list.load().catch(() => {});
   const reload = debounceRefresh(() => list.load(), 500);
