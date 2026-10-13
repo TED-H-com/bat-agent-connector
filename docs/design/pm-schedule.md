@@ -80,7 +80,7 @@ Operation attempt 的結束時刻：`succeeded`、`failed`、`cancelled` 都用�
 
 沒有 `total`。`coverage` 只用布林：`visibility_filtered`、`attempts_truncated`、`attempts_unavailable`、`work_bindings_truncated`、`issues_truncated`，加上 `network_checked: false`。看不到的筆數不回傳，缺列的筆數也不回傳。
 
-位元上限是 2,000,000 個 UTF-8 bytes。每一列的公開 JSON 只編碼一次。信封用最壞情況估算：`more` 為 true、剩餘列裡最長的編碼游標、全部 `unknown`、以及最大的 `range` 物件。列的編碼長度（含陣列裡的逗號與空白）累加，超過上限就停在前一列。同一輪也累計這一頁公開列引用的 lineage roots 聯集；聯集即將超過 64 時同樣停在前一列。因此被位元組或 roots 截斷時 `more` 為 true，`next_cursor` 是這一頁依排序最後留下的列；下一頁用 `after` 接上，不重複、不漏列。單列自己的 roots 超過 64，或查詢丟出 `OperationError` 時，該列視為隱藏，不放進游標，也不讓整次讀取 409。單列加上信封仍超過上限是 413 `PM_SCHEDULE_TOO_LARGE`。回傳本文再編碼後也不超過該上限。多位元組標題以 UTF-8 位元組長度計。
+位元上限是 2,000,000 個 UTF-8 bytes。每一列的公開 JSON 只編碼一次。信封用最壞情況估算：`more` 為 true、剩餘列裡最長的編碼游標、全部 `unknown`、以及最大的 `range` 物件。列的編碼長度（含陣列裡的逗號與空白）累加，超過上限就停在前一列。同一輪也累計這一頁公開列引用的 lineage roots 聯集；聯集即將超過 64 時同樣停在前一列。因此被位元組或 roots 截斷時 `more` 為 true，`next_cursor` 是這一頁依排序最後留下的列；下一頁用 `after` 接上，不重複、不漏列。單列自己的 roots 超過 64，或查詢丟出 `OperationError` 時，該列視為隱藏，不放進游標，也不讓整次讀取 409。這個判斷在算出工作的 actual 與狀態之前做；被隱藏的 attempt 不計入所屬工作的起訖或狀態。單列加上信封仍超過上限是 413 `PM_SCHEDULE_TOO_LARGE`。回傳本文再編碼後也不超過該上限。多位元組標題以 UTF-8 位元組長度計。
 
 `unknown` 是 `{field, reason}`，依欄位與原因排序。固定包含 phase、blocked、`ci_wait`、`token_usage` / `no_explicit_attribution`。沒有 baseline 時另有 `baseline` / `no_adopted_schedule_baseline`。同一需求文字只出現一次。
 

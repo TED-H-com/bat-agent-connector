@@ -22,7 +22,8 @@
   back, including a row id that contains a control character. A plan or one issue
   mapping that lineage refuses is hidden; it does not fail the schedule read.
   A cancelled or failed operation ends at the matching status event, including a
-  failure that never recorded a failed step.
+  failure that never recorded a failed step. An attempt whose own lineage does not
+  fit is omitted before its work's dates and status are derived.
   See `docs/design/pm-schedule.md`.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):

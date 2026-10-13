@@ -303,6 +303,7 @@ def _works(ops, principal, workspace_id, milestones, requirements, notes, covera
         unavailable = any((link["kind"] == "operation" and link["ref"] in evidence["missing_operations"])
                           or (link["kind"] == "task" and link["ref"] in evidence["missing_tasks"]) for link in own)
         attempt_rows = [row for row in (_attempt(binding["work_item_id"], link, evidence, notes) for link in own) if row]
+        attempt_rows = [row for row in attempt_rows if _emit_row(db, row, coverage)]
         attempts.extend(attempt_rows)
         parent = _work_parent(binding, milestones, requirements, notes)
         withheld = unavailable or binding["work_item_id"] in truncated_works
@@ -1069,6 +1070,21 @@ def _row_roots(db, public):
     for kind, identity in pm_source_lineage.references(public):
         found.update(pm_source_lineage.roots(db, kind, identity))
     return found
+
+
+def _emit_row(db, row, coverage):
+    """Drop a row whose own roots will not fit before it can change a work's dates or status."""
+    if not _lineage_open(db):
+        return True
+    try:
+        roots = _row_roots(db, _public(row))
+    except OperationError:
+        coverage["visibility_filtered"] = True
+        return False
+    if len(roots) > pm_source_lineage.MAX_ROOTS:
+        coverage["visibility_filtered"] = True
+        return False
+    return True
 
 
 def _fit(loaded, ordered, limit):

@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "9ea71b6f01a64486ebcd8c6ee7bba971c0c7d41b6bf45466fa0228136981439d"
+  canonical_sha256: "42f9dc73a6dda4b5b3e2d4395f060acbd534cc43f1c0837474a6624e43183184"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1601,7 +1601,8 @@ A session that stopped producing output is not ended; do not use the last messag
 `limit` is 1–100. `after` is the previous page's opaque `next_cursor` (base64url, not a raw
 row id). Preserve it and read further pages. The server accepts every cursor it issued. One plan or issue mapping that lineage
 refuses is omitted and does not fail the page. A cancelled or failed operation ends at
-its status event, not at a step time. A page may also end early so its lineage roots
+its status event, not at a step time. An attempt that cannot fit in the lineage budget is
+omitted before it changes the work's dates or status. A page may also end early so its lineage roots
 stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id

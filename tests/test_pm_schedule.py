@@ -1266,6 +1266,34 @@ async def test_a_lineage_error_hides_one_session_or_task_and_keeps_the_page(ops)
     assert source["task_id"] not in json.dumps(gone) and "task-session" not in json.dumps(gone)
 
 
+async def test_an_oversized_attempt_does_not_change_work_dates_or_status(ops, monkeypatch):
+    monkeypatch.setattr(pm_package_handoff, "source_visible", lambda db, principal, operation: True)
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    tid = source["task_id"]
+    await link(ops, work, "task", tid)
+    ops.db.execute("UPDATE tasks SET session_id=? WHERE task_id=?", ("split-session", tid))
+    pm_source_lineage.schema(ops.journal)
+    originals = [(await source_operation(ops, action="fixture.root"))["operation_id"] for _ in range(4)]
+    session_ref = "mock-host/split-session"
+    for operation_id in originals[:2]:
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('session',?,?,?)", (session_ref, operation_id, operation_id))
+    for operation_id in originals[2:]:
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('execution',?,?,?)", (tid, operation_id, operation_id))
+    monkeypatch.setattr(pm_source_lineage, "MAX_ROOTS", 3)
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert f"work:{work_id}" in found
+    assert f"attempt:task:{work_id}:{tid}" not in found
+    work_row = found[f"work:{work_id}"]
+    assert work_row["status"] == "not_started"
+    assert "actual" not in work_row
+    assert body["coverage"]["visibility_filtered"] is True
+    assert body["coverage"]["attempts_truncated"] is False
+    assert body["partial"] is False
+
+
 async def test_scope_filter_runs_before_the_binding_cap(ops, monkeypatch):
     target, plan, *_ = await accepted(ops)
     wid = target["workspace_id"]
