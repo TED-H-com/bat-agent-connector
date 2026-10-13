@@ -19,6 +19,7 @@ for (const native of [false, true]) {
     await expect.poll(() => fixture.data.writes.length).toBe(1);
     expect(fixture.data.writes[0].body.action).toBe('session.send');
     await expect(input).toHaveValue('');
+    await page.getByRole('button', {name: 'More actions', exact: true}).click();
     await page.getByRole('combobox', {name: 'Send shortcut', exact: true}).selectOption('enter');
     await input.fill('繁體中文');
     await input.evaluate(el => {
@@ -33,6 +34,7 @@ for (const native of [false, true]) {
     await page.getByRole('combobox', {name: 'Send shortcut', exact: true}).selectOption('button');
     await input.press('Control+Enter'); expect(fixture.data.writes).toHaveLength(1);
     await page.reload();
+    await page.getByRole('button', {name: 'More actions', exact: true}).click();
     await expect(page.getByRole('combobox', {name: 'Send shortcut', exact: true})).toHaveValue('button');
     await expect(input).toHaveValue('繁體中文\n');
   });

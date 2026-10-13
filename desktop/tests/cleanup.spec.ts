@@ -262,7 +262,7 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
       const opener = page.getByRole("button", {name: /^(Results|成果)$/, exact: true});
       if (await opener.isVisible()) await opener.click();
       await page.locator(".workspace-evidence > summary").click();
-      await page.locator("button.secondary").filter({hasText: locale === "en-US" ? "Start agent work from this version" : "從這個檢查點建立代理工作"}).click();
+      await page.locator("button.secondary").filter({hasText: locale === "en-US" ? "Start from here" : "從這裡接續"}).click();
       const note = page.locator("[data-confinement-note]");
       await expect(note).toContainText("acceptEdits");
       await page.getByRole("combobox", {name: "Agent", exact: true}).selectOption("codex");

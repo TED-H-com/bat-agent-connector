@@ -65,7 +65,7 @@ for (const native of [false, true]) {
   test(`saved position restores across session entry and history pages without marking read (${platform})`, async ({page}) => {
     const {data, dispatch} = fixture();
     await mountConversation(page, native, dispatch); await page.goto('/dashboard/#/session/demo/session-1');
-    await page.getByRole('button', {name: 'Earlier messages'}).click();
+    await page.getByRole('button', {name: 'Load earlier'}).click();
     await expect(page.locator('[data-message-id="message-0"]')).toHaveCount(1);
     await page.locator('.conversation-scroll').evaluate(el => el.scrollTop = 400);
     const remember = page.getByRole('button', {name: 'Remember reading position'});

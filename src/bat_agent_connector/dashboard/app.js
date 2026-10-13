@@ -5428,7 +5428,7 @@ var STRINGS = {
 		workspace_stale: "工作樹尚未更新，保留上次讀取的資料。",
 		workspace_work_details: "工作與成果",
 		workspace_result: "成果與交付",
-		workspace_result_empty: "尚無明確關聯的成果。可從下方保留檢查點。",
+		workspace_result_empty: "尚無關聯成果",
 		workspace_work_missing: "目前專案資料中找不到這筆工作，請重新整理工作樹。",
 		workspace_refresh: "重新讀取工作樹",
 		workspace_resizer: "調整側欄寬度",
@@ -5495,6 +5495,8 @@ var STRINGS = {
 		message_you: "你",
 		message_system: "系統",
 		message_window: "最近 30 則訊息",
+		message_window_showing: "顯示最近 30 則",
+		message_load_earlier: "載入更早",
 		message_anchor_missing: "原本閱讀的位置已不在這次載入的訊息中。",
 		tailscale_request: "原開啟請求",
 		tailscale_title: "Tailscale",
@@ -5525,6 +5527,8 @@ var STRINGS = {
 		bat_copy_id: "複製完整 ID",
 		bat_copied: "已複製。",
 		bat_copy_manually: "請選取並複製以下完整內容。",
+		bat_menu_title: "複製標題",
+		bat_menu_id: "複製 ID",
 		bat_open: "在 BAT 中開啟",
 		bat_browser: "請在 BAT 中搜尋上方完整標題或 ID。桌面版可選擇並開啟 BAT profile。",
 		bat_profile: "BAT profile",
@@ -5812,7 +5816,7 @@ var STRINGS = {
 		sessions_not_seen: "最近掃描未見",
 		sessions_stale: "觀測待更新",
 		sessions_activity_unknown: "活動狀態未確認",
-		permissions_title: "Session 權限",
+		permissions_title: "工作階段權限",
 		permissions_mode: "要求的模式",
 		permissions_default: "一般權限",
 		permissions_allow_all: "全部允許",
@@ -5930,7 +5934,7 @@ var STRINGS = {
 		obs_snapshot: "固定 journal 快照：{seq}。",
 		obs_historical_limits: "早期歷程可能不完整；未知時間不會推測。",
 		obs_first_recorded: "最早記錄",
-		obs_relations: "Execution 與 Session 關係",
+		obs_relations: "執行與工作階段關係",
 		obs_history: "資源歷程",
 		obs_include_closed: "包含已關閉關係",
 		obs_execution: "Execution",
@@ -6616,6 +6620,11 @@ var STRINGS = {
 		session_sources_empty: "尚無成果來源",
 		session_details: "詳細資料",
 		session_discuss: "與專案討論",
+		session_checkpoint_unavailable: "此主機無法建立檢查點",
+		session_sent_now: "已送出 · 剛剛",
+		session_send_queued: "已排隊",
+		session_send_failed: "失敗",
+		session_send_retry: "重試",
 		session_back: "返回{view}",
 		session_send_waiting: "正在讀取最新內容。",
 		session_send_scope: "這個登入不能送出訊息。",
@@ -6629,7 +6638,7 @@ var STRINGS = {
 		allow: "允許",
 		deny: "拒絕",
 		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
-		continue_from_checkpoint: "從這個檢查點建立代理工作",
+		continue_from_checkpoint: "從這裡接續",
 		checkpoints: "檢查點",
 		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的 clone 裡用新的 branch 與工作階段進行。",
 		create_checkpoint: "記下這個檢查點",
@@ -6900,7 +6909,7 @@ var STRINGS = {
 		workspace_stale: "The tree could not refresh. Last observed work is retained.",
 		workspace_work_details: "Work and results",
 		workspace_result: "Results and delivery",
-		workspace_result_empty: "No linked result yet. You can record a checkpoint below.",
+		workspace_result_empty: "No linked result yet",
 		workspace_work_missing: "This work is no longer in the current project response. Refresh the work tree.",
 		workspace_refresh: "Refresh work tree",
 		workspace_resizer: "Resize sidebar",
@@ -6983,6 +6992,8 @@ var STRINGS = {
 		message_you: "You",
 		message_system: "System",
 		message_window: "Latest 30 messages",
+		message_window_showing: "Showing latest 30",
+		message_load_earlier: "Load earlier",
 		message_anchor_missing: "Your previous reading position is outside the messages currently loaded.",
 		tailscale_request: "Original opening request",
 		tailscale_title: "Tailscale",
@@ -7013,6 +7024,8 @@ var STRINGS = {
 		bat_copy_id: "Copy full ID",
 		bat_copied: "Copied.",
 		bat_copy_manually: "Select and copy the complete text below.",
+		bat_menu_title: "Copy title",
+		bat_menu_id: "Copy ID",
 		bat_open: "Open in BAT",
 		bat_browser: "Search in BAT using the full title or ID above. The desktop app can open an explicitly chosen BAT profile.",
 		bat_profile: "BAT profile",
@@ -8104,6 +8117,11 @@ var STRINGS = {
 		session_sources_empty: "No result sources",
 		session_details: "Details",
 		session_discuss: "Discuss with PM",
+		session_checkpoint_unavailable: "Not available on this host",
+		session_sent_now: "Sent · just now",
+		session_send_queued: "Queued",
+		session_send_failed: "Failed",
+		session_send_retry: "Retry",
 		session_back: "Back to {view}",
 		session_send_waiting: "Waiting for a fresh read.",
 		session_send_scope: "This sign-in cannot send.",
@@ -8117,7 +8135,7 @@ var STRINGS = {
 		allow: "Allow",
 		deny: "Deny",
 		read_only_note: "A person created this session in BAT, so the API never writes to it. To have an agent continue, start a new managed session from its commit.",
-		continue_from_checkpoint: "Start agent work from this version",
+		continue_from_checkpoint: "Start from here",
 		checkpoints: "Checkpoints",
 		checkpoint_help: "Records this session's current commit and recent conversation (read-only; the session and its folder are not changed). Agent work started from it runs in the connector's own clone on a new branch and session.",
 		create_checkpoint: "Record this version",
@@ -8327,6 +8345,19 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 var paths = {
+	"clipboard": [["rect", {
+		"width": "8",
+		"height": "4",
+		"x": "8",
+		"y": "2",
+		"rx": "1",
+		"ry": "1"
+	}], ["path", { "d": "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" }]],
+	"external-link": [
+		["path", { "d": "M15 3h6v6" }],
+		["path", { "d": "M10 14 21 3" }],
+		["path", { "d": "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]
+	],
 	"layout-dashboard": [
 		["rect", {
 			"width": "7",
@@ -8479,6 +8510,7 @@ var paths = {
 	],
 	"chevron-right": [["path", { "d": "m9 18 6-6-6-6" }]],
 	"chevron-down": [["path", { "d": "m6 9 6 6 6-6" }]],
+	"chevron-up": [["path", { "d": "m18 15-6-6-6 6" }]],
 	"chevron-left": [["path", { "d": "m15 18-6-6 6-6" }]],
 	"x": [["path", { "d": "M18 6 6 18" }], ["path", { "d": "m6 6 12 12" }]],
 	"more-horizontal": [
@@ -8567,9 +8599,6 @@ function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
 }
-function emptyState({ icon, title, text, action }) {
-	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
-}
 var disclosures = new Map();
 function disclosure({ label, body, open = false, key }) {
 	const root = h$1("details", {
@@ -8611,25 +8640,36 @@ function menu({ button: trigger, items }) {
 	trigger.setAttribute("aria-haspopup", "menu");
 	trigger.setAttribute("aria-controls", panel.id);
 	trigger.setAttribute("aria-expanded", "false");
-	const controls = items.map((item) => h$1(item.href ? "a" : "button", {
-		type: item.href ? null : "button",
-		href: item.href,
-		role: "menuitem",
-		"data-menu-key": item.key,
-		tabindex: -1,
-		disabled: item.href ? null : item.disabled,
-		"aria-disabled": item.disabled ? "true" : null,
-		onclick: (event) => {
-			if (item.disabled) {
-				event.preventDefault();
-				return;
-			}
-			close();
-			item.onSelect?.();
+	for (const item of items) {
+		if (item.content) {
+			panel.append(h$1("div", {
+				class: "ui-menu-group",
+				role: "group",
+				"aria-label": item.label,
+				"data-menu-key": item.key
+			}, item.content));
+			continue;
 		}
-	}, nodeIcon(item.icon), item.label));
-	panel.append(...controls);
-	const enabledControls = () => controls.filter((node) => node.getAttribute("aria-disabled") !== "true");
+		panel.append(h$1(item.href ? "a" : "button", {
+			type: item.href ? null : "button",
+			href: item.href,
+			role: "menuitem",
+			"data-menu-key": item.key,
+			tabindex: -1,
+			title: item.title,
+			disabled: item.href ? null : item.disabled,
+			"aria-disabled": item.disabled ? "true" : null,
+			onclick: (event) => {
+				if (item.disabled) {
+					event.preventDefault();
+					return;
+				}
+				close();
+				item.onSelect?.();
+			}
+		}, nodeIcon(item.icon), item.label));
+	}
+	const enabledControls = () => [...panel.querySelectorAll("[role=\"menuitem\"], select:not(:disabled)")].filter((node) => node.getAttribute("aria-disabled") !== "true");
 	function close(restore = true) {
 		panel.hidden = true;
 		trigger.setAttribute("aria-expanded", "false");
@@ -8640,6 +8680,7 @@ function menu({ button: trigger, items }) {
 		if (!root.contains(event.target)) close(false);
 	}
 	function keys(event) {
+		if (event.target?.matches?.("select, input, textarea")) return;
 		if (event.key === "Escape") {
 			event.preventDefault();
 			event.stopPropagation();
@@ -28318,7 +28359,7 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
 		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
 		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
 		infoToggle.setAttribute("aria-label", label);
-		infoToggle.textContent = (isInfoCollapsed ? "▸ " : "▾ ") + label;
+		infoToggle.replaceChildren(icon(isInfoCollapsed ? "chevron-down" : "chevron-up"));
 	};
 	infoToggle.addEventListener("click", () => {
 		if (!alive()) return;
@@ -28348,9 +28389,9 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
 		const hasDraft = (textarea?.value || "").trim().length > 0;
 		composer.classList.toggle("workspace-composer-collapsed", isComposerCollapsed);
 		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
-		const baseText = isComposerCollapsed ? t("mobile_compose_open") : `▾ ${t("mobile_compose_close")}`;
+		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
 		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-		composerToggle.textContent = baseText + draftSuffix;
+		composerToggle.replaceChildren(icon(isComposerCollapsed ? "chevron-down" : "chevron-up"));
 		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
 		composerToggle.classList.toggle("has-draft", hasDraft);
 	};
@@ -28957,12 +28998,14 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		}
 	}, t("conversation_remember"));
 	const older = h("button", {
-		class: "mini",
+		class: "conversation-earlier",
 		type: "button",
 		hidden: true,
 		onclick: () => run(() => readingActions.older())
-	}, t("conversation_older"));
-	const box = h("section", { class: "panel conversation" }, h("div", { class: "muted" }, t("message_window")), notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingActions ? h("div", { class: "actions" }, progress, mark, remember, older) : null, fallback);
+	}, t("message_load_earlier"));
+	const caption = h("p", { class: "muted conversation-window" }, t("message_window"));
+	const readingBar = readingActions ? h("div", { class: "actions" }, progress, mark, remember) : null;
+	const box = h("section", { class: "panel conversation" }, caption, notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingBar, fallback);
 	let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
 	const alive = () => {
 		if (disposed) return false;
@@ -29073,12 +29116,15 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 					extra: h("span", { class: "message-extra" }),
 					who: h("span", { class: "who" })
 				};
-				row.who.append(row.name, row.time, row.extra);
+				row.chip = h("span", { class: "message-chip" });
+				row.who.append(row.name, row.time, row.chip, row.extra);
 				row.node = h("article", { class: "msg" }, h("div", { class: "message-meta" }, row.mark, row.who, h("button", {
-					class: "mini",
+					class: "message-copy",
 					type: "button",
+					"aria-label": t("message_copy"),
+					title: t("message_copy"),
 					onclick: () => copy(row.text)
-				}, t("message_copy"))), row.body);
+				}, icon("clipboard"))), row.body);
 			}
 			const extras = [];
 			const knownStatus = new Set([
@@ -29093,14 +29139,16 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			const statusWord = (value) => knownStatus.has(value) ? t("message_status_" + value) : value;
 			if (message.role === "tool") extras.push(message.tool || t("obs_unknown"), t("message_tool_status", { status: statusWord(message.denied ? "denied" : message.deferred ? "deferred" : message.status || "unknown") }));
 			else if (typeof message.status === "string") extras.push(t("message_tool_status", { status: statusWord(message.status) }));
-			if (typeof message.agent === "string") extras.push(t("message_agent", { agent: message.agent }));
-			if (typeof message.model === "string") extras.push(t("message_model", { model: message.model }));
+			const chip = [];
+			if (typeof message.agent === "string") chip.push(message.agent);
+			if (typeof message.model === "string") chip.push(message.model);
 			if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0) extras.push(t("message_duration", { ms: message.duration_ms }));
 			const whoName = message.role === "user" ? t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : message.agent || t("agent");
 			const stamp = when(message.ts);
 			const meta = JSON.stringify([
 				whoName,
 				stamp,
+				chip,
 				extras
 			]);
 			if (row.meta !== meta) {
@@ -29109,7 +29157,8 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.name.textContent = whoName;
 				row.time.textContent = stamp;
 				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
-				row.extra.textContent = extras.length ? " · " + extras.join(" · ") : "";
+				row.chip.textContent = chip.join(" · ");
+				row.extra.textContent = extras.join(" · ");
 				row.meta = meta;
 			}
 			row.node.className = `msg${message.role === "user" ? " user" : ""}`;
@@ -29187,8 +29236,15 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		}
 		if (readingActions && state) {
 			reading = state.reading;
-			older.hidden = state.next_offset == null;
 			olderWindow = Boolean(state.olderWindow);
+			const canOlder = state.next_offset != null;
+			older.hidden = !canOlder;
+			older.textContent = t("message_load_earlier");
+			if (canOlder) caption.replaceChildren(t("message_window_showing") + "\xA0· ", older);
+			else {
+				if (older.parentElement === caption) readingBar?.append(older);
+				caption.textContent = t("message_window");
+			}
 			progress.textContent = reading?.unread_count == null ? t("conversation_unknown") : t(reading.complete ? "conversation_unread" : "conversation_partial", { count: reading.unread_count });
 			progress.title = t("conversation_count_note");
 		}
@@ -30785,6 +30841,52 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 			update();
 		}
 	};
+}
+//#endregion
+//#region src/ui/time.js
+var MONTHS = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec"
+];
+var DAY = 864e5;
+function clock(date, zh) {
+	let hour = date.getHours();
+	const minute = String(date.getMinutes()).padStart(2, "0");
+	const period = hour < 12 ? zh ? "上午" : "AM" : zh ? "下午" : "PM";
+	let h12 = hour % 12;
+	if (h12 === 0) h12 = 12;
+	return zh ? `${period}${h12}:${minute}` : `${h12}:${minute} ${period}`;
+}
+function language(locale) {
+	if (typeof locale === "string" && locale) return locale;
+	if (typeof navigator !== "undefined" && navigator.language) return navigator.language;
+	return "en";
+}
+function compactTime(value, { locale, now = Date.now() } = {}) {
+	if (value == null || value === "") return "";
+	const date = value instanceof Date ? value : new Date(value);
+	if (Number.isNaN(date.getTime())) return String(value);
+	const zh = language(locale).toLowerCase().startsWith("zh");
+	const delta = now - date.getTime();
+	if (delta >= 0 && delta < DAY) {
+		const minutes = Math.floor(delta / 6e4);
+		if (minutes < 1) return zh ? "剛剛" : "just now";
+		if (minutes < 60) return zh ? `${minutes} 分鐘前` : `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		return zh ? `${hours} 小時前` : `${hours}h ago`;
+	}
+	if (zh) return `${date.getMonth() + 1}月${date.getDate()}日 ${clock(date, true)}`;
+	return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${clock(date, false)}`;
 }
 //#endregion
 //#region src/native-files.js
@@ -33804,7 +33906,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		class: "session-bat",
 		"aria-label": t("bat_handoff")
 	});
-	const actions = h("div", { class: "actions" }), content = h("div", { hidden: true });
+	const content = h("div", { hidden: true });
 	const message = h("p", {
 		class: "muted",
 		role: "status"
@@ -33902,7 +34004,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			if (!alive()) return;
 			const input = h("textarea", {
 				readonly: true,
-				"aria-label": t(field === "title" ? "bat_copy_title" : "bat_copy_id")
+				"aria-label": t(field === "title" ? "bat_menu_title" : "bat_menu_id")
 			}, value);
 			copyFallback.replaceChildren(h("p", { class: "muted" }, t("bat_copy_manually")), input);
 			input.focus();
@@ -33969,10 +34071,6 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			disabled: busy || disabled,
 			onclick: fn
 		}, t(key));
-		actions.replaceChildren(button("bat_copy_title", () => copy("title"), !session()?.title), button("bat_copy_id", () => copy("id"), !session()?.session_id), button("bat_open", () => {
-			expanded = true;
-			run(read);
-		}, !nativeDesktop));
 		content.hidden = !expanded;
 		if (!expanded) return;
 		const fixed = !!intent || damaged;
@@ -34004,8 +34102,6 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		lines.push(h("div", { class: "actions" }, ...buttons), h("p", { class: "muted" }, t("bat_preferences"), " ", h("a", { href: "#/settings" }, t("nav_settings"))));
 		content.replaceChildren(...lines);
 	};
-	box.append(actions);
-	if (!nativeDesktop) box.append(h("p", { class: "muted" }, t("bat_browser")));
 	box.append(content, copyFallback, message);
 	render();
 	if (nativeDesktop && expanded) queueMicrotask(() => run(read));
@@ -34014,6 +34110,12 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		update: render,
 		dispose: () => {
 			disposed = true;
+		},
+		copyTitle: () => copy("title"),
+		copyId: () => copy("id"),
+		open: () => {
+			expanded = true;
+			run(read);
 		}
 	};
 }
@@ -36253,6 +36355,22 @@ function when(iso) {
 	const d = new Date(iso);
 	return isNaN(d) ? iso : d.toLocaleString();
 }
+function sessionWhen(value) {
+	if (value == null || value === "") return "";
+	return compactTime(typeof value === "number" ? new Date(value * 1e3).toISOString() : value);
+}
+function metaTail(text, sep) {
+	const words = String(text).trim().split(/\s+/);
+	const last = words.pop() || "";
+	return [words.length ? words.join(" ") + " " : "", last + (sep ? "\xA0·" : "")];
+}
+function metaAnchor(href, text, sep, quiet) {
+	const [head, tail] = metaTail(text, sep);
+	return h("a", {
+		href,
+		class: quiet ? "session-host" : null
+	}, head, h("span", { class: "session-meta-tail" }, tail));
+}
 async function draftId(scope, request) {
 	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(request)));
 	return `${scope}.${[...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
@@ -37916,7 +38034,7 @@ async function viewSession(main, host, sid, context = null) {
 	const conversation = conversationPanel({
 		h,
 		t,
-		when,
+		when: sessionWhen,
 		guard: () => assertView(connection),
 		memory: viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`),
 		readingActions: readingSupported ? {
@@ -37965,7 +38083,7 @@ async function viewSession(main, host, sid, context = null) {
 					queue: queue.checked
 				}, {}, scope);
 				assertView(connection);
-				status.replaceChildren(opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+				paintSend(op);
 				if (op.status === "succeeded" && box.value === submitted) {
 					box.value = "";
 					try {
@@ -38001,6 +38119,35 @@ async function viewSession(main, host, sid, context = null) {
 			}
 		}
 	});
+	const paintSend = (op) => {
+		const id = typeof op?.operation_id === "string" ? op.operation_id : "";
+		const queued = [
+			"queued",
+			"accepted",
+			"pending",
+			"running"
+		].includes(op.status);
+		const failed = op.status === "failed" || op.status === "cancelled";
+		const line = h("p", {
+			class: "muted session-send-line",
+			title: id || null
+		});
+		if (op.status === "succeeded") line.textContent = t("session_sent_now");
+		else if (queued) line.textContent = t("session_send_queued");
+		else if (failed) line.append(t("session_send_failed"), " · ", h("button", {
+			type: "button",
+			class: "session-retry",
+			onclick: () => send.click()
+		}, t("session_send_retry")));
+		else line.textContent = t("op_" + op.status);
+		const record = id ? disclosure({
+			label: t("session_details"),
+			body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(id)}` }, id)),
+			key: `session-send:${connection.namespace}:${host}:${sid}`
+		}) : null;
+		if (record) record.classList.add("session-send-record");
+		status.replaceChildren(line, record);
+	};
 	const shortcut = composerShortcut({
 		h,
 		t,
@@ -38016,7 +38163,7 @@ async function viewSession(main, host, sid, context = null) {
 	const composer = h("div", {
 		hidden: true,
 		id: "workspace-message-input"
-	}, box, h("div", { class: "actions" }, send, h("label", { class: "muted" }, queue, " ", t("queue_behind"))), shortcut.box);
+	}, box, h("div", { class: "composer-row" }, h("label", { class: "composer-queue" }, queue, t("queue_behind")), send));
 	const readonly = h("p", { class: "note" }, t("session_access_unknown"));
 	let capture, permissions, batHandoff, sourcesPanel;
 	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
@@ -38051,7 +38198,7 @@ async function viewSession(main, host, sid, context = null) {
 		if (instructions.box.open) instructions.refresh();
 	});
 	const deliveryPills = h("div", { class: "session-delivery-pills" });
-	const sourcesBody = h("div", { "data-session-sources": "" }, emptyState({ title: t("session_sources_empty") }));
+	const sourcesBody = h("div", { "data-session-sources": "" }, h("p", { class: "muted session-quiet" }, t("session_sources_empty")));
 	const details = disclosure({
 		label: t("session_details"),
 		body: metadata,
@@ -38074,17 +38221,47 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
+	const sessionSection = (name, title, body) => h("section", { class: "session-section" }, h("h2", { class: "session-section-title" }, icon(name, { size: 16 }), title), body);
 	const overflow = menu({
 		button: iconButton({
 			icon: "more-horizontal",
 			label: t("ui_more")
 		}),
-		items: [{
-			key: "discuss",
-			label: t("session_discuss"),
-			href: "#",
-			icon: "message-square"
-		}]
+		items: [
+			{
+				key: "discuss",
+				label: t("session_discuss"),
+				href: "#",
+				icon: "message-square"
+			},
+			{
+				key: "copy-title",
+				label: t("bat_menu_title"),
+				icon: "clipboard",
+				title: t("bat_browser"),
+				onSelect: () => batHandoff?.copyTitle()
+			},
+			{
+				key: "copy-id",
+				label: t("bat_menu_id"),
+				icon: "clipboard",
+				title: t("bat_browser"),
+				onSelect: () => batHandoff?.copyId()
+			},
+			{
+				key: "open-bat",
+				label: t("bat_open"),
+				icon: "external-link",
+				title: t("bat_browser"),
+				disabled: !nativeDesktop,
+				onSelect: () => batHandoff?.open()
+			},
+			{
+				key: "shortcut",
+				label: t("composer_shortcut"),
+				content: shortcut.box
+			}
+		]
 	});
 	const header = pageHeader({
 		title: titleNode,
@@ -38097,30 +38274,9 @@ async function viewSession(main, host, sid, context = null) {
 	head.append(backSlot, header);
 	results.body.append(...[
 		context?.itemBox,
-		sectionCard({
-			title: [
-				icon("folder"),
-				" ",
-				t("session_changes")
-			],
-			body: h("div", {}, captureSlot, cps.box, artifactSlot)
-		}),
-		sectionCard({
-			title: [
-				icon("check"),
-				" ",
-				t("session_delivery")
-			],
-			body: result
-		}),
-		sectionCard({
-			title: [
-				icon("inbox"),
-				" ",
-				t("session_sources")
-			],
-			body: sourcesBody
-		}),
+		sessionSection("folder", t("session_changes"), h("div", {}, captureSlot, cps.box, artifactSlot)),
+		sessionSection("check", t("session_delivery"), result),
+		sessionSection("inbox", t("session_sources"), sourcesBody),
 		batSlot,
 		permissionsSlot,
 		labels.box,
@@ -38339,19 +38495,44 @@ async function viewSession(main, host, sid, context = null) {
 		titleNode.textContent = row.title || sid;
 		markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
 		pillSlot.replaceChildren(statusPill(sessionStatus(row)));
-		const metaParts = [];
-		if (context?.project?.name) metaParts.push(h("a", { href: `#/project/${encodeURIComponent(context.project.project_id)}` }, context.project.name));
-		else if (row.workspace) metaParts.push(h("span", {}, row.workspace));
-		metaParts.push(h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host || host));
-		if (row.observed_at) metaParts.push(h("time", {}, when(typeof row.observed_at === "number" ? new Date(row.observed_at * 1e3).toISOString() : row.observed_at)));
-		meta.replaceChildren(...metaParts);
+		const metaBits = [];
+		if (context?.project?.name) metaBits.push({
+			kind: "link",
+			href: `#/project/${encodeURIComponent(context.project.project_id)}`,
+			text: context.project.name
+		});
+		else if (row.workspace) metaBits.push({
+			kind: "text",
+			text: row.workspace
+		});
+		metaBits.push({
+			kind: "link",
+			href: `#/host/${encodeURIComponent(host)}`,
+			text: row.host || host,
+			quiet: true
+		});
+		const observedIso = typeof row.observed_at === "number" ? new Date(row.observed_at * 1e3).toISOString() : row.observed_at;
+		if (row.observed_at) metaBits.push({
+			kind: "time",
+			text: sessionWhen(row.observed_at),
+			dateTime: typeof observedIso === "string" ? observedIso : ""
+		});
+		meta.replaceChildren(...metaBits.flatMap((bit, index) => {
+			const sep = index < metaBits.length - 1;
+			const [head, tail] = metaTail(bit.text, sep);
+			const node = bit.kind === "time" ? h("time", {
+				class: "session-meta-time",
+				dateTime: bit.dateTime || ""
+			}, bit.text) : bit.kind === "text" ? h("span", {}, head, sep ? h("span", { class: "session-meta-tail" }, tail) : tail) : metaAnchor(bit.href, bit.text, sep, bit.quiet);
+			return index ? [" ", node] : [node];
+		}));
 		paintOrigin();
 		mobileLayout?.updateInfo();
 		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"
-		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, observationTime(row.observed_at), row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
+		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, sessionWhen(row.observed_at) || t("obs_unknown"), row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
 		if (!batHandoff) batHandoff = sessionBatPanel({
 			h,
 			t,
@@ -38567,7 +38748,7 @@ function checkpointPanel(host, sid) {
 		}, t("start_agent_work"));
 		const form = h("div", { hidden: true }, confinementNote(host, agent), instr, draft.box, h("div", { class: "actions" }, agent, go), out);
 		return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
-			when(epoch(cp.captured_at)),
+			sessionWhen(cp.captured_at),
 			cp.actor,
 			t("excerpt_count", { n: cp.excerpt_messages })
 		].join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form), h("button", {
@@ -38592,7 +38773,7 @@ function checkpointPanel(host, sid) {
 				session_id: sid,
 				limit: "10"
 			})}`);
-			list.replaceChildren(...page.checkpoints.length ? page.checkpoints.map(row) : [h("p", { class: "muted" }, t("no_checkpoints"))]);
+			list.replaceChildren(...page.checkpoints.length ? page.checkpoints.map(row) : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []);
 		} catch (e) {
 			list.replaceChildren(errorBox(e));
 		}
@@ -38628,6 +38809,7 @@ function checkpointPanel(host, sid) {
 	};
 	const create = h("button", {
 		class: "secondary",
+		hidden: !can,
 		disabled: !can,
 		onclick: async () => {
 			create.disabled = true;
@@ -38654,8 +38836,13 @@ function checkpointPanel(host, sid) {
 			create.disabled = !can || previewFailed;
 		}
 	}, t("create_checkpoint"));
+	const checkpointWhy = disclosure({
+		label: t("session_details"),
+		key: `session-checkpoint:${host}:${sid}`,
+		body: h("div", {}, h("p", { class: "muted" }, t("checkpoint_help")), h("p", { class: "muted" }, t("checkpoint_unavailable")), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")))
+	});
 	return {
-		box: h("div", { class: "panel" }, h("h2", {}, t("checkpoints")), h("p", { class: "muted" }, t("checkpoint_help")), can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")), can && !mayStart ? h("p", { class: "muted" }, t("needs_start_scope")) : null, note, h("div", { class: "actions" }, pick, create), status, list),
+		box: h("div", { class: "session-checkpoints" }, h("h3", { class: "session-subsection" }, t("checkpoints")), can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), note, can ? h("div", { class: "actions" }, pick, create) : null, status, list, checkpointWhy),
 		load: async () => {
 			await loadPreview();
 			await load();

@@ -15,12 +15,15 @@ for (const native of [false,true]) {
     await expect(page.locator('.conversation th')).toHaveText(['Option','Result']);
     await expect(page.locator('.conversation strong')).toHaveText('A');
     await expect(page.locator('.conversation img,.conversation script,.conversation a')).toHaveCount(0);
-    await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
+    const last = page.locator('.msg').last();
+    await last.hover();
+    await last.getByRole('button',{name:'Copy original',exact:true}).click();
     await expect.poll(()=>copied).toEqual([data.messages.at(-1)!.text]);
     await page.getByRole('button',{name:'Copy code',exact:true}).click();
     await expect.poll(()=>copied[1]).toBe('const result = "<script>fixture only</script>";\r\nconsole.log(result);\r\n');
     await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{throw new Error('denied');}}}));
-    await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
+    await last.hover();
+    await last.getByRole('button',{name:'Copy original',exact:true}).click();
     const fallback=page.getByRole('textbox',{name:'Original text to copy'});
     await expect(fallback).toHaveValue(data.messages.at(-1)!.text.replace(/\r\n/g,'\n'));
     const manual=await fallback.evaluate(el=>{
@@ -39,6 +42,7 @@ for (const native of [false,true]) {
     const draft=page.locator('textarea').first(); await draft.fill('Keep this draft');
     const row=page.locator('.msg').nth(3);
     await row.evaluate(el=>{const box=el.closest('.conversation-scroll')!; box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top;});
+    await row.hover();
     await row.getByRole('button',{name:'Copy original'}).focus();
     await row.locator('.message-text').evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection()!;selection.removeAllRanges();selection.addRange(range);});
     const oldTop=await row.evaluate(el=>el.getBoundingClientRect().top), selected=await page.evaluate(()=>String(window.getSelection()));
@@ -88,6 +92,7 @@ for (const native of [false,true]) {
     await expect(page.locator('.msg')).toHaveCount(12);
     const row=page.locator('.msg').filter({hasText:'Review note 5'});
     await row.evaluate(el=>{const box=el.closest('.conversation-scroll')!; box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top;});
+    await row.hover();
     await row.getByRole('button',{name:'Copy original'}).focus();
     const top=await row.evaluate(el=>el.getBoundingClientRect().top);
     data.messages=data.messages.slice(2); data.cursor++;
@@ -99,7 +104,10 @@ for (const native of [false,true]) {
   test(`late clipboard failure cannot show a previous session's text after navigation (${platform})`, async ({page}) => {
     const {dispatch}=conversationFixture(); await mountConversation(page,native,dispatch);
     await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>new Promise((_,reject)=>Object.assign(window,{rejectCopy:reject}))}}));
-    await page.goto('/dashboard/#/session/demo/session-1'); await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
+    await page.goto('/dashboard/#/session/demo/session-1');
+    const late = page.locator('.msg').last();
+    await late.hover();
+    await late.getByRole('button',{name:'Copy original',exact:true}).click();
     await page.getByRole('button', {name: 'Tools', exact: true}).click();
     await page.getByRole('menuitem',{name:'Sessions',exact:true}).click();
     await expect(page.locator('.conversation')).toHaveCount(0);
@@ -117,7 +125,10 @@ for (const native of [false,true]) {
       await page.locator('.conversation').evaluate(el=>scrollBy(0,el.getBoundingClientRect().top-document.querySelector('.top')!.getBoundingClientRect().bottom-12));
       await page.locator('.conversation-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-      await expect(page.getByRole('button',{name:locale==='zh-TW'?'複製原文':'Copy original',exact:true}).last()).toBeVisible();
+      const article = page.locator('.msg').last();
+      const copyName = locale==='zh-TW'?'複製原文':'Copy original';
+      if (width > 800) await article.hover();
+      await expect(article.getByRole('button',{name:copyName,exact:true})).toBeVisible();
       await page.screenshot({path:info.outputPath(`conversation-${platform}-${locale}-${width}.png`)});
       expect(errors).toEqual([]); expect(data.writes).toEqual([]);
     });

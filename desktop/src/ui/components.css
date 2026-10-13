@@ -1,4 +1,4 @@
-.ui-icon { flex: none; vertical-align: middle; }
+.ui-icon { flex: none; vertical-align: middle; pointer-events: none; }
 .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 32px; padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: inherit; cursor: pointer; text-decoration: none; transition: background var(--motion); }
 .ui-button.ui-md { min-height: 32px; padding: 4px 12px; }
 .ui-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
@@ -53,6 +53,8 @@
 .ui-menu-panel { position: absolute; right: 0; top: calc(100% + 4px); min-width: 180px; max-width: min(360px, calc(100vw - 32px)); z-index: 40; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-overlay); padding: var(--space-1); }
 .ui-menu-panel [role=menuitem] { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--r-xs); min-height: 32px; padding: 6px 10px; font: inherit; text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
 .ui-menu-panel [role=menuitem]:focus, .ui-menu-panel [role=menuitem]:hover { background: var(--surface-2); }
+.ui-menu-group { display: grid; gap: var(--space-1); padding: 6px 10px; }
+.ui-menu-group select { max-width: 100%; font: inherit; }
 .ui-inspector { position: sticky; top: 64px; width: 400px; max-width: 100%; max-height: calc(100vh - 80px); overflow: auto; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
 .ui-inspector[hidden] { display: none; }
 @media (min-width: 1200px) {

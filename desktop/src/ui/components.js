@@ -91,16 +91,22 @@ export function menu({button: trigger, items}) {
   const panel = h('div', {class: 'ui-menu-panel', role: 'menu', id: uid(), hidden: true});
   const root = h('div', {class: 'ui-menu'}, trigger, panel);
   trigger.setAttribute('aria-haspopup', 'menu'); trigger.setAttribute('aria-controls', panel.id); trigger.setAttribute('aria-expanded', 'false');
-  const controls = items.map(item => h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem', 'data-menu-key': item.key,
-    tabindex: -1, disabled: item.href ? null : item.disabled, 'aria-disabled': item.disabled ? 'true' : null,
-    onclick: event => {if (item.disabled) {event.preventDefault(); return;} close(); item.onSelect?.();}}, nodeIcon(item.icon), item.label));
-  panel.append(...controls);
-  const enabledControls = () => controls.filter(node => node.getAttribute('aria-disabled') !== 'true');
+  for (const item of items) {
+    if (item.content) {
+      panel.append(h('div', {class: 'ui-menu-group', role: 'group', 'aria-label': item.label, 'data-menu-key': item.key}, item.content));
+      continue;
+    }
+    panel.append(h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem', 'data-menu-key': item.key,
+      tabindex: -1, title: item.title, disabled: item.href ? null : item.disabled, 'aria-disabled': item.disabled ? 'true' : null,
+      onclick: event => {if (item.disabled) {event.preventDefault(); return;} close(); item.onSelect?.();}}, nodeIcon(item.icon), item.label));
+  }
+  const enabledControls = () => [...panel.querySelectorAll('[role="menuitem"], select:not(:disabled)')].filter(node => node.getAttribute('aria-disabled') !== 'true');
   function close(restore = true) {panel.hidden = true; trigger.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outside);
     if (restore && root.isConnected) trigger.focus();}
   function outside(event) {if (!root.contains(event.target)) close(false);}
   function keys(event) {
+    if (event.target?.matches?.('select, input, textarea')) return;
     if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); close();}
     else if (event.key === 'Tab') close(false);
     else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {

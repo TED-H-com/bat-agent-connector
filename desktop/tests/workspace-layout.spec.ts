@@ -147,7 +147,8 @@ test.describe('Workspace Layout Controls', () => {
 
     // Check draft indicator
     await expect(composerToggle).toHaveClass(/has-draft/);
-    await expect(composerToggle).toContainText('Draft');
+    await expect(composerToggle).toHaveAttribute('aria-label', /Draft/);
+    await expect(composerToggle).not.toContainText('Collapse');
     await page.screenshot({ path: 'test-results/workspace-mobile-composer-collapsed-draft-390.png', fullPage: true });
 
     // Expand composer again
@@ -161,7 +162,7 @@ test.describe('Workspace Layout Controls', () => {
     await textarea.fill('');
     await composerToggle.click();
     await expect(composerToggle).not.toHaveClass(/has-draft/);
-    await expect(composerToggle).not.toContainText('Draft');
+    await expect(composerToggle).not.toHaveAttribute('aria-label', /Draft/);
   });
 
   test('visualViewport keyboard adaptation without treating pinch zoom as keyboard', async ({ page }) => {

@@ -1,4 +1,5 @@
 import {renderMessage} from "./message-format.js";
+import {icon} from "./ui/icons.js";
 
 // Scrolling never marks messages read. Personal receipts require an explicit action.
 export function conversationPanel({h, t, when, guard, readingActions = null, memory = null}) {
@@ -20,12 +21,14 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     if (row?.reading) run(() => readingActions.remember({message_id: row.id, revision: row.reading.revision,
       offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)}, reading?.position?.version || 0));
   }}, t("conversation_remember"));
-  const older = h("button", {class: "mini", type: "button", hidden: true,
-    onclick: () => run(() => readingActions.older())}, t("conversation_older"));
+  const older = h("button", {class: "conversation-earlier", type: "button", hidden: true,
+    onclick: () => run(() => readingActions.older())}, t("message_load_earlier"));
+  const caption = h("p", {class: "muted conversation-window"}, t("message_window"));
+  const readingBar = readingActions ? h("div", {class: "actions"}, progress, mark, remember) : null;
   const box = h("section", {class: "panel conversation"},
-    h("div", {class: "muted"}, t("message_window")), notice, viewport,
+    caption, notice, viewport,
     h("div", {class: "conversation-toolbar"}, status, latest),
-    readingActions ? h("div", {class: "actions"}, progress, mark, remember, older) : null, fallback);
+    readingBar, fallback);
   let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
   const alive = () => {if (disposed) return false; try {guard(); return true;} catch {return false;}};
   const atBottom = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 48;
@@ -97,9 +100,11 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
           mark: h("span", {class: "ui-agent-mark", "aria-hidden": "true"}),
           name: h("span", {class: "message-name"}), time: h("time", {class: "message-time"}),
           extra: h("span", {class: "message-extra"}), who: h("span", {class: "who"})};
-        row.who.append(row.name, row.time, row.extra);
+        row.chip = h("span", {class: "message-chip"});
+        row.who.append(row.name, row.time, row.chip, row.extra);
         row.node = h("article", {class: "msg"}, h("div", {class: "message-meta"}, row.mark, row.who,
-          h("button", {class: "mini", type: "button", onclick: () => copy(row.text)}, t("message_copy"))), row.body);
+          h("button", {class: "message-copy", type: "button", "aria-label": t("message_copy"), title: t("message_copy"),
+            onclick: () => copy(row.text)}, icon("clipboard"))), row.body);
       }
       const extras = [];
       const knownStatus = new Set(["completed", "error", "running", "unknown", "failed", "denied", "deferred"]);
@@ -107,8 +112,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       if (message.role === "tool") extras.push(message.tool || t("obs_unknown"),
         t("message_tool_status", {status: statusWord(message.denied ? "denied" : message.deferred ? "deferred" : message.status || "unknown")}));
       else if (typeof message.status === "string") extras.push(t("message_tool_status", {status: statusWord(message.status)}));
-      if (typeof message.agent === "string") extras.push(t("message_agent", {agent: message.agent}));
-      if (typeof message.model === "string") extras.push(t("message_model", {model: message.model}));
+      const chip = [];
+      if (typeof message.agent === "string") chip.push(message.agent);
+      if (typeof message.model === "string") chip.push(message.model);
       if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0)
         extras.push(t("message_duration", {ms: message.duration_ms}));
       const whoName = message.role === "user" ? t("message_you")
@@ -116,14 +122,15 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         : message.role === "system" ? t("message_system")
         : (message.agent || t("agent"));
       const stamp = when(message.ts);
-      const meta = JSON.stringify([whoName, stamp, extras]);
+      const meta = JSON.stringify([whoName, stamp, chip, extras]);
       if (row.meta !== meta) {
         const glyphs = Array.from(whoName);
         row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
         row.name.textContent = whoName;
         row.time.textContent = stamp;
         row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
-        row.extra.textContent = extras.length ? " · " + extras.join(" · ") : "";
+        row.chip.textContent = chip.join(" · ");
+        row.extra.textContent = extras.join(" · ");
         row.meta = meta;
       }
       row.node.className = `msg${message.role === "user" ? " user" : ""}`;
@@ -176,7 +183,12 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     }
     if (state?.latest) {viewport.scrollTop = viewport.scrollHeight; notice.hidden = true;}
     if (readingActions && state) {
-      reading = state.reading; older.hidden = state.next_offset == null; olderWindow = Boolean(state.olderWindow);
+      reading = state.reading; olderWindow = Boolean(state.olderWindow);
+      const canOlder = state.next_offset != null;
+      older.hidden = !canOlder;
+      older.textContent = t("message_load_earlier");
+      if (canOlder) caption.replaceChildren(t("message_window_showing") + "\u00a0· ", older);
+      else {if (older.parentElement === caption) readingBar?.append(older); caption.textContent = t("message_window");}
       progress.textContent = reading?.unread_count == null ? t("conversation_unknown")
         : t(reading.complete ? "conversation_unread" : "conversation_partial", {count: reading.unread_count});
       progress.title = t("conversation_count_note");

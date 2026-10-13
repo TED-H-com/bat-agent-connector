@@ -12,7 +12,8 @@ for (const native of [false, true]) test(`message-local metadata and visible exc
   page.on('pageerror', error => errors.push(error.message)); await mountConversation(page, native, dispatch);
   await page.goto('/dashboard/#/session/demo/session-1');
   const row = (id: string) => page.locator(`[data-message-id="${id}"]`);
-  await expect(row('new')).toContainText('Message model: message-model'); await expect(row('new')).toContainText('Message agent: codex');
+  await expect(row('new')).toContainText('codex · message-model');
+  await expect(row('new')).not.toContainText('Message model:'); await expect(row('new')).not.toContainText('Message agent:');
   await expect(row('new')).toContainText('Message duration: 2500 ms'); await expect(row('old')).not.toContainText('Message model:'); await expect(row('old')).toContainText('Status: failed');
   await expect(row('tool-completed').locator('details')).not.toHaveAttribute('open');
   for (const status of ['error', 'running', 'unknown']) {

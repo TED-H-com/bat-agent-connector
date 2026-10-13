@@ -64,7 +64,7 @@ a { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
-.ui-icon { flex: none; vertical-align: middle; }
+.ui-icon { flex: none; vertical-align: middle; pointer-events: none; }
 .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 32px; padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: inherit; cursor: pointer; text-decoration: none; transition: background var(--motion); }
 .ui-button.ui-md { min-height: 32px; padding: 4px 12px; }
 .ui-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
@@ -119,6 +119,8 @@ a { color: var(--accent); }
 .ui-menu-panel { position: absolute; right: 0; top: calc(100% + 4px); min-width: 180px; max-width: min(360px, calc(100vw - 32px)); z-index: 40; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-overlay); padding: var(--space-1); }
 .ui-menu-panel [role=menuitem] { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--r-xs); min-height: 32px; padding: 6px 10px; font: inherit; text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
 .ui-menu-panel [role=menuitem]:focus, .ui-menu-panel [role=menuitem]:hover { background: var(--surface-2); }
+.ui-menu-group { display: grid; gap: var(--space-1); padding: 6px 10px; }
+.ui-menu-group select { max-width: 100%; font: inherit; }
 .ui-inspector { position: sticky; top: 64px; width: 400px; max-width: 100%; max-height: calc(100vh - 80px); overflow: auto; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
 .ui-inspector[hidden] { display: none; }
 @media (min-width: 1200px) {
@@ -1292,10 +1294,32 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
   row-gap: 0; min-width: 0; flex: 1; }
 .session-workspace .message-meta .mini { margin-left: auto; flex: none; }
 .session-workspace .message-name { font-weight: 600; color: var(--text); }
-.session-workspace .message-extra { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+.session-workspace .message-name::after { content: "\00a0·"; font-weight: 400; color: var(--text-3); }
+.session-workspace .message-time { color: var(--text-3); white-space: nowrap; }
+.session-workspace .message-chip:empty, .session-workspace .message-extra:empty { display: none; }
+.session-workspace .message-chip:not(:empty), .session-workspace .message-extra:not(:empty) {
+  flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; color: var(--text-3);
+  font-size: var(--fs-caption); font-weight: 400; }
+.session-workspace .message-chip:not(:empty) {
+  display: inline-flex; align-items: center; width: fit-content; max-width: 100%; min-height: 20px;
+  margin-top: 2px; padding: 0 8px; border-radius: var(--r-pill); background: var(--surface-2); }
+.session-workspace .message-copy {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  margin-left: auto; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--text-3); cursor: pointer; flex: none; }
+.session-workspace .message-copy:hover, .session-workspace .message-copy:focus-visible {
+  background: var(--surface-2); color: var(--text); }
 .session-workspace .message-body { max-width: 760px; }
-.workspace-session-heading .workspace-session-meta { gap: var(--space-2) var(--space-3); }
-.workspace-session-heading .workspace-session-meta > :not(:first-child)::before { content: "·"; margin-right: var(--space-2); }
+.workspace-session-heading .workspace-session-meta { display: block; line-height: 1.45; }
+.workspace-session-heading .workspace-session-meta a { color: var(--text-3); text-decoration: none; }
+.workspace-session-heading .workspace-session-meta a:hover,
+.workspace-session-heading .workspace-session-meta a:focus-visible { text-decoration: underline; }
+.workspace-session-heading .session-meta-tail,
+.workspace-session-heading .session-meta-time { white-space: nowrap; }
+.workspace-session-heading .composer-shortcut { display: grid; gap: var(--space-1); margin: 0; }
+.workspace-session-heading .composer-shortcut label { display: grid; gap: 2px; margin: 0; }
+.workspace-session-heading .composer-shortcut select { width: 100%; max-width: 100%; }
+.workspace-session-heading .composer-shortcut .muted { margin: 0; color: var(--text-3); font-size: var(--fs-caption); }
 .session-workspace .message-tool > summary { max-width: 760px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; cursor: pointer; color: var(--text-2); min-height: 32px; line-height: 32px; }
 .session-workspace .conversation-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
@@ -1303,15 +1327,51 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-asking { display: grid; gap: var(--space-2); }
 .session-asking .title { display: flex; align-items: center; gap: var(--space-2); }
 .session-send-reason { margin: var(--space-1) 0; }
+.session-workspace .ui-inspector-body > .session-section {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  margin: 0; padding: var(--space-3) 0; border-top: 1px solid var(--line); }
+.session-workspace .ui-inspector-body > .session-section:first-child { border-top: 0; padding-top: 0; }
+.session-workspace .session-section-title {
+  display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2);
+  font-size: var(--fs-section); font-weight: 600; }
+.session-workspace .session-section-title .ui-icon { width: 16px; height: 16px; }
+.session-workspace .session-subsection { margin: var(--space-2) 0 var(--space-1); font-size: var(--fs-section); font-weight: 600; }
+.session-workspace .session-checkpoint-state, .session-workspace .session-quiet { margin: 0; color: var(--text-3); font-weight: 400; text-align: start; }
+.session-workspace .ui-inspector .panel { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+.session-workspace .session-bat { border-top: 0; margin-top: 0; padding-top: 0; }
+.session-workspace .session-bat:has(.actions) {
+  border-top: 1px solid var(--line); margin-top: var(--space-3); padding-top: var(--space-3); }
+.session-workspace .conversation-window { margin: 0 0 var(--space-1); font-size: var(--fs-caption); color: var(--text-3); }
+.session-workspace .conversation-earlier {
+  border: 0; background: transparent; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+.session-workspace .composer-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
+.session-workspace .composer-queue { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; min-width: 0; color: var(--text-2); }
+.session-workspace .composer-row .primary { flex: none; margin-left: auto; }
+.session-workspace .session-send-line { margin: var(--space-2) 0 0; }
+.session-workspace .session-retry { border: 0; background: transparent; padding: 0; color: var(--bad); font: inherit; cursor: pointer; text-decoration: underline; }
+.session-workspace .session-send-record { margin-top: var(--space-1); }
+.session-workspace .ui-menu-group .muted { margin: 0; color: var(--text-3); font-size: var(--fs-caption); }
 .session-workspace .ui-section-card header h2 { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); }
-.session-workspace .ui-section-card .panel h2 { margin-top: 0; }
 .session-workspace .ui-section-card .panel { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
 .session-delivery-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .session-workspace > .ui-inspector { width: auto; max-width: 100%; }
 @media (min-width: 1200px) {
   .session-workspace.workspace-session { grid-template-columns: minmax(0, 1fr) 400px; }
 }
+@media (hover: hover) and (pointer: fine) {
+  .session-workspace .message-copy { opacity: 0; }
+  .session-workspace .msg:hover .message-copy,
+  .session-workspace .msg:focus-within .message-copy { opacity: 1; }
+}
 @media (max-width: 800px) {
   .session-workspace .message-tool > summary,
-  .session-workspace .workspace-composer .ui-button { min-height: 44px; }
+  .session-workspace .workspace-composer .ui-button,
+  .session-workspace .message-copy { min-height: 44px; }
+  .session-workspace .message-copy { width: 44px; min-width: 44px; opacity: 1; }
+  .workspace-session-heading .composer-shortcut select { font-size: var(--fs-input-mobile); min-height: 44px; }
+  .workspace-session-heading .workspace-info-toggle,
+  .session-workspace .workspace-composer-toggle {
+    width: 44px; min-width: 44px; max-width: 44px; height: 44px; margin-left: auto;
+    justify-content: center; padding: 0;
+  }
 }

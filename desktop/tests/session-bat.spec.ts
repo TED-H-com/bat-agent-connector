@@ -58,20 +58,26 @@ async function setup(page:Page, native=true, options:any={}) {
 }
 const calls=(page:Page, action:string)=>page.evaluate(a=>(window as any).__sessionBat.calls.filter((c:any)=>c.action===a),action);
 
+async function openMore(page:Page) {
+ const trigger = page.getByRole('button',{name:'More actions',exact:true});
+ if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+}
 async function review(page:Page, selected='profile-1') {
- await page.getByRole('button',{name:'Open in BAT',exact:true}).click();
+ await openMore(page);
+ await page.getByRole('menuitem',{name:'Open in BAT',exact:true}).click();
  const picker=page.getByRole('combobox',{name:'BAT profile',exact:true});
  await expect(picker).toHaveValue(''); await picker.selectOption(selected);
  await page.getByRole('button',{name:'Review selected profile',exact:true}).click();
 }
 for (const native of [false,true]) test(`complete copy and no inferred mapping (${native?'native':'browser'})`,async({page})=>{
  await setup(page,native);
- await page.getByRole('button',{name:'Copy full title',exact:true}).click();
- await page.getByRole('button',{name:'Copy full ID',exact:true}).click();
+ await openMore(page); await page.getByRole('menuitem',{name:'Copy title',exact:true}).click();
+ await openMore(page); await page.getByRole('menuitem',{name:'Copy ID',exact:true}).click();
  expect(await page.evaluate(()=>(window as any).__sessionBat.copies)).toEqual([title,sid]);
  expect(await calls(page,'preview_profile')).toHaveLength(0);expect(await calls(page,'launch')).toHaveLength(0);
- if(native){await page.getByRole('button',{name:'Open in BAT',exact:true}).click();await expect(page.getByRole('combobox',{name:'BAT profile'})).toHaveValue('');await expect(page.getByRole('button',{name:'Review selected profile',exact:true})).toBeDisabled();}
- else await expect(page.getByRole('button',{name:'Open in BAT',exact:true})).toBeDisabled();
+ await openMore(page);
+ if(native){await page.getByRole('menuitem',{name:'Open in BAT',exact:true}).click();await expect(page.getByRole('combobox',{name:'BAT profile'})).toHaveValue('');await expect(page.getByRole('button',{name:'Review selected profile',exact:true})).toBeDisabled();}
+ else await expect(page.getByRole('menuitem',{name:'Open in BAT',exact:true})).toBeDisabled();
 });
 test('explicit profile review launches only the fixed native request and preserves manual read-only',async({page})=>{
  await setup(page);await review(page);expect(await calls(page,'preview_profile')).toEqual([{action:'preview_profile',profile_id:'profile-1'}]);
@@ -137,9 +143,12 @@ test('navigation while launch reply held preserves original for later readback',
 for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`session handoff ${locale} ${width}`,async({browser})=>{
  const context=await browser.newContext({locale,viewport:{width,height:900}}),page=await context.newPage();await setup(page);
  await expect(page.locator('[data-session-view]')).toBeVisible();
+ const more=locale==='zh-TW'?'更多操作':'More actions';
+ const openBat=locale==='zh-TW'?'在 BAT 中開啟':'Open in BAT';
+ await page.getByRole('button',{name:more,exact:true}).click();
+ await page.getByRole('menuitem',{name:openBat,exact:true}).click();
  const opener=page.getByRole('button',{name:/^(Results|成果)$/,exact:true});
  if(await opener.isVisible())await opener.click();
- const open=page.locator('.session-bat .actions button').nth(2);await open.click();
  const picker=page.locator('.session-bat select');await expect(picker).toBeEnabled();await picker.selectOption('profile-1');
  await page.locator('.session-bat').getByRole('button',{name:locale==='zh-TW'?'預覽所選 profile':'Review selected profile',exact:true}).click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -151,7 +160,8 @@ test('a different verified central principal cannot load the previous session la
  await setup(page,true,{lose:true});await review(page);await page.getByRole('button',{name:'Open selected profile',exact:true}).click();
  await expect(page.getByText(/Lost reply/)).toBeVisible();
  await page.evaluate(()=>sessionStorage.setItem('fixture-principal','other-principal'));await page.reload();
- await expect(page.getByRole('button',{name:'Open in BAT',exact:true})).toBeVisible();
+ await openMore(page);
+ await expect(page.getByRole('menuitem',{name:'Open in BAT',exact:true})).toBeVisible();
  expect(await calls(page,'launch_status')).toHaveLength(0);expect(await calls(page,'launch')).toHaveLength(0);
  await expect(page.getByRole('combobox',{name:'BAT profile'})).toHaveCount(0);
  await page.evaluate(()=>sessionStorage.removeItem('fixture-principal'));await page.reload();
@@ -160,8 +170,8 @@ test('a different verified central principal cannot load the previous session la
 });
 test('clipboard denial retains selectable complete text without a launch',async({page})=>{
  await setup(page,false);await page.evaluate(()=>navigator.clipboard.writeText=async()=>{throw new Error('denied')});
- await page.getByRole('button',{name:'Copy full ID',exact:true}).click();
- await expect(page.getByRole('textbox',{name:'Copy full ID',exact:true})).toHaveValue(sid);
+ await openMore(page); await page.getByRole('menuitem',{name:'Copy ID',exact:true}).click();
+ await expect(page.getByRole('textbox',{name:'Copy ID',exact:true})).toHaveValue(sid);
  expect(await calls(page,'launch')).toHaveLength(0);
 });
 

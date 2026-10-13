@@ -4,7 +4,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
-const shotDir = `${process.env.TMPDIR || '/tmp'}/shots`;
+const shotDir = '/home/ted-h/agent-work/bac-ux/tmp/w1-session/shots2';
 
 async function shot(page: Page, name: string) {
   mkdirSync(shotDir, {recursive: true});
@@ -50,6 +50,17 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await expect(page.locator('[data-pm-view=requirements]')).toHaveAttribute('aria-current', 'page');
     await go(page, `#/session/${ids.host}/${ids.sessions.implement}`);
     await expect(page.locator('h1')).toContainText(copy.sessionImplement);
+    const meta = page.locator('.workspace-session-meta');
+    await expect(meta).toHaveText(zh
+      ? '會員登入與忘記密碼 · demo-host · 10月12日 上午5:00'
+      : 'Member sign-in & password reset · demo-host · Oct 12, 5:00 AM');
+    expect(await meta.innerText()).not.toMatch(/:\s*demo-host/);
+    expect(await meta.innerText()).not.toMatch(/\d:\d{2}:\d{2}/);
+    await expect(page.locator('.session-checkpoint-state')).toHaveText(zh ? '此主機無法建立檢查點' : 'Not available on this host');
+    await expect(page.getByRole('button', {name: zh ? '記下這個檢查點' : 'Record this version'})).toHaveCount(0);
+    await expect(page.locator('[data-session-sources]')).toHaveText(zh ? '尚無成果來源' : 'No result sources');
+    await expect(page.locator('.ui-inspector-body')).not.toContainText(zh ? '請在 BAT 中搜尋' : 'Search in BAT');
+    await expect(page.locator('.workspace-composer')).not.toContainText(zh ? '選字時不送出' : 'composition never sends');
     await expect(page.locator('[data-session-back=requirements]')).toHaveText(back);
     await expect(page.locator('.shell-crumb-view')).toHaveText(zh ? ['工作', '工作階段'] : ['Work', 'Session']);
     await expect(page.locator('.session-pill')).toContainText(zh ? '執行中' : 'Running');
@@ -84,6 +95,9 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const sent = writes.find(item => item.body?.action === 'session.send');
     expect(sent?.body?.params).toMatchObject({text: 'Ship the sign-in handler.'});
     await expect(page.locator('.conversation-scroll')).toContainText('Ship the sign-in handler.');
+    await expect(page.locator('.session-send-line')).toHaveText(zh ? '已送出 · 剛剛' : 'Sent · just now');
+    await expect(page.locator('.session-send-line')).not.toContainText(/op_/);
+    await expect(page.locator('.session-send-record')).not.toHaveAttribute('open');
     await shot(page, `session-${locale}-1440`);
     await page.setViewportSize({width: 768, height: 900});
     await expect(page.locator('.ui-inspector')).toBeHidden();
@@ -93,6 +107,26 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await page.setViewportSize({width: 390, height: 844});
     await scroller.evaluate(el => {el.scrollTop = el.scrollHeight;});
     expect(await page.evaluate(noOverflow)).toBe(true);
+    const leadingDot = await meta.evaluate(el => {
+      const bad: string[] = [];
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      while (node) {
+        const text = node.textContent || '';
+        for (let i = 0; i < text.length; i++) {
+          if (text[i] !== '·') continue;
+          const range = document.createRange();
+          range.setStart(node, i); range.setEnd(node, i + 1);
+          const rect = range.getBoundingClientRect();
+          if (rect.width && rect.left - el.getBoundingClientRect().left < 8) bad.push(text.slice(Math.max(0, i - 6), i + 4));
+        }
+        node = walker.nextNode();
+      }
+      return bad;
+    });
+    expect(leadingDot).toEqual([]);
+    await expect(page.locator('.workspace-info-toggle')).not.toContainText(/Collapse|收合|Expand|展開/);
+    await expect(page.locator('.workspace-composer-toggle')).not.toContainText(/Collapse|收合|Write|撰寫/);
     await shot(page, `session-${locale}-390`);
     await page.setViewportSize({width: 1440, height: 900});
     await go(page, `#/session/${ids.host}/${ids.sessions.review}`);

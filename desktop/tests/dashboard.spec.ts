@@ -103,6 +103,7 @@ test("lost operation reply preserves draft and idempotency key across reopening"
   await page.reload();
   await expect(draft).toHaveValue("Fixture task instructions");
   await page.getByRole("button", {name: "Send", exact: true}).click();
+  await page.locator(".session-send-record summary").click();
   await expect(page.getByText("op_" + "a".repeat(32), {exact: true})).toBeVisible();
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBeTruthy(); expect(keys[0]).toBe(keys[1]);

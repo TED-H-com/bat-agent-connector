@@ -1,3 +1,5 @@
+import {icon} from "./ui/icons.js";
+
 // Shared workspace layout controls: adjustable project sidebar and mobile conversation layout.
 // Upstream references: Project Hub PR #2 (sidebar-resize.js) and mobile.js.
 // Strictly maintains central authority, DOM structure, local drafts, focus, and bounded layout constraints.
@@ -260,7 +262,7 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
     infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
     const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
     infoToggle.setAttribute("aria-label", label);
-    infoToggle.textContent = (isInfoCollapsed ? "▸ " : "▾ ") + label;
+    infoToggle.replaceChildren(icon(isInfoCollapsed ? "chevron-down" : "chevron-up"));
   };
 
   infoToggle.addEventListener("click", () => {
@@ -305,11 +307,9 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
     composer.classList.toggle("workspace-composer-collapsed", isComposerCollapsed);
     composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
 
-    const baseText = isComposerCollapsed
-      ? t("mobile_compose_open")
-      : `▾ ${t("mobile_compose_close")}`;
+    const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
     const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-    composerToggle.textContent = baseText + draftSuffix;
+    composerToggle.replaceChildren(icon(isComposerCollapsed ? "chevron-down" : "chevron-up"));
     composerToggle.setAttribute("aria-label", baseText + draftSuffix);
     composerToggle.classList.toggle("has-draft", hasDraft);
   };

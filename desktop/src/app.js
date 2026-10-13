@@ -1,6 +1,6 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {pageHeader, statusPill, agentMark, inspector, menu, iconButton, button, sectionCard, emptyState, disclosure} from './ui/components.js';
+import {pageHeader, statusPill, agentMark, inspector, menu, iconButton, button, disclosure} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
 import {viewState} from './ui/view-state.js';
@@ -29,6 +29,7 @@ import {createRecordForm} from "./create-record.js";
 // BAT Dashboard: a client of /api/v1 only. Every change is an operation with an Idempotency-Key; text from
 // sessions is always set with textContent (never parsed as HTML).
 import { t } from "./i18n.js";
+import {compactTime} from "./ui/time.js";
 import { connectorRequest, connectorUploadArtifact, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
@@ -125,6 +126,19 @@ function when(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   return isNaN(d) ? iso : d.toLocaleString();
+}
+function sessionWhen(value) {
+  if (value == null || value === "") return "";
+  return compactTime(typeof value === "number" ? new Date(value * 1000).toISOString() : value);
+}
+function metaTail(text, sep) {
+  const words = String(text).trim().split(/\s+/);
+  const last = words.pop() || "";
+  return [words.length ? words.join(" ") + " " : "", last + (sep ? "\u00a0·" : "")];
+}
+function metaAnchor(href, text, sep, quiet) {
+  const [head, tail] = metaTail(text, sep);
+  return h("a", {href, class: quiet ? "session-host" : null}, head, h("span", {class: "session-meta-tail"}, tail));
 }
 async function draftId(scope, request) {
   // A draft is the exact request: resending it (lost reply, double click) reuses its key, a different text does not.
@@ -1235,7 +1249,7 @@ async function viewSession(main, host, sid, context = null) {
     if (op.status !== "succeeded") throw new Error(op.status_reason || t("conversation_pending"));
   };
   const scrollMemory = viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`);
-  const conversation = conversationPanel({h, t, when, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
+  const conversation = conversationPanel({h, t, when: sessionWhen, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
     mark: messages => saveReading("session.read", {messages}),
     remember: (position, version) => saveReading("session.position", position, {expected_version: version}),
     older: () => loadMessages(nextMessageOffset, false),
@@ -1261,7 +1275,7 @@ async function viewSession(main, host, sid, context = null) {
       assertView(connection);
       const op = await submit("session.send", { host, session_id: sid }, { text: submitted, queue: queue.checked }, {}, scope);
       assertView(connection);
-      status.replaceChildren(opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+      paintSend(op);
       if (op.status === "succeeded" && box.value === submitted) {
         box.value = ""; try { localStorage.removeItem(draftKey); } catch { /* unavailable */ }
         mobileLayout?.updateDraft();
@@ -1276,11 +1290,25 @@ async function viewSession(main, host, sid, context = null) {
       assertView(connection); status.replaceChildren(opStatus(op));
     } catch (e) { status.replaceChildren(errorBox(e)); }
   }});
+  const paintSend = op => {
+    const id = typeof op?.operation_id === "string" ? op.operation_id : "";
+    const queued = ["queued", "accepted", "pending", "running"].includes(op.status);
+    const failed = op.status === "failed" || op.status === "cancelled";
+    const line = h("p", {class: "muted session-send-line", title: id || null});
+    if (op.status === "succeeded") line.textContent = t("session_sent_now");
+    else if (queued) line.textContent = t("session_send_queued");
+    else if (failed) line.append(t("session_send_failed"), " · ", h("button", {type: "button", class: "session-retry", onclick: () => send.click()}, t("session_send_retry")));
+    else line.textContent = t("op_" + op.status);
+    const record = id ? disclosure({label: t("session_details"), body: h("p", {}, h("a", {href: `#/op/${encodeURIComponent(id)}`}, id)),
+      key: `session-send:${connection.namespace}:${host}:${sid}`}) : null;
+    if (record) record.classList.add("session-send-record");
+    status.replaceChildren(line, record);
+  };
   const shortcut = composerShortcut({h, t, input: box, button: send,
     storageKey: `batc.composer-shortcut.${connection.namespace}`, guard: () => assertView(connection)});
   const sendReason = h("p", {class: "muted session-send-reason", hidden: true});
-  const composer = h("div", {hidden: true, id: "workspace-message-input"}, box, h("div", { class: "actions" }, send,
-    h("label", { class: "muted" }, queue, " ", t("queue_behind"))), shortcut.box);
+  const composer = h("div", {hidden: true, id: "workspace-message-input"}, box,
+    h("div", {class: "composer-row"}, h("label", {class: "composer-queue"}, queue, t("queue_behind")), send));
   const readonly = h("p", { class: "note" }, t("session_access_unknown"));
   let capture, permissions, batHandoff, sourcesPanel;
   const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
@@ -1293,7 +1321,7 @@ async function viewSession(main, host, sid, context = null) {
     guard: () => assertView(connection), host, sessionId: sid, errorBox}) : null;
   instructions?.box.addEventListener("toggle", () => {if (instructions.box.open) instructions.refresh();});
   const deliveryPills = h("div", {class: "session-delivery-pills"});
-  const sourcesBody = h("div", {"data-session-sources": ""}, emptyState({title: t("session_sources_empty")}));
+  const sourcesBody = h("div", {"data-session-sources": ""}, h("p", {class: "muted session-quiet"}, t("session_sources_empty")));
   const details = disclosure({label: t("session_details"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
@@ -1302,14 +1330,22 @@ async function viewSession(main, host, sid, context = null) {
   const wide = matchMedia("(min-width: 1200px)");
   const syncWide = () => {openResults.hidden = wide.matches;};
   syncWide(); wide.addEventListener("change", syncWide);
+  const sessionSection = (name, title, body) => h("section", {class: "session-section"},
+    h("h2", {class: "session-section-title"}, icon(name, {size: 16}), title), body);
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
-    items: [{key: "discuss", label: t("session_discuss"), href: "#", icon: "message-square"}]});
+    items: [
+      {key: "discuss", label: t("session_discuss"), href: "#", icon: "message-square"},
+      {key: "copy-title", label: t("bat_menu_title"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyTitle()},
+      {key: "copy-id", label: t("bat_menu_id"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyId()},
+      {key: "open-bat", label: t("bat_open"), icon: "external-link", title: t("bat_browser"), disabled: !nativeDesktop, onSelect: () => batHandoff?.open()},
+      {key: "shortcut", label: t("composer_shortcut"), content: shortcut.box},
+    ]});
   const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: [stop, openResults], overflow});
   head.append(backSlot, header);
   results.body.append(...[context?.itemBox,
-    sectionCard({title: [icon("folder"), " ", t("session_changes")], body: h("div", {}, captureSlot, cps.box, artifactSlot)}),
-    sectionCard({title: [icon("check"), " ", t("session_delivery")], body: result}),
-    sectionCard({title: [icon("inbox"), " ", t("session_sources")], body: sourcesBody}),
+    sessionSection("folder", t("session_changes"), h("div", {}, captureSlot, cps.box, artifactSlot)),
+    sessionSection("check", t("session_delivery"), result),
+    sessionSection("inbox", t("session_sources"), sourcesBody),
     batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
   const lane = h("section", {class: "workspace-conversation", "aria-label": t("messages")}, conversation.box, controls);
   const mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection) });
@@ -1434,12 +1470,20 @@ async function viewSession(main, host, sid, context = null) {
     titleNode.textContent = row.title || sid;
     markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
     pillSlot.replaceChildren(statusPill(sessionStatus(row)));
-    const metaParts = [];
-    if (context?.project?.name) metaParts.push(h("a", {href: `#/project/${encodeURIComponent(context.project.project_id)}`}, context.project.name));
-    else if (row.workspace) metaParts.push(h("span", {}, row.workspace));
-    metaParts.push(h("a", {href: `#/host/${encodeURIComponent(host)}`}, row.host || host));
-    if (row.observed_at) metaParts.push(h("time", {}, when(typeof row.observed_at === "number" ? new Date(row.observed_at * 1000).toISOString() : row.observed_at)));
-    meta.replaceChildren(...metaParts);
+    const metaBits = [];
+    if (context?.project?.name) metaBits.push({kind: "link", href: `#/project/${encodeURIComponent(context.project.project_id)}`, text: context.project.name});
+    else if (row.workspace) metaBits.push({kind: "text", text: row.workspace});
+    metaBits.push({kind: "link", href: `#/host/${encodeURIComponent(host)}`, text: row.host || host, quiet: true});
+    const observedIso = typeof row.observed_at === "number" ? new Date(row.observed_at * 1000).toISOString() : row.observed_at;
+    if (row.observed_at) metaBits.push({kind: "time", text: sessionWhen(row.observed_at), dateTime: typeof observedIso === "string" ? observedIso : ""});
+    meta.replaceChildren(...metaBits.flatMap((bit, index) => {
+      const sep = index < metaBits.length - 1;
+      const [head, tail] = metaTail(bit.text, sep);
+      const node = bit.kind === "time" ? h("time", {class: "session-meta-time", dateTime: bit.dateTime || ""}, bit.text)
+        : bit.kind === "text" ? h("span", {}, head, sep ? h("span", {class: "session-meta-tail"}, tail) : tail)
+        : metaAnchor(bit.href, bit.text, sep, bit.quiet);
+      return index ? [" ", node] : [node];
+    }));
     paintOrigin();
     mobileLayout?.updateInfo();
     metadata.replaceChildren(h("div", {class: "actions"}, ...sessionBadges(row)),
@@ -1448,7 +1492,7 @@ async function viewSession(main, host, sid, context = null) {
         h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
         h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
-        h("dt", {}, t("observed")), h("dd", {}, observationTime(row.observed_at),
+        h("dt", {}, t("observed")), h("dd", {}, sessionWhen(row.observed_at) || t("obs_unknown"),
           row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
     if (!batHandoff) batHandoff = sessionBatPanel({h, t, guard: () => assertView(connection), session: () => row,
       storageKey: `batc.session-bat.${connection.namespace}.${JSON.stringify([host, sid])}`});
@@ -1596,7 +1640,7 @@ function checkpointPanel(host, sid) {
     return h("div", { class: "row" },
       h("div", { class: "grow" },
         h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""),
-        h("div", { class: "muted" }, [when(epoch(cp.captured_at)), cp.actor,
+        h("div", { class: "muted" }, [sessionWhen(cp.captured_at), cp.actor,
           t("excerpt_count", { n: cp.excerpt_messages })].join(" · ")),
         cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty }))
           : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null,
@@ -1613,7 +1657,7 @@ function checkpointPanel(host, sid) {
       const p = new URLSearchParams({ host, session_id: sid, limit: "10" });
       const page = await api("GET", `/checkpoints?${p}`);
       list.replaceChildren(...(page.checkpoints.length ? page.checkpoints.map(row)
-        : [h("p", { class: "muted" }, t("no_checkpoints"))]));
+        : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []));
     } catch (e) { list.replaceChildren(errorBox(e)); }
   };
   const pick = h("select", { "aria-label": t("commit"), hidden: true });
@@ -1638,7 +1682,7 @@ function checkpointPanel(host, sid) {
       previewFailed = true; create.disabled = true; status.replaceChildren(errorBox(error));
     }
   };
-  const create = h("button", { class: "secondary", disabled: !can, onclick: async () => {
+  const create = h("button", { class: "secondary", hidden: !can, disabled: !can, onclick: async () => {
     create.disabled = true;
     try {
       const params = { last_n: 20, ...(preview ? { commit: pick.value } : {}), ...(note.value.trim() ? { note: note.value.trim() } : {}) };
@@ -1650,10 +1694,13 @@ function checkpointPanel(host, sid) {
     } catch (e) { status.replaceChildren(errorBox(e)); }
     create.disabled = !can || previewFailed;
   } }, t("create_checkpoint"));
-  const box = h("div", { class: "panel" }, h("h2", {}, t("checkpoints")), h("p", { class: "muted" }, t("checkpoint_help")),
-    can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")),
-    can && !mayStart ? h("p", { class: "muted" }, t("needs_start_scope")) : null, note,
-    h("div", { class: "actions" }, pick, create), status, list);
+  const checkpointWhy = disclosure({label: t("session_details"), key: `session-checkpoint:${host}:${sid}`, body: h("div", {},
+    h("p", {class: "muted"}, t("checkpoint_help")),
+    h("p", {class: "muted"}, t("checkpoint_unavailable")),
+    mayStart ? null : h("p", {class: "muted"}, t("needs_start_scope")))});
+  const box = h("div", {class: "session-checkpoints"}, h("h3", {class: "session-subsection"}, t("checkpoints")),
+    can ? null : h("p", {class: "muted session-checkpoint-state"}, t("session_checkpoint_unavailable")),
+    note, can ? h("div", {class: "actions"}, pick, create) : null, status, list, checkpointWhy);
   return { box, load: async () => { await loadPreview(); await load(); } };
 }
 
