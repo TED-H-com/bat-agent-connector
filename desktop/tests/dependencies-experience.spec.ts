@@ -9,7 +9,7 @@ const ids = dependencyFixtureIds;
 const files = ['api/pyproject.toml', 'api/uv.lock', 'api/constraints.txt', 'web/package.json', 'web/package-lock.json', 'web/vendor.lock', 'tools/broken.toml', 'vendor/closed'];
 
 function shotDir() {
-  return `${process.env.TMPDIR || '/tmp'}/shots`;
+  return process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
 }
 
 async function shot(page: Page, name: string) {
@@ -93,14 +93,32 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
   await expect(page.locator('[data-dependencies-meta]')).not.toContainText(/fresh/i);
   await expect(page.locator('[data-dep-capture]')).toBeVisible();
   await expect(page.locator('[data-dep-capture]')).toBeDisabled();
-  await expect(page.locator('.ui-header-actions button.primary:visible')).toHaveCount(1);
+  await expect(page.locator('[data-dep-capture]')).toHaveClass(/\bsecondary\b/);
+  await expect(page.locator('[data-dep-capture]')).not.toHaveClass(/\bprimary\b/);
+  await expect(page.locator('[data-dep-capture-reason]')).toHaveText('Capture needs manage access.');
+  await expect(page.locator('[data-dep-capture]')).toHaveAttribute('aria-describedby', 'dep-capture-reason');
+  await expect(page.locator('[data-dep-capture]')).toHaveAttribute('title', 'Capture needs manage access.');
+  await expect(page.locator('.ui-header-actions button.primary:visible')).toHaveCount(0);
   await expect(page.locator('[data-dep-relation=test]')).toContainText('2');
+  await expect(page.locator('.dep-filter-label').first()).toHaveText('Relation');
+  await expect(page.locator('.dep-filter').nth(1).locator('.dep-filter-label')).toHaveText('Evidence');
+  await expect(page.locator('[data-dep-matrix]')).toContainText('membership-api');
+  await expect(page.locator('[data-dep-matrix]')).toContainText('membership-web');
   await expect(page.locator('[data-dep-matrix]')).toContainText('pytest');
-  await expect(page.locator('[data-dep-matrix]')).not.toContainText('vitest');
-  await page.locator('[data-dep-show-all]').click();
   await expect(page.locator('[data-dep-matrix]')).toContainText('vitest');
-  await page.locator('[data-dep-show-all]').click();
-  await expect(page.locator('[data-dep-matrix]')).not.toContainText('vitest');
+  await expect(page.locator(`[data-dep-cell="${ids.web}|${ids.keys.vitest}"]`)).toContainText('T');
+  await expect(page.locator(`[data-dep-cell="${ids.web}|${ids.keys.vite}"]`)).toContainText('B');
+  await expect(page.locator(`[data-dep-cell="${ids.web}|${ids.keys.react}"]`)).toContainText('R');
+  await expect(page.locator('[data-dep-show-all]')).toBeHidden();
+  await expect(page.locator('[data-dep-legend]')).toContainText('Ref');
+  await expect(page.locator('[data-dep-legend]')).toContainText('Solid verified');
+  await expect(page.locator(`[data-dep-cell="${ids.api}|${ids.keys.httpx}"]`)).toHaveAttribute('aria-label', 'httpx · Runtime · >=0.27 · Declared');
+  await expect(page.locator(`[data-dep-cell="${ids.api}|${ids.keys.legacy}"]`)).toContainText('Ref');
+  const searchBox = await page.locator('.dep-search').boundingBox();
+  const searchIcon = await page.locator('.dep-search .ui-icon').boundingBox();
+  const searchInput = await page.locator('.dep-search input').boundingBox();
+  expect(searchBox?.height ?? 0).toBeLessThanOrEqual(34);
+  expect(searchIcon && searchInput && searchIcon.y >= searchInput.y - 1 && searchIcon.y + searchIcon.height <= searchInput.y + searchInput.height + 1).toBe(true);
 
   await page.locator('[data-dep-details] > summary').click();
   await expect(page.locator('[data-dep-freshness]')).toHaveText('Freshness is unknown: Head not observed');
@@ -256,12 +274,33 @@ for (const locale of ['en', 'zh-TW'] as const) {
       await expect(page.getByRole('heading', {level: 1})).toHaveText(zh ? '技術相依' : 'Dependencies');
       await expect(page.locator('[data-dependencies-meta]')).toContainText(zh ? '擷取於 c0ffee1 · 10月13日' : 'Captured at c0ffee1 · Oct 13');
       await expect(page.locator('[data-dep-capture]')).toHaveText(zh ? '再次擷取' : 'Capture again');
-      if (width > 800) await expect(page.locator('[data-dep-matrix]')).toBeVisible();
-      else {
+      const searchBox = await page.locator('.dep-search').boundingBox();
+      const searchIcon = await page.locator('.dep-search .ui-icon').boundingBox();
+      const searchInput = await page.locator('.dep-search input').boundingBox();
+      expect(searchBox && searchIcon && searchInput).toBeTruthy();
+      expect(Math.abs((searchBox?.height ?? 0) - (width <= 800 ? 44 : 32))).toBeLessThanOrEqual(2);
+      expect(searchIcon!.y).toBeGreaterThanOrEqual(searchInput!.y - 1);
+      expect(searchIcon!.y + searchIcon!.height).toBeLessThanOrEqual(searchInput!.y + searchInput!.height + 1);
+      expect(searchIcon!.x).toBeGreaterThanOrEqual(searchInput!.x);
+      expect(searchIcon!.x).toBeLessThan(searchInput!.x + 28);
+      if (width > 800) {
+        await expect(page.locator('[data-dep-matrix]')).toBeVisible();
+        await expect(page.locator('[data-dep-matrix]')).toContainText('membership-api');
+        await expect(page.locator('[data-dep-matrix]')).toContainText('membership-web');
+        await expect(page.locator('[data-dep-matrix]')).toContainText('vitest');
+        await expect(page.locator('[data-dep-show-all]')).toBeHidden();
+        await expect(page.locator('[data-dep-legend]')).toBeVisible();
+        await expect(page.locator('[data-dep-legend]')).toContainText(zh ? '實線為已核對' : 'Solid verified');
+        await expect(page.locator('.dep-filter-label').nth(0)).toHaveText(zh ? '關係' : 'Relation');
+        await expect(page.locator('.dep-filter-label').nth(1)).toHaveText(zh ? '證據' : 'Evidence');
+      } else {
         await expect(page.locator('[data-dep-matrix]')).toBeHidden();
         await expect(page.locator('[data-dep-list]')).toBeVisible();
         await expect(page.locator('[data-dep-list]')).toContainText('membership-api');
+        await expect(page.locator('[data-dep-list]')).toContainText('membership-web');
         await expect(page.locator('[data-dep-list]')).toContainText('vitest');
+        await expect(page.locator('.dep-filter-label').nth(0)).toHaveText(zh ? '關係' : 'Relation');
+        await expect(page.locator('.dep-filter-label').nth(1)).toHaveText(zh ? '證據' : 'Evidence');
       }
       await expectNoOverflow(page);
       const text = await page.locator('#main').innerText();
@@ -278,6 +317,11 @@ for (const locale of ['en', 'zh-TW'] as const) {
         await shot(page, 'dependencies-en-1440-dark');
         await page.getByRole('radio', {name: 'Graph', exact: true}).click();
         await expect(page.locator('[data-dep-loaded]')).toHaveText('Loaded');
+        await expect(page.getByRole('button', {name: 'Zoom out', exact: true})).toBeVisible();
+        await expect(page.getByRole('button', {name: 'Zoom in', exact: true})).toBeVisible();
+        const viewBox = await page.locator('[data-dep-view]').boundingBox();
+        const graphBox = await page.locator('[data-dep-graph]').boundingBox();
+        expect((graphBox?.width ?? 0)).toBeGreaterThan((viewBox?.width ?? 1) * 0.9);
         await expectNoOverflow(page);
         await shot(page, 'dependencies-en-1440-graph');
       }
