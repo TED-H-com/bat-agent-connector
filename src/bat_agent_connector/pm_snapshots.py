@@ -12,6 +12,7 @@ import time
 
 from . import pm_evidence, pm_plans, pm_read_cache, pm_workspace, work_items
 from .operations import ActionDef, OperationError
+from .pm_release_baselines import _snapshot_read
 
 TEMPLATE_VERSION = 1
 MAX_PROJECTS = 100
@@ -479,6 +480,7 @@ async def _run(ctx):
         return _insert(ctx, workspace, document)
 
 
+@_snapshot_read
 def _out(ops, principal, row):
     document = json.loads(row["document"])
     _require_original_sources(ops.db, principal, row, document)

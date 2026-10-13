@@ -70,7 +70,8 @@ copied asynchronous context invalidates reuse rather than granting access.
     db.execute('SAVEPOINT ' + anchor)
     state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
         'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {},
-        'remembering': False, 'local_only': set(),
+        'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
+        'guard_contexts': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
         'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
         'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
     token, handle = _READ.set(state), None
@@ -113,19 +114,54 @@ copied asynchronous context invalidates reuse rather than granting access.
         state['open'] = False
         state['memo'].clear()
         state['visibility'].clear()
+        state['guarded_visibility'].clear()
         state['local_only'].clear()
+        state['refused'].clear()
+        state['guard_contexts'].clear()
+        state['repair_walks'].clear()
+        state['repair_completed'].clear()
         state['active'].clear()
         if handle is not None:
             handle.cancel()
         _READ.reset(token)
 
 
+def _guard_context(db, principal):
+    from .pm_maintenance_repairs import source_read_context
+    return pm_read_cache.guard_identity(), source_read_context(db, principal)
+
+
+def complete_repair_sources(db, principal, state):
+    """Release booleans only after the entire entered repair DAG is proved."""
+    if (not _valid(state) or pm_read_cache.is_guarded() or _guard_context(db, principal)[1]
+            or not state['repair_walks'] or state['repair_walks'] != state['repair_completed']
+            or state['repair_generation'] != pm_read_cache.refusal_generation()):
+        return
+    for key, (_, repairs) in tuple(state['guard_contexts'].items()):
+        if (repairs and repairs <= state['repair_completed'] and key not in state['refused']
+                and state['memo'].get(key) is True):
+            state['local_only'].discard(key)
+            del state['guard_contexts'][key]
+            kind, identity = key
+            pm_read_cache.remember(check, (principal, kind, identity), lambda: True,
+                                   cache_errors=False, cache_if=bool)
+    for (_, repairs, key), value in state['guarded_visibility'].items():
+        if repairs <= state['repair_completed'] and len(state['visibility']) < MAX_NODES:
+            state['visibility'][key] = value
+
+
 def check(db, principal, kind, identity, predicate):
     """Reuse only completed booleans; never share mutable source documents."""
     with scope(db, principal) as state:
         key = kind, identity
+        if (key in state['guard_contexts'] and key not in state['refused']
+                and state['guard_contexts'][key] != _guard_context(db, principal)):
+            # A partial grant from another traversal is not a completed answer.
+            state['memo'].pop(key, None)
+            state['local_only'].discard(key)
+            del state['guard_contexts'][key]
         if key in state['memo']:
-            if key in state['local_only'] and not pm_read_cache.is_guarded():
+            if key in state['refused'] or key in state['local_only'] and not pm_read_cache.is_guarded():
                 pm_read_cache.refuse()
             return state['memo'][key]
         found, result = pm_read_cache.recall(check, (principal, kind, identity))
@@ -158,6 +194,7 @@ def check(db, principal, kind, identity, predicate):
         state['active'].add(key)
         generation = pm_read_cache.refusal_generation()
         guarded = pm_read_cache.is_guarded()
+        context = _guard_context(db, principal) if guarded else None
         try:
             result = bool(predicate())
             if not _valid(state):
@@ -165,6 +202,10 @@ def check(db, principal, kind, identity, predicate):
             state['memo'][key] = result
             if guarded or generation != pm_read_cache.refusal_generation():
                 state['local_only'].add(key)
+            if context is not None:
+                state['guard_contexts'][key] = context
+            if generation != pm_read_cache.refusal_generation():
+                state['refused'].add(key)
             # Publish completed nested positives after their stack unwinds.
             # A cycle/budget refusal taints every enclosing load. Active domain
             # guards still exclude partial repair/conversation/spec answers.

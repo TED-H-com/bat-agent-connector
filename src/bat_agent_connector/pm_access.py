@@ -56,20 +56,31 @@ def inherit_operation_sources(db, operation_id, source_operation_ids):
 
 
 def visible(db, principal, operation):
-    from .pm_maintenance_repairs import source_read_active
+    from .pm_maintenance_repairs import source_read_context
     from .pm_source_reads import MAX_NODES, scope
     with scope(db, principal) as state:
         # These are the visibility reader's entire inputs. Domain readers load
         # their own canonical records by ID; caller results/contexts are not
         # authority and need not be walked to construct an identical read key.
         selection = {key: operation[key] for key in ('operation_id', 'action', 'target', 'actor') if key in operation}
-        if source_read_active(db, principal):
-            # Even a positive answer can assume the active repair's backedge.
-            return _visible(db, principal, selection)
         try:
             key = pm_read_cache._key(selection)
         except TypeError:
             return _visible(db, principal, selection)
+        repairs = source_read_context(db, principal)
+        if repairs:
+            # Reuse only inside this exact guarded repair traversal. These
+            # answers may assume its backedges and never enter the full memo.
+            guard = pm_read_cache.guard_identity()
+            local_key = guard, repairs, key
+            if guard is not None and local_key in state['guarded_visibility']:
+                return True
+            generation = pm_read_cache.refusal_generation()
+            result = _visible(db, principal, selection)
+            if (result and guard is not None and generation == pm_read_cache.refusal_generation()
+                    and len(state['guarded_visibility']) < MAX_NODES):
+                state['guarded_visibility'][local_key] = True
+            return result
         if key in state['visibility']:
             return True
         generation = pm_read_cache.refusal_generation()

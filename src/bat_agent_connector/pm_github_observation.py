@@ -148,6 +148,14 @@ async def _run(ctx):
     intent = binding.get('github_observation_intent')
 
     def check():
+        # This synchronous page/receipt guard expands the same historical
+        # graph through several readers. Share completed reads only until it
+        # returns, before the caller writes or awaits the provider.
+        from . import pm_read_cache
+        with baselines._snapshot(ctx.service.db), pm_read_cache.scope(ctx.service.db, principal):
+            return checked_sources()
+
+    def checked_sources():
         ctx.check_cancel()
         from . import pm_maintenance_checks
         maintenance_deadline = pm_maintenance_checks.require_child(ctx.service, ctx.op)

@@ -116,6 +116,21 @@ frames. Actual cycle and budget refusals mark every enclosing load; a blanket
 conversation guard no longer prevents unrelated completed reads from being
 shared. Traversal-dependent local answers also mark subsequent enclosing loads,
 so ignoring a refusal cannot turn it into a request-wide grant or denial.
+A separate bounded operation-visibility map can reuse positive answers inside
+the exact same repair traversal, keyed by its live guard token and complete
+active repair set. These answers never enter the completed request memo or
+ordinary visibility map, and cannot be used after a guard, write, source scope
+or principal changes. Actual cycle/budget refusals remain uncached here too.
+After the outer canonical repair reader proves the entire entered DAG, its
+completed positive source and operation decisions may join the ordinary memo.
+Every entered repair must have completed, every guard must be closed and no
+refusal may have occurred since that DAG began. A failed or provisional repair
+cannot release any partial grant. Read-local source entries also carry their
+guard and active repair context, and recompute if that context changes.
+The GitHub page and receipt authority callback also holds one synchronous
+read memo for its complete source validation, then closes it before the GET or
+receipt write. It still rechecks current authority and the original budgets on
+every invocation; no provider result or budget survives across that boundary.
 Raw canonical operation columns, action/table metadata and complete immutable
 lineage roots may be reused even inside a traversal guard: none depends on a
 partial source grant. Callers still decode and authorize the original records;

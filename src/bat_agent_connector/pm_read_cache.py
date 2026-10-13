@@ -14,6 +14,7 @@ _CURRENT = ContextVar('pm_read_cache', default=None)
 # Depth of active traversal guards. A context copied into another thread or
 # task keeps the depth, which can only prevent storing, never add an entry.
 _GUARDS = ContextVar('pm_read_cache_guards', default=0)
+_GUARD_TOKEN = ContextVar('pm_read_cache_guard_token', default=None)
 _REFUSALS = ContextVar('pm_read_cache_refusals', default=0)
 
 
@@ -103,15 +104,22 @@ def guarded():
     Entries stored outside every guard may still be served.
     """
     token = _GUARDS.set(_GUARDS.get() + 1)
+    identity = _GUARD_TOKEN.set(object())
     try:
         yield
     finally:
+        _GUARD_TOKEN.reset(identity)
         _GUARDS.reset(token)
 
 
 def is_guarded():
     """Whether new answers would depend on an active traversal guard."""
     return _GUARDS.get() > 0
+
+
+def guard_identity():
+    """Identify one live traversal; never promote its partial grants."""
+    return _GUARD_TOKEN.get()
 
 
 def refusal_generation():

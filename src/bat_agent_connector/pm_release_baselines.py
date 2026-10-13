@@ -11,7 +11,7 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 
-from . import pm_evidence, pm_workspace, work_items
+from . import pm_evidence, pm_read_cache, pm_workspace, work_items
 from . import pm_release_sources as sources
 from .operations import RERUN, ActionDef, Cancelled, OperationError, OperationService, StepFailed
 
@@ -39,7 +39,8 @@ def _snapshot(db):
 def _snapshot_read(fn):
     @wraps(fn)
     def read(ops, *args, **kwargs):
-        with _snapshot(ops.db):
+        principal = args[0] if args else kwargs.get('principal')
+        with _snapshot(ops.db), pm_read_cache.scope(ops.db, principal):
             return fn(ops, *args, **kwargs)
     return read
 

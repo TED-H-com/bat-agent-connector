@@ -156,14 +156,19 @@ def source_backedge(db, principal, operation_id):
 
 
 def source_read_active(db, principal):
-    """A partial same-caller repair traversal is never a reusable source grant."""
+    """A partial same-caller repair traversal is never a request-wide grant."""
+    return bool(source_read_context(db, principal))
+
+
+def source_read_context(db, principal):
+    """The exact active repair set, only for traversal-local boolean reuse."""
     prefix = _source_read_key(db, principal, None)[:-1]
-    return any(key[:-1] == prefix for key in _READING.get())
+    return frozenset(key for key in _READING.get() if key[:-1] == prefix)
 
 
 def _full_access(ops, principal, op):
-    from .pm_source_reads import check, scope
-    with scope(ops.db, principal):
+    from .pm_source_reads import check, complete_repair_sources, scope
+    with scope(ops.db, principal) as state:
         pm_workspace.require_member(ops.db, principal, op['target']['workspace_id'])
         original = _operation(ops, op['operation_id'])
         if (original['action'] != ACTION or original['action'] != op['action']
@@ -178,6 +183,8 @@ def _full_access(ops, principal, op):
             visible()
         elif not check(ops.db, principal, 'repair_sources', original['operation_id'], visible):
             raise _bad('NOT_FOUND', 'Original repair sources unavailable', 404)
+        else:
+            complete_repair_sources(ops.db, principal, state)
 
 
 def _full_access_sources(ops, principal, op):
@@ -197,12 +204,16 @@ def _full_access_sources(ops, principal, op):
         # and receive a fresh source scope on each synchronous invocation.
         from .pm_source_reads import scope
         # Nested answers assume this repair is visible; do not store them request-wide.
-        with scope(ops.db, principal), pm_read_cache.guarded():
+        with scope(ops.db, principal) as state, pm_read_cache.guarded():
+            if state['repair_generation'] is None:
+                state['repair_generation'] = pm_read_cache.refusal_generation()
+            state['repair_walks'].add(key)
             _access(ops, principal, op)
             from . import pm_maintenance_repair_evidence as evidence
             evidence.require_evidence_sources(ops, principal, op)
             from . import pm_maintenance_repair_delivery as delivery
             delivery.require_sources(ops, principal, op)
+            state['repair_completed'].add(key)
     finally:
         _READING.reset(token)
 

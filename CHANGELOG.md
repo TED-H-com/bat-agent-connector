@@ -3,7 +3,7 @@
 ## Next release (unreleased)
 
 - Reuse completed PM source and operation visibility reads during synchronous
-  step and final-frame validation. Discard memos on writes and before awaits;
+  page, step and final-frame validation. Discard memos on writes and before awaits;
   preserve current authority, withdrawal and original-receipt recovery checks.
 
 - Bound repeated original-source traversal in GitHub workload observation checks.
