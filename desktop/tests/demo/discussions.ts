@@ -13,13 +13,14 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
   state.proposals.push(adopted);
   const decorate = (data: any) => ({...data, thread: {...data.thread, context: data.thread.context || []}, capabilities: {...data.capabilities, write: true, decide: true}});
   for (const row of state.threads) state.details.set(row.thread_id, decorate(threadDetail(project, row.thread_id)));
-  const caps = (value: any) => ({...value, scopes: ['observe', 'manage', 'start'], actions: actions.map(action => ({action, allowed: true})),
+  const caps = (value: any) => ({...value, scopes: [...new Set([...(value.scopes || []), 'observe', 'manage', 'start'])],
+    actions: [...(value.actions || []).filter((row: any) => !actions.includes(row.action)), ...actions.map(action => ({action, allowed: true}))],
     features: {...value.features, pm_workspaces: {...value.features.pm_workspaces, native_analysis: true}}});
   const ok = (data: any) => ({status: 200, data: structuredClone(data)});
   const context = (refs: any[]) => refs.map((ref, position) => state.withdrawn ? {kind: ref.kind, position, available: false} : {...ref, position, available: true, label: project.copy.blocker, bound_label: project.copy.blocker});
   async function dispatch(input: DemoRequest): Promise<any> {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
-    if (input.method === 'POST' && path === '/operations') {
+    if (input.method === 'POST' && path === '/operations' && actions.includes((input.body as any)?.action)) {
       state.writes.push(structuredClone(input)); const body: any = input.body;
       let operation = state.operations.get(input.idempotency_key);
       if (!operation) {
@@ -61,7 +62,10 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
       }
       return ok({operation});
     }
-    if (path.startsWith('/operations/')) return ok({operation: [...state.operations.values()].find((op: any) => path.endsWith(op.operation_id))});
+    if (path.startsWith('/operations/')) {
+      const operation = [...state.operations.values()].find((op: any) => path.endsWith(op.operation_id));
+      if (operation) return ok({operation});
+    }
     if (path === root + '/threads') return ok({workspace_id: project.ids.workspaceId, threads: state.threads.map((row: any) => {const thread = state.details.get(row.thread_id).thread; return {...thread, context: state.withdrawn ? context(thread.context || []) : thread.context};}), next_cursor: null});
     if (path.startsWith(root + '/threads/')) {
       const data = state.details.get(path.split('/').at(-1));

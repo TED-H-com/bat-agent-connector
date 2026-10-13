@@ -1,3 +1,4 @@
+import {UNCERTAIN_OPERATION} from './demo/global.ts';
 import {openPmPanel, openThreadTab} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
@@ -144,7 +145,7 @@ test('unknown demo routes fail loudly and pages keep their cursors', async () =>
 for (const {locale, width} of cases) {
   test(`Overview and Issues open bound discussion drafts in ${locale} at ${width}`, async ({browser, baseURL}) => {
     // Use the authorized discussion fixture for composer focus. The browsing demo below
-    // remains observe-only, with all of its write controls and manual sessions read-only.
+    // keeps PM management controls gated and manual sessions read-only; Session writes are mocked.
     const fixture = demoFixture({locale, discussions: true});
     const context = await browser.newContext({locale, baseURL, viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage();
@@ -355,3 +356,23 @@ for (const {locale, width} of cases) {
     await context.close();
   });
 }
+
+
+test('authorized discussion demo retains session actions and original-key mock recovery', async () => {
+  const fixture = demoFixture({discussions: true}), {ids} = fixture;
+  const capabilities = (await fixture.dispatch({method: 'GET', path: '/capabilities'})).data;
+  for (const action of ['session.send', 'session.answer', 'session.interrupt', 'pm.thread.create', 'pm.conversation.adopt'])
+    expect(capabilities.actions).toContainEqual({action, allowed: true});
+  expect(capabilities.scopes).toEqual(expect.arrayContaining(['observe', 'operate', 'manage', 'start']));
+  const global = await fixture.dispatch({method: 'GET', path: `/operations/${UNCERTAIN_OPERATION}`});
+  expect(global.data.operation).toMatchObject({operation_id: UNCERTAIN_OPERATION, action: 'checkpoint.continue', status: 'uncertain'});
+  const input = {method: 'POST', path: '/operations', idempotency_key: 'fixture-session-original', body: {
+    action: 'session.send', target: {host: ids.host, session_id: ids.sessions.implement}, params: {text: 'Retain this original mock send.'},
+  }};
+  const first = await fixture.dispatch(input), recovered = await fixture.dispatch(input);
+  expect(first.status).toBe(200); expect(recovered.data.operation).toEqual(first.data.operation);
+  const messages = (await fixture.dispatch({method: 'GET', path: `/sessions/${ids.host}/${ids.sessions.implement}/messages`})).data.messages;
+  expect(messages.filter((row: any) => row.text === input.body.params.text)).toHaveLength(1);
+  const manual = await fixture.dispatch({...input, idempotency_key: 'fixture-manual-refusal', body: {...input.body, target: {host: ids.host, session_id: ids.sessions.manual}}});
+  expect(manual.status).toBe(403); expect(fixture.discussion.writes).toHaveLength(0);
+});
