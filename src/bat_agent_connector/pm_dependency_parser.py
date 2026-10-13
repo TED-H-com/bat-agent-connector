@@ -51,24 +51,39 @@ def requirement(value):
 
 
 def _commands(command):
-    """Literal command words only; quoted mentions and shell substitutions aren't calls."""
-    if "\n" in command:
-        return [words for line in command.splitlines() for words in _commands(line)]
-    try:
-        words = shlex.split(command, comments=True)
-    except ValueError:
-        return []
-    groups, current = [], []
-    for word in words:
-        if word in {"&&", ";", "||", "|"}:
-            if current:
-                groups.append(current)
+    """Split literal shell subcommands before unquoting their argument words."""
+    segments, current = [], []
+    quote, escaped, comment = None, False, False
+    for char in command:
+        if comment:
+            if char != "\n":
+                continue
+            comment = False
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\" and quote != "'":
+            current.append(char)
+            escaped = True
+        elif quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+        elif char in {"'", '"'}:
+            current.append(char)
+            quote = char
+        elif char == "#" and (not current or current[-1].isspace()):
+            comment = True
+        elif char in ";&|\n":
+            segments.append("".join(current))
             current = []
         else:
-            current.append(word)
-    if current:
-        groups.append(current)
-    return groups
+            current.append(char)
+    segments.append("".join(current))
+    try:
+        return [words for part in segments if (words := shlex.split(part))]
+    except ValueError:
+        return []
 
 
 def unwrapped(words):

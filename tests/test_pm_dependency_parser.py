@@ -578,3 +578,18 @@ def test_unavailable_inherited_publish_is_unknown_and_not_publishable():
     assert component['published_name'] is None
     assert component['published_name_reason'] == 'workspace_inheritance_unavailable'
     assert 'cargo_workspace_inheritance_unavailable' in result['parser_reasons']
+
+
+@pytest.mark.parametrize('command', ['npm ci&&cd web&&npm test', 'npm ci;cd web;npm test'])
+def test_compact_shell_separators_preserve_step_directory_tracking(command):
+    result = inventory({'package.json': '{"name":"root"}', 'web/package.json': '{"name":"web"}',
+        '.github/workflows/ci.yml': 'jobs:\n  t:\n    steps:\n      - run: ' + command + '\n'})
+    assert not hints(result, 'package.json')
+    assert {h['relation'] for h in hints(result, 'web/package.json')} == {'test'}
+
+
+@pytest.mark.parametrize('command', ["echo '&&' vitest", "echo ';' vitest", 'echo "|" vitest'])
+def test_quoted_shell_separators_do_not_create_tool_invocations(command):
+    result = inventory({'package.json': '{"name":"app"}',
+        '.github/workflows/ci.yml': 'jobs:\n  t:\n    steps:\n      - run: ' + command + '\n'})
+    assert not result['verification_hints']

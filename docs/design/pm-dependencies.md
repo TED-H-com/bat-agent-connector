@@ -88,7 +88,7 @@ Cargo workspace version、rust-version、publish 與 dependencies 僅從明確�
 Workflow 為保守的逐行 reader，只處理 jobs、steps、literal run/uses、working-directory 及 defaults；
 不解析 YAML anchors、任意 expression／matrix 或執行 shell。無法確認 component 工作目錄時不建立關聯。
 Workflow/job defaults 僅接受 defaults.run.working-directory，讀完全文後解析繼承，不受 jobs／steps 前後順序影響；支援尾端註解與 run: {working-directory: web}。
-Step 的目錄只影響該 step；同一步內依序追蹤 literal cd，後續 command 使用更新目錄。未知 cd（變數、-、subshell）或不支援的 defaults／目錄形式不當成 repo root，以 workflow_directory_unknown 明示缺口且不建立該 command 的 component 關聯。
+Step 的目錄只影響該 step；同一步內依序追蹤 literal cd，後續 command 使用更新目錄；&&／; 不要求兩旁空白，引號或跳脫內的 separator 不建立額外 command。未知 cd（變數、-、subshell）或不支援的 defaults／目錄形式不當成 repo root，以 workflow_directory_unknown 明示缺口且不建立該 command 的 component 關聯。
 同一 command 的 build 與 test 都保留；辨識 npx、pnpm exec、uv run、poetry run 包裝。
 不因共用 CI job 就將 uses action 掛為 component dependency。
 每筆 evidence command、script、job_id、declaration_group 最多 512 UTF-8 bytes；分類仍使用原始內容，顯示截斷時附 <field>_truncated=true 與完整 <field>_sha256，parser reason=evidence_<field>_truncated。群組名稱不再無界複製至 basis；Python dependency-groups 的 basis 為 python_group，身分在 declaration_group。
