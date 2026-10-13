@@ -3044,8 +3044,12 @@ var dependencyStrings = {
 		dep_inferred: "Inferred",
 		dep_filter_relation: "Relation",
 		dep_filter_evidence: "Evidence",
-		dep_show_transitive: "Show transitive",
-		dep_show_direct: "Direct only",
+		dep_all_columns: "All columns ({n})",
+		dep_fewer_columns: "Fewer columns",
+		dep_components_shown: "{shown} of {loaded} loaded components shown",
+		dep_dependencies_shown: "{shown} of {loaded} loaded dependencies shown",
+		dep_nodes_shown: "{shown} of {loaded} loaded nodes shown",
+		dep_narrow: "Search or filter to narrow",
 		dep_show_all_rows: "Show all ({n})",
 		dep_show_fewer: "Show fewer",
 		dep_legend_verified: "Solid verified",
@@ -3063,6 +3067,7 @@ var dependencyStrings = {
 		dep_tests: "Tests to re-run",
 		dep_affected: "Affected components",
 		dep_releases: "Affected releases",
+		dep_discuss: "Discuss with PM",
 		dep_check_impact: "Check impact",
 		dep_declare: "Declare relation",
 		dep_retract: "Retract",
@@ -3103,6 +3108,24 @@ var dependencyStrings = {
 		dep_revisions: "Captures",
 		dep_revisions_more: "More captures were not loaded",
 		dep_distance: "Distance {n}",
+		dep_source: "Sources",
+		dep_manifest: "Manifest path",
+		dep_declaration: "Declaration",
+		dep_edges_omitted: "More relations were omitted from this capture",
+		dep_no_components_returned: "No components returned",
+		dep_collection_files: "Files",
+		dep_collection_edges: "Relations",
+		dep_collection_components: "Components",
+		dep_collection_dependencies: "Dependencies",
+		dep_collection_verification_hints: "Test hints",
+		dep_collection_unreadable_paths: "Unreadable paths",
+		dep_omitted_collections: "Omitted collections: {names}",
+		dep_reason_tree_limit: "Tree limit reached",
+		dep_reason_file_limit: "File limit reached",
+		dep_reason_component_limit: "Component limit reached",
+		dep_reason_unsupported_tree_entry: "Unsupported tree entry",
+		dep_reason_selection_budget: "Peer selection stopped early",
+		dep_reason_unreadable_manifest: "Manifest unreadable",
 		dep_choose: "Choose",
 		dep_dash: "—"
 	},
@@ -3111,7 +3134,7 @@ var dependencyStrings = {
 		dep_meta: "擷取於 {commit} · {date}",
 		dep_meta_commit: "擷取於 {commit}",
 		dep_matrix: "矩陣",
-		dep_graph: "圖",
+		dep_graph: "關係圖",
 		dep_search: "搜尋相依",
 		dep_runtime: "執行期",
 		dep_build: "建置",
@@ -3123,8 +3146,12 @@ var dependencyStrings = {
 		dep_inferred: "推測",
 		dep_filter_relation: "關係",
 		dep_filter_evidence: "證據",
-		dep_show_transitive: "顯示間接相依",
-		dep_show_direct: "只顯示直接",
+		dep_all_columns: "全部欄位（{n}）",
+		dep_fewer_columns: "精簡欄位",
+		dep_components_shown: "顯示已載入的 {loaded} 個元件中的 {shown} 個",
+		dep_dependencies_shown: "顯示已載入的 {loaded} 個相依中的 {shown} 個",
+		dep_nodes_shown: "顯示已載入的 {loaded} 個節點中的 {shown} 個",
+		dep_narrow: "可用搜尋或篩選縮小範圍",
 		dep_show_all_rows: "顯示全部（{n}）",
 		dep_show_fewer: "少顯示一些",
 		dep_legend_verified: "實線為已核對",
@@ -3142,6 +3169,7 @@ var dependencyStrings = {
 		dep_tests: "要重跑的測試",
 		dep_affected: "受影響元件",
 		dep_releases: "受影響的發布",
+		dep_discuss: "與 PM 討論",
 		dep_check_impact: "檢查影響",
 		dep_declare: "宣告關係",
 		dep_retract: "撤回",
@@ -3182,6 +3210,24 @@ var dependencyStrings = {
 		dep_revisions: "擷取紀錄",
 		dep_revisions_more: "還有未載入的擷取",
 		dep_distance: "距離 {n}",
+		dep_source: "來源",
+		dep_manifest: "清單檔路徑",
+		dep_declaration: "已宣告關係",
+		dep_edges_omitted: "這次擷取還有未列入的關係",
+		dep_no_components_returned: "未回傳受影響元件",
+		dep_collection_files: "檔案清單",
+		dep_collection_edges: "關係",
+		dep_collection_components: "元件",
+		dep_collection_dependencies: "技術相依",
+		dep_collection_verification_hints: "測試提示",
+		dep_collection_unreadable_paths: "無法讀取的路徑",
+		dep_omitted_collections: "未列入的資料：{names}",
+		dep_reason_tree_limit: "已達目錄上限",
+		dep_reason_file_limit: "已達檔案上限",
+		dep_reason_component_limit: "已達元件上限",
+		dep_reason_unsupported_tree_entry: "不支援的目錄項目",
+		dep_reason_selection_budget: "跨儲存庫選取提前結束",
+		dep_reason_unreadable_manifest: "無法讀取清單檔",
 		dep_choose: "請選擇",
 		dep_dash: "—"
 	}
@@ -16638,6 +16684,29 @@ function workspaceOverview(options) {
 }
 //#endregion
 //#region src/pm-dependencies-layout.js
+function limitColumns(rows, columns, edges, limit) {
+	const picked = new Set();
+	for (const row of rows) {
+		const key = columns.find((key) => edges.some((edge) => edge.component_id === row.component_id && edge.dependency_key === key));
+		if (key && picked.size < limit) picked.add(key);
+	}
+	for (const key of columns) {
+		if (picked.size >= limit) break;
+		picked.add(key);
+	}
+	return columns.filter((key) => picked.has(key));
+}
+function boundGraph(nodes, links, { limit = 60, required = [] } = {}) {
+	const ids = new Set(required.filter((id) => nodes.some((node) => node.id === id)).slice(0, limit));
+	for (const node of nodes) {
+		if (ids.size >= limit) break;
+		ids.add(node.id);
+	}
+	return {
+		nodes: nodes.filter((node) => ids.has(node.id)),
+		links: links.filter((link) => ids.has(link.from) && ids.has(link.to))
+	};
+}
 function layoutGraph(nodes, links) {
 	const ids = [];
 	const seen = new Set();
@@ -16762,12 +16831,19 @@ var FILE_STATUS = {
 var SVG = "http://www.w3.org/2000/svg";
 var NODE_W = 148;
 var NODE_H = 36;
-var GAP_X = 72;
 var GAP_Y = 18;
 var PAD = 20;
-var knownReason = (code) => Object.hasOwn(reasonLabels, code);
+var LOCAL_REASONS = new Set([
+	"tree_limit",
+	"file_limit",
+	"component_limit",
+	"unsupported_tree_entry",
+	"selection_budget",
+	"unreadable_manifest"
+]);
+var knownReason = (code) => LOCAL_REASONS.has(code) || Object.hasOwn(reasonLabels, code);
 var reasonText = (t, code, detail = false) => {
-	const label = reasonLabel(t, code);
+	const label = LOCAL_REASONS.has(code) ? t("dep_reason_" + code) : reasonLabel(t, code);
 	return detail && code && !knownReason(code) ? t("ui_reason_detail", {
 		label,
 		code
@@ -16808,7 +16884,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	let selection = preference.selection && typeof preference.selection === "object" ? preference.selection : null;
 	let focusId = typeof preference.focus === "string" ? preference.focus : "";
 	let zoom = Number.isFinite(preference.zoom) ? Math.min(1.8, Math.max(.6, preference.zoom)) : 1;
-	let panel = null;
+	let panel = null, graphRows = [];
 	const levelText = (level) => EVIDENCE.includes(level) ? t("dep_" + level) : reasonText(t, level);
 	const remember = () => Object.assign(preference, {
 		mode,
@@ -16852,10 +16928,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const seen = new Set(), rows = [];
 		const add = (edge) => {
 			if (!edge?.component_id || !edge?.dependency_key || !RELATIONS.includes(edge.relation)) return;
-			const id = [
+			const id = edge.declaration_id || edge.edge_id || [
 				edge.component_id,
 				edge.dependency_key,
-				edge.relation
+				edge.relation,
+				edge.evidence_level
 			].join("|");
 			if (seen.has(id)) return;
 			seen.add(id);
@@ -16871,9 +16948,19 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		});
 		return rows;
 	}
-	function filteredEdges() {
+	function matchesFilters(edge) {
 		const query = search.value.trim().toLocaleLowerCase();
-		return allEdges().filter((edge) => relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || componentName(edge.component_id).toLocaleLowerCase().includes(query) || dependencyName(edge.dependency_key).toLocaleLowerCase().includes(query)));
+		return relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || [
+			componentName(edge.component_id),
+			dependencyName(edge.dependency_key),
+			componentName(edge.target_component_id)
+		].some((name) => name.toLocaleLowerCase().includes(query)));
+	}
+	function filteredEdges() {
+		return allEdges().filter(matchesFilters);
+	}
+	function filteredCrossEdges() {
+		return (data?.cross_repository_edges || []).filter(matchesFilters);
 	}
 	const selectedKey = () => selection?.type === "dependency" || selection?.type === "edge" ? selection.dependencyKey : "";
 	const selectionEdges = () => allEdges().filter((edge) => selection?.type === "component" ? edge.component_id === selection.componentId : selection?.type === "edge" ? edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey : edge.dependency_key === selection?.dependencyKey);
@@ -16883,11 +16970,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (selection.type === "component") return (data.components || []).some((row) => row.component_id === selection.componentId) || (data.external_components || []).some((row) => row.component_id === selection.componentId);
 		return allEdges().some((edge) => edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey);
 	}
-	const focusKeyFor = (value) => value?.type === "edge" ? `cell:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const narrow = () => matchMedia("(max-width: 800px)").matches;
+	const focusKeyFor = (value) => value?.type === "edge" ? mode === "graph" ? `col:${value.dependencyKey}` : `${narrow() ? "pick" : "cell"}:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const activeFocusHost = () => mode === "graph" ? graphHost : narrow() ? listHost : matrixScroll;
+	const focusTarget = (key) => key ? activeFocusHost().querySelector(`[data-dep-focus="${CSS.escape(key)}"]`) : null;
 	const focusSelection = () => {
-		const key = focusKeyFor(selection);
-		if (!key) return;
-		element.querySelector(`[data-dep-focus="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+		focusTarget(focusKeyFor(selection))?.focus({ preventScroll: true });
 	};
 	const search = h("input", {
 		type: "search",
@@ -16927,7 +17015,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		};
 	}
 	const showAllButton = button({
-		label: t("dep_show_transitive"),
+		label: t("dep_all_columns", { n: 0 }),
 		"data-dep-show-all": ""
 	});
 	showAllButton.classList.add("dep-show-all");
@@ -16964,12 +17052,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	});
 	const filterGroup = (name, chips) => h("div", { class: "dep-filter" }, h("span", { class: "dep-filter-label" }, t(name)), h("div", { class: "dep-chips" }, ...chips.map((chip) => chip.node)));
 	const toolbar = h("div", { class: "dep-toolbar" }, modeSwitch, h("div", { class: "dep-filters" }, filterGroup("dep_filter_relation", relationChips), filterGroup("dep_filter_evidence", evidenceChips)), searchWrap, showAllButton, showRowsButton);
+	const coverage = h("p", {
+		class: "dep-note",
+		"data-dep-coverage": "",
+		hidden: true
+	});
 	const statusBox = h("div", { role: "status" });
 	const matrixScroll = h("div", {
 		class: "dep-matrix-scroll",
 		"data-dep-matrix": "",
-		tabindex: "0",
-		role: "grid",
 		"aria-label": t("dep_matrix")
 	});
 	const listHost = h("div", {
@@ -16981,7 +17072,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"data-dep-legend": "",
 		hidden: true
 	});
-	const matrixHost = h("div", { "data-dep-matrix-host": "" }, legend, matrixScroll, listHost);
+	const matrixHost = h("div", { "data-dep-matrix-host": "" }, matrixScroll, listHost);
 	const graphScroll = h("div", {
 		class: "dep-graph-scroll",
 		"data-dep-graph": ""
@@ -17004,7 +17095,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		class: "dep-loaded",
 		"data-dep-loaded": ""
 	}, t("dep_loaded"));
-	const graphHost = h("div", { "data-dep-graph-host": "" }, h("div", { class: "dep-graph-bar" }, loaded, zoomOut, zoomIn), graphScroll);
+	const graphBar = h("div", { class: "dep-graph-bar" }, h("div", { class: "dep-graph-controls" }, loaded, zoomOut, zoomIn));
+	const graphHost = h("div", { "data-dep-graph-host": "" }, graphBar, graphScroll);
 	const detailBody = h("div");
 	const details = disclosure({
 		label: t("dep_details"),
@@ -17137,7 +17229,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			captureButton.removeAttribute("aria-describedby");
 			captureButton.removeAttribute("title");
 		}
-		if (captureButton.parentElement) captureButton.after(captureHint);
 	}
 	const captureForm = form({
 		action: "pm.dependencies.capture",
@@ -17189,11 +17280,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"aria-label": t("dep_note"),
 		maxlength: 1e3
 	});
-	const sourceCommit = h("p", {
+	const sourceCommit = h("span", {
 		class: "dep-note",
 		"data-dep-source-commit": ""
 	});
-	const labelled = (key, node) => h("label", {}, t(key), node);
+	const labelled = (key, node, note = "") => h("label", {}, t(key), node, note);
 	function relationOptions() {
 		const allowed = evidenceSelect.value === "declared" ? ["contract", "reference"] : RELATIONS;
 		const current = relationSelect.value;
@@ -17212,8 +17303,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			ecosystem: ecosystemInput,
 			kind: kindSelect,
 			version: versionInput,
-			relation: relationSelect,
 			evidence: evidenceSelect,
+			relation: relationSelect,
 			path: pathInput,
 			url: urlInput,
 			note: noteInput
@@ -17242,9 +17333,10 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				...note ? { note } : {}
 			};
 		},
-		extra: h("div", { class: "dep-fields" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput), sourceCommit, labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
+		extra: h("div", { class: "dep-fields dep-declare-grid" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput, sourceCommit), labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
 	});
-	const retractSelect = h("select", { "aria-label": t("dep_retract") });
+	relationOptions();
+	const retractSelect = h("select", { "aria-label": t("dep_declaration") });
 	const retractForm = form({
 		action: "pm.dependencies.retract",
 		target: { workspace_id: workspaceId },
@@ -17254,8 +17346,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		preconditions,
 		onSaved: () => refresh(),
 		params: (values) => ({ declaration_id: values.declaration_id }),
-		extra: h("div", { class: "dep-fields" }, labelled("dep_retract", retractSelect))
+		extra: h("div", { class: "dep-fields" }, labelled("dep_declaration", retractSelect))
 	});
+	retractForm.box.querySelector("button[type=submit]").className = "secondary";
 	const record = disclosure({
 		label: t("dep_record"),
 		body: h("div", {}, declareForm.box, retractForm.box),
@@ -17265,11 +17358,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			"dep-record"
 		])
 	});
+	record.dataset.depRecord = "";
 	const holder = h("div", {}, record);
 	const element = h("section", {
 		class: "dep-view",
 		"data-dep-view": ""
-	}, toolbar, statusBox, captureForm.box, matrixHost, graphHost, details, holder);
+	}, captureHint, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 	function fillComponents() {
 		const value = componentSelect.value;
 		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
@@ -17278,7 +17372,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function fillRetract() {
 		const value = retractSelect.value;
 		const rows = data?.declared || [];
-		retractSelect.replaceChildren(...rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
+		retractSelect.replaceChildren(...!data ? [] : rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
 		if ([...retractSelect.options].some((option) => option.value === value)) retractSelect.value = value;
 	}
 	function moveGrid(event, root) {
@@ -17380,7 +17474,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		captureButton.hidden = !active;
 		syncCapture();
 		if (!active || !data) return;
-		const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
+		const commit = shortSha(data.capture?.commit_sha);
 		const date = capturedDate(data.capture?.captured_at);
 		const line = commit && date ? t("dep_meta", {
 			commit,
@@ -17392,7 +17486,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		const marks = [];
 		if (data.stale === true) marks.push(statusPill("stale"));
-		if (data.partial === true) marks.push(statusPill("partial"));
+		if (data.capture?.revision_id && data.partial === true) marks.push(statusPill("partial"));
 		if (header?.pills) {
 			header.pills.replaceChildren(...marks);
 			header.pills.hidden = !marks.length;
@@ -17403,8 +17497,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (key === impactKey) return;
 		impactKey = key;
 		impact = null;
-		if (!key) return;
 		const ticket = ++impactTicket;
+		if (!key) return;
 		(async () => {
 			try {
 				const result = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies/impact?dependency=${encodeURIComponent(key)}`);
@@ -17485,7 +17579,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const name = dependencyName(selectedKey());
 		if (!impact || impact.dependency !== selectedKey() || impact.error) return name || t("ui_dependencies");
 		if (MISS.has(impact.reason)) return joinLabel([name, reasonText(t, impact.reason)]);
-		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
+		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components) && (impact.counts.components > 0 || !partialImpact())) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
 		return name || t("ui_dependencies");
 	}
 	function openInspector() {
@@ -17493,10 +17587,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (!panel) {
 			panel = inspector({
 				title: inspectorTitle(),
+				returnFocus: () => focusTarget(focusKeyFor(selection)),
 				onClose: () => {
 					panel = null;
-					holder.append(record);
-					focusSelection();
 				}
 			});
 			panel.dataset.depInspector = "";
@@ -17507,6 +17600,17 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function closeInspector() {
 		panel?.close();
+	}
+	function partialImpact() {
+		return impact?.partial === true || impact?.counts?.partial === true || impact?.reason === "bounded_captured_graph" || ["bounded", "partial"].includes(impact?.cross_repository?.status) || impact?.cross_repository?.complete === false;
+	}
+	function dependencyRow(edge) {
+		const refs = (edge.evidence_refs || (edge.source_ref ? [edge.source_ref] : [])).map(evidenceLine).filter(Boolean);
+		return h("section", { "data-dep-dependency-row": edge.dependency_key }, h("h4", {}, dependencyName(edge.dependency_key)), h("p", {}, joinLabel([
+			t("dep_" + edge.relation),
+			versionLabel(edge) || t("dep_dash"),
+			levelText(edge.evidence_level)
+		])), refs.length ? h("dl", { class: "dep-facts" }, h("dt", {}, t("dep_source")), h("dd", {}, refs.join(" · "))) : "");
 	}
 	function renderInspector() {
 		if (!panel || !selection || !data) return;
@@ -17520,36 +17624,38 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (title) title.textContent = inspectorTitle();
 		const edges = selectionEdges();
 		const dep = dependencyByKey().get(selectedKey());
-		const owner = ownerFact((data.components || []).find((row) => row.component_id === (selection.componentId || edges[0]?.component_id)) || data);
+		const component = [...data.components || [], ...data.external_components || []].find((row) => row.component_id === (selection.componentId || edges[0]?.component_id));
+		const owner = ownerFact(component || data);
 		const facts = h("dl", { class: "dep-facts" });
 		const add = (label, value, note) => {
 			facts.append(h("dt", {}, label), h("dd", {}, value));
 			if (note) facts.append(h("dd", { class: "dep-note" }, note));
 		};
 		if (dep || selection.type !== "component") add(t("dep_name"), dep?.name || dependencyName(selectedKey()) || t("dep_dash"));
-		if (selection.type === "component") add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
-		for (const edge of edges) {
-			const pinned = typeof edge.resolved === "string" && edge.resolved ? edge.resolved : t("dep_dash");
-			const range = typeof edge.version === "string" && edge.version ? edge.version : t("dep_dash");
-			add(t("dep_pinned"), pinned, edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
-			add(t("dep_range"), range, !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
+		if (selection.type === "component") {
+			facts.dataset.depComponentFacts = "";
+			add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
+			add(t("dep_ecosystem"), component?.ecosystem || t("dep_dash"));
+			add(t("dep_manifest"), component?.manifest_path || t("dep_dash"));
+			add(t("dep_version"), component?.version || t("dep_dash"));
+		} else for (const edge of edges) {
+			add(t("dep_component"), componentName(edge.component_id) || t("dep_dash"));
+			add(t("dep_pinned"), edge.resolved || t("dep_dash"), edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
+			add(t("dep_range"), edge.version || t("dep_dash"), !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
 			add(t("dep_level"), levelText(edge.evidence_level));
 			if (edge.basis) add(t("dep_why"), reasonText(t, edge.basis));
-			for (const ref of edge.evidence_refs || []) {
-				const line = evidenceLine(ref);
-				if (line) add(t("dep_level"), line);
-			}
+			const refs = (edge.evidence_refs || []).map(evidenceLine).filter(Boolean);
+			if (refs.length) add(t("dep_source"), refs.join(" · "));
 		}
 		add(t("dep_owner"), owner.actor || t("dep_dash"), owner.reason ? reasonText(t, owner.reason) : "");
 		const tests = h("div", { "data-dep-tests": "" }, h("h3", {}, t("dep_tests")));
 		const jobs = hintRows();
 		if (jobs.length) for (const hint of jobs) tests.append(h("p", {}, joinLabel([hint.job_id, hint.command])));
 		else tests.append(h("p", {}, Number(data.omitted_hints) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
-		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t("dep_affected")));
+		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t(selectedKey() ? "dep_affected" : "ui_dependencies")));
 		if (!selectedKey()) {
-			const names = [...new Set(edges.map((edge) => dependencyName(edge.dependency_key)).filter(Boolean))];
-			if (names.length) for (const name of names) affected.append(h("p", {}, name));
-			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
+			if (edges.length) affected.append(...edges.map(dependencyRow));
+			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_edges_omitted") : t("dep_none_recorded")));
 		} else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
 		else if (impact.error) affected.append(inlineError({
 			error: impact.error,
@@ -17558,11 +17664,29 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				syncImpact();
 			}
 		}));
-		else if (MISS.has(impact.reason)) affected.append(h("p", {}, reasonText(t, impact.reason)));
 		else {
+			if (partialImpact()) affected.append(statusPill("partial"));
+			const reasons = new Set([
+				impact.reason,
+				impact.cross_repository?.reason,
+				...impact.selection_reasons || [],
+				...impact.cross_repository?.selection_reasons || []
+			].filter(Boolean));
+			for (const code of reasons) affected.append(h("p", {
+				class: "dep-note",
+				"data-dep-impact-reason": code
+			}, reasonText(t, code)));
 			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
-			if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: impact.counts.components })));
-			if (!(impact.components || []).length && !(impact.counts && Number.isFinite(impact.counts.components))) affected.append(h("p", {}, t("dep_none_recorded")));
+			for (const row of impact.declared || []) affected.append(h("section", { "data-dep-impact-declaration": row.declaration_id }, h("p", {}, joinLabel([
+				componentName(row.component_id),
+				row.dependency?.name,
+				t("dep_" + row.relation),
+				versionLabel(row) || t("dep_dash"),
+				levelText(row.evidence_level)
+			])), h("p", { class: "dep-note" }, (row.evidence_refs || (row.source_ref ? [row.source_ref] : [])).map(evidenceLine).filter(Boolean).join(" · "))));
+			const count = impact.counts?.components;
+			if (impact.counts?.basis === "returned_components" && Number.isFinite(count) && (count > 0 || !partialImpact())) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: count })));
+			if (!(impact.components || []).length && !(impact.declared || []).length && !MISS.has(impact.reason)) affected.append(h("p", {}, t("dep_no_components_returned")));
 		}
 		const releases = impact && Object.hasOwn(impact, "affected_releases") ? impact.affected_releases : Object.hasOwn(data, "affected_releases") ? data.affected_releases : null;
 		const releaseBlock = Array.isArray(releases) ? h("div", { "data-dep-releases": "" }, h("h3", {}, t("dep_releases")), ...releases.length ? releases.map((row) => h("p", {}, typeof row === "string" ? row : joinLabel([
@@ -17571,17 +17695,19 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			row?.revision_id,
 			row?.id
 		]) || t("dep_dash"))) : [h("p", {}, t("dep_dash"))]) : "";
-		const discuss = selectedKey() ? h("a", {
+		const discussionTitle = joinLabel([selectedKey() ? dependencyName(selectedKey()) : componentName(selection.componentId), shortSha(data.capture?.commit_sha) ? t("dep_meta_commit", { commit: shortSha(data.capture.commit_sha) }) : ""]);
+		const discuss = selection ? h("a", {
 			class: "ui-button secondary ui-md",
 			"data-dep-discuss": "",
 			href: discussHref({
 				workspaceId,
 				refs: [],
-				title: inspectorTitle(),
+				title: discussionTitle,
 				from: "dependencies"
 			})
-		}, t("dep_check_impact")) : "";
-		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss), record);
+		}, t("dep_discuss")) : "";
+		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss));
+		if (activeEl?.matches("[data-dep-discuss]")) panel.querySelector("[data-dep-discuss]")?.focus({ preventScroll: true });
 	}
 	function drawGraph(edges) {
 		const nodes = new Map();
@@ -17595,18 +17721,21 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				name: dependencyName(edge.dependency_key) || edge.dependency_key
 			});
 		}
-		const visible = new Set([...nodes.keys()].map((id) => id.slice(2)));
 		const cross = [];
-		for (const link of data?.cross_repository_edges || []) {
-			if (!visible.has(link.component_id) && !visible.has(link.target_component_id)) continue;
-			const target = data.external_components?.find((row) => row.component_id === link.target_component_id) || data.components?.find((row) => row.component_id === link.target_component_id);
-			if (target) nodes.set("c:" + link.target_component_id, {
-				id: "c:" + link.target_component_id,
-				name: target.name || link.target_component_id
+		for (const link of filteredCrossEdges()) {
+			const source = componentName(link.component_id), target = componentName(link.target_component_id);
+			if (!source || !target) continue;
+			nodes.set("c:" + link.component_id, {
+				id: "c:" + link.component_id,
+				name: source
 			});
-			if (nodes.has("c:" + link.component_id) && nodes.has("c:" + link.target_component_id)) cross.push(link);
+			nodes.set("c:" + link.target_component_id, {
+				id: "c:" + link.target_component_id,
+				name: target
+			});
+			cross.push(link);
 		}
-		const links = [...edges.map((edge) => ({
+		const fullLinks = [...edges.map((edge) => ({
 			from: "d:" + edge.dependency_key,
 			to: "c:" + edge.component_id,
 			relation: edge.relation,
@@ -17617,11 +17746,29 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			relation: link.relation,
 			level: link.evidence_level
 		}))];
+		const rows = new Set(graphRows.map((row) => "c:" + row.component_id));
+		const rowLinks = fullLinks.filter((link) => rows.has(link.to));
+		const candidateIds = new Set(rowLinks.flatMap((link) => [link.from, link.to]));
+		const previous = document.activeElement?.getAttribute?.("data-dep-node");
+		const bounded = boundGraph([...nodes.values()].filter((node) => candidateIds.has(node.id)), rowLinks, { required: previous ? [previous] : [] });
+		const loadedNodes = nodes.size;
+		nodes.clear();
+		for (const node of bounded.nodes) nodes.set(node.id, node);
+		const links = bounded.links;
+		if (mode === "graph") {
+			coverage.hidden = nodes.size >= loadedNodes;
+			coverage.textContent = t("dep_nodes_shown", {
+				shown: nodes.size,
+				loaded: loadedNodes
+			}) + " · " + t("dep_narrow");
+		}
 		const layout = layoutGraph([...nodes.values()], links);
 		const placed = new Map(layout.positions.map((position) => [position.id, position]));
-		const width = Math.max(1, 40 + (layout.layers ? layout.layers * NODE_W + (layout.layers - 1) * GAP_X : 0));
+		const nodeHeight = narrow() ? 44 : NODE_H;
+		const strideX = Math.max(280, (graphScroll.clientWidth - 40 - NODE_W) / Math.max(1, layout.layers - 1));
+		const width = Math.max(1, 188 + Math.max(0, layout.layers - 1) * strideX);
 		const depth = layout.positions.reduce((max, position) => Math.max(max, position.y), 0);
-		const height = Math.max(76, 40 + (layout.positions.length ? (depth + 1) * NODE_H + depth * GAP_Y : 0));
+		const height = Math.max(nodeHeight + 40, 40 + (layout.positions.length ? (depth + 1) * nodeHeight + depth * GAP_Y : 0));
 		const selectedIds = new Set();
 		if (selection?.type === "dependency" || selection?.type === "edge") selectedIds.add("d:" + selection.dependencyKey);
 		if (selection?.type === "component" || selection?.type === "edge") selectedIds.add("c:" + selection.componentId);
@@ -17667,25 +17814,28 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			if (!from || !to) return;
 			const group = arrivals.get(link.to) || [index];
 			const bow = (group.indexOf(index) - (group.length - 1) / 2) * 8;
-			const x1 = PAD + from.x * 220 + NODE_W, y1 = PAD + from.y * 54 + NODE_H / 2;
-			const x2 = PAD + to.x * 220, y2 = PAD + to.y * 54 + NODE_H / 2;
+			const x1 = PAD + from.x * strideX + NODE_W, y1 = PAD + from.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
+			const x2 = PAD + to.x * strideX, y2 = PAD + to.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
 			const mid = (x1 + x2) / 2;
 			const path = svg("path", {
 				d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`,
+				"data-dep-edge": "",
 				class: `dep-edge dep-rel-${link.relation}${link.level === "inferred" ? " evidence-inferred" : ""}`
 			});
 			path.dataset.depMark = markOf(link.from) === "dim" && markOf(link.to) === "dim" ? "dim" : "";
 			picture.append(path);
 		});
-		for (const [id, node] of nodes) {
+		const visualOrder = [...nodes].sort(([a], [b]) => placed.get(a).x - placed.get(b).x || placed.get(a).y - placed.get(b).y);
+		for (const [id, node] of visualOrder) {
 			const position = placed.get(id);
 			if (!position) continue;
-			const left = PAD + position.x * 220, top = PAD + position.y * 54;
+			const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
 			const group = svg("g", {
 				class: "dep-node",
 				tabindex: "-1",
 				role: "button",
 				"aria-label": node.name,
+				"aria-pressed": String(selectedIds.has(id)),
 				"data-dep-node": id,
 				"data-dep-focus": id.startsWith("d:") ? `col:${id.slice(2)}` : `row:${id.slice(2)}`,
 				"data-dep-mark": markOf(id)
@@ -17694,12 +17844,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				x: left,
 				y: top,
 				width: NODE_W,
-				height: NODE_H,
+				height: nodeHeight,
 				rx: 6,
 				class: "dep-node-shape"
 			}), svg("text", {
 				x: left + 10,
-				y: top + 23
+				y: top + nodeHeight / 2 + 5
 			}, abbreviate(node.name)));
 			picture.append(group);
 		}
@@ -17712,46 +17862,62 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function render() {
 		const previous = document.activeElement?.getAttribute?.("data-dep-focus");
 		element.dataset.depMode = mode;
-		matrixHost.hidden = mode !== "matrix";
-		graphHost.hidden = mode !== "graph";
-		const counted = typeof data?.counts?.edges === "number";
+		toolbar.hidden = !data;
+		details.hidden = !data;
+		holder.hidden = !data;
+		if (mode === "graph") graphBar.prepend(legend);
+		else matrixHost.before(legend);
+		matrixHost.hidden = !data || mode !== "matrix";
+		graphHost.hidden = !data || mode !== "graph";
+		const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);
+		const countedEdges = allEdges();
 		for (const chip of relationChips) {
-			const count = counted ? (data.edges || []).filter((edge) => edge.relation === chip.value).length : null;
+			const count = counted ? countedEdges.filter((edge) => edge.relation === chip.value).length : null;
 			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
 			chip.label.textContent = text;
 			chip.node.setAttribute("aria-label", text);
 			chip.node.setAttribute("aria-pressed", String(relationFilter.includes(chip.value)));
 		}
 		for (const chip of evidenceChips) {
-			const count = counted ? (data.edges || []).filter((edge) => edge.evidence_level === chip.value).length : null;
+			const count = counted ? countedEdges.filter((edge) => edge.evidence_level === chip.value).length : null;
 			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
 			chip.label.textContent = text;
 			chip.node.setAttribute("aria-label", text);
 			chip.node.setAttribute("aria-pressed", String(evidenceFilter.includes(chip.value)));
 		}
-		sourceCommit.textContent = shortSha(data?.source?.commit_sha);
+		sourceCommit.textContent = data?.source?.commit_sha ? t("dep_meta_commit", { commit: shortSha(data.source.commit_sha) }) : "";
 		const edges = data ? filteredEdges() : [];
 		const names = new Map();
 		for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
 		showAllButton.hidden = mode !== "matrix" || names.size <= COLUMN_LIMIT;
-		showAllButton.textContent = t(showAll ? "dep_show_direct" : "dep_show_transitive");
-		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
-		showRowsButton.hidden = mode !== "matrix" || components.length <= ROW_LIMIT;
+		showAllButton.textContent = showAll ? t("dep_fewer_columns") : t("dep_all_columns", { n: names.size });
+		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id) || mode === "graph" && filteredCrossEdges().some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
+		showRowsButton.hidden = components.length <= ROW_LIMIT;
 		showRowsButton.textContent = showAllRows ? t("dep_show_fewer") : t("dep_show_all_rows", { n: components.length });
 		const visibleRows = !showAllRows && components.length > ROW_LIMIT ? components.slice(0, ROW_LIMIT) : components;
 		if (!focusId || !components.some((row) => row.component_id === focusId)) focusId = components[0]?.component_id || focusId;
-		let columns = [...names.keys()];
-		if (mode === "matrix" && !showAll && columns.length > COLUMN_LIMIT && focusId) {
-			const direct = new Set(edges.filter((edge) => edge.component_id === focusId).map((edge) => edge.dependency_key));
-			const limited = columns.filter((key) => direct.has(key));
-			if (limited.length) columns = limited;
-		}
-		const columnDeps = columns.map((key) => ({
+		graphRows = visibleRows;
+		let columnDeps = [...names.keys()].map((key) => ({
 			key,
 			...dependencyByKey().get(key) || { name: key }
 		}));
 		columnDeps.sort((a, b) => KINDS.findIndex((kind) => (a.kinds || []).includes(kind)) - KINDS.findIndex((kind) => (b.kinds || []).includes(kind)) || String(a.name).localeCompare(String(b.name)));
-		legend.hidden = mode !== "matrix" || !visibleRows.length;
+		if (!showAll && columnDeps.length > COLUMN_LIMIT) {
+			const kept = new Set(limitColumns(visibleRows, columnDeps.map((dep) => dep.key), edges, COLUMN_LIMIT));
+			columnDeps = columnDeps.filter((dep) => kept.has(dep.key));
+		}
+		const summaries = [];
+		if (visibleRows.length < components.length) summaries.push(t("dep_components_shown", {
+			shown: visibleRows.length,
+			loaded: components.length
+		}));
+		if (!narrow() && columnDeps.length < names.size) summaries.push(t("dep_dependencies_shown", {
+			shown: columnDeps.length,
+			loaded: names.size
+		}));
+		coverage.hidden = !data || !summaries.length;
+		coverage.textContent = [...summaries, t("dep_narrow")].join(" · ");
+		legend.hidden = mode === "matrix" && narrow() || !edges.length && !filteredCrossEdges().length;
 		if (!legend.hidden) paintLegend();
 		if (!data || !visibleRows.length) {
 			const reason = data?.reason === "not_captured" ? t("dep_not_captured") : data && data.capture?.status === "complete" && data.counts?.components === 0 ? t("dep_empty") : data?.reason ? reasonText(t, data.reason) : data ? t("dep_no_match") : "";
@@ -17794,7 +17960,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-row": "-1",
 						"data-col": String(col),
 						tabindex: "-1",
-						"aria-selected": String(selectedCol),
+						"aria-pressed": String(selectedCol),
 						onclick: () => choose({
 							type: "dependency",
 							dependencyKey: dep.key
@@ -17813,7 +17979,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					"data-row": String(row),
 					"data-col": "-1",
 					tabindex: "-1",
-					"aria-selected": String(selectedRow),
+					"aria-pressed": String(selectedRow),
 					onclick: () => choose({
 						type: "component",
 						componentId: component.component_id
@@ -17833,7 +17999,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						tabindex: "-1",
 						title: label || dep.name,
 						"aria-label": label || joinLabel([component.name, dep.name]),
-						"aria-selected": String(selectedCell),
+						"aria-pressed": String(selectedCell),
 						onclick: cellEdges.length ? () => choose({
 							type: "edge",
 							componentId: component.component_id,
@@ -17849,9 +18015,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			matrixScroll.replaceChildren(h("table", { class: "dep-matrix" }, h("thead", {}, headKind, headName), body));
 			matrixScroll.scrollLeft = preference.matrixLeft || 0;
 			matrixScroll.scrollTop = preference.matrixTop || 0;
-			listHost.replaceChildren(...components.map((component) => {
+			listHost.replaceChildren(...(narrow() && mode === "matrix" ? visibleRows : []).map((component) => {
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
-				return h("section", { class: "dep-group" }, h("h3", {}, component.name), ...own.map((edge) => {
+				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
 					return h("button", {
 						type: "button",
@@ -17859,7 +18025,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-dep-pick": `${edge.component_id}|${edge.dependency_key}`,
 						"data-dep-focus": `pick:${edge.component_id}|${edge.dependency_key}`,
 						tabindex: selectedPick ? "0" : "-1",
-						"aria-selected": String(selectedPick),
+						"aria-pressed": String(selectedPick),
 						"aria-label": edgeLabel(edge),
 						onclick: () => choose({
 							type: "edge",
@@ -17875,14 +18041,23 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		detailBody.replaceChildren();
 		if (data) {
-			if (data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
+			if (data.capture?.revision_id && data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
 			const omitted = [
 				"omitted_edges",
 				"omitted_hints",
 				"omitted_components"
 			].reduce((sum, key) => Number.isFinite(data[key]) && data[key] > 0 ? sum + data[key] : sum, 0);
 			if (omitted > 0) detailBody.append(h("p", { "data-dep-omitted": "" }, t("dep_omitted", { n: omitted })));
-			for (const code of data.parser_reasons || []) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			for (const code of new Set([
+				...data.parser_reasons || [],
+				...data.catalog_reasons || [],
+				data.cross_repository?.reason,
+				...data.cross_repository?.selection_reasons || []
+			].filter(Boolean))) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			if (data.projection_omitted_collections?.length) {
+				const names = data.projection_omitted_collections.map((code) => t("dep_collection_" + code) === "dep_collection_" + code ? t("ui_reason_generic") : t("dep_collection_" + code));
+				detailBody.append(h("p", {}, t("dep_omitted_collections", { names: names.join(" · ") })));
+			}
 			const files = h("div", { class: "dep-files" });
 			for (const file of data.files || []) {
 				const status = FILE_STATUS[file.status] ? t(FILE_STATUS[file.status]) : reasonText(t, file.status, true);
@@ -17893,15 +18068,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				}, h("span", {}, file.path || t("dep_dash")), h("span", {}, joinLabel([status, note]))));
 			}
 			for (const row of data.unreadable_paths || []) {
-				const path = typeof row === "string" ? row : row?.path;
+				const path = typeof row === "string" ? row : row?.path || row?.parent_path;
 				files.append(h("div", {
 					class: "dep-file",
 					"data-dep-file": path || ""
-				}, h("span", {}, path || t("dep_dash")), h("span", {}, t("dep_file_unreadable"))));
+				}, h("span", {}, path || t("dep_dash")), h("span", {}, joinLabel([t("dep_file_unreadable"), row?.reason ? reasonText(t, row.reason, true) : ""]))));
 			}
 			if (files.childNodes.length) detailBody.append(files);
 			if ((revisions?.revisions || []).length || revisions?.next_cursor) {
-				detailBody.append(h("h3", {}, t("dep_revisions")));
+				detailBody.append(h("h2", {}, t("dep_revisions")));
 				for (const row of revisions?.revisions || []) detailBody.append(h("p", {}, joinLabel([
 					shortSha(row.commit_sha),
 					capturedDate(row.captured_at),
@@ -17914,7 +18089,13 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		syncChrome();
 		syncImpact();
 		if (panel) renderInspector();
-		if (previous) element.querySelector(`[data-dep-focus="${CSS.escape(previous)}"]`)?.focus({ preventScroll: true });
+		if (previous) {
+			const target = focusTarget(previous);
+			if (target) {
+				for (const node of activeFocusHost().querySelectorAll("[data-dep-focus]")) node.tabIndex = node === target ? 0 : -1;
+				target.focus({ preventScroll: true });
+			}
+		}
 	}
 	async function refresh() {
 		if (!active) return;
@@ -17928,6 +18109,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			data = projection;
 			revisions = history;
 			statusBox.replaceChildren();
+			impactTicket++;
+			impactKey = "";
 			if (!selectionAlive()) {
 				selection = null;
 				closeInspector();
@@ -17950,14 +18133,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				403,
 				404
 			].includes(error.status)) withdraw();
-			else {
-				data = null;
-				revisions = null;
-				impact = null;
-				impactKey = "";
-				closeInspector();
-				render();
-			}
+			else clearData();
 			statusBox.replaceChildren(inlineError({
 				error,
 				retry: () => {
@@ -17965,6 +18141,20 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				}
 			}));
 		}
+	}
+	function clearData() {
+		impactTicket++;
+		data = null;
+		revisions = null;
+		impact = null;
+		impactKey = "";
+		closeInspector();
+		fillComponents();
+		fillRetract();
+		render();
+		captureForm.update();
+		declareForm.update();
+		retractForm.update();
 	}
 	function withdraw() {
 		serial++;
@@ -17977,8 +18167,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		preference.selection = null;
 		closeInspector();
 		statusBox.replaceChildren();
+		fillComponents();
+		fillRetract();
 		render();
-		syncChrome();
+		captureForm.update();
+		declareForm.update();
+		retractForm.update();
 	}
 	function setActive(value) {
 		const next = Boolean(value);
@@ -17999,6 +18193,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		syncChrome();
 		return refresh();
 	}
+	const media = matchMedia("(max-width: 800px)");
+	const onResize = () => render();
+	media.addEventListener("change", onResize);
 	render();
 	return {
 		element,
@@ -18006,6 +18203,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		setActive,
 		withdraw,
 		dispose() {
+			media.removeEventListener("change", onResize);
 			active = false;
 			serial++;
 			impactTicket++;

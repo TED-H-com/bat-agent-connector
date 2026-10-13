@@ -434,40 +434,67 @@ origin, so bars and the Today line line up; the document never scrolls horizonta
 
 ## Dependencies
 
+The relation form uses a bounded two-column grid, one column on phones, 44px touch
+controls and labelled source commits. Graph fills the available layer width and
+keeps its legend beside 32px zoom controls (44px on touch). Active chips use the
+existing primary text token for contrast in both themes; selected matrix cells
+centre their marks with a separate inset selection ring.
+
+Distinct edge and declaration IDs retain their evidence even when they share a
+component, dependency and relation. Failed reads hide both view hosts as well as
+their rows, forms and inspector; late impact reads cannot restore withdrawn data.
+
+Matrix and list selection buttons use pressed state. Graph nodes do the same, with
+a distinct selected fill. Home/End follow the graph's visual column/row order.
+Activation, live reads and inspector close resolve focus by stable item key in the
+currently visible matrix, list or graph; inspectors receive a return-focus callback.
+
 The question on this view is which checks have to be run again if one dependency changes.
 It reads the current dependency projection, its revisions, and one impact query. Capture,
 declare, and retract stay the durable dependency actions, using the projection version,
 the workspace version, and the source binding digest. Capture again is the header action.
-It is primary only when this member can run it. Otherwise it is a secondary button with the
-blocking reason beside it. Maintenance policy, release baselines, maintenance checks, and
+It is primary only when this member can run it. Otherwise it is a secondary button with the blocking reason below the header,
+where it wraps without displacing Refresh. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
 
 The header names the capture commit and its UTC date. A Stale pill is shown only when
 the projection says `stale` is true. Unknown freshness stays out of the header and is
 stated once under Details. A Partial pill and the omitted total describe the returned
-capture, not a repository-wide total. Relation counts do the same, and they are omitted
-when the projection has no count object.
+capture, not a repository-wide total. Relation/evidence counts include captured edges and separate owner declarations;
+they are omitted without a capture or a count object. An uncaptured workspace has
+no Partial pill or freshness claim. Details includes parser/catalog reasons, omitted
+collections, cross-repository selection gaps and unreadable parent paths.
 
-The matrix lists every captured component. More than twelve rows start with the first
-twelve and Show all (M). Columns group dependencies by kind. A capture of twelve
-columns or fewer shows every dependency, so a second component is not an empty row.
-More than twelve columns start as the focused component's direct dependencies, with
-Show transitive. A cell mark is
-R, B, T, C, or Ref. A legend above the matrix names those marks and the evidence styles:
-solid verified, outline declared, dashed inferred. The accessible name is the dependency,
-relation, version, and evidence. At 800px and below the same rows become a list. The graph
-uses the width of the view and centres a drawing that is narrower than that width. It is
-labelled Loaded and is not a fleet-wide graph. Selecting a node keeps its upstream and
-downstream visible.
+Matrix and narrow list start with twelve loaded components. Show all (M) expands
+those rows. Matrix columns group by kind and start with at most twelve dependencies,
+covering each shown component before filling the budget; All columns (N) reveals the
+rest. These controls describe direct columns, not transitive impact. View limits say
+how many of the loaded components/dependencies are shown and offer search/filtering.
+Hidden desktop lists are not populated. Graph uses the same relation, evidence and
+search predicates for local and cross-repository links; external nodes appear only
+with matching links. It starts with the same row prefix and always caps drawing at
+sixty nodes, retaining the focused key where present. Its limit describes shown nodes
+out of matching loaded nodes, never a complete graph total. Relation/evidence legends
+are visible in both matrix and graph. Selecting a node keeps upstream/downstream visible.
 
 The inspector shows a pinned version only when this capture resolved one, plus the
 allowed range, the evidence location, and the maintenance owner or the recorded reason.
-Tests to re-run come from the capture's verification hints. Affected components come
-from the impact read. A bounded prefix says how many components were loaded. An impact
+Component selections show component facts and a Dependencies list whose rows name
+the dependency, relation, version, evidence and joined source references. Tests to
+re-run come from the capture's verification hints. Affected components come
+from the impact read; owner declarations are listed separately from captured paths. Bounded/partial impact has a Partial pill and its reason, cross-repository reason
+and selection reasons. Positive counts describe returned components only; an empty
+bounded prefix never says “0 loaded”. Declared-only reads list the declarations. An impact
 miss says why the dependency is outside this projection, which is not the same as no
-impact. Check impact opens a discussion with no context ref; the dependency name and
-the impact summary are in the title. Declare and retract stay owner actions in a
-disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
+impact. Discuss with PM opens a discussion for dependency and component selections without
+a context ref (the backend has no dependency context kind). Its title names the item
+and captured commit. Declare and retract stay owner actions in a
+disclosure on the main page, never reparented into an inspector. Inferred drafts
+restore all five translated relations. The source commit and declaration select
+have labels; retract is secondary. Projection refresh rereads an open impact and
+retains focus on its action. Failed reads remove options, disable mutation forms,
+and hide the toolbar, Details and record disclosure with the rows and inspector;
+drafts and original operation keys remain intact. Details lists every manifest and unreadable path. Unknown reason codes use
 the shared wording, and the raw code appears only there.
 
 ## Issues & changes

@@ -104,6 +104,17 @@
 - Add the Dependencies view, which answers which checks to re-run when a dependency changes: a
   component matrix with evidence styles, a bounded graph, and an inspector with the pinned version,
   owner, tests to re-run and affected components. Capture again stays the durable header action.
+  Preserve distinct dependency declarations alongside captured relations and hide empty view hosts
+  after failed reads. Move Dependencies capture reasons below header actions; improve form layout,
+  touch targets, dark chip contrast, graph spacing and selected-cell outlines. Apply Dependencies
+  graph filters to cross-repository links and bound large matrix, graph and narrow list views with
+  explicit shown-versus-loaded counts and legends. Clear Dependencies form options and hide source
+  surfaces on failed reads, while retaining drafts and original operation keys. Refresh open impact
+  inspectors and restore inferred relation drafts in both languages. Count owner declarations
+  throughout Dependencies and disclose bounded impact, catalog gaps and declared-only results.
+  Component inspectors name their dependencies; Discuss with PM titles include the selected item and
+  captured commit. Preserve Dependencies keyboard focus across activation, live reads and inspector
+  close in the matrix, graph and narrow list; expose valid selection semantics.
 - Show the central register in Issues & changes: type counts and the summary appear only when
   coverage is complete, pagination stays honest, and a processing timeline offers Discuss and
   Propose change. A selected row survives refreshes, and states read in the reader's language.
