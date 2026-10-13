@@ -428,15 +428,16 @@ test('VP-4: selected matrix cell centres and frames its badge', async ({page}) =
   expect(style.gap).toBeGreaterThanOrEqual(4);
 });
 
-test('M3: dark selected chip contrast meets 4.5 to 1', async ({page}) => {
+test('M3: dark selected chips use the readable text token and meet 4.5 to 1', async ({page}) => {
   await page.emulateMedia({reducedMotion: 'reduce'});
   await mount(page);
   await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
   const colors = await page.locator('[data-dep-relation=test]').evaluate(node => {
     const rgb = (value: string) => value.match(/[\d.]+/g)!.map(Number);
     const css = getComputedStyle(node);
-    return {fg: rgb(css.color), bg: rgb(css.backgroundColor), canvas: rgb(getComputedStyle(document.body).backgroundColor)};
+    return {fg: rgb(css.color), primary: rgb(getComputedStyle(document.body).color), bg: rgb(css.backgroundColor), canvas: rgb(getComputedStyle(document.body).backgroundColor)};
   });
+  expect(colors.fg).toEqual(colors.primary);
   const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
   const alpha = colors.bg[3] ?? 1;
   const background = colors.bg.slice(0, 3).map((value, index) => value * alpha + colors.canvas[index] * (1 - alpha));
@@ -458,6 +459,7 @@ if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as 
       const directory = process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
       mkdirSync(directory, {recursive: true});
       const shot = async (state: string) => {
+        if (process.env.BATC_DEP_SHOT_STATE && state !== process.env.BATC_DEP_SHOT_STATE) return;
         expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
         const text = await page.locator('#main').innerText();
         expect(text).not.toMatch(/\b(?:undefined|null|NaN)\b|ui_reason_|dep_/);

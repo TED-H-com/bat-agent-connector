@@ -307,7 +307,7 @@ for (const {locale, width} of cases) {
     await expect(inventory).toContainText('membership-api');
     await expectNoJunk(page);
     await shot(page, `dependencies-${locale}-${width}`);
-    await dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '圖' : 'Graph', exact: true}).click();
+    await dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '關係圖' : 'Graph', exact: true}).click();
     await expect(dependencies.locator('[data-dep-graph] svg')).toBeVisible();
     await openView(page, 'overview');
     await expectView(page, locale, width, 'overview', copy.name);
@@ -315,7 +315,7 @@ for (const {locale, width} of cases) {
     await expect(page.locator('.pm-overview-saved')).toContainText(copy.snapshotV3);
     await openView(page, 'dependencies');
     await expectView(page, locale, width, 'dependencies', copy.name);
-    await expect(dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '圖' : 'Graph', exact: true})).toHaveAttribute('aria-checked', 'true');
+    await expect(dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '關係圖' : 'Graph', exact: true})).toHaveAttribute('aria-checked', 'true');
 
     await showThreads(page);
     await expectView(page, locale, width, 'discussions', copy.name);
