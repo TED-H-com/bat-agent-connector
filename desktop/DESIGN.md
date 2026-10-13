@@ -223,7 +223,22 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
-Selecting a governance attention item opens its exact Issues & changes inspector,
+The Decisions card retains the central pending count and adds Recently decided:
+up to five visible completed decisions, with their title, relative time and actor.
+Each row opens the exact Issues & changes register inspector. Missing history is
+Unknown; incomplete or capped history is Partial and describes only loaded rows.
+It never substitutes the history total for the pending count. Saved reports do
+not borrow live decision history.
+
+An adopted discussion with an open sourced issue offers one secondary Resolve
+issue action to its assigned writer or explicit workspace owner, with the action's
+observe/manage scopes. The durable form prefills an editable rationale naming the
+fixed adopted plan title and revision number. It preserves the original finding,
+affected IDs, sources and version precondition; it creates no snapshot. Original-key
+recovery settles the receipt before rereading the finding and Overview. Reported
+resolved remains Not assessed; adoption alone never resolves an issue.
+
+Selecting a governance attention item or completed plan decision opens its exact Issues & changes inspector,
 where Discuss retains the record identity and title. Without the register capability,
 the existing governance tool remains the destination. The destination list settles
 before selection; withdrawn or late record reads cannot reopen an inspector.

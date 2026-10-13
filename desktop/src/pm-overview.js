@@ -98,7 +98,8 @@ export function workspaceOverview(options) {
     const metrics = ['blocker', 'decision'].map(kind => {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
-        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null)});
+        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null,
+          kind === 'decision' && !fixed ? recentDecisions(data) : null)});
       node.dataset.overviewMetric = kind; return node;
     });
     return h('div', {class: 'pm-overview-status', 'data-overview-status': ''}, goal, progress, ...metrics);
@@ -108,6 +109,16 @@ export function workspaceOverview(options) {
     const seconds = Math.max(0, projection.as_of - since);
     const [key, unit] = seconds >= 86400 ? ['ov_day', 86400] : seconds >= 3600 ? ['ov_hour', 3600] : ['ov_minute', 60];
     return t(key, {n: Math.floor(seconds / unit)});
+  }
+  function recentDecisions(data) {
+    const rows = Array.isArray(data?.recent_decisions) ? data.recent_decisions : null;
+    const partial = rows && (data.recent_decisions_complete !== true || data.recent_decisions_truncated === true);
+    return h('section', {class: 'pm-overview-decisions' + (rows?.length === 0 && !partial ? ' pm-overview-decisions-empty' : ''), 'data-overview-recent-decisions': ''},
+      h('h3', {}, t('ov_recent_decisions')),
+      ...(rows || []).map(row => h('div', {'data-overview-decided': row.key}, itemLink(row, 'decided'),
+        h('div', {class: 'ui-meta'}, [age(row.decided_at), row.actor].filter(Boolean).join(' · ')))),
+      !rows ? statusPill('unknown') : partial ? h('div', {class: 'ui-meta'}, statusPill('partial'), ' ', t('ov_showing', {n: rows.length}))
+        : !rows.length && data.recent_decisions_count === 0 ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null);
   }
   function contextText(row) {
     const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
@@ -283,7 +294,8 @@ export function workspaceOverview(options) {
     if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
     const main = attention(projection);
     commitParts([
-      {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown], render: () => statusStrip(projection)},
+      {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
+        projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated], render: () => statusStrip(projection)},
       {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => {
         const columns = parts.get('columns')?.node;
         if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}

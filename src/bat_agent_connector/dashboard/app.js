@@ -43,6 +43,7 @@ var overviewStrings = {
 		ov_progress: "Progress",
 		ov_blockers: "Blockers",
 		ov_decisions: "Decisions",
+		ov_recent_decisions: "Recently decided",
 		ov_accepted: "{accepted} of {total} accepted",
 		ov_requirements: "{n} requirements",
 		ov_adopted: "adopted {date}",
@@ -107,6 +108,7 @@ var overviewStrings = {
 		ov_progress: "進度",
 		ov_blockers: "阻礙",
 		ov_decisions: "待決事項",
+		ov_recent_decisions: "近期決策",
 		ov_accepted: "{total} 項中 {accepted} 項已驗收",
 		ov_requirements: "{n} 項需求",
 		ov_adopted: "{date} 採用",
@@ -3848,6 +3850,10 @@ var workbenchStrings = {
 //#region src/pm-plan-proposal-strings.js
 var pmPlanProposalStrings = {
 	en: {
+		pcp_resolve_issue: "Resolve issue",
+		pcp_resolve_rationale: "Reason for resolving",
+		pcp_resolve_default: "Issue resolved following adoption of {title} (revision #{number}).",
+		pcp_plan_context: "Plan context",
 		pcp_title: "Plan update from this discussion",
 		pcp_help: "Prepare a sourced proposal, review the whole change, then adopt it once.",
 		pcp_purpose: "What should this plan update cover?",
@@ -3912,6 +3918,10 @@ var pmPlanProposalStrings = {
 		pcp_removed_help: "These original commitments are removed when you adopt the whole update."
 	},
 	"zh-TW": {
+		pcp_resolve_issue: "回報解決",
+		pcp_resolve_rationale: "回報解決的理由",
+		pcp_resolve_default: "採用「{title}」（修訂 #{number}）後，回報此問題已解決。",
+		pcp_plan_context: "計畫脈絡",
 		pcp_title: "從這段討論整理計畫",
 		pcp_help: "先整理有來源的提案，審閱整組變更，再一次採用。",
 		pcp_purpose: "這次計畫要整理哪些內容？",
@@ -16107,7 +16117,7 @@ function workspaceOverview(options) {
 			const node = metric({
 				label: t(kind === "blocker" ? "ov_blockers" : "ov_decisions"),
 				value: data?.attention_counts?.[kind] ?? null,
-				context: h("div", {}, itemLink(first, "status"), kind === "decision" && first ? discuss(first, "status") : null)
+				context: h("div", {}, itemLink(first, "status"), kind === "decision" && first ? discuss(first, "status") : null, kind === "decision" && !fixed ? recentDecisions(data) : null)
 			});
 			node.dataset.overviewMetric = kind;
 			return node;
@@ -16122,6 +16132,14 @@ function workspaceOverview(options) {
 		const seconds = Math.max(0, projection.as_of - since);
 		const [key, unit] = seconds >= 86400 ? ["ov_day", 86400] : seconds >= 3600 ? ["ov_hour", 3600] : ["ov_minute", 60];
 		return t(key, { n: Math.floor(seconds / unit) });
+	}
+	function recentDecisions(data) {
+		const rows = Array.isArray(data?.recent_decisions) ? data.recent_decisions : null;
+		const partial = rows && (data.recent_decisions_complete !== true || data.recent_decisions_truncated === true);
+		return h("section", {
+			class: "pm-overview-decisions" + (rows?.length === 0 && !partial ? " pm-overview-decisions-empty" : ""),
+			"data-overview-recent-decisions": ""
+		}, h("h3", {}, t("ov_recent_decisions")), ...(rows || []).map((row) => h("div", { "data-overview-decided": row.key }, itemLink(row, "decided"), h("div", { class: "ui-meta" }, [age(row.decided_at), row.actor].filter(Boolean).join(" · ")))), !rows ? statusPill("unknown") : partial ? h("div", { class: "ui-meta" }, statusPill("partial"), " ", t("ov_showing", { n: rows.length })) : !rows.length && data.recent_decisions_count === 0 ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null);
 	}
 	function contextText(row) {
 		const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
@@ -16531,7 +16549,11 @@ function workspaceOverview(options) {
 					projection.attention_counts,
 					projection.attention,
 					projection.next_milestone,
-					projection.unknown
+					projection.unknown,
+					projection.recent_decisions,
+					projection.recent_decisions_count,
+					projection.recent_decisions_complete,
+					projection.recent_decisions_truncated
 				],
 				render: () => statusStrip(projection)
 			},
@@ -19519,6 +19541,229 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 	};
 }
 //#endregion
+//#region src/pm-issue-resolution.js
+var ACTION$1 = "pm.governance.revise";
+var findingFields = [
+	"title",
+	"description",
+	"owner_actor",
+	"affected_requirement_ids",
+	"trigger",
+	"response",
+	"review_at",
+	"dimension",
+	"alternatives",
+	"disambiguation"
+];
+function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitted, form, input, labelled, errorBox, refreshParent }) {
+	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const box = h("div", { "data-proposal-resolution": "" }), entries = new Map();
+	let serial = 0, current = null, workspace = null, enabled = false;
+	const scope = () => caps()?.scopes?.includes("observe") && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === ACTION$1 && row.allowed === true) && permitted(false);
+	const role = () => Array.isArray(workspace?.members) ? workspace.members.find((row) => row.actor === caps()?.actor)?.role : workspace?.membership?.actor === caps()?.actor ? workspace.membership.role : null;
+	const authorized = (entry) => enabled && Boolean(entry.value) && scope() && ["owner", "contributor"].includes(role()) && (role() === "owner" || entry.value?.revision.document.owner_actor === caps()?.actor);
+	const open = (entry) => ["open", "monitoring"].includes(entry.value?.revision.document.status);
+	const baseline = (entry) => JSON.parse(entry.editor?.values().finding || "null");
+	const fresh = (entry) => baseline(entry)?.version === entry.value?.record.version;
+	function checked(value, id) {
+		if (value?.workspace_id !== workspaceId || value.record?.workspace_id !== workspaceId || value.record.record_id !== id || value.revision?.record_id !== id || value.revision.revision_id !== value.record.revision_id || value.revision.version !== value.record.version || !Number.isSafeInteger(value.record.version) || !Array.isArray(value.revision.document?.sources)) throw Error(t("pm_scope_mismatch"));
+		return value;
+	}
+	function params(document) {
+		return {
+			...Object.fromEntries(findingFields.filter((key) => Object.hasOwn(document, key)).map((key) => [key, document[key]])),
+			source_refs: document.sources.map(({ kind, id }) => ({
+				kind,
+				id
+			})),
+			proposed_revision_id: document.proposed_revision?.revision_id ?? null,
+			status: "reported_resolved"
+		};
+	}
+	function makeEntry(value, plan) {
+		const id = value.record.record_id, entry = {
+			value,
+			editor: null
+		};
+		const finding = h("input", {
+			type: "hidden",
+			value: JSON.stringify({
+				version: value.record.version,
+				params: params(value.revision.document)
+			})
+		});
+		const rationale = input("pcp_resolve_rationale", {
+			multiline: true,
+			max: 4e3
+		});
+		const extra = h("div", {}, h("strong", { "data-issue-resolve-title": "" }, value.revision.document.title), finding, labelled("pcp_resolve_rationale", rationale));
+		entry.editor = form({
+			action: ACTION$1,
+			target: {
+				workspace_id: workspaceId,
+				record_id: id
+			},
+			fields: {
+				finding,
+				rationale
+			},
+			params: (values) => ({
+				...JSON.parse(values.finding).params,
+				rationale: values.rationale
+			}),
+			preconditions: () => ({ expected_version: baseline(entry).version }),
+			permitted: () => authorized(entry) && open(entry) && fresh(entry),
+			recoverPermitted: () => authorized(entry),
+			label: "pcp_resolve_issue",
+			extra,
+			onStateChange: () => {
+				if (!entry.node?.isConnected || !authorized(entry)) return;
+				if (!entry.editor.locked() && entry.value.revision.document.status === "reported_resolved") showResolved(entry);
+				else controls(entry);
+			},
+			onSaved: async (result) => {
+				if (result?.workspace_id !== workspaceId || result.record_id !== id) throw Error(t("pm_scope_mismatch"));
+				await refresh(current);
+				await api("GET", base + "/overview");
+				alive();
+				await refreshParent?.();
+			}
+		});
+		entry.editor.box.querySelector("button[type=submit]").className = "secondary";
+		const defaultRationale = t("pcp_resolve_default", {
+			title: plan.document.title,
+			number: plan.sequence
+		});
+		if (!entry.editor.locked() && !rationale.value) entry.editor.set("rationale", defaultRationale);
+		entry.editor.box.hidden = !entry.editor.locked() && rationale.value === defaultRationale;
+		entry.launch = h("button", {
+			type: "button",
+			class: "secondary",
+			"data-issue-resolve-open": "",
+			onclick: () => {
+				if (!authorized(entry) || !open(entry)) return;
+				entry.editor.box.hidden = false;
+				entry.launch.hidden = true;
+				rationale.focus();
+			}
+		}, t("pcp_resolve_issue"));
+		entry.review = h("button", {
+			type: "button",
+			class: "secondary",
+			hidden: true,
+			onclick: () => {
+				if (!authorized(entry) || entry.editor.locked()) return;
+				entry.editor.set("finding", JSON.stringify({
+					version: entry.value.record.version,
+					params: params(entry.value.revision.document)
+				}));
+				entry.editor.update();
+				render();
+			}
+		}, t("pm_gov_review_fresh"));
+		entry.warning = h("p", {
+			class: "muted",
+			hidden: true
+		}, t("pm_gov_stale"));
+		entry.node = h("section", { "data-issue-resolution": id }, entry.launch, entry.warning, entry.review, entry.editor.box);
+		return entry;
+	}
+	function showResolved(entry) {
+		box.replaceChildren(h("p", { "data-issue-resolved": entry.value.record.record_id }, t("reg_status_reported_resolved"), " · ", statusPill("not_assessed")));
+	}
+	function controls(entry) {
+		entry.warning.hidden = fresh(entry) || entry.editor.locked();
+		entry.review.hidden = entry.warning.hidden;
+		if (entry.editor.locked()) entry.editor.box.hidden = false;
+		entry.launch.hidden = !entry.editor.box.hidden;
+	}
+	function render() {
+		for (const entry of entries.values()) entry.editor.update();
+		const entry = [...entries.values()].find((row) => authorized(row) && row.editor.locked()) || [...entries.values()].find((row) => authorized(row) && open(row)) || [...entries.values()].find((row) => authorized(row) && row.value?.revision.document.status === "reported_resolved");
+		box.replaceChildren();
+		if (!entry) return;
+		if (!open(entry) && !entry.editor.locked()) {
+			showResolved(entry);
+			return;
+		}
+		controls(entry);
+		box.append(entry.node);
+	}
+	async function refresh(revision) {
+		current = revision;
+		const ticket = ++serial;
+		enabled = false;
+		workspace = null;
+		box.replaceChildren();
+		for (const entry of entries.values()) {
+			entry.value = null;
+			entry.editor.update();
+		}
+		const refs = (thread()?.thread.context || []).filter((ref) => ref.kind === "governance" && ref.available !== false && /^pmgov_[0-9a-f]{32}$/.test(ref.id));
+		if (!scope() || !/^pmrev_[0-9a-f]{32}$/.test(revision || "") || !refs.length) return;
+		try {
+			const [ws, plan, ...records] = await Promise.all([
+				api("GET", base),
+				api("GET", base + "/plans/" + revision),
+				...refs.map(async (ref) => {
+					try {
+						return checked(await api("GET", base + "/governance/" + ref.id), ref.id);
+					} catch (error) {
+						if ([403, 404].includes(error.status)) return null;
+						throw error;
+					}
+				})
+			]);
+			alive();
+			if (ticket !== serial) return;
+			if (ws.workspace?.workspace_id !== workspaceId || plan.plan?.workspace_id !== workspaceId || plan.plan.revision_id !== revision || typeof plan.plan.document?.title !== "string" || !Number.isSafeInteger(plan.plan.sequence)) throw Error(t("pm_scope_mismatch"));
+			workspace = ws.workspace;
+			enabled = true;
+			for (const value of records) {
+				if (!value || value.record.kind !== "issue") continue;
+				let entry = entries.get(value.record.record_id);
+				if (!entry) {
+					entry = makeEntry(value, plan.plan);
+					entries.set(value.record.record_id, entry);
+				}
+				entry.value = value;
+			}
+			render();
+		} catch (error) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			enabled = false;
+			workspace = null;
+			box.replaceChildren();
+			if (![403, 404].includes(error.status)) box.append(errorBox(error));
+		}
+	}
+	function withdraw() {
+		serial++;
+		enabled = false;
+		workspace = null;
+		box.replaceChildren();
+		for (const entry of entries.values()) {
+			entry.value = null;
+			entry.editor.update();
+		}
+	}
+	return {
+		box,
+		refresh,
+		withdraw,
+		dispose() {
+			withdraw();
+			for (const entry of entries.values()) entry.editor.dispose();
+			entries.clear();
+		}
+	};
+}
+//#endregion
 //#region src/pm-plan-proposals.js
 var proposalReasonLabel = (t, reason) => Object.hasOwn(reasonLabels, reason) ? reasonLabel(t, reason) : t("pd_stale");
 var PROPOSE = "pm.conversation.propose";
@@ -19700,6 +19945,21 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		},
 		extra: h("div", {}, review, content, labelled("pcp_rationale", rationale), note("pcp_review_help"))
 	});
+	const resolution = conversation ? issueResolution({
+		h,
+		t,
+		api,
+		alive,
+		caps,
+		workspaceId,
+		thread,
+		permitted,
+		form,
+		input,
+		labelled,
+		errorBox,
+		refreshParent
+	}) : null;
 	const more = h("button", {
 		type: "button",
 		class: "secondary",
@@ -19890,7 +20150,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					onRevision(p.adopted_revision_id);
 				}
 			}, t("pd_accepted_revision")));
-			detail.append(h("p", {}, p.document?.summary || ""), confirmation);
+			detail.append(h("p", {}, p.document?.summary || ""), confirmation, resolution.box);
 			if (adopt.locked()) {
 				adopt.box.firstElementChild.hidden = true;
 				adopt.box.append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
@@ -20168,6 +20428,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		content.replaceChildren();
 		candidateFields = [];
 		requirementFields = [];
+		resolution?.withdraw();
 		adopt.update();
 		if (!id) return;
 		try {
@@ -20178,6 +20439,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (active?.proposal_id !== result.proposal_id) conflict = false;
 			active = result;
 			renderReview();
+			await resolution?.refresh(adopted() ? result.adopted_revision_id : null);
+			alive();
+			if (own !== ticket) return;
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
@@ -20228,6 +20492,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				if (active?.proposal_id !== result.proposal_id) conflict = false;
 				active = result;
 				renderReview();
+				await resolution?.refresh(adopted() ? result.adopted_revision_id : null);
+				alive();
+				if (own !== ticket) return;
 			}
 		} catch (error) {
 			if (own === ticket) {
@@ -20277,6 +20544,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		content.replaceChildren();
 		notice.replaceChildren();
 		more.hidden = true;
+		resolution?.withdraw();
 		prepare?.update();
 		adopt?.update();
 	}
@@ -20340,6 +20608,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		dispose() {
 			clearInterval(clock);
 			withdraw();
+			resolution?.dispose();
 			prepare.dispose();
 			adopt.dispose();
 		}
@@ -35850,7 +36119,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`;
 			workbench?.select(destination);
 			if (destination === "requirements") await traceability?.openRef?.(ref);
-			else if (ref.kind === "governance") {
+			else if (ref.kind === "governance" || ref.kind === "plan_revision" && register) {
 				if (register) await register.openRef(ref);
 				else await governance?.openRef?.(ref);
 			} else if (ref.kind === "milestone" && destination === "schedule" && schedule) await schedule.openRef(ref);
@@ -37249,7 +37518,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			packageSignature = signature;
 		}
 		for (const run of page.runs || []) {
-			const detail = h("div"), item = h("details", { "data-pm-run": run.run_id }, h("summary", {}, run.purpose, " · ", time(run.created_at), run.adapter === "codex-native-linux" ? " · " + nativeRunState(t, run) : ""), detail);
+			const adoptionRef = typeof run.purpose === "string" && run.purpose.match(/^Adopt plan (pmrev_[0-9a-f]{32})$/);
+			const caption = h("span", { "data-pm-run-purpose": "" }, adoptionRef ? t("pcp_plan_context") : run.purpose);
+			const detail = h("div"), item = h("details", { "data-pm-run": run.run_id }, h("summary", {}, caption, " · ", time(run.created_at), run.adapter === "codex-native-linux" ? " · " + nativeRunState(t, run) : ""), detail);
+			if (adoptionRef) (async () => {
+				try {
+					const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${adoptionRef[1]}`);
+					alive();
+					if (!item.isConnected) return;
+					if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1] || typeof value.plan.document?.title !== "string" || !Number.isSafeInteger(value.plan.sequence)) throw Error(t("pm_scope_mismatch"));
+					caption.textContent = value.plan.document.title + " · " + t("pm_revision_number", { number: value.plan.sequence });
+				} catch (error) {
+					if (!item.isConnected || retired(error)) return;
+					if ([403, 404].includes(error.status)) item.remove();
+					else detail.replaceChildren(errorBox(error));
+				}
+			})();
 			let fetched = false, pending = false;
 			item.addEventListener("toggle", async () => {
 				if (!item.open || fetched || pending) return;
@@ -37262,7 +37546,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					const saved = data.run;
 					if (saved?.workspace_id !== workspaceId || saved?.thread_id !== threadId || saved?.run_id !== run.run_id) throw Error(t("pm_scope_mismatch"));
 					const context = saved.context;
-					detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_version", { version: context.thread_version })), h("a", { href: `#/op/${saved.operation_id}` }, t("pm_operation")), ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) => h("section", {}, h("h4", {}, discussionLabel(t, "pm_status_", status)), ...inputs.map((input) => h("div", {}, h("p", {}, input.value), h("small", { class: "muted" }, [
+					detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_version", { version: context.thread_version })), h("a", { href: `#/op/${saved.operation_id}` }, t("pm_operation")), adoptionRef ? h("details", {}, h("summary", {}, t("pcp_original")), h("p", {}, saved.purpose)) : "", ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) => h("section", {}, h("h4", {}, discussionLabel(t, "pm_status_", status)), ...inputs.map((input) => h("div", {}, h("p", {}, input.value), h("small", { class: "muted" }, [
 						input.source_ref?.ref || input.source_ref?.message_id,
 						input.source_ref?.path,
 						input.source_ref?.revision

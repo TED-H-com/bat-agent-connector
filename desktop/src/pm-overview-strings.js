@@ -1,6 +1,7 @@
 export const overviewStrings = {
   en: {
     ov_live: 'Live', ov_goal: 'Goal', ov_progress: 'Progress', ov_blockers: 'Blockers', ov_decisions: 'Decisions',
+    ov_recent_decisions: 'Recently decided',
     ov_accepted: '{accepted} of {total} accepted', ov_requirements: '{n} requirements', ov_adopted: 'adopted {date}',
     ov_attention: 'Needs attention', ov_milestones: 'Milestones', ov_deliveries: 'Recent deliveries', ov_deliveries_loaded: 'Recent deliveries (loaded)',
     ov_discuss: 'Discuss', ov_empty: 'Nothing needs you right now.', ov_incomplete: 'Nothing loaded needs you · sources incomplete',
@@ -22,6 +23,7 @@ export const overviewStrings = {
   },
   'zh-TW': {
     ov_live: '即時', ov_goal: '目標', ov_progress: '進度', ov_blockers: '阻礙', ov_decisions: '待決事項',
+    ov_recent_decisions: '近期決策',
     ov_accepted: '{total} 項中 {accepted} 項已驗收', ov_requirements: '{n} 項需求', ov_adopted: '{date} 採用',
     ov_attention: '需要關注', ov_milestones: '里程碑', ov_deliveries: '近期交付', ov_deliveries_loaded: '近期交付（已載入）',
     ov_discuss: '討論', ov_empty: '目前沒有需要你處理的事項。', ov_incomplete: '已載入事項無待辦 · 來源不完整',

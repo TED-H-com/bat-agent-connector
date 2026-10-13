@@ -360,7 +360,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' && !row.kind ? 'schedule' : 'issues';
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
-        else if (ref.kind === 'governance') {
+        else if (ref.kind === 'governance' || ref.kind === 'plan_revision' && register) {
           if (register) await register.openRef(ref);
           else await governance?.openRef?.(ref);
         }
@@ -932,9 +932,24 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (!append && signature === packageSignature) return;
     if (!append) {packages.replaceChildren(); packageSignature = signature;}
     for (const run of page.runs || []) {
+      const adoptionRef = typeof run.purpose === 'string' && run.purpose.match(/^Adopt plan (pmrev_[0-9a-f]{32})$/);
+      const caption = h('span', {'data-pm-run-purpose': ''}, adoptionRef ? t('pcp_plan_context') : run.purpose);
       const detail = h('div'), item = h('details', {'data-pm-run': run.run_id},
-        h('summary', {}, run.purpose, ' · ', time(run.created_at),
+        h('summary', {}, caption, ' · ', time(run.created_at),
           run.adapter === 'codex-native-linux' ? ' · ' + nativeRunState(t, run) : ''), detail);
+      if (adoptionRef) void (async () => {
+        try {
+          const value = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${adoptionRef[1]}`);
+          alive(); if (!item.isConnected) return;
+          if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1]
+            || typeof value.plan.document?.title !== 'string' || !Number.isSafeInteger(value.plan.sequence)) throw Error(t('pm_scope_mismatch'));
+          caption.textContent = value.plan.document.title + ' · ' + t('pm_revision_number', {number: value.plan.sequence});
+        } catch (error) {
+          if (!item.isConnected || retired(error)) return;
+          if ([403, 404].includes(error.status)) item.remove();
+          else detail.replaceChildren(errorBox(error));
+        }
+      })();
       let fetched = false, pending = false;
       item.addEventListener('toggle', async () => {
         if (!item.open || fetched || pending) return;
@@ -947,6 +962,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const context = saved.context;
           detail.replaceChildren(h('p', {class: 'muted'}, t('pm_package_version', {version: context.thread_version})),
             h('a', {href: `#/op/${saved.operation_id}`}, t('pm_operation')),
+            adoptionRef ? h('details', {}, h('summary', {}, t('pcp_original')), h('p', {}, saved.purpose)) : '',
             ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) =>
               h('section', {}, h('h4', {}, discussionLabel(t, 'pm_status_', status)), ...inputs.map(input => h('div', {}, h('p', {}, input.value),
                 h('small', {class: 'muted'}, [input.source_ref?.ref || input.source_ref?.message_id,

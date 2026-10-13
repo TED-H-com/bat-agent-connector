@@ -15,6 +15,10 @@
 .pm-overview-link:hover { color: var(--accent); text-decoration: underline; }
 .pm-overview .ui-metric-context .ui-button { margin-top: var(--space-1); }
 .pm-overview-next { margin-top: var(--space-2); }
+.pm-overview-decisions { margin-top: var(--space-3); }
+.pm-overview-decisions h3 { margin: 0 0 var(--space-2); font-size: var(--fs-caption); font-weight: 500; }
+.pm-overview-decisions-empty h3 { display: inline; margin-right: var(--space-2); }
+.pm-overview-decisions > div + div { margin-top: var(--space-2); }
 .pm-overview-late { margin-left: var(--space-2); color: var(--warn); white-space: nowrap; }
 .pm-overview-attention-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); border-top: 1px solid var(--line); padding-block: var(--space-2); }
 .pm-overview-attention-row:first-child { border-top: 0; }

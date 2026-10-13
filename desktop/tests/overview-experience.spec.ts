@@ -11,6 +11,7 @@ const root = (page: Page) => page.locator('[data-pm-overview]');
 const metric = (page: Page, key: string) => root(page).locator(`[data-overview-metric="${key}"]`);
 function fixture(locale = 'en') {
   const base = demoFixture({locale}), data: any = overview(demoProject(locale));
+  Object.assign(data, {recent_decisions: [], recent_decisions_count: 0, recent_decisions_complete: true, recent_decisions_truncated: false});
   const state = {data, overviewCap: true, cursor: 0, events: [] as any[], reportPatch: null as null | ((snapshot: any) => void), heldReport: null as Promise<void> | null, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
   return {...base, state, dispatch: async (input: any) => {
     state.reads.push(input.path); if (input.method !== 'GET') state.writes.push(input);
@@ -52,6 +53,42 @@ async function report(page: Page, id: string) {
   await expect(root(page)).toHaveAttribute('data-overview-mode', 'saved');
   await expect(page.locator('[data-overview-discuss]')).toHaveAttribute('href', new RegExp(id));
 }
+
+function decided(f: ReturnType<typeof fixture>) {
+  const row = {key: `plan_revision.${f.ids.planV3}`, title: f.state.data.plan.title, decided_at: f.state.data.as_of - 3600,
+    actor: f.ids.actor, status: 'adopted', ref: {kind: 'plan_revision', id: f.ids.planV3}, operation_id: 'op_' + 'd'.repeat(32)};
+  Object.assign(f.state.data, {recent_decisions: [row], recent_decisions_count: 1, recent_decisions_complete: true, recent_decisions_truncated: false});
+  return row;
+}
+
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`completed decision opens its register inspector ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+  const page = await context.newPage(), f = fixture(locale), row = decided(f);
+  await boot(page, f, native);
+  await expect(metric(page, 'decision').locator('.ui-metric-value')).toHaveText('2');
+  const recent = metric(page, 'decision').locator('[data-overview-recent-decisions]');
+  await expect(recent).toContainText(locale === 'en' ? 'Recently decided' : '近期決策');
+  await expect(recent).toContainText(row.title); await expect(recent).toContainText(f.ids.actor);
+  await expect(recent).toContainText(locale === 'en' ? '1h' : '1 小時');
+  await recent.getByRole('button').click();
+  await expect(page.locator(`[data-reg-inspector][data-reg-row="${row.key}"]`)).toBeVisible();
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+test('completed history distinguishes missing, incomplete, capped and empty sources without changing pending count', async ({page}) => {
+  const f = fixture(); delete f.state.data.recent_decisions; await boot(page, f);
+  const recent = metric(page, 'decision').locator('[data-overview-recent-decisions]');
+  await expect(recent).toContainText('Unknown');
+  const row = decided(f);
+  Object.assign(f.state.data, {recent_decisions_count: null, recent_decisions_complete: false, recent_decisions_truncated: true});
+  await refresh(page); await expect(recent).toContainText('Partial'); await expect(recent).toContainText('Showing 1');
+  await expect(recent).toContainText(row.title); await expect(metric(page, 'decision').locator('.ui-metric-value')).toHaveText('2');
+  Object.assign(f.state.data, {recent_decisions_count: 7, recent_decisions_complete: true});
+  await refresh(page); await expect(recent).toContainText('Showing 1'); await expect(recent).not.toContainText('7');
+  Object.assign(f.state.data, {recent_decisions: [], recent_decisions_count: 0, recent_decisions_complete: true, recent_decisions_truncated: false});
+  await refresh(page); await expect(recent).toContainText('None recorded'); await expect(recent).not.toContainText('Partial');
+  expect(f.state.writes).toEqual([]);
+});
 
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`five-second project answer ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}, colorScheme: 'light', reducedMotion: 'reduce'});
@@ -198,7 +235,7 @@ test('source withdrawal clears values and plan inspector; saved reports reauthor
 
 
 test('late live response cannot restore withdrawn data', async ({page}) => {
-  const f = fixture(); await boot(page, f); await report(page, f.ids.snap1);
+  const f = fixture(), decision = decided(f); await boot(page, f); await report(page, f.ids.snap1);
   let release!: () => void;
   f.state.held = new Promise<void>(resolve => {release = resolve;});
   const before = f.state.reads.filter(path => path.endsWith('/overview')).length;
@@ -211,11 +248,14 @@ test('late live response cannot restore withdrawn data', async ({page}) => {
   } finally {release();}
   await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
   await expect(root(page).locator('[data-overview-row]')).toHaveCount(0);
+  await expect(root(page).locator('[data-overview-decided]')).toHaveCount(0);
+  await expect(root(page)).not.toContainText(decision.actor);
   await expect(metric(page, 'progress')).not.toContainText('3 of 8 accepted'); expect(f.state.writes).toEqual([]);
 });
 
 test('background updates retain reading rows, charter expansion and plan reader', async ({page}) => {
   const f = fixture(); f.state.extraStatements = true; await boot(page, f);
+  await page.evaluate(() => document.fonts.ready);
   const more = root(page).locator('[data-charter-section="definition"] button');
   await more.click(); await expect(more).toHaveAttribute('aria-expanded', 'true');
   const row = root(page).locator('[data-overview-open]').nth(1); await row.focus();
