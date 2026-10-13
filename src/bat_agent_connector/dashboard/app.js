@@ -16286,10 +16286,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const seen = new Set(), rows = [];
 		const add = (edge) => {
 			if (!edge?.component_id || !edge?.dependency_key || !RELATIONS.includes(edge.relation)) return;
-			const id = [
+			const id = edge.declaration_id || edge.edge_id || [
 				edge.component_id,
 				edge.dependency_key,
-				edge.relation
+				edge.relation,
+				edge.evidence_level
 			].join("|");
 			if (seen.has(id)) return;
 			seen.add(id);
@@ -17224,8 +17225,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		holder.hidden = !data;
 		if (mode === "graph") graphBar.prepend(legend);
 		else matrixHost.before(legend);
-		matrixHost.hidden = mode !== "matrix";
-		graphHost.hidden = mode !== "graph";
+		matrixHost.hidden = !data || mode !== "matrix";
+		graphHost.hidden = !data || mode !== "graph";
 		const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);
 		const countedEdges = allEdges();
 		for (const chip of relationChips) {

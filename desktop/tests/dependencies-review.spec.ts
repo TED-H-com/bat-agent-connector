@@ -30,7 +30,7 @@ async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boo
     }
     if (url.pathname.endsWith('/dependencies/impact')) {
       impactReads++;
-      if (options.impact) return {status: 200, data: options.impact(dependencyImpact(demoProject(locale), url.searchParams.get('dependency') || ''))};
+      if (options.impact) return {status: 200, data: await options.impact(dependencyImpact(demoProject(locale), url.searchParams.get('dependency') || ''))};
     }
     const result = await fixture.dispatch(input);
     if (options.manage && ['/capabilities', '/bootstrap'].includes(url.pathname)) {
@@ -90,7 +90,7 @@ for (const width of [768, 390]) test(`BLOCKER-3: refreshed list sheet returns fo
   await expect(pick).toBeFocused();
 });
 
-test('SF-6 and M1: valid selection semantics and graph keyboard follows visual order', async ({page}) => {
+test('SF-6: valid selection semantics and heading hierarchy', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await mount(page);
   await expect(page.locator('[data-dep-view] button[aria-selected]')).toHaveCount(0);
@@ -98,6 +98,16 @@ test('SF-6 and M1: valid selection semantics and graph keyboard follows visual o
   await expect(page.locator('[data-dep-matrix]')).not.toHaveAttribute('tabindex', '0');
   await page.locator('[data-dep-details] > summary').click();
   await expect(page.getByRole('heading', {name: 'Captures', exact: true})).toHaveJSProperty('tagName', 'H2');
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  const node = page.locator('[data-dep-node]').first();
+  await node.focus();
+  await page.keyboard.press('Enter');
+  await expect(node).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('M1: graph keyboard follows visual column and row order', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page);
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
   const order = await page.locator('[data-dep-node]').evaluateAll(nodes => nodes.map(node => {
     const rect = node.getBoundingClientRect(); return {key: node.getAttribute('data-dep-node'), x: rect.x, y: rect.y};
@@ -214,6 +224,8 @@ for (const status of [403, 404, 409, 413]) test(`BLOCKER-7: failed read ${status
   await expect(retract.locator('button[type=submit]')).toBeDisabled();
   await expect(page.locator('[data-dep-capture]')).toBeDisabled();
   await expect(page.locator('.dep-toolbar')).toBeHidden();
+  await expect(page.locator('[data-dep-matrix-host]')).toBeHidden();
+  await expect(page.locator('[data-dep-graph-host]')).toBeHidden();
   await expect(page.locator('[data-dep-details]')).toBeHidden();
   await expect(page.locator('[data-dep-record]')).toBeHidden();
   await expect(page.locator('[data-dep-cell], [data-dep-node], [data-dep-pick]')).toHaveCount(0);
@@ -301,7 +313,7 @@ function largeDocument(doc: Document) {
   for (let index = 10; index < 25; index++) {
     const key = `pmdepkey_${index.toString(16).padStart(32, '0')}`;
     doc.dependencies.runtime_library.push({key, name: `pkg-${index}`, ecosystem: 'python', kinds: ['runtime_library']});
-    doc.edges.push({...samples[1], dependency_key: key, component_id: doc.components[0].component_id});
+    doc.edges.push({...samples[1], edge_id: `pmde_${(1000 + index).toString(16).padStart(32, '0')}`, dependency_key: key, component_id: doc.components[0].component_id});
   }
   doc.declared = []; doc.cross_repository_edges = []; doc.external_components = [];
   doc.counts = {...doc.counts, components: 520, dependencies: 22, edges: doc.edges.length, declared: 0};
@@ -376,7 +388,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(`polish ${locale}`,
   });
 });
 
-for (const width of [1440, 768, 390]) test(`SF-9 and VP-1: form grid and controls are sized for ${width}`, async ({page}) => {
+for (const width of [1440, 768, 390]) test(`SF-9: form and graph controls meet target sizes at ${width}`, async ({page}) => {
   await page.setViewportSize({width, height: 900});
   await mount(page, {manage: true});
   await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
@@ -384,11 +396,6 @@ for (const width of [1440, 768, 390]) test(`SF-9 and VP-1: form grid and control
   const inputBoxes = await form.locator('input, select').evaluateAll(nodes => nodes.map(node => ({height: node.getBoundingClientRect().height, width: node.getBoundingClientRect().width, font: parseFloat(getComputedStyle(node).fontSize)})));
   expect(inputBoxes.every(box => box.height >= (width <= 800 ? 44 : 32))).toBe(true);
   if (width === 390) expect(inputBoxes.every(box => box.font >= 16)).toBe(true);
-  if (width === 1440) {
-    const positions = await form.locator('input').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x));
-    expect(new Set(positions).size).toBeGreaterThan(1);
-    expect((await form.locator('.dep-declare-grid').boundingBox())!.width).toBeLessThanOrEqual(720);
-  }
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
   const buttons = await page.locator('.dep-graph-bar button').evaluateAll(nodes => nodes.map(node => ({width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height})));
   expect(buttons.every(box => box.height >= (width <= 800 ? 44 : 32) && box.width >= (width <= 800 ? 44 : 32))).toBe(true);
@@ -489,3 +496,46 @@ if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as 
     });
   }
 }
+
+
+test('BLOCKER-5: distinct declarations sharing a captured relation count and render', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page, {projection: doc => ({...doc, declared: [...doc.declared, {...doc.declared[0],
+    declaration_id: doc.declared[0].declaration_id.slice(0, -1) + '2', dependency_key: ids.keys.httpx,
+    dependency: {...doc.dependencies.runtime_library[0], kind: 'runtime_library', version: '>=0.27'},
+    relation: 'runtime', evidence_level: 'inferred'}]})});
+  await expect(page.locator('[data-dep-relation=runtime]')).toHaveText('Runtime 4');
+  await expect(page.locator('[data-dep-evidence=inferred]')).toHaveText('Inferred 2');
+  await expect(page.locator(`[data-dep-cell="${ids.api}|${ids.keys.httpx}"] .dep-mark`)).toHaveCount(2);
+  await page.locator(`[data-dep-focus="row:${ids.api}"]`).click();
+  await expect(page.locator(`[data-dep-dependency-row="${ids.keys.httpx}"]`)).toHaveCount(2);
+});
+
+test('BLOCKER-7: late impact cannot revive withdrawn data', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  let release: (() => void) | undefined;
+  const harness = await mount(page, {manage: true, impact: doc => new Promise(resolve => {release = () => resolve(doc);})});
+  await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`).click();
+  await expect.poll(harness.impacts).toBe(1);
+  harness.fail(403);
+  await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-dep-inspector]')).toHaveCount(0);
+  const response = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/dependencies/impact'));
+  release!();
+  await (await response).finished();
+  await expect(page.locator('[data-dep-inspector], [data-dep-cell], [data-dep-node], [data-dep-pick]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-action="pm.dependencies.declare"] select[aria-label="Component"] option')).toHaveCount(0);
+  await expect(page.locator('[data-pm-action="pm.dependencies.retract"] option')).toHaveCount(0);
+  await expect(page.locator('.dep-toolbar')).toBeHidden();
+  expect(harness.posts).toEqual([]);
+});
+
+for (const width of [1440, 1000, 390]) test(`VP-1: bounded relation form uses responsive columns at ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  await mount(page, {manage: true});
+  await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
+  const form = page.locator('[data-pm-action="pm.dependencies.declare"]');
+  const positions = await form.locator('input').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x));
+  expect(new Set(positions).size).toBe(width === 390 ? 1 : 2);
+  expect((await form.locator('.dep-declare-grid').boundingBox())!.width).toBeLessThanOrEqual(640);
+});

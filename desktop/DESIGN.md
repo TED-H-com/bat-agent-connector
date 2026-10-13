@@ -401,6 +401,10 @@ keeps its legend beside 32px zoom controls (44px on touch). Active chips use the
 existing primary text token for contrast in both themes; selected matrix cells
 centre their marks with a separate inset selection ring.
 
+Distinct edge and declaration IDs retain their evidence even when they share a
+component, dependency and relation. Failed reads hide both view hosts as well as
+their rows, forms and inspector; late impact reads cannot restore withdrawn data.
+
 Matrix and list selection buttons use pressed state. Graph nodes do the same, with
 a distinct selected fill. Home/End follow the graph's visual column/row order.
 Activation, live reads and inspector close resolve focus by stable item key in the

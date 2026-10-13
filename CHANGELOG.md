@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Preserve distinct dependency declarations alongside captured relations and hide
+  empty view hosts after failed reads.
+
 - Move Dependencies capture reasons below header actions; improve form layout,
   touch targets, dark chip contrast, graph spacing and selected-cell outlines.
 
