@@ -431,6 +431,81 @@ async def test_cross_repository_pinned_edges_withdraw_without_hidden_counts(pm, 
     assert impact["reason"] == "dependency_not_observed"
 
 
+def _first_sorting_copy(db, source_wid, fake="ws_" + "0" * 32):
+    """Copy a workspace's carrier rows under an ID that sorts before every real workspace."""
+    db.execute("INSERT INTO pm_workspaces SELECT ?,server_id,name,repositories,version,created_by,created_at,updated_at,'op_fake' "
+               "FROM pm_workspaces WHERE workspace_id=?", (fake, source_wid))
+    db.execute("INSERT INTO pm_workspace_members SELECT ?,actor,role,controller_id,created_at,updated_at "
+               "FROM pm_workspace_members WHERE workspace_id=?", (fake, source_wid))
+    db.execute("INSERT INTO pm_workspace_worktrees SELECT ?,run_id,binding,created_at FROM pm_workspace_worktrees "
+               "WHERE workspace_id=?", (fake, source_wid))
+    db.execute("INSERT INTO pm_dependency_heads SELECT ?,source_key,version,revision_id FROM pm_dependency_heads "
+               "WHERE workspace_id=?", (fake, source_wid))
+    return fake
+
+
+def _stored(pm, result):
+    return json.loads(pm["d"].ops.db.execute("SELECT document FROM pm_dependency_revisions WHERE revision_id=?",
+                                             (result["capture"]["revision_id"],)).fetchone()[0])
+
+
+@pytest.mark.parametrize("hidden_first", [False, True])
+async def test_capture_peer_cap_counts_only_visible_peers(pm, mock, monkeypatch, hidden_first):
+    await prepare(pm)
+    peer = await peer_repository(pm, mock)
+    if hidden_first:
+        fake = _first_sorting_copy(pm["d"].ops.db, peer["workspace_id"])
+        # The copy's head row passes the SQL filter but fails the source check.
+        assert pm_dependency_reads._current(pm["d"].ops, OWNER, fake) is None
+    monkeypatch.setattr(pm_dependency_reads, "MAX_REPOSITORIES", 1)
+    assert (await run(pm))["status"] == "succeeded"
+    result = read(pm)
+    stored = _stored(pm, result)
+    assert [row["workspace_id"] for row in stored["peer_revisions"]] == [peer["workspace_id"]]
+    assert stored["peer_selection_reasons"] == []
+    assert len(result["cross_repository_edges"]) == 1 and len(result["external_components"]) == 1
+    assert result["partial"] is False and result["cross_repository"] == {"status": "bounded", "complete": False}
+    assert "ws_" + "0" * 32 not in json.dumps(result)
+
+
+async def test_capture_peer_scan_bound_records_a_reason(pm, mock, monkeypatch):
+    await prepare(pm)
+    peer = await peer_repository(pm, mock)
+    _first_sorting_copy(pm["d"].ops.db, peer["workspace_id"])
+    monkeypatch.setattr(pm_dependency_reads, "MAX_PEER_SCAN", 1)
+    assert (await run(pm))["status"] == "succeeded"
+    result = read(pm)
+    stored = _stored(pm, result)
+    # The bound stopped after one hidden candidate; the visible peer was never examined.
+    assert stored["peer_revisions"] == [] and stored["peer_selection_reasons"] == ["peer_scan_limit"]
+    assert result["partial"] is True
+    assert result["cross_repository"] == {"status": "bounded", "complete": False, "selection_reasons": ["peer_scan_limit"]}
+    assert result["counts"]["partial"] is False  # The captured catalog itself is complete.
+    impact = pm_dependency_reads.impact(pm["d"].ops, OWNER, pm["workspace_id"], dependency=dependency_key("npm", "leaf-library"))
+    assert impact["partial"] is True
+    impact = pm_dependency_reads.impact(pm["d"].ops, OWNER, pm["workspace_id"], dependency=dependency_key("python", "httpx"))
+    assert impact["cross_repository"]["selection_reasons"] == ["peer_scan_limit"]
+
+
+async def test_impact_before_capture_says_why_and_reads_have_their_own_403(pm):
+    ops, wid, key = pm["d"].ops, pm["workspace_id"], dependency_key("python", "httpx")
+    unavailable = pm_dependency_reads.impact(ops, OWNER, wid, dependency=key)
+    assert unavailable["reason"] == "source_unavailable" and unavailable["counts"] is None
+    assert unavailable["cross_repository"] == {"status": "bounded", "complete": False}
+    await prepare(pm)
+    pending = pm_dependency_reads.impact(ops, OWNER, wid, dependency=key)
+    assert pending["reason"] == "not_captured" and pending["counts"] is None and pending["partial"] is True
+    assert pending["capture"]["status"] == "unknown"
+    assert pending["cross_repository"] == {"status": "bounded", "complete": False}
+    manage_only = Principal(OWNER.actor, frozenset({"manage"}))
+    for read_fn, kwargs in ((pm_dependency_reads.get, {}), (pm_dependency_reads.revisions, {}),
+                            (pm_dependency_reads.impact, {"dependency": key})):
+        with pytest.raises(OperationError) as refused:
+            read_fn(ops, manage_only, wid, **kwargs)
+        assert (refused.value.code, refused.value.status) == ("FORBIDDEN", 403)
+        assert "observe" in refused.value.message and "changes" not in refused.value.message
+
+
 @pytest.mark.parametrize("field,value", [("sha256", "f" * 64), ("blob_sha", "f" * 40), ("size", 1), ("path", "../outside")])
 async def test_forged_host_file_evidence_never_becomes_a_capture(pm, field, value):
     await prepare(pm)
@@ -570,7 +645,7 @@ async def test_revision_summaries_do_not_decode_inventory_documents(pm, monkeypa
 @pytest.mark.parametrize('change', ['binding', 'member', 'config'])
 async def test_final_guard_refuses_withdrawal_during_peer_discovery(pm, monkeypatch, change):
     await prepare(pm)
-    def discover(ops, principal, wid):
+    def discover(ops, principal, wid, reasons=None):
         if change == 'binding':
             original = pm_runs.workspace_worktree
             monkeypatch.setattr(pm_runs, 'workspace_worktree', lambda db, wid: {**original(db, wid), 'source_sha': 'f' * 40})

@@ -133,6 +133,10 @@ Impact 以完整 component rows 的有界前綴回傳，counts.basis=returned_co
 Revisions 在 capture 同一 transaction 寫入獨立不可變 summary table，頁面只讀小型 summary、revision_id 與 sequence，不讀取／rehash inventory document，也不選取大型 row 尾端的 created_at。
 沒有資料搬移或新 user_version；舊 revision 尚無 summary 時 captured_at／commit_sha=null、status=unknown、partial=true、reason=summary_not_recorded。
 來源不可用時整頁 reason=source_unavailable。Revisions 沒有把歷史頁筆數當總數。
+Impact 的 `dependency` 必須是 GET 回傳的 `pmdepkey_…`（`dependencies.<kind>[].key`、`edges[].dependency_key`
+或 `declared[].dependency_key`）；套件名稱回 422 INVALID_PARAMS。尚無 capture 時，impact 與 GET 一樣回
+`reason=source_unavailable`（來源撤回或無法存取）或 `not_captured`，並帶 `cross_repository`；counts=null。
+沒有 observe scope 的讀取回 403 FORBIDDEN，訊息說明讀取需要 observe（不是變更所需的 manage）。
 
 Latest 包含 `version/workspace_version/source/capture/stale/partial/reason`、`components`、
 依 kind 分組的 `dependencies`、`edges`、獨立 `declared`、`files`、`verification_hints`、
@@ -143,6 +147,12 @@ PM carrier binding 固定且目前沒有 repository head 的觀察證據，因�
 `stale=null, stale_reason=repository_head_not_observed`；不把 pinned commit 相等說成對 repository head 而言「最新」。
 
 Capture 同時固定最多 32 個、合計最多 1 MB 的可見其他 carrier revisions 作為跨 repo 比較集合。
+候選依 `(workspace_id, revision_id)` 分頁掃描，不用 SQL `LIMIT 32`：先過可見性（目前 binding 與原 source
+權限）、排除與本 repository 相同者、同一 repository 只取第一筆、再檢查 1 MB 預算，通過的才佔名額，
+滿 32 個即停止。隱藏、同 repository 或重複的列不佔名額。每次 capture 最多檢查 1,024 個候選；
+掃描上限在仍有候選時停止，記 `peer_scan_limit`；可見 peer 因 1 MB 預算略過時記 `peer_byte_budget`。
+這些原因隨 capture 固定，GET／impact 放在 `cross_repository.selection_reasons`，並使 `partial=true`
+（`counts.partial` 仍只描述 captured catalog）。原因不含候選數，不洩漏隱藏來源的數量。
 只有 ecosystem + published package name（Python 使用 PEP 503 正規化）對應才建立 `cross_repository_edges`，證據同時包含兩個
 manifest、repository 和 commit；跨 component links 上限 2,000，始終標示有界；可見 peer components 放 `external_components`。
 `cross_repository={status:bounded,complete:false}` 永遠不代表全站 repo 總圖。
