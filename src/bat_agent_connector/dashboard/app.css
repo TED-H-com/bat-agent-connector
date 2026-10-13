@@ -1232,5 +1232,6 @@ body.pm-mode #main { padding: 0; }
 .workspace-read-error p { font-size: var(--fs-caption); margin: var(--space-1) 0; }
 .workspace-read-error > .ui-icon-button { color: var(--text-2); }
 @media (max-width: 999px) {
-  .shell-all-projects, .workspace-session-tree > summary, .workspace-nav-footer > .ui-menu > button { min-height: 44px; }
+  .pm-project-views button, .workspace-nav-footer > a, .workspace-nav-footer > .ui-menu > button,
+  .shell-all-projects, .workspace-session-tree > summary { min-height: 44px; }
 }

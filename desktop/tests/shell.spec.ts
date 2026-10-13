@@ -78,6 +78,7 @@ test('binding withdrawal removes Work rows; workspace names never imply bindings
 });
 test('mobile drawer traps focus, closes on Escape and returns to its opener', async ({page}) => {
   await page.setViewportSize({width:390,height:844});const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
+  await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
   const opener=page.locator('#workspace-menu'); await opener.click(); const drawer=page.locator('.workspace-nav');
   await expect(drawer).toHaveAttribute('aria-modal','true'); await expect(page.locator('#main')).toHaveAttribute('inert','');
   await drawer.locator('.workspace-nav-footer > a').last().focus(); await page.keyboard.press('Tab');
@@ -223,6 +224,7 @@ for (const width of [390, 768, 1440]) test(`sidebar rows share icon and text col
     const row = page.locator(selector).first(); await expect(row).toBeVisible(); return (await row.boundingBox())!.x;
   };
   const start = await textStart('[data-pm-view=overview] > span');
+  if (width < 1000) expect((await page.locator('[data-pm-view=overview]').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await textStart('.shell-all-projects > span')).toBe(start);
   await page.locator('.shell-all-projects').click();
   if (width < 1000) await page.locator('#workspace-menu').click();
