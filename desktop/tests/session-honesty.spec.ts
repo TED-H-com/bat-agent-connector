@@ -441,3 +441,54 @@ test('a delayed clipboard failure cannot restore withdrawn text when the session
   expect(s.writes).toEqual([]);
   await s.context.close();
 });
+
+for (const status of [403, 404, 410]) {
+  test(`answer preflight withdraws the Session on a revoked read (${status})`, async ({browser}) => {
+    const s = await openSession(browser);
+    await fromRequirements(s.page, s.ids, 'review');
+    s.overrides.push((_, url) => url.pathname === `/sessions/${s.ids.host}/${s.ids.sessions.review}`
+      ? {status, data: {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'Read withdrawn'}}} : undefined);
+    await s.page.getByRole('button', {name: 'Allow', exact: true}).click();
+    await expect(s.page.locator('[data-session-withdrawn]')).toBeVisible();
+    await expect(s.page.locator('[data-session-view]')).toHaveCount(0);
+    await expect(s.page.locator('.msg')).toHaveCount(0);
+    const details = s.page.locator('[data-session-withdrawn] details');
+    await expect(details.locator('summary')).toHaveText('Error details');
+    await details.locator('summary').click();
+    await expect(details).toContainText(status === 403 ? 'FORBIDDEN' : 'NOT_FOUND');
+    expect(s.writes).toEqual([]);
+    await s.context.close();
+  });
+}
+
+test('a late answer preflight cannot restore withdrawn facts or submit after reinstatement', async ({browser}) => {
+  const s = await openSession(browser);
+  const {page} = s, path = `/sessions/${s.ids.host}/${s.ids.sessions.review}`;
+  let mode = 'normal', release!: (data: any) => void;
+  const held = new Promise(resolve => {release = resolve;});
+  const old = await s.fixture.dispatch({method: 'GET', path});
+  s.overrides.push(async (_, url) => {
+    if (url.pathname !== path) return undefined;
+    if (mode === 'hold') {mode = 'withdrawn'; return held;}
+    if (mode === 'withdrawn') return notFound;
+    if (mode === 'fresh') {
+      const latest = await s.fixture.dispatch({method: 'GET', path});
+      latest.data.session.title = 'Fresh central title'; return latest;
+    }
+    return undefined;
+  });
+  await fromRequirements(page, s.ids, 'review');
+  mode = 'hold';
+  await page.getByRole('button', {name: 'Allow', exact: true}).click();
+  await expect.poll(() => mode).toBe('withdrawn');
+  s.sessionEvent('review');
+  await expect(page.locator('[data-session-withdrawn]')).toBeVisible();
+  mode = 'fresh'; s.sessionEvent('review');
+  await expect(page.locator('.workspace-session-heading h1')).toHaveText('Fresh central title');
+  const completed = page.waitForResponse(response => response.url().endsWith('/api/v1' + path));
+  release(old); await (await completed).finished();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(s.writes).toEqual([]);
+  await expect(page.locator('.workspace-session-heading h1')).toHaveText('Fresh central title');
+  await s.context.close();
+});

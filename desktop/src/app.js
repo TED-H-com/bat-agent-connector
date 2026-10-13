@@ -1283,15 +1283,19 @@ function sessionErrorLine(e) {
   if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
   return t("session_err_unknown");
 }
+function sessionErrorDetails(e) {
+  const code = typeof e?.code === "string" ? e.code : "";
+  const detail = [code, e?.status ? `HTTP ${e.status}` : "", e?.message && e.message !== code ? e.message : ""].filter(Boolean).join(" · ");
+  return detail ? disclosure({label: t("session_error_details"), body: h("p", {class: "muted"}, h("code", {}, detail))}) : null;
+}
 function sessionErrorBox(e, action = null) {
   // Like errorBox: a caught refresh error still keeps its event batch unacknowledged.
   if (state.refreshCycle) state.refreshCycle.error ||= e;
   const code = typeof e?.code === "string" ? e.code : "";
-  const detail = [code, e?.status ? `HTTP ${e.status}` : "", e?.message && e.message !== code ? e.message : ""].filter(Boolean).join(" · ");
   return h("div", {class: "session-error", role: "alert", "data-session-error": code},
     h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, sessionErrorLine(e)),
       action ? h("button", {type: "button", class: "session-error-action", onclick: action.run}, action.label) : null),
-    detail ? disclosure({label: t("session_error_details"), body: h("p", {class: "muted"}, h("code", {}, detail))}) : null);
+    sessionErrorDetails(e));
 }
 // Pull-request links come from the receipt's provider origin, never a hard-coded host.
 function sessionPullHref(target) {
@@ -1352,7 +1356,7 @@ async function viewSession(main, host, sid, context = null) {
   const queue = h("input", { type: "checkbox" });
   let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
   // Withdrawal (404/410/403 on the session read) is a settled state, not a failure to retry every second.
-  let withdrawn = "", retryTimer = null, retryDelay = 1000, retryAt = 0, disposed = false, observationRequest = 0;
+  let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1000, retryAt = 0, disposed = false, observationRequest = 0;
   const allowed = action => !withdrawn && readReady && row?.api_access === "managed" && may("operate")
     && state.caps?.hosts?.find(item => item.host === host)?.writes !== false
     && state.caps?.actions?.find(item => item.action === action)?.allowed !== false;
@@ -1571,7 +1575,20 @@ async function viewSession(main, host, sid, context = null) {
         assertView(connection);
         // Inventory is observation evidence, not write authority. Recheck its latest identity here;
         // central still validates tool_use_id against the live BAT pending frame before any write.
-        const latest = await api("GET", path); assertView(connection);
+        const sourceVersion = withdrawalVersion;
+        let latest;
+        try {latest = await api("GET", path);}
+        catch (error) {
+          assertView(connection);
+          if (disposed || sourceVersion !== withdrawalVersion) return;
+          if ([403, 404, 410].includes(error?.status)) {
+            withdraw(error.status === 403 ? "forbidden" : "gone", error); return;
+          }
+          throw error;
+        }
+        assertView(connection);
+        // A fresh view after withdrawal cannot authorize an older preflight's answer.
+        if (disposed || withdrawn || sourceVersion !== withdrawalVersion) return;
         applyObservation(latest);
         if (latest.session.api_access !== "managed" || identity(latest.session.pending) !== current || !pend.toolUseId)
           throw new ApiError(409, "PENDING_CHANGED", t("pending_changed"));
@@ -1715,7 +1732,7 @@ async function viewSession(main, host, sid, context = null) {
     catch (error) {
       if ([403, 404, 410].includes(error?.status) && current()) {
         error.sessionWithdrawn = error.status === 403 ? "forbidden" : "gone";
-        withdraw(error.sessionWithdrawn);
+        withdraw(error.sessionWithdrawn, error);
       }
       throw error;
     }
@@ -1793,9 +1810,10 @@ async function viewSession(main, host, sid, context = null) {
     return origin ? h("a", {href: origin.href, class: "ui-button secondary"}, t("session_back", {view: t("ui_" + origin.view)}))
       : h("a", {href: "#/sessions", class: "ui-button secondary"}, t("session_back_sessions"));
   };
-  const withdraw = kind => {
+  const withdraw = (kind, error = null) => {
     const first = !withdrawn;
     withdrawn = kind;
+    withdrawalVersion += 1;
     clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000;
     // Late reads for the withdrawn session must not paint again.
     ++observationRequest; ++deliveryTicket; ++messageRequest; cps.clear(); deliveryKnown.clear();
@@ -1808,7 +1826,8 @@ async function viewSession(main, host, sid, context = null) {
     overflow.hidden = true; row = null; readReady = false; updateControls(); syncWide();
     if (first) {workspaceNode.remove(); if (context?.picker) context.picker.hidden = true; head.after(withdrawnSlot);}
     withdrawnSlot.replaceChildren(h("div", {"data-session-withdrawn": kind},
-      emptyState({icon: "circle-alert", title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"), action: backLink()})));
+      emptyState({icon: "circle-alert", title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
+        action: h("div", {}, backLink(), sessionErrorDetails(error))})));
   };
   const reinstate = () => {
     withdrawn = "";
@@ -1835,7 +1854,7 @@ async function viewSession(main, host, sid, context = null) {
         updateControls(); readError?.remove(); readError = null;
       } catch (error) {
         // Withdrawal is the settled, displayed state: it does not keep the event batch failing.
-        if (error?.sessionWithdrawn) {withdraw(error.sessionWithdrawn); return;}
+        if (error?.sessionWithdrawn) {withdraw(error.sessionWithdrawn, error); return;}
         readReady = false; updateControls();
         readError = sessionErrorBox(error, {label: t("ui_retry"), run: () => refresh().catch(() => {})});
         readError.error = error;

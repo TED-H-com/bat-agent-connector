@@ -48200,26 +48200,29 @@ function sessionErrorLine(e) {
 	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
 	return t("session_err_unknown");
 }
-function sessionErrorBox(e, action = null) {
-	if (state.refreshCycle) state.refreshCycle.error ||= e;
+function sessionErrorDetails(e) {
 	const code = typeof e?.code === "string" ? e.code : "";
 	const detail = [
 		code,
 		e?.status ? `HTTP ${e.status}` : "",
 		e?.message && e.message !== code ? e.message : ""
 	].filter(Boolean).join(" · ");
+	return detail ? disclosure({
+		label: t("session_error_details"),
+		body: h("p", { class: "muted" }, h("code", {}, detail))
+	}) : null;
+}
+function sessionErrorBox(e, action = null) {
+	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	return h("div", {
 		class: "session-error",
 		role: "alert",
-		"data-session-error": code
+		"data-session-error": typeof e?.code === "string" ? e.code : ""
 	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, sessionErrorLine(e)), action ? h("button", {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
-	}, action.label) : null), detail ? disclosure({
-		label: t("session_error_details"),
-		body: h("p", { class: "muted" }, h("code", {}, detail))
-	}) : null);
+	}, action.label) : null), sessionErrorDetails(e));
 }
 function sessionPullHref(target) {
 	try {
@@ -48325,7 +48328,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const queue = h("input", { type: "checkbox" });
 	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
-	let withdrawn = "", retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
+	let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
 	const allowed = (action) => !withdrawn && readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
 	const identity = (pend) => pend ? JSON.stringify({
 		kind: pend.kind,
@@ -48811,8 +48814,25 @@ async function viewSession(main, host, sid, context = null) {
 		const answer = async (params) => {
 			try {
 				assertView(connection);
-				const latest = await api("GET", path);
+				const sourceVersion = withdrawalVersion;
+				let latest;
+				try {
+					latest = await api("GET", path);
+				} catch (error) {
+					assertView(connection);
+					if (disposed || sourceVersion !== withdrawalVersion) return;
+					if ([
+						403,
+						404,
+						410
+					].includes(error?.status)) {
+						withdraw(error.status === 403 ? "forbidden" : "gone", error);
+						return;
+					}
+					throw error;
+				}
 				assertView(connection);
+				if (disposed || withdrawn || sourceVersion !== withdrawalVersion) return;
 				applyObservation(latest);
 				if (latest.session.api_access !== "managed" || identity(latest.session.pending) !== current || !pend.toolUseId) throw new ApiError(409, "PENDING_CHANGED", t("pending_changed"));
 				const op = await submit("session.answer", {
@@ -49048,7 +49068,7 @@ async function viewSession(main, host, sid, context = null) {
 				410
 			].includes(error?.status) && current()) {
 				error.sessionWithdrawn = error.status === 403 ? "forbidden" : "gone";
-				withdraw(error.sessionWithdrawn);
+				withdraw(error.sessionWithdrawn, error);
 			}
 			throw error;
 		}
@@ -49147,9 +49167,10 @@ async function viewSession(main, host, sid, context = null) {
 			class: "ui-button secondary"
 		}, t("session_back_sessions"));
 	};
-	const withdraw = (kind) => {
+	const withdraw = (kind, error = null) => {
 		const first = !withdrawn;
 		withdrawn = kind;
+		withdrawalVersion += 1;
 		clearTimeout(retryTimer);
 		retryTimer = null;
 		retryDelay = 1e3;
@@ -49188,7 +49209,7 @@ async function viewSession(main, host, sid, context = null) {
 		withdrawnSlot.replaceChildren(h("div", { "data-session-withdrawn": kind }, emptyState({
 			icon: "circle-alert",
 			title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
-			action: backLink()
+			action: h("div", {}, backLink(), sessionErrorDetails(error))
 		})));
 	};
 	const reinstate = () => {
@@ -49223,7 +49244,7 @@ async function viewSession(main, host, sid, context = null) {
 				readError = null;
 			} catch (error) {
 				if (error?.sessionWithdrawn) {
-					withdraw(error.sessionWithdrawn);
+					withdraw(error.sessionWithdrawn, error);
 					return;
 				}
 				readReady = false;
