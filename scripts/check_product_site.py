@@ -102,10 +102,13 @@ for path in [
     ROOT / "docs/windows.zh-TW.md",
     ROOT / "docs/design/managed-installation.md",
     ROOT / "docs/product/progress-2026-10-12.md",
+    ROOT / "docs/product/progress-2026-10-14.md",
+    ROOT / "docs/product/implementation-status.md",
     ROOT / "docs/product/pm-v1.2-status.md",
     ROOT / "docs/product/pm-v1.2-history-through-2026-10-12.md",
     ROOT / "docs/handoff/2026-10-12-pm-v1.2.md",
     SITE / "README.md",
+    SITE / "DESIGN.md",
     SITE / "images/README.md",
 ]:
     for value in re.findall(r"\]\(([^\s)]+)\)", path.read_text()):
@@ -114,15 +117,36 @@ for path in [
 manifest = json.loads((SITE / "images/manifest.json").read_text())
 expected_images = {
     f"{view}-{lang}.png"
-    for view in ("workspace", "dispatch", "pm-planning", "pm-kanban")
+    for view in ("overview", "discussions", "requirements", "issues", "schedule", "dependencies", "board", "session")
     for lang in ("en", "zh")
 }
 if {entry["file"] for entry in manifest["images"]} != expected_images:
-    errors.append("Screenshot manifest must describe all eight public images.")
+    errors.append("Screenshot manifest must describe all sixteen public images.")
+if len(manifest["images"]) != len(expected_images):
+    errors.append("Screenshot manifest contains missing or duplicate images.")
+for field, expected in {"synthetic_data": True, "native_or_live_acceptance": False,
+                        "dom_content_modified": False, "timezone": "UTC"}.items():
+    if manifest.get(field) != expected:
+        errors.append(f"Screenshot manifest has an invalid {field} guarantee.")
+if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("frontend_source_commit", "")):
+    errors.append("Screenshot manifest must pin a full source commit.")
 for entry in manifest["images"]:
     path = SITE / "images" / entry["file"]
     if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
         errors.append(f"Screenshot does not match its capture manifest: {entry['file']}")
+    language = "zh-TW" if entry["file"].endswith("-zh.png") else "en-US"
+    if entry.get("locale") != language or entry.get("theme") != "light" or entry.get("viewport") != {"width": 1440, "height": 960}:
+        errors.append(f"Screenshot has incorrect capture settings: {entry['file']}")
+    checks = entry.get("responsive_checks", [])
+    if [check.get("viewport") for check in checks] != [390, 768, 1440] or any(
+        check.get("horizontal_overflow") is not False or check.get("content", float("inf")) > check.get("viewport", 0)
+        for check in checks
+    ):
+        errors.append(f"Screenshot is missing passing responsive checks: {entry['file']}")
+for entry in manifest["source_files"]:
+    path = ROOT / entry["file"]
+    if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
+        errors.append(f"Capture source does not match its manifest: {entry['file']}")
 if errors:
     raise SystemExit("\n".join(errors))
 print(f"Checked {links} links and static assets; no missing local targets, fragments or duplicate IDs.")
