@@ -2,14 +2,19 @@
 
 ## Next release (unreleased)
 
-- Keep PM discussion disclosures as the reader left them during live updates and
-  Refresh. A pending original request still opens Inputs when the thread is first
-  shown, including after a reload, and does not expand that section again later.
+- Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
+  startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
+  Installed-app UI tests retry transient UI Automation reads within the existing
+  readiness deadline and keep bounded, text-free attempt diagnostics.
 
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
   the mapping, or the name on the published issue when the mapping omits it,
   and otherwise shows only the issue number.
+
+- Diagnose durable-operation test timeouts with worker/step details and join failed
+  test workers before journal teardown, preserving the existing deadline and original-key
+  recovery.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
@@ -26,6 +31,10 @@
 - Formal signing, Mac notarization, production update channels and Linux persistent native
   credential enrollment are outside this delivery. Real-environment acceptance is user-owned;
   these exclusions do not claim corresponding features or tests are complete.
+
+- Keep PM discussion disclosures as the reader left them during live updates and
+  Refresh. A pending original request still opens Inputs when the thread is first
+  shown, including after a reload, and does not expand that section again later.
 
 - Backport the official GLib iterator fix for RUSTSEC-2024-0429 into the Linux
   desktop dependency graph. Preserve the original crate version/license and exact
