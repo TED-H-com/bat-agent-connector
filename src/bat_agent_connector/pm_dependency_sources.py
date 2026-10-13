@@ -39,7 +39,7 @@ def _file(row):
     result = {"path": row["path"], "blob_sha": blob, "size": size, "sha256": None, "status": "read", "reason": None}
     if reason is not None:
         statuses = {"missing_at_commit": "missing", "document_too_large": "too_large",
-                    "selection_byte_budget": "too_large", "symlink_or_nonregular_blob": "unparsable"}
+                    "selection_byte_budget": "too_large", "selection_wire_budget": "too_large", "symlink_or_nonregular_blob": "unparsable"}
         if reason not in statuses or reason == "missing_at_commit" and (blob is not None or size is not None):
             raise invalid()
         return {**result, "status": statuses[reason], "reason": reason}, None

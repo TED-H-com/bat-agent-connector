@@ -32,6 +32,7 @@ def dependency_key(ecosystem, name):
 def text(value):
     if not isinstance(value, str) or not value.strip() or len(value) > 4096 or any(ord(c) < 32 for c in value):
         raise ValueError("unsupported_value")
+    value.encode("utf-8")
     return value
 
 
@@ -45,6 +46,8 @@ def requirement(value):
 
 def _commands(command):
     """Literal command words only; quoted mentions and shell substitutions aren't calls."""
+    if "\n" in command:
+        return [words for line in command.splitlines() for words in _commands(line)]
     try:
         words = shlex.split(command, comments=True)
     except ValueError:
@@ -67,7 +70,7 @@ def binaries(command):
     for words in _commands(command):
         if words[:2] == ["uv", "run"]:
             words = words[2:]
-        elif words[:2] in (["python", "-m"], ["python3", "-m"]):
+        if words[:2] in (["python", "-m"], ["python3", "-m"]):
             words = words[2:]
         elif words and words[0] == "npx":
             words = words[1:]
@@ -169,13 +172,13 @@ def _go(content, sums=False):
                 raise ValueError("unsupported_go_sum")
             rows.append((fields[0], fields[1].removesuffix("/go.mod")))
         return rows
-    name, dependencies, grouped = None, [], False
+    name, dependencies, toolchain, grouped = None, [], [], False
     for line in content.splitlines():
         line = line.partition("//")[0].strip()
         if line.startswith("module "):
             name = text(line[7:].strip().strip('"'))
         elif line.startswith("go ") or line.startswith("toolchain "):
-            continue
+            toolchain.append(tuple(line.split(maxsplit=1)))
         elif line == "require (":
             grouped = True
         elif grouped and line == ")":
@@ -187,7 +190,7 @@ def _go(content, sums=False):
             dependencies.append((text(fields[0]), text(fields[1])))
     if not name:
         raise ValueError("missing_module_name")
-    return {"name": name, "dependencies": dependencies}
+    return {"name": name, "dependencies": dependencies, "toolchain": toolchain}
 
 
 class Inventory:
@@ -199,7 +202,7 @@ class Inventory:
 
     def ref(self, path, **extra):
         row = next(row for row in self.files if row["path"] == path)
-        return {"path": path, "commit_sha": self.commit, "blob_sha": row["blob_sha"], **extra}
+        return {"repository": self.repository, "path": path, "commit_sha": self.commit, "blob_sha": row["blob_sha"], **extra}
 
     def parse(self):
         for row in self.files:
@@ -208,7 +211,7 @@ class Inventory:
                 continue
             name = posixpath.basename(path)
             try:
-                if name.endswith(".toml") or name in {"uv.lock", "Cargo.lock"}:
+                if name.endswith(".toml") or name in {"uv.lock", "Cargo.lock"} or name == "rust-toolchain" and content.lstrip().startswith("["):
                     value = tomllib.loads(content)
                 elif name.endswith(".json"):
                     value = json.loads(content)
@@ -259,7 +262,26 @@ class Inventory:
                 self.edges = [e for e in self.edges if e["component_id"] not in ids]
         self.toolchains()
         self.ci()
+        merged = {}
+        for edge in self.edges:
+            key = (edge["component_id"], edge["dependency_key"], edge["relation"], edge["version"])
+            if key not in merged:
+                merged[key] = {**edge, "edge_id": stable("pmde_", *key), "bases": [edge["basis"]]}
+                continue
+            saved = merged[key]
+            if edge["basis"] not in saved["bases"]:
+                saved["bases"].append(edge["basis"])
+            for ref in edge["evidence_refs"]:
+                if ref not in saved["evidence_refs"]:
+                    saved["evidence_refs"].append(ref)
+        self.edges = list(merged.values())
+        invalid_files = {r["path"] for r in self.files if r["status"] != "read"}
+        for edge in self.edges:
+            if any(ref["path"] in invalid_files for ref in edge["evidence_refs"]):
+                edge.update(resolved=None, evidence_level="declared")
         used = {e["dependency_key"] for e in self.edges}
+        for key in used:
+            self.dependencies[key]["kinds"] = sorted({e["kind"] for e in self.edges if e["dependency_key"] == key})
         return {"components": self.components, "dependencies": [d for k, d in sorted(self.dependencies.items()) if k in used],
                 "edges": self.edges, "verification_hints": self.hints, "parser_reasons": sorted(self.reasons)}
 
@@ -329,8 +351,9 @@ class Inventory:
             if relation and set(bins) & binaries(command):
                 evidence.append((relation, self.ref(component["manifest_path"], script=script, command=command)))
         for path, step in self.steps(component):
-            if set(bins) & binaries(step["command"]):
-                evidence.append(("test", self.ref(path, job_id=step["job_id"], line=step["line"], command=step["command"])))
+            relation = self.step_relation(component, step)
+            if relation and set(bins) & binaries(step["command"]):
+                evidence.append((relation, self.ref(path, job_id=step["job_id"], line=step["line"], command=step["command"])))
         if evidence:
             for relation, ref in evidence:
                 self.add(component, name, version, relation, basis=basis, refs=[self.ref(component["manifest_path"]), ref])
@@ -384,6 +407,8 @@ class Inventory:
             if value["package"].get("rust-version"):
                 self.add(c, "rust", value["package"]["rust-version"], "build", basis="rust-version", ecosystem="toolchain", resolved=False)
         elif eco == "go":
+            for basis, version in value["toolchain"]:
+                self.add(c, "go", version, "build", basis=basis, ecosystem="toolchain", resolved=False)
             for name, version in value["dependencies"]:
                 self.add(c, name, version, "runtime", basis="go.require", resolved=False)
 
@@ -400,6 +425,31 @@ class Inventory:
                 if "$" not in cwd and posixpath.normpath(cwd) == directory:
                     yield path, step
 
+    def step_relation(self, component, step):
+        for words in _commands(step["command"]):
+            if words[:2] in (["uv", "build"], ["cargo", "build"], ["go", "build"]):
+                return "build"
+            if words[:2] in (["cargo", "test"], ["cargo", "check"], ["go", "test"]):
+                return "test"
+            if words[:2] == ["npm", "test"]:
+                return "test"
+            if words[:2] == ["npm", "run"] and len(words) >= 3:
+                if re.match(r"^(?:test|check)(?::|$)", words[2]):
+                    return "test"
+                if re.match(r"^(?:build|prepare|prepack)(?::|$)", words[2]):
+                    return "build"
+            if words[:2] == ["uv", "run"]:
+                words = words[2:]
+            if words[:2] in (["python", "-m"], ["python3", "-m"]):
+                words = words[2:]
+            if words and words[0] in {"pytest", "tox", "ruff", "mypy"}:
+                return "test"
+            if words and words[0] in {"vite", "tsc"}:
+                return "build"
+            if words and words[0] in {"vitest", "playwright"}:
+                return "test"
+        return None
+
     def ci(self):
         for c in self.components:
             eco = c["ecosystem"]
@@ -407,10 +457,14 @@ class Inventory:
                 command = step["command"]
                 groups = _commands(command)
                 tools = {"python": {"uv", "python", "python3", "pytest", "ruff", "tox"}, "npm": {"npm", "npx"}, "cargo": {"cargo"}, "go": {"go"}}[eco]
+                if eco == "npm":
+                    for name in self.parsed[c["manifest_path"]].get("devDependencies", {}):
+                        _, _, bins = self.resolution(c, name)
+                        tools.update(bins or BINARIES.get(name, []))
                 calls = [words for words in groups if words and words[0] in tools]
                 if not calls:
                     continue
-                relation = "test" if any(any(w in {"test", "pytest", "check", "test:ui", "test:unit"} or w.startswith("test:") for w in words[1:]) or words[0] in {"pytest", "ruff", "tox"} for words in calls) else "build" if any("build" in words for words in calls) else None
+                relation = self.step_relation(c, step)
                 if not relation:
                     continue
                 ref = self.ref(path, job_id=step["job_id"], line=step["line"], command=command)
@@ -441,7 +495,7 @@ class Inventory:
                             if fields and fields[0] in {tool, "nodejs" if tool == "node" else tool} and len(fields) >= 2:
                                 self.add(c, tool, " ".join(fields[1:]), "build", basis=name, refs=[self.ref(path)], ecosystem="toolchain", resolved=False)
                         continue
-                    version = value["toolchain"]["channel"] if name.endswith(".toml") else value.strip()
+                    version = value["toolchain"]["channel"] if isinstance(value, dict) else value.strip()
                     self.add(c, tool, version, "build", basis=name, refs=[self.ref(path)], ecosystem="toolchain", resolved=False)
                 except (KeyError, TypeError, ValueError, AttributeError):
                     row = next(r for r in self.files if r["path"] == path)

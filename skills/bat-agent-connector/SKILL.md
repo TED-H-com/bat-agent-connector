@@ -1561,3 +1561,26 @@ Quota windows require an explicit opaque pool binding and a fresh source report;
 never add shared balances or convert tokens into subscription quota. Capacity,
 accepted-work performance and remaining-work forecasts are not supplied by this
 increment. See `docs/design/agent-resource-observation.md` for the exact scope.
+
+### Pinned technology and dependency inventory
+
+Check `features.pm_dependencies.version == 1`. Use `pm_dependencies_get(workspace_id)`,
+`pm_dependencies_revisions_list(workspace_id, after?, limit?)`, and
+`pm_dependencies_impact_get(workspace_id, dependency)` with your own observe principal.
+These read the immutable Git capture and current visibility; they never refresh Git or execute code.
+Unknown counts stay null, partial counts cover only the captured catalog, and stale keeps the original commit.
+
+To capture, submit `pm.dependencies.capture` with target `{workspace_id}`, params
+`{repository, commit_sha}` from `source`, and preconditions `{expected_version: version,
+expected_workspace_version: workspace_version, expected_binding_digest: source.binding_digest}`.
+It requires manage + observe and write membership, and reads only the existing pinned PM carrier.
+Keep the original operation/key on an unknown result. Never replace it with a new capture request.
+
+Owner-only `pm.dependencies.declare` takes `{component_id, dependency: {name, ecosystem, kind,
+version}, relation, evidence_level, source_ref, note?}` with the same preconditions. Supply a bound
+`{path, commit_sha}` or credential-free HTTPS URL as source_ref. Declared Contract/Reference and
+inferred PM candidates remain separate from captured edges. `pm.dependencies.retract` takes the
+original `{declaration_id}` and current preconditions; it preserves history. Verified means a resolved
+version in that commit's lockfile, not a successful test. CI hints are commands to recheck, not receipts.
+Cross-repository matches require exact package names/ecosystems and both pinned manifests. Respect
+withdrawal of a peer or source; do not reconstruct hidden counts from old responses.

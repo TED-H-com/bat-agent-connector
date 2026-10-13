@@ -343,3 +343,173 @@ async def test_http_rpc_mcp_scope_membership_and_no_read_effects(pm, monkeypatch
         await fleet.close()
         server.close()
         await server.wait_closed()
+
+
+async def peer_repository(w, mock):
+    """A second actual Git repository and carrier, sharing only the central service."""
+    import re
+    from dataclasses import replace
+
+    from bat_agent_connector import controller_authority, pm_workspace, pm_worktree
+    from bat_agent_connector.operations import ActionDef
+
+    ops = w["d"].ops
+    human, remote = w["human"].parent / "peer", w["human"].parent / "peer.git"
+    human.mkdir()
+    git(human, "init", "-q", "-b", "main")
+    git(human, "config", "user.name", "fixture")
+    git(human, "config", "user.email", "fixture@example.invalid")
+    (human / "package.json").write_text(json.dumps({"name": "shared-widget", "version": "1.2.0", "dependencies": {"leaf-library": "^2"}}))
+    (human / "package-lock.json").write_text(json.dumps({"lockfileVersion": 3, "packages": {"node_modules/leaf-library": {"version": "2.1.0"}}}))
+    git(human, "add", ".")
+    git(human, "commit", "-qm", "Synthetic peer package")
+    git(human.parent, "clone", "--bare", "--no-hardlinks", str(human), str(remote))
+    sha = git(human, "rev-parse", "HEAD")
+    config = ops.context["github_config"]
+    original = config.repos["o/r"]
+    config.repos["o/peer"] = replace(original, repository="o/peer", sync=replace(original.sync, remote_url=str(remote), bindings=(("h1", "ws-dependency-peer"),)))
+    mock.ws_doc["workspaces"].append({**mock.ws_doc["workspaces"][0], "id": "ws-dependency-peer", "folderPath": str(human)})
+    provide_original = w["gh"].before_request
+    def provide(method, path, body):
+        provide_original(method, path, body)
+        if method == "GET" and path == "/repos/o/peer":
+            w["gh"].script.append(("GET", re.escape(path) + "$", 200, {}, {"id": 5000, "full_name": "o/peer"}))
+        if method == "GET" and path == "/repos/o/peer/git/ref/heads/main":
+            w["gh"].script.append(("GET", re.escape(path) + "$", 200, {}, {"ref": "refs/heads/main", "object": {"type": "commit", "sha": sha}}))
+    w["gh"].before_request = provide
+    created, _ = ops.create(OWNER, action="pm.workspace.create", params={"name": "Peer", "repositories": ["o/peer"]}, idempotency_key="peer-workspace")
+    await settle_operations(ops)
+    wid = ops.get(created["operation_id"])["result"]["workspace"]["workspace_id"]
+    created, _ = ops.create(OWNER, action="pm.thread.create", target={"workspace_id": wid}, params={"title": "Peer"},
+                            preconditions={"expected_version": 1}, idempotency_key="peer-thread")
+    await settle_operations(ops)
+    tid = ops.get(created["operation_id"])["result"]["thread_id"]
+    authority = {**pm_runs.execution_identity(ops.db, wid), "server_id": pm_workspace.server_id(ops.db),
+                 "scopes": ["observe", "manage", "start"], "admin": False, "pm_workspace_id": wid}
+    pv = await repository_sync.source_preview(ops, {"repository": "o/peer", "host": "h1", "workspace_id": "ws-dependency-peer", "source_ref": "refs/heads/main"})
+    selection = {**pv["target"], **{k: pv[k] for k in ("source_ref", "source_sha", "repository_id", "binding_digest")}}
+    async def prepare_peer(ctx):
+        execution = {**authority, "pm_operation_id": ctx.operation_id, "pm_requester": pm_workspace.principal_binding(OWNER)}
+        record = pm_runs.create(ops, OWNER, operation_id=ctx.operation_id, workspace_id=wid, thread_id=tid,
+            expected_version=1, adapter="manual", purpose="Fixture peer", execution_authority=execution)
+        async def check():
+            pm_runs.require_writer(ops.journal, record["run_id"], record["generation"])
+        with controller_authority.use(execution, ops.journal):
+            plan = await pm_worktree.select(ops, wid, execution, selection, operation_id=ctx.operation_id)
+            pm_runs.bind_worktree(ops.journal, record["run_id"], record["generation"], plan)
+            carrier = await pm_worktree.ensure(ctx, plan, check=check)
+            pm_runs.fail(ops.journal, record["run_id"], record["generation"], "Fixture carrier ready", before_send=True)
+            return carrier
+    ops.register(ActionDef("pm.fixture.peer", "manage", "Fixture peer carrier", prepare_peer))
+    created, _ = ops.create(OWNER, action="pm.fixture.peer", target={"workspace_id": wid}, idempotency_key="peer-carrier")
+    await settle_operations(ops)
+    assert ops.get(created["operation_id"])["status"] == "succeeded", ops.get(created["operation_id"])
+    peer = {**w, "workspace_id": wid, "sha": sha}
+    assert (await run(peer, params={"repository": "o/peer", "commit_sha": sha}))["status"] == "succeeded"
+    return peer
+
+
+async def test_cross_repository_pinned_edges_withdraw_without_hidden_counts(pm, mock):
+    await prepare(pm)
+    peer = await peer_repository(pm, mock)
+    await run(pm)
+    result = read(pm)
+    assert len(result["cross_repository_edges"]) == 1
+    link = result["cross_repository_edges"][0]
+    assert {ref["repository"] for ref in link["evidence_refs"]} == {"o/r", "o/peer"}
+    assert {ref["commit_sha"] for ref in link["evidence_refs"]} == {pm["sha"], peer["sha"]}
+    impact = pm_dependency_reads.impact(pm["d"].ops, OWNER, pm["workspace_id"], dependency=dependency_key("npm", "leaf-library"))
+    assert [(c["name"], c["distance"]) for c in impact["components"]] == [("shared-widget", 1), ("sample-desktop", 2)]
+    pm["d"].ops.db.execute("DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?", (peer["workspace_id"], OWNER.actor))
+    withdrawn = read(pm)
+    assert withdrawn["cross_repository_edges"] == withdrawn["external_components"] == []
+    assert withdrawn["counts"] == result["counts"]
+    assert peer["workspace_id"] not in json.dumps(withdrawn)
+    impact = pm_dependency_reads.impact(pm["d"].ops, OWNER, pm["workspace_id"], dependency=dependency_key("npm", "leaf-library"))
+    assert impact["components"] == [] and impact["counts"] is None
+    assert impact["reason"] == "dependency_not_observed"
+
+
+@pytest.mark.parametrize("field,value", [("sha256", "f" * 64), ("blob_sha", "f" * 40), ("size", 1), ("path", "../outside")])
+async def test_forged_host_file_evidence_never_becomes_a_capture(pm, field, value):
+    await prepare(pm)
+    original = pm["runner"].run
+    async def forged(host, script, timeout_s=None):
+        result = json.loads(await original(host, script, timeout_s))
+        result["result"]["files"][0][field] = value
+        return json.dumps(result)
+    pm["runner"].run = forged
+    result = await run(pm)
+    assert result["status"] == "failed" and result["error_code"] == "PM_DEPENDENCIES_INVALID_SOURCE"
+    assert read(pm)["capture"]["revision_id"] is None
+
+
+async def test_schema_is_idempotent_and_captures_and_declarations_are_immutable(pm):
+    import sqlite3
+
+    from bat_agent_connector import pm_dependencies
+    await prepare(pm)
+    await run(pm)
+    ops = pm["d"].ops
+    version = ops.db.execute("PRAGMA user_version").fetchone()[0]
+    pm_dependencies.schema(ops.journal)
+    pm_dependencies.schema(ops.journal)
+    assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        ops.db.execute("DELETE FROM pm_dependency_revisions")
+
+
+@pytest.mark.parametrize("value", [None, "http://example.com/spec", "https://user:password@example.com/spec", {"path": "../secret", "commit_sha": "f" * 40}, {"path": "spec.md", "commit_sha": "f" * 40}])
+async def test_declarations_require_an_exact_bound_or_https_source(pm, value):
+    await prepare(pm)
+    await run(pm)
+    params = {"component_id": read(pm)["components"][0]["component_id"],
+        "dependency": {"ecosystem": "api", "name": "contract", "kind": "api_schema", "version": None},
+        "relation": "contract", "evidence_level": "declared", "source_ref": value}
+    with pytest.raises(OperationError) as caught:
+        pm["d"].ops.create(OWNER, **request(pm, "declare", params), idempotency_key="bad-source")
+    assert caught.value.code == "INVALID_PARAMS" and read(pm)["declared"] == []
+
+
+async def test_catalog_and_total_byte_limits_are_partial_not_silent_totals(pm):
+    files = {f"component-{i:03}/.python-version": "3.12\n" for i in range(130)}
+    # Byte budget is exercised before the catalog's later paths.
+    files.update({f"a{i}/requirements.txt": "#" + "x" * 499999 for i in range(5)})
+    await prepare(pm, files)
+    assert (await run(pm))["status"] == "succeeded"
+    result = read(pm)
+    assert result["partial"] and "file_limit" in result["catalog_reasons"]
+    assert len(result["files"]) == 128 and result["counts"]["partial"]
+    assert any(f["reason"] == "selection_byte_budget" for f in result["files"])
+
+
+async def test_capture_http_and_mcp_share_the_original_operation_key(pm, monkeypatch):
+    await prepare(pm)
+    d = pm["d"]
+    server = await asyncio.start_server(d._handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    auth = token(d, OWNER.actor, "observe", "manage")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    mcp, fleet = mcp_server.build_server(d.fleet.config, principal_only=True)
+    try:
+        envelope = request(pm)
+        status, accepted = await http(port, "POST", "/api/v1/operations", tok=auth,
+            body=envelope, headers={"Idempotency-Key": "capture-http-mcp"})
+        assert status == 202, accepted
+        await settle_operations(d.ops)
+        oid = accepted["operation"]["operation_id"]
+        op = d.ops.get(oid)
+        assert op["status"] == "succeeded", op
+        reads = len(pm["runner"].phases)
+        replay = unpack(await mcp.call_tool("operation_submit", {**envelope, "idempotency_key": "capture-http-mcp", "confirm": True}))
+        assert replay["operation"]["operation_id"] == oid
+        assert replay["operation"]["result"]["revision_id"] == op["result"]["revision_id"]
+        assert len(pm["runner"].phases) == reads
+        rejected, body = await http(port, "POST", "/api/v1/operations", tok=token(d, OWNER.actor, "observe"),
+            body=request(pm), headers={"Idempotency-Key": "capture-no-manage"})
+        assert rejected == 403 and "components" not in body
+    finally:
+        await fleet.close()
+        server.close()
+        await server.wait_closed()

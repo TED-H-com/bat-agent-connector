@@ -1,7 +1,6 @@
 """Current-authority dependency projections. Reads never contact the host or scan files."""
 from __future__ import annotations
 
-import json
 import re
 
 from . import pm_dependencies as dep
@@ -11,6 +10,8 @@ from .pm_dependency_parser import KINDS, stable
 from .pm_release_baselines import _bounded, _snapshot_read
 
 MAX_REPOSITORIES = 32
+MAX_PEER_BYTES = 1_000_000
+MAX_LINKS = 2000
 
 
 def _current(ops, principal, wid):
@@ -30,16 +31,16 @@ def _empty(wid):
             "stale": None, "partial": True, "reason": "source_unavailable", "components": [],
             "dependencies": {kind: [] for kind in KINDS}, "edges": [], "declared": [], "files": [],
             "verification_hints": [], "counts": None, "maintenance_owner": None,
-            "cross_repository": {"status": "bounded", "complete": False}, "cross_repository_edges": []}
+            "cross_repository": {"status": "bounded", "complete": False}, "cross_repository_edges": [], "external_components": []}
 
 
 def _owner(ops, principal, wid):
     policy = pm_maintenance_policy.current_policy(ops, principal, wid).get("policy")
     if policy:
-        # Authority actor is the adopting policy owner, not an inferred maintainer.
-        controller = policy["document"].get("controller", {})
-        if controller.get("actor"):
-            return {"actor": controller["actor"], "policy_id": policy["policy_id"], "basis": "adopted_maintenance_policy"}
+        # The adopting actor/controller is authority, not a maintenance assignment.
+        owner = policy["document"]["policy"].get("maintenance_owner")
+        if isinstance(owner, str) and owner.strip():
+            return {"actor": owner, "policy_id": policy["policy_id"], "basis": "adopted_maintenance_policy"}
     return None
 
 
@@ -49,37 +50,53 @@ def _visible_record(ops, principal, wid, revision_id):
     return saved
 
 
-def _related(ops, principal, wid, doc):
-    """One bounded indexed batch; membership filters precede selection of peers.
-
-    Peer catalogs are an explicitly partial aid, never a global repository total.
-    Exact published package identities are the only automatic cross-repo link.
-    """
-    keys = {(d["ecosystem"], d["name"]) for d in doc["dependencies"]}
-    # Candidate inventories require a current carrier, declared repository membership,
-    # and the exact source identity that produced the indexed component.
-    rows = ops.db.execute("""SELECT DISTINCT c.workspace_id,c.revision_id FROM pm_dependency_components c
-        JOIN pm_dependency_heads h ON h.workspace_id=c.workspace_id AND h.source_key=c.source_key AND h.revision_id=c.revision_id
-        JOIN pm_workspaces w ON w.workspace_id=c.workspace_id
+def discover_peers(ops, principal, wid):
+    """Capture a bounded peer selection once; reads never repopulate its hidden slots."""
+    rows = ops.db.execute("""SELECT h.workspace_id,h.revision_id FROM pm_dependency_heads h
+        JOIN pm_workspaces w ON w.workspace_id=h.workspace_id
         JOIN pm_workspace_worktrees b ON b.workspace_id=w.workspace_id
-        JOIN pm_dependency_revisions r ON r.revision_id=c.revision_id
-        WHERE c.workspace_id!=? AND c.published=1
-        AND (? OR EXISTS (SELECT 1 FROM pm_workspace_members m WHERE m.workspace_id=w.workspace_id AND m.actor=?))
+        JOIN pm_dependency_revisions r ON r.revision_id=h.revision_id
+        WHERE h.workspace_id!=? AND (? OR EXISTS
+            (SELECT 1 FROM pm_workspace_members m WHERE m.workspace_id=w.workspace_id AND m.actor=?))
         AND EXISTS (SELECT 1 FROM json_each(w.repositories) j WHERE j.value=json_extract(b.binding,'$.target.repository'))
         AND json_extract(r.source_binding,'$.binding_digest')=json_extract(b.binding,'$.binding_digest')
         AND json_extract(r.source_binding,'$.operation_id')=json_extract(b.binding,'$.operation_id')
-        AND EXISTS (SELECT 1 FROM json_each(?) k WHERE json_extract(k.value,'$[0]')=c.ecosystem AND json_extract(k.value,'$[1]')=c.name)
-        ORDER BY c.workspace_id LIMIT ?""", (wid, principal.admin, principal.actor, json.dumps(sorted(keys)), MAX_REPOSITORIES)).fetchall()
-    peers = []
+        ORDER BY h.workspace_id LIMIT ?""", (wid, principal.admin, principal.actor, MAX_REPOSITORIES)).fetchall()
+    peers, repositories, size = [], set(), 0
     for row in rows:
-        binding = _current(ops, principal, row["workspace_id"])
-        if binding is None:
-            continue
+        if _current(ops, principal, row["workspace_id"]) is not None:
+            try:
+                record = _visible_record(ops, principal, row["workspace_id"], row["revision_id"])
+            except OperationError:
+                continue
+            repository = record["document"]["repository"]
+            # Freeze this bounded selection; later readers never refill hidden slots.
+            from .pm_release_baselines import _size
+            length = _size(record["document"])
+            if repository in repositories or size + length > MAX_PEER_BYTES:
+                continue
+            repositories.add(repository)
+            size += length
+            peers.append({"workspace_id": row["workspace_id"], "revision_id": row["revision_id"],
+                          "document_digest": record["document_digest"]})
+    return peers
+
+
+def _related(ops, principal, wid, doc):
+    """Filter the fixed capture-time peer set before constructing any graph or count."""
+    peers = []
+    for source in doc.get("peer_revisions", []):
+        peer_id = source["workspace_id"]
         try:
-            record = _visible_record(ops, principal, row["workspace_id"], row["revision_id"])
+            binding = _current(ops, principal, peer_id)
+            if binding is None:
+                continue
+            record = _visible_record(ops, principal, peer_id, source["revision_id"])
+            if record["document_digest"] != source["document_digest"] or record["document"]["repository"] == doc["repository"]:
+                continue
         except OperationError:
             continue
-        peers.append({"workspace_id": row["workspace_id"], "stale": record["document"]["commit_sha"] != binding["source_sha"], **record["document"]})
+        peers.append({"workspace_id": peer_id, "stale": record["document"]["commit_sha"] != binding["source_sha"], **record["document"]})
     return peers
 
 
@@ -99,6 +116,8 @@ def _links(documents):
             for target in targets.get((dependency["ecosystem"], dependency["name"]), []):
                 if source["component_id"] == target["component_id"]:
                     continue
+                if len(links) >= MAX_LINKS:
+                    return links
                 links.append({"link_id": stable("pmdeplink_", edge["edge_id"], target["component_id"]),
                     "component_id": source["component_id"], "target_component_id": target["component_id"],
                     "dependency_key": edge["dependency_key"], "edge_id": edge["edge_id"], "relation": edge["relation"],
@@ -135,10 +154,11 @@ def get(ops, principal, workspace_id):
     for dependency in doc["dependencies"]:
         for kind in dependency["kinds"]:
             grouped[kind].append(dependency)
-    result.update({key: value for key, value in doc.items() if key != "dependencies"})
+    result.update({key: value for key, value in doc.items() if key not in {"dependencies", "peer_revisions"}})
     result.update(dependencies=grouped, declared=declarations, stale=doc["commit_sha"] != binding["source_sha"],
         reason=None, maintenance_owner=owner, components=[{**c, "maintenance_owner": owner} for c in doc["components"]],
-        cross_repository_edges=_links([doc, *peers]))
+        cross_repository_edges=_links([doc, *peers]),
+        external_components=[{**c, "stale": peer["stale"], "capture_revision_id": peer["capture"]["revision_id"]} for peer in peers for c in peer["components"]])
     result["counts"] = {"components": len(doc["components"]), "dependencies": len(doc["dependencies"]),
         "edges": len(doc["edges"]), "declared": len(declarations), "basis": "captured_revision", "partial": doc["partial"]}
     return _bounded(result)
@@ -177,8 +197,12 @@ def impact(ops, principal, workspace_id, *, dependency):
         return result
     flat = [d for values in current["dependencies"].values() for d in values]
     doc = {**current, "dependencies": list({d["key"]: d for d in flat}.values())}
-    peers = _related(ops, principal, workspace_id, doc)
+    saved = _visible_record(ops, principal, workspace_id, current["capture"]["revision_id"])["document"]
+    peers = _related(ops, principal, workspace_id, saved)
     documents = [doc, *peers]
+    if not any(d["key"] == dependency for document in documents for d in document["dependencies"]) and not any(
+            d["dependency_key"] == dependency for d in current["declared"]):
+        return {**result, "partial": True, "reason": "dependency_not_observed"}
     edges = [e for d in documents for e in d["edges"]]
     links = _links(documents)
     reached = {e["component_id"]: 1 for e in edges if e["dependency_key"] == dependency}
@@ -199,11 +223,12 @@ def impact(ops, principal, workspace_id, *, dependency):
                 continue
             evidence = [e for e in edges if e["component_id"] == cid and e["dependency_key"] == dependency]
             evidence += [link for link in links if link["component_id"] == cid and link["target_component_id"] in reached]
-            result["components"].append({**c, "distance": reached[cid], "direct": reached[cid] == 1,
+            result["components"].append({**c, "stale": document.get("stale", False), "distance": reached[cid], "direct": reached[cid] == 1,
                                           "relations": sorted({e["relation"] for e in evidence}), "edges": evidence})
     result["components"].sort(key=lambda c: (c["distance"], c["component_id"]))
     result["declared"] = [d for d in current["declared"] if d["dependency_key"] == dependency]
-    result["partial"] = current["partial"] or any(d["partial"] for d in peers)
+    result["partial"] = True
+    result["reason"] = "bounded_captured_graph"
     result["cross_repository"] = {"status": "bounded", "complete": False}
     result["counts"] = {"components": len(result["components"]), "basis": "visible_captured_graph", "partial": True}
     return _bounded(result)

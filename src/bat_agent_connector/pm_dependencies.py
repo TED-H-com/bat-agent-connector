@@ -46,11 +46,6 @@ def schema(journal):
             """CREATE TABLE IF NOT EXISTS pm_dependency_retractions (
                 declaration_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, source_key TEXT NOT NULL,
                 actor TEXT NOT NULL, created_at REAL NOT NULL, operation_id TEXT NOT NULL UNIQUE)""",
-            """CREATE TABLE IF NOT EXISTS pm_dependency_components (
-                workspace_id TEXT NOT NULL, source_key TEXT NOT NULL, revision_id TEXT NOT NULL,
-                component_id TEXT NOT NULL, ecosystem TEXT NOT NULL, name TEXT NOT NULL, published INTEGER NOT NULL,
-                PRIMARY KEY(revision_id,component_id))""",
-            "CREATE INDEX IF NOT EXISTS pm_dependency_package ON pm_dependency_components(ecosystem,name,workspace_id)",
             "CREATE INDEX IF NOT EXISTS pm_dependency_history ON pm_dependency_revisions(workspace_id,source_key,sequence)",
             "CREATE INDEX IF NOT EXISTS pm_dependency_declared ON pm_dependency_declarations(workspace_id,source_key,sequence)",
         ):
@@ -179,7 +174,8 @@ def _check(ops, principal, action, target, params, pre):
                 text(params["note"])
         except ValueError:
             raise bad() from None
-        if (dep["kind"] not in KINDS or params["evidence_level"] not in {"declared", "inferred"}
+        if (not isinstance(dep["kind"], str) or not isinstance(params["evidence_level"], str)
+                or not isinstance(params["relation"], str) or dep["kind"] not in KINDS or params["evidence_level"] not in {"declared", "inferred"}
                 or params["relation"] not in RELATIONS or params["evidence_level"] == "declared" and params["relation"] not in {"contract", "reference"}):
             raise bad()
         if not current["revision_id"]:
@@ -249,6 +245,8 @@ async def _run(ctx):
         from .pm_dependency_sources import collect
         source = await collect(ops, principal, wid, binding)
         inventory = Inventory(binding["target"]["repository"], binding["source_sha"], source["files"], source["contents"]).parse()
+        from .pm_dependency_reads import discover_peers
+        inventory["peer_revisions"] = discover_peers(ops, principal, wid)
         inventory.update(files=source["files"], tree_sha=source["tree_sha"], catalog_reasons=source["catalog_reasons"])
         # No await between this final host/workspace frame and the atomic CAS+receipt.
         await pm_spec_sources._guard(ops, principal, wid, binding)
@@ -264,14 +262,14 @@ async def _run(ctx):
             partial = bool(inventory["catalog_reasons"] or inventory["parser_reasons"] or any(f["status"] != "read" for f in inventory["files"]))
             doc = {**inventory, "repository": binding["target"]["repository"], "repository_id": binding["repository_id"],
                 "binding_digest": binding["binding_digest"], "commit_sha": binding["source_sha"],
+                "coverage": {"scope": "allowlisted_git_artifacts", "working_tree_included": False,
+                             "effective_ci_configuration": "unknown", "go_sum_is_lockfile": False},
                 "capture": {"revision_id": revision_id, "commit_sha": binding["source_sha"], "captured_at": now,
                             "status": "partial" if partial else "complete"}, "partial": partial}
             _bounded(doc)
             ops.db.execute("""INSERT INTO pm_dependency_revisions(revision_id,workspace_id,source_key,document,
                 document_digest,source_binding,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?)""",
                 (revision_id, wid, key, _json(doc), pm_spec_sources._digest(doc), _json(source_identity(binding)), now, ctx.operation_id))
-            ops.db.executemany("INSERT INTO pm_dependency_components VALUES(?,?,?,?,?,?,?)", [
-                (wid, key, revision_id, c["component_id"], c["ecosystem"], c["name"], int(c["published_name"] is not None)) for c in doc["components"]])
             result.update(revision_id=revision_id, status=doc["capture"]["status"])
         elif ctx.op["action"] == ACTIONS[1]:
             did, params = "pmdecl_" + ctx.operation_id[3:], ctx.params

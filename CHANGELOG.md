@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
+  lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
+  immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
+  current membership and source withdrawal; capture never executes repository code.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.

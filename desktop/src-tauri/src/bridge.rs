@@ -1380,7 +1380,9 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                 "dependency" if path.ends_with("/dependencies/impact") => {
                     value.len() == 41
                         && value.starts_with("pmdepkey_")
-                        && value[9..].bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                        && value[9..]
+                            .bytes()
+                            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
                 }
                 "since" | "until" if path.ends_with("/resources") => {
                     value.len() <= 40
@@ -1947,12 +1949,32 @@ mod tests {
     #[test]
     fn dependencies_are_exact_read_routes_without_capture_commands() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/dependencies";
-        for suffix in ["", "/revisions?after=0&limit=100", "/impact?dependency=pmdepkey_22222222222222222222222222222222"] {
-            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_ok(), "{suffix}");
+        for suffix in [
+            "",
+            "/revisions?after=0&limit=100",
+            "/impact?dependency=pmdepkey_22222222222222222222222222222222",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_ok(),
+                "{suffix}"
+            );
         }
-        for suffix in ["/capture", "/declare", "/retract", "?path=package.json", "?limit=1", "/revisions?limit=101",
-            "/revisions?after=-1", "/revisions?limit=1&limit=2", "/impact?dependency=name", "/impact?dependency=pmdepkey_22222222222222222222222222222222&host=fixture"] {
-            assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err(), "{suffix}");
+        for suffix in [
+            "/capture",
+            "/declare",
+            "/retract",
+            "?path=package.json",
+            "?limit=1",
+            "/revisions?limit=101",
+            "/revisions?after=-1",
+            "/revisions?limit=1&limit=2",
+            "/impact?dependency=name",
+            "/impact?dependency=pmdepkey_22222222222222222222222222222222&host=fixture",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}{suffix}"))).is_err(),
+                "{suffix}"
+            );
         }
         let mut write = get(root);
         write.method = "POST".into();

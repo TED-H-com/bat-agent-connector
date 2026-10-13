@@ -14,6 +14,7 @@ if __name__ != "__main__":
         MAX_FILES,
         MAX_TOTAL_BYTES,
         MAX_TREES,
+        MAX_WIRE_BYTES,
         SKIP_DIRS,
         allowed_path,
     )
@@ -87,7 +88,19 @@ def dependency_objects(req):
             raise ValueError("PM_SPEC_BLOB_CHANGED")
         row.update(content=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest())
         total += size
-    return {"tree_sha": tree, "files": sorted(found.values(), key=lambda r: r["path"]), "catalog_reasons": sorted(reasons)}
+    result = {"tree_sha": tree, "files": sorted(found.values(), key=lambda r: r["path"]), "catalog_reasons": sorted(reasons)}
+    # The existing SSH runner has a 1 MiB output ceiling. Reserve the envelope and
+    # account for JSON escaping of paths before returning any bytes to that runner.
+    for row in reversed(result["files"]):
+        if len(json.dumps(result).encode()) <= MAX_WIRE_BYTES - 2048:
+            break
+        if "content" in row:
+            row.pop("content")
+            row.pop("sha256")
+            row["reason"] = "selection_wire_budget"
+    if len(json.dumps(result).encode()) > MAX_WIRE_BYTES - 2048:
+        raise ValueError("PM_SPEC_CATALOG_TOO_LARGE")
+    return result
 
 
 if __name__ == "__main__":
