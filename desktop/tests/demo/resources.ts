@@ -14,6 +14,11 @@ function localDate(instant: Date, tz: string) {
   catch {return instant.toISOString().slice(0, 10);}
 }
 
+function shiftDate(isoDate: string, delta: number) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+
 function localDates(sinceIso: string, untilIso: string, tz: string) {
   const since = Date.parse(sinceIso), until = Date.parse(untilIso);
   if (!Number.isFinite(since) || !Number.isFinite(until) || until <= since) return [];
@@ -30,48 +35,73 @@ function localDates(sinceIso: string, untilIso: string, tz: string) {
   return dates;
 }
 
-// Fixed dates keep the screenshots honest: today is still being read, yesterday is settling,
-// one covered zero stays zero, and one null total is a gap rather than a zero bar.
-function planDay(date: string) {
-  if (date === '2026-10-13') return {codex: 420, claude: 180, codexComplete: false, claudeComplete: false};
-  if (date === '2026-10-12') return {codex: 260, claude: 90, codexComplete: false, claudeComplete: false};
-  if (date === '2026-10-10') return {codex: null, claude: 150, codexComplete: true, claudeComplete: true};
+// Days follow the backend: a complete Codex total is input + output and is never null.
+// A gap is an incomplete day. Today stays open. Yesterday is still settling.
+function planDay(date: string, today: string) {
+  const yesterday = shiftDate(today, -1);
+  if (date === today) return {codex: 420, claude: 180, codexComplete: false, claudeComplete: false};
+  if (date === yesterday) return {codex: 260, claude: 90, codexComplete: false, claudeComplete: false};
+  if (date === '2026-10-10') return {codex: null, claude: 150, codexComplete: false, claudeComplete: true};
   if (date === '2026-10-09') return {codex: 0, claude: 40, codexComplete: true, claudeComplete: true};
   const day = Number(date.slice(-2)) || 0;
   return {codex: 100 + day, claude: 20 + day, codexComplete: true, claudeComplete: true};
 }
 
 function dayRecord(date: string, total: number | null, complete: boolean) {
-  return {date, complete, tokens: {
+  const settled = total != null && complete;
+  return {date, complete: settled, tokens: {
     // A gap keeps component samples so a client that re-adds them cannot draw a bar.
     input: total == null ? 50 : total, cache_read: null, cache_write: null, output: total == null ? 25 : null, reasoning: null, total,
   }};
 }
 
-function usable(project: DemoProject, sourceId: string, adapter: string, role: string, quota: string | null, metrics: object, observations: number, calls: number | null, configurations: object[]) {
+function codexMetrics(total: number) {
+  const output = Math.round(total * 0.3);
+  const input = total - output;
+  const cache = Math.min(300, input);
+  const reasoning = Math.min(80, output);
+  return {
+    input: metric(input, input, 6), cache_read: metric(cache, cache, 6), cache_write: metric(null, null, 0),
+    output: metric(output, output, 6), reasoning: metric(reasoning, reasoning, 6), total: metric(total, total, 6),
+  };
+}
+
+function claudeMetrics(total: number) {
+  const cacheRead = Math.round(total * 0.2);
+  const cacheWrite = Math.round(total * 0.08);
+  const output = Math.round(total * 0.3);
+  const input = total - cacheRead - cacheWrite - output;
+  return {
+    input: metric(input, input, 6), cache_read: metric(cacheRead, cacheRead, 6), cache_write: metric(cacheWrite, cacheWrite, 6),
+    output: metric(output, output, 6), reasoning: metric(null, null, 0), total: metric(total, total, 6),
+  };
+}
+
+function usable(project: DemoProject, sourceId: string, adapter: string, role: string, quota: string | null, metrics: object, observations: number, calls: number | null, configurations: object[], firstAt: string, lastAt: string) {
   const at = iso(project.now);
   return {
     source_id: sourceId, adapter, role, host_id: project.ids.serverId, host_kind: 'central_local', status: 'current',
     checked_at: at, successful_at: at, quota_pool: quota, capacity: null, forecast: null, metrics, observations,
-    configurations, calls, first_at: iso(project.now, -10), last_at: iso(project.now, -1), configurations_partial: false,
+    configurations, calls, first_at: firstAt, last_at: lastAt, configurations_partial: false,
   };
 }
 
 export function resources(project: DemoProject, url: URL) {
   const since = url.searchParams.get('since') || iso(project.now, -7);
   const until = url.searchParams.get('until') || iso(project.now);
-  const dates = localDates(since, until, url.searchParams.get('tz') || 'UTC');
-  const plans = dates.map(date => ({date, ...planDay(date)}));
+  const tz = url.searchParams.get('tz') || 'UTC';
+  const today = localDate(new Date(Date.parse(until)), tz);
+  const dates = localDates(since, until, tz);
+  const plans = dates.map(date => ({date, ...planDay(date, today)}));
   const sum = (key: 'codex' | 'claude') => plans.reduce((total, day) => total + (typeof day[key] === 'number' ? day[key] : 0), 0);
-  const codexTotal = sum('codex'), claudeTotal = sum('claude');
-  const codex = usable(project, project.ids.sources.codex, 'codex-rollout-v1', 'implementer', project.ids.poolId, {
-    input: metric(1200, 1200, 4), cache_read: metric(300, 300, 4), cache_write: metric(null, null, 0),
-    output: metric(480, 480, 4), reasoning: metric(80, 80, 4), total: metric(codexTotal, codexTotal, plans.length),
-  }, 4, null, [{requested_model: 'example-codex', actual_model: null, effort: 'medium', cli_version: '0.120.0'}]);
-  const claude = usable(project, project.ids.sources.claude, 'claude-transcript-v1', 'reviewer', null, {
-    input: metric(400, 400, 6), cache_read: metric(150, 150, 6), cache_write: metric(40, 40, 6),
-    output: metric(220, 220, 6), reasoning: metric(null, null, 0), total: metric(claudeTotal, claudeTotal, plans.length),
-  }, 6, 6, [{requested_model: 'example-claude', actual_model: 'example-claude', effort: 'medium', cli_version: '2.1.0'}]);
+  const sinceMs = Date.parse(since), untilMs = Date.parse(until);
+  const firstAt = new Date(Number.isFinite(sinceMs) ? sinceMs + 60 * 60 * 1000 : project.now).toISOString();
+  const lastAt = new Date(Number.isFinite(untilMs) ? untilMs - 60 * 1000 : project.now).toISOString();
+  const codex = usable(project, project.ids.sources.codex, 'codex-rollout-v1', 'implementer', project.ids.poolId, codexMetrics(sum('codex')), 4, null,
+    [{requested_model: 'example-codex', actual_model: null, effort: 'medium', cli_version: '0.120.0'}], firstAt, lastAt);
+  const claude = usable(project, project.ids.sources.claude, 'claude-transcript-v1', 'reviewer', null, claudeMetrics(sum('claude')), 6, 6,
+    [{requested_model: 'example-claude', actual_model: 'example-claude', effort: 'medium', cli_version: '2.1.0'}], firstAt, lastAt);
+  // An unavailable source contributes no buckets and no counts, with or without the chart.
   const unavailable = {
     source_id: project.ids.sources.unavailable, adapter: 'codex-rollout-v1', role: 'investigator', host_id: project.ids.serverId,
     host_kind: 'central_local', status: 'source_unavailable', checked_at: iso(project.now, -2), successful_at: null,
@@ -84,7 +114,10 @@ export function resources(project: DemoProject, url: URL) {
     quota_pools: [{
       pool_id: project.ids.poolId, limit_id: 'codex', identity_basis: 'operator_binding', sources: [project.ids.sources.codex],
       status: 'reported', snapshot: {observed_at: iso(project.now), limit_id: 'codex',
-        windows: [{window: 'primary', used_percent: 40, window_minutes: 300, resets_at: unix(project.now, 1)}]},
+        windows: [
+          {window: 'primary', used_percent: 40, window_minutes: 300, resets_at: unix(project.now, 1)},
+          {window: 'weekly', used_percent: 12.345678, window_minutes: 10080, resets_at: unix(project.now, 2)},
+        ]},
     }, {
       pool_id: hexId('pool_', 2, 32), limit_id: 'notes', identity_basis: 'operator_binding', sources: [project.ids.sources.unavailable],
       status: 'unavailable', snapshot: null,
@@ -94,7 +127,6 @@ export function resources(project: DemoProject, url: URL) {
     coverage: 'configured_local_files_only', forecast: {status: 'insufficient_evidence'},
   };
   if (url.searchParams.get('buckets') === 'day') {
-    const tz = url.searchParams.get('tz') || 'UTC';
     body.buckets = {granularity: 'day', tz, series: [
       {source_id: project.ids.sources.codex, adapter: 'codex-rollout-v1', cli: 'codex', days: plans.map(day => dayRecord(day.date, day.codex, day.codexComplete))},
       {source_id: project.ids.sources.claude, adapter: 'claude-transcript-v1', cli: 'claude', days: plans.map(day => dayRecord(day.date, day.claude, day.claudeComplete))},

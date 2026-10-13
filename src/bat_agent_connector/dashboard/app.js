@@ -2952,34 +2952,24 @@ var discussionStrings = {
 var resourceStrings = {
 	en: {
 		wb_agents: "Agent resources",
-		res_title: "Agent resources & usage",
 		res_filter: "Filter CLI, model or role",
 		res_window: "Observation window",
-		res_days: "Last {days} days",
-		res_refresh: "Update records",
 		res_pause: "Pause updates",
 		res_resume: "Resume updates",
 		res_no_data: "No data",
-		res_cached: "Cached",
 		res_source: "Source / CLI",
-		res_model: "Model records",
 		res_role: "Role",
-		res_total: "Observed tokens",
-		res_state: "Collection",
 		res_empty: "No usage sources are connected to this workspace.",
 		res_no_match: "No sources match this filter.",
 		res_unknown: "Not provided",
 		res_local: "Central host · local files",
-		res_count: "{count} visible sources",
 		res_observations: "Usage observations",
-		res_calls: "Distinct reported messages",
-		res_as_of: "Read at {time}",
+		res_calls: "Messages",
 		res_current: "Up to date",
-		res_catching_up: "Reading remaining records",
-		res_stale: "Observation overdue",
-		res_pending: "Waiting for first collection",
-		res_unavailable: "Source unavailable",
-		res_error: "Source needs review",
+		res_catching_up: "Catching up",
+		res_pending: "Not collected yet",
+		res_unavailable: "Unavailable",
+		res_error: "Needs review",
 		res_actual: "Reported model",
 		res_requested: "Requested model",
 		res_effort: "Effort",
@@ -2999,14 +2989,8 @@ var resourceStrings = {
 		res_scope: "Only explicitly connected local files are included. These observations do not establish complete project cost, execution capacity or accepted delivery performance.",
 		res_setup: "A central administrator can connect a versioned CLI source to this workspace. Other hosts and unconnected sessions are outside this view.",
 		res_forecast: "Remaining usage estimate: insufficient comparable accepted-work evidence.",
-		res_quota: "Current reported quota windows",
-		res_pool: "Quota pool / limit",
-		res_remaining: "Remaining",
-		res_reset: "Resets",
 		res_quota_unknown: "No current quota balance was provided.",
 		res_quota_scope: "Pools use explicit operator bindings. Each limit is shown once; balances are never added. Reports expire after five minutes or at reset.",
-		res_quota_at: "Reported at {time}",
-		res_minutes: "{minutes}-minute window",
 		res_configurations_more: "Additional model configurations are outside this detail limit.",
 		res_period_1: "1d",
 		res_period_7: "7d",
@@ -3015,6 +2999,7 @@ var resourceStrings = {
 		res_observed: "{start} – {end} · {zone} · updated {ago}",
 		res_observed_range: "{start} – {end} · {zone}",
 		res_window_hours: "{hours}-hour window",
+		res_window_days: "{days}-day window",
 		res_just_now: "just now",
 		res_min_ago: "{n} min ago",
 		res_hr_ago: "{n} hr ago",
@@ -3029,7 +3014,7 @@ var resourceStrings = {
 		res_trend: "Usage",
 		res_settling: "Settling",
 		res_exact: "Exact values",
-		res_calls_col: "Calls",
+		res_calls_col: "Messages",
 		res_seen: "Last seen",
 		res_status: "Status",
 		res_model_col: "Model",
@@ -3040,46 +3025,51 @@ var resourceStrings = {
 		res_filter_cli: "CLI · {name}",
 		res_filter_role: "Role · {name}",
 		res_filter_model: "Model · {name}",
+		res_filter_group_cli: "CLI",
+		res_filter_group_role: "Role",
+		res_filter_group_model: "Model",
 		res_discuss: "Discuss",
 		res_quota_heading: "Quota",
 		res_used: "Used",
-		res_unconfirmed: "Unconfirmed",
 		res_resets_in: "Resets {when}",
 		res_window_short: "{minutes} min",
 		res_tokens_hint: "In · cache · out · reasoning",
 		res_adapter: "Adapter",
-		res_details: "Details"
+		res_details: "Details",
+		res_date: "Date",
+		res_partial_day: "Partial day",
+		res_not_reported: "Not reported",
+		res_paused_meta: "Paused · data from {time}",
+		res_effort_low: "Low",
+		res_effort_medium: "Medium",
+		res_effort_high: "High",
+		res_src_unavailable: "{count} unavailable",
+		res_src_catching_up: "{count} catching up",
+		res_src_pending: "{count} not collected yet",
+		res_src_stale: "{count} stale",
+		res_src_error: "{count} needs review",
+		res_src_unknown: "{count} unknown"
 	},
 	"zh-TW": {
 		wb_agents: "Agent 資源",
-		res_title: "Agent 資源與用量",
 		res_filter: "篩選 CLI、模型或角色",
 		res_window: "觀測期間",
-		res_days: "最近 {days} 天",
-		res_refresh: "更新紀錄",
 		res_pause: "暫停更新",
 		res_resume: "繼續更新",
 		res_no_data: "無資料",
-		res_cached: "快取",
 		res_source: "來源／CLI",
-		res_model: "模型紀錄",
 		res_role: "角色",
-		res_total: "已觀測 tokens",
-		res_state: "收集狀態",
 		res_empty: "此工作區尚未連接用量來源。",
 		res_no_match: "沒有符合篩選條件的來源。",
 		res_unknown: "來源未提供",
 		res_local: "中央主機・本機檔案",
-		res_count: "{count} 個可見來源",
 		res_observations: "用量觀測筆數",
-		res_calls: "已回報訊息數（去重）",
-		res_as_of: "讀取於 {time}",
-		res_current: "已讀至檔尾",
-		res_catching_up: "正在讀取剩餘紀錄",
-		res_stale: "觀測已過期",
-		res_pending: "等待首次收集",
-		res_unavailable: "來源無法讀取",
-		res_error: "來源待檢查",
+		res_calls: "訊息數",
+		res_current: "最新",
+		res_catching_up: "同步中",
+		res_pending: "尚未收集",
+		res_unavailable: "無法取得",
+		res_error: "待檢查",
 		res_actual: "回報模型",
 		res_requested: "要求的模型",
 		res_effort: "推理強度",
@@ -3099,14 +3089,8 @@ var resourceStrings = {
 		res_scope: "只涵蓋已明確連接的本機檔案。這些觀測尚不能代表完整專案成本、執行容量或已驗收交付表現。",
 		res_setup: "中央管理者可將具名版本的 CLI 來源連接到此工作區。其他主機與未連接的 session 不在此頁涵蓋範圍。",
 		res_forecast: "剩餘耗量預估：可比較的已驗收工作證據不足。",
-		res_quota: "目前回報的配額時間窗",
-		res_pool: "配額池／限制",
-		res_remaining: "剩餘",
-		res_reset: "重設時間",
 		res_quota_unknown: "來源未提供目前可用的配額餘額。",
 		res_quota_scope: "配額池依管理者明確綁定，各限制只顯示一次，不相加餘額。回報超過五分鐘或到達重設時間即失效。",
-		res_quota_at: "回報於 {time}",
-		res_minutes: "{minutes} 分鐘時間窗",
 		res_configurations_more: "其他模型配置超出本次詳情的顯示上限。",
 		res_period_1: "1 天",
 		res_period_7: "7 天",
@@ -3115,6 +3099,7 @@ var resourceStrings = {
 		res_observed: "{start}–{end} · {zone} · {ago}更新",
 		res_observed_range: "{start}–{end} · {zone}",
 		res_window_hours: "{hours} 小時區間",
+		res_window_days: "{days} 天區間",
 		res_just_now: "剛剛",
 		res_min_ago: "{n} 分鐘前",
 		res_hr_ago: "{n} 小時前",
@@ -3122,14 +3107,14 @@ var resourceStrings = {
 		res_in_min: "{n} 分鐘後",
 		res_in_hr: "{n} 小時後",
 		res_in_day: "{n} 天後",
-		res_tokens: "已觀測 tokens",
+		res_tokens: "已觀測 Tokens",
 		res_sources: "來源",
 		res_sources_value: "{current} / {total}",
 		res_next_reset: "下次配額重設",
 		res_trend: "用量",
 		res_settling: "待穩定",
 		res_exact: "精確數值",
-		res_calls_col: "呼叫",
+		res_calls_col: "訊息數",
 		res_seen: "最後出現",
 		res_status: "狀態",
 		res_model_col: "模型",
@@ -3140,15 +3125,30 @@ var resourceStrings = {
 		res_filter_cli: "CLI · {name}",
 		res_filter_role: "角色 · {name}",
 		res_filter_model: "模型 · {name}",
+		res_filter_group_cli: "CLI",
+		res_filter_group_role: "角色",
+		res_filter_group_model: "模型",
 		res_discuss: "討論",
 		res_quota_heading: "配額",
 		res_used: "已使用",
-		res_unconfirmed: "待確認",
 		res_resets_in: "{when}重設",
 		res_window_short: "{minutes} 分鐘",
 		res_tokens_hint: "輸入 · 快取 · 輸出 · 推理",
-		res_adapter: "介面",
-		res_details: "詳細資料"
+		res_adapter: "解析格式",
+		res_details: "詳細資料",
+		res_date: "日期",
+		res_partial_day: "非整日",
+		res_not_reported: "未回報",
+		res_paused_meta: "已暫停 · 資料時間 {time}",
+		res_effort_low: "低",
+		res_effort_medium: "中",
+		res_effort_high: "高",
+		res_src_unavailable: "{count} 個無法取得",
+		res_src_catching_up: "{count} 個同步中",
+		res_src_pending: "{count} 個尚未收集",
+		res_src_stale: "{count} 個過期",
+		res_src_error: "{count} 個待檢查",
+		res_src_unknown: "{count} 個未知"
 	}
 };
 //#endregion
@@ -11233,6 +11233,71 @@ function dayKey(instant, timeZone) {
 function isBucketPayload(buckets) {
 	return Boolean(buckets && buckets.granularity === "day" && typeof buckets.tz === "string" && buckets.tz && Array.isArray(buckets.series));
 }
+function niceCeiling(value) {
+	if (!(value > 0)) return 0;
+	const pow = 10 ** Math.floor(Math.log10(value));
+	const frac = value / pow;
+	for (const step of [
+		1,
+		2,
+		2.5,
+		5,
+		10
+	]) if (frac < step - 1e-9) return step * pow;
+	return 10 * pow;
+}
+function shiftDate(isoDate, delta) {
+	const [y, m, d] = String(isoDate || "").split("-").map(Number);
+	if (!y || !m || !d) return "";
+	return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+function zoneParts(instant, timeZone) {
+	const fmt = new Intl.DateTimeFormat("en-US", {
+		timeZone,
+		hourCycle: "h23",
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit"
+	});
+	const map = {};
+	for (const part of fmt.formatToParts(instant)) map[part.type] = part.value;
+	return {
+		year: Number(map.year),
+		month: Number(map.month),
+		day: Number(map.day),
+		hour: Number(map.hour) % 24,
+		minute: Number(map.minute),
+		second: Number(map.second)
+	};
+}
+function alignMidnight(isoDate, timeZone) {
+	const [y, m, d] = isoDate.split("-").map(Number);
+	let utc = Date.UTC(y, m - 1, d);
+	for (let i = 0; i < 4; i++) {
+		const got = zoneParts(new Date(utc), timeZone);
+		utc += Date.UTC(y, m - 1, d) - Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute, got.second);
+	}
+	return new Date(utc);
+}
+function zonedMidnight(isoDate, timeZone) {
+	const zone = timeZone || "UTC";
+	try {
+		return alignMidnight(isoDate, zone);
+	} catch {
+		return alignMidnight(isoDate, "UTC");
+	}
+}
+function periodWindow(now, days, timeZone) {
+	const zone = timeZone || "UTC";
+	const count = Math.max(1, Number(days) || 1);
+	return {
+		since: zonedMidnight(shiftDate(dayKey(now, zone), 1 - count), zone).toISOString(),
+		until: now.toISOString()
+	};
+}
 function cliRank(cli) {
 	const index = CLI_ORDER.indexOf(cli);
 	return index < 0 ? CLI_ORDER.length : index;
@@ -11244,7 +11309,12 @@ function combine(values) {
 	if (!values.length || values.some((value) => value == null)) return null;
 	return values.reduce((sum, value) => sum + value, 0);
 }
-function stackDailyBuckets(buckets, now = new Date()) {
+function clippedDay(date, tz, bounds) {
+	const since = Date.parse(bounds?.since);
+	if (!Number.isFinite(since) || typeof date !== "string") return false;
+	return zonedMidnight(date, tz).getTime() < since;
+}
+function stackDailyBuckets(buckets, now = new Date(), bounds) {
 	if (!isBucketPayload(buckets)) return null;
 	const tz = buckets.tz;
 	const today = dayKey(now, tz);
@@ -11280,11 +11350,17 @@ function stackDailyBuckets(buckets, now = new Date()) {
 					}))
 				};
 			});
+			let mark = "";
+			if (open) {
+				if (clippedDay(date, tz, bounds)) mark = "partial_day";
+				else if (date === today) mark = "in_progress";
+				else mark = "settling";
+			}
 			return {
 				date,
 				parts,
 				partial: parts.some((part) => part.total == null),
-				mark: open ? date === today ? "in_progress" : "settling" : ""
+				mark
 			};
 		})
 	};
@@ -11293,6 +11369,11 @@ function stackDailyBuckets(buckets, now = new Date()) {
 //#region src/pm-agents-chart.js
 var SVG$1 = "http://www.w3.org/2000/svg";
 var liveCharts = new Set();
+var TOP_LINE = 14;
+var BASELINE = 126;
+var HEIGHT = 127;
+var USABLE = 110;
+var hatchSerial = 0;
 function svgEl(tag, attrs) {
 	const el = document.createElementNS(SVG$1, tag);
 	for (const [key, value] of Object.entries(attrs || {})) {
@@ -11301,11 +11382,31 @@ function svgEl(tag, attrs) {
 	}
 	return el;
 }
+function uiLocale() {
+	return (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en-US";
+}
+function axisDate(date) {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || "");
+	if (!match) return "";
+	const instant = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+	return new Intl.DateTimeFormat(uiLocale(), {
+		timeZone: "UTC",
+		month: "numeric",
+		day: "numeric"
+	}).format(instant);
+}
+function compact(value) {
+	return new Intl.NumberFormat(uiLocale(), {
+		notation: "compact",
+		maximumFractionDigits: 1
+	}).format(value);
+}
 function dayState(day, t) {
 	const parts = [];
 	if (day.mark === "in_progress") parts.push(t("ui_status_in_progress"));
 	if (day.mark === "settling") parts.push(t("res_settling"));
-	if (day.partial) parts.push(t("ui_status_partial"));
+	if (day.mark === "partial_day") parts.push(t("res_partial_day"));
+	if (day.partial && day.mark !== "partial_day") parts.push(t("ui_status_partial"));
 	return parts.join(" · ");
 }
 function labelEvery(count, slot) {
@@ -11316,47 +11417,32 @@ function labelEvery(count, slot) {
 	if (count > 60) step = 14;
 	return Math.max(step, fitted);
 }
-function niceMax(value) {
-	if (!(value > 0)) return 0;
-	if (value < 1e3) {
-		const step = 10 ** Math.floor(Math.log10(value));
-		return Math.ceil(value / step) * step;
-	}
-	return Math.ceil(value / 100) * 100;
-}
-function axisLabel(value) {
-	if (value >= 1e3) {
-		const thousands = value / 1e3;
-		const rounded = Math.round(thousands * 10) / 10;
-		return (Math.abs(rounded - Math.round(rounded)) < 1e-6 ? String(Math.round(rounded)) : rounded.toFixed(1)) + "k";
-	}
-	return String(Math.round(value));
-}
 function partText(part, t) {
 	return part.total == null ? `${cliName(part.cli)} · ${t("res_no_data")}` : `${cliName(part.cli)} ${part.total.toLocaleString()}`;
 }
-function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
-	const stacked = stackDailyBuckets(buckets, now);
+function usageChart({ h, t, buckets, now = new Date(), exactKey, window: bounds, formatDay } = {}) {
+	const stacked = stackDailyBuckets(buckets, now, bounds);
 	if (!stacked || !stacked.days.length) return null;
 	const { clis, days } = stacked;
 	const shown = clis.filter((cli) => days.some((day) => day.parts.some((part) => part.cli === cli && part.total != null)));
-	const topLine = 14;
-	const baseline = 126;
-	const height = 127;
-	const usable = 110;
-	const scaleMax = niceMax(days.reduce((best, day) => Math.max(best, day.parts.reduce((sum, part) => sum + (part.total > 0 ? part.total : 0), 0)), 0));
-	const heightOf = (value) => scaleMax > 0 ? value / scaleMax * usable : 0;
+	const withYear = days[0].date.slice(0, 4) !== days.at(-1).date.slice(0, 4);
+	const dateText = (date) => typeof formatDay === "function" ? formatDay(date, withYear) : axisDate(date);
+	const scaleMax = niceCeiling(days.reduce((best, day) => Math.max(best, day.parts.reduce((sum, part) => sum + (part.total > 0 ? part.total : 0), 0)), 0));
+	const heightOf = (value) => scaleMax > 0 ? value / scaleMax * USABLE : 0;
+	const hatchId = `agents-hatch-${++hatchSerial}`;
 	const host = h("figure", {
 		class: "pm-agents-chart",
 		"data-resource-chart": ""
 	});
-	host.style.setProperty("--plot-h", "127px");
-	host.style.setProperty("--line-top", "14px");
-	host.style.setProperty("--line-base", "126px");
 	const yscale = h("div", { class: "pm-agents-yscale" });
 	const svg = svgEl("svg", {
 		role: "img",
-		"aria-label": t("res_trend"),
+		"aria-label": [
+			t("res_trend"),
+			dateText(days[0].date),
+			dateText(days.at(-1).date),
+			shown.map(cliName).join(", ")
+		].filter(Boolean).join(", "),
 		preserveAspectRatio: "xMinYMin meet"
 	});
 	const labels = h("div", { class: "pm-agents-xlabels" });
@@ -11370,14 +11456,14 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 	function show(day, event) {
 		tip.hidden = false;
 		tip.replaceChildren(...[
-			h("div", {}, day.date),
+			h("div", {}, dateText(day.date)),
 			dayState(day, t) ? h("div", {}, dayState(day, t)) : null,
 			...day.parts.map((part) => h("div", { "data-tip-cli": part.cli }, partText(part, t)))
 		].filter(Boolean));
-		const bounds = host.getBoundingClientRect();
-		const point = Number.isFinite(event?.clientX) ? event.clientX : bounds.left + bounds.width / 2;
+		const boundsBox = host.getBoundingClientRect();
+		const point = Number.isFinite(event?.clientX) ? event.clientX : boundsBox.left + boundsBox.width / 2;
 		const tipWidth = tip.offsetWidth || 160;
-		const left = Math.min(Math.max(8, point - bounds.left), Math.max(8, bounds.width - tipWidth - 8));
+		const left = Math.min(Math.max(8, point - boundsBox.left), Math.max(8, boundsBox.width - tipWidth - 8));
 		tip.style.left = left + "px";
 		tip.style.top = "4px";
 	}
@@ -11385,7 +11471,7 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 		const slot = width / days.length;
 		const barW = Math.max(2, Math.min(slot * .62, Math.max(2, slot - 4)));
 		const step = labelEvery(days.length, slot);
-		const maxText = scaleMax > 0 ? axisLabel(scaleMax) : "";
+		const maxText = scaleMax > 0 ? compact(scaleMax) : "";
 		yscale.replaceChildren(...[
 			h("span", {
 				class: "sizer",
@@ -11394,61 +11480,97 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 			maxText ? h("span", { class: "max" }, maxText) : null,
 			h("span", { class: "zero" }, "0")
 		].filter(Boolean));
-		svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+		svg.setAttribute("viewBox", `0 0 ${width} ${HEIGHT}`);
 		svg.setAttribute("width", String(width));
-		svg.setAttribute("height", String(height));
-		svg.style.width = width + "px";
-		svg.style.height = "127px";
-		svg.replaceChildren(svgEl("line", {
+		svg.setAttribute("height", String(HEIGHT));
+		const pattern = svgEl("pattern", {
+			id: hatchId,
+			width: 6,
+			height: 6,
+			patternUnits: "userSpaceOnUse"
+		});
+		pattern.append(svgEl("path", {
+			d: "M0 6 L6 0",
+			class: "open-hatch"
+		}));
+		const defs = svgEl("defs");
+		defs.append(pattern);
+		svg.replaceChildren(defs, svgEl("line", {
 			class: "grid zero",
 			x1: 0,
 			x2: width,
-			y1: baseline,
-			y2: baseline
+			y1: BASELINE,
+			y2: BASELINE
 		}));
 		if (scaleMax > 0) svg.append(svgEl("line", {
 			class: "grid max",
 			x1: 0,
 			x2: width,
-			y1: topLine,
-			y2: topLine
+			y1: TOP_LINE,
+			y2: TOP_LINE
 		}));
-		labels.replaceChildren(...days.map((day, index) => {
+		const nodes = days.map((day, index) => {
 			const showLabel = index === days.length - 1 || index % step === 0 && days.length - 1 - index >= step;
-			const [, month, date] = day.date.split("-");
-			return h("span", {}, showLabel ? `${Number(month)}/${Number(date)}` : "");
-		}));
+			return h("span", { "data-date": day.date }, showLabel ? axisDate(day.date) : "");
+		});
+		labels.replaceChildren(...nodes);
+		nodes.forEach((span, index) => {
+			if (!span.textContent) {
+				span.hidden = true;
+				return;
+			}
+			const center = index * slot + slot / 2;
+			const textWidth = span.offsetWidth || 0;
+			let left = index === 0 ? 0 : index === days.length - 1 ? width - textWidth : center - textWidth / 2;
+			left = Math.max(0, Math.min(left, Math.max(0, width - textWidth)));
+			span.style.left = left + "px";
+		});
 		days.forEach((day, index) => {
 			const x0 = index * slot;
 			const x = x0 + (slot - barW) / 2;
 			const gaps = day.parts.filter((part) => part.total == null).map((part) => part.cli);
 			const zeros = day.parts.filter((part) => part.total === 0).map((part) => part.cli);
+			const open = day.mark ? " open" : "";
 			const group = svgEl("g", {
 				class: "day",
-				tabindex: "-1",
 				"data-date": day.date,
 				"data-incomplete": day.mark || null,
 				"data-partial": day.partial ? "true" : null,
 				"data-gap": gaps.join(" ") || null,
 				"data-zero": zeros.join(" ") || null,
 				"aria-label": [
-					day.date,
+					dateText(day.date),
 					dayState(day, t),
 					...day.parts.map((part) => partText(part, t))
 				].filter(Boolean).join(" · ")
 			});
-			if (gaps.length) group.append(svgEl("rect", {
-				class: "gap",
-				x: x0 + 1,
-				y: 117,
-				width: Math.max(2, slot - 2),
-				height: 8
-			}));
-			let y = 125;
+			let top = 125;
+			let placed = false;
 			for (const part of day.parts) {
-				if (part.total == null) continue;
 				const tone = `cli-${cliClass(part.cli)}`;
-				const open = day.mark ? " open" : "";
+				if (part.total == null) {
+					const stubH = 6;
+					if (placed) {
+						top -= 1;
+						group.append(svgEl("rect", {
+							class: "seg-gap",
+							x,
+							y: top,
+							width: barW,
+							height: 1
+						}));
+					}
+					top -= stubH;
+					group.append(svgEl("rect", {
+						class: "gap",
+						x,
+						y: top,
+						width: barW,
+						height: stubH
+					}));
+					placed = true;
+					continue;
+				}
 				if (part.total === 0) {
 					group.append(svgEl("rect", {
 						class: `tick ${tone}${open}`,
@@ -11460,47 +11582,76 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 					continue;
 				}
 				const barH = Math.max(1, heightOf(part.total));
-				y -= barH;
+				if (placed) {
+					top -= 1;
+					group.append(svgEl("rect", {
+						class: "seg-gap",
+						x,
+						y: top,
+						width: barW,
+						height: 1
+					}));
+				}
+				top -= barH;
 				group.append(svgEl("rect", {
 					class: `bar ${tone}${open}`,
 					x,
-					y,
+					y: top,
 					width: barW,
 					height: barH
 				}));
+				if (day.mark) group.append(svgEl("rect", {
+					class: "open-hatch-fill",
+					x,
+					y: top,
+					width: barW,
+					height: barH,
+					fill: `url(#${hatchId})`
+				}));
+				placed = true;
 			}
 			if (day.mark) {
-				const cx = x + barW / 2;
-				const markerBottom = y - 3;
-				if (day.mark === "settling") group.append(svgEl("rect", {
-					class: "marker settling",
-					x: cx - 3,
-					y: markerBottom - 6,
-					width: 6,
-					height: 6,
-					rx: 1
-				}));
-				else group.append(svgEl("circle", {
-					class: "marker in_progress",
-					cx,
-					cy: markerBottom - 3,
-					r: 3
-				}));
+				const radius = 3;
+				const cx = Math.max(radius, Math.min(x + barW / 2, width - radius));
+				if (day.mark === "in_progress") {
+					const cy = Math.max(radius, Math.min(top - 6, 124));
+					group.append(svgEl("circle", {
+						class: "marker in_progress",
+						cx,
+						cy,
+						r: radius
+					}));
+				} else {
+					const marker = 6;
+					const mx = Math.max(0, Math.min(cx - marker / 2, width - marker));
+					const my = Math.max(0, Math.min(top - 9, 121));
+					group.append(svgEl("rect", {
+						class: `marker ${day.mark}`,
+						x: mx,
+						y: my,
+						width: marker,
+						height: marker,
+						rx: 1
+					}));
+				}
 			}
 			group.append(svgEl("rect", {
 				class: "band",
 				x: x0,
 				y: 0,
 				width: slot,
-				height
+				height: HEIGHT
 			}));
 			group.addEventListener("pointerenter", (event) => show(day, event));
-			group.addEventListener("focus", (event) => show(day, event));
 			svg.append(group);
 		});
 	}
 	function layout() {
-		if (!host.isConnected) return;
+		if (!host.isConnected) {
+			observer.disconnect();
+			liveCharts.delete(tracker);
+			return;
+		}
 		const width = Math.round(plot.clientWidth);
 		if (width < 8 || width === drawn) return;
 		drawn = width;
@@ -11513,6 +11664,10 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 		observer
 	};
 	liveCharts.add(tracker);
+	function dispose() {
+		observer.disconnect();
+		liveCharts.delete(tracker);
+	}
 	queueMicrotask(() => {
 		for (const item of [...liveCharts]) if (!item.host.isConnected) {
 			item.observer.disconnect();
@@ -11532,11 +11687,14 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 	}), t("ui_status_in_progress")) : null, days.some((day) => day.mark === "settling") ? h("li", {}, h("span", {
 		class: "swatch marker settling",
 		"aria-hidden": "true"
-	}), t("res_settling")) : null, days.some((day) => day.parts.some((part) => part.total == null)) ? h("li", {}, h("span", {
+	}), t("res_settling")) : null, days.some((day) => day.mark === "partial_day") ? h("li", {}, h("span", {
+		class: "swatch marker partial_day",
+		"aria-hidden": "true"
+	}), t("res_partial_day")) : null, days.some((day) => day.parts.some((part) => part.total == null)) ? h("li", {}, h("span", {
 		class: "swatch gap",
 		"aria-hidden": "true"
 	}), t("res_no_data")) : null);
-	const table = h("table", {}, h("thead", {}, h("tr", {}, h("th", { scope: "col" }, t("res_seen")), ...clis.map((cli) => h("th", { scope: "col" }, cliName(cli))), h("th", { scope: "col" }, t("res_status")))), h("tbody", {}, ...days.map((day) => {
+	const table = h("table", {}, h("thead", {}, h("tr", {}, h("th", { scope: "col" }, t("res_date")), ...clis.map((cli) => h("th", { scope: "col" }, cliName(cli))), h("th", { scope: "col" }, t("res_status")))), h("tbody", {}, ...days.map((day) => {
 		const gaps = day.parts.filter((part) => part.total == null).map((part) => part.cli);
 		const zeros = day.parts.filter((part) => part.total === 0).map((part) => part.cli);
 		return h("tr", {
@@ -11545,14 +11703,16 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey } = {}) {
 			"data-partial": day.partial ? "true" : null,
 			"data-gap": gaps.join(" ") || null,
 			"data-zero": zeros.join(" ") || null
-		}, h("td", {}, day.date), ...day.parts.map((part) => h("td", { "data-cli": part.cli }, part.total == null ? "—" : part.total.toLocaleString())), h("td", {}, dayState(day, t)));
+		}, h("td", {}, dateText(day.date)), ...day.parts.map((part) => h("td", { "data-cli": part.cli }, part.total == null ? "—" : part.total.toLocaleString())), h("td", {}, dayState(day, t)));
 	})));
-	host.append(h("div", { class: "pm-agents-plot" }, yscale, plot), legend, tip, disclosure({
+	const exact = disclosure({
 		label: t("res_exact"),
 		body: h("div", { class: "pm-agents-exact" }, table),
 		key: exactKey
-	}));
-	return host;
+	});
+	exact.querySelector("summary")?.setAttribute("data-focus-key", exactKey || "agents-exact");
+	host.append(h("div", { class: "pm-agents-plot" }, yscale, plot), legend, tip, exact);
+	return Object.assign(host, { dispose });
 }
 //#endregion
 //#region src/pm-resources.js
@@ -11567,14 +11727,44 @@ var READABLE = new Set([
 	"catching_up",
 	"stale"
 ]);
+var TREND_TTL = 9e5;
 var EM = "—";
-function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox }) {
+var STATUS_KEY = {
+	current: "res_current",
+	catching_up: "res_catching_up",
+	pending: "res_pending",
+	source_unavailable: "res_unavailable",
+	unavailable: "res_unavailable",
+	error: "res_error",
+	binding_changed: "res_error"
+};
+var STATUS_TONE = {
+	current: "ok",
+	catching_up: "info",
+	pending: "warn",
+	source_unavailable: "neutral",
+	unavailable: "neutral",
+	error: "bad",
+	binding_changed: "warn"
+};
+var SOURCE_KIND = {
+	catching_up: "catching_up",
+	stale: "stale",
+	pending: "pending",
+	source_unavailable: "unavailable",
+	unavailable: "unavailable",
+	error: "error",
+	binding_changed: "error"
+};
+function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported = false }) {
 	const preference = viewState(namespace, workspaceId, "agents");
 	let period = PERIODS.includes(preference.period) ? preference.period : "7";
 	let filter = savedFilter(preference.filter);
 	let serial = 0, active = false, busy = false, paused = Boolean(preference.paused), timer = null;
-	let data = null, selected = preference.selected || null, signature = "", trendBuckets = null;
-	let inspectorPanel = null, closing = false, menuSignature = "";
+	let data = null, selected = preference.selected || null, signature = "";
+	let trendBuckets = null, trendReadAt = 0, trendSourceKey = "", trendUntilDay = "";
+	let bucketsStopped = false, requestZone = browserTimeZone();
+	let inspectorPanel = null, closing = false, chartNode = null, chartTrendKey = "";
 	const meta = h("p", {
 		class: "ui-meta",
 		"data-resource-meta": ""
@@ -11592,28 +11782,43 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		onChange(value) {
 			period = value;
 			preference.period = period;
-			const keep = selected;
-			withdraw({ preserveSelection: true });
-			selected = keep;
-			refresh({ trend: true });
+			clearTimeout(timer);
+			serial++;
+			busy = false;
+			trendBuckets = null;
+			trendReadAt = 0;
+			trendSourceKey = "";
+			trendUntilDay = "";
+			data = null;
+			signature = "";
+			dropChart();
+			main.replaceChildren(skeleton(4));
+			refresh({
+				user: true,
+				trend: bucketsSupported && !bucketsStopped
+			});
 		}
 	});
 	const pause = button({
 		variant: "ghost",
 		size: "sm",
-		"aria-pressed": String(paused),
 		onclick: () => {
 			paused = !paused;
 			preference.paused = paused;
 			paintPause();
-			if (paused) clearTimeout(timer);
-			else refresh({ trend: false });
+			if (paused) {
+				clearTimeout(timer);
+				if (data) updateMeta();
+			} else refresh({
+				user: true,
+				trend: wantsTrend()
+			});
 		}
 	});
 	function paintPause() {
 		const label = t(paused ? "res_resume" : "res_pause");
 		pause.replaceChildren(icon(paused ? "play" : "pause"), label);
-		pause.setAttribute("aria-pressed", String(paused));
+		pause.removeAttribute("aria-pressed");
 		pause.setAttribute("aria-label", label);
 	}
 	paintPause();
@@ -11625,8 +11830,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	const element = h("section", {
 		"data-pm-resources": "",
 		class: "pm-agents"
-	}, h("div", { class: "pm-agents-toolbar" }, periodControl, h("div", { class: "pm-agents-toolbar-actions" }, h("div", { class: "pm-agents-filter-host" }), pause)), status, layout);
-	syncFilterMenu();
+	}, h("div", { class: "pm-agents-toolbar" }, periodControl, pause), status, layout);
 	function finite(value) {
 		return typeof value === "number" && Number.isFinite(value) ? value : null;
 	}
@@ -11679,6 +11883,14 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			minute: "2-digit"
 		}).format(parsed);
 	}
+	function clockTime(value) {
+		const parsed = Date.parse(value);
+		if (!Number.isFinite(parsed)) return "";
+		return new Intl.DateTimeFormat(uiLocale(), {
+			hour: "numeric",
+			minute: "2-digit"
+		}).format(parsed);
+	}
 	function seenCell(row) {
 		if (!isReadable(row)) return EM;
 		const parsed = Date.parse(row.last_at);
@@ -11696,33 +11908,26 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function roleLabel(role) {
 		return role === "unassigned" ? t("wb_unassigned") : role || EM;
 	}
-	function filterLabel() {
-		if (filter.kind === "cli") return t("res_filter_cli", { name: cliName(filter.value) });
-		if (filter.kind === "role") return t("res_filter_role", { name: roleLabel(filter.value) });
-		if (filter.kind === "model") return t("res_filter_model", { name: filter.value });
-		return t("res_filter_all");
+	function effortLabel(value) {
+		if (value === "low" || value === "medium" || value === "high") return t("res_effort_" + value);
+		return value || t("res_unknown");
+	}
+	function statusText(code) {
+		if (code === "stale" || code === "unknown" || code === "partial" || code === "unconfirmed") return t("ui_status_" + code);
+		if (STATUS_KEY[code]) return t(STATUS_KEY[code]);
+		return reasonBits(code).text;
 	}
 	function statusNode(row) {
-		const known = {
-			current: ["ok", "res_current"],
-			catching_up: ["info", "res_catching_up"],
-			stale: ["warn", "res_stale"],
-			pending: ["warn", "res_pending"],
-			source_unavailable: ["neutral", "res_unavailable"],
-			binding_changed: ["warn", "res_error"]
-		};
-		if (known[row.status]) {
-			const [tone, key] = known[row.status];
-			return h("span", {
-				class: `ui-pill tone-${tone}`,
-				"data-status": row.status
-			}, t(key));
-		}
-		const reason = reasonBits(row.status);
+		const code = row?.status || "unknown";
+		if (code === "stale" || code === "unknown" || code === "partial" || code === "unconfirmed") return statusPill(code);
+		if (STATUS_KEY[code]) return h("span", {
+			class: `ui-pill tone-${STATUS_TONE[code] || "neutral"}`,
+			"data-status": code
+		}, statusText(code));
 		return h("span", {
 			class: "ui-pill tone-bad",
-			"data-status": row.status || "unknown"
-		}, reason.text);
+			"data-status": code
+		}, statusText(code));
 	}
 	function visibleRows() {
 		return (data?.rows || []).filter(matches);
@@ -11759,47 +11964,41 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			value: next.value || ""
 		};
 		preference.filter = filter;
-		labelFilterButton();
 		render(true);
 	}
-	function labelFilterButton() {
-		const trigger = element.querySelector("[data-resource-filter]");
-		const slot = trigger?.querySelector("[data-filter-label]");
-		if (!trigger || !slot) return;
-		const label = filterLabel();
-		slot.textContent = label;
-		trigger.setAttribute("aria-label", label);
-	}
-	function syncFilterMenu() {
-		const sig = JSON.stringify(filterOptions());
-		labelFilterButton();
-		if (sig === menuSignature && element.querySelector(".pm-agents-filter-host .ui-menu")) return;
-		menuSignature = sig;
-		const host = element.querySelector(".pm-agents-filter-host");
-		host.querySelector(".ui-menu")?.dispose?.();
-		const label = filterLabel();
-		const trigger = button({
-			variant: "secondary",
-			size: "sm",
-			label: h("span", { "data-filter-label": "" }, label),
-			"aria-label": label,
-			title: t("res_filter"),
-			"data-resource-filter": ""
+	function filterSelect() {
+		const select = h("select", {
+			"data-resource-filter": "",
+			"aria-label": t("res_filter")
 		});
-		trigger.append(icon("chevron-down"));
-		const items = [{
-			key: "all",
-			label: t("res_filter_all"),
-			onSelect: () => setFilter({ kind: "all" })
-		}, ...filterOptions().map((option) => ({
-			key: option.kind + ":" + option.value,
-			label: option.label,
-			onSelect: () => setFilter(option)
-		}))];
-		host.replaceChildren(menu({
-			button: trigger,
-			items
-		}));
+		select.append(h("option", { value: "all" }, t("res_filter_all")));
+		for (const [kind, label] of [
+			["cli", t("res_filter_group_cli")],
+			["role", t("res_filter_group_role")],
+			["model", t("res_filter_group_model")]
+		]) {
+			const options = filterOptions().filter((option) => option.kind === kind);
+			if (!options.length) continue;
+			const group = h("optgroup", { label });
+			for (const option of options) group.append(h("option", { value: option.kind + "\0" + option.value }, option.label));
+			select.append(group);
+		}
+		const current = filter.kind === "all" || !filter.value ? "all" : filter.kind + "\0" + filter.value;
+		select.value = [...select.options].some((option) => option.value === current) ? current : "all";
+		select.addEventListener("change", () => {
+			if (select.value === "all") setFilter({
+				kind: "all",
+				value: ""
+			});
+			else {
+				const split = select.value.indexOf("\0");
+				setFilter({
+					kind: select.value.slice(0, split),
+					value: select.value.slice(split + 1)
+				});
+			}
+		});
+		return h("div", { class: "pm-agents-list-tools" }, select);
 	}
 	function facts(pairs) {
 		return h("dl", { class: "pm-agents-facts" }, ...pairs.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)]));
@@ -11812,6 +12011,11 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const requested = first.requested_model && first.requested_model !== first.actual_model ? h("div", { class: "pm-agents-requested" }, t("res_requested_short", { model: first.requested_model })) : null;
 		return h("div", { class: "pm-agents-model" }, first.actual_model || (!requested ? t("res_unknown") : null), requested, items.length > 1 ? h("div", { class: "pm-agents-requested" }, t("res_more_models", { count: items.length - 1 })) : null);
 	}
+	function partText(metricValue) {
+		if (finite(metricValue?.value) != null) return finite(metricValue.value).toLocaleString();
+		if (finite(metricValue?.observed) != null) return t("res_partial", { count: finite(metricValue.observed).toLocaleString() });
+		return t("res_not_reported");
+	}
 	function tokenHeadline(row) {
 		const total = row.metrics?.total;
 		if (finite(total?.value) != null) return finite(total.value).toLocaleString();
@@ -11820,14 +12024,12 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function tokenBreakdown(row) {
 		const metrics = row.metrics || {};
-		const read = finite(metrics.cache_read?.value), write = finite(metrics.cache_write?.value);
-		const cache = read == null || write == null ? EM : (read + write).toLocaleString();
-		const part = (value) => finite(value?.value) == null ? EM : finite(value.value).toLocaleString();
 		return [
-			[t("res_input"), part(metrics.input)],
-			[t("res_cached"), cache],
-			[t("res_output"), part(metrics.output)],
-			[t("res_reasoning"), part(metrics.reasoning)]
+			[t("res_input"), partText(metrics.input)],
+			[t("res_cache_read"), partText(metrics.cache_read)],
+			[t("res_cache_write"), partText(metrics.cache_write)],
+			[t("res_output"), partText(metrics.output)],
+			[t("res_reasoning"), partText(metrics.reasoning)]
 		];
 	}
 	function tokenTitle(row) {
@@ -11849,25 +12051,33 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const cli = cliOf(row);
 		return h("div", { class: "pm-agents-source" }, isReadable(row) && cli ? agentMark(cli) : null, h("div", { class: "pm-agents-source-id" }, row.source_id, isReadable(row) && cli ? h("div", { class: "ui-meta" }, cliName(cli)) : null));
 	}
+	function metaZone() {
+		return isBucketPayload(data?.buckets) && data.buckets.tz || requestZone || "UTC";
+	}
 	function updateMeta() {
-		const stacked = stackDailyBuckets(data?.buckets, new Date());
-		const zone = stacked?.tz || "UTC";
+		if (!data) {
+			meta.replaceChildren();
+			meta.hidden = true;
+			mountMeta();
+			return;
+		}
+		if (paused) {
+			const time = clockTime(data.as_of);
+			meta.textContent = t("res_paused_meta", { time: time || EM });
+			meta.hidden = false;
+			mountMeta();
+			return;
+		}
+		const zone = metaZone();
 		let start = "", end = "";
-		if (stacked?.days.length) {
-			const first = stacked.days[0].date, last = stacked.days.at(-1).date;
+		const since = Date.parse(data.window?.since), until = Date.parse(data.window?.until);
+		if (Number.isFinite(since) && Number.isFinite(until) && until >= since) {
+			const first = dayKey(new Date(since), zone), last = dayKey(new Date(until), zone);
 			const withYear = first.slice(0, 4) !== last.slice(0, 4);
 			start = formatDay(first, withYear);
 			end = formatDay(last, withYear);
-		} else if (data?.window?.since && data?.window?.until) {
-			const since = Date.parse(data.window.since), until = Date.parse(data.window.until);
-			if (Number.isFinite(since) && Number.isFinite(until) && until > since) {
-				const first = dayKey(new Date(since), zone), last = dayKey(new Date(until - 1), zone);
-				const withYear = first.slice(0, 4) !== last.slice(0, 4);
-				start = formatDay(first, withYear);
-				end = formatDay(last, withYear);
-			}
 		}
-		const parsed = Date.parse(data?.as_of);
+		const parsed = Date.parse(data.as_of);
 		const ago = Number.isFinite(parsed) ? relativePast(Date.now() - parsed) : "";
 		if (!(start && end)) {
 			meta.replaceChildren();
@@ -11895,21 +12105,48 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const heading = element.closest(".pm-main")?.querySelector(".ui-page-heading");
 		if (heading && meta.parentNode !== heading) heading.append(meta);
 	}
+	function needsPartial(row) {
+		if (row?.status === "pending" || row?.status === "binding_changed" || row?.status === "catching_up" || row?.status === "stale") return true;
+		if (!isReadable(row)) return true;
+		return finite(row.metrics?.total?.value) == null;
+	}
 	function tokenMetric() {
-		const readable = (data?.rows || []).filter(isReadable);
-		const values = readable.map((row) => finite(row.metrics?.total?.value));
-		const known = values.filter((value) => value != null);
-		const stacked = stackDailyBuckets(data?.buckets, new Date());
-		const partial = values.some((value) => value == null) || Boolean(stacked?.days.some((day) => day.partial || day.mark));
+		const rows = data?.rows || [];
+		const readable = rows.filter(isReadable);
+		const known = readable.map((row) => finite(row.metrics?.total?.value)).filter((value) => value != null);
+		const partial = rows.some(needsPartial);
 		if (!known.length) return metric({
 			label: t("res_tokens"),
 			value: readable.length ? EM : null,
-			pill: readable.length ? statusPill("partial") : null
+			pill: readable.length && partial ? statusPill("partial") : null
 		});
 		return metric({
 			label: t("res_tokens"),
 			value: known.reduce((sum, value) => sum + value, 0).toLocaleString(),
 			pill: partial ? statusPill("partial") : null
+		});
+	}
+	function sourcesContext(rows) {
+		const counts = new Map();
+		for (const row of rows) {
+			if (row?.status === "current") continue;
+			const kind = SOURCE_KIND[row?.status] || "unknown";
+			counts.set(kind, (counts.get(kind) || 0) + 1);
+		}
+		if (!counts.size) return "";
+		return [...counts].map(([kind, count]) => t("res_src_" + kind, { count })).join(" · ");
+	}
+	function sourcesMetric() {
+		const rows = data?.rows || [];
+		const current = rows.filter((row) => row.status === "current").length;
+		const context = sourcesContext(rows);
+		return metric({
+			label: t("res_sources"),
+			value: t("res_sources_value", {
+				current,
+				total: rows.length
+			}),
+			context: context || null
 		});
 	}
 	function resetMetric() {
@@ -11928,8 +12165,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			value: earliest == null ? null : relativeFuture(earliest - now)
 		});
 	}
-	function quotaNodes(visible) {
-		const ids = new Set(visible.map((row) => row.source_id));
+	function quotaNodes() {
+		const ids = new Set((data?.rows || []).map((row) => row.source_id));
 		const blocks = [];
 		for (const pool of data?.quota_pools || []) {
 			if (!pool?.sources?.some((id) => ids.has(id))) continue;
@@ -11942,9 +12179,17 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			body: h("div", { class: "pm-agents-quotas" }, ...blocks)
 		})];
 	}
+	function formatPercent(value) {
+		const digits = Math.abs(value) > 0 && Math.abs(value) < 10 ? 1 : 0;
+		return new Intl.NumberFormat(uiLocale(), {
+			minimumFractionDigits: digits,
+			maximumFractionDigits: digits
+		}).format(value) + "%";
+	}
 	function windowLabel(minutes) {
 		const value = finite(minutes);
 		if (value == null) return "";
+		if (value >= 1440 && value % 1440 === 0) return t("res_window_days", { days: value / 1440 });
 		if (value >= 60 && value % 60 === 0) return t("res_window_hours", { hours: value / 60 });
 		return t("res_window_short", { minutes: value });
 	}
@@ -11959,10 +12204,12 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function quotaBlock(pool, item) {
 		const used = item ? finite(item.used_percent) : null;
 		const confirmed = pool.status === "reported" && item && used != null;
+		const percent = confirmed ? formatPercent(used) : "";
+		const usedText = confirmed ? t("res_used") + " " + percent : "";
 		const bar = h("div", {
 			class: "pm-agents-used",
 			role: "img",
-			"aria-label": confirmed ? t("res_used") + " " + used + "%" : t("res_unconfirmed")
+			"aria-label": confirmed ? usedText : t("ui_status_unconfirmed")
 		}, h("span"));
 		if (confirmed) bar.querySelector("span").style.width = Math.max(0, Math.min(100, used)) + "%";
 		const windowText = windowLabel(item?.window_minutes);
@@ -11971,52 +12218,39 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			const at = item.resets_at * 1e3;
 			reset = t("res_resets_in", { when: at > Date.now() ? relativeFuture(at - Date.now()) : clock(new Date(at).toISOString()) });
 		}
+		const details = disclosure({
+			label: t("res_details"),
+			key: `agents-pool:${workspaceId}:${pool.pool_id || poolLabel(pool)}:${item?.window || "none"}`,
+			body: h("p", { class: "pm-agents-pool-id" }, h("code", { class: "mono" }, pool.pool_id || EM))
+		});
 		return h("article", {
 			class: "pm-agents-quota",
 			"data-resource-pool": pool.pool_id || ""
-		}, h("div", { class: "pm-agents-quota-head" }, h("div", {}, h("div", { class: "pm-agents-pool-name" }, poolLabel(pool)), windowText ? h("div", { class: "ui-meta" }, windowText) : null), confirmed ? h("div", { class: "tabular" }, t("res_used") + " " + used + "%") : h("span", { class: "ui-pill tone-neutral" }, t("res_unconfirmed"))), confirmed ? bar : null, reset ? h("div", { class: "ui-meta" }, reset) : null, disclosure({
-			label: t("res_details"),
-			key: `agents-pool:${workspaceId}:${pool.pool_id || poolLabel(pool)}`,
-			body: h("p", { class: "pm-agents-pool-id" }, h("code", { class: "mono" }, pool.pool_id || EM))
-		}));
+		}, h("div", { class: "pm-agents-quota-head" }, h("div", {}, h("div", { class: "pm-agents-pool-name" }, poolLabel(pool)), windowText ? h("div", { class: "ui-meta" }, windowText) : null), confirmed ? h("div", { class: "tabular" }, usedText) : statusPill("unconfirmed")), confirmed ? bar : null, reset ? h("div", { class: "ui-meta" }, reset) : null, details);
 	}
 	function choose(id) {
 		selected = id;
 		preference.selected = selected;
 		signature = currentSignature();
-		for (const node of layout.querySelectorAll(".pm-agents-list-row")) {
-			const on = node.getAttribute("data-resource-row") === id;
-			node.setAttribute("aria-selected", String(on));
-			node.tabIndex = on ? 0 : -1;
-		}
+		for (const node of layout.querySelectorAll(".pm-agents-list-row")) if (node.getAttribute("data-resource-row") === id) node.setAttribute("aria-current", "true");
+		else node.removeAttribute("aria-current");
 		renderInspector();
 	}
-	function listRow(row, index) {
+	function listRow(row) {
 		const readable = isReadable(row);
 		const cli = cliOf(row);
-		const on = row.source_id === selected;
-		const node = h("div", {
+		return h("button", {
+			type: "button",
 			class: "pm-agents-list-row",
 			role: "listitem",
-			tabindex: on || selected == null && index === 0 ? 0 : -1,
-			"aria-selected": String(Boolean(on)),
+			"aria-current": row.source_id === selected ? "true" : null,
 			"data-resource-row": row.source_id,
-			"data-resource-select": row.source_id
+			"data-resource-select": row.source_id,
+			onclick: () => choose(row.source_id)
 		}, h("div", { class: "pm-agents-list-mark" }, readable && cli ? agentMark(cli) : null), h("div", { class: "pm-agents-list-id" }, h("span", { class: "pm-agents-list-name" }, row.source_id), readable && cli ? h("span", { class: "pm-agents-list-cli" }, cliName(cli)) : null), h("div", {
 			class: "pm-agents-list-tokens tabular",
 			title: readable ? tokenTitle(row) : null
 		}, readable ? tokenHeadline(row) : EM), h("div", { class: "pm-agents-list-meta" }, readable ? `${modelName(row)} · ${roleLabel(row.role)}` : roleLabel(row.role)), h("div", { class: "pm-agents-list-status" }, statusNode(row)));
-		node.addEventListener("click", (event) => {
-			if (!event.target.closest("a, button, input, select")) choose(row.source_id);
-		});
-		node.addEventListener("keydown", (event) => {
-			if (event.target !== node) return;
-			if (event.key === "Enter" || event.key === " ") {
-				event.preventDefault();
-				choose(row.source_id);
-			}
-		});
-		return node;
 	}
 	function tableFor(visible) {
 		if (!data?.rows?.length) return emptyState({ title: t("res_empty") });
@@ -12073,53 +12307,99 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			]
 		});
 	}
-	function paint(visible) {
-		const focusId = document.activeElement?.closest?.("[data-resource-row]")?.getAttribute("data-resource-row") || "";
-		const scroller = main.querySelector(".ui-data-table");
-		if (scroller) preference.scroll = scroller.scrollLeft;
-		const kept = inspectorPanel;
-		const chart = usageChart({
+	function readableKey(rows) {
+		return (rows || []).filter(isReadable).map((row) => `${row.source_id}\u0000${row.status}`).sort().join("\n");
+	}
+	function filteredBuckets() {
+		if (!isBucketPayload(trendBuckets)) return null;
+		const readable = new Set((data?.rows || []).filter(isReadable).map((row) => row.source_id));
+		const series = trendBuckets.series.filter((item) => item && readable.has(item.source_id));
+		if (!series.length) return null;
+		return {
+			...trendBuckets,
+			series
+		};
+	}
+	function trendKey(buckets) {
+		const stacked = stackDailyBuckets(buckets, new Date(), data?.window);
+		if (!stacked) return "";
+		return JSON.stringify([stacked.tz, stacked.days.map((day) => [
+			day.date,
+			day.mark,
+			day.partial,
+			day.parts.map((part) => [part.cli, part.total])
+		])]);
+	}
+	function dropChart() {
+		const node = chartNode;
+		chartNode = null;
+		chartTrendKey = "";
+		node?.dispose?.();
+	}
+	function chartFor() {
+		const buckets = filteredBuckets();
+		const key = trendKey(buckets);
+		if (!key) {
+			dropChart();
+			return null;
+		}
+		if (chartNode && chartTrendKey === key && chartNode.isConnected) return chartNode;
+		dropChart();
+		chartNode = usageChart({
 			h,
 			t,
-			buckets: data.buckets,
+			buckets,
 			now: new Date(),
-			exactKey: `agents-exact:${workspaceId}`
+			exactKey: `agents-exact:${workspaceId}`,
+			window: data?.window,
+			formatDay
 		});
-		const current = (data.rows || []).filter((row) => row.status === "current").length;
+		chartTrendKey = key;
+		return chartNode;
+	}
+	function wantsTrend(now = new Date()) {
+		if (!bucketsSupported || bucketsStopped) return false;
+		if (!trendBuckets) return true;
+		if (readableKey(data?.rows) !== trendSourceKey) return true;
+		const today = dayKey(now, trendBuckets.tz || requestZone);
+		if (trendUntilDay && today > trendUntilDay) return true;
+		if (now.getTime() - trendReadAt >= TREND_TTL) return true;
+		return false;
+	}
+	function paint(visible) {
+		const activeEl = document.activeElement;
+		const focusKey = activeEl?.closest?.("[data-focus-key]")?.getAttribute("data-focus-key") || "";
+		const focusRow = activeEl?.closest?.("[data-resource-row]")?.getAttribute("data-resource-row") || "";
+		const scroller = main.querySelector(".ui-data-table");
+		if (scroller) preference.scroll = scroller.scrollLeft;
+		const chart = chartFor();
 		main.replaceChildren(...[
 			h("div", {
 				class: "pm-agents-metrics",
 				"data-resource-metrics": ""
-			}, tokenMetric(), metric({
-				label: t("res_sources"),
-				value: t("res_sources_value", {
-					current,
-					total: data.rows.length
-				})
-			}), resetMetric()),
+			}, tokenMetric(), sourcesMetric(), resetMetric()),
 			chart ? sectionCard({
 				title: t("res_trend"),
 				body: chart
 			}) : null,
+			filterSelect(),
 			tableFor(visible),
-			h("div", { "data-resource-quota": "" }, ...quotaNodes(visible)),
+			h("div", { "data-resource-quota": "" }, ...quotaNodes()),
 			disclosure({
 				label: t("res_coverage"),
 				key: `agents-scope:${workspaceId}`,
 				body: h("div", { class: "pm-agents-scope" }, coverageLine(data.coverage), h("p", {}, t("res_local")), h("p", {}, t("res_scope")), h("p", {}, t("res_setup")), h("p", {}, t("res_quota_scope")), h("p", {}, t("res_forecast")))
 			})
 		].filter(Boolean));
-		layout.replaceChildren(main);
-		if (kept && kept.dataset.source === selected) {
-			layout.append(kept);
-			fillInspector(data.rows.find((row) => row.source_id === selected));
-		} else {
-			if (kept) {
-				inspectorPanel = kept;
-				clearInspector();
-			}
-			renderInspector();
-		}
+		if (main.parentNode !== layout) layout.prepend(main);
+		const row = selected ? data.rows.find((item) => item.source_id === selected) : null;
+		if (row && inspectorPanel?.isConnected) {
+			inspectorPanel.dataset.source = row.source_id;
+			const title = inspectorPanel.querySelector("h2");
+			if (title) title.textContent = row.source_id;
+			fillInspector(row);
+		} else if (row) renderInspector();
+		else if (inspectorPanel) clearInspector();
 		const table = main.querySelector(".ui-data-table");
 		if (table) {
 			table.scrollLeft = preference.scroll || 0;
@@ -12127,8 +12407,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				preference.scroll = table.scrollLeft;
 			}, { passive: true });
 		}
-		if (focusId) layout.querySelector(`[data-resource-row="${cssEscape(focusId)}"]`)?.focus({ preventScroll: true });
-		syncFilterMenu();
+		if (focusKey) layout.querySelector(`[data-focus-key="${cssEscape(focusKey)}"]`)?.focus({ preventScroll: true });
+		else if (focusRow && document.activeElement === document.body) layout.querySelector(`[data-resource-row="${cssEscape(focusRow)}"]`)?.focus({ preventScroll: true });
 	}
 	function reasonBits(code) {
 		if (typeof code === "string" && Object.hasOwn(reasonLabels, code)) return {
@@ -12157,29 +12437,38 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		}, t("res_discuss")))];
 		if (isReadable(row)) {
 			const models = row.configurations || [];
+			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_model_col")));
 			nodes.push(...(models.length ? models : [{}]).map((item) => facts([
 				[t("res_actual"), item.actual_model || t("res_unknown")],
 				[t("res_requested"), item.requested_model || t("res_unknown")],
-				[t("res_effort"), item.effort || t("res_unknown")],
+				[t("res_effort"), effortLabel(item.effort)],
 				[t("res_version"), item.cli_version || t("res_unknown")]
 			])));
-			nodes.push(facts([
-				...tokenBreakdown(row),
+			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_tokens_col")), facts([
 				[t("res_tokens_col"), tokenHeadline(row)],
+				...tokenBreakdown(row),
 				[t("res_calls"), finite(row.calls) == null ? t("res_unknown") : finite(row.calls).toLocaleString()],
 				[t("res_observations"), finite(row.observations) == null ? t("res_unknown") : finite(row.observations).toLocaleString()]
 			]));
 		}
 		const reason = reasonBits(row.status);
-		nodes.push(disclosure({
+		const known = Boolean(STATUS_KEY[row.status]) || [
+			"stale",
+			"unknown",
+			"partial",
+			"unconfirmed"
+		].includes(row.status);
+		const details = disclosure({
 			label: t("res_details"),
 			key: `agents-coverage:${workspaceId}:${row.source_id}`,
 			body: h("div", { class: "pm-agents-scope" }, isReadable(row) ? h("p", {}, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")) : null, h("p", {}, t("res_adapter"), " ", h("code", { class: "mono" }, row.adapter || t("res_unknown"))), isReadable(row) ? facts([
 				[t("res_first"), clock(row.first_at) === EM ? t("res_unknown") : clock(row.first_at)],
 				[t("res_last"), clock(row.last_at) === EM ? t("res_unknown") : clock(row.last_at)],
 				[t("res_collected"), clock(row.successful_at) === EM ? t("res_unknown") : clock(row.successful_at)]
-			]) : null, h("p", {}, t("res_status"), " ", reason.text, reason.raw ? h("code", { class: "mono" }, reason.raw) : null), row.configurations_partial ? h("p", {}, t("res_configurations_more")) : null)
-		}));
+			]) : null, h("p", {}, t("res_status"), " ", statusText(row.status), !known && reason.raw ? h("code", { class: "mono" }, reason.raw) : null), row.configurations_partial ? h("p", {}, t("res_configurations_more")) : null)
+		});
+		details.querySelector("summary")?.setAttribute("data-focus-key", `agents-coverage:${workspaceId}:${row.source_id}`);
+		nodes.push(details);
 		inspectorPanel.body.replaceChildren(...nodes);
 	}
 	function renderInspector() {
@@ -12188,11 +12477,13 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			clearInspector();
 			return;
 		}
-		if (inspectorPanel?.isConnected && inspectorPanel.dataset.source === row.source_id) {
+		if (inspectorPanel?.isConnected) {
+			inspectorPanel.dataset.source = row.source_id;
+			const title = inspectorPanel.querySelector("h2");
+			if (title) title.textContent = row.source_id;
 			fillInspector(row);
 			return;
 		}
-		clearInspector();
 		const panel = inspector({
 			title: row.source_id,
 			onClose() {
@@ -12203,7 +12494,9 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				inspectorPanel = null;
 				signature = currentSignature();
 				const opener = stageRow(id);
-				if (opener) opener.setAttribute("aria-selected", "false");
+				if (opener?.getAttribute("role") === "listitem") opener.removeAttribute("aria-current");
+				else if (opener) opener.setAttribute("aria-selected", "false");
+				queueMicrotask(() => stageRow(id)?.focus());
 			}
 		});
 		panel.dataset.resourceDetail = "";
@@ -12213,7 +12506,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		layout.append(panel);
 	}
 	function stageRow(id) {
-		return layout.querySelector(`[data-resource-row="${cssEscape(id)}"]`);
+		return id ? layout.querySelector(`[data-resource-row="${cssEscape(id)}"]`) : null;
 	}
 	function clearInspector() {
 		if (!inspectorPanel) return;
@@ -12227,23 +12520,13 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const { checked_at, successful_at, as_of, ...rest } = row || {};
 		return rest;
 	}
-	function trendKey(buckets) {
-		const stacked = stackDailyBuckets(buckets, new Date());
-		if (!stacked) return "";
-		return JSON.stringify([stacked.tz, stacked.days.map((day) => [
-			day.date,
-			day.mark,
-			day.partial,
-			day.parts.map((part) => part.total)
-		])]);
-	}
 	function currentSignature(visible = visibleRows()) {
 		return JSON.stringify([
 			visible.map(stableRow),
 			selected,
 			filter,
 			period,
-			trendKey(data?.buckets),
+			trendKey(filteredBuckets()),
 			(data?.quota_pools || []).map((pool) => ({
 				...pool,
 				snapshot: pool.snapshot ? {
@@ -12266,14 +12549,39 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function schedule() {
 		clearTimeout(timer);
-		if (active && !paused) timer = setTimeout(() => void refresh({ trend: false }), Math.max(1e4, Number(data?.interval_s || 60) * 1e3));
+		if (active && !paused) timer = setTimeout(() => {
+			if (!active || paused || busy) return;
+			refresh({
+				user: false,
+				trend: wantsTrend()
+			});
+		}, Math.max(1e4, Number(data?.interval_s || 60) * 1e3));
 	}
-	function withdraw({ preserveSelection = false } = {}) {
-		serial++;
+	function rememberTrend(result, until, zoneUsed) {
+		if (!isBucketPayload(result?.buckets)) {
+			trendBuckets = null;
+			trendReadAt = 0;
+			trendSourceKey = "";
+			trendUntilDay = "";
+			return;
+		}
+		trendBuckets = result.buckets;
+		trendReadAt = Date.now();
+		trendSourceKey = readableKey(result.rows);
+		const untilMs = Date.parse(result.window?.until || until);
+		trendUntilDay = dayKey(new Date(Number.isFinite(untilMs) ? untilMs : Date.now()), result.buckets.tz || zoneUsed);
+	}
+	function withdraw({ preserveSelection = false, keepSerial = false } = {}) {
+		if (!keepSerial) serial++;
 		busy = false;
 		data = null;
 		signature = "";
 		trendBuckets = null;
+		trendReadAt = 0;
+		trendSourceKey = "";
+		trendUntilDay = "";
+		clearTimeout(timer);
+		dropChart();
 		if (!preserveSelection) selected = null;
 		clearInspector();
 		main.replaceChildren();
@@ -12291,41 +12599,59 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			scroll: scroller ? scroller.scrollLeft : preference.scroll || 0
 		});
 	}
-	async function refresh({ trend = false } = {}) {
-		if (!active) return;
+	async function refresh({ user = false, trend = false } = {}) {
+		if (!active || paused && !user) return;
+		if (!user && busy) return;
 		const ticket = ++serial;
 		busy = true;
+		clearTimeout(timer);
 		if (!data) main.replaceChildren(skeleton(4));
-		const until = new Date(), since = new Date(until.getTime() - Number(period) * 864e5);
-		const params = new URLSearchParams({
-			since: since.toISOString(),
-			until: until.toISOString()
-		});
-		let sentTz = "";
-		if (trend) {
-			params.set("buckets", "day");
-			sentTz = browserTimeZone();
-			params.set("tz", sentTz);
-		}
+		const until = new Date();
+		let zoneUsed = requestZone;
+		let asked = Boolean(trend) && bucketsSupported && !bucketsStopped;
+		let win = periodWindow(until, Number(period), zoneUsed);
 		const path = `/pm/workspaces/${encodeURIComponent(workspaceId)}/resources?`;
+		const query = (zone, withBuckets, range) => {
+			const params = new URLSearchParams({
+				since: range.since,
+				until: range.until
+			});
+			if (withBuckets) {
+				params.set("buckets", "day");
+				params.set("tz", zone);
+			}
+			return params.toString();
+		};
+		let follow = false;
 		try {
 			let result;
 			try {
-				result = await api("GET", path + params);
+				result = await api("GET", path + query(zoneUsed, asked, win));
 			} catch (error) {
-				if (!(trend && error?.status === 422 && error?.code === "INVALID_PARAMS" && sentTz !== "UTC")) throw error;
-				params.set("tz", "UTC");
-				result = await api("GET", path + params);
+				if (!(asked && error?.status === 422 && error?.code === "INVALID_PARAMS" && zoneUsed !== "UTC")) throw error;
+				zoneUsed = "UTC";
+				requestZone = "UTC";
+				win = periodWindow(until, Number(period), "UTC");
+				try {
+					result = await api("GET", path + query("UTC", true, win));
+				} catch (again) {
+					if (again?.status !== 422) throw again;
+					bucketsStopped = true;
+					asked = false;
+					result = await api("GET", path + query("UTC", false, win));
+				}
 			}
 			alive();
 			if (ticket !== serial) return;
 			if (result?.workspace_id !== workspaceId || !Array.isArray(result.rows) || !Array.isArray(result.quota_pools)) throw Error(t("pm_scope_mismatch"));
-			if (trend) trendBuckets = isBucketPayload(result.buckets) ? result.buckets : null;
+			const previousKey = trendSourceKey;
+			if (asked) rememberTrend(result, win.until, zoneUsed);
 			else if (trendBuckets) result = {
 				...result,
 				buckets: trendBuckets
 			};
 			data = result;
+			follow = !asked && bucketsSupported && !bucketsStopped && readableKey(result.rows) !== previousKey;
 			render();
 		} catch (error) {
 			try {
@@ -12334,13 +12660,17 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			} catch {
 				return;
 			}
-			withdraw();
+			withdraw({ keepSerial: true });
 			status.replaceChildren(errorBox(error));
+			follow = false;
 		} finally {
-			if (ticket === serial || !data) {
-				busy = false;
-				schedule();
-			}
+			if (ticket !== serial) return;
+			busy = false;
+			schedule();
+			if (follow && active && !paused) refresh({
+				user: false,
+				trend: true
+			});
 		}
 	}
 	return {
@@ -12348,12 +12678,21 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		refresh,
 		withdraw,
 		setActive(value) {
+			const opening = Boolean(value) && !active;
 			active = value;
 			clearTimeout(timer);
 			if (active) {
+				if (opening) {
+					bucketsStopped = false;
+					requestZone = browserTimeZone();
+				}
+				mountMeta();
 				if (data) updateMeta();
-				else mountMeta();
-				if (!busy) refresh({ trend: true });
+				if (paused) return;
+				if (!busy) refresh({
+					user: true,
+					trend: wantsTrend()
+				});
 			} else {
 				serial++;
 				busy = false;
@@ -12366,6 +12705,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			clearTimeout(timer);
 			listMedia.removeEventListener("change", onListChange);
 			meta.remove();
+			dropChart();
 			withdraw();
 		}
 	};
@@ -33039,7 +33379,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		alive,
 		namespace,
 		workspaceId,
-		errorBox
+		errorBox,
+		bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === "day"
 	}) : null;
 	if (resources) body.insertBefore(resources.element, content);
 	const drawersHome = h("div", { hidden: true });

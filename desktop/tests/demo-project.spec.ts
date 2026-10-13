@@ -268,7 +268,7 @@ for (const {locale, width} of cases) {
     await expect(agents.locator('[data-resource-row="codex-implementer"]')).toBeVisible();
     await expect(agents.locator('[data-resource-row="claude-reviewer"]')).toBeVisible();
     const unavailable = agents.locator('[data-resource-row="security-notes"]');
-    await expect(unavailable).toContainText(locale === 'zh-TW' ? '來源無法讀取' : 'Source unavailable');
+    await expect(unavailable).toContainText(locale === 'zh-TW' ? '無法取得' : 'Unavailable');
     await expect(unavailable).not.toContainText('100%');
     await expect(unavailable).not.toContainText('Codex');
     await expect(agents.locator('[data-resource-chart]')).toBeVisible();

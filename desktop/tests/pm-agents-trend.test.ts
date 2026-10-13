@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {isBucketPayload, stackDailyBuckets} from '../src/pm-agents-trend.js';
+import {isBucketPayload, niceCeiling, periodWindow, stackDailyBuckets} from '../src/pm-agents-trend.js';
 
 const now = new Date('2026-10-13T09:01:00.000Z');
 
@@ -54,4 +54,32 @@ test('input and output are not added back into the total', () => {
     {cli: 'codex', days: [{date: '2026-10-13', complete: true, tokens: {input: 100, output: 50, total: 150}}]},
   ]), now);
   assert.equal(stacked?.days[0].parts[0].total, 150);
+});
+
+test('a period starts at local midnight of today minus N plus one', () => {
+  const frozen = new Date('2026-10-13T09:00:00.000Z');
+  assert.equal(periodWindow(frozen, 7, 'Asia/Taipei').since, '2026-10-06T16:00:00.000Z');
+  assert.equal(periodWindow(frozen, 1, 'Asia/Taipei').since, '2026-10-12T16:00:00.000Z');
+  assert.equal(periodWindow(frozen, 30, 'Asia/Taipei').since, '2026-09-13T16:00:00.000Z');
+  assert.equal(periodWindow(frozen, 7, 'Asia/Taipei').until, frozen.toISOString());
+});
+
+test('a clipped open day is a partial day and only today is in progress', () => {
+  const frozen = new Date('2026-10-13T09:00:00.000Z');
+  const bounds = periodWindow(frozen, 7, 'Asia/Taipei');
+  const stacked = stackDailyBuckets(buckets([
+    {cli: 'codex', days: [day('2026-10-06', 10, false), day('2026-10-07', 10, true), day('2026-10-13', 10, false)]},
+  ], 'Asia/Taipei'), frozen, bounds);
+  assert.equal(stacked?.days[0].mark, 'partial_day');
+  assert.equal(stacked?.days[1].mark, '');
+  assert.equal(stacked?.days[2].mark, 'in_progress');
+});
+
+test('the y ceiling is one nice step above every magnitude', () => {
+  assert.equal(niceCeiling(600), 1000);
+  assert.equal(niceCeiling(1000), 2000);
+  assert.equal(niceCeiling(2000), 2500);
+  assert.equal(niceCeiling(2500), 5000);
+  assert.equal(niceCeiling(1234567), 2e6);
+  assert.equal(niceCeiling(25345678), 5e7);
 });

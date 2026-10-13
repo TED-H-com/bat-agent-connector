@@ -120,7 +120,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   throw new Error(`Unknown demo fixture route GET ${url.pathname}${url.search}`);
 }
 
-export function demoFixture({locale, now, discussions = false}: {locale?: string, now?: number, discussions?: boolean} = {}) {
+export function demoFixture({locale, now, discussions = false, buckets = true}: {locale?: string, now?: number, discussions?: boolean, buckets?: boolean} = {}) {
   const project = demoProject(locale, now);
   const root = `/pm/workspaces/${project.ids.workspaceId}`;
   const dispatch = async (input: DemoRequest) => {
@@ -131,8 +131,8 @@ export function demoFixture({locale, now, discussions = false}: {locale?: string
     // Web boot probes a managed browser session. This demo uses the bearer token, so the
     // central answer is the ordinary missing-route 404 (no csrf, no managed session).
     if (path === '/browser-session') return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'no such route'}}};
-    if (path === '/capabilities') return ok(capabilities(project));
-    if (path === '/bootstrap') return ok(bootstrap(project));
+    if (path === '/capabilities') return ok(capabilities(project, buckets));
+    if (path === '/bootstrap') return ok(bootstrap(project, buckets));
     if (path === '/events') return ok(events(url));
     if (path === '/projects') return ok(projectList(project));
     if (path === `/projects/${project.ids.projectId}`) return ok(projectDetail(project));

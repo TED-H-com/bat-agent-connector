@@ -431,7 +431,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = workspaceId && !threadId && caps()?.features?.pm_resources
-    ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox}) : null;
+    ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox, bucketsSupported: caps()?.features?.pm_resources?.buckets?.granularity === 'day'}) : null;
   if (resources) body.insertBefore(resources.element, content);
   const drawersHome = h('div', {hidden: true});
   body.append(drawersHome);

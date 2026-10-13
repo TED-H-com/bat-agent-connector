@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
+import {periodWindow} from '../src/pm-agents-trend.js';
 import {workbenchFixture,route,workspaceId} from './pm-workbench-fixture.ts';
 
 function fixture(){
@@ -33,18 +34,19 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
     await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Not provided');
     await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
     await expect(resources(page).locator('[data-resource-chart]')).toHaveCount(0);
-    expect(f.state.reads[0]).toContain('buckets=day'); expect(f.state.reads[0]).toContain('tz=');
-    await resources(page).getByRole('button',{name:'All sources',exact:true}).click();
-    await resources(page).getByRole('menuitem',{name:'Role · reviewer',exact:true}).click();
+    expect(f.state.reads[0]).not.toContain('buckets='); expect(f.state.reads[0]).not.toContain('tz=');
+    await resources(page).locator('[data-resource-filter]').selectOption({label:'Role · reviewer'});
     await expect(resources(page).locator('[data-resource-row]')).toHaveCount(1);
-    await expect(resources(page).locator('[data-resource-quota]')).not.toContainText('25%');
+    await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
+    await expect(resources(page).locator('[data-resource-metrics]')).toContainText('1,650');
     const before=f.state.reads.length;
     await resources(page).getByRole('radio',{name:'30d',exact:true}).click();
     await expect.poll(()=>f.state.reads.length).toBe(before+1);
     expect(f.state.reads.at(-1)).toContain('since=');
-    expect(f.state.reads.at(-1)).toContain('buckets=day'); expect(f.state.reads.at(-1)).toContain('tz=');
+    expect(f.state.reads.at(-1)).not.toContain('buckets='); expect(f.state.reads.at(-1)).not.toContain('tz=');
     const last=new URL(f.state.reads.at(-1)||'','http://fixture');
-    expect(Date.parse(last.searchParams.get('until')||'')-Date.parse(last.searchParams.get('since')||'')).toBe(30*86400000);
+    const zone=await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(last.searchParams.get('since')).toBe(periodWindow(new Date(last.searchParams.get('until')||''),30,zone).since);
   });
   test('source withdrawal removes details, quota and counts',async({page})=>{
     const f=fixture();await open(page,native,f);await resources(page).locator('[data-resource-row="Implementation"]').click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
