@@ -235,6 +235,7 @@ class Projection:
             WHERE r.workspace_id=? AND json_extract(v.document,'$.status')!='reported_resolved'
             ORDER BY r.sequence LIMIT ?""", lambda r: pm_governance._view(self.ops, self.principal, self.wid, r['record_id']))
         blocked = set()
+        requirements = {r['id'] for r in plan['document']['requirements']} if plan else None
         for entry in entries:
             if not self.visible(entry, 'governance'):
                 continue
@@ -248,8 +249,15 @@ class Projection:
             if kind is None:
                 continue
             context = {'requirement_ids': doc['affected_requirement_ids'], 'revision_id': row['context']['plan_revision_id']}
-            if kind == 'blocker' and plan and context['revision_id'] == plan['revision_id']:
-                blocked.update(doc['affected_requirement_ids'])
+            if kind == 'blocker':
+                # A new adopted revision does not resolve a finding. Match only
+                # its explicit stable IDs, preserving the original plan context.
+                context.update(current_revision_id=plan['revision_id'] if plan else None,
+                    blocked_requirement_ids=[rid for rid in context['requirement_ids'] if rid in requirements]
+                        if requirements is not None else None,
+                    absent_requirement_ids=[rid for rid in context['requirement_ids'] if rid not in requirements]
+                        if requirements is not None else None)
+                blocked.update(context['blocked_requirement_ids'] or [])
             self.add(kind, doc['title'], {'kind': 'governance', 'id': row['record_id']}, row['created_at'],
                 severity='high' if kind == 'blocker' else 'medium', context=context)
         return blocked

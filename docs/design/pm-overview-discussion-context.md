@@ -42,7 +42,7 @@ Goal 的唯一取值規則：按已採用文件 `selected_inputs` 的原順序�
 
 進度分母僅是已採用版本的 distinct requirements。每條需求只進一類，優先順序為：
 
-1. 同一 plan 的未解決 issue／dependency 治理紀錄明確列為受影響需求 → blocked。
+1. 可見的未解決 issue／dependency 明確列出的受影響 ID 仍存在於目前採用計畫 → blocked；不要求來源 revision 與目前 revision 相同。
 2. 同一 binding／scope 的目前 qualified quality review 涵蓋每個原 acceptance input → accepted。
 3. 有該需求的品質審閱或 work 為 done → in_review。
 4. 明確相連的 work 為 doing／waiting → in_progress。
@@ -51,6 +51,16 @@ Goal 的唯一取值規則：按已採用文件 `selected_inputs` 的原順序�
 `complete` 表示分類來源掃描完整，**不是專案已完成**。工作／治理／品質來源不完整時，
 分母仍可來自完整採用文件，但所有分類數為 null。Management approval、session 結束、
 CI 成功、merge 或 deploy 都不能單獨建立 requirement acceptance。
+
+採用新版不會自動解決原 issue／dependency。Blocker attention 的 `context.requirement_ids` 保留原受影響
+ID、`context.revision_id` 保留最初記錄的計畫版本；另外提供 `current_revision_id`、
+`blocked_requirement_ids`（仍在目前採用計畫的受影響 ID）與 `absent_requirement_ids`（目前計畫已無此 ID）。
+兩組保留原 ID 順序，合起來涵蓋原受影響 ID，不從文字或新名稱推測替代需求。
+無可讀採用計畫時，三個目前關係欄位皆為 null，不能把未知當成全部已移除。
+Blockers 的數字計算未解決紀錄；progress.blocked 計算目前需求的 distinct ID，因此多個紀錄可阻擋同一需求。
+例如 N 記錄的 issue 影響 login／recovery，N+1 保留兩個 ID 時，原 blocker 仍計為一筆，兩條需求皆 blocked；
+N+1 移除 recovery 時，仍有一筆 blocker、login 為 blocked，recovery 明列於 absent_requirement_ids，不進目前分母。
+全部受影響需求已移除時，未解決紀錄仍須處理，row 與 count 保留、blocked_requirement_ids 為空，progress 不新增不存在的需求。
 
 Attention 只使用明確中央關係：未決 change、仍可採用的 conversation proposal（plan head 與討論內容未變）、
 較新的 plan head、生命週期尚未核對的操作、未解決（含 monitoring）的 issue／dependency、risk／assumption、

@@ -1652,6 +1652,14 @@ were omitted to respect the whole document's lineage bound. Reference trimming i
 reported in coverage.sources.attention_references, independently of source scan
 completeness and progress/counts; inspect it before describing displayed deliveries.
 Source cursors belong to existing source-list tools, not to the overview call.
+Unresolved issue/dependency blockers follow their explicitly affected stable IDs
+into the current adopted plan. Their context.revision_id remains the recorded
+revision; current_revision_id identifies the comparison plan. Inspect
+blocked_requirement_ids and absent_requirement_ids together: removed requirements
+stay explicit in the row but never enter current progress. Those three current
+relation fields are null when no accepted plan is readable. Blocker counts count
+records; progress.blocked counts distinct current requirements. Adoption alone
+does not resolve a finding or discard its original context.
 The adopted goal uses the first selected, user_confirmed/repo_evidence input whose
 slot is exactly value, goal, problem or governance.goal. Conversation adoption
 records the reviewed governance goal as governance.goal; preserve its attribution.
