@@ -232,6 +232,7 @@ class Inventory:
                 self.parsed[path] = value
             except (ValueError, TypeError, RecursionError):
                 row.update(status="unparsable", reason="unsupported_or_invalid_format")
+        self.catalog = {path: self.parsed.get(path) for path in self.contents}
         for path, value in list(self.parsed.items()):
             name = posixpath.basename(path)
             ecosystem = {"pyproject.toml": "python", "package.json": "npm", "Cargo.toml": "cargo", "go.mod": "go"}.get(name)
@@ -290,7 +291,7 @@ class Inventory:
     def resolution(self, component, name):
         eco, manifest = component["ecosystem"], component["manifest_path"]
         lockname = {"python": "uv.lock", "npm": "package-lock.json", "cargo": "Cargo.lock", "go": "go.sum"}[eco]
-        path, lock = _nearest(manifest, lockname, self.parsed)
+        path, lock = _nearest(manifest, lockname, self.catalog)
         if lock is None:
             return None, None, []
         try:
@@ -490,8 +491,8 @@ class Inventory:
             eco = c["ecosystem"]
             names = {"python": [".python-version", ".tool-versions"], "npm": [".nvmrc", ".tool-versions"], "cargo": ["rust-toolchain", "rust-toolchain.toml", ".tool-versions"], "go": [".tool-versions"]}[eco]
             for name in names:
-                path, value = _nearest(c["manifest_path"], name, self.parsed)
-                if path is None:
+                path, value = _nearest(c["manifest_path"], name, self.catalog)
+                if path is None or value is None:
                     continue
                 try:
                     tool = {"python": "python", "npm": "node", "cargo": "rust", "go": "go"}[eco]

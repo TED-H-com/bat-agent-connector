@@ -125,3 +125,11 @@ def test_unversioned_workflow_tool_is_null_with_a_reason():
     edge = next(e for e in result["edges"] if e["basis"] == "workflow_step")
     assert edge["version"] is None and edge["version_reason"] == "not_declared"
     assert edge["resolved"] is None and edge["resolution_reason"] == "not_lockfile_dependency"
+
+
+def test_unreadable_nearest_lock_does_not_borrow_an_ancestor_resolution():
+    result = inventory({"package-lock.json": json.dumps({"lockfileVersion": 3, "packages": {"node_modules/lib": {"version": "1.0.0"}}}),
+        "app/package.json": '{"name":"app","dependencies":{"lib":"^2"}}', "app/package-lock.json": '{invalid'})
+    assert result["edges"][0]["resolved"] is None
+    assert result["edges"][0]["evidence_level"] == "declared"
+    assert next(f for f in result["files"] if f["path"] == "app/package-lock.json")["status"] == "unparsable"

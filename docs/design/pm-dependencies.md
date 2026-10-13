@@ -20,7 +20,8 @@ Git blob SHA-1、大小及 SHA-256 在中央重驗。最後一次 guard 到 jour
 
 每檔保留 `path/blob_sha/size/sha256/status/reason`。`status` 為 `read`、`missing`、
 `too_large`、`unparsable`；不存在的值為 null。對已發現 manifest 補列缺少的慣用 lockfile；
-上層已有 lockfile 時沿用上層。超量、非 UTF-8、symlink、格式／結構不支援都不能當成空檔。
+同層沒有 lockfile 時可沿用上層；同層檔案存在但無法讀取或解析時，不跳過它借用上層版本。
+超量、非 UTF-8、symlink、格式／結構不支援都不能當成空檔。
 解析使用 Python stdlib，Python 3.10 沿用既有 tomli；不新增相依套件。
 
 ## 操作契約
