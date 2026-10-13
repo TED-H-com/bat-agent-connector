@@ -306,15 +306,15 @@ class Projection:
             FROM pm_conversation_proposals p JOIN pm_runs r USING(run_id)
             JOIN pm_threads t ON t.thread_id=p.thread_id
             LEFT JOIN pm_plan_heads h ON h.workspace_id=p.workspace_id
-            LEFT JOIN pm_thread_content_heads c ON c.thread_id=p.thread_id
             WHERE p.workspace_id=? AND json_extract(p.validation,'$.status')='format_valid'
             AND COALESCE(h.version,0)=json_extract(r.context,'$.plan_head.version')
             AND h.latest_revision_id IS json_extract(r.context,'$.plan_head.latest_revision_id')
             AND h.accepted_revision_id IS json_extract(r.context,'$.plan_head.accepted_revision_id')
-            AND COALESCE(c.version,(SELECT json_extract(a.result,'$.version') FROM pm_discussion_applied a
+            AND t.version-json_extract(r.context,'$.thread_version')=(
+                SELECT COUNT(DISTINCT json_extract(a.result,'$.version')) FROM pm_discussion_applied a
                 JOIN operations o USING(operation_id) WHERE json_extract(a.result,'$.thread_id')=t.thread_id
-                AND o.action!='pm.thread.rename' ORDER BY json_extract(a.result,'$.version') DESC LIMIT 1),t.version)
-                <=json_extract(r.context,'$.thread_version')
+                AND json_extract(a.result,'$.version')>json_extract(r.context,'$.thread_version')
+                AND json_extract(a.result,'$.version')<=t.version AND o.action='pm.thread.rename')
             ORDER BY p.sequence LIMIT ?""", decode)
         for row in rows:
             self.add('decision', row['document']['title'], {'kind': 'proposal', 'id': row['proposal_id']}, row['created_at'])

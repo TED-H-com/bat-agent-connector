@@ -133,18 +133,20 @@ async def test_hidden_large_issue_mapping_checks_access_before_size(mapped):
 
     from bat_agent_connector import pm_issue_mappings
     w, ops = mapped, mapped['d'].ops
-    task, evidence = await issues.add_task_evidence(w)
-    w['package'] = issues.read(w, await issues.create(w, previous=w['package']['package_id'], evidence_refs=[evidence]))
     published = await issues.publish(w)
+    task, evidence = await issues.add_task_evidence(w)
+    hidden_package = issues.read(w, await issues.create(w, previous=w['package']['package_id'], evidence_refs=[evidence]))
     mid = published['result']['mapping_id']
     original = dict(ops.db.execute('SELECT * FROM pm_issue_revisions WHERE mapping_id=?', (mid,)).fetchone())
     previous = original['revision_id']
     # Historical immutable rows, each with its own explicit identity and digest.
-    for _ in range(100):
+    for index in range(119):
         row = {**original, 'revision_id': 'pmir_' + uuid.uuid4().hex,
             'operation_id': 'op_' + uuid.uuid4().hex, 'previous_revision_id': previous}
         row.pop('sequence')
         doc = {**json.loads(row['document']), **{k: row[k] for k in ('revision_id', 'operation_id', 'previous_revision_id')}}
+        if index == 118:
+            doc['package_ref'] = {key: hidden_package[key] for key in ('workspace_id', 'package_id', 'document_digest')}
         row.update(document=json.dumps(doc), document_digest=pm_issue_mappings.packages._digest(doc))
         ops.db.execute(f"INSERT INTO pm_issue_revisions ({','.join(row)}) VALUES ({','.join('?' for _ in row)})", list(row.values()))
         previous = row['revision_id']

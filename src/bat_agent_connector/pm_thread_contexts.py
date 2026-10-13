@@ -173,8 +173,12 @@ def resolve(ops, principal, wid, ref):
     elif kind == 'issue_mapping':
         from . import pm_issue_mappings
         _table(ops, 'pm_issue_revisions')
-        # The neighbouring historical reader has no page parameter. Cap its input.
-        access_rows = ops.db.execute('SELECT document FROM pm_issue_revisions WHERE workspace_id=? AND mapping_id=? ORDER BY sequence LIMIT 101', (wid, identity)).fetchall()
+        # Authorize the entire bounded domain history before disclosing the
+        # smaller context limit, including hidden sources after revision 100.
+        access_rows = ops.db.execute('SELECT document FROM pm_issue_revisions WHERE workspace_id=? AND mapping_id=? ORDER BY sequence LIMIT ?',
+            (wid, identity, pm_issue_mappings.MAX_REVISIONS + 1)).fetchall()
+        if len(access_rows) > pm_issue_mappings.MAX_REVISIONS:
+            raise unavailable()
         pm_issue_mappings._access(ops, principal, wid, [{'document': json.loads(row[0])} for row in access_rows])
         if len(access_rows) > 100:
             raise OperationError('PM_CONTEXT_TOO_LARGE', 'Context history exceeds its bound / 討論來源歷程超出上限', 413)

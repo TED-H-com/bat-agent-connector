@@ -282,16 +282,13 @@ def test_removed_commitments_require_explicit_original_ids_and_cycles_are_reject
     assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "needs_review"
 
 
-@pytest.mark.parametrize('legacy', [False, True])
-async def test_title_only_rename_preserves_proposal_adoption(proposal_world, legacy):
+@pytest.mark.parametrize('renames', [1, 105])
+async def test_title_only_rename_preserves_proposal_adoption(proposal_world, renames):
     from bat_agent_connector import pm_overview
     w, ops = proposal_world, proposal_world['d'].ops
     proposal = await proposed(w)
     ref = {'kind': 'proposal', 'id': proposal['proposal_id']}
-    if legacy:
-        # Pre-upgrade journals have applied history but no content-head row.
-        ops.db.execute('DELETE FROM pm_thread_content_heads WHERE thread_id=?', (proposal['thread_id'],))
-    for index in range(105 if legacy else 1):
+    for index in range(renames):
         await plans.act(w, 'pm.thread.rename', {'title': f'Owner discussion title / 討論名稱 {index}'})
     assert any(a['ref'] == ref for a in pm_overview.read(ops, OWNER, w['workspace_id'])['attention'])
     done = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
@@ -364,3 +361,19 @@ async def test_bound_plan_source_reference_uses_revision_operation(proposal_worl
     assert context['source_references']['context.0']['operation_id'] == primary
     assert primary in context['source_operation_ids']
     await complete(w, op)
+
+
+async def test_runtime_imported_message_invalidates_pending_proposal(proposal_world):
+    from bat_agent_connector import pm_overview
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    analysis = native.request(ops, plans.target(w), params={'purpose': 'Analyze the latest conversation'},
+        version=plans.version(w), who=OWNER)
+    done = await complete(w, analysis)
+    assert done['status'] == 'succeeded', done
+    assert done['result']['outcome']['message_id']
+    await plans.act(w, 'pm.thread.rename', {'title': 'Analysis discussion / 分析討論'})
+    with pytest.raises(OperationError, match='VERSION_CONFLICT'):
+        ops.create(OWNER, **adoption_request(w, proposal))
+    out = pm_overview.read(ops, OWNER, w['workspace_id'])
+    assert not any(a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']} for a in out['attention'])
