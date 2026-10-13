@@ -396,6 +396,15 @@ var reasonLabels = Object.freeze({
 	not_applicable: ["Not applicable", "不適用"],
 	not_recorded: ["Not recorded", "尚無紀錄"],
 	no_roadmap_baseline: ["No milestone baseline", "尚無里程碑基準"],
+	quality_revoked: ["Acceptance revoked", "驗收已撤回"],
+	forecast_later_than_baseline: ["Later than baseline", "晚於基準日"],
+	lifecycle_inflight: ["Pending operations", "待核對操作"],
+	missing: ["Not recorded", "尚無紀錄"],
+	context_changed: ["Context changed", "來源已變動"],
+	stale: ["Stale", "過期"],
+	stopped: ["Stopped", "已停止"],
+	disabled: ["Disabled", "已停用"],
+	incomplete: ["Sources incomplete", "來源不完整"],
 	not_assessed: ["Not assessed", "未評估"],
 	unknown: ["Unknown", "未知"]
 });
@@ -10806,7 +10815,7 @@ function charterSections(snapshot) {
 function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const preference = viewState(namespace, workspaceId, "overview");
-	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
+	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
 	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
@@ -10992,6 +11001,24 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		history = append ? [...history, ...data.snapshots] : data.snapshots;
 		cursor = data.next_cursor ?? null;
 	}
+	async function readHistory(ticket) {
+		const pages = [];
+		let after = 0;
+		for (let i = 0; i < historyPages; i++) {
+			const page = await api("GET", `${endpoint}/snapshots?${after ? `after=${after}&` : ""}limit=100`);
+			alive();
+			if (ticket !== serial) return null;
+			check(page);
+			if (page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= after)) throw Error(t("pm_scope_mismatch"));
+			pages.push({
+				page,
+				after
+			});
+			if (page.next_cursor == null) break;
+			after = page.next_cursor;
+		}
+		return pages;
+	}
 	async function refresh(id = null) {
 		if (id) onChange(null, "selected");
 		const chosen = id || selectedId, ticket = ++serial;
@@ -11005,9 +11032,9 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		]);
 		comparison.replaceChildren();
 		try {
-			const [data, page, current] = await Promise.all([
+			const [data, pages, current] = await Promise.all([
 				api("GET", `${endpoint}/snapshots/${chosen || "latest"}`),
-				api("GET", `${endpoint}/snapshots?limit=100`),
+				readHistory(ticket),
 				api("GET", `${endpoint}/plans/head`)
 			]);
 			alive();
@@ -11015,7 +11042,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			if (current.head?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 			snapshot = checkedSnapshot(data, chosen);
 			head = current.head;
-			acceptHistory(page, 0);
+			pages.forEach(({ page, after }, index) => acceptHistory(page, after, index > 0));
 			selectedId = snapshot?.snapshot_id || null;
 			preference.snapshotId = selectedId;
 			if (!chosen) latestId = selectedId;
@@ -11081,6 +11108,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			alive();
 			if (ticket !== serial) return;
 			acceptHistory(page, after, true);
+			historyPages++;
 			if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
 			historyOptions();
 		} catch (error) {
@@ -11249,9 +11277,9 @@ function workspaceOverview(options) {
 	const { h, t, api, alive, namespace, workspaceId, onOpen = () => {}, onHeader = () => {} } = options;
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const preference = viewState(namespace, workspaceId, "overview");
-	let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false;
+	let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
 	const parts = new Map(), attentionNodes = new Map();
-	let attentionCard = null, attentionList = null, readerDocument = null;
+	let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
 	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false;
 	const primary = h("a", {
 		class: "ui-button primary",
@@ -11548,6 +11576,32 @@ function workspaceOverview(options) {
 		reader?.close();
 		reader = null;
 		readerDocument = null;
+		relatedSelection = null;
+	}
+	function openRelated(row, host) {
+		closeReader();
+		relatedSelection = row;
+		reader = inspector({
+			title: row.title,
+			onClose: () => {
+				reader = null;
+				relatedSelection = null;
+			}
+		});
+		reader.classList.add("pm-overview-related");
+		reader.dataset.overviewRelated = row.key;
+		reader.body.append(h("section", {
+			"data-overview-related-row": row.key,
+			"aria-current": "true"
+		}, h("p", {}, t("ov_" + row.kind)), h("p", {}, contextText(row)), row.delta_days > 0 ? h("p", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null, discuss(row), disclosure({
+			label: t("ov_details"),
+			body: h("div", {}, row.reason ? h("p", {}, reasonLabel(t, row.reason)) : null, h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+				ref: row.ref,
+				since: row.since,
+				context: row.context
+			}, null, 2)))
+		})));
+		host.append(reader);
 	}
 	function fullPlan(document) {
 		closeReader();
@@ -11739,7 +11793,7 @@ function workspaceOverview(options) {
 		})) };
 		const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute("data-overview-open") || document.activeElement?.getAttribute("data-overview-row-discuss") : null;
 		const discussFocused = document.activeElement?.hasAttribute("data-overview-row-discuss");
-		if (reader && readerDocument !== JSON.stringify(plan?.document)) closeReader();
+		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
 		const main = attention(projection);
 		commitParts([
 			{
@@ -11835,6 +11889,13 @@ function workspaceOverview(options) {
 		status.replaceChildren();
 		header();
 	}
+	function prepareReports() {
+		reportsLoaded = true;
+		if (!reportRead) reportRead = reports.refresh().finally(() => {
+			reportRead = null;
+		});
+		return reportRead;
+	}
 	return {
 		box,
 		primary,
@@ -11842,9 +11903,10 @@ function workspaceOverview(options) {
 		reportTools,
 		refresh,
 		withdraw,
-		prepareReports: async () => {
-			reportsLoaded = true;
-			await reports.refresh();
+		prepareReports,
+		openRelated,
+		closeRelated: () => {
+			if (relatedSelection) closeReader();
 		},
 		reportActions: {
 			compare: () => {
@@ -26600,19 +26662,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		},
 		onOpen: async (ref, row) => {
 			if (!ref) return;
-			const destination = ["requirement", "work_item"].includes(ref.kind) ? "requirements" : ref.kind === "milestone" ? "schedule" : "issues";
+			const destination = ["requirement", "work_item"].includes(ref.kind) ? "requirements" : ref.kind === "milestone" && !row.kind ? "schedule" : "issues";
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`;
 			workbench?.select(destination);
 			if (destination === "requirements") await traceability?.openRef?.(ref);
 			else if (ref.kind === "governance") await governance?.openRef?.(ref);
-			else if (ref.kind === "milestone") {
+			else if (ref.kind === "milestone" && destination === "schedule") {
 				const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
 				if (node) {
 					node.tabIndex = -1;
 					node.focus();
 					node.scrollIntoView({ block: "nearest" });
 				}
-			}
+			} else brief?.openRelated?.(row, main);
 		},
 		onDiscuss: () => {
 			location.hash = `#/pm/${workspaceId}/discussions`;
@@ -27134,6 +27196,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			view,
 			groups,
 			onSelect: (id) => {
+				if (id !== "issues") brief?.closeRelated?.();
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
 				brief?.setActive?.(id === "overview");

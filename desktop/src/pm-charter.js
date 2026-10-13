@@ -21,7 +21,7 @@ export function charterSections(snapshot) {
 export function workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {}}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const preference = viewState(namespace, workspaceId, 'overview');
-  let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
+  let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
   const status = h('div', {role: 'status'}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
@@ -116,16 +116,28 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     if (data.next_cursor != null && data.next_cursor < last) throw Error(t('pm_scope_mismatch'));
     history = append ? [...history, ...data.snapshots] : data.snapshots; cursor = data.next_cursor ?? null;
   }
+  async function readHistory(ticket) {
+    const pages = []; let after = 0;
+    for (let i = 0; i < historyPages; i++) {
+      const page = await api('GET', `${endpoint}/snapshots?${after ? `after=${after}&` : ''}limit=100`);
+      alive(); if (ticket !== serial) return null;
+      check(page);
+      if (page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= after)) throw Error(t('pm_scope_mismatch'));
+      pages.push({page, after}); if (page.next_cursor == null) break; after = page.next_cursor;
+    }
+    return pages;
+  }
   async function refresh(id = null) {
     if (id) onChange(null, 'selected');
     const chosen = id || selectedId, ticket = ++serial; busy = true; head = null; controls();
     const previous = JSON.stringify([snapshot, latestId, cursor]); comparison.replaceChildren();
     try {
-      const [data, page, current] = await Promise.all([api('GET', `${endpoint}/snapshots/${chosen || 'latest'}`),
-        api('GET', `${endpoint}/snapshots?limit=100`), api('GET', `${endpoint}/plans/head`)]);
+      const [data, pages, current] = await Promise.all([api('GET', `${endpoint}/snapshots/${chosen || 'latest'}`),
+        readHistory(ticket), api('GET', `${endpoint}/plans/head`)]);
       alive(); if (ticket !== serial) return;
       if (current.head?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
-      snapshot = checkedSnapshot(data, chosen); head = current.head; acceptHistory(page, 0);
+      snapshot = checkedSnapshot(data, chosen); head = current.head;
+      pages.forEach(({page, after}, index) => acceptHistory(page, after, index > 0));
       selectedId = snapshot?.snapshot_id || null;
       preference.snapshotId = selectedId;
       if (!chosen) latestId = selectedId;
@@ -147,7 +159,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     if (busy || cursor === null) return;
     const ticket = ++serial, after = cursor; busy = true; controls();
     try {const page = await api('GET', `${endpoint}/snapshots?after=${after}&limit=100`); alive(); if (ticket !== serial) return;
-      acceptHistory(page, after, true); if (cursor === null && history.length) latestId = history.at(-1).snapshot_id; historyOptions();
+      acceptHistory(page, after, true); historyPages++; if (cursor === null && history.length) latestId = history.at(-1).snapshot_id; historyOptions();
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   async function comparePrevious() {

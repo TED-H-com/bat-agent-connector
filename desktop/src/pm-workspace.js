@@ -277,14 +277,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         if (active) {phasePill.hidden = !phase; phasePill.textContent = phase || ''; }},
       onOpen: async (ref, row) => {
         if (!ref) return;
-        const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' ? 'schedule' : 'issues';
+        const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' && !row.kind ? 'schedule' : 'issues';
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
         else if (ref.kind === 'governance') await governance?.openRef?.(ref);
-        else if (ref.kind === 'milestone') {
+        else if (ref.kind === 'milestone' && destination === 'schedule') {
           const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
-        }
+        } else brief?.openRelated?.(row, main);
       },
       onDiscuss: () => {location.hash = `#/pm/${workspaceId}/discussions`; workbench?.select('discussions'); content.querySelector('input')?.focus();}})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
@@ -429,6 +429,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       groups.push({id, sections: [region]});
     }
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
+      if (id !== 'issues') brief?.closeRelated?.();
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents');
       brief?.setActive?.(id === 'overview');
       if (id !== 'overview' || !liveOverview) window.scrollTo(0, 0);

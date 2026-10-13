@@ -65,6 +65,9 @@ export const reasonLabels = Object.freeze({
   source_unavailable: ['Source unavailable', '無法取得來源'], unavailable: ['Not available', '無法取得'],
   not_configured: ['Not configured', '尚未設定'], not_applicable: ['Not applicable', '不適用'],
   not_recorded: ['Not recorded', '尚無紀錄'], no_roadmap_baseline: ['No milestone baseline', '尚無里程碑基準'],
+  quality_revoked: ['Acceptance revoked', '驗收已撤回'], forecast_later_than_baseline: ['Later than baseline', '晚於基準日'], lifecycle_inflight: ['Pending operations', '待核對操作'],
+  missing: ['Not recorded', '尚無紀錄'], context_changed: ['Context changed', '來源已變動'], stale: ['Stale', '過期'],
+  stopped: ['Stopped', '已停止'], disabled: ['Disabled', '已停用'], incomplete: ['Sources incomplete', '來源不完整'],
   not_assessed: ['Not assessed', '未評估'], unknown: ['Unknown', '未知'],
 });
 for (const [reason, labels] of Object.entries(reasonLabels)) {

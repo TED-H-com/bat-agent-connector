@@ -16,9 +16,9 @@ export function workspaceOverview(options) {
   const {h, t, api, alive, namespace, workspaceId, onOpen = () => {}, onHeader = () => {}} = options;
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const preference = viewState(namespace, workspaceId, 'overview');
-  let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false;
+  let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
   const parts = new Map(), attentionNodes = new Map();
-  let attentionCard = null, attentionList = null, readerDocument = null;
+  let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
   let mode = preference.mode === 'saved' ? 'saved' : 'live', signature = '', loading = false;
   const primary = h('a', {class: 'ui-button primary', 'data-overview-discuss': ''}, t('wb_discuss'));
   const meta = h('span', {'data-overview-meta': ''});
@@ -153,7 +153,18 @@ export function workspaceOverview(options) {
       !data.recent_deliveries.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null)});
     return h('div', {class: 'pm-overview-side'}, milestones, deliveries);
   }
-  function closeReader() {reader?.close(); reader = null; readerDocument = null;}
+  function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
+  function openRelated(row, host) {
+    closeReader(); relatedSelection = row;
+    reader = inspector({title: row.title, onClose: () => {reader = null; relatedSelection = null;}});
+    reader.classList.add('pm-overview-related'); reader.dataset.overviewRelated = row.key;
+    reader.body.append(h('section', {'data-overview-related-row': row.key, 'aria-current': 'true'},
+      h('p', {}, t('ov_' + row.kind)), h('p', {}, contextText(row)),
+      row.delta_days > 0 ? h('p', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null,
+      discuss(row), disclosure({label: t('ov_details'), body: h('div', {}, row.reason ? h('p', {}, reasonLabel(t, row.reason)) : null,
+        h('pre', {class: 'pm-brief-proof'}, JSON.stringify({ref: row.ref, since: row.since, context: row.context}, null, 2)))})));
+    host.append(reader);
+  }
   function fullPlan(document) {
     closeReader(); reader = inspector({title: t('ov_plan'), onClose: () => {reader = null;}});
     reader.dataset.overviewPlan = ''; readerDocument = JSON.stringify(document);
@@ -238,7 +249,7 @@ export function workspaceOverview(options) {
     source.brief.decisions = {items: projection.attention.filter(row => row.kind === 'decision').map(row => ({text: row.title, source: row.ref}))};
     const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute('data-overview-open') || document.activeElement?.getAttribute('data-overview-row-discuss') : null;
     const discussFocused = document.activeElement?.hasAttribute('data-overview-row-discuss');
-    if (reader && readerDocument !== JSON.stringify(plan?.document)) closeReader();
+    if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
     const main = attention(projection);
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown], render: () => statusStrip(projection)},
@@ -268,8 +279,12 @@ export function workspaceOverview(options) {
   }
   async function refresh() {if (mode === 'live') await refreshLive(); if (reportsLoaded || mode === 'saved') {await reports.refresh(); if (mode === 'saved') render();}}
   function withdraw() {serial++; projection = null; plan = null; saved = null; signature = ''; loading = false; closeReader(); reports.withdraw(); resetContent(); status.replaceChildren(); header();}
-  return {box, primary, meta, reportTools, refresh, withdraw,
-    prepareReports: async () => {reportsLoaded = true; await reports.refresh();},
+  function prepareReports() {
+    reportsLoaded = true;
+    if (!reportRead) reportRead = reports.refresh().finally(() => {reportRead = null;});
+    return reportRead;
+  }
+  return {box, primary, meta, reportTools, refresh, withdraw, prepareReports, openRelated, closeRelated: () => {if (relatedSelection) closeReader();},
     reportActions: {compare: () => {if (mode !== 'saved') {mode = preference.mode = 'saved'; saved = reports.current(); signature = ''; render();} return reports.comparePrevious();}, print: () => window.print()},
     setActive(value) {if (active === value) {header(); return;} active = value; if (!value) {preference.scroll = window.scrollY; closeReader();} else if (preference.scroll) window.scrollTo(0, preference.scroll); header();},
     dispose() {serial++; closeReader();},

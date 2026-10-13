@@ -11,16 +11,27 @@ const root = (page: Page) => page.locator('[data-pm-overview]');
 const metric = (page: Page, key: string) => root(page).locator(`[data-overview-metric="${key}"]`);
 function fixture(locale = 'en') {
   const base = demoFixture({locale}), data: any = overview(demoProject(locale));
-  const state = {data, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
+  const state = {data, cursor: 0, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
   return {...base, state, dispatch: async (input: any) => {
     state.reads.push(input.path); if (input.method !== 'GET') state.writes.push(input);
+    const url = new URL(input.path, 'http://fixture');
+    if (url.pathname === '/events') return {status: 200, data: {
+      events: Number(url.searchParams.get('after')) < state.cursor ? [{seq: state.cursor, resource_type: 'pm_evidence', resource_id: base.ids.workspaceId, kind: 'pm.evidence.updated'}] : [],
+      next_cursor: state.cursor, head_cursor: state.cursor, has_more: false, sync: {checkpoint: {cursor: state.cursor, token: `demo-${state.cursor}`}},
+    }};
     if (input.path.endsWith('/overview')) {
-      const result = structuredClone(state.data), held = state.held; state.held = null;
+      const result = structuredClone(state.data), held = state.held, denied = state.denied; state.held = null;
       if (held) await held;
-      return state.denied ? {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Source withdrawn'}}} : {status: 200, data: result};
+      return denied ? {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Source withdrawn'}}} : {status: 200, data: result};
     }
     if (state.reportDenied && /\/snapshots\//.test(input.path)) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Report withdrawn'}}};
-    return base.dispatch(input);
+    if (url.pathname.endsWith('/snapshots')) url.searchParams.set('limit', String(state.reportPageSize));
+    const response = await base.dispatch({...input, path: url.pathname + url.search});
+    if (state.extraStatements && url.pathname.endsWith('/plans/' + base.ids.planV3)) {
+      const rows = response.data.plan.document.sections.governance.statements;
+      rows.push({...rows[0], value: 'A fourth explicit purpose statement', input_id: 'extra-purpose'});
+    }
+    return response;
   }};
 }
 async function boot(page: Page, f: ReturnType<typeof fixture>, native = false) {
@@ -140,4 +151,78 @@ test('source withdrawal clears values and plan inspector; saved reports reauthor
   f.state.denied = false; await refresh(page); await expect(metric(page, 'progress')).toContainText('3 of 8 accepted');
   await report(page, f.ids.snap2); f.state.reportDenied = true; await refresh(page);
   await expect(root(page)).not.toContainText(f.copy.goal); await expect(root(page).locator('[data-charter-section]')).toHaveCount(0);
+});
+
+
+test('late live response cannot restore withdrawn data', async ({page}) => {
+  const f = fixture(); await boot(page, f); await report(page, f.ids.snap1);
+  let release!: () => void;
+  f.state.held = new Promise<void>(resolve => {release = resolve;});
+  const before = f.state.reads.filter(path => path.endsWith('/overview')).length;
+  await root(page).getByRole('button', {name: 'Back to live', exact: true}).click();
+  await expect.poll(() => f.state.reads.filter(path => path.endsWith('/overview')).length).toBe(before + 1);
+  f.state.denied = true;
+  try {
+    await refresh(page); await expect(metric(page, 'progress')).toContainText('—Unknown');
+    await expect(root(page)).not.toContainText(f.copy.goal);
+  } finally {release();}
+  await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
+  await expect(root(page).locator('[data-overview-row]')).toHaveCount(0);
+  await expect(metric(page, 'progress')).not.toContainText('3 of 8 accepted'); expect(f.state.writes).toEqual([]);
+});
+
+test('background updates retain reading rows, charter expansion and plan reader', async ({page}) => {
+  const f = fixture(); f.state.extraStatements = true; await boot(page, f);
+  const more = root(page).locator('[data-charter-section="definition"] button');
+  await more.click(); await expect(more).toHaveAttribute('aria-expanded', 'true');
+  const row = root(page).locator('[data-overview-open]').nth(1); await row.focus();
+  await row.evaluate(node => node.setAttribute('data-reading-marker', 'retained'));
+  const y = (await row.boundingBox())!.y;
+  f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2;
+  f.state.data.attention.reverse(); f.state.cursor++;
+  await expect(metric(page, 'progress')).toContainText('2 of 8 accepted');
+  await expect(page.locator('[data-reading-marker=retained]')).toBeFocused();
+  expect((await page.locator('[data-reading-marker=retained]').boundingBox())!.y).toBe(y);
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await root(page).locator('[data-charter-plan]').click();
+  const reader = page.locator('[data-overview-plan]'); await expect(reader).toBeVisible();
+  const readCount = f.state.reads.filter(path => path.endsWith('/overview')).length;
+  f.state.data.attention_counts.decision = 3; f.state.cursor++;
+  await expect.poll(() => f.state.reads.filter(path => path.endsWith('/overview')).length).toBeGreaterThan(readCount);
+  await expect(reader).toBeVisible(); await page.keyboard.press('Escape');
+  await openPmSection(page, 'requirements'); await openPmSection(page, 'overview');
+  await expect(more).toHaveAttribute('aria-expanded', 'true'); expect(f.state.writes).toEqual([]);
+});
+
+test('milestone deviation opens its exact context in Issues; withdrawal closes it', async ({page}) => {
+  const f = fixture(); await boot(page, f);
+  const deviation = f.state.data.attention.find((row: any) => row.kind === 'deviation');
+  await root(page).locator(`[data-overview-open="${deviation.key}"]`).click();
+  await expect(page.locator('[data-pm-view=issues]')).toHaveAttribute('aria-current', 'page');
+  const detail = page.locator('[data-overview-related]'); await expect(detail).toContainText(deviation.title);
+  const query = new URLSearchParams((await detail.getByRole('link', {name: 'Discuss', exact: true}).getAttribute('href'))!.split('?')[1]);
+  expect(parseDiscussRefs(query).refs).toEqual([deviation.ref]);
+  f.state.data.attention = []; f.state.cursor++;
+  await expect(detail).toHaveCount(0); expect(f.state.writes).toEqual([]);
+});
+
+
+test('report pages survive refresh and comparisons reauthorize both snapshots', async ({page}) => {
+  const f = fixture(); f.state.reportPageSize = 1; await boot(page, f);
+  await report(page, f.ids.snap1);
+  await openPmPanel(page, 'ui_report');
+  await page.getByRole('button', {name: 'Load more summary versions', exact: true}).click();
+  await page.keyboard.press('Escape');
+  await expect(root(page).getByRole('button', {name: 'Next report', exact: true})).toBeEnabled();
+  const before = f.state.reads.filter(path => path.includes('/snapshots?')).length; f.state.cursor++;
+  await expect.poll(() => f.state.reads.filter(path => path.includes('/snapshots?')).length).toBeGreaterThan(before);
+  await expect(root(page).getByRole('button', {name: 'Next report', exact: true})).toBeEnabled();
+  await root(page).getByRole('button', {name: 'Next report', exact: true}).click();
+  await expect(root(page).locator('.pm-overview-saved')).toContainText('Viewing report #2');
+  const readStart = f.state.reads.length;
+  await root(page).getByRole('button', {name: 'Compare', exact: true}).click();
+  await expect(page.locator('.pm-charter-comparison')).toBeVisible();
+  expect(f.state.reads.slice(readStart).some(path => path.endsWith('/snapshots/' + f.ids.snap1))).toBe(true);
+  expect(f.state.reads.slice(readStart).some(path => path.endsWith('/snapshots/' + f.ids.snap2))).toBe(true);
+  await page.keyboard.press('Escape'); expect(f.state.writes).toEqual([]);
 });

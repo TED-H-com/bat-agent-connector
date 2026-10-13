@@ -60,7 +60,9 @@ try {
   await page.getByLabel('Workspace name', {exact:true}).fill('PM contract fixture');
   await page.getByRole('button', {name:'Create workspace', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}$/);
-  await page.getByRole('button', {name:'Discuss with PM', exact:true}).click();
+  // The Overview owns the shared URL; the Discussions receiver is integrated separately.
+  await expect(page.getByRole('link', {name:'Discuss with PM', exact:true})).toHaveAttribute('href', /\/discussions\/new\?from=overview$/);
+  await page.locator('[data-pm-view="discussions"]').click();
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
   await page.getByRole('button', {name:'Start discussion', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/pmt_[a-f0-9]{32}$/);
@@ -294,10 +296,11 @@ try {
   assert.equal(lifecycle.lifecycle.stage,'development');assert.equal(lifecycle.lifecycle.execution_epoch,3);
   const history=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/lifecycle/transitions`,{headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.deepEqual(history.transitions.map(row=>row.to_stage),['paused','closed','development']);
-  // The workspace now opens its fixed Charter, while RTM reads the same central work.
+  // Live Overview reports the missing adopted baseline without manufacturing progress.
   await page.goto(origin + '/dashboard/#/pm/' + workspaceId + '/overview');
   await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
-  await expect(page.locator('[data-pm-charter]')).toContainText('No adopted plan in this summary');
+  await expect(page.locator('[data-overview-metric=progress]')).toContainText('—Unknown');
+  await expect(page.locator('[data-overview-metric=progress]')).toContainText('No adopted plan');
   child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');
   assert.equal((await next()).usage_connected,true);
   await page.locator('[data-pm-view="agents"]').click();

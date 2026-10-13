@@ -217,13 +217,15 @@ states separate.
 Attention retains the central severity/age ordering, with exact context identities
 passed to `discussHref`. Reading rows keep focus during refresh. Requirements and
 work open the existing requirements selection; governance opens its existing Issues
-selection. The charter follows the live adopted document in six compact cards,
+selection. Attention without a governance record opens its exact central context
+in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,
 with three bullets before expansion and an icon disclosure for each source list.
 Full plan uses the shared inspector and restores focus on Escape. At 768px the
 charter has two columns; at 390px all regions stack in reading order.
 
 Report tools retain the existing durable snapshot operation, original-key recovery,
-authorized comparison, history pagination, print and export. Selecting a report
+authorized comparison, history pagination, print and export. Report history loads on
+demand and rereads every loaded page after a refresh. Selecting a report
 replaces the status and charter with that report's fixed content; live attention,
 milestones, delivery rows and phase are absent. Historical snapshots do not contain
 central acceptance counts, so those metrics stay unknown. Back to live rereads the
