@@ -1548,10 +1548,18 @@ as create-own, a PM writer, a general native CLI adapter or an adapter switch.
 
 ### Agent resource observations
 
-Use `pm_resources_get(workspace_id, since?, until?)` with your own observe principal.
+Use `pm_resources_get(workspace_id, since?, until?, tz?)` with your own observe principal.
 This reads the same projection as the project Agent resources page; it never starts
 collection, CLI processes, model calls or dispatch. Workspace membership is checked
 on every read. UTC/offset timestamps select at most 366 days; the default is seven days.
+Optional `tz` is an IANA time zone for daily buckets, default UTC. Invalid names are refused.
+
+`buckets.series` lists only sources that still contribute totals. Each day has local `date`,
+per-metric `tokens` and `complete`. A metric is null unless every sample that day included
+it. `complete` is true only when the stored cursor had reached EOF at or after that local
+day and the requested window covers the whole day. A covered day with no samples is zero.
+A day without that coverage is null, not zero. Withdrawn, unavailable and binding-changed
+sources contribute no buckets. Do not add cache into input or reasoning into output again.
 
 Only administrator-bound local Codex rollout v1 and Claude transcript v1 files are
 covered. Do not discover files, infer project ownership from paths, or treat missing

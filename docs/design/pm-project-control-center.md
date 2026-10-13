@@ -259,7 +259,8 @@ action、schema、外部同步、派工政策或 native 權限。
 
 ## 14. Agent 資源第一段候選
 
-`feat/pm-v12-resource-observation-20261012` 從已合併 #121 接續。新增中央定期收集
-明確綁定的本機 Codex／Claude 用量檔、原 cursor／去重、有限來源配額窗與共用資源頁。
-精確範圍、來源格式、權限及剩餘工作见 [Agent resource observations](agent-resource-observation.md)。
+本機 Codex／Claude 用量檔的中央定期收集、原 cursor／去重、有限來源配額窗與共用資源頁
+已隨 #122 進主線（開發分支 `feat/pm-v12-resource-observation-20261012`）。
+精確範圍、來源格式、權限及剩餘工作見 [Agent resource observations](agent-resource-observation.md)。
+同一投影現在附帶每日本地用量桶，供之後的趨勢圖使用；這還不是圖表 UI。
 這不是完整第 3 節：遠端主機、完整配額、合格交付／返工歸因、容量、區間預測和策略安排仍待做。

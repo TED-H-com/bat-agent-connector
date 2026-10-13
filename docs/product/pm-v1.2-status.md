@@ -8,7 +8,7 @@
 ## 目前整合狀態
 
 - **Charter／RTM 已合併：#121／`8bc6cf3`。** 總覽閱讀與版本比較、專案內導覽及需求／工作／交付追溯已進主線。精確候選 `0d718f3` 的 Python 3.10–3.13、五個 desktop jobs 與 1,978 項 UI 通過；沒有 owner 安裝或 live 宣稱。
-- **Agent 資源開發分支：** `feat/pm-v12-resource-observation-20261012` 從 #121 接續，新增中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。尚未合併，精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
+- **Agent 資源：本機觀測已在 #122 進主線。** 中央定期收集明確綁定的本機 Codex／Claude 紀錄、增量 cursor／去重、來源回報配額窗及共用資源頁。精確涵蓋與缺口見 [resource observation 合約](../design/agent-resource-observation.md)。同一讀取另附每日用量桶（`buckets`，可選 IANA `tz`，預設 UTC）：只含仍計入總量的來源；整日 `complete` 僅在既有 cursor 已讀到檔尾且成功時間蓋過該本地日。缺欄位與未涵蓋日是 null，不是 0。圖表 UI 尚未接上。遠端 collector、交付效能歸因、容量、預測與完整 W30 仍待完成。
 
 - **新的管理工作台方向已記錄，尚未完成：**[六視圖合約](../design/pm-project-control-center.md)
   定義 Charter、Agent 資源、RTM、技術相依、時程及問題／行動／變更；保留看板與工作空間。

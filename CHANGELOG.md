@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
+  an optional IANA `tz` (default UTC) and returns per-source local days for the selected
+  window. A day is complete only when the stored cursor had reached EOF at or after that
+  day; missing counters and uncovered days stay null, and withdrawn sources omit buckets
+  together with their totals.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
