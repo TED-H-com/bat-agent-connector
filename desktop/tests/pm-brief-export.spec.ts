@@ -138,7 +138,7 @@ test('old desktop versions preserve Brief reading and disclose unavailable repor
 });
 
 test('an older selected snapshot remains the download target after a failed refresh',async({page})=>{
-  const f=fixture();await mount(page,false,f);await page.getByText('Earlier project snapshots',{exact:true}).click();
+  const f=fixture();await mount(page,false,f);await page.getByText('Earlier reports',{exact:true}).click();
   await brief(page).getByRole('button',{name:/^Earlier Brief ·/}).click();await expect(brief(page)).toContainText('Original selected goal');
   f.state.snapshotError=403;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(brief(page)).not.toContainText('Original selected goal');
   f.state.snapshotError=null;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(brief(page)).toContainText('Original selected goal');
@@ -149,7 +149,7 @@ test('an older selected snapshot remains the download target after a failed refr
 test('a delayed report cannot download after a different snapshot is selected',async({page})=>{
   const f=fixture();await mount(page,false,f);await open(page);f.state.holdReport=true;let downloads=0;page.on('download',()=>downloads++);
   await page.getByRole('button',{name:'Download report',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
-  await page.getByText('Earlier project snapshots',{exact:true}).click();await brief(page).getByRole('button',{name:/^Earlier Brief ·/}).click();
+  await page.getByText('Earlier reports',{exact:true}).click();await brief(page).getByRole('button',{name:/^Earlier Brief ·/}).click();
   await expect(brief(page)).toContainText('Original selected goal');await f.state.held[0]();await expect(page.getByRole('button',{name:'Download report',exact:true})).toBeEnabled();
   expect(downloads).toBe(0);await expect(brief(page)).toContainText('Original selected goal');
 });
