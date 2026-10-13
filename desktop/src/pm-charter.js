@@ -18,10 +18,10 @@ export function charterSections(snapshot) {
   };
 }
 
-export function workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead}) {
+export function workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {}}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const preference = viewState(namespace, workspaceId, 'overview');
-  let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
+  let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
   const status = h('div', {role: 'status'}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
@@ -41,7 +41,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print), status, report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
-    snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error));}, errorBox}) : null;
+    snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}, errorBox}) : null;
   if (exports) box.append(exports.element);
   const stamp = value => Number.isFinite(value) ? new Date(value * 1000).toLocaleString() : t('wb_unknown');
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
@@ -57,6 +57,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     previous.disabled = busy || index <= 0; next.disabled = busy || index < 0 || index >= history.length - 1;
     compare.disabled = previous.disabled; picker.disabled = busy || !history.length; print.disabled = busy || !snapshot;
     more.hidden = cursor === null; more.disabled = busy; create.update(); exports?.update();
+    onControls({previous: previous.disabled, next: next.disabled, compare: compare.disabled});
   }
   function historyOptions() {
     picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${stamp(row.as_of)}`)));
@@ -72,6 +73,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
         h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))));
   }
   function render() {
+    onChange(snapshot, 'updated');
     report.replaceChildren(); comparison.replaceChildren();
     if (!snapshot) {report.append(h('p', {}, t('wb_no_snapshot'))); historyOptions(); return;}
     const document = snapshot.baseline?.document, groups = charterSections(snapshot);
@@ -100,9 +102,9 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     historyOptions();
   }
   function withdraw() {serial++; head = null; snapshot = null; history = []; cursor = null; busy = false;
-    report.replaceChildren(); comparison.replaceChildren(); picker.replaceChildren(); status.replaceChildren(); controls();}
+    report.replaceChildren(); comparison.replaceChildren(); picker.replaceChildren(); status.replaceChildren(); controls(); onChange(null, 'withdrawn');}
   function failed(error, ticket) {try {alive(); if (ticket !== serial) return;} catch {return;}
-    withdraw(); status.replaceChildren(errorBox(error));}
+    withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}
   function acceptHistory(data, after, append = false) {
     check(data);
     if (!Array.isArray(data.snapshots) || data.next_cursor != null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t('pm_scope_mismatch'));
@@ -114,25 +116,39 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     if (data.next_cursor != null && data.next_cursor < last) throw Error(t('pm_scope_mismatch'));
     history = append ? [...history, ...data.snapshots] : data.snapshots; cursor = data.next_cursor ?? null;
   }
+  async function readHistory(ticket) {
+    const pages = []; let after = 0;
+    for (let i = 0; i < historyPages; i++) {
+      const page = await api('GET', `${endpoint}/snapshots?${after ? `after=${after}&` : ''}limit=100`);
+      alive(); if (ticket !== serial) return null;
+      check(page);
+      if (page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= after)) throw Error(t('pm_scope_mismatch'));
+      pages.push({page, after}); if (page.next_cursor == null) break; after = page.next_cursor;
+    }
+    return pages;
+  }
   async function refresh(id = null) {
+    if (id) onChange(null, 'selected');
     const chosen = id || selectedId, ticket = ++serial; busy = true; head = null; controls();
     const previous = JSON.stringify([snapshot, latestId, cursor]); comparison.replaceChildren();
     try {
-      const [data, page, current] = await Promise.all([api('GET', `${endpoint}/snapshots/${chosen || 'latest'}`),
-        api('GET', `${endpoint}/snapshots?limit=100`), api('GET', `${endpoint}/plans/head`)]);
+      const [data, pages, current] = await Promise.all([api('GET', `${endpoint}/snapshots/${chosen || 'latest'}`),
+        readHistory(ticket), api('GET', `${endpoint}/plans/head`)]);
       alive(); if (ticket !== serial) return;
       if (current.head?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
-      snapshot = checkedSnapshot(data, chosen); head = current.head; acceptHistory(page, 0);
+      snapshot = checkedSnapshot(data, chosen); head = current.head;
+      pages.forEach(({page, after}, index) => acceptHistory(page, after, index > 0));
       selectedId = snapshot?.snapshot_id || null;
       preference.snapshotId = selectedId;
       if (!chosen) latestId = selectedId;
       if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
       if (!report.childElementCount || previous !== JSON.stringify([snapshot, latestId, cursor])) {status.replaceChildren(); render();}
-      else historyOptions();
+      else {historyOptions(); onChange(snapshot, 'updated');}
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   async function select(id) {
     if (busy || !history.some(row => row.snapshot_id === id)) return;
+    onChange(null, 'selected');
     const ticket = ++serial; busy = true; selectedId = id; snapshot = null; report.replaceChildren(); comparison.replaceChildren(); controls();
     try {const data = await api('GET', `${endpoint}/snapshots/${id}`); alive(); if (ticket !== serial) return;
       snapshot = checkedSnapshot(data, id); preference.snapshotId = id; status.replaceChildren(); render();
@@ -143,7 +159,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     if (busy || cursor === null) return;
     const ticket = ++serial, after = cursor; busy = true; controls();
     try {const page = await api('GET', `${endpoint}/snapshots?after=${after}&limit=100`); alive(); if (ticket !== serial) return;
-      acceptHistory(page, after, true); if (cursor === null && history.length) latestId = history.at(-1).snapshot_id; historyOptions();
+      acceptHistory(page, after, true); historyPages++; if (cursor === null && history.length) latestId = history.at(-1).snapshot_id; historyOptions();
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   async function comparePrevious() {
@@ -163,5 +179,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
             h('div', {}, h('strong', {}, t('wb_after')), renderItems(right[key])))))) : h('p', {}, t('wb_unchanged')));
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
-  controls(); return {box, refresh, withdraw};
+  controls(); return {box, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
+    current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled}),
+    comparePrevious, history: () => history};
 }

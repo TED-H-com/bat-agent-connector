@@ -1,3 +1,5 @@
+import {overview, overviewGovernance} from './overview.ts';
+import {discussionDemo} from './discussions.ts';
 // One dispatcher for the member sign-in demo. Shapes come from the current central reads.
 // Unknown routes throw. A known id that is not in this project is a 404. Nothing here writes.
 import {demoProject, type DemoProject} from './project.ts';
@@ -6,9 +8,13 @@ import {pageSnapshots, snapshots} from './snapshots.ts';
 import {kanbanCard, kanbanPage} from './kanban.ts';
 import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
+import {schedulePage} from './schedule.ts';
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
+import {registerDetail, registerList} from './register.ts';
 import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
+import {dependencyDocument, dependencyImpact, dependencyRevisions} from './dependencies.ts';
+import {globalRoutes} from './global.ts';
 
 export interface DemoRequest {
   method?: string;
@@ -33,6 +39,10 @@ function segment(value: string) {
 
 function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   if (rest === '' || rest === '/') return ok({workspace: workspaceRecord(project)});
+  if (rest === '/overview') return ok(overview(project));
+  if (rest === '/governance') return ok({version: 1, workspace_id: project.ids.workspaceId, records: overviewGovernance(project), next_cursor: null});
+  const governance = rest.match(/^\/governance\/([^/]+)$/);
+  if (governance) {const row = overviewGovernance(project).find(row => row.record.record_id === governance[1]); return row ? ok({version: 1, workspace_id: project.ids.workspaceId, ...row}) : notFound();}
   if (rest === '/capabilities') return ok(workspaceCapabilities(project));
   if (rest === '/plans/head') return ok({version: 1, head: plans(project).head});
   if (rest === '/plans/accepted') {
@@ -81,6 +91,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const found = roadmap(project).revisions.find(row => row.revision_id === segment(revision[1]));
     return found ? ok({version: 1, workspace_id: project.ids.workspaceId, revision: found}) : notFound();
   }
+  if (rest === '/schedule') return ok(schedulePage(project, url));
   if (rest === '/roadmap') return ok(roadmapView(project));
   if (rest === '/work') return ok(workBindings(project, url));
   if (rest === '/resources') return ok(resources(project, url));
@@ -90,6 +101,16 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const detail = proposalDetail(project);
     return segment(proposal[1]) === detail.proposal.proposal_id ? ok(detail) : notFound();
   }
+  if (rest === '/dependencies/revisions') return ok(dependencyRevisions(project, url));
+  if (rest === '/dependencies/impact') {
+    const key = url.searchParams.get('dependency') || '';
+    if (!/^pmdepkey_[0-9a-f]{32}$/.test(key)) return {status: 400, data: {error: {code: 'BAD_REQUEST', message: 'Invalid dependency'}}};
+    return ok(dependencyImpact(project, key));
+  }
+  if (rest === '/dependencies') return ok(dependencyDocument(project));
+  if (rest === '/register') return registerList(project, url);
+  const registerRow = rest.match(/^\/register\/([^/]+)$/);
+  if (registerRow) return registerDetail(project, segment(registerRow[1]));
   if (rest === '/threads') return ok(threadList(project, url));
   const thread = rest.match(/^\/threads\/([^/]+)$/);
   if (thread) {
@@ -99,7 +120,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   throw new Error(`Unknown demo fixture route GET ${url.pathname}${url.search}`);
 }
 
-export function demoFixture({locale, now}: {locale?: string, now?: number} = {}) {
+export function demoFixture({locale, now, discussions = false}: {locale?: string, now?: number, discussions?: boolean} = {}) {
   const project = demoProject(locale, now);
   const root = `/pm/workspaces/${project.ids.workspaceId}`;
   const dispatch = async (input: DemoRequest) => {
@@ -121,6 +142,8 @@ export function demoFixture({locale, now}: {locale?: string, now?: number} = {})
       if (path !== root && !path.startsWith(`${root}/`)) return notFound();
       return workspaceRoutes(project, url, path.slice(root.length));
     }
+    const global = globalRoutes(project, url);
+    if (global) return global.status === 200 ? ok(global.data) : global;
     if (path === '/work-items') return ok(workItems(project, url));
     const messages = path.match(/^\/sessions\/([^/]+)\/([^/]+)\/messages$/);
     if (messages) {
@@ -135,7 +158,8 @@ export function demoFixture({locale, now}: {locale?: string, now?: number} = {})
     if (path === '/checkpoints') return ok({checkpoints: []});
     throw new Error(`Unknown demo fixture route ${method} ${input.path}`);
   };
-  return {dispatch, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates};
+  const discussion = discussions ? discussionDemo(project, dispatch) : null;
+  return {dispatch: discussion?.dispatch || dispatch, discussion: discussion?.state, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates};
 }
 
 // Workbench view names are in-memory. They are not URL selections, so charter/rtm/board/agents

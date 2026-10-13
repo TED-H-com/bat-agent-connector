@@ -18,6 +18,7 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
   const preference = viewState(namespace, workspaceId, 'requirements');
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
+  let pendingFocus = null;
   let selected = preference.selected || null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = '', renderedDetail = '', deliveryPages = 1;
   const pages = {work: 1, issues: 1, reviews: 1}, cursors = {}, expanded = new Set(preference.expanded || []), order = [];
   const status = h('div', {role: 'status'}), count = h('p', {class: 'muted'}), tableBody = h('tbody');
@@ -53,7 +54,7 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     button.disabled = busy; button.hidden = cursors[kind] == null;
   }}
   function withdraw() {
-    serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; signature = '';
+    pendingFocus = null; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; signature = '';
     detailCard = null; deliveryRows = []; deliveryCursor = null; detailBusy = false; renderedDetail = '';
     tableBody.replaceChildren(); detail.replaceChildren(); detail.hidden = true; count.replaceChildren(); status.replaceChildren();
     for (const kind of Object.keys(pages)) cursors[kind] = null; controls();
@@ -153,6 +154,7 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
       status.replaceChildren(...([work, mappings, quality].some(row => row?.filtered || row?.next != null) ? [h('p', {class: 'muted'}, t('wb_partial'))] : []));
       if (selected && cards.some(card => card.work_item_id === selected)) await select(selected, false, true);
       else {detailCard = null; deliveryRows = []; detail.replaceChildren(); detail.hidden = true; detailBusy = false; renderedDetail = '';}
+      void applyPending();
     } catch (error) {fail(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   function deliveryCheck(data, id, after) {
@@ -244,5 +246,32 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     if (detailBusy || deliveryCursor === null || !selected) return;
     deliveryPages++; await select(selected);
   }
-  controls(); return {element, refresh, withdraw, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate: async () => {if (!active) {active = true; await refresh();}}};
+  async function openRef(ref) {
+    if (!active || !plan) {active = true; await refresh();}
+    if (ref.kind === 'work_item') {
+      for (const card of cards.filter(row => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
+      renderTable(); await select(ref.id, true); return;
+    }
+    if (ref.kind !== 'requirement' || ref.revision_id !== plan?.revision_id) return;
+    expanded.add(ref.id); filter.value = ''; renderTable();
+    const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
+    if (row) {row.setAttribute('aria-selected', 'true'); row.querySelector('button')?.focus(); row.scrollIntoView({block: 'nearest'});}
+  }
+  async function activate() {if (!active) {active = true; await refresh();}}
+  function focusWork(id) {pendingFocus = {kind: 'work_item', id}; if (!active) return activate(); if (!busy) void applyPending();}
+  function focusRequirement(id) {pendingFocus = {kind: 'requirement', id}; if (!active) return activate(); if (!busy) void applyPending();}
+  async function applyPending() {
+    const pending = pendingFocus;
+    if (!pending || !plan) return;
+    pendingFocus = null;
+    if (pending.kind === 'work_item' && !cards.some(row => row.work_item_id === pending.id)) return;
+    if (pending.kind === 'requirement' && !plan.document?.requirements?.some(row => row.id === pending.id)) return;
+    filter.value = '';
+    await openRef({...pending, revision_id: plan.revision_id});
+    if (pending.kind === 'work_item') {
+      const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
+      target?.focus({preventScroll: true}); target?.scrollIntoView({block: 'nearest'});
+    }
+  }
+  controls(); return {element, refresh, withdraw, openRef, focusWork, focusRequirement, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate};
 }

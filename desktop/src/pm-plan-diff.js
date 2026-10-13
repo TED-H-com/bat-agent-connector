@@ -169,5 +169,9 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
     finally {if (ticket === request) {busy = false; controls();}}
   }
   options();
-  return {box, update, refreshBindings};
+  return {box, update, refreshBindings, select(left, right) {
+    from.value = plans.has(left) ? left : '';
+    to.value = plans.has(right) && right !== left ? right : [...plans.keys()].find(id => id !== left) || '';
+    changed(); to.focus();
+  }};
 }

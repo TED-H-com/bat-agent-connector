@@ -1,3 +1,4 @@
+import {discussionStrings} from './pm-discussions-strings.js';
 import {resourceStrings} from './pm-resources-strings.js';
 import {workbenchStrings} from './pm-workbench-strings.js';
 import {pmPlanProposalStrings} from './pm-plan-proposal-strings.js';
@@ -5,6 +6,7 @@ import {pmContextBundleStrings} from './pm-context-bundle-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
 import {pmLifecycleStrings} from './pm-lifecycle-strings.js';
 import {pmIssueStrings} from './pm-issue-strings.js';
+import {pmRegisterStrings} from './pm-register-strings.js';
 import {specSourceStrings} from './pm-spec-sources-strings.js';
 import {pmFollowUpStrings} from './pm-follow-up-strings.js';
 import {followUpAnalysisStrings} from './pm-follow-up-analysis-strings.js';
@@ -20,6 +22,7 @@ export const pmStrings = {
     ...resourceStrings.en,
     ...pmPlanProposalStrings.en,
     ...pmIssueStrings.en,
+    ...pmRegisterStrings.en,
     ...pmLifecycleStrings.en,
     ...pmSprintStrings.en,
     ...pmKanbanStrings.en,
@@ -223,6 +226,7 @@ export const pmStrings = {
     pm_notes: 'Discussion notes', pm_note_content: 'Add a discussion note', pm_save_note: 'Save note',
     pm_note_help: 'Saved to this discussion. This does not send a message to an agent.',
     pm_manual: 'Discussion notes · no AI participant is connected', pm_no_notes: 'No notes yet. Record the problem, an option, or a question to revisit.',
+    ...discussionStrings.en,
     pm_mode_idea: 'Idea', pm_mode_planning: 'Planning draft', pm_inputs: 'Facts and open questions',
     pm_information: 'Inputs and planning direction',
     pm_inputs_help: 'Confirmed statements, source claims and unresolved assumptions stay distinct.',
@@ -259,6 +263,7 @@ export const pmStrings = {
     ...resourceStrings['zh-TW'],
     ...pmPlanProposalStrings['zh-TW'],
     ...pmIssueStrings['zh-TW'],
+    ...pmRegisterStrings['zh-TW'],
     ...pmLifecycleStrings['zh-TW'],
     ...pmSprintStrings['zh-TW'],
     ...pmKanbanStrings['zh-TW'],
@@ -462,6 +467,7 @@ export const pmStrings = {
     pm_notes: '討論筆記', pm_note_content: '新增討論筆記', pm_save_note: '儲存筆記',
     pm_note_help: '儲存到這份討論，不會傳送給 Agent。', pm_manual: '討論筆記 · 目前未連接 AI 參與者',
     pm_no_notes: '尚無筆記。可以先記下問題、一個選項，或待釐清的疑問。',
+    ...discussionStrings['zh-TW'],
     pm_mode_idea: '想法', pm_mode_planning: '規劃草稿', pm_inputs: '事實與待釐清問題',
     pm_information: '討論依據與規劃方向',
     pm_inputs_help: '已確認的陳述、來源說法與待查假設會分開標示。',

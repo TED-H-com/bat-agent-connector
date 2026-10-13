@@ -149,7 +149,7 @@ export function proposalDetail(project: DemoProject) {
       operation_id: hexId('op_', 5, 32), run_id: project.ids.runId, sequence: 1, document, document_digest: digest(71),
       raw_reply: project.copy.proposalSummary, validation: {status: 'format_valid', errors: []}, created_by: project.ids.actor,
       created_at: unix(project.now, -1), accepted_plan_changed: false, execution_authorized: false,
-      assessment_basis: 'unadopted_agent_proposal', conclusions_verified: false,
+      assessment_basis: 'unadopted_agent_proposal', conclusions_verified: false, adoptable: true, adoptable_reason: null,
       context: {
         thread_version: 4, plan_head: {version: saved.head.version, accepted_revision_id: saved.head.accepted_revision_id},
         accepted_plan: saved.v3, source_references: {'note.owner': {quote: project.copy.planningNote, id: hexId('pmm_', 2, 32), digest: digest(9), kind: 'message'}},
@@ -164,7 +164,7 @@ export function proposalList(project: DemoProject, url: URL) {
   const limit = Number(url.searchParams.get('limit') || 20);
   const detail = proposalDetail(project).proposal;
   const row = {sequence: detail.sequence, proposal_id: detail.proposal_id, thread_id: detail.thread_id, operation_id: detail.operation_id,
-    run_id: detail.run_id, document_digest: detail.document_digest, created_by: detail.created_by, created_at: detail.created_at, validation: detail.validation};
+    run_id: detail.run_id, document_digest: detail.document_digest, created_by: detail.created_by, created_at: detail.created_at, validation: detail.validation, adoptable: detail.adoptable, adoptable_reason: detail.adoptable_reason};
   const rows = !threadId || threadId === project.ids.threadPlanning ? [row].filter(item => item.sequence > after) : [];
   const slice = rows.slice(0, limit);
   return {version: 1, workspace_id: project.ids.workspaceId, proposals: slice,

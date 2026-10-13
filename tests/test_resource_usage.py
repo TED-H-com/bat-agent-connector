@@ -267,7 +267,12 @@ async def test_window_optional_fields_stale_and_schema_idempotence(ready):
     d.journal.db.execute("UPDATE resource_usage_sources SET successful_at='2020-01-01T00:00:00+00:00'")
     assert read(d, wid)["rows"][0]["status"] == "stale"
     for params in [{"since": True}, {"since": "2026-01-01"}, {"since": "2027-01-01T00:00:00Z", "until": "2026-01-01T00:00:00Z"},
-                   {"since": "2020-01-01T00:00:00Z", "until": "2026-01-01T00:00:00Z"}]:
+                   {"since": "2020-01-01T00:00:00Z", "until": "2026-01-01T00:00:00Z"},
+                   {"since": "2026-10-11T24:00:00Z", "until": "2026-10-12T00:00:00Z"},
+                   {"since": "2026-10-11T24:00:00+00:00", "until": "2026-10-12T00:00:00Z"},
+                   {"since": "20261011T090000Z", "until": "2026-10-12T00:00:00Z"},
+                   {"since": "2026-W41-1", "until": "2026-10-12T00:00:00Z"},
+                   {"since": "2026-10-11T09:00:00.1234567Z", "until": "2026-10-12T00:00:00Z"}]:
         with pytest.raises(OperationError, match="INVALID_PARAMS"):
             read(d, wid, **params)
 

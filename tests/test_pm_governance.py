@@ -204,7 +204,9 @@ async def test_risk_owner_is_a_current_writer(ops, owner):
 
 
 @pytest.mark.parametrize('value', ['2026-02-30T09:00:00Z', '2026-10-11', '2026-10-11T09:00:00',
-                                   '2026-10-11T09:00:00+01:99', '2026-10-11T24:00:00Z', True])
+                                   '2026-10-11T09:00:00+01:99', '2026-10-11T24:00:00Z',
+                                   '2026-10-11T24:00:00+00:00', '20261011T090000Z', '2026-W41-1',
+                                   '2026-10-11T09:00:00.1234567Z', True])
 async def test_review_time_rejects_invalid_or_ambiguous_dates(ops, value):
     data = await prepared(ops)
     with pytest.raises(OperationError, match='INVALID_PARAMS'):

@@ -1,6 +1,11 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {pageHeader} from './ui/components.js';
+import {disclosure, emptyState, iconButton, pageHeader, segmented, statusPill} from './ui/components.js';
+import {icon} from './ui/icons.js';
+import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, workStatusKey} from './global-labels.js';
+import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
+import {joinLabel} from './label-text.js';
+import {viewState} from './ui/view-state.js';
 import {h as dom} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
@@ -45,7 +50,7 @@ import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 
 const TOKEN_KEY = "batc.dashboard.token";
-const state = { token: null, caps: null, lastEvent: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
+const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
 async function activate(caps, endpoint = location.origin, reset = false) {
   state.epoch++;
   state.observations = new Map();
@@ -86,7 +91,7 @@ function saveCursor() {
 }
 function disconnect() {
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
-  state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0;
+  state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.online = false; state.viewReady = false; state.sync = null;
 }
 
@@ -647,6 +652,7 @@ async function streamEvents() {
           throw new Error("Invalid central event checkpoint");
         state.sync = page.sync.checkpoint;
       }
+      if (cursor !== state.lastEvent) state.lastEventAt = Date.now();
       state.lastEvent = cursor;
       saveCursor();
       state.refreshCycle = null;
@@ -777,31 +783,59 @@ function sessionBadges(s) {
     s.pending ? chip(t("pending_" + s.pending.kind), "stale") : null,
   ];
 }
-function light(s) {
-  const cls = s.pending ? "pending" : s.streaming ? "streaming" : s.loaded ? "ok" : "";
-  return h("span", { class: `light ${cls}`, title: s.streaming ? t("state_streaming") : s.loaded ? t("state_loaded") : t("state_unloaded") });
-}
-function sessionRow(s) {
-  return h("div", { class: "row" }, light(s),
-    h("div", { class: "grow" },
-      h("a", { class: "title", href: `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}` },
-        s.title || s.session_id),
-      h("div", { class: "muted" }, [s.workspace, s.agent_kind, s.worktree_branch].filter(Boolean).join(" · "))),
-    h("div", { class: "actions session-badges" }, ...sessionBadges(s)),
-    h("span", { class: "muted" }, when(s.last_activity_at)));
+function sessionRow(s, open) {
+  const title = s.title || s.session_id;
+  const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
+  const key = JSON.stringify([s.host, s.session_id]);
+  const asking = s.pending?.kind === "ask_user";
+  const permission = s.pending?.kind === "permission";
+  const meta = joinLabel([s.host, s.agent_kind, s.worktree_branch,
+    s.pending?.kind ? t("pending_" + s.pending.kind) : "", s.stale ? reasonText(s.stale_reason) : ""]);
+  const pill = statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
+  return inboxRow({
+    h, key, title, href, meta, pill,
+    action: h("a", {class: "ui-button secondary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+    detailsLabel: t("global_details_for", {title}),
+    onOpen: () => open?.(key, title, [
+      statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+      meta ? h("p", {}, meta) : null,
+      disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
+        h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, s.session_id || "—")),
+        h("dt", {}, t("host")), h("dd", {}, s.host || "—"),
+        s.pending?.kind ? [h("dt", {}, t("global_state")), h("dd", {}, t("pending_" + s.pending.kind))] : null,
+        s.stale_reason ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText(s.stale_reason), " ", h("code", {}, String(s.stale_reason)))] : null)}),
+    ]),
+  });
 }
 const epoch = x => (x ? new Date(x * 1000).toISOString() : "");
 function opStatus(op) {
   const started = op.status === "succeeded" && ["session.start", "repository.continue"].includes(op.action);
   return h("span", { class: `status-${op.status}` }, t(started ? "start_dispatched" : "op_" + op.status));
 }
-function opRow(op) {
-  return h("div", { class: "row" },
-    h("div", { class: "grow" },
-      h("a", { class: "title", href: `#/op/${op.operation_id}` }, op.action),
-      h("div", { class: "muted" }, [op.actor, when(epoch(op.created_at))].join(" · ")),
-      op.status_reason ? h("div", { class: "muted" }, op.status_reason) : null),
-    opStatus(op), op.error_code ? chip(op.error_code, "bad") : null);
+function opRow(op, open) {
+  const title = actionLabel(op.action);
+  const href = `#/op/${encodeURIComponent(op.operation_id)}`;
+  const key = op.operation_id;
+  const meta = operationMeta(op, formatTime(op.created_at));
+  const needs = ["needs_attention", "uncertain", "failed"].includes(op.status);
+  const precise = t("op_" + op.status);
+  return inboxRow({
+    h, key, title, href, meta,
+    pill: statusPill(operationStatusKey(op.status)),
+    action: h("a", {class: "ui-button secondary ui-sm", href}, t(needs ? "global_review" : "global_open")),
+    detailsLabel: t("global_details_for", {title}),
+    onOpen: () => open?.(key, title, [
+      statusPill(operationStatusKey(op.status)),
+      meta ? h("p", {class: "muted"}, meta) : null,
+      op.status_reason ? h("p", {}, op.status_reason) : null,
+      precise !== "op_" + op.status ? h("p", {class: "muted"}, precise) : null,
+      disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
+        h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
+        h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")),
+        h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))),
+        op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)}),
+    ]),
+  });
 }
 
 // ------------------------------------------------------------------ views
@@ -832,7 +866,7 @@ async function viewSessions(main) {
     state.caps?.actions?.some(a => a.action === "session.start") ? h("a", {href: "#/start"}, t("start_title_page")) : null,
     state.caps?.features?.repository_sync?.length ? h("a", {href: "#/published"}, t("pub_title")) : null,
     state.caps?.actions?.some(a => Object.values(orchestrationActions).includes(a.action)) ? h("a", {href: "#/orchestrate/relay"}, t("orch_title")) : null),
-    h("p", {class: "muted"}, t("sessions_intro")),
+    disclosure({label: t("global_details"), body: h("p", {}, t("sessions_intro"))}),
     h("div", {class: "filters session-filters"}, search, hostSel, accessSel,
       state.caps?.actions?.some(a => a.action === "session.approve_pending") ? h("a", {href: "#/approvals"}, t("bulk_title")) : null), status,
     h("div", {class: "session-layout"}, scope, h("section", {"aria-label": t("sessions_title"), class: "session-results"}, count, list,
@@ -1561,6 +1595,7 @@ function checkpointPanel(host, sid) {
 
 async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceRepository) {
   freshPage();
+  let reload = async () => {};
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const source = sourceHost && ["execution", "task_command"].includes(sourceKind) && sourceId
     ? {host: sourceHost, kind: sourceKind, id: sourceId} : null;
@@ -1580,7 +1615,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
     groups.get(key).push(r);
   }
   const environments = [...groups.values()].map(environmentCard);
-  main.append(pageHeader({title: t("nav_delivery")}), ...environments.map(e => e.card));
+  main.append(pageHeader({title: t("nav_delivery"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => reload().catch(() => {})})]}), ...environments.map(e => e.card));
   if (source) main.append(h("p", {class: "note"}, t("delivery_source_context"), " ", h("code", {}, source.id)));
   let selectedMethod = "";
   let reviewedPreview = null;
@@ -1681,7 +1716,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
         pr.integration?.allowed ? integrationPanel(pr, load, source) : null);
     } catch (e) { if (!holdCard()) fill(card, errorBox(e)); }
   };
-  const reload = async (fromEvent = true) => { await settleRefreshes([...environments.map(e => e.load(fromEvent)), load(null, fromEvent)]); };
+  reload = async (fromEvent = true) => { await settleRefreshes([...environments.map(e => e.load(fromEvent)), load(null, fromEvent)]); };
   await reload(false);
   return liveReload(reload, ["operation", "integration", "deployment", "deployment_environment"]);
 }
@@ -2176,12 +2211,22 @@ function integrationStatus(op, act) {
 }
 
 async function viewOperations(main, filter = "all") {
-  const statuses = {attention: "needs_attention,uncertain", active: "accepted,running,waiting_checks,waiting_external"}[filter];
+  const selected = ["all", "attention", "active"].includes(filter) ? filter : "all";
+  const statuses = {attention: "needs_attention,uncertain", active: "accepted,running,waiting_checks,waiting_external"}[selected];
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  const list = operationList({h, t, api, guard: () => assertView(connection), row: opRow, statuses});
-  main.append(pageHeader({title: t("nav_operations")}),
-    h("div", {class: "actions"}, ...[["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([id, label]) =>
-      h("a", {href: `#/operations/${id}`, class: filter === id ? "on" : ""}, t(label)))), list.box);
+  const list = operationList({h, t, api, guard: () => assertView(connection), statuses, namespace: state.namespace});
+  const memory = viewState(state.namespace || "", "", "operations:" + (statuses || "all"));
+  const search = h("input", {type: "search", "aria-label": t("global_search_operations"), placeholder: t("global_search_operations"), value: memory.query || ""});
+  search.addEventListener("input", () => list.filter(search.value));
+  const searchField = h("div", {class: "workspace-search global-ops-search"}, icon("search", {size: 16}), search);
+  const filters = segmented({
+    label: t("global_ops_filter"), value: selected,
+    options: [["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([value, label]) => ({value, label: t(label)})),
+    onChange: value => {location.hash = "#/operations/" + value;},
+  });
+  main.append(pageHeader({title: t("nav_operations"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => list.load().catch(() => {})})]}),
+    h("div", {class: "global-ops-tools"}, filters, searchField), list.box);
+  if (memory.query) list.filter(memory.query);
   await list.load().catch(() => {});
   const reload = debounceRefresh(() => list.load(), 500);
   return onEvents(ev => {if (ev.resource_type === "operation") return reload();});
@@ -2249,16 +2294,18 @@ async function viewOperation(main, id) {
       if (!panel.isConnected) return;
       if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
       freshPage();
-      fill(panel, pageHeader({title: op.action}),
-        h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(op.error_code, "bad") : null),
+      fill(panel, pageHeader({title: actionLabel(op.action), pill: statusPill(operationStatusKey(op.status))}),
+        h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText(op.error_code) || t("reason_unavailable"), "bad") : null),
         ...(linked?.length ? [linkedItems(linked)] : []),
         h("dl", { class: "kv" },
+          h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
           h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`),
           h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))),
           op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null,
-          h("dt", {}, "Target"), h("dd", {}, h("code", {}, JSON.stringify(op.target))),
-          Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, "Refs"), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null,
-          op.result && op.action !== "worktree.merge" ? [h("dt", {}, "Result"), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null),
+          op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null,
+          h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))),
+          Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null,
+          op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null),
         ...(receipts || []),
         mergeRecovery(op),
         op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")),
@@ -2310,61 +2357,117 @@ function mergeRecovery(op) {
     refs.host && refs.session_id ? observationLink("session", `${refs.host}/${refs.session_id}`) : null);
 }
 
+function fleetEmpty() {
+  return h("section", {class: "panel"}, emptyState({
+    title: t("global_fleet_empty"),
+    action: h("a", {class: "ui-button secondary ui-sm", href: setupGuide()}, t("global_setup_guide")),
+  }));
+}
+function connectionFacts() {
+  const endpoint = state.endpoint || (state.token ? location.origin : "");
+  const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+  const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+  return h("dl", {class: "kv global-connection-facts"},
+    h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
+    h("dt", {}, t("global_state")), h("dd", {}, h("span", {class: `ui-pill tone-${tone}`}, t(key))),
+    h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
+}
+function openSettings(main, {exclusive = false} = {}) {
+  const frame = settingsFrame({h, t, exclusive, sections: [
+    {id: "connection", label: t("global_nav_connection")},
+    {id: "desktop", label: t("global_nav_desktop"), hidden: true},
+    {id: "models", label: t("global_nav_models"), hidden: true},
+    {id: "fleet", label: t("global_nav_fleet"), hidden: true},
+    {id: "updates", label: t("global_nav_updates"), hidden: true},
+    {id: "about", label: t("global_nav_about")},
+  ]});
+  if (state.token && state.caps) main.append(pageHeader({
+    title: t("ui_settings"),
+    actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => route()})],
+  }));
+  frame.panel("about").append(h("section", {class: "panel"},
+    h("h2", {}, t("global_nav_about")),
+    h("p", {}, t("global_product")),
+    h("a", {href: setupGuide()}, t("global_setup_guide"))));
+  main.append(frame.root);
+  return frame;
+}
+function viewBrowserSettings(main) {
+  const frame = openSettings(main, {exclusive: true});
+  const managed = state.token === browserSessionToken;
+  const facts = connectionFacts();
+  facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})));
+  const footer = h("div", {class: "global-card-footer"});
+  frame.panel("connection").append(h("section", {class: "panel"},
+    facts,
+    managed ? h("h2", {}, t("managed_browser_connected")) : null,
+    managed ? disclosure({label: t("global_details"), body: h("p", {}, t("managed_browser_help"))}) : null,
+    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")),
+    footer));
+  const note = mountTailscale(footer, {h, t, presentation: "note"});
+  frame.show("fleet");
+  frame.panel("fleet").append(fleetEmpty());
+  return note;
+}
+function viewBrowserSignedOut(main) {
+  const input = h("input", {type: "password", autocomplete: "off", placeholder: "batc_…"});
+  const remember = h("input", {type: "checkbox"});
+  const info = h("p", {class: "muted", role: "status"});
+  if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
+  const form = h("form", {class: "global-connect-form", onsubmit: async event => {
+    event.preventDefault();
+    disconnect();
+    state.token = input.value.trim();
+    try {
+      await activate(await api("GET", "/capabilities"));
+      saveToken(state.token, remember.checked);
+      location.hash = "#/home";
+      await route();
+    } catch (e) {state.token = null; info.replaceChildren(errorBox(e));}
+  }}, h("label", {class: "connection-token"}, t("token"), input),
+    h("label", {class: "global-remember"}, remember, " ", t("remember")),
+    h("div", {class: "global-connect-actions"},
+      h("button", {class: "primary", type: "submit"}, t("connect")),
+      h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
+    disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
+  const footer = h("div", {class: "global-card-footer"});
+  const root = firstRunCard({h, t, body: form, footer});
+  main.append(root);
+  // Browser builds have no local Tailscale control. Keep the explanation visible and do not call IPC.
+  mountTailscale(footer, {h, t, presentation: "note"});
+}
 function viewSettings(main) {
   if (state.caps?.managed_installation) return viewManagedSettings(main);
   if (nativeDesktop) return viewNativeSettings(main);
-  if (state.token && state.caps && state.token === browserSessionToken) {
-    main.append(pageHeader({title: t("nav_settings")}), h("section", {class: "panel"},
-      h("h2", {}, t("managed_browser_connected")),
-      h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})),
-      h("p", {class: "muted"}, t("managed_browser_help")),
-      h("button", {class: "secondary", onclick: () => {disconnect(); route();}}, t("disconnect"))));
-    return mountTailscale(main, {h, t});
-  }
-  const input = h("input", { type: "password", autocomplete: "off", placeholder: "batc_…" });
-  const remember = h("input", { type: "checkbox" });
-  const info = h("p", { class: "muted" });
-  if (state.caps) info.textContent = t("connected_as", { actor: state.caps.actor, scopes: state.caps.scopes.join(", ") });
-  else if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
-  main.append(pageHeader({title: t("nav_settings")}), h("div", { class: "panel" },
-    h("div", { class: "filters connection-controls" }, h("label", {class: "connection-token"}, t("token"), input),
-      h("button", { class: "primary", onclick: async () => {
-        disconnect();
-        state.token = input.value.trim();
-        try {
-          await activate(await api("GET", "/capabilities"));
-          saveToken(state.token, remember.checked);
-          location.hash = "#/home";
-          await route();
-        } catch (e) { state.token = null; info.replaceChildren(errorBox(e)); }
-      } }, t("connect")),
-      h("button", { class: "secondary", onclick: () => { disconnect(); route(); } }, t("disconnect"))),
-    h("label", {}, remember, " ", t("remember")), h("p", { class: "muted" }, t("token_help")), info));
-  return mountTailscale(main, {h, t});
+  if (state.token && state.caps) return viewBrowserSettings(main);
+  viewBrowserSignedOut(main);
 }
 
 async function viewManagedSettings(main) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const guard = () => assertView(connection);
   const status = h("div", {role: "status"});
+  const frame = openSettings(main, {exclusive: !nativeDesktop});
   const local = h("section", {class: "panel"}, h("h2", {}, t("managed_browser_connected")),
+    connectionFacts(),
     h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})),
-    h("p", {class: "muted"}, t("managed_background_help")),
+    disclosure({label: t("global_details"), body: h("p", {}, t("managed_background_help"))}),
     h("details", {"data-managed-locations": ""}, h("summary", {}, t("managed_locations")),
       h("p", {class: "muted"}, t("managed_locations_central")),
       h("p", {class: "muted"}, t("managed_locations_work"))), status);
-  main.append(pageHeader({title: t("nav_settings")}), local);
+  frame.panel("connection").append(local);
   const setup = managedSetupPanel({h, t, api, guard, namespace: state.namespace, errorBox, opStatus, caps: () => state.caps,
     onConfigured: async () => {const caps = await api("GET", "/capabilities"); guard(); state.caps = caps;}});
-  main.append(setup.box);
+  frame.panel("connection").append(setup.box);
   await setup.load();
   try {guard();} catch (error) {
     setup.dispose();
     if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(error.code)) return;
     throw error;
   }
-  const fleetRoot = h("div"); main.append(fleetRoot);
-  let disposeFleet;
+  const fleetRoot = frame.panel("fleet");
+  frame.show("fleet");
+  let disposeFleet, disposeTailscale;
   if (nativeDesktop) {
     const login = h("input", {type: "checkbox", disabled: true});
     const open = h("button", {class: "secondary", onclick: async () => {
@@ -2398,16 +2501,20 @@ async function viewManagedSettings(main) {
         }}, h("p", {class: "muted"}, t("managed_join_help")),
           h("div", {class: "capture-fields"}, h("label", {}, t("desktop_endpoint"), endpoint),
             h("label", {}, t("desktop_expected_actor"), actor)), review);
-        main.append(h("details", {class: "panel", "data-managed-join": ""}, h("summary", {}, t("managed_join_existing")), form));
+        frame.panel("desktop").append(h("details", {class: "panel", "data-managed-join": ""}, h("summary", {}, t("managed_join_existing")), form));
+        frame.show("desktop");
       }
     } catch (error) {if (connection.generation === generation) status.append(errorBox(error));}
     disposeFleet = await mountFleet(fleetRoot, {h, t});
+    disposeTailscale = mountTailscale(fleetRoot, {h, t});
   } else {
-    local.append(h("p", {class: "muted"}, t("managed_browser_help")),
-      h("button", {class: "secondary", onclick: () => {disconnect(); route();}}, t("disconnect")));
+    const footer = h("div", {class: "global-card-footer"});
+    local.append(disclosure({label: t("global_details"), body: h("p", {}, t("managed_browser_help"))}),
+      h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")), footer);
+    disposeTailscale = mountTailscale(footer, {h, t, presentation: "note"});
+    fleetRoot.append(fleetEmpty());
   }
-  const disposeTailscale = mountTailscale(fleetRoot, {h, t});
-  return () => {setup.dispose(); disposeFleet?.(); disposeTailscale();};
+  return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
 }
 
 // Credential dialogs and protected storage stay native. A transition invalidates old async
@@ -2483,7 +2590,7 @@ async function viewNativeSettings(main) {
   const enroll = action("enroll", "desktop_add_credential");
   const reload = action("reload", "desktop_reload_configuration");
   const forget = action("forget", "desktop_forget_credential");
-  const leave = action("disconnect", "disconnect");
+  const leave = action("disconnect", "disconnect", "danger");
   const actions = h("div", {class: "actions"}, connect, enroll, reload, leave);
   const saved = h("div", {}, h("p", {class: "muted"}, t("desktop_forget_help")), forget);
   const connectionDetails = h("details", {}, h("summary", {}, t("connection_details")), technicalDetails, help);
@@ -2491,9 +2598,13 @@ async function viewNativeSettings(main) {
     h("ol", {}, h("li", {}, t("delivery_setup_central")), h("li", {}, t("delivery_setup_identity")), h("li", {}, t("delivery_setup_mode"))));
   const localDetails = h("details", {class: "panel"}, h("summary", {}, t("desktop_local")),
     h("p", {class: "muted"}, t("desktop_dashboard_only")));
-  main.append(pageHeader({title: t("nav_settings")}), h("section", {class: "panel native-connection", "aria-label": t("desktop_connection")},
+  const frame = openSettings(main);
+  frame.panel("connection").append(h("section", {class: "panel native-connection", "aria-label": t("desktop_connection")},
     h("h2", {}, t("desktop_connection")),
-    setup, details, platform, actions, info, connectionDetails, introduction, saved), localDetails, fleetRoot, updateRoot);
+    setup, details, platform, actions, info, connectionDetails, introduction, saved));
+  frame.panel("desktop").append(localDetails);
+  frame.panel("fleet").append(fleetRoot);
+  frame.panel("updates").append(updateRoot);
   const showInfo = () => {
     info.replaceChildren();
     if (state.caps) info.append(h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})));
@@ -2558,10 +2669,18 @@ async function viewNativeSettings(main) {
     forget.disabled = state.nativeBusy || !status.credential_saved;
   } catch (error) { if (mine === generation) info.append(errorBox(error)); }
   if (mine !== generation) return;
-  if (firstConnection) return () => disposeUpdates?.();
+  if (disposeUpdates) frame.show("updates");
+  if (firstConnection) {
+    setup.prepend(h("span", {class: "brand-mark", "aria-hidden": "true"}),
+      h("p", {}, t("global_first_sentence")),
+      h("a", {href: setupGuide()}, t("global_setup_guide")));
+    return () => disposeUpdates?.();
+  }
+  frame.show("desktop");
   const disposeFleet = await mountFleet(fleetRoot, {h, t});
   if (mine !== generation || !main.isConnected) { disposeFleet?.(); disposeUpdates?.(); return; }
   const disposeTailscale = mountTailscale(fleetRoot, {h, t});
+  frame.show("fleet");
   return () => {disposeFleet?.(); disposeUpdates?.(); disposeTailscale();};
 }
 
@@ -2597,13 +2716,12 @@ async function change(out, action, target, params, pre, scope) {
 function manageNote() { return may("manage") ? null : h("p", { class: "note" }, t("needs_manage_access")); }
 function indent(el, depth) { el.style.setProperty("--depth", String(depth)); return el; } // CSP: no style attributes
 function stateChip(c) {
-  const cls = { done: "ok", awaiting_approval: "warn", doing: "info", waiting: "warn" }[c.display_state] || "";
-  return chip(t("wi_state_" + c.display_state), cls);
+  return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
-  return [c.doing ? chip(`${t("wi_state_doing")} ${c.doing}`, "info") : null,
-    c.awaiting_approval ? chip(`${t("wi_state_awaiting_approval")} ${c.awaiting_approval}`, "warn") : null,
-    chip(t("wi_done_of", { done: c.done, total: c.total }), c.total && c.done === c.total ? "ok" : "")];
+  return [c.doing ? h("span", {class: "ui-pill tone-info"}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+    c.awaiting_approval ? h("span", {class: "ui-pill tone-review"}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+    h("span", {class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "")}, t("wi_done_of", {done: c.done, total: c.total}))];
 }
 // ↑ ↓ and pin for one entry among its siblings; pinned entries never cross unpinned ones.
 function orderButtons(sibs, i, key, run) {
@@ -2691,7 +2809,8 @@ async function viewProjects(main) {
     namespace: connection.namespace, kind: "project", errorBox, opStatus,
     onCreated: async op => {location.hash = `#/project/${op.result.project_id}`;}});
   const showArchived = h("input", { type: "checkbox" });
-  main.append(pageHeader({title: t("nav_projects")}), h("p", { class: "muted" }, t("projects_help")), manageNote() || "",
+  main.append(pageHeader({title: t("nav_projects"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => render().catch(() => {})})]}),
+    disclosure({label: t("global_details"), body: h("p", {}, t("projects_help"))}), manageNote() || "",
     create.box, out, tree,
     h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
   const render = async (fromEvent = false) => {
@@ -2843,7 +2962,6 @@ async function viewProject(main, pid) {
         h("div", { class: "grow" }, h("a", { class: "title", href: `#/item/${w.work_item_id}` }, w.title),
           w.derived_from ? h("span", { class: "muted" }, " ⑂") : null),
         w.steps.length ? chip(`${done}/${w.steps.length}`) : null,
-        w.completion.pending ? chip(t("needs_decision"), "warn") : null,
         may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
       if (may("manage") && !p.archived) dr.box.prepend(h("div", {class: "actions"}, ...orderButtons(sibs, i, "work_item_id", run)));
       if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row,
@@ -3149,13 +3267,25 @@ function linkedItems(items) {
   return h("p", { class: "muted" }, t("linked_items"), ": ",
     ...items.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/item/${x.work_item_id}` }, x.title)]));
 }
-function workItemRow(w) {
-  return h("div", { class: "row" }, stateChip(w.completion),
-    h("div", { class: "grow" }, h("a", { class: "title", href: `#/item/${w.work_item_id}` }, w.title),
-      h("div", { class: "muted" }, [w.project_name, w.completion.claimed_by && t("claimed_by", { who: w.completion.claimed_by })]
-        .filter(Boolean).join(" · "))),
-    w.reading?.unread ? chip(t("reading_unread")) : null,
-    w.completion.pending ? chip(t("needs_decision"), "warn") : null);
+function workItemRow(w, open) {
+  const title = w.title || w.work_item_id;
+  const href = `#/item/${encodeURIComponent(w.work_item_id)}`;
+  const key = w.work_item_id;
+  const meta = joinLabel([w.project_name, w.completion?.claimed_by ? t("claimed_by", {who: w.completion.claimed_by}) : "",
+    w.reading?.unread ? t("reading_unread") : ""]);
+  return inboxRow({
+    h, key, title, href, meta,
+    pill: statusPill(workStatusKey(w.completion?.display_state)),
+    action: h("a", {class: "ui-button secondary ui-sm", href}, t("global_review")),
+    detailsLabel: t("global_details_for", {title}),
+    onOpen: () => open?.(key, title, [
+      statusPill(workStatusKey(w.completion?.display_state)),
+      meta ? h("p", {}, meta) : null,
+      w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
+      disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
+        h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, w.work_item_id || "—")))}),
+    ]),
+  });
 }
 
 // ------------------------------------------------------------------ router
@@ -3385,8 +3515,10 @@ async function viewCleanup(main, section, ident) {
       } }, t("more")));
     } catch (e) { fill(retainedOut, errorBox(e)); }
   }
-  main.append(pageHeader({title: t("nav_cleanup")}), h("p", { class: "muted" }, t("cleanup_intro")),
-    section === "task" || supportsTask ? h("p", {class: "muted"}, t("cleanup_task_help")) : "");
+  main.append(pageHeader({title: t("nav_cleanup"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"),
+      onClick: () => settleRefreshes([loadHistory(), loadRetained(), refreshCleanup(true)]).catch(() => {})})]}),
+    disclosure({label: t("global_details"), body: h("div", {}, h("p", {}, t("cleanup_intro")),
+      section === "task" || supportsTask ? h("p", {}, t("cleanup_task_help")) : null)}));
   if (section === "resource") {
     try {
       const data = await api("GET", `/cleanup-tombstones/${encodeURIComponent(ident)}`);
@@ -3417,6 +3549,7 @@ async function viewApprovals(main) {
   const panel = approvalsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus,
     storageKey: `batc.approvals.${connection.namespace}`});
+  panel.box.classList.add("global-form");
   main.append(h("a", {href: "#/sessions"}, t("sessions_title")), pageHeader({title: t("bulk_title")}), panel.box);
   try {await panel.refresh();} catch { /* panel retains its fixed intent and displays the read error */ }
   return onEvents(event => event.resource_type === "operation" ? panel.refresh(true) : panel.update());
@@ -3598,7 +3731,7 @@ function mountWorkspace(name) {
 let teardown = null;
 let generation = 0;
 async function route() {
-  let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
+  let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split('?')[0].replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
   if (nextName === 'pm') {
     if (nextView?.startsWith('pmt_')) {nextThread = nextView; nextView = 'discussions';
       history.replaceState(null, '', `#/pm/${encodeURIComponent(nextWorkspace)}/discussions/${encodeURIComponent(nextThread)}`);}
@@ -3610,7 +3743,7 @@ async function route() {
   state.viewReady = false;
   if (teardown) { teardown(); teardown = null; }
   freshPage();
-  let [name, ...rest] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
+  let [name, ...rest] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
   if (name === "home" && state.token && state.caps?.managed_installation && !state.caps.hosts?.length) name = "settings";
   mountWorkspace(name);
   // The event loop starts after the initial view read. Name that waiting state
@@ -3636,7 +3769,14 @@ async function route() {
     const connection = {epoch: state.epoch, namespace: state.namespace, generation};
     preferences = modelPreferencesPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection), submit,
       storageKey: `batc.model-preferences.${connection.namespace}`, onEvents, errorBox});
-    main.append(preferences.box);
+    const slot = main.querySelector("[data-settings-models]");
+    const tab = main.querySelector('[data-settings-nav="models"]');
+    if (slot) {
+      slot.append(preferences.box);
+      if (tab) tab.hidden = false;
+      if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
+    }
+    else main.append(preferences.box);
   }
   if (name === "project" && state.caps?.features?.project_skills?.version === 1) {
     const connection = {epoch: state.epoch, namespace: state.namespace, generation};

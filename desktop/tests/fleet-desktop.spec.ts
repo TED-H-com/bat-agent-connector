@@ -33,7 +33,7 @@ async function setup(page:any,options:any={}) {
   if(env.lose===input.action){env.lose=null;throw new Error('Fixture lost reply');}return structuredClone(result);
  }}});
  },{doc:fixture,options});
- await page.goto('/dashboard/#/settings');await expect(page.locator('[data-fleet-choice="dashboard:dashboard"]')).toBeVisible();
+ await page.goto('/dashboard/#/settings');await page.getByRole('tab',{name:/^(Fleet|機群)$/}).click();await expect(page.locator('[data-fleet-choice="dashboard:dashboard"]')).toBeVisible();
 }
 const calls=(page:any,action:string)=>page.evaluate((a:string)=>(window as any).__fleet.calls.filter((c:any)=>c.action===a),action);
 const refresh=(page:any)=>page.getByRole('button',{name:'Read status',exact:true}).first().click();

@@ -1,7 +1,7 @@
 import {viewState} from './ui/view-state.js';
 import {agentMark, button, dataTable, disclosure, emptyState, inspector, menu, metric, sectionCard, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
-import {reasonPresentation} from './ui/ui-strings.js';
+import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
 import {usageChart} from './pm-agents-chart.js';
 import {browserTimeZone, cliClass, cliName, dayKey, isBucketPayload, stackDailyBuckets} from './pm-agents-trend.js';
@@ -114,7 +114,8 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       const [tone, key] = known[row.status];
       return h('span', {class: `ui-pill tone-${tone}`, 'data-status': row.status}, t(key));
     }
-    return h('span', {class: 'ui-pill tone-bad', 'data-status': row.status || 'unknown'}, t(reasonPresentation(row.status).key));
+    const reason = reasonBits(row.status);
+    return h('span', {class: 'ui-pill tone-bad', 'data-status': row.status || 'unknown'}, reason.text);
   }
   function visibleRows() {return (data?.rows || []).filter(matches);}
   function matches(row) {
@@ -386,9 +387,13 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     if (focusId) layout.querySelector(`[data-resource-row="${cssEscape(focusId)}"]`)?.focus({preventScroll: true});
     syncFilterMenu();
   }
+  function reasonBits(code) {
+    if (typeof code === 'string' && Object.hasOwn(reasonLabels, code)) return {text: reasonLabel(t, code), raw: ''};
+    return {text: t('ui_reason_generic'), raw: typeof code === 'string' ? code : ''};
+  }
   function coverageLine(code) {
-    const reason = reasonPresentation(code);
-    return h('p', {}, t(reason.key), reason.raw ? h('code', {class: 'mono'}, reason.raw) : null);
+    const reason = reasonBits(code);
+    return h('p', {}, reason.text, reason.raw ? h('code', {class: 'mono'}, reason.raw) : null);
   }
   function fillInspector(row) {
     if (!inspectorPanel || !row) return;
@@ -409,7 +414,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
         [t('res_observations'), finite(row.observations) == null ? t('res_unknown') : finite(row.observations).toLocaleString()],
       ]));
     }
-    const reason = reasonPresentation(row.status);
+    const reason = reasonBits(row.status);
     nodes.push(disclosure({
       label: t('res_details'), key: `agents-coverage:${workspaceId}:${row.source_id}`,
       body: h('div', {class: 'pm-agents-scope'},
@@ -418,7 +423,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
         isReadable(row) ? facts([[t('res_first'), clock(row.first_at) === EM ? t('res_unknown') : clock(row.first_at)],
           [t('res_last'), clock(row.last_at) === EM ? t('res_unknown') : clock(row.last_at)],
           [t('res_collected'), clock(row.successful_at) === EM ? t('res_unknown') : clock(row.successful_at)]]) : null,
-        h('p', {}, t('res_status'), ' ', t(reason.key), reason.raw ? h('code', {class: 'mono'}, reason.raw) : null),
+        h('p', {}, t('res_status'), ' ', reason.text, reason.raw ? h('code', {class: 'mono'}, reason.raw) : null),
         row.configurations_partial ? h('p', {}, t('res_configurations_more')) : null),
     }));
     inspectorPanel.body.replaceChildren(...nodes);

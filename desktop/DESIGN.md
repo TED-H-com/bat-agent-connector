@@ -16,6 +16,9 @@ Never substitute zero for missing data or count a loaded page as a complete inve
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
+Work, session and delivery events refresh the live projections together without
+locking the workspace Refresh control; a held projection read can still be superseded
+by a newer withdrawal read. PM record events retain the complete workspace refresh.
 
 ## Tokens and type
 
@@ -132,7 +135,7 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 | Requirements | RTM; quality reviews and execution verification, evidence, specs, work packages (including deliveries), handoff and issue publication |
 | Schedule | Roadmap baseline/forecast/observation; sprints |
 | Dependencies | Maintenance policy, checks, workload and release baselines |
-| Issues & changes | Governance and findings; repairs, review and follow-ups |
+| Issues & changes | Register of risks, issues, actions, changes and decisions when `pm_register` is available; otherwise governance stays primary. Repairs, review, follow-ups and governance remain collapsed disclosures |
 | Agents | Resource observations; AHP |
 | Board | Kanban; work batches |
 
@@ -158,6 +161,10 @@ Optional title (trimmed to 160 code points), project-view origin and snapshot re
 use the same validation in both directions; empty values are omitted and refs with
 extra fields (including display metadata) are rejected.
 
+## Global screens
+
+Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): the title row and its actions are vertically centred, with 16px before the next control. Pending is an inbox. The Needs you / Active operations / Unread switch is the shared segmented control. Each group is one surface list: a title and count, hairline rows, and a secondary action. The row title is not underlined until hover or focus. The status pill sits on the meta line. A chevron opens the inspector only when that is different from the row action. Failed operations offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. Explanations sit once in a Details disclosure after the groups. Operations is a dense table (action, target, status, actor, started, duration) with the shared segmented filter and the shared search field. Selecting a row opens an inspector; attempts, frames and raw ids stay in Details. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section and stacks under 800px. Native settings keep mounted sections visible together. Forms stay within 640px. Connection shows the endpoint, a state pill, the last event time, access and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The status word stays in the tooltip and accessible name. The Pending count badge stays. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details.
+
 ## Headers, copy and acceptance
 
 One page title; do not repeat the workspace name above it or repeat the view name
@@ -166,6 +173,8 @@ content has a 760px measure; forms 640px; tables and boards fill up to 1600px.
 English uses sentence case. Every new string has natural Traditional Chinese in
 `ui/ui-strings.js`, merged into the existing i18n mechanism. No raw keys, undefined,
 null, emoji icons or unexplained disabled navigation.
+Projection reasons share one frozen map and `reasonLabel(t, reason)` using the app
+translator. Unknown codes say Not available / 無法取得; raw codes stay in Details.
 Composed labels use `label-text.js` to omit missing segments. A Brief section without
 a recorded status says Unknown / 未知. Issue labels prefer the repository name stored
 on the mapping, then the published issue name, and otherwise show only the number.
@@ -191,6 +200,172 @@ Computed contrast acceptance (normal enabled controls; light / dark): primary
 warn 4.93 / 6.30, bad 4.83 / 5.55, info 5.23 / 5.61, review 5.34 / 5.91,
 neutral 5.19 / 5.44. All meet 4.5:1. The icon legal comment must remain in both
 browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle resource.
+
+## Overview
+
+Overview defaults to the central `pm_overview` live projection. The shared header
+shows the plan title, adoption date, live/report mode and visible lifecycle stage;
+the plan journal sequence is never displayed as a version. Four equal status
+columns answer goal, accepted requirements, blockers and decisions. Null remains a
+dash, incomplete classification keeps only its known denominator with Partial, and
+complete coverage describes the scan rather than project completion. Unknown
+reasons share the localized reason map; omitted lifecycle operations appear only
+in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
+states separate.
+
+Attention retains the central severity/age ordering, with exact context identities
+passed to `discussHref`. Reading rows keep focus during refresh. Requirements and
+work open the existing requirements selection; governance opens its existing Issues
+selection. Attention without a governance record opens its exact central context
+in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,
+with three bullets before expansion and an icon disclosure for each source list.
+Full plan uses the shared inspector and restores focus on Escape. At 768px the
+charter has two columns; at 390px all regions stack in reading order.
+
+Report tools retain the existing durable snapshot operation, original-key recovery,
+authorized comparison, history pagination, print and export. Report history loads on
+demand and rereads every loaded page after a refresh. Selecting a report
+replaces the status and charter with that report's fixed content; live attention,
+milestones, delivery rows and phase are absent. Historical snapshots do not contain
+central acceptance counts, so those metrics stay unknown. Back to live rereads the
+projection. Source withdrawal invalidates the affected facts and closes their reader;
+late responses cannot restore a prior generation. Preferences store only UI state,
+scoped to connection/principal and workspace. Older servers retain the saved-charter
+view when `pm_overview` is absent.
+
+## Discussions
+
+Discussions uses a 280px searchable thread list, a conversation with its composer
+pinned below the scrolling transcript, and a Context / Inputs / Plan panel. Below
+1200px the panel opens in the shared drawer; below 800px it becomes a sheet with
+Escape and focus return. A quiet origin link sits above the text title; its pencil
+opens inline Save / Cancel controls (Enter saves, Escape cancels) using the central
+rename action. Recovery remains attached to the original rename intent.
+Context chips use current labels and put differing admission labels in tooltips;
+withdrawn refs show only their kind and Unavailable, including in the thread list.
+Chips stay on one line with full accessible labels: up to three in the header, then
++N opens Context; one per list row. The selected row has the table accent inset.
+The composer has one status/actions row with Send and Ask PM kept together.
+
+The shared `/discussions/new` link opens an editable draft and focuses the composer.
+Its first Send creates the bound thread and then appends the note. Both operations
+retain their own original keys; the acknowledged thread ID and unsent note bridge a
+reload between the two. Opening or reloading the draft performs no write. Thread
+origins retain the project-view route and fixed report ID through draft reloads; returning
+to a report restores both its ID and Overview's saved mode. Source views retain their own
+preference state.
+
+Structured analysis stays on the existing capability-checked native/BAT proposal
+path. A Proposed update card groups candidates with include toggles, at most three
+inline answers, and one owner adoption review. Notes and answers remain central
+messages. Only central `adoptable` / `adoptable_reason` determine proposal freshness; the
+client does not compare source IDs or thread versions. Renaming alone leaves an
+adoptable proposal intact. Known reasons use shared short labels; future reasons
+and central VERSION_CONFLICT show Out of date and Ask PM again while retaining
+review drafts. Raw reason codes stay in Details.
+The operation's real state drives the static working/elapsed line and original-key
+recovery. Saved proposals, runtime options, planning inputs, immutable revisions,
+context packages, meetings, follow-ups and Brief remain in the thread panel.
+Proposal titles replace raw IDs in the picker; plan name, revision and status replace
+commit digests in the reading surface. Identifiers and copyable digests are in Details.
+All thread tools use shared chevron disclosures, including retained lazy controls.
+The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
+pills and a Compare action; explanatory planning copy is inside Details.
+
+## Schedule
+
+Schedule uses the central `pm_schedule` projection. Day / Week / Month zoom, Today,
+and a shared legend sit above a sticky tree and time axis. The tree follows explicit
+`parent_id` relationships; there are no phase rows. Undated ancestors retain the tree
+structure, and the Unscheduled disclosure includes every loaded undated item.
+Baseline is dashed, forecast outlined with a solid stroke, and actual filled. An actual
+without end evidence has a short fading marker labelled Open, never a finish at today.
+Only a `blocked` status produces hatching. Milestone delta compares recorded dates.
+
+Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
+range uses all loaded rows; any partial/truncated page keeps a Partial pill and a
+reason in Details. Unknown reasons use the shared reason vocabulary with a neutral
+fallback. Counts describe loaded items only. Source withdrawal clears the chart,
+counts and inspector together and invalidates pending reads.
+
+The inspector keeps the Requirements section order and a narrow
+`pm-schedule-inspector.render(row, context)` interface for shared-inspector integration.
+Session attempts have no dates or bars; their read-only session links and attempts
+remain available in the inspector and Unscheduled. Propose change uses `discussHref`
+with the exact context identity. Missing result and delivery evidence stays unavailable.
+Roadmap and Sprints keep their original durable forms in the header overflow drawer.
+Zoom, selection, expansion and scroll preferences are bounded and connection/workspace
+keyed. Below 800px, rows become a list with date ranges and independently scrolling
+mini timelines; the document never scrolls horizontally.
+
+## Dependencies
+
+The question on this view is which checks have to be run again if one dependency changes.
+It reads the current dependency projection, its revisions, and one impact query. Capture,
+declare, and retract stay the durable dependency actions, using the projection version,
+the workspace version, and the source binding digest. Capture again is the header action.
+It is primary only when this member can run it. Otherwise it is a secondary button with the
+blocking reason beside it. Maintenance policy, release baselines, maintenance checks, and
+workload observations stay in the secondary cards.
+
+The header names the capture commit and its UTC date. A Stale pill is shown only when
+the projection says `stale` is true. Unknown freshness stays out of the header and is
+stated once under Details. A Partial pill and the omitted total describe the returned
+capture, not a repository-wide total. Relation counts do the same, and they are omitted
+when the projection has no count object.
+
+The matrix lists every captured component. More than twelve rows start with the first
+twelve and Show all (M). Columns group dependencies by kind. A capture of twelve
+columns or fewer shows every dependency, so a second component is not an empty row.
+More than twelve columns start as the focused component's direct dependencies, with
+Show transitive. A cell mark is
+R, B, T, C, or Ref. A legend above the matrix names those marks and the evidence styles:
+solid verified, outline declared, dashed inferred. The accessible name is the dependency,
+relation, version, and evidence. At 800px and below the same rows become a list. The graph
+uses the width of the view and centres a drawing that is narrower than that width. It is
+labelled Loaded and is not a fleet-wide graph. Selecting a node keeps its upstream and
+downstream visible.
+
+The inspector shows a pinned version only when this capture resolved one, plus the
+allowed range, the evidence location, and the maintenance owner or the recorded reason.
+Tests to re-run come from the capture's verification hints. Affected components come
+from the impact read. A bounded prefix says how many components were loaded. An impact
+miss says why the dependency is outside this projection, which is not the same as no
+impact. Check impact opens a discussion with no context ref; the dependency name and
+the impact summary are in the title. Declare and retract stay owner actions in a
+disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
+the shared wording, and the raw code appears only there.
+
+## Issues & changes
+
+When `features.pm_register.version` is 1, the view reads `GET /pm/workspaces/{id}/register`
+and `GET …/register/{row_id}`. Type counts and the summary (open-by-age, twelve weeks,
+blocking reasons) appear only when `coverage.complete` is true. Otherwise the header
+meta is the number of rows shown, and an empty blocking-reason list says that no
+reason field was recorded. The summary is one 120px strip of three blocks above the
+table. At 800px and below it collapses into a closed Trends disclosure, and the rows
+become a list (title, one meta line, next step) instead of the wide table. The table
+shows the type word; Source stays in the inspector facts. Filters are one toolbar:
+type, status, exact owner and title search, with accessible names and no visible
+field labels. Pages follow `next_cursor`; row ids and cursors are passed through
+unchanged. The inspector shows the stored processing timeline. Discuss and Propose
+change use the shared discussion link, bound only when the row source is a context
+ref. Requirement and work links open the Requirements selection. A 403 or 404 drops
+the rows, counts and inspector together. Governance, repairs, review and follow-up
+keep their durable forms in collapsed disclosures, opened from the header overflow.
+Header actions and capture hints belong to their active view; an empty overflow is hidden.
+
+## Agents
+
+Agent resources uses the same compact navigation, table and inspector. Separate
+source-reported models from requested model context, and observed tokens from current
+quota windows. Missing counters stay unknown. Source failures withdraw numbers and
+model details together. Filters and a selected inspector keep their place during
+background reads; the toolbar can pause view updates without stopping collection.
+When the resources projection includes `buckets`, the usage trend is one stacked bar
+per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
+The resources read includes `buckets` only when the request sets `buckets=day`.
+Omit the chart when the projection has no buckets.
 
 Agent resources keeps the shell title. Its meta line sits under that title and shows
 the observed local range, the server time zone, and when the read was updated. Metrics

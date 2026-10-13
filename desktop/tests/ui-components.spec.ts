@@ -50,8 +50,8 @@ test('disclosure remembers open state; table rows navigate and expand; unknown d
 });
 for (const locale of ['en', 'zh-TW']) test(`canonical vocabulary ${locale} and text-only content`, async ({browser}) => {
   const context = await browser.newContext({locale}); const page = await context.newPage(); await mount(page);
-  const expected = locale === 'en' ? ['Not started','In progress','Waiting','In review','Accepted','Blocked','Done','Merged','Deployed','Unknown','Not assessed','Partial','Stale','Read-only','Draft','Adopted','Historical']
-    : ['未開始','進行中','等待中','審閱中','已驗收','受阻','完成','已合併','已部署','未知','未評估','部分','過期','唯讀','草稿','已採用','歷史'];
+  const expected = locale === 'en' ? ['Not started','In progress','Waiting','In review','Accepted','Blocked','Done','Merged','Deployed','Rolled back','Unconfirmed','Unknown','Not assessed','Partial','Stale','Read-only','Draft','Adopted','Historical']
+    : ['未開始','進行中','等待中','審閱中','已驗收','受阻','完成','已合併','已部署','已回復','待確認','未知','未評估','部分','過期','唯讀','草稿','已採用','歷史'];
   await expect(page.locator('#fixture > [data-status]')).toHaveText(expected);
   await page.evaluate(async () => {const {button} = await import('/src/ui/components.js'); document.body.append(button({label: '<img src=x onerror=alert(1)>'}));});
   await expect(page.locator('img')).toHaveCount(0); await expect(page.locator('[style]')).toHaveCount(0); await context.close();
@@ -68,4 +68,34 @@ test('nested menu Escape closes only the menu and disabled links cannot activate
   await expect(page.getByRole('menuitem', {name: 'Unavailable', exact: true})).toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector')).toBeVisible(); await expect(trigger).toBeFocused();
   await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector')).toHaveCount(0);
+});
+
+test('progress segments retain blocker and warning tones', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {metric} = await import('/src/ui/components.js');
+    document.getElementById('fixture')!.append(metric({label: 'Progress', value: '3 of 8 accepted', bar: [{tone: 'bad', value: 1}, {tone: 'warn', value: 2}]}));
+  });
+  await expect(page.locator('.ui-metric-bar .tone-bad')).toHaveCount(1);
+  await expect(page.locator('.ui-metric-bar .tone-warn')).toHaveCount(1);
+});
+
+test('shared disclosure can retain existing lazy content and listeners', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {disclosure} = await import('/src/ui/components.js');
+    const {h} = await import('/src/ui/dom.js');
+    const input = h('input', {'aria-label': 'Retained draft'}); input.value = 'Keep this draft';
+    const existing = h('details', {'data-existing-disclosure': '', open: true}, h('summary', {}, 'Existing tools'), input);
+    existing.addEventListener('toggle', () => existing.dataset.openState = String(existing.open));
+    document.getElementById('fixture')!.append(disclosure({element: existing}));
+    disclosure({element: existing});
+  });
+  const disclosure = page.locator('[data-existing-disclosure]');
+  await expect(disclosure.getByLabel('Retained draft')).toHaveValue('Keep this draft');
+  await expect(disclosure.locator(':scope > summary > svg')).toHaveCount(1);
+  await disclosure.locator(':scope > summary').press('Enter');
+  await expect(disclosure).toHaveAttribute('data-open-state', 'false');
+  await disclosure.locator(':scope > summary').press('Enter');
+  await expect(disclosure.getByLabel('Retained draft')).toHaveValue('Keep this draft');
 });

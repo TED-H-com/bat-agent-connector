@@ -52,7 +52,7 @@ export function sectionCard({title, actions = [], body} = {}) {
 export function metric({label, value, context, bar, pill} = {}) {
   const unknown = value === null || value === undefined || typeof value === 'number' && !Number.isFinite(value);
   const track = bar && !unknown ? h('div', {class: 'ui-metric-bar', 'aria-hidden': 'true'}, ...bar.map(part => {
-    const span = h('span', {class: `tone-${['ok', 'review', 'info'].includes(part.tone) ? part.tone : 'neutral'}`});
+    const span = h('span', {class: `tone-${['ok', 'review', 'info', 'bad', 'warn'].includes(part.tone) ? part.tone : 'neutral'}`});
     span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0); return span;
   })) : null;
   return h('div', {class: 'ui-metric'}, h('div', {class: 'ui-meta'}, label),
@@ -66,9 +66,14 @@ export function skeleton(rows = 3) {
     ...Array.from({length: Math.min(100, Math.max(0, rows))}, () => h('div', {'aria-hidden': 'true'})));
 }
 const disclosures = new Map();
-export function disclosure({label, body, open = false, key}) {
-  const root = h('details', {class: 'ui-disclosure', open: key && disclosures.has(key) ? disclosures.get(key) : open},
-    h('summary', {}, drawIcon('chevron-right'), label), body);
+export function disclosure({label, body, open = false, key, element}) {
+  // Existing lazy/durable content can opt into the shared disclosure without
+  // replacing its nodes, listeners, focus or open state.
+  const root = element || h('details', {open}, h('summary', {}, label), body);
+  if (root.classList.contains('ui-disclosure')) return root;
+  root.classList.add('ui-disclosure');
+  root.querySelector(':scope > summary')?.prepend(drawIcon('chevron-right'));
+  if (key && disclosures.has(key)) root.open = disclosures.get(key);
   root.addEventListener('toggle', () => {if (!key || !root.isConnected) return;
     disclosures.delete(key); disclosures.set(key, root.open); if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);});
   return root;

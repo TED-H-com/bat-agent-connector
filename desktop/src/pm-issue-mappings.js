@@ -1,5 +1,5 @@
 // Publication uses the existing central operation; only explicitly entered text is public.
-import {firstLabel, joinLabel} from './label-text.js';
+import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/issue-mappings`;
   const id=/^pmim_[0-9a-f]{32}$/,revision=/^pmir_[0-9a-f]{32}$/,digest=/^[0-9a-f]{64}$/;
@@ -119,7 +119,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
       h('p',{class:'muted'},t('pmi_not_done')),
       fold('pmi_history',...record.revisions.map(item=>{
         const d=item.document,selected=d.selected;
-        return h('details',{},h('summary',{},`${t('pmi_revision')} ${item.sequence} · ${item.actor}`),
+        return h('details',{},h('summary',{},joinLabel([`${t('pmi_revision')} ${labelSegment(item.sequence)}`, item.actor])),
           selected.public_title?h('h4',{},selected.public_title):'',selected.public_body?h('pre',{class:'pm-note-text'},selected.public_body):'',
           selected.public_reason?h('pre',{class:'pm-note-text'},selected.public_reason):'',
           selected.rationale?h('p',{},t('pmi_private_reason'),': ',selected.rationale):'',

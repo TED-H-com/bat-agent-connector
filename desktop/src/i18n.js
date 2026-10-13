@@ -1,4 +1,7 @@
+import {overviewStrings} from './pm-overview-strings.js';
+import {scheduleStrings} from './pm-schedule-strings.js';
 import {uiStrings} from './ui/ui-strings.js';
+import {globalStrings} from './global-strings.js';
 import {ahpObserverStrings} from './pm-ahp-observer-strings.js';
 import {pmMaintenanceRepairsStrings} from './pm-maintenance-repairs-strings.js';
 import {pmQualityReviewsStrings} from './pm-quality-reviews-strings.js';
@@ -12,6 +15,7 @@ import {maintenanceCheckStrings} from './pm-maintenance-checks-strings.js';
 import {maintenanceObservationStrings} from './pm-maintenance-observation-strings.js';
 import {pmMaintenancePolicyStrings} from './pm-maintenance-policy-strings.js';
 import {pmReleaseBaselineStrings} from './pm-release-baseline-strings.js';
+import {dependencyStrings} from './pm-dependencies-strings.js';
 import {pmPackageHandoffStrings} from './pm-package-handoff-strings.js';
 import {pmStrings} from "./pm-strings.js";
 import {instructionReceiptStrings} from './instruction-receipts.js';
@@ -20,11 +24,15 @@ const STRINGS = {
   "zh-TW": {
     ...pmStrings["zh-TW"],
     ...uiStrings["zh-TW"],
+    ...overviewStrings["zh-TW"],
+    ...scheduleStrings["zh-TW"],
+    ...globalStrings["zh-TW"],
     ...ahpObserverStrings["zh-TW"],
     ...qualityProjectionStrings["zh-TW"],
     ...pmQualityReviewsStrings["zh-TW"],
     ...pmMaintenanceRepairsStrings["zh-TW"],
     ...pmReleaseBaselineStrings["zh-TW"],
+    ...dependencyStrings["zh-TW"],
     ...pmPackageHandoffStrings["zh-TW"],
     ...workDeliveryStrings["zh-TW"],
     ...pmSpecMaterializationStrings["zh-TW"],
@@ -69,7 +77,7 @@ const STRINGS = {
     managed_browser_connected: "已連線至本機 Connector", managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
     delivery_list_prs: "瀏覽 Pull Requests",
     delivery_no_prs: "找不到 PR。",
-    delivery_refresh_prs: "重新整理",
+    delivery_refresh_prs: "重新整理這一頁的 PR",
 
     delivery_search_prs: "搜尋這一頁的 PR", delivery_choose_repository: "請先選取或填入已連結的儲存庫。",
     delivery_pr_page: "第 {page} 頁", delivery_pr_stale: "清單尚未重新驗證；更新成功後才能選取。", delivery_pr_invalid: "PR 清單回應與選取的儲存庫不一致。",
@@ -764,10 +772,10 @@ const STRINGS = {
     nav_settings: "連線",
     tab_needs_you: "需要你處理", tab_to_confirm: "待確認",
     attention_tab_needs: "需要你處理", attention_tab_active: "執行中操作", attention_tab_unread: "未讀工作更新",
-    attention_replies: "待回覆與權限", attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
-    attention_completion: "完成確認", attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
-    attention_problems: "需處理的操作", attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
-    attention_hosts: "主機連線", attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
+    attention_replies: "提問", attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
+    attention_completion: "待你確認", attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
+    attention_problems: "失敗的操作", attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
+    attention_hosts: "主機", attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
     attention_active: "執行中操作", attention_active_note: "已受理、執行中或等待外部條件的操作；這不是工作完成確認。",
     attention_unread: "未讀工作更新", attention_unread_note: "尚未標記已讀的工作項目版本，包含先前已有的項目；不代表未讀訊息數。",
     attention_loaded: "已載入 {count} 筆（非總數）", attention_empty: "這一類目前沒有項目。",
@@ -909,11 +917,15 @@ const STRINGS = {
   en: {
     ...pmStrings.en,
     ...uiStrings.en,
+    ...overviewStrings.en,
+    ...scheduleStrings.en,
+    ...globalStrings.en,
     ...ahpObserverStrings.en,
     ...qualityProjectionStrings.en,
     ...pmQualityReviewsStrings.en,
     ...pmMaintenanceRepairsStrings.en,
     ...pmReleaseBaselineStrings.en,
+    ...dependencyStrings.en,
     ...pmPackageHandoffStrings.en,
     ...workDeliveryStrings.en,
     ...pmSpecMaterializationStrings.en,
@@ -971,7 +983,7 @@ const STRINGS = {
 
     delivery_list_prs: "List Pull Requests",
     delivery_no_prs: "No PRs found.",
-    delivery_refresh_prs: "Refresh",
+    delivery_refresh_prs: "Refresh this page of PRs",
     delivery_choose_pr: "Choose a repository to load PRs.",
     delivery_search_prs: "Search this page of PRs", delivery_choose_repository: "Choose or enter a configured repository first.",
     delivery_pr_page: "Page {page}", delivery_pr_stale: "This list has not been revalidated. Refresh before selecting.", delivery_pr_invalid: "The PR list does not match the selected repository.",
@@ -1645,10 +1657,10 @@ const STRINGS = {
     nav_settings: "Connection",
     tab_needs_you: "Needs you", tab_to_confirm: "To confirm",
     attention_tab_needs: "Needs you", attention_tab_active: "Active operations", attention_tab_unread: "Unread work updates",
-    attention_replies: "Replies and permissions", attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
-    attention_completion: "Completion review", attention_completion_note: "Work reported done or with every step checked still needs your decision.",
-    attention_problems: "Operations needing attention", attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
-    attention_hosts: "Host connections", attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
+    attention_replies: "Questions", attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
+    attention_completion: "Reviews", attention_completion_note: "Work reported done or with every step checked still needs your decision.",
+    attention_problems: "Failed operations", attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
+    attention_hosts: "Hosts", attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
     attention_active: "Active operations", attention_active_note: "Accepted, running or waiting for external conditions. These are not work completion reviews.",
     attention_unread: "Unread work updates", attention_unread_note: "Work-item versions you have not marked read, including existing items. This is not an unread message count.",
     attention_loaded: "{count} loaded (not a total)", attention_empty: "No items in this category.",

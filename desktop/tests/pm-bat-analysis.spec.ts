@@ -1,3 +1,4 @@
+import {openThreadAnalysis} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture';
@@ -12,7 +13,7 @@ const submit = (page:any, bat=true) => form(page,bat).getByRole('button',{name:'
 for (const native of [false,true]) test.describe(native ? 'native BAT analysis' : 'web BAT analysis',()=>{
   test('explicit adapter choice preserves independent drafts and submits the exact BAT request',async({page})=>{
     const f=nativeFixture();f.bat.available=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await purpose(page,false).fill('Keep this central draft');
     await selector(page).selectOption('bat_analysis');
     await expect(page.locator('[data-pm-analysis-binding]')).toContainText('fixture-bat · workspace-source · demo/library');
@@ -34,14 +35,14 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
   });
   test('unknown BAT receipt survives switching, reload and changed eligibility with its original key and CAS',async({page})=>{
     const f=nativeFixture();f.bat.available=true;f.state.lost=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await selector(page).selectOption('bat_analysis');await purpose(page).fill('Original BAT context only');await submit(page).click();
     await expect(form(page)).toContainText('Reply unavailable');
     await selector(page).selectOption('native_analysis');
     await expect(submit(page,false)).toBeDisabled();
     await expect(page.locator('[data-pm-analysis-recovery]')).toContainText('Check the original request');
     f.bat.eligible=false;f.bat.reason='REPOSITORY_BINDING_CHANGED';f.bat.binding=null;f.state.thread.version=9;
-    await page.reload();
+    await page.reload();await openThreadAnalysis(page);
     await expect(selector(page)).toHaveValue('native_analysis');await expect(submit(page,false)).toBeDisabled();
     await selector(page).selectOption('bat_analysis');
     await expect(purpose(page)).toBeDisabled();await expect(purpose(page)).toHaveValue('Original BAT context only');
@@ -55,10 +56,10 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
   });
   test('unknown central request remains recoverable after choosing BAT',async({page})=>{
     const f=nativeFixture();f.bat.available=true;f.state.lost=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await purpose(page,false).fill('Original central request');await submit(page,false).click();
     await expect(form(page,false)).toContainText('Reply unavailable');
-    await selector(page).selectOption('bat_analysis');await expect(submit(page)).toBeDisabled();await page.reload();
+    await selector(page).selectOption('bat_analysis');await expect(submit(page)).toBeDisabled();await page.reload();await openThreadAnalysis(page);
     await expect(selector(page)).toHaveValue('bat_analysis');await expect(submit(page)).toBeDisabled();
     await selector(page).selectOption('native_analysis');
     await form(page,false).getByRole('button',{name:'Check original request',exact:true}).click();
@@ -67,11 +68,11 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
   });
   test('known pending BAT operation is read by original ID after switching and never resent',async({page})=>{
     const f=nativeFixture();f.bat.available=true;f.bat.pending=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await selector(page).selectOption('bat_analysis');await purpose(page).fill('Wait for the original BAT completion');await submit(page).click();
     await expect(form(page)).toContainText('original operation is still pending');
     await selector(page).selectOption('native_analysis');await expect(submit(page,false)).toBeDisabled();
-    await page.reload();await selector(page).selectOption('bat_analysis');
+    await page.reload();await openThreadAnalysis(page);await selector(page).selectOption('bat_analysis');
     await expect(page.locator('[data-pm-native-runs]')).toContainText('Analysis running');
     f.complete('bat-pm-linux-v1');
     await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
@@ -81,24 +82,24 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
   });
   test('BAT-only capability requires the prepared binding and does not claim model readiness',async({page})=>{
     const f=nativeFixture();f.native.available=false;f.bat.available=true;f.bat.eligible=false;f.bat.reason='PM_WORKTREE_REQUIRED';f.bat.binding=null;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await expect(selector(page)).toHaveValue('bat_analysis');await expect(form(page)).toBeVisible();
     await expect(form(page,false)).toBeHidden();await expect(submit(page)).toBeDisabled();
     await expect(page.locator('[data-pm-native-eligibility]')).toContainText('Prepare discussion context');
-    f.bat.eligible=true;f.bat.reason=null;await page.reload();
+    f.bat.eligible=true;f.bat.reason=null;await page.reload();await openThreadAnalysis(page);
     await expect(page.locator('[data-pm-native-eligibility]')).toContainText('sign-in and model availability are not yet verified');
-    f.state.start=false;await page.reload();await expect(submit(page)).toBeDisabled();expect(f.state.writes).toHaveLength(0);
+    f.state.start=false;await page.reload();await openThreadAnalysis(page);await expect(submit(page)).toBeDisabled();expect(f.state.writes).toHaveLength(0);
   });
   test('read withdrawal clears displayed binding and source text while retaining exact recovery',async({page})=>{
     const f=nativeFixture();f.bat.available=true;f.state.lost=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);
     await selector(page).selectOption('bat_analysis');await purpose(page).fill('Private original analysis');await submit(page).click();
     await expect(form(page)).toContainText('Reply unavailable');
     f.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(page.locator('[data-pm-analysis-binding]')).toBeHidden();
     await expect(page.locator('[data-pm-analysis-binding]')).toHaveText('');
     await expect(page.locator('[data-pm-native-analysis]')).toBeHidden();
-    f.state.failRead=false;await page.reload();
+    f.state.failRead=false;await page.reload();await openThreadAnalysis(page);
     await expect(purpose(page)).toHaveValue('Private original analysis');
     await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
     expect(f.state.ops.size).toBe(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
@@ -109,9 +110,9 @@ test('BAT selector and source provenance fit both languages and all shared width
   const folder=process.env.PM_BAT_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
   for(const locale of ['en','zh-TW']){
     const context=await browser.newContext({locale,baseURL});const page=await context.newPage();const f=nativeFixture();f.bat.available=true;
-    await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await selector(page).selectOption('bat_analysis');
+    await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);await selector(page).selectOption('bat_analysis');
     for(const [width,height] of [[1440,900],[768,900],[390,844]]){
-      await page.setViewportSize({width,height});
+      await page.setViewportSize({width,height});await openThreadAnalysis(page);
       await expect(form(page)).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       await page.screenshot({path:`${folder}/bat-analysis-${locale}-${width}.png`,fullPage:true});
     }

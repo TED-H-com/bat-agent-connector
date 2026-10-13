@@ -27,8 +27,10 @@ def test_marker_ms_parsing():
     assert service.marker_ms("1790486096680") == 1790486096680
     assert service.marker_ms(1790486096680) == 1790486096680
     assert service.marker_ms("2026-09-27T01:14:56+00:00") == 1790471696000
-    with pytest.raises(BatError):
-        service.marker_ms("not-a-marker")
+    for value in ("not-a-marker", "2026-10-11T24:00:00Z", "2026-10-11T24:00:00+00:00",
+                  "20261011T090000Z", "2026-W41-1", "2026-10-11T09:00:00.1234567Z"):
+        with pytest.raises(BatError):
+            service.marker_ms(value)
 
 
 async def test_send_returns_marker_and_read_hides_previous_turn(fleet_factory, mock):

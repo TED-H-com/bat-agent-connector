@@ -52,8 +52,8 @@ def _admit(ops, principal, target, params, pre):
     head = pm_plans.head(ops.db, target["workspace_id"])
     if (type(pre["expected_version"]) is not int or type(pre["expected_plan_version"]) is not int
             or pre["expected_version"] not in {thread["version"], context["thread_version"]}
-            or not pm_discussions.content_unchanged(ops.db, thread, context["thread_version"])
-            or head != context["plan_head"] or head["version"] != pre["expected_plan_version"]
+            or not proposal["adoptable"]
+            or head["version"] != pre["expected_plan_version"]
             or head["accepted_revision_id"] != pre["expected_accepted_revision_id"]):
         raise proposals.error("The reviewed discussion or plan baseline changed", "VERSION_CONFLICT", 409)
     pm_discussions._text(params["rationale"], "rationale", 4000)

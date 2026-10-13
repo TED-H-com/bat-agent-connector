@@ -46,6 +46,14 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 const paths = {
+  "pencil": [
+    ["path", {"d": "m16 3 5 5L7 22H2v-5L16 3Z"}],
+    ["path", {"d": "m14 5 5 5"}]
+  ],
+  "panel-right": [
+    ["rect", {"x": "3", "y": "3", "width": "18", "height": "18", "rx": "2"}],
+    ["path", {"d": "M15 3v18"}]
+  ],
   "layout-dashboard": [
     [
       "rect",
@@ -251,6 +259,28 @@ const paths = {
         "x2": "12.01",
         "y1": "16",
         "y2": "16"
+      }
+    ]
+  ],
+  "circle-x": [
+    [
+      "circle",
+      {
+        "cx": "12",
+        "cy": "12",
+        "r": "10"
+      }
+    ],
+    [
+      "path",
+      {
+        "d": "m15 9-6 6"
+      }
+    ],
+    [
+      "path",
+      {
+        "d": "m9 9 6 6"
       }
     ]
   ],

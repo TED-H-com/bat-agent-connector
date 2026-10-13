@@ -35,6 +35,202 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
+//#region src/pm-overview-strings.js
+var overviewStrings = {
+	en: {
+		ov_live: "Live",
+		ov_goal: "Goal",
+		ov_progress: "Progress",
+		ov_blockers: "Blockers",
+		ov_decisions: "Decisions",
+		ov_accepted: "{accepted} of {total} accepted",
+		ov_requirements: "{n} requirements",
+		ov_adopted: "adopted {date}",
+		ov_attention: "Needs attention",
+		ov_milestones: "Milestones",
+		ov_deliveries: "Recent deliveries",
+		ov_deliveries_loaded: "Recent deliveries (loaded)",
+		ov_discuss: "Discuss",
+		ov_empty: "Nothing needs you right now.",
+		ov_incomplete: "Nothing loaded needs you · sources incomplete",
+		ov_showing: "Showing {n}",
+		ov_view_all: "View all in Issues & changes",
+		ov_no_items: "None recorded",
+		ov_details: "Details",
+		ov_sources: "Sources",
+		ov_hidden: "{n} hidden",
+		ov_more: "+{n} more",
+		ov_less: "Show less",
+		ov_report: "Report #{n}",
+		ov_viewing: "Viewing report #{n}",
+		ov_back_live: "Back to live",
+		ov_plan: "Full plan",
+		ov_charter: "Charter",
+		ov_not_saved: "Select a report in Versions.",
+		ov_saved_limits: "This report contains fixed sources. Acceptance and complete blocker counts were not assessed.",
+		ov_caveat: "Acceptance, merge and deployment are separate evidence. Complete coverage describes the scan, not project completion. Costs and quota are not supplied by the charter.",
+		ov_blocker: "Blocker",
+		ov_decision: "Decision",
+		ov_deviation: "Deviation",
+		ov_risk: "Risk",
+		ov_context_requirement: "{n} requirements",
+		ov_context_work: "Related work",
+		ov_context_milestone: "Milestone",
+		ov_day: "{n}d",
+		ov_hour: "{n}h",
+		ov_minute: "{n}m",
+		ov_delta: "+{n}d",
+		ov_partial_history: "More reports available",
+		ov_no_goal: "Not set",
+		ov_plan_unavailable: "Plan unavailable",
+		ov_report_previous: "Previous report",
+		ov_report_next: "Next report",
+		ov_plan_discussion: "Plan in Discussions"
+	},
+	"zh-TW": {
+		ov_live: "即時",
+		ov_goal: "目標",
+		ov_progress: "進度",
+		ov_blockers: "阻礙",
+		ov_decisions: "待決事項",
+		ov_accepted: "{total} 項中 {accepted} 項已驗收",
+		ov_requirements: "{n} 項需求",
+		ov_adopted: "{date} 採用",
+		ov_attention: "需要關注",
+		ov_milestones: "里程碑",
+		ov_deliveries: "近期交付",
+		ov_deliveries_loaded: "近期交付（已載入）",
+		ov_discuss: "討論",
+		ov_empty: "目前沒有需要你處理的事項。",
+		ov_incomplete: "已載入事項無待辦 · 來源不完整",
+		ov_showing: "顯示 {n} 筆",
+		ov_view_all: "在問題與變更查看全部",
+		ov_no_items: "尚無紀錄",
+		ov_details: "詳細資訊",
+		ov_sources: "來源",
+		ov_hidden: "{n} 筆已隱藏",
+		ov_more: "還有 {n} 項",
+		ov_less: "收合",
+		ov_report: "報告 #{n}",
+		ov_viewing: "正在檢視報告 #{n}",
+		ov_back_live: "返回即時總覽",
+		ov_plan: "完整計畫",
+		ov_charter: "專案章程",
+		ov_not_saved: "請從版本選取報告。",
+		ov_saved_limits: "本報告使用固定來源，未評估驗收進度與完整阻礙數量。",
+		ov_caveat: "驗收、合併與部署各有獨立證據。涵蓋完整表示掃描完整，不代表專案完成。章程不提供費用與剩餘配額。",
+		ov_blocker: "阻礙",
+		ov_decision: "待決",
+		ov_deviation: "偏差",
+		ov_risk: "風險",
+		ov_context_requirement: "{n} 項需求",
+		ov_context_work: "相關工作",
+		ov_context_milestone: "里程碑",
+		ov_day: "{n} 天",
+		ov_hour: "{n} 小時",
+		ov_minute: "{n} 分鐘",
+		ov_delta: "+{n} 天",
+		ov_partial_history: "還有其他報告",
+		ov_no_goal: "未設定",
+		ov_plan_unavailable: "無法取得計畫",
+		ov_report_previous: "上一份報告",
+		ov_report_next: "下一份報告",
+		ov_plan_discussion: "在討論中查看計畫"
+	}
+};
+//#endregion
+//#region src/pm-schedule-strings.js
+var scheduleStrings = {
+	en: {
+		sched_day: "Day",
+		sched_week: "Week",
+		sched_month: "Month",
+		sched_zoom: "Timeline zoom",
+		sched_today: "Today",
+		sched_baseline: "Baseline",
+		sched_forecast: "Forecast",
+		sched_actual: "Actual",
+		sched_milestone: "Milestone",
+		sched_legend: "Schedule legend",
+		sched_tree: "Schedule items",
+		sched_timeline: "Timeline",
+		sched_item: "Milestone / work",
+		sched_unassigned: "Not under a milestone",
+		sched_unscheduled: "Unscheduled ({n})",
+		sched_loaded: "{n} loaded",
+		sched_empty: "No scheduled dates",
+		sched_empty_unscheduled: "No unscheduled items",
+		sched_details: "Details",
+		sched_open: "Open",
+		sched_no_dates: "No dates recorded",
+		sched_not_observed: "Not observed yet",
+		sched_delta: "{n}d",
+		sched_requirement: "Requirement served",
+		sched_status: "Status & session",
+		sched_result: "Latest result",
+		sched_blocker: "Blocker & next step",
+		sched_delivery: "Delivery",
+		sched_attempts: "Attempts",
+		sched_agent: "Agent unknown",
+		sched_unavailable: "Not available",
+		sched_session: "Open session",
+		sched_run: "Open run",
+		sched_requirements: "Open in Requirements",
+		sched_propose: "Propose change",
+		sched_roadmap: "Roadmap",
+		sched_error: "Schedule unavailable",
+		sched_changed: "Schedule changed during loading. Refresh to read it again.",
+		sched_dates: "Recorded dates",
+		sched_partial: "Some schedule data is partial.",
+		sched_as_of: "As of {date}",
+		sched_view: "Schedule"
+	},
+	"zh-TW": {
+		sched_day: "日",
+		sched_week: "週",
+		sched_month: "月",
+		sched_zoom: "時間刻度",
+		sched_today: "今天",
+		sched_baseline: "基準",
+		sched_forecast: "預測",
+		sched_actual: "實際",
+		sched_milestone: "里程碑",
+		sched_legend: "時程圖例",
+		sched_tree: "時程項目",
+		sched_timeline: "時間軸",
+		sched_item: "里程碑／工作",
+		sched_unassigned: "未歸屬里程碑",
+		sched_unscheduled: "未排期（{n}）",
+		sched_loaded: "已載入 {n} 筆",
+		sched_empty: "尚無排定日期",
+		sched_empty_unscheduled: "沒有未排期項目",
+		sched_details: "詳細資訊",
+		sched_open: "未結束",
+		sched_no_dates: "尚無日期紀錄",
+		sched_not_observed: "尚未觀察到",
+		sched_delta: "{n} 天",
+		sched_requirement: "對應需求",
+		sched_status: "狀態與工作階段",
+		sched_result: "最新結果",
+		sched_blocker: "阻礙與下一步",
+		sched_delivery: "交付",
+		sched_attempts: "執行嘗試",
+		sched_agent: "Agent 未知",
+		sched_unavailable: "無法取得",
+		sched_session: "開啟工作階段",
+		sched_run: "開啟執行紀錄",
+		sched_requirements: "在需求中開啟",
+		sched_propose: "提議變更",
+		sched_roadmap: "路線圖",
+		sched_error: "無法取得時程",
+		sched_changed: "載入期間時程已變更，請重新整理。",
+		sched_dates: "已記錄日期",
+		sched_partial: "部分時程資料尚不完整。",
+		sched_as_of: "資料時間：{date}",
+		sched_view: "時程"
+	}
+};
+//#endregion
 //#region src/ui/ui-strings.js
 var statusVocabulary = Object.freeze({
 	not_started: {
@@ -82,6 +278,16 @@ var statusVocabulary = Object.freeze({
 		"zh-TW": "已部署",
 		tone: "ok"
 	},
+	rolled_back: {
+		en: "Rolled back",
+		"zh-TW": "已回復",
+		tone: "warn"
+	},
+	unconfirmed: {
+		en: "Unconfirmed",
+		"zh-TW": "待確認",
+		tone: "neutral"
+	},
 	unknown: {
 		en: "Unknown",
 		"zh-TW": "未知",
@@ -125,6 +331,7 @@ var statusVocabulary = Object.freeze({
 });
 var uiStrings = {
 	en: {
+		ui_reason_detail: "{label} ({code})",
 		ui_search_work: "Search work",
 		ui_report_versions: "Versions",
 		ui_save_snapshot: "Save snapshot",
@@ -194,21 +401,10 @@ var uiStrings = {
 		ui_baselines: "Release baselines",
 		ui_batches: "Work batches",
 		ui_observations: "AHP observations",
-		reason_generic: "Not available",
-		reason_configured_local_files_only: "Connected local files",
-		reason_insufficient_evidence: "Not enough evidence",
-		reason_source_unavailable: "Unavailable",
-		reason_binding_changed: "Binding changed",
-		reason_conflicting: "Conflicting reports",
-		reason_operator_binding: "Operator binding",
-		reason_reported: "Reported",
-		reason_unavailable: "Unavailable",
-		reason_current: "Current",
-		reason_catching_up: "Reading",
-		reason_stale: "Stale",
-		reason_pending: "Waiting"
+		ui_governance: "Governance"
 	},
 	"zh-TW": {
+		ui_reason_detail: "{label}（{code}）",
 		ui_search_work: "搜尋工作",
 		ui_report_versions: "版本",
 		ui_save_snapshot: "儲存快照",
@@ -278,33 +474,299 @@ var uiStrings = {
 		ui_baselines: "發布基準",
 		ui_batches: "工作批次",
 		ui_observations: "AHP 觀察",
-		reason_generic: "無法取得",
-		reason_configured_local_files_only: "已連接的本機檔案",
-		reason_insufficient_evidence: "證據不足",
-		reason_source_unavailable: "無法取得",
-		reason_binding_changed: "綁定已變更",
-		reason_conflicting: "回報互相衝突",
-		reason_operator_binding: "管理者綁定",
-		reason_reported: "已回報",
-		reason_unavailable: "無法取得",
-		reason_current: "最新",
-		reason_catching_up: "讀取中",
-		reason_stale: "過期",
-		reason_pending: "等待中"
+		ui_governance: "治理"
 	}
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
-function reasonPresentation(code) {
-	const key = `reason_${code}`;
-	if (typeof code === "string" && Object.hasOwn(uiStrings.en, key)) return {
-		key,
-		raw: ""
-	};
-	return {
-		key: "reason_generic",
-		raw: typeof code === "string" ? code : ""
-	};
+var reasonLabels = Object.freeze({
+	not_on_current_revision: ["Not on this revision", "不在這個版本"],
+	repository_name_not_stored: ["Repository name was not stored", "沒有儲存儲存庫名稱"],
+	host_unreachable: ["Host unreachable", "主機連不上"],
+	host_not_refreshed: ["Not refreshed", "很久沒更新"],
+	not_enumerated: ["Missing from listing", "上次列舉沒有出現"],
+	gone: ["Gone", "已不存在"],
+	never_observed: ["Not observed yet", "尚未觀測"],
+	SOURCE_MOVED: ["Source moved", "來源已移動"],
+	SOURCE_UNAVAILABLE: ["Source unavailable", "來源無法取得"],
+	invalid_proposal: ["Invalid proposal", "提案無效"],
+	content_changed: ["Discussion changed", "討論內容已變更"],
+	plan_head_changed: ["Plan changed", "計畫已變更"],
+	superseded: ["Replaced by a newer update", "已有較新的更新"],
+	withdrawn: ["Source unavailable", "來源無法取得"],
+	generic: ["Not available", "無法取得"],
+	repository_head_not_observed: ["Head not observed", "尚未觀察到最新提交"],
+	not_captured: ["Not captured", "尚未擷取"],
+	not_named_in_visible_policy: ["Not named in policy", "政策未指定負責人"],
+	capture_budget: ["Capture stopped early", "擷取提前結束"],
+	dependency_omitted: ["Omitted from this view", "這次畫面未列入"],
+	dependency_not_observed: ["Not in this capture", "這次擷取沒有這筆"],
+	projection_byte_budget: ["Projection cut short", "投影超出大小"],
+	summary_not_recorded: ["Summary not recorded", "沒有摘要"],
+	bounded_captured_graph: ["Loaded graph only", "僅已載入的圖"],
+	lockfile_does_not_cover_component: ["Lockfile does not cover this", "鎖定檔未涵蓋此元件"],
+	no_unique_lock_resolution: ["No single locked version", "沒有唯一鎖定版本"],
+	go_sum_not_lockfile: ["go.sum is not a lockfile", "go.sum 不是鎖定檔"],
+	lockfile_unparsable: ["Lockfile unreadable", "鎖定檔無法解析"],
+	not_lockfile_dependency: ["Not in a lockfile", "不在鎖定檔中"],
+	not_declared: ["Version not declared", "未宣告版本"],
+	owner_declaration: ["Owner declaration", "負責人宣告"],
+	workspace_inheritance_unavailable: ["Inheritance unavailable", "無法取得繼承"],
+	package_name_not_declared: ["Package name not declared", "未宣告套件名稱"],
+	missing_at_commit: ["Missing at this commit", "這次提交沒有此檔"],
+	document_too_large: ["File too large", "檔案過大"],
+	selection_byte_budget: ["Selection cut short", "選取超出大小"],
+	selection_wire_budget: ["Selection cut short", "選取超出傳輸大小"],
+	symlink_or_nonregular_blob: ["Not a regular file", "不是一般檔案"],
+	blob_unavailable: ["File content unavailable", "無法取得檔案內容"],
+	non_utf8_or_binary: ["Not UTF-8 text", "不是 UTF-8 文字"],
+	unsupported_or_invalid_format: ["Unreadable format", "格式無法解析"],
+	unsupported_manifest_structure: ["Unsupported manifest", "不支援的清單結構"],
+	unsupported_lock_structure: ["Unsupported lockfile", "不支援的鎖定檔"],
+	unsupported_toolchain: ["Unsupported toolchain", "不支援的工具鏈"],
+	unsupported_field: ["Unsupported field", "不支援的欄位"],
+	dev_unclassified: ["Dev dependency", "開發用相依"],
+	workflow_step: ["CI step", "CI 步驟"],
+	same_ci_job: ["Same CI job", "同一個 CI 工作"],
+	python_group: ["Python group", "Python 群組"],
+	exact_published_package: ["Published package", "已發布套件"],
+	python_dynamic_dependencies: ["Dynamic dependencies", "動態相依"],
+	manifest_without_package: ["Manifest has no package", "清單沒有套件名稱"],
+	workflow_directory_unknown: ["Working directory unknown", "工作目錄不明"],
+	npm_package_name_not_declared: ["Package name not declared", "未宣告套件名稱"],
+	not_available: ["Not available", "無法取得"],
+	schedule_page_partial: ["A source page is partial", "來源分頁不完整"],
+	schedule_page_limit: ["Refresh page limit reached", "已達單次載入頁數上限"],
+	attempts_truncated: ["Some attempts were not loaded", "部分執行嘗試尚未載入"],
+	attempts_unavailable: ["Attempt records unavailable", "無法取得執行嘗試紀錄"],
+	work_bindings_truncated: ["Some work links were not loaded", "部分工作連結尚未載入"],
+	issues_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
+	no_explicit_phase_records: ["No phase records", "尚無階段紀錄"],
+	no_explicit_blocked_record: ["No blocker record", "尚無受阻紀錄"],
+	no_explicit_check_binding: ["No linked check evidence", "尚無連結的檢查證據"],
+	no_explicit_attribution: ["Usage is not attributed", "用量尚未歸屬"],
+	no_adopted_schedule_baseline: ["No adopted baseline", "尚無已採用的時程基準"],
+	no_explicit_finish_evidence: ["No finish evidence", "尚無結束證據"],
+	forecast_baseline_mismatch: ["Forecast uses another baseline", "預測使用不同基準"],
+	no_work_dependency_contract: ["Work dependencies unavailable", "無法取得工作相依"],
+	requirement_text_unavailable: ["Requirement text unavailable", "無法取得需求文字"],
+	multiple_explicit_milestones: ["Linked to several milestones", "已連結多個里程碑"],
+	requirement_dependency_outside_baseline: ["Dependency outside this baseline", "相依項目不在此基準內"],
+	binding_page_truncated: ["Some work links were not loaded", "部分工作連結尚未載入"],
+	work_item_unavailable: ["Work item unavailable", "無法取得工作項目"],
+	attempt_links_truncated: ["Some attempt links were not loaded", "部分執行嘗試連結尚未載入"],
+	operation_record_missing: ["Operation record unavailable", "無法取得操作紀錄"],
+	task_record_missing: ["Task record unavailable", "無法取得任務紀錄"],
+	multiple_explicit_runs: ["Several runs are linked", "已連結多筆執行紀錄"],
+	session_not_observed: ["Not observed yet", "尚未觀察到"],
+	terminal_time_unrecorded: ["End time not recorded", "尚無結束時間紀錄"],
+	state_time_unrecorded: ["State time not recorded", "尚無狀態時間紀錄"],
+	multiple_explicit_parents: ["Linked to several parents", "已連結多個上層項目"],
+	attempt_finished_is_not_work_completion: ["Attempt finished; work completion unknown", "執行嘗試已結束，工作是否完成仍未知"],
+	inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
+	mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
+	issue_title_unavailable: ["Issue title unavailable", "無法取得議題標題"],
+	no_explicit_goal: ["Not set", "未設定"],
+	goal_unconfirmed: ["Unconfirmed", "待確認"],
+	no_adopted_plan: ["No adopted plan", "尚無已採用計畫"],
+	source_limit: ["Partial", "部分"],
+	partial_page: ["Partial", "部分"],
+	source_incomplete: ["Source is incomplete", "來源不完整"],
+	incomplete_sources: ["Sources incomplete", "來源不完整"],
+	source_unavailable: ["Source unavailable", "無法取得來源"],
+	unavailable: ["Not available", "無法取得"],
+	not_configured: ["Not configured", "尚未設定"],
+	not_applicable: ["Not applicable", "不適用"],
+	not_recorded: ["Not recorded", "尚無紀錄"],
+	no_roadmap_baseline: ["No milestone baseline", "尚無里程碑基準"],
+	quality_revoked: ["Acceptance revoked", "驗收已撤回"],
+	forecast_later_than_baseline: ["Later than baseline", "晚於基準日"],
+	lifecycle_inflight: ["Pending operations", "待核對操作"],
+	missing: ["Not recorded", "尚無紀錄"],
+	context_changed: ["Context changed", "來源已變動"],
+	stale: ["Stale", "過期"],
+	stopped: ["Stopped", "已停止"],
+	disabled: ["Disabled", "已停用"],
+	incomplete: ["Sources incomplete", "來源不完整"],
+	not_assessed: ["Not assessed", "未評估"],
+	unknown: ["Unknown", "未知"],
+	configured_local_files_only: ["Connected local files", "已連接的本機檔案"],
+	insufficient_evidence: ["Not enough evidence", "證據不足"],
+	binding_changed: ["Binding changed", "綁定已變更"],
+	conflicting: ["Conflicting reports", "回報互相衝突"],
+	operator_binding: ["Operator binding", "管理者綁定"],
+	reported: ["Reported", "已回報"]
+});
+for (const [reason, labels] of Object.entries(reasonLabels)) {
+	uiStrings.en["ui_reason_" + reason] = labels[0];
+	uiStrings["zh-TW"]["ui_reason_" + reason] = labels[1];
 }
+function reasonLabel(t, reason) {
+	return t("ui_reason_" + (Object.hasOwn(reasonLabels, reason) ? reason : "unavailable"));
+}
+//#endregion
+//#region src/global-strings.js
+var globalStrings = {
+	en: {
+		global_product: "BAT Dashboard",
+		global_first_sentence: "Connect this dashboard to your Connector.",
+		global_setup_guide: "Setup guide",
+		global_view_all: "View all",
+		global_fleet_empty: "Fleet not set up",
+		global_access: "Access",
+		global_refresh: "Refresh",
+		global_details: "Details",
+		global_details_for: "Details for {title}",
+		global_shown: "{count} shown",
+		global_answer: "Answer",
+		global_review: "Review",
+		global_open: "Open",
+		global_approvals: "Approvals",
+		global_no_event: "No event yet",
+		global_endpoint: "Endpoint",
+		global_state: "State",
+		global_last_event: "Last event",
+		global_settings_nav: "Settings sections",
+		global_nav_connection: "Connection",
+		global_nav_desktop: "Desktop",
+		global_nav_models: "Models",
+		global_nav_fleet: "Fleet",
+		global_nav_updates: "Updates",
+		global_nav_about: "About",
+		global_search_operations: "Search operations",
+		global_ops_filter: "Operation filter",
+		global_no_match: "No matches on this page",
+		global_col_action: "Action",
+		global_col_target: "Target",
+		global_col_status: "Status",
+		global_col_duration: "Duration",
+		global_action_id: "Action ID",
+		global_operation_id: "Operation ID",
+		global_code: "Code",
+		global_refs: "References",
+		global_result: "Result",
+		global_duration_s: "{n}s",
+		global_duration_m: "{n}m {s}s",
+		global_duration_m_only: "{n}m",
+		action_unknown: "Operation",
+		action_checkpoint_continue: "Continue from checkpoint",
+		action_checkpoint_revalidate: "Revalidate checkpoint source",
+		action_artifact_upload: "Upload artifact",
+		action_artifact_capture: "Capture artifact",
+		action_artifact_accept: "Accept artifact",
+		action_session_start: "Start session",
+		action_session_send: "Send to session",
+		action_session_answer: "Answer session",
+		action_session_permissions: "Set session permissions",
+		action_session_approve: "Approve pending sessions",
+		action_repository_continue: "Continue from published version",
+		action_github_merge: "Merge pull request",
+		action_delivery_merge: "Merge and deploy",
+		action_deployment_start: "Start deployment",
+		action_cleanup_apply: "Apply cleanup",
+		action_task_pause: "Pause dispatch",
+		action_task_resume: "Resume dispatch",
+		action_task_verify: "Verify task",
+		action_worktree_merge: "Merge worktree",
+		action_integration_apply: "Apply integration",
+		action_integration_handoff: "Hand off integration",
+		action_project_create: "Create project",
+		action_project_update: "Update project",
+		action_project_order: "Reorder projects",
+		action_project_pin: "Pin project",
+		action_work_item_create: "Create work item",
+		action_work_item_update: "Update work item",
+		action_work_item_link: "Link work item",
+		action_work_item_read: "Mark work item read",
+		action_setup_host: "Set up host",
+		action_setup_repository: "Set up repository",
+		action_setup_verification: "Set up verification",
+		action_models_update: "Update model preferences",
+		rail_needs_you: "Needs you",
+		rail_asking: "Asking you",
+		rail_failed: "Failed",
+		rail_running: "Running"
+	},
+	"zh-TW": {
+		global_product: "BAT Dashboard",
+		global_first_sentence: "將這個儀表板連到你的 Connector。",
+		global_setup_guide: "設定說明",
+		global_view_all: "查看全部",
+		global_fleet_empty: "尚未設定機群",
+		global_access: "存取",
+		global_refresh: "重新整理",
+		global_details: "詳細資料",
+		global_details_for: "{title}的詳細資料",
+		global_shown: "顯示 {count} 筆",
+		global_answer: "回答",
+		global_review: "查看",
+		global_open: "開啟",
+		global_approvals: "核准",
+		global_no_event: "尚無事件",
+		global_endpoint: "位址",
+		global_state: "狀態",
+		global_last_event: "最近事件",
+		global_settings_nav: "設定分類",
+		global_nav_connection: "連線",
+		global_nav_desktop: "桌面",
+		global_nav_models: "模型",
+		global_nav_fleet: "機群",
+		global_nav_updates: "更新",
+		global_nav_about: "關於",
+		global_search_operations: "搜尋操作",
+		global_ops_filter: "操作篩選",
+		global_no_match: "這一頁沒有相符項目",
+		global_col_action: "動作",
+		global_col_target: "對象",
+		global_col_status: "狀態",
+		global_col_duration: "耗時",
+		global_action_id: "動作 ID",
+		global_operation_id: "操作 ID",
+		global_code: "代碼",
+		global_refs: "參照",
+		global_result: "結果",
+		global_duration_s: "{n} 秒",
+		global_duration_m: "{n} 分 {s} 秒",
+		global_duration_m_only: "{n} 分",
+		action_unknown: "操作",
+		action_checkpoint_continue: "從檢查點繼續",
+		action_checkpoint_revalidate: "重新驗證檢查點來源",
+		action_artifact_upload: "上傳成果",
+		action_artifact_capture: "擷取成果",
+		action_artifact_accept: "接受成果",
+		action_session_start: "開始工作階段",
+		action_session_send: "傳送到工作階段",
+		action_session_answer: "回答工作階段",
+		action_session_permissions: "設定工作階段權限",
+		action_session_approve: "核准待處理的工作階段",
+		action_repository_continue: "從已發布版本繼續",
+		action_github_merge: "合併拉取請求",
+		action_delivery_merge: "合併並部署",
+		action_deployment_start: "開始部署",
+		action_cleanup_apply: "套用清理",
+		action_task_pause: "暫停派工",
+		action_task_resume: "恢復派工",
+		action_task_verify: "驗證任務",
+		action_worktree_merge: "合併工作樹",
+		action_integration_apply: "套用整合",
+		action_integration_handoff: "交接整合",
+		action_project_create: "建立專案",
+		action_project_update: "更新專案",
+		action_project_order: "調整專案順序",
+		action_project_pin: "固定專案",
+		action_work_item_create: "建立工作項目",
+		action_work_item_update: "更新工作項目",
+		action_work_item_link: "連結工作項目",
+		action_work_item_read: "標記工作項目已讀",
+		action_setup_host: "設定主機",
+		action_setup_repository: "設定儲存庫",
+		action_setup_verification: "設定驗證",
+		action_models_update: "更新模型偏好",
+		rail_needs_you: "需要你",
+		rail_asking: "正在詢問",
+		rail_failed: "失敗",
+		rail_running: "執行中"
+	}
+};
 //#endregion
 //#region src/pm-ahp-observer-strings.js
 var ahpObserverStrings = {
@@ -2092,6 +2554,168 @@ var pmReleaseBaselineStrings = {
 	}
 };
 //#endregion
+//#region src/pm-dependencies-strings.js
+var dependencyStrings = {
+	en: {
+		dep_capture: "Capture again",
+		dep_meta: "Captured at {commit} · {date}",
+		dep_meta_commit: "Captured at {commit}",
+		dep_matrix: "Matrix",
+		dep_graph: "Graph",
+		dep_search: "Search dependencies",
+		dep_runtime: "Runtime",
+		dep_build: "Build",
+		dep_test: "Test",
+		dep_contract: "Contract",
+		dep_reference: "Reference",
+		dep_verified: "Verified",
+		dep_declared: "Declared",
+		dep_inferred: "Inferred",
+		dep_filter_relation: "Relation",
+		dep_filter_evidence: "Evidence",
+		dep_show_transitive: "Show transitive",
+		dep_show_direct: "Direct only",
+		dep_show_all_rows: "Show all ({n})",
+		dep_show_fewer: "Show fewer",
+		dep_legend_verified: "Solid verified",
+		dep_legend_declared: "Outline declared",
+		dep_legend_inferred: "Dashed inferred",
+		dep_capture_manage: "Capture needs manage access.",
+		dep_capture_no_source: "This capture has no repository to read.",
+		dep_capture_not_ready: "This projection is not ready to capture again.",
+		dep_loaded: "Loaded",
+		dep_loaded_count: "{n} loaded",
+		dep_kind_runtime_library: "Runtime / library",
+		dep_kind_api_schema: "API / schema",
+		dep_kind_build_test_toolchain: "Toolchain",
+		dep_kind_external_service: "Service",
+		dep_tests: "Tests to re-run",
+		dep_affected: "Affected components",
+		dep_releases: "Affected releases",
+		dep_check_impact: "Check impact",
+		dep_declare: "Declare relation",
+		dep_retract: "Retract",
+		dep_record: "Record a relation",
+		dep_pinned: "Pinned version",
+		dep_range: "Allowed range",
+		dep_owner: "Maintenance owner",
+		dep_level: "Evidence",
+		dep_why: "Basis",
+		dep_details: "Details",
+		dep_files: "Files",
+		dep_freshness_unknown: "Freshness is unknown: {reason}",
+		dep_omitted: "{n} omitted",
+		dep_none_recorded: "None recorded in this capture",
+		dep_tests_omitted: "More tests were omitted from this capture",
+		dep_not_captured: "Not captured yet",
+		dep_no_match: "No matching relations",
+		dep_empty: "No components in this capture",
+		dep_file_read: "Read",
+		dep_file_missing: "Missing",
+		dep_file_too_large: "Too large",
+		dep_file_unparsable: "Unparsable",
+		dep_file_unreadable: "Unreadable",
+		dep_line_n: "line {n}",
+		dep_zoom_in: "Zoom in",
+		dep_zoom_out: "Zoom out",
+		dep_graph_label: "Dependency graph",
+		dep_component: "Component",
+		dep_name: "Name",
+		dep_ecosystem: "Ecosystem",
+		dep_kind: "Kind",
+		dep_version: "Version",
+		dep_relation: "Relation",
+		dep_source_path: "Source path",
+		dep_source_url: "Source URL",
+		dep_note: "Note",
+		dep_source_required: "Enter a source path or an https URL",
+		dep_revisions: "Captures",
+		dep_revisions_more: "More captures were not loaded",
+		dep_distance: "Distance {n}",
+		dep_choose: "Choose",
+		dep_dash: "—"
+	},
+	"zh-TW": {
+		dep_capture: "再次擷取",
+		dep_meta: "擷取於 {commit} · {date}",
+		dep_meta_commit: "擷取於 {commit}",
+		dep_matrix: "矩陣",
+		dep_graph: "圖",
+		dep_search: "搜尋相依",
+		dep_runtime: "執行期",
+		dep_build: "建置",
+		dep_test: "測試",
+		dep_contract: "契約",
+		dep_reference: "參考",
+		dep_verified: "已核對",
+		dep_declared: "已宣告",
+		dep_inferred: "推測",
+		dep_filter_relation: "關係",
+		dep_filter_evidence: "證據",
+		dep_show_transitive: "顯示間接相依",
+		dep_show_direct: "只顯示直接",
+		dep_show_all_rows: "顯示全部（{n}）",
+		dep_show_fewer: "少顯示一些",
+		dep_legend_verified: "實線為已核對",
+		dep_legend_declared: "外框為已宣告",
+		dep_legend_inferred: "虛線為推測",
+		dep_capture_manage: "再次擷取需要管理權限。",
+		dep_capture_no_source: "這次擷取沒有可讀的儲存庫。",
+		dep_capture_not_ready: "這份投影還不能再次擷取。",
+		dep_loaded: "已載入",
+		dep_loaded_count: "已載入 {n}",
+		dep_kind_runtime_library: "執行期／函式庫",
+		dep_kind_api_schema: "API／結構",
+		dep_kind_build_test_toolchain: "工具鏈",
+		dep_kind_external_service: "服務",
+		dep_tests: "要重跑的測試",
+		dep_affected: "受影響元件",
+		dep_releases: "受影響的發布",
+		dep_check_impact: "檢查影響",
+		dep_declare: "宣告關係",
+		dep_retract: "撤回",
+		dep_record: "登錄關係",
+		dep_pinned: "鎖定版本",
+		dep_range: "允許範圍",
+		dep_owner: "維護負責人",
+		dep_level: "證據",
+		dep_why: "依據",
+		dep_details: "詳細資料",
+		dep_files: "檔案清單",
+		dep_freshness_unknown: "無法判斷是否過期：{reason}",
+		dep_omitted: "未列入 {n}",
+		dep_none_recorded: "這次擷取沒有記錄",
+		dep_tests_omitted: "這次擷取還有未列入的測試",
+		dep_not_captured: "尚未擷取",
+		dep_no_match: "沒有符合的關係",
+		dep_empty: "這次擷取沒有元件",
+		dep_file_read: "已讀取",
+		dep_file_missing: "缺少",
+		dep_file_too_large: "過大",
+		dep_file_unparsable: "無法解析",
+		dep_file_unreadable: "無法讀取",
+		dep_line_n: "第 {n} 行",
+		dep_zoom_in: "放大",
+		dep_zoom_out: "縮小",
+		dep_graph_label: "相依圖",
+		dep_component: "元件",
+		dep_name: "名稱",
+		dep_ecosystem: "生態系",
+		dep_kind: "種類",
+		dep_version: "版本",
+		dep_relation: "關係",
+		dep_source_path: "來源路徑",
+		dep_source_url: "來源網址",
+		dep_note: "備註",
+		dep_source_required: "請填來源路徑或 https 網址",
+		dep_revisions: "擷取紀錄",
+		dep_revisions_more: "還有未載入的擷取",
+		dep_distance: "距離 {n}",
+		dep_choose: "請選擇",
+		dep_dash: "—"
+	}
+};
+//#endregion
 //#region src/pm-package-handoff-strings.js
 var pmPackageHandoffStrings = {
 	en: {
@@ -2179,6 +2803,148 @@ var pmPackageHandoffStrings = {
 		ph_open: "開啟自有執行",
 		ph_preparation: "準備版本",
 		ph_project_version: "專案版本"
+	}
+};
+//#endregion
+//#region src/pm-discussions-strings.js
+var discussionStrings = {
+	en: {
+		pd_save: "Save",
+		pd_cancel: "Cancel",
+		pd_finished: "PM finished",
+		pd_retry: "Retry",
+		pd_more_context: "{count} more context items",
+		pd_new: "New discussion",
+		pd_search: "Search discussions",
+		pd_message: "Message the PM…",
+		pd_send: "Send",
+		pd_ask: "Ask PM",
+		pd_panel: "Thread panel",
+		pd_tab_context: "Context",
+		pd_tab_inputs: "Inputs",
+		pd_tab_plan: "Plan",
+		pd_back: "Back to {view}",
+		pd_title: "Discussion title",
+		pd_rename: "Rename",
+		pd_unavailable: "Unavailable",
+		pd_bound_label: "Originally: {label}",
+		pd_not_connected: "PM agent not connected",
+		pd_setup: "Set up",
+		pd_working: "PM is working",
+		pd_proposed: "Proposed update",
+		pd_review: "Review & adopt",
+		pd_follow_up: "Ask follow-up",
+		pd_stale: "Out of date",
+		pd_again: "Ask PM again",
+		pd_adopted: "Update adopted",
+		pd_details: "Details",
+		pd_copy: "Copy digest",
+		pd_answer: "Your answer",
+		pd_answer_send: "Send answers",
+		pd_empty: "Start with what needs a decision.",
+		pd_no_context: "No bound context",
+		pd_analysis: "Analysis options",
+		pd_history: "Saved proposals",
+		pd_kind_snapshot: "Report",
+		pd_kind_plan_revision: "Plan",
+		pd_kind_requirement: "Requirement",
+		pd_kind_milestone: "Milestone",
+		pd_kind_work_item: "Work",
+		pd_kind_governance: "Decision",
+		pd_kind_finding: "Finding",
+		pd_kind_repair: "Repair",
+		pd_kind_follow_up: "Follow-up",
+		pd_kind_proposal: "Proposal",
+		pd_kind_issue_mapping: "Issue",
+		pd_kind_meeting: "Meeting",
+		pd_kind_lifecycle_transition: "Phase",
+		pd_op_waiting_checks: "Waiting for checks",
+		pd_op_waiting_external: "Waiting for external result",
+		pd_op_succeeded: "Completed",
+		pd_op_failed: "Failed",
+		pd_op_cancelled: "Cancelled",
+		pd_op_needs_attention: "Needs attention",
+		pd_op_uncertain: "Uncertain",
+		pd_op_running: "Running",
+		pd_op_queued: "Queued",
+		pd_op_pending: "Pending",
+		pd_op_accepted: "Accepted",
+		pm_mode_refinement: "Refinement",
+		pm_mode_sprint_planning: "Sprint planning",
+		pm_mode_sprint_review: "Sprint review",
+		pm_mode_retrospective: "Retrospective",
+		pm_mode_maintenance_review: "Maintenance review",
+		pm_mode_closure_reopen: "Closure / reopen",
+		pm_mode_follow_up: "Follow-up"
+	},
+	"zh-TW": {
+		pd_save: "儲存",
+		pd_cancel: "取消",
+		pd_finished: "PM 已完成",
+		pd_retry: "重試",
+		pd_more_context: "還有 {count} 個脈絡項目",
+		pd_new: "新增討論",
+		pd_search: "搜尋討論",
+		pd_message: "傳訊息給 PM…",
+		pd_send: "傳送",
+		pd_ask: "詢問 PM",
+		pd_panel: "討論資料",
+		pd_tab_context: "脈絡",
+		pd_tab_inputs: "資訊",
+		pd_tab_plan: "計畫",
+		pd_back: "返回{view}",
+		pd_title: "討論標題",
+		pd_rename: "重新命名",
+		pd_unavailable: "無法取得",
+		pd_bound_label: "建立討論時：{label}",
+		pd_not_connected: "尚未連接 PM Agent",
+		pd_setup: "設定",
+		pd_working: "PM 處理中",
+		pd_proposed: "建議更新",
+		pd_review: "審閱並採用",
+		pd_follow_up: "繼續追問",
+		pd_stale: "已過期",
+		pd_again: "再次詢問 PM",
+		pd_adopted: "已採用更新",
+		pd_details: "詳細資料",
+		pd_copy: "複製摘要碼",
+		pd_answer: "你的回答",
+		pd_answer_send: "傳送回答",
+		pd_empty: "從需要決定的事開始。",
+		pd_no_context: "尚未連結脈絡",
+		pd_analysis: "分析選項",
+		pd_history: "已存提案",
+		pd_kind_snapshot: "報告",
+		pd_kind_plan_revision: "計畫",
+		pd_kind_requirement: "需求",
+		pd_kind_milestone: "里程碑",
+		pd_kind_work_item: "工作",
+		pd_kind_governance: "決策",
+		pd_kind_finding: "發現",
+		pd_kind_repair: "修復",
+		pd_kind_follow_up: "追蹤",
+		pd_kind_proposal: "提案",
+		pd_kind_issue_mapping: "議題",
+		pd_kind_meeting: "會議",
+		pd_kind_lifecycle_transition: "階段",
+		pd_op_waiting_checks: "等待檢查",
+		pd_op_waiting_external: "等待外部結果",
+		pd_op_succeeded: "已完成",
+		pd_op_failed: "失敗",
+		pd_op_cancelled: "已取消",
+		pd_op_needs_attention: "待處理",
+		pd_op_uncertain: "結果不明",
+		pd_op_running: "執行中",
+		pd_op_queued: "排隊中",
+		pd_op_pending: "待處理",
+		pd_op_accepted: "已受理",
+		pm_mode_refinement: "需求釐清",
+		pm_mode_sprint_planning: "Sprint 規劃",
+		pm_mode_sprint_review: "Sprint 審查",
+		pm_mode_retrospective: "回顧改進",
+		pm_mode_maintenance_review: "維護審查",
+		pm_mode_closure_reopen: "結案／重啟",
+		pm_mode_follow_up: "追蹤討論"
 	}
 };
 //#endregion
@@ -3125,6 +3891,200 @@ var pmIssueStrings = {
 		pmi_public_reason: "公開說明（可留空）",
 		pmi_remove_public: "移除公開說明",
 		pmi_stop_help: "公開說明留空時，只停止本地追蹤，不連線 GitHub；issue 與各個 session 保持開啟。"
+	}
+};
+//#endregion
+//#region src/pm-register-strings.js
+var pmRegisterStrings = {
+	en: {
+		reg_all: "All",
+		reg_type_risk: "Risk",
+		reg_type_issue: "Issue",
+		reg_type_action: "Action",
+		reg_type_change: "Change",
+		reg_type_decision: "Decision",
+		reg_filter_status: "Status",
+		reg_any_status: "Any status",
+		reg_filter_owner: "Owner",
+		reg_filter_search: "Search titles",
+		reg_trends: "Trends",
+		reg_more: "+{n} more",
+		reg_shown: "{n} shown",
+		reg_none_shown: "None shown",
+		reg_load_more: "Load more",
+		reg_empty: "No matching records",
+		reg_unavailable: "Source unavailable",
+		reg_open_age: "Open by age",
+		reg_age_0_7: "0–7 days",
+		reg_age_8_30: "8–30 days",
+		reg_age_31_90: "31–90 days",
+		reg_age_90: "90+ days",
+		reg_without_age: "{n} without a known age",
+		reg_weekly: "Opened and resolved",
+		reg_opened: "Opened",
+		reg_resolved: "Resolved",
+		reg_blocking: "Blocking reasons",
+		reg_no_reasons: "No reason fields recorded",
+		reg_no_reason_recorded: "No reason recorded · {n}",
+		reg_col_type: "Type",
+		reg_col_title: "Title",
+		reg_col_source: "Source",
+		reg_col_impact: "Impact",
+		reg_col_priority: "Priority",
+		reg_col_owner: "Owner",
+		reg_col_due: "Due",
+		reg_col_status: "Status",
+		reg_col_next: "Next step",
+		reg_col_related: "Related",
+		reg_discuss: "Discuss",
+		reg_propose: "Propose change",
+		reg_change_title: "Change: {title}",
+		reg_discussion: "Discussion",
+		reg_created: "Created",
+		reg_updated: "Updated",
+		reg_timeline: "Processing",
+		reg_details: "Details",
+		reg_neutral: "Type is a neutral classification",
+		reg_bar_value: "{label}, {value}",
+		reg_week_value: "{week}, {opened} opened, {resolved} resolved",
+		reg_reason_count: "{reason}, {count}",
+		reg_step_finding: "Finding",
+		reg_step_action: "Action",
+		reg_step_work: "Work",
+		reg_step_evidence: "Evidence",
+		reg_step_review: "Review",
+		reg_step_proposal: "Proposal",
+		reg_step_decision: "Decision",
+		reg_step_revision: "Revision",
+		reg_kind_governance: "Governance",
+		reg_kind_finding: "Finding",
+		reg_kind_repair: "Repair",
+		reg_kind_follow_up: "Follow-up",
+		reg_kind_proposal: "Proposal",
+		reg_kind_issue_mapping: "GitHub issue",
+		reg_kind_meeting: "Meeting",
+		reg_kind_plan_revision: "Plan",
+		reg_kind_requirement: "Requirement",
+		reg_kind_work_item: "Work",
+		reg_status_open: "Open",
+		reg_status_monitoring: "Monitoring",
+		reg_status_observed_open: "Observed",
+		reg_status_tracking: "Tracking",
+		reg_status_needs_review: "Needs review",
+		reg_status_proposed: "Proposed",
+		reg_status_reported_resolved: "Reported resolved",
+		reg_status_reported_done: "Reported done",
+		reg_status_rejected: "Rejected",
+		reg_status_cancelled: "Cancelled",
+		reg_status_succeeded: "Succeeded",
+		reg_status_failed: "Failed",
+		reg_action_repair: "Turn into work",
+		reg_action_evidence: "Record evidence",
+		reg_action_revise: "Revise record",
+		reg_action_decide: "Record decision",
+		reg_action_link: "Link adoption",
+		reg_action_publish: "Publish issue",
+		reg_action_cancel: "Stop tracking",
+		reg_action_follow: "Record follow-up",
+		reg_action_open: "Open action",
+		reg_pr: "PR #{n}",
+		reg_work: "Work",
+		reg_requirement: "Requirement"
+	},
+	"zh-TW": {
+		reg_all: "全部",
+		reg_type_risk: "風險",
+		reg_type_issue: "問題",
+		reg_type_action: "行動",
+		reg_type_change: "變更",
+		reg_type_decision: "決定",
+		reg_filter_status: "狀態",
+		reg_any_status: "任何狀態",
+		reg_filter_owner: "負責人",
+		reg_filter_search: "搜尋標題",
+		reg_trends: "趨勢",
+		reg_more: "+{n} 項",
+		reg_shown: "顯示 {n} 筆",
+		reg_none_shown: "目前沒有顯示",
+		reg_load_more: "載入更多",
+		reg_empty: "沒有符合的紀錄",
+		reg_unavailable: "來源無法取得",
+		reg_open_age: "未決時間",
+		reg_age_0_7: "0–7 天",
+		reg_age_8_30: "8–30 天",
+		reg_age_31_90: "31–90 天",
+		reg_age_90: "超過 90 天",
+		reg_without_age: "{n} 筆沒有已知時間",
+		reg_weekly: "新開與已解決",
+		reg_opened: "新開",
+		reg_resolved: "已解決",
+		reg_blocking: "受阻原因",
+		reg_no_reasons: "沒有記下原因欄位",
+		reg_no_reason_recorded: "沒有記錄原因 · {n}",
+		reg_col_type: "類型",
+		reg_col_title: "標題",
+		reg_col_source: "來源",
+		reg_col_impact: "影響",
+		reg_col_priority: "優先順序",
+		reg_col_owner: "負責人",
+		reg_col_due: "期限",
+		reg_col_status: "狀態",
+		reg_col_next: "下一步",
+		reg_col_related: "相關",
+		reg_discuss: "討論",
+		reg_propose: "提議變更",
+		reg_change_title: "變更：{title}",
+		reg_discussion: "討論",
+		reg_created: "建立時間",
+		reg_updated: "更新時間",
+		reg_timeline: "處理過程",
+		reg_details: "詳細資料",
+		reg_neutral: "類型是中性分類",
+		reg_bar_value: "{label}，{value}",
+		reg_week_value: "{week}，新開 {opened}，已解決 {resolved}",
+		reg_reason_count: "{reason}，{count}",
+		reg_step_finding: "發現",
+		reg_step_action: "行動",
+		reg_step_work: "工作",
+		reg_step_evidence: "證據",
+		reg_step_review: "審查",
+		reg_step_proposal: "提案",
+		reg_step_decision: "決定",
+		reg_step_revision: "修訂",
+		reg_kind_governance: "治理",
+		reg_kind_finding: "發現",
+		reg_kind_repair: "修復",
+		reg_kind_follow_up: "後續",
+		reg_kind_proposal: "提案",
+		reg_kind_issue_mapping: "GitHub issue",
+		reg_kind_meeting: "會議",
+		reg_kind_plan_revision: "計畫",
+		reg_kind_requirement: "需求",
+		reg_kind_work_item: "工作",
+		reg_status_open: "未解決",
+		reg_status_monitoring: "觀察中",
+		reg_status_observed_open: "已觀察",
+		reg_status_tracking: "追蹤中",
+		reg_status_needs_review: "待審閱",
+		reg_status_proposed: "已提議",
+		reg_status_reported_resolved: "回報已解決",
+		reg_status_reported_done: "回報完成",
+		reg_status_rejected: "已拒絕",
+		reg_status_cancelled: "已取消",
+		reg_status_succeeded: "已成功",
+		reg_status_failed: "失敗",
+		reg_action_repair: "轉成工作",
+		reg_action_evidence: "記錄證據",
+		reg_action_revise: "修訂紀錄",
+		reg_action_decide: "記錄決定",
+		reg_action_link: "連結採用",
+		reg_action_publish: "發布 issue",
+		reg_action_cancel: "停止追蹤",
+		reg_action_follow: "記錄後續",
+		reg_action_open: "開啟動作",
+		reg_pr: "PR #{n}",
+		reg_work: "工作",
+		reg_requirement: "需求"
 	}
 };
 //#endregion
@@ -4510,6 +5470,7 @@ var pmStrings = {
 		...resourceStrings.en,
 		...pmPlanProposalStrings.en,
 		...pmIssueStrings.en,
+		...pmRegisterStrings.en,
 		...pmLifecycleStrings.en,
 		...pmSprintStrings.en,
 		...pmKanbanStrings.en,
@@ -4780,6 +5741,7 @@ var pmStrings = {
 		pm_note_help: "Saved to this discussion. This does not send a message to an agent.",
 		pm_manual: "Discussion notes · no AI participant is connected",
 		pm_no_notes: "No notes yet. Record the problem, an option, or a question to revisit.",
+		...discussionStrings.en,
 		pm_mode_idea: "Idea",
 		pm_mode_planning: "Planning draft",
 		pm_inputs: "Facts and open questions",
@@ -4856,6 +5818,7 @@ var pmStrings = {
 		...resourceStrings["zh-TW"],
 		...pmPlanProposalStrings["zh-TW"],
 		...pmIssueStrings["zh-TW"],
+		...pmRegisterStrings["zh-TW"],
 		...pmLifecycleStrings["zh-TW"],
 		...pmSprintStrings["zh-TW"],
 		...pmKanbanStrings["zh-TW"],
@@ -5126,6 +6089,7 @@ var pmStrings = {
 		pm_note_help: "儲存到這份討論，不會傳送給 Agent。",
 		pm_manual: "討論筆記 · 目前未連接 AI 參與者",
 		pm_no_notes: "尚無筆記。可以先記下問題、一個選項，或待釐清的疑問。",
+		...discussionStrings["zh-TW"],
 		pm_mode_idea: "想法",
 		pm_mode_planning: "規劃草稿",
 		pm_inputs: "事實與待釐清問題",
@@ -5399,11 +6363,15 @@ var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
 		...uiStrings["zh-TW"],
+		...overviewStrings["zh-TW"],
+		...scheduleStrings["zh-TW"],
+		...globalStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
 		...pmMaintenanceRepairsStrings["zh-TW"],
 		...pmReleaseBaselineStrings["zh-TW"],
+		...dependencyStrings["zh-TW"],
 		...pmPackageHandoffStrings["zh-TW"],
 		...workDeliveryStrings["zh-TW"],
 		...pmSpecMaterializationStrings["zh-TW"],
@@ -5499,7 +6467,7 @@ var STRINGS = {
 		managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 		delivery_list_prs: "瀏覽 Pull Requests",
 		delivery_no_prs: "找不到 PR。",
-		delivery_refresh_prs: "重新整理",
+		delivery_refresh_prs: "重新整理這一頁的 PR",
 		delivery_search_prs: "搜尋這一頁的 PR",
 		delivery_choose_repository: "請先選取或填入已連結的儲存庫。",
 		delivery_pr_page: "第 {page} 頁",
@@ -6547,13 +7515,13 @@ var STRINGS = {
 		attention_tab_needs: "需要你處理",
 		attention_tab_active: "執行中操作",
 		attention_tab_unread: "未讀工作更新",
-		attention_replies: "待回覆與權限",
+		attention_replies: "提問",
 		attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
-		attention_completion: "完成確認",
+		attention_completion: "待你確認",
 		attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
-		attention_problems: "需處理的操作",
+		attention_problems: "失敗的操作",
 		attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
-		attention_hosts: "主機連線",
+		attention_hosts: "主機",
 		attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
 		attention_active: "執行中操作",
 		attention_active_note: "已受理、執行中或等待外部條件的操作；這不是工作完成確認。",
@@ -6864,11 +7832,15 @@ var STRINGS = {
 	en: {
 		...pmStrings.en,
 		...uiStrings.en,
+		...overviewStrings.en,
+		...scheduleStrings.en,
+		...globalStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
 		...pmMaintenanceRepairsStrings.en,
 		...pmReleaseBaselineStrings.en,
+		...dependencyStrings.en,
 		...pmPackageHandoffStrings.en,
 		...workDeliveryStrings.en,
 		...pmSpecMaterializationStrings.en,
@@ -6989,7 +7961,7 @@ var STRINGS = {
 		mobile_draft_indicator: "Draft",
 		delivery_list_prs: "List Pull Requests",
 		delivery_no_prs: "No PRs found.",
-		delivery_refresh_prs: "Refresh",
+		delivery_refresh_prs: "Refresh this page of PRs",
 		delivery_choose_pr: "Choose a repository to load PRs.",
 		delivery_search_prs: "Search this page of PRs",
 		delivery_choose_repository: "Choose or enter a configured repository first.",
@@ -8013,13 +8985,13 @@ var STRINGS = {
 		attention_tab_needs: "Needs you",
 		attention_tab_active: "Active operations",
 		attention_tab_unread: "Unread work updates",
-		attention_replies: "Replies and permissions",
+		attention_replies: "Questions",
 		attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
-		attention_completion: "Completion review",
+		attention_completion: "Reviews",
 		attention_completion_note: "Work reported done or with every step checked still needs your decision.",
-		attention_problems: "Operations needing attention",
+		attention_problems: "Failed operations",
 		attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
-		attention_hosts: "Host connections",
+		attention_hosts: "Hosts",
 		attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
 		attention_active: "Active operations",
 		attention_active_note: "Accepted, running or waiting for external conditions. These are not work completion reviews.",
@@ -8382,6 +9354,14 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 var paths = {
+	"pencil": [["path", { "d": "m16 3 5 5L7 22H2v-5L16 3Z" }], ["path", { "d": "m14 5 5 5" }]],
+	"panel-right": [["rect", {
+		"x": "3",
+		"y": "3",
+		"width": "18",
+		"height": "18",
+		"rx": "2"
+	}], ["path", { "d": "M15 3v18" }]],
 	"layout-dashboard": [
 		["rect", {
 			"width": "7",
@@ -8479,6 +9459,15 @@ var paths = {
 			"y1": "16",
 			"y2": "16"
 		}]
+	],
+	"circle-x": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "10"
+		}],
+		["path", { "d": "m15 9-6 6" }],
+		["path", { "d": "m9 9 6 6" }]
 	],
 	"cpu": [
 		["path", { "d": "M12 20v2" }],
@@ -8666,6 +9655,7 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 	return root;
 }
 var segmented = (options) => choices(options, false);
+var tabs = (options) => choices(options, true);
 function statusPill(status) {
 	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
 	return h$1("span", {
@@ -8688,7 +9678,9 @@ function metric({ label, value, context, bar, pill } = {}) {
 		const span = h$1("span", { class: `tone-${[
 			"ok",
 			"review",
-			"info"
+			"info",
+			"bad",
+			"warn"
 		].includes(part.tone) ? part.tone : "neutral"}` });
 		span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0);
 		return span;
@@ -8706,11 +9698,12 @@ function skeleton(rows = 3) {
 	}, ...Array.from({ length: Math.min(100, Math.max(0, rows)) }, () => h$1("div", { "aria-hidden": "true" })));
 }
 var disclosures = new Map();
-function disclosure({ label, body, open = false, key }) {
-	const root = h$1("details", {
-		class: "ui-disclosure",
-		open: key && disclosures.has(key) ? disclosures.get(key) : open
-	}, h$1("summary", {}, icon("chevron-right"), label), body);
+function disclosure({ label, body, open = false, key, element }) {
+	const root = element || h$1("details", { open }, h$1("summary", {}, label), body);
+	if (root.classList.contains("ui-disclosure")) return root;
+	root.classList.add("ui-disclosure");
+	root.querySelector(":scope > summary")?.prepend(icon("chevron-right"));
+	if (key && disclosures.has(key)) root.open = disclosures.get(key);
 	root.addEventListener("toggle", () => {
 		if (!key || !root.isConnected) return;
 		disclosures.delete(key);
@@ -8718,6 +9711,24 @@ function disclosure({ label, body, open = false, key }) {
 		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
 	});
 	return root;
+}
+function inlineError({ error, retry }) {
+	return h$1("div", {
+		class: "ui-inline-error",
+		role: "alert"
+	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+		size: "sm",
+		variant: "ghost",
+		label: t("ui_retry"),
+		onClick: retry
+	}) : null);
+}
+function contextChip({ icon, text, onRemove }) {
+	return h$1("span", { class: "ui-context-chip" }, nodeIcon(icon), text, onRemove ? iconButton({
+		icon: "x",
+		label: t("ui_remove", { text }),
+		onClick: onRemove
+	}) : null);
 }
 function agentMark(cli) {
 	const [initials, label] = {
@@ -9007,9 +10018,9 @@ function availableProjectViews(caps) {
 		overview: pm.brief_snapshots || pm.lifecycle?.version === 1,
 		discussions: pm.version === 1,
 		requirements: pm.work_evidence || pm.work_package_prepare || pm.spec_sources || pm.quality_reviews?.version === 1 || pm.spec_materialization?.version === 1 || pm.package_handoff?.available || pm.issue_mapping || pm.engineering_delivery?.contract === "pm-engineering-delivery/v1" || pm.plan_drafting && pm.kanban && pm.brief_snapshots,
-		schedule: pm.roadmap || pm.sprints,
-		dependencies: pm.maintenance_policy?.version === 1 || pm.release_baselines,
-		issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare,
+		schedule: caps?.features?.pm_schedule?.version === 1 || pm.roadmap || pm.sprints,
+		dependencies: caps?.features?.pm_dependencies?.version === 1 || pm.maintenance_policy?.version === 1 || pm.release_baselines,
+		issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare || caps?.features?.pm_register?.version === 1,
 		agents: caps?.features?.pm_resources || pm.ahp_observation?.contract === "ahp_observer_v1",
 		board: pm.kanban || pm.work_batches?.version === 1
 	})[id]);
@@ -9431,6 +10442,318 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/label-text.js
+var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
+function labelSegment(value) {
+	if (typeof value === "string") {
+		const text = value.trim();
+		return text && !SENTINEL.test(text) ? text : "";
+	}
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+	if (typeof value === "boolean") return value ? "true" : "false";
+	return "";
+}
+function firstLabel(...values) {
+	for (const value of values) {
+		const text = labelSegment(value);
+		if (text) return text;
+	}
+	return "";
+}
+function joinLabel(parts, separator = " · ") {
+	return parts.map(labelSegment).filter(Boolean).join(separator);
+}
+//#endregion
+//#region src/global-labels.js
+var ACTIONS = {
+	"checkpoint.continue": "action_checkpoint_continue",
+	"checkpoint.continue.revalidate": "action_checkpoint_revalidate",
+	"artifact.upload": "action_artifact_upload",
+	"artifact.capture.managed": "action_artifact_capture",
+	"artifact.accept": "action_artifact_accept",
+	"session.start": "action_session_start",
+	"session.send": "action_session_send",
+	"session.answer": "action_session_answer",
+	"session.permissions": "action_session_permissions",
+	"session.approve_pending": "action_session_approve",
+	"repository.continue": "action_repository_continue",
+	"github.pr.merge": "action_github_merge",
+	"delivery.merge_and_deploy": "action_delivery_merge",
+	"deployment.start": "action_deployment_start",
+	"cleanup.apply": "action_cleanup_apply",
+	"task.pause": "action_task_pause",
+	"task.resume": "action_task_resume",
+	"task.verify": "action_task_verify",
+	"worktree.merge": "action_worktree_merge",
+	"integration.apply": "action_integration_apply",
+	"integration.handoff": "action_integration_handoff",
+	"project.create": "action_project_create",
+	"project.update": "action_project_update",
+	"project.order": "action_project_order",
+	"project.pin": "action_project_pin",
+	"work_item.create": "action_work_item_create",
+	"work_item.update": "action_work_item_update",
+	"work_item.link": "action_work_item_link",
+	"work_item.read": "action_work_item_read",
+	"setup.host": "action_setup_host",
+	"setup.repository": "action_setup_repository",
+	"setup.verification": "action_setup_verification",
+	"preferences.models.update": "action_models_update"
+};
+var OPERATION_STATUS = {
+	accepted: "waiting",
+	running: "in_progress",
+	waiting_checks: "waiting",
+	waiting_external: "waiting",
+	needs_attention: "blocked",
+	uncertain: "unknown",
+	succeeded: "done",
+	failed: "blocked",
+	cancelled: "historical"
+};
+var WORK_STATUS = {
+	todo: "not_started",
+	doing: "in_progress",
+	waiting: "waiting",
+	done: "done",
+	awaiting_approval: "in_review"
+};
+function actionLabel(action) {
+	const key = ACTIONS[action];
+	if (!key) return t("action_unknown");
+	const label = t(key);
+	return label === key ? t("action_unknown") : label;
+}
+function operationStatusKey(status) {
+	return OPERATION_STATUS[status] || "unknown";
+}
+function workStatusKey(state) {
+	return WORK_STATUS[state] || "unknown";
+}
+function operationTargetText(op) {
+	const target = op?.target;
+	if (!target || typeof target !== "object") return labelSegment(target);
+	return labelSegment(target.title || target.name || target.recipe || target.branch || target.repository || target.host || target.session_id || target.project_id || target.work_item_id || target.checkpoint_id);
+}
+function operationMeta(op, whenText = "") {
+	return joinLabel([
+		operationTargetText(op),
+		op?.actor,
+		whenText
+	]);
+}
+function formatTime(seconds) {
+	const value = Number(seconds);
+	if (!Number.isFinite(value) || value <= 0) return "";
+	const date = new Date(value * 1e3);
+	return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+function operationDuration(op) {
+	const start = Number(op?.created_at);
+	const end = Number(op?.finished_at ?? op?.completed_at);
+	if (!Number.isFinite(start) || start <= 0 || !Number.isFinite(end) || end < start) return "";
+	const seconds = Math.round(end - start);
+	if (seconds < 60) return t("global_duration_s", { n: seconds });
+	const minutes = Math.floor(seconds / 60);
+	const rest = seconds % 60;
+	return rest ? t("global_duration_m", {
+		n: minutes,
+		s: rest
+	}) : t("global_duration_m_only", { n: minutes });
+}
+function railPresentation(state) {
+	if (!state?.key) return null;
+	if (state.key === "pending_ask_user") return {
+		labelKey: "rail_asking",
+		loud: true,
+		tone: state.tone || "stale"
+	};
+	if (state.key === "workspace_needs_you" || state.key === "pending_permission" || state.key === "wi_state_awaiting_approval") return {
+		labelKey: "rail_needs_you",
+		loud: true,
+		tone: state.tone || "stale"
+	};
+	if (state.key === "op_failed" || state.key === "task_state_failed" || state.key === "wi_state_failed") return {
+		labelKey: "rail_failed",
+		loud: true,
+		tone: "bad"
+	};
+	if (state.key === "obs_value_streaming") return {
+		labelKey: "rail_running",
+		loud: false,
+		tone: state.tone || "info"
+	};
+	return {
+		labelKey: state.key,
+		loud: false,
+		tone: state.tone || ""
+	};
+}
+function reasonText$1(code) {
+	const token = labelSegment(code);
+	if (!token) return "";
+	return reasonLabel(t, token);
+}
+//#endregion
+//#region src/global-screens.js
+function setupGuide() {
+	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
+}
+function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
+	const article = h("article", {
+		class: "global-inbox-row",
+		"data-inbox-key": key
+	});
+	if (onOpen) article.addEventListener("click", (event) => {
+		if (event.target.closest("a, button, input, select, textarea")) return;
+		onOpen();
+	});
+	const text = h("div", { class: "global-inbox-text" }, h("a", {
+		class: "title",
+		href
+	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
+	const details = onOpen ? iconButton({
+		icon: "chevron-right",
+		label: detailsLabel,
+		onClick: () => onOpen()
+	}) : null;
+	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
+	return article;
+}
+function firstRunCard({ h, t, body, footer }) {
+	return h("div", { class: "global-first-run" }, h("section", {
+		class: "global-first-card",
+		"aria-labelledby": "global-first-title"
+	}, h("span", {
+		class: "brand-mark",
+		"aria-hidden": "true"
+	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
+}
+function settingsFrame({ h, t, sections, exclusive = false }) {
+	const nav = h("nav", {
+		class: "global-settings-nav",
+		role: "tablist",
+		"aria-orientation": "vertical",
+		"aria-label": t("global_settings_nav")
+	});
+	const panels = h("div", { class: "global-settings-panels" });
+	const buttons = [];
+	const roots = [];
+	for (const section of sections) {
+		const panel = h("section", {
+			class: "global-settings-section",
+			role: "tabpanel",
+			id: `settings-panel-${section.id}`,
+			"data-settings-panel": section.id,
+			"aria-labelledby": `settings-tab-${section.id}`
+		});
+		if (section.id === "models") panel.setAttribute("data-settings-models", "");
+		const button = h("button", {
+			type: "button",
+			role: "tab",
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id,
+			"aria-controls": panel.id
+		}, section.label);
+		if (section.hidden) {
+			button.hidden = true;
+			panel.hidden = true;
+		}
+		button.addEventListener("click", () => select(section.id, true));
+		buttons.push(button);
+		roots.push(panel);
+		nav.append(button);
+		panels.append(panel);
+	}
+	const visible = () => buttons.filter((button) => !button.hidden);
+	function apply(id) {
+		for (const button of buttons) {
+			const on = !button.hidden && button.dataset.settingsNav === id;
+			button.setAttribute("aria-selected", on ? "true" : "false");
+			button.tabIndex = on ? 0 : -1;
+		}
+		if (!exclusive) return;
+		for (const node of roots) {
+			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
+			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
+		}
+	}
+	function select(id, scroll) {
+		const button = buttons.find((item) => item.dataset.settingsNav === id);
+		if (!button || button.hidden) return;
+		apply(id);
+		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
+	}
+	nav.addEventListener("keydown", (event) => {
+		if (![
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		const enabled = visible();
+		const current = enabled.indexOf(document.activeElement);
+		if (current < 0) return;
+		event.preventDefault();
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		next.focus();
+		select(next.dataset.settingsNav, true);
+	});
+	const first = sections.find((section) => !section.hidden);
+	if (first) apply(first.id);
+	function panel(id) {
+		return roots.find((node) => node.dataset.settingsPanel === id);
+	}
+	function show(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		button.hidden = false;
+		if (!exclusive) node.hidden = false;
+		const selected = visible().find((item) => item.getAttribute("aria-selected") === "true");
+		apply(selected ? selected.dataset.settingsNav : id);
+	}
+	function hide(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		const was = button.getAttribute("aria-selected") === "true";
+		button.hidden = true;
+		node.hidden = true;
+		if (was) {
+			const next = visible()[0];
+			if (next) apply(next.dataset.settingsNav);
+		}
+	}
+	return {
+		root: h("div", {
+			class: "global-settings",
+			"data-settings-exclusive": exclusive ? "true" : "false"
+		}, nav, panels),
+		panel,
+		show,
+		hide
+	};
+}
+//#endregion
+//#region src/ui/view-state.js
+var states$1 = new Map();
+function viewState(namespace, workspaceId, view) {
+	const key = JSON.stringify([
+		namespace,
+		workspaceId,
+		view
+	]);
+	const value = states$1.get(key) || {};
+	states$1.delete(key);
+	states$1.set(key, value);
+	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
+	return value;
+}
+//#endregion
 //#region src/pr-selector.js
 function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, stale = false, error = "";
@@ -9553,19 +10876,225 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
-//#region src/ui/view-state.js
-var states$1 = new Map();
-function viewState(namespace, workspaceId, view) {
-	const key = JSON.stringify([
-		namespace,
-		workspaceId,
-		view
-	]);
-	const value = states$1.get(key) || {};
-	states$1.delete(key);
-	states$1.set(key, value);
-	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
-	return value;
+//#region src/pm-discussions.js
+function discussionLabel(t, prefix, value) {
+	const key = prefix + value, label = t(key);
+	return label === key ? t("ui_status_unknown") : label;
+}
+function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
+	const chips = refs.slice(0, limit).map((ref) => {
+		const kind = discussionLabel(t, "pd_kind_", ref.kind);
+		const text = ref.available === false ? `${kind} · ${t("pd_unavailable")}` : [kind, ref.label].filter(Boolean).join(" · ");
+		const chip = contextChip({ text });
+		chip.dataset.discussionContext = ref.kind;
+		chip.title = text;
+		chip.setAttribute("aria-label", text);
+		if (ref.available !== false && ref.bound_label && ref.bound_label !== ref.label) chip.title += "\n" + t("pd_bound_label", { label: ref.bound_label });
+		return chip;
+	});
+	if (refs.length > limit && onMore) chips.push(button({
+		size: "sm",
+		variant: "ghost",
+		label: "+" + (refs.length - limit),
+		"aria-label": t("pd_more_context", { count: refs.length - limit }),
+		"data-discussion-more-context": "",
+		onClick: onMore
+	}));
+	return chips;
+}
+var discussionDom = (create) => (tag, attrs, ...children) => {
+	const node = create(tag, attrs, ...children);
+	return tag === "details" ? disclosure({ element: node }) : node;
+};
+function discussionTitle({ t, field, form, value, local = false }) {
+	let current = value;
+	const title = h$1("h2", {
+		"data-discussion-title": "",
+		title: value
+	}, value);
+	const pencil = iconButton({
+		icon: "pencil",
+		label: t("pd_rename"),
+		"data-discussion-rename": "",
+		onClick: () => {
+			if (!form.hasDraft()) form.set("title", current);
+			edit.hidden = false;
+			display.hidden = true;
+			field.focus();
+			field.select();
+		}
+	});
+	const display = h$1("div", { class: "pd-title-display" }, title, pencil);
+	const cancel = button({
+		label: t("pd_cancel"),
+		onClick: () => {
+			if (form.locked()) return;
+			form.set("title", current);
+			finish();
+			pencil.focus();
+		}
+	});
+	const edit = local ? h$1("form", { onsubmit: (event) => {
+		event.preventDefault();
+		current = field.value.trim();
+		title.textContent = current;
+		title.title = current;
+		finish();
+		pencil.focus();
+	} }, field, h$1("div", { class: "actions" }, h$1("button", {
+		type: "submit",
+		class: "primary"
+	}, t("pd_save")))) : form.box;
+	edit.classList.add("pd-title-edit");
+	edit.querySelector(".actions").append(cancel);
+	edit.addEventListener("keydown", (event) => {
+		if (event.key === "Escape") {
+			event.preventDefault();
+			event.stopPropagation();
+			cancel.click();
+		}
+	});
+	function finish() {
+		edit.hidden = true;
+		display.hidden = false;
+	}
+	finish();
+	if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {
+		edit.hidden = false;
+		display.hidden = true;
+	}
+	return {
+		box: h$1("div", { class: "pd-title" }, display, edit),
+		finish,
+		update(next) {
+			current = next;
+			title.textContent = next;
+			title.title = next;
+			pencil.disabled = field.disabled;
+			cancel.disabled = form.locked();
+		}
+	};
+}
+function discussionComposer({ t, form, analysis, details, draft = false }) {
+	const actions = form.box.querySelector(":scope > .actions");
+	const status = h$1("div", { class: "pd-composer-status" }, form.box.querySelector(":scope > [role=status]"));
+	const receipt = form.box.querySelector(":scope > .pm-receipt");
+	if (details) details.append(receipt);
+	else status.append(disclosure({
+		label: t("pd_details"),
+		body: receipt
+	}));
+	const recovery = actions.querySelector("button[type=button]");
+	if (recovery) status.append(recovery);
+	if (analysis) {
+		actions.append(analysis.querySelector("[data-discussion-ask]"));
+		status.append(analysis);
+	} else if (!draft) status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " · ", h$1("a", { href: "#/settings" }, t("pd_setup"))));
+	form.box.append(h$1("div", { class: "pd-composer-row" }, status, actions));
+	return h$1("div", { class: "pd-composer" }, form.box);
+}
+function discussionFeedback({ t, request, node, eligible }) {
+	const operation = request?.operation();
+	const error = request?.box.querySelector(":scope > [role=status] .error");
+	const failed = error || [
+		"failed",
+		"cancelled",
+		"uncertain",
+		"needs_attention"
+	].includes(operation?.status);
+	const message = discussionOperation(t, operation) || error?.textContent || "";
+	node.replaceChildren(message);
+	if (failed) node.append(" · ", button({
+		size: "sm",
+		variant: "ghost",
+		label: t("pd_retry"),
+		disabled: request.replaceable() ? !eligible : !request.canSubmit(),
+		onClick: () => {
+			if (request.replaceable()) request.edit();
+			request.submit();
+		}
+	}));
+}
+function discussionPanel({ t, namespace, workspaceId, panes }) {
+	const state = viewState(namespace, workspaceId, "discussion-panel");
+	if (!Object.hasOwn(panes, state.tab)) state.tab = Object.keys(panes)[0];
+	const home = h$1("aside", { class: "pd-panel-home" }), body = h$1("div", {
+		class: "pd-panel",
+		"data-discussion-panel": ""
+	});
+	const select = (key) => {
+		state.tab = key;
+		for (const [id, node] of Object.entries(panes)) node.hidden = id !== key;
+	};
+	const controls = tabs({
+		label: t("pd_panel"),
+		value: state.tab || "context",
+		options: Object.keys(panes).map((value) => ({
+			value,
+			label: t("pd_tab_" + value)
+		})),
+		onChange: select
+	});
+	body.append(controls, ...Object.values(panes));
+	home.append(body);
+	select(state.tab || "context");
+	let overlay = null;
+	const trigger = iconButton({
+		icon: "panel-right",
+		label: t("pd_panel"),
+		"data-discussion-panel-toggle": "",
+		onClick: () => {
+			if (overlay) {
+				overlay.close();
+				return;
+			}
+			overlay = inspector({
+				title: t("pd_panel"),
+				onClose: () => {
+					home.append(body);
+					overlay = null;
+				}
+			});
+			overlay.classList.add("pd-panel-overlay");
+			overlay.body.append(body);
+			document.getElementById("main").append(overlay);
+		}
+	});
+	trigger.classList.add("pd-panel-toggle");
+	return {
+		home,
+		trigger,
+		select(key) {
+			select(key);
+			controls.setValue(key);
+		},
+		open(key) {
+			select(key);
+			controls.setValue(key);
+			if (matchMedia("(max-width: 1199px)").matches && !overlay) trigger.click();
+			else controls.querySelector("[aria-selected=true]")?.focus();
+		},
+		close() {
+			overlay?.close();
+		},
+		dispose() {
+			overlay?.close();
+		}
+	};
+}
+function discussionOperation(t, operation) {
+	if (!operation) return "";
+	if (operation.status === "succeeded") return t("pd_finished");
+	if (![
+		"running",
+		"accepted",
+		"queued",
+		"pending"
+	].includes(operation.status)) return discussionLabel(t, "pd_op_", operation.status);
+	const at = operation.started_at || operation.created_at;
+	const start = typeof at === "number" ? at : Date.parse(at) / 1e3;
+	const seconds = Number.isFinite(start) ? Math.max(0, Math.floor(Date.now() / 1e3 - start)) : null;
+	return t("pd_working") + (seconds === null ? "" : ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`);
 }
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
@@ -9638,6 +11167,19 @@ function discussHref({ workspaceId, refs = [], title = "", from = "", report = "
 	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
 	const search = query.toString();
 	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
 }
 //#endregion
 //#region src/pm-agents-trend.js
@@ -9749,10 +11291,10 @@ function stackDailyBuckets(buckets, now = new Date()) {
 }
 //#endregion
 //#region src/pm-agents-chart.js
-var SVG = "http://www.w3.org/2000/svg";
+var SVG$1 = "http://www.w3.org/2000/svg";
 var liveCharts = new Set();
 function svgEl(tag, attrs) {
-	const el = document.createElementNS(SVG, tag);
+	const el = document.createElementNS(SVG$1, tag);
 	for (const [key, value] of Object.entries(attrs || {})) {
 		if (value == null || value === false) continue;
 		el.setAttribute(key, value === true ? "" : String(value));
@@ -10176,10 +11718,11 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				"data-status": row.status
 			}, t(key));
 		}
+		const reason = reasonBits(row.status);
 		return h("span", {
 			class: "ui-pill tone-bad",
 			"data-status": row.status || "unknown"
-		}, t(reasonPresentation(row.status).key));
+		}, reason.text);
 	}
 	function visibleRows() {
 		return (data?.rows || []).filter(matches);
@@ -10587,9 +12130,19 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (focusId) layout.querySelector(`[data-resource-row="${cssEscape(focusId)}"]`)?.focus({ preventScroll: true });
 		syncFilterMenu();
 	}
+	function reasonBits(code) {
+		if (typeof code === "string" && Object.hasOwn(reasonLabels, code)) return {
+			text: reasonLabel(t, code),
+			raw: ""
+		};
+		return {
+			text: t("ui_reason_generic"),
+			raw: typeof code === "string" ? code : ""
+		};
+	}
 	function coverageLine(code) {
-		const reason = reasonPresentation(code);
-		return h("p", {}, t(reason.key), reason.raw ? h("code", { class: "mono" }, reason.raw) : null);
+		const reason = reasonBits(code);
+		return h("p", {}, reason.text, reason.raw ? h("code", { class: "mono" }, reason.raw) : null);
 	}
 	function fillInspector(row) {
 		if (!inspectorPanel || !row) return;
@@ -10617,7 +12170,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				[t("res_observations"), finite(row.observations) == null ? t("res_unknown") : finite(row.observations).toLocaleString()]
 			]));
 		}
-		const reason = reasonPresentation(row.status);
+		const reason = reasonBits(row.status);
 		nodes.push(disclosure({
 			label: t("res_details"),
 			key: `agents-coverage:${workspaceId}:${row.source_id}`,
@@ -10625,7 +12178,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				[t("res_first"), clock(row.first_at) === EM ? t("res_unknown") : clock(row.first_at)],
 				[t("res_last"), clock(row.last_at) === EM ? t("res_unknown") : clock(row.last_at)],
 				[t("res_collected"), clock(row.successful_at) === EM ? t("res_unknown") : clock(row.successful_at)]
-			]) : null, h("p", {}, t("res_status"), " ", t(reason.key), reason.raw ? h("code", { class: "mono" }, reason.raw) : null), row.configurations_partial ? h("p", {}, t("res_configurations_more")) : null)
+			]) : null, h("p", {}, t("res_status"), " ", reason.text, reason.raw ? h("code", { class: "mono" }, reason.raw) : null), row.configurations_partial ? h("p", {}, t("res_configurations_more")) : null)
 		}));
 		inspectorPanel.body.replaceChildren(...nodes);
 	}
@@ -11223,7 +12776,13 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 	return {
 		box,
 		update,
-		refreshBindings
+		refreshBindings,
+		select(left, right) {
+			from.value = plans.has(left) ? left : "";
+			to.value = plans.has(right) && right !== left ? right : [...plans.keys()].find((id) => id !== left) || "";
+			changed();
+			to.focus();
+		}
 	};
 }
 //#endregion
@@ -11431,7 +12990,10 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 		}),
 		permitted: () => Boolean(head) && permitted(false) && thread().thread.mode === "planning",
 		onSaved: () => refresh(),
-		extra: h("div", { class: "pm-fields" }, labelled("pm_revision_title", title), labelled("pm_revision_markdown", markdown), structure, h("p", { class: "muted" }, t("pm_revision_draft_help")))
+		extra: h("div", { class: "pm-fields" }, labelled("pm_revision_title", title), labelled("pm_revision_markdown", markdown), structure, disclosure({
+			label: t("pd_details"),
+			body: h("p", { class: "muted" }, t("pm_revision_draft_help"))
+		}))
 	});
 	const draftBox = h("details", { "data-pm-revision-editor": "" }, h("summary", {}, t("pm_revision_new")), editor.box);
 	const current = h("div", { "data-pm-accepted-plan": "" }), rows = h("div", { class: "pm-revision-list" });
@@ -11447,13 +13009,45 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 		workspaceId,
 		errorBox
 	});
-	box.append(h("details", { "data-pm-plan-comparison": "" }, h("summary", {}, t("pm_compare_plans")), comparison.box));
+	const comparisonBox = h("details", { "data-pm-plan-comparison": "" }, h("summary", {}, t("pm_compare_plans")), comparison.box);
+	box.append(comparisonBox);
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
 	function revisionRow(summary) {
-		const detail = h("div"), item = h("details", { "data-pm-revision": summary.revision_id }, h("summary", {}, t("pm_revision_number", { number: summary.sequence }), summary.revision_id === head.accepted_revision_id ? " · " + t("pm_plan_accepted") : ""), detail);
+		const detail = h("div", {
+			class: "pd-revision-detail",
+			hidden: true
+		});
+		const pill = h("span", {}, statusPill(summary.revision_id === head.accepted_revision_id ? "accepted" : "unknown"));
+		const open = button({
+			variant: "ghost",
+			label: t("pm_revision_number", { number: summary.sequence }),
+			"data-pm-revision-open": "",
+			"aria-expanded": "false",
+			onClick: () => {
+				const show = detail.hidden;
+				for (const row of rows.querySelectorAll("[data-pm-revision]")) {
+					row.querySelector(".pd-revision-detail").hidden = true;
+					row.querySelector("[data-pm-revision-open]").setAttribute("aria-expanded", "false");
+				}
+				detail.hidden = !show;
+				open.setAttribute("aria-expanded", String(show));
+				if (show) read();
+			}
+		});
+		const compare = button({
+			size: "sm",
+			variant: "ghost",
+			label: t("ui_compare"),
+			"data-pm-revision-compare": "",
+			onClick: () => {
+				comparisonBox.open = true;
+				comparison.select(summary.revision_id, head.accepted_revision_id === summary.revision_id ? head.latest_revision_id : head.accepted_revision_id);
+			}
+		});
+		const item = h("div", { "data-pm-revision": summary.revision_id }, h("div", { class: "pd-revision-row" }, open, pill, compare), detail);
 		let pending = false, fetched = false;
-		item.addEventListener("toggle", async () => {
-			if (!item.open || pending || fetched) return;
+		async function read() {
+			if (pending || fetched) return;
 			pending = true;
 			try {
 				const data = await api("GET", `${endpoint}/${encodeURIComponent(summary.revision_id)}`);
@@ -11461,8 +13055,9 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				if (!item.isConnected) return;
 				const plan = data.plan;
 				if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t("pm_scope_mismatch"));
+				pill.replaceChildren(statusPill(plan.is_current_accepted ? "accepted" : plan.status === "adopted" ? "historical" : plan.status === "draft" ? "draft" : "unknown"));
 				const document = plan.document, source = h("div", { class: "pm-plan-domains" });
-				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, t("pm_slot_" + domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, t("pm_status_" + statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
+				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, discussionLabel(t, "pm_slot_", domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, discussionLabel(t, "pm_status_", statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
 					statement.source_ref?.ref || statement.source_ref?.message_id,
 					statement.source_ref?.path,
 					statement.source_ref?.revision
@@ -11533,10 +13128,19 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				}
 				fetched = true;
 			} catch (error) {
-				if (item.isConnected) detail.replaceChildren(errorBox(error));
+				if (item.isConnected) {
+					if ([403, 404].includes(error.status)) item.remove();
+					else {
+						detail.replaceChildren(errorBox(error));
+						pill.replaceChildren(statusPill("unknown"));
+					}
+				}
 			} finally {
 				pending = false;
 			}
+		}
+		queueMicrotask(() => {
+			if (item.isConnected) read();
 		});
 		return item;
 	}
@@ -11587,7 +13191,19 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 			if (signature !== nextSignature) {
 				signature = nextSignature;
 				current.replaceChildren(h("p", {}, h("strong", {}, accepted.plan ? accepted.plan.document.title : t("pm_plan_none_accepted"))));
-				if (accepted.plan) current.append(h("p", { class: "muted" }, t("pm_plan_accepted"), " · ", h("code", {}, accepted.plan.adoption.commit_sha)));
+				if (accepted.plan) current.append(h("p", { class: "muted" }, t("pm_revision_number", { number: accepted.plan.sequence }), " · ", t("pm_plan_accepted")));
+				if (accepted.plan?.adoption?.commit_sha) current.append(h("details", {}, h("summary", {}, t("pd_details")), h("code", {}, accepted.plan.adoption.commit_sha), h("button", {
+					type: "button",
+					class: "secondary",
+					onclick: async (event) => {
+						const details = event.currentTarget.parentElement;
+						try {
+							await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);
+						} catch (error) {
+							if (details.isConnected) details.append(errorBox(error));
+						}
+					}
+				}, t("pd_copy"))));
 				renderRows(page);
 			}
 			editor.update();
@@ -11871,28 +13487,6 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 	};
 }
 //#endregion
-//#region src/label-text.js
-var SENTINEL = /^(?:undefined|null|nan|\[object object\])$/i;
-function labelSegment(value) {
-	if (typeof value === "string") {
-		const text = value.trim();
-		return text && !SENTINEL.test(text) ? text : "";
-	}
-	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
-	if (typeof value === "boolean") return value ? "true" : "false";
-	return "";
-}
-function firstLabel(...values) {
-	for (const value of values) {
-		const text = labelSegment(value);
-		if (text) return text;
-	}
-	return "";
-}
-function joinLabel(parts, separator = " · ") {
-	return parts.map(labelSegment).filter(Boolean).join(separator);
-}
-//#endregion
 //#region src/pm-charter.js
 var sections = [
 	"definition",
@@ -11925,10 +13519,10 @@ function charterSections(snapshot) {
 		decisions: items("decisions").filter((row) => row.source?.kind !== "plan_adoption")
 	};
 }
-function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead }) {
+function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const preference = viewState(namespace, workspaceId, "overview");
-	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
+	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
 	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
@@ -11999,6 +13593,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		onUnavailable: (error) => {
 			withdraw();
 			status.replaceChildren(errorBox(error));
+			onChange(null, "error", error);
 		},
 		errorBox
 	}) : null;
@@ -12025,6 +13620,11 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		more.disabled = busy;
 		create.update();
 		exports?.update();
+		onControls({
+			previous: previous.disabled,
+			next: next.disabled,
+			compare: compare.disabled
+		});
 	}
 	function historyOptions() {
 		picker.replaceChildren(...history.map((row) => h("option", { value: row.snapshot_id }, `${t("wb_snapshot", { number: row.sequence })} · ${stamp(row.as_of)}`)));
@@ -12042,6 +13642,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		].includes(row.status) ? h("span", { class: "chip" }, t("pm_status_" + row.status)) : ""))), h("details", { class: "pm-charter-source" }, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))));
 	}
 	function render() {
+		onChange(snapshot, "updated");
 		report.replaceChildren();
 		comparison.replaceChildren();
 		if (!snapshot) {
@@ -12082,6 +13683,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		picker.replaceChildren();
 		status.replaceChildren();
 		controls();
+		onChange(null, "withdrawn");
 	}
 	function failed(error, ticket) {
 		try {
@@ -12092,6 +13694,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		}
 		withdraw();
 		status.replaceChildren(errorBox(error));
+		onChange(null, "error", error);
 	}
 	function acceptHistory(data, after, append = false) {
 		check(data);
@@ -12105,7 +13708,26 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		history = append ? [...history, ...data.snapshots] : data.snapshots;
 		cursor = data.next_cursor ?? null;
 	}
+	async function readHistory(ticket) {
+		const pages = [];
+		let after = 0;
+		for (let i = 0; i < historyPages; i++) {
+			const page = await api("GET", `${endpoint}/snapshots?${after ? `after=${after}&` : ""}limit=100`);
+			alive();
+			if (ticket !== serial) return null;
+			check(page);
+			if (page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= after)) throw Error(t("pm_scope_mismatch"));
+			pages.push({
+				page,
+				after
+			});
+			if (page.next_cursor == null) break;
+			after = page.next_cursor;
+		}
+		return pages;
+	}
 	async function refresh(id = null) {
+		if (id) onChange(null, "selected");
 		const chosen = id || selectedId, ticket = ++serial;
 		busy = true;
 		head = null;
@@ -12117,9 +13739,9 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		]);
 		comparison.replaceChildren();
 		try {
-			const [data, page, current] = await Promise.all([
+			const [data, pages, current] = await Promise.all([
 				api("GET", `${endpoint}/snapshots/${chosen || "latest"}`),
-				api("GET", `${endpoint}/snapshots?limit=100`),
+				readHistory(ticket),
 				api("GET", `${endpoint}/plans/head`)
 			]);
 			alive();
@@ -12127,7 +13749,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			if (current.head?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 			snapshot = checkedSnapshot(data, chosen);
 			head = current.head;
-			acceptHistory(page, 0);
+			pages.forEach(({ page, after }, index) => acceptHistory(page, after, index > 0));
 			selectedId = snapshot?.snapshot_id || null;
 			preference.snapshotId = selectedId;
 			if (!chosen) latestId = selectedId;
@@ -12139,7 +13761,10 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			])) {
 				status.replaceChildren();
 				render();
-			} else historyOptions();
+			} else {
+				historyOptions();
+				onChange(snapshot, "updated");
+			}
 		} catch (error) {
 			failed(error, ticket);
 		} finally {
@@ -12151,6 +13776,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	}
 	async function select(id) {
 		if (busy || !history.some((row) => row.snapshot_id === id)) return;
+		onChange(null, "selected");
 		const ticket = ++serial;
 		busy = true;
 		selectedId = id;
@@ -12189,6 +13815,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			alive();
 			if (ticket !== serial) return;
 			acceptHistory(page, after, true);
+			historyPages++;
 			if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
 			historyOptions();
 		} catch (error) {
@@ -12231,7 +13858,2097 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	return {
 		box,
 		refresh,
-		withdraw
+		withdraw,
+		select,
+		comparison,
+		previous,
+		next,
+		compare,
+		picker,
+		print,
+		current: () => snapshot,
+		controls: () => ({
+			busy,
+			previous: previous.disabled,
+			next: next.disabled
+		}),
+		comparePrevious,
+		history: () => history
+	};
+}
+//#endregion
+//#region src/pm-overview.js
+var domains = [
+	"definition",
+	"scope",
+	"schedule",
+	"resources",
+	"risks",
+	"decisions"
+];
+var classes = [
+	"accepted",
+	"in_review",
+	"in_progress",
+	"blocked",
+	"not_started"
+];
+var tones = [
+	"ok",
+	"review",
+	"info",
+	"bad",
+	"neutral"
+];
+var phaseNames = [
+	"idea",
+	"planning",
+	"development",
+	"maintain",
+	"paused",
+	"closed"
+];
+function workspaceOverview(options) {
+	const { h, t, api, alive, namespace, workspaceId, onOpen = () => {}, onHeader = () => {} } = options;
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const preference = viewState(namespace, workspaceId, "overview");
+	let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
+	const parts = new Map(), attentionNodes = new Map();
+	let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
+	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false;
+	const primary = h("a", {
+		class: "ui-button primary",
+		"data-overview-discuss": ""
+	}, t("wb_discuss"));
+	const meta = h("span", { "data-overview-meta": "" });
+	const content = h("div"), status = h("div", { role: "status" }), savedBar = h("div", {
+		class: "pm-overview-saved",
+		hidden: true
+	});
+	const box = h("section", {
+		class: "pm-overview",
+		"data-pm-overview": ""
+	}, savedBar, status, content);
+	const reportTools = h("div", {
+		class: "pm-report-tools",
+		"data-pm-report-tools": ""
+	});
+	const reportControls = (flags) => {
+		for (const [key, disabled] of Object.entries(flags)) {
+			const node = savedBar.querySelector(`[data-overview-report-control="${key}"]`);
+			if (node) node.disabled = disabled;
+		}
+	};
+	const reports = workspaceCharter({
+		...options,
+		onChange: reportChanged,
+		onControls: reportControls
+	});
+	for (const node of reports.box.querySelectorAll(":scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]")) reportTools.append(node);
+	reportTools.append(reports.comparison);
+	const back = button({
+		variant: "ghost",
+		label: t("ov_back_live"),
+		"data-overview-live": "",
+		onClick: () => {
+			mode = preference.mode = "live";
+			projection = null;
+			plan = null;
+			loading = true;
+			signature = "";
+			closeReader();
+			reports.comparison.replaceChildren();
+			render();
+			refreshLive();
+		}
+	});
+	const reportLabel = h("span");
+	reports.previous.setAttribute("aria-label", t("ov_report_previous"));
+	reports.next.setAttribute("aria-label", t("ov_report_next"));
+	savedBar.append(reportLabel, iconButton({
+		icon: "chevron-left",
+		label: t("ov_report_previous"),
+		"data-overview-report-control": "previous",
+		onClick: () => reports.previous.click()
+	}), iconButton({
+		icon: "chevron-right",
+		label: t("ov_report_next"),
+		"data-overview-report-control": "next",
+		onClick: () => reports.next.click()
+	}), button({
+		variant: "ghost",
+		label: t("ui_compare"),
+		"data-overview-report-control": "compare",
+		onClick: () => options.onCompare?.()
+	}), back);
+	reportControls(reports.controls());
+	const date = (value) => {
+		const parsed = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00Z") : null;
+		return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en", {
+			month: "short",
+			day: "numeric",
+			timeZone: "UTC"
+		}) : "—";
+	};
+	const refs = () => {
+		const revision = mode === "saved" ? saved?.baseline?.document_revision : projection?.plan?.revision_id;
+		return [...revision ? [{
+			kind: "plan_revision",
+			id: revision
+		}] : [], ...mode === "saved" && saved ? [{
+			kind: "snapshot",
+			id: saved.snapshot_id
+		}] : []];
+	};
+	function header() {
+		const current = mode === "saved" ? saved : projection;
+		primary.href = discussHref({
+			workspaceId,
+			refs: refs(),
+			title: mode === "saved" ? saved?.title : projection?.plan?.title,
+			from: "overview",
+			report: mode === "saved" ? saved?.snapshot_id : void 0
+		});
+		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t("ov_not_saved") : [
+			projection?.plan?.title,
+			projection?.plan?.adopted_at != null ? t("ov_adopted", { date: date(projection.plan.adopted_at) }) : null,
+			t("ov_live")
+		].filter(Boolean).join(" · ");
+		const phase = mode === "live" && current?.lifecycle?.stage;
+		onHeader({
+			meta,
+			phase: phaseNames.includes(phase) ? t("ui_phase_" + phase) : null,
+			active
+		});
+	}
+	function reportChanged(value, event, error) {
+		if (event === "selected") {
+			mode = preference.mode = "saved";
+			saved = null;
+			closeReader();
+			signature = "";
+		}
+		if (event === "updated") saved = value;
+		if (event === "withdrawn") {
+			saved = null;
+			closeReader();
+			signature = "";
+		}
+		if (event === "error") status.replaceChildren(options.errorBox(error));
+		if (mode === "saved") render();
+	}
+	function discuss(row) {
+		return h("a", {
+			class: "ui-button ghost ui-sm",
+			"data-overview-row-discuss": row.key || row.milestone_id,
+			href: discussHref({
+				workspaceId,
+				refs: row.ref ? [row.ref] : [],
+				title: row.title,
+				from: "overview"
+			})
+		}, t("ov_discuss"));
+	}
+	function open(row) {
+		preference.attention = row.key;
+		onOpen(row.ref, row);
+	}
+	function itemLink(row) {
+		return row ? h("button", {
+			type: "button",
+			class: "pm-overview-link",
+			onclick: () => open(row)
+		}, row.title) : null;
+	}
+	function milestoneDate(row) {
+		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date ? ` → ${date(row.forecast_date)}` : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
+	}
+	function statusStrip(data, fixed = false) {
+		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
+		const goalReason = (data?.unknown || []).find((row) => row.field === "plan.goal")?.reason;
+		const goal = metric({
+			label: t("ov_goal"),
+			value: data?.plan?.goal ?? "—",
+			context: h("div", {}, !data?.plan?.goal ? h("span", { class: "ui-meta" }, reasonLabel(t, goalReason || "unknown")) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
+		});
+		goal.dataset.overviewMetric = "goal";
+		const next = data?.next_milestone;
+		const progress = metric({
+			label: t("ov_progress"),
+			value: !p ? null : complete ? t("ov_accepted", {
+				accepted: p.accepted,
+				total: p.requirements
+			}) : t("ov_requirements", { n: p.requirements }),
+			context: h("div", {}, p && !complete ? statusPill(fixed ? "unknown" : "partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
+			bar: complete ? classes.map((key, i) => ({
+				tone: tones[i],
+				value: p[key]
+			})) : null
+		});
+		progress.dataset.overviewMetric = "progress";
+		if (complete) progress.append(disclosure({
+			label: t("ov_details"),
+			key: `${namespace}:${workspaceId}:progress`,
+			body: h("ul", {}, ...classes.map((key) => h("li", {}, statusPill(key), ` ${p[key]}`)))
+		}));
+		const metrics = ["blocker", "decision"].map((kind) => {
+			const first = data?.attention?.find((row) => row.kind === kind);
+			const node = metric({
+				label: t(kind === "blocker" ? "ov_blockers" : "ov_decisions"),
+				value: data?.attention_counts?.[kind] ?? null,
+				context: h("div", {}, itemLink(first), kind === "decision" && first ? discuss(first) : null)
+			});
+			node.dataset.overviewMetric = kind;
+			return node;
+		});
+		return h("div", {
+			class: "pm-overview-status",
+			"data-overview-status": ""
+		}, goal, progress, ...metrics);
+	}
+	function age(since) {
+		if (!Number.isFinite(since) || !Number.isFinite(projection?.as_of)) return null;
+		const seconds = Math.max(0, projection.as_of - since);
+		const [key, unit] = seconds >= 86400 ? ["ov_day", 86400] : seconds >= 3600 ? ["ov_hour", 3600] : ["ov_minute", 60];
+		return t(key, { n: Math.floor(seconds / unit) });
+	}
+	function contextText(row) {
+		const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
+		return ids.map((id) => plan?.document?.requirements?.find((req) => req.id === id)?.text).filter(Boolean).join(" · ") || (ids.length ? t("ov_context_requirement", { n: ids.length }) : c.work_item_id ? t("ov_context_work") : c.milestone_id ? t("ov_context_milestone") : "");
+	}
+	function attention(data) {
+		if (!attentionList) {
+			attentionList = h("div", {
+				class: "pm-overview-attention",
+				"data-overview-attention": ""
+			});
+			attentionCard = sectionCard({
+				title: t("ov_attention"),
+				body: attentionList
+			});
+		}
+		const rows = attentionList, reading = rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover"));
+		const keys = new Set(data.attention.map((row) => row.key));
+		for (const [key, entry] of attentionNodes) if (!keys.has(key)) {
+			entry.node.remove();
+			attentionNodes.delete(key);
+		}
+		rows.querySelector(".pm-overview-footer")?.remove();
+		rows.querySelector(".ui-empty")?.remove();
+		const existingOrder = [...rows.children].map((node) => node.dataset.overviewRow);
+		const ordered = reading ? [...data.attention].sort((a, b) => {
+			const ai = existingOrder.indexOf(a.key), bi = existingOrder.indexOf(b.key);
+			return (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi);
+		}) : data.attention;
+		let position = 0;
+		for (const row of ordered) {
+			const rowSignature = JSON.stringify([row, contextText(row)]), cached = attentionNodes.get(row.key);
+			if (cached?.signature === rowSignature) {
+				if (rows.children[position] !== cached.node) rows.insertBefore(cached.node, rows.children[position] || null);
+				position++;
+				continue;
+			}
+			const label = [
+				"blocker",
+				"decision",
+				"deviation",
+				"risk"
+			].includes(row.kind) ? t("ov_" + row.kind) : reasonLabel(t, "unknown");
+			const elapsed = age(row.since);
+			const link = h("button", {
+				type: "button",
+				class: "pm-overview-attention-main",
+				"data-overview-open": row.key,
+				onclick: () => open(row)
+			}, h("span", {
+				class: "pm-overview-kind",
+				title: label,
+				"aria-label": label
+			}, icon(row.kind === "decision" ? "message-square" : "circle-alert")), h("span", {}, h("strong", {}, row.title), h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · "))));
+			const node = h("div", {
+				class: "pm-overview-attention-row",
+				"data-overview-row": row.key
+			}, link, elapsed === null ? null : h("span", {
+				class: "ui-meta",
+				"data-overview-age": ""
+			}, elapsed), discuss(row));
+			cached?.node.remove();
+			attentionNodes.set(row.key, {
+				signature: rowSignature,
+				node
+			});
+			rows.insertBefore(node, rows.children[position] || null);
+			position++;
+		}
+		if (!data.attention.length) rows.append(emptyState({ title: t(data.coverage?.complete ? "ov_empty" : "ov_incomplete") }));
+		if (data.attention_truncated) rows.append(h("div", { class: "pm-overview-footer" }, t("ov_showing", { n: data.attention.length }), " · ", h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/issues` }, t("ov_view_all"))));
+		return attentionCard;
+	}
+	function sidebar(data) {
+		const milestones = sectionCard({
+			title: t("ov_milestones"),
+			body: h("div", {}, ...data.milestones.map((row) => h("div", {
+				class: "pm-overview-milestone",
+				"data-overview-milestone": row.milestone_id
+			}, h("div", {}, itemLink(row), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
+		});
+		const deliveries = sectionCard({
+			title: t(data.recent_deliveries_complete ? "ov_deliveries" : "ov_deliveries_loaded"),
+			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
+				class: "pm-overview-delivery",
+				"data-overview-delivery": row.work_item_id
+			}, itemLink({
+				...row,
+				ref: {
+					kind: "work_item",
+					id: row.work_item_id
+				}
+			}), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
+		});
+		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
+	}
+	function closeReader() {
+		reader?.close();
+		reader = null;
+		readerDocument = null;
+		relatedSelection = null;
+	}
+	function openRelated(row, host) {
+		closeReader();
+		relatedSelection = row;
+		reader = inspector({
+			title: row.title,
+			onClose: () => {
+				reader = null;
+				relatedSelection = null;
+			}
+		});
+		reader.classList.add("pm-overview-related");
+		reader.dataset.overviewRelated = row.key;
+		reader.body.append(h("section", {
+			"data-overview-related-row": row.key,
+			"aria-current": "true"
+		}, h("p", {}, t("ov_" + row.kind)), h("p", {}, contextText(row)), row.delta_days > 0 ? h("p", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null, discuss(row), disclosure({
+			label: t("ov_details"),
+			body: h("div", {}, row.reason ? h("p", {}, reasonLabel(t, row.reason)) : null, h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+				ref: row.ref,
+				since: row.since,
+				context: row.context
+			}, null, 2)))
+		})));
+		host.append(reader);
+	}
+	function fullPlan(document) {
+		closeReader();
+		reader = inspector({
+			title: t("ov_plan"),
+			onClose: () => {
+				reader = null;
+			}
+		});
+		reader.dataset.overviewPlan = "";
+		readerDocument = JSON.stringify(document);
+		reader.body.append(planDocument(h, document.markdown), h("ul", {}, ...(document.requirements || []).map((row) => h("li", {}, row.text, h("ul", {}, ...(row.acceptance || []).map((item) => h("li", {}, item.text)))))));
+		box.append(reader);
+	}
+	function charter(source) {
+		const groups = charterSections(source), document = source?.baseline?.document;
+		const grid = h("div", { class: "pm-overview-charter-grid" });
+		for (const key of domains) {
+			const rows = groups[key], expanded = preference.expanded?.includes(key);
+			const list = h("ul", { class: "pm-overview-bullets" }, ...rows.map((row, i) => h("li", { hidden: i >= 3 && !expanded }, row.text, [
+				"agent_assumption",
+				"unresolved",
+				"conflicting"
+			].includes(row.status) ? statusPill("unconfirmed") : null)));
+			const sources = disclosure({
+				label: icon("list-checks"),
+				key: `${namespace}:${workspaceId}:overview-source:${key}`,
+				body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))
+			});
+			sources.classList.add("pm-overview-sources");
+			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
+			sources.querySelector("summary").title = t("ov_sources");
+			const card = sectionCard({
+				title: t("wb_" + key),
+				body: h("div", {}, rows.length ? list : h("span", { class: "ui-meta" }, t("ov_no_items")), sources)
+			});
+			card.dataset.charterSection = key;
+			if (rows.length > 3) {
+				const more = button({
+					variant: "ghost",
+					size: "sm",
+					label: t(expanded ? "ov_less" : "ov_more", { n: rows.length - 3 }),
+					"aria-expanded": String(Boolean(expanded)),
+					onClick: () => {
+						const expand = more.getAttribute("aria-expanded") !== "true";
+						more.setAttribute("aria-expanded", String(expand));
+						[...list.children].forEach((node, i) => {
+							node.hidden = i >= 3 && !expand;
+						});
+						more.textContent = t(expand ? "ov_less" : "ov_more", { n: rows.length - 3 });
+						const keys = new Set(preference.expanded || []);
+						expand ? keys.add(key) : keys.delete(key);
+						preference.expanded = [...keys];
+					}
+				});
+				card.append(more);
+			}
+			grid.append(card);
+		}
+		return h("section", {
+			"data-pm-charter": "",
+			class: "pm-overview-charter"
+		}, h("header", { class: "pm-overview-charter-heading" }, h("h2", {}, t("ov_charter")), button({
+			variant: "ghost",
+			label: t("ov_plan"),
+			disabled: !document,
+			"data-charter-plan": "",
+			onClick: () => fullPlan(document)
+		})), grid);
+	}
+	function details(data, fixed) {
+		const entries = new Map((data?.unknown || []).map((row) => [row.reason, row]));
+		for (const source of Object.values(data?.coverage?.sources || {})) if (source.status) entries.set(source.status, { reason: source.status });
+		const omitted = data?.coverage?.sources?.lifecycle_inflight?.omitted;
+		return disclosure({
+			label: t("ov_details"),
+			key: `${namespace}:${workspaceId}:overview-details`,
+			body: h("div", {}, h("p", {}, t(fixed ? "ov_saved_limits" : "ov_caveat")), h("ul", {}, ...[...entries.values()].map((row) => h("li", {}, reasonLabel(t, row.reason), Object.hasOwn(reasonLabels, row.reason) ? null : h("code", {}, ` (${row.reason})`))), omitted > 0 ? h("li", {}, t("ov_hidden", { n: omitted })) : null), h("pre", { class: "pm-brief-proof" }, JSON.stringify(fixed ? {
+				coverage: saved?.coverage,
+				visibility: saved?.visibility,
+				snapshot_id: saved?.snapshot_id
+			} : {
+				coverage: data?.coverage,
+				as_of: data?.as_of
+			}, null, 2)))
+		});
+	}
+	function savedData() {
+		const document = saved?.baseline?.document;
+		const goal = document?.selected_inputs?.find((row) => [
+			"value",
+			"goal",
+			"problem"
+		].includes(row.slot) && ["user_confirmed", "repo_evidence"].includes(row.status))?.value;
+		return {
+			plan: document ? {
+				title: document.title,
+				goal: goal || null,
+				adopted_at: saved.baseline.adoption?.created_at
+			} : null,
+			progress: document ? { requirements: new Set((document.requirements || []).map((row) => row.id)).size } : null,
+			attention_counts: {
+				blocker: null,
+				decision: null
+			},
+			attention: [],
+			unknown: [{
+				field: "progress",
+				reason: "not_assessed"
+			}]
+		};
+	}
+	function commitParts(entries) {
+		if (!parts.size) content.replaceChildren();
+		const keys = new Set(entries.map((row) => row.key));
+		for (const [key, part] of parts) if (!keys.has(key)) {
+			part.node.remove();
+			parts.delete(key);
+		}
+		entries.forEach((entry, index) => {
+			let part = parts.get(entry.key);
+			const value = JSON.stringify(entry.value);
+			if (!part || part.value !== value) {
+				const node = entry.render();
+				if (part && node !== part.node) part.node.replaceWith(node);
+				part = {
+					node,
+					value
+				};
+				parts.set(entry.key, part);
+			}
+			if (content.children[index] !== part.node) content.insertBefore(part.node, content.children[index] || null);
+		});
+	}
+	function resetContent(...nodes) {
+		parts.clear();
+		content.replaceChildren(...nodes);
+	}
+	function render() {
+		header();
+		savedBar.hidden = mode !== "saved";
+		box.dataset.overviewMode = mode;
+		if (mode === "saved") {
+			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t("ov_not_saved");
+			if (!saved) {
+				resetContent(loading ? skeleton(3) : h("p", {}, t("ov_not_saved")));
+				return;
+			}
+			const next = JSON.stringify(saved);
+			if (signature === `saved:${next}`) return;
+			signature = `saved:${next}`;
+			closeReader();
+			commitParts([
+				{
+					key: "status",
+					value: saved,
+					render: () => statusStrip(savedData(), true)
+				},
+				{
+					key: "charter",
+					value: saved,
+					render: () => charter(saved)
+				},
+				{
+					key: "details",
+					value: saved,
+					render: () => details(null, true)
+				}
+			]);
+			return;
+		}
+		if (!projection) {
+			resetContent(loading ? skeleton(4) : statusStrip(null));
+			return;
+		}
+		const next = JSON.stringify([{
+			...projection,
+			as_of: null
+		}, plan]);
+		if (signature === `live:${next}`) return;
+		signature = `live:${next}`;
+		const source = {
+			baseline: { document: plan?.document },
+			brief: {}
+		};
+		source.brief.decisions = { items: projection.attention.filter((row) => row.kind === "decision").map((row) => ({
+			text: row.title,
+			source: row.ref
+		})) };
+		const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute("data-overview-open") || document.activeElement?.getAttribute("data-overview-row-discuss") : null;
+		const discussFocused = document.activeElement?.hasAttribute("data-overview-row-discuss");
+		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
+		const main = attention(projection);
+		commitParts([
+			{
+				key: "status",
+				value: [
+					projection.plan,
+					projection.progress,
+					projection.attention_counts,
+					projection.attention,
+					projection.next_milestone,
+					projection.unknown
+				],
+				render: () => statusStrip(projection)
+			},
+			{
+				key: "columns",
+				value: [
+					projection.milestones,
+					projection.recent_deliveries,
+					projection.milestones_truncated,
+					projection.recent_deliveries_complete
+				],
+				render: () => h("div", { class: "pm-overview-columns" }, main, sidebar(projection))
+			},
+			{
+				key: "charter",
+				value: source,
+				render: () => charter(source)
+			},
+			{
+				key: "details",
+				value: [projection.coverage, projection.unknown],
+				render: () => details(projection, false)
+			}
+		]);
+		if (focused) content.querySelector(`[${discussFocused ? "data-overview-row-discuss" : "data-overview-open"}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+	}
+	async function refreshLive() {
+		const ticket = ++serial;
+		loading = true;
+		if (!projection && mode === "live") render();
+		try {
+			const data = await api("GET", `${endpoint}/overview`);
+			alive();
+			if (ticket !== serial) return;
+			if (data?.workspace_id !== workspaceId || data.version !== 1 || !Array.isArray(data.attention) || !Array.isArray(data.milestones) || !Array.isArray(data.recent_deliveries)) throw Error(t("pm_scope_mismatch"));
+			let adopted = null;
+			if (data.plan) {
+				const value = await api("GET", `${endpoint}/plans/${encodeURIComponent(data.plan.revision_id)}`);
+				alive();
+				if (ticket !== serial) return;
+				if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== data.plan.revision_id) throw Error(t("pm_scope_mismatch"));
+				adopted = value.plan;
+			}
+			projection = data;
+			plan = adopted;
+			loading = false;
+			status.replaceChildren();
+			render();
+		} catch (error) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			projection = null;
+			plan = null;
+			loading = false;
+			signature = "";
+			closeReader();
+			render();
+			status.replaceChildren(options.errorBox(error));
+		}
+	}
+	async function refresh() {
+		if (mode === "live") await refreshLive();
+		if (reportsLoaded || mode === "saved") {
+			await reports.refresh();
+			if (mode === "saved") render();
+		}
+	}
+	function withdraw() {
+		serial++;
+		projection = null;
+		plan = null;
+		saved = null;
+		signature = "";
+		loading = false;
+		closeReader();
+		reports.withdraw();
+		resetContent();
+		status.replaceChildren();
+		header();
+	}
+	function prepareReports() {
+		reportsLoaded = true;
+		if (!reportRead) reportRead = reports.refresh().finally(() => {
+			reportRead = null;
+		});
+		return reportRead;
+	}
+	return {
+		box,
+		primary,
+		meta,
+		reportTools,
+		refresh,
+		withdraw,
+		prepareReports,
+		openRelated,
+		closeRelated: () => {
+			if (relatedSelection) closeReader();
+		},
+		reportActions: {
+			compare: () => {
+				if (mode !== "saved") {
+					mode = preference.mode = "saved";
+					saved = reports.current();
+					signature = "";
+					render();
+				}
+				return reports.comparePrevious();
+			},
+			print: () => window.print()
+		},
+		setActive(value) {
+			if (active === value) {
+				header();
+				return;
+			}
+			active = value;
+			if (!value) {
+				preference.scroll = window.scrollY;
+				closeReader();
+			} else if (preference.scroll) window.scrollTo(0, preference.scroll);
+			header();
+		},
+		dispose() {
+			serial++;
+			closeReader();
+		}
+	};
+}
+//#endregion
+//#region src/pm-dependencies-layout.js
+function layoutGraph(nodes, links) {
+	const ids = [];
+	const seen = new Set();
+	for (const node of nodes || []) {
+		const id = node?.id;
+		if (id == null || seen.has(id)) continue;
+		seen.add(id);
+		ids.push(id);
+	}
+	const outgoing = new Map(ids.map((id) => [id, []]));
+	const incoming = new Map(ids.map((id) => [id, []]));
+	for (const link of links || []) {
+		if (!outgoing.has(link?.from) || !outgoing.has(link?.to) || link.from === link.to) continue;
+		if (!outgoing.get(link.from).includes(link.to)) outgoing.get(link.from).push(link.to);
+		if (!incoming.get(link.to).includes(link.from)) incoming.get(link.to).push(link.from);
+	}
+	const layer = new Map();
+	const visiting = new Set();
+	const depth = (id) => {
+		if (layer.has(id)) return layer.get(id);
+		if (visiting.has(id)) return 0;
+		visiting.add(id);
+		let value = 0;
+		for (const pred of incoming.get(id)) value = Math.max(value, depth(pred) + 1);
+		visiting.delete(id);
+		layer.set(id, value);
+		return value;
+	};
+	for (const id of ids) depth(id);
+	const count = ids.length ? Math.max(...layer.values()) + 1 : 0;
+	const columns = Array.from({ length: count }, () => []);
+	for (const id of ids) columns[layer.get(id)].push(id);
+	for (const column of columns) column.sort();
+	const orderOf = () => {
+		const order = new Map();
+		columns.forEach((column) => column.forEach((id, index) => order.set(id, index)));
+		return order;
+	};
+	const bary = (column, neighbors, order) => column.map((id, index) => {
+		const refs = neighbors.get(id).map((next) => order.get(next)).filter((value) => value != null);
+		return {
+			id,
+			index,
+			score: refs.length ? refs.reduce((sum, value) => sum + value, 0) / refs.length : index
+		};
+	}).sort((a, b) => a.score - b.score || a.index - b.index).map((row) => row.id);
+	for (let pass = 0; pass < 4; pass++) {
+		let order = orderOf();
+		for (let index = 1; index < columns.length; index++) columns[index] = bary(columns[index], incoming, order);
+		order = orderOf();
+		for (let index = columns.length - 2; index >= 0; index--) columns[index] = bary(columns[index], outgoing, order);
+	}
+	const yOf = new Map();
+	for (const column of columns) {
+		const rows = column.map((id, index) => {
+			const preds = incoming.get(id).map((next) => yOf.get(next)).filter((value) => value != null);
+			return {
+				id,
+				ideal: preds.length ? preds.reduce((sum, value) => sum + value, 0) / preds.length : index,
+				index
+			};
+		}).sort((a, b) => a.ideal - b.ideal || a.index - b.index);
+		let cursor = -Infinity;
+		for (const row of rows) {
+			const y = Math.max(cursor + 1, row.ideal);
+			yOf.set(row.id, y);
+			cursor = y;
+		}
+	}
+	const positions = [];
+	columns.forEach((column, x) => column.forEach((id) => positions.push({
+		id,
+		x,
+		y: yOf.get(id),
+		layer: x
+	})));
+	return {
+		positions,
+		layers: count
+	};
+}
+//#endregion
+//#region src/pm-dependencies.js
+var RELATIONS = [
+	"runtime",
+	"build",
+	"test",
+	"contract",
+	"reference"
+];
+var EVIDENCE = [
+	"verified",
+	"declared",
+	"inferred"
+];
+var KINDS = [
+	"runtime_library",
+	"api_schema",
+	"build_test_toolchain",
+	"external_service"
+];
+var LETTERS = {
+	runtime: "R",
+	build: "B",
+	test: "T",
+	contract: "C",
+	reference: "Ref"
+};
+var COLUMN_LIMIT = 12;
+var ROW_LIMIT = 12;
+var MISS = new Set([
+	"dependency_omitted",
+	"capture_budget",
+	"dependency_not_observed"
+]);
+var FILE_STATUS = {
+	read: "dep_file_read",
+	missing: "dep_file_missing",
+	too_large: "dep_file_too_large",
+	unparsable: "dep_file_unparsable"
+};
+var SVG = "http://www.w3.org/2000/svg";
+var NODE_W = 148;
+var NODE_H = 36;
+var GAP_X = 72;
+var GAP_Y = 18;
+var PAD = 20;
+var knownReason = (code) => Object.hasOwn(reasonLabels, code);
+var reasonText = (t, code, detail = false) => {
+	const label = reasonLabel(t, code);
+	return detail && code && !knownReason(code) ? t("ui_reason_detail", {
+		label,
+		code
+	}) : label;
+};
+var shortSha = (value) => typeof value === "string" && value ? value.slice(0, 7) : "";
+var capturedDate = (epoch) => {
+	if (typeof epoch !== "number" || !Number.isFinite(epoch)) return "";
+	const date = new Date(epoch * 1e3);
+	if (Number.isNaN(date.valueOf())) return "";
+	return date.toLocaleDateString(void 0, {
+		month: "short",
+		day: "numeric",
+		timeZone: "UTC"
+	});
+};
+var abbreviate = (value) => {
+	const text = String(value || "");
+	return text.length > 16 ? text.slice(0, 15) + "…" : text;
+};
+var svg = (tag, attrs = {}, ...children) => {
+	const node = document.createElementNS(SVG, tag);
+	for (const [key, value] of Object.entries(attrs)) {
+		if (value == null || value === false) continue;
+		node.setAttribute(key, value === true ? "" : String(value));
+	}
+	for (const child of children.flat()) if (child != null && child !== false) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+	return node;
+};
+function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permitted, form, errorBox, main, header }) {
+	const preference = viewState(namespace, workspaceId, "dependencies");
+	let active = false, serial = 0, impactTicket = 0, impactKey = "", data = null, revisions = null, impact = null;
+	let mode = preference.mode === "graph" ? "graph" : "matrix";
+	let relationFilter = Array.isArray(preference.relations) ? preference.relations.filter((value) => RELATIONS.includes(value)) : [...RELATIONS];
+	let evidenceFilter = Array.isArray(preference.evidence) ? preference.evidence.filter((value) => EVIDENCE.includes(value)) : [...EVIDENCE];
+	let showAll = preference.showAll === true;
+	let showAllRows = preference.showAllRows === true;
+	let selection = preference.selection && typeof preference.selection === "object" ? preference.selection : null;
+	let focusId = typeof preference.focus === "string" ? preference.focus : "";
+	let zoom = Number.isFinite(preference.zoom) ? Math.min(1.8, Math.max(.6, preference.zoom)) : 1;
+	let panel = null;
+	const levelText = (level) => EVIDENCE.includes(level) ? t("dep_" + level) : reasonText(t, level);
+	const remember = () => Object.assign(preference, {
+		mode,
+		relations: [...relationFilter],
+		evidence: [...evidenceFilter],
+		query: search.value,
+		showAll,
+		showAllRows,
+		selection,
+		focus: focusId,
+		zoom
+	});
+	const ready = () => Boolean(data?.source?.repository && data.source.commit_sha && data.source.binding_digest && Number.isInteger(data.version) && Number.isInteger(data.workspace_version));
+	const preconditions = () => ({
+		expected_version: data.version,
+		expected_workspace_version: data.workspace_version,
+		expected_binding_digest: data.source.binding_digest
+	});
+	const dependencyName = (key) => dependencyByKey().get(key)?.name || "";
+	const componentName = (id) => (data?.components || []).find((row) => row.component_id === id)?.name || (data?.external_components || []).find((row) => row.component_id === id)?.name || "";
+	function dependencyByKey() {
+		const map = new Map();
+		for (const kind of KINDS) for (const row of data?.dependencies?.[kind] || []) if (row?.key && !map.has(row.key)) map.set(row.key, row);
+		for (const row of data?.declared || []) {
+			const dep = row.dependency;
+			if (dep?.key && !map.has(dep.key)) map.set(dep.key, {
+				key: dep.key,
+				name: dep.name,
+				ecosystem: dep.ecosystem,
+				kinds: dep.kind ? [dep.kind] : []
+			});
+		}
+		for (const edge of data?.edges || []) if (edge?.dependency_key && !map.has(edge.dependency_key)) map.set(edge.dependency_key, {
+			key: edge.dependency_key,
+			name: edge.dependency_key,
+			kinds: edge.kind ? [edge.kind] : []
+		});
+		return map;
+	}
+	function allEdges(source = data) {
+		const seen = new Set(), rows = [];
+		const add = (edge) => {
+			if (!edge?.component_id || !edge?.dependency_key || !RELATIONS.includes(edge.relation)) return;
+			const id = [
+				edge.component_id,
+				edge.dependency_key,
+				edge.relation
+			].join("|");
+			if (seen.has(id)) return;
+			seen.add(id);
+			rows.push(edge);
+		};
+		for (const edge of source?.edges || []) add(edge);
+		for (const row of source?.declared || []) add({
+			...row,
+			edge_id: row.declaration_id,
+			dependency_key: row.dependency_key,
+			kind: row.dependency?.kind,
+			evidence_refs: row.evidence_refs || (row.source_ref ? [row.source_ref] : [])
+		});
+		return rows;
+	}
+	function filteredEdges() {
+		const query = search.value.trim().toLocaleLowerCase();
+		return allEdges().filter((edge) => relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || componentName(edge.component_id).toLocaleLowerCase().includes(query) || dependencyName(edge.dependency_key).toLocaleLowerCase().includes(query)));
+	}
+	const selectedKey = () => selection?.type === "dependency" || selection?.type === "edge" ? selection.dependencyKey : "";
+	const selectionEdges = () => allEdges().filter((edge) => selection?.type === "component" ? edge.component_id === selection.componentId : selection?.type === "edge" ? edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey : edge.dependency_key === selection?.dependencyKey);
+	function selectionAlive() {
+		if (!selection || !data) return false;
+		if (selection.type === "dependency") return dependencyByKey().has(selection.dependencyKey);
+		if (selection.type === "component") return (data.components || []).some((row) => row.component_id === selection.componentId) || (data.external_components || []).some((row) => row.component_id === selection.componentId);
+		return allEdges().some((edge) => edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey);
+	}
+	const focusKeyFor = (value) => value?.type === "edge" ? `cell:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const focusSelection = () => {
+		const key = focusKeyFor(selection);
+		if (!key) return;
+		element.querySelector(`[data-dep-focus="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+	};
+	const search = h("input", {
+		type: "search",
+		"aria-label": t("dep_search"),
+		placeholder: t("dep_search")
+	});
+	search.value = typeof preference.query === "string" ? preference.query : "";
+	search.addEventListener("input", () => {
+		remember();
+		render();
+	});
+	const searchWrap = h("div", { class: "dep-search" }, icon("search", { size: 16 }), search);
+	const relationChips = RELATIONS.map((value) => makeChip("relation", value));
+	const evidenceChips = EVIDENCE.map((value) => makeChip("evidence", value));
+	function makeChip(kind, value) {
+		const label = h("span");
+		const node = button({
+			variant: "ghost",
+			size: "sm",
+			label,
+			["data-dep-" + kind]: value,
+			"aria-pressed": "true"
+		});
+		node.classList.add("dep-chip");
+		node.addEventListener("click", () => {
+			const current = kind === "relation" ? relationFilter : evidenceFilter;
+			const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+			if (kind === "relation") relationFilter = next;
+			else evidenceFilter = next;
+			remember();
+			render();
+		});
+		return {
+			node,
+			label,
+			value
+		};
+	}
+	const showAllButton = button({
+		label: t("dep_show_transitive"),
+		"data-dep-show-all": ""
+	});
+	showAllButton.classList.add("dep-show-all");
+	showAllButton.addEventListener("click", () => {
+		showAll = !showAll;
+		remember();
+		render();
+	});
+	const showRowsButton = button({
+		label: t("dep_show_all_rows", { n: 0 }),
+		"data-dep-show-rows": ""
+	});
+	showRowsButton.classList.add("dep-show-rows");
+	showRowsButton.addEventListener("click", () => {
+		showAllRows = !showAllRows;
+		remember();
+		render();
+	});
+	const modeSwitch = segmented({
+		label: t("ui_dependencies"),
+		value: mode,
+		options: [{
+			value: "matrix",
+			label: t("dep_matrix")
+		}, {
+			value: "graph",
+			label: t("dep_graph")
+		}],
+		onChange: (value) => {
+			mode = value;
+			remember();
+			render();
+		}
+	});
+	const filterGroup = (name, chips) => h("div", { class: "dep-filter" }, h("span", { class: "dep-filter-label" }, t(name)), h("div", { class: "dep-chips" }, ...chips.map((chip) => chip.node)));
+	const toolbar = h("div", { class: "dep-toolbar" }, modeSwitch, h("div", { class: "dep-filters" }, filterGroup("dep_filter_relation", relationChips), filterGroup("dep_filter_evidence", evidenceChips)), searchWrap, showAllButton, showRowsButton);
+	const statusBox = h("div", { role: "status" });
+	const matrixScroll = h("div", {
+		class: "dep-matrix-scroll",
+		"data-dep-matrix": "",
+		tabindex: "0",
+		role: "grid",
+		"aria-label": t("dep_matrix")
+	});
+	const listHost = h("div", {
+		class: "dep-list",
+		"data-dep-list": ""
+	});
+	const legend = h("div", {
+		class: "dep-legend",
+		"data-dep-legend": "",
+		hidden: true
+	});
+	const matrixHost = h("div", { "data-dep-matrix-host": "" }, legend, matrixScroll, listHost);
+	const graphScroll = h("div", {
+		class: "dep-graph-scroll",
+		"data-dep-graph": ""
+	});
+	const zoomOut = button({
+		size: "sm",
+		label: "−",
+		"aria-label": t("dep_zoom_out"),
+		title: t("dep_zoom_out"),
+		onClick: () => setZoom(zoom - .2)
+	});
+	const zoomIn = button({
+		size: "sm",
+		label: "+",
+		"aria-label": t("dep_zoom_in"),
+		title: t("dep_zoom_in"),
+		onClick: () => setZoom(zoom + .2)
+	});
+	const loaded = h("span", {
+		class: "dep-loaded",
+		"data-dep-loaded": ""
+	}, t("dep_loaded"));
+	const graphHost = h("div", { "data-dep-graph-host": "" }, h("div", { class: "dep-graph-bar" }, loaded, zoomOut, zoomIn), graphScroll);
+	const detailBody = h("div");
+	const details = disclosure({
+		label: t("dep_details"),
+		body: detailBody,
+		key: JSON.stringify([
+			namespace,
+			workspaceId,
+			"dep-files"
+		])
+	});
+	details.dataset.depDetails = "";
+	matrixScroll.addEventListener("scroll", () => {
+		preference.matrixLeft = matrixScroll.scrollLeft;
+		preference.matrixTop = matrixScroll.scrollTop;
+	});
+	graphScroll.addEventListener("scroll", () => {
+		preference.graphLeft = graphScroll.scrollLeft;
+		preference.graphTop = graphScroll.scrollTop;
+	});
+	matrixScroll.addEventListener("keydown", (event) => moveGrid(event, matrixScroll));
+	listHost.addEventListener("keydown", (event) => {
+		const current = event.target.closest?.("[data-dep-pick]");
+		if (!current || ![
+			"ArrowDown",
+			"ArrowUp",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		const items = [...listHost.querySelectorAll("[data-dep-pick]")];
+		const index = items.indexOf(current);
+		const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : index + (event.key === "ArrowUp" ? -1 : 1);
+		if (!items[next]) return;
+		event.preventDefault();
+		items.forEach((node, item) => {
+			node.tabIndex = item === next ? 0 : -1;
+		});
+		items[next].focus();
+	});
+	let drag = null;
+	graphScroll.addEventListener("pointerdown", (event) => {
+		if (event.button !== 0 || event.target.closest("[data-dep-node], button, a, input, select, textarea")) return;
+		drag = {
+			id: event.pointerId,
+			x: event.clientX,
+			y: event.clientY,
+			left: graphScroll.scrollLeft,
+			top: graphScroll.scrollTop
+		};
+	});
+	graphScroll.addEventListener("pointermove", (event) => {
+		if (!drag || event.pointerId !== drag.id) return;
+		graphScroll.scrollLeft = drag.left - (event.clientX - drag.x);
+		graphScroll.scrollTop = drag.top - (event.clientY - drag.y);
+	});
+	const endDrag = (event) => {
+		if (drag && event.pointerId === drag.id) drag = null;
+	};
+	graphScroll.addEventListener("pointerup", endDrag);
+	graphScroll.addEventListener("pointerleave", endDrag);
+	graphScroll.addEventListener("pointercancel", endDrag);
+	graphScroll.addEventListener("keydown", (event) => {
+		const node = event.target.closest?.("[data-dep-node]");
+		if (!node) return;
+		if (["Enter", " "].includes(event.key)) {
+			event.preventDefault();
+			const next = selectionFromNode(node);
+			if (next) choose(next, true);
+			return;
+		}
+		if (![
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const nodes = [...graphScroll.querySelectorAll("[data-dep-node]")];
+		if (event.key === "Home" || event.key === "End") {
+			focusGraph(event.key === "Home" ? nodes[0] : nodes.at(-1));
+			return;
+		}
+		const box = node.getBoundingClientRect();
+		const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+		let best = null, score = Infinity;
+		for (const other of nodes) {
+			if (other === node) continue;
+			const bounds = other.getBoundingClientRect();
+			const dx = bounds.x + bounds.width / 2 - cx, dy = bounds.y + bounds.height / 2 - cy;
+			if (event.key === "ArrowRight" && dx <= 8 || event.key === "ArrowLeft" && dx >= -8 || event.key === "ArrowDown" && dy <= 8 || event.key === "ArrowUp" && dy >= -8) continue;
+			const rank = (event.key === "ArrowLeft" || event.key === "ArrowRight" ? Math.abs(dx) : Math.abs(dy)) + (event.key === "ArrowLeft" || event.key === "ArrowRight" ? Math.abs(dy) : Math.abs(dx)) * 4;
+			if (rank < score) {
+				score = rank;
+				best = other;
+			}
+		}
+		if (best) focusGraph(best);
+	});
+	graphScroll.addEventListener("click", (event) => {
+		const node = event.target.closest?.("[data-dep-node]");
+		const next = node && selectionFromNode(node);
+		if (next) choose(next, true);
+	});
+	const captureHint = h("p", {
+		id: "dep-capture-reason",
+		class: "dep-capture-hint",
+		"data-dep-capture-reason": "",
+		hidden: true
+	});
+	let captureButton = null;
+	function captureHintText() {
+		if (!active || !data || !captureButton?.disabled) return "";
+		if (captureForm.locked() && permitted(false) && ready()) return "";
+		if (!permitted(false)) return t("dep_capture_manage");
+		if (!data.source?.repository || !data.source.commit_sha) return t("dep_capture_no_source");
+		if (!ready()) return t("dep_capture_not_ready");
+		return t("dep_capture_manage");
+	}
+	function syncCapture() {
+		if (!captureButton) return;
+		const reason = captureHintText();
+		captureButton.className = captureButton.disabled ? "ui-button secondary ui-md" : "ui-button primary ui-md";
+		captureHint.textContent = reason;
+		captureHint.hidden = !active || !reason;
+		if (reason) {
+			captureButton.setAttribute("aria-describedby", captureHint.id);
+			captureButton.title = reason;
+		} else {
+			captureButton.removeAttribute("aria-describedby");
+			captureButton.removeAttribute("title");
+		}
+		if (captureButton.parentElement) captureButton.after(captureHint);
+	}
+	const captureForm = form({
+		action: "pm.dependencies.capture",
+		target: { workspace_id: workspaceId },
+		fields: {},
+		label: "dep_capture",
+		params: () => ({
+			repository: data.source.repository,
+			commit_sha: data.source.commit_sha
+		}),
+		preconditions,
+		permitted: () => permitted(false) && ready(),
+		onSaved: () => refresh(),
+		onStateChange: () => syncCapture()
+	});
+	captureForm.box.id = "dep-capture-form";
+	captureButton = captureForm.box.querySelector("button[type=submit]");
+	captureButton.setAttribute("data-dep-capture", "");
+	captureButton.setAttribute("form", captureForm.box.id);
+	captureButton.hidden = true;
+	syncCapture();
+	const componentSelect = h("select", { "aria-label": t("dep_component") });
+	const nameInput = h("input", {
+		"aria-label": t("dep_name"),
+		maxlength: 200,
+		required: true
+	});
+	const ecosystemInput = h("input", {
+		"aria-label": t("dep_ecosystem"),
+		maxlength: 80,
+		required: true
+	});
+	const kindSelect = h("select", { "aria-label": t("dep_kind") }, ...KINDS.map((value) => h("option", { value }, t("dep_kind_" + value))));
+	const versionInput = h("input", {
+		"aria-label": t("dep_version"),
+		maxlength: 80
+	});
+	const relationSelect = h("select", { "aria-label": t("dep_relation") });
+	const evidenceSelect = h("select", { "aria-label": t("dep_level") }, ...["declared", "inferred"].map((value) => h("option", { value }, t("dep_" + value))));
+	const pathInput = h("input", {
+		"aria-label": t("dep_source_path"),
+		maxlength: 500
+	});
+	const urlInput = h("input", {
+		"aria-label": t("dep_source_url"),
+		maxlength: 500
+	});
+	const noteInput = h("textarea", {
+		"aria-label": t("dep_note"),
+		maxlength: 1e3
+	});
+	const sourceCommit = h("p", {
+		class: "dep-note",
+		"data-dep-source-commit": ""
+	});
+	const labelled = (key, node) => h("label", {}, t(key), node);
+	function relationOptions() {
+		const allowed = evidenceSelect.value === "declared" ? ["contract", "reference"] : RELATIONS;
+		const current = relationSelect.value;
+		relationSelect.replaceChildren(...allowed.map((value) => h("option", { value }, t("dep_" + value))));
+		relationSelect.value = allowed.includes(current) ? current : allowed[0];
+	}
+	evidenceSelect.addEventListener("change", relationOptions);
+	relationOptions();
+	const declareForm = form({
+		action: "pm.dependencies.declare",
+		target: { workspace_id: workspaceId },
+		label: "dep_declare",
+		fields: {
+			component: componentSelect,
+			name: nameInput,
+			ecosystem: ecosystemInput,
+			kind: kindSelect,
+			version: versionInput,
+			relation: relationSelect,
+			evidence: evidenceSelect,
+			path: pathInput,
+			url: urlInput,
+			note: noteInput
+		},
+		permitted: () => permitted(true) && ready() && Boolean(data?.capture?.revision_id),
+		preconditions,
+		onSaved: () => refresh(),
+		params: (values) => {
+			const url = values.url.trim(), path = values.path.trim();
+			if (!url && !path) throw Error(t("dep_source_required"));
+			const note = values.note.trim();
+			return {
+				component_id: values.component,
+				dependency: {
+					name: values.name.trim(),
+					ecosystem: values.ecosystem.trim(),
+					kind: values.kind,
+					version: values.version.trim() || null
+				},
+				relation: values.relation,
+				evidence_level: values.evidence,
+				source_ref: url || {
+					path,
+					commit_sha: data.source.commit_sha
+				},
+				...note ? { note } : {}
+			};
+		},
+		extra: h("div", { class: "dep-fields" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput), sourceCommit, labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
+	});
+	const retractSelect = h("select", { "aria-label": t("dep_retract") });
+	const retractForm = form({
+		action: "pm.dependencies.retract",
+		target: { workspace_id: workspaceId },
+		label: "dep_retract",
+		fields: { declaration_id: retractSelect },
+		permitted: () => permitted(true) && ready() && /^pmdecl_[0-9a-f]{32}$/.test(retractSelect.value),
+		preconditions,
+		onSaved: () => refresh(),
+		params: (values) => ({ declaration_id: values.declaration_id }),
+		extra: h("div", { class: "dep-fields" }, labelled("dep_retract", retractSelect))
+	});
+	const record = disclosure({
+		label: t("dep_record"),
+		body: h("div", {}, declareForm.box, retractForm.box),
+		key: JSON.stringify([
+			namespace,
+			workspaceId,
+			"dep-record"
+		])
+	});
+	const holder = h("div", {}, record);
+	const element = h("section", {
+		class: "dep-view",
+		"data-dep-view": ""
+	}, toolbar, statusBox, captureForm.box, matrixHost, graphHost, details, holder);
+	function fillComponents() {
+		const value = componentSelect.value;
+		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
+		if ([...componentSelect.options].some((option) => option.value === value)) componentSelect.value = value;
+	}
+	function fillRetract() {
+		const value = retractSelect.value;
+		const rows = data?.declared || [];
+		retractSelect.replaceChildren(...rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
+		if ([...retractSelect.options].some((option) => option.value === value)) retractSelect.value = value;
+	}
+	function moveGrid(event, root) {
+		const current = event.target.closest?.("[data-row]");
+		if (!current || !root.contains(current) || ![
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const row = Number(current.getAttribute("data-row")), col = Number(current.getAttribute("data-col"));
+		const cells = [...root.querySelectorAll("[data-row]")];
+		const rows = cells.map((node) => Number(node.getAttribute("data-row")));
+		const cols = cells.map((node) => Number(node.getAttribute("data-col")));
+		let nextRow = row, nextCol = col;
+		if (event.key === "Home") nextCol = Math.min(...cols.filter((_, index) => rows[index] === row));
+		else if (event.key === "End") nextCol = Math.max(...cols.filter((_, index) => rows[index] === row));
+		else if (event.key === "ArrowLeft" || event.key === "ArrowRight") nextCol = col + (event.key === "ArrowLeft" ? -1 : 1);
+		else nextRow = row + (event.key === "ArrowUp" ? -1 : 1);
+		const target = cells.find((node) => Number(node.getAttribute("data-row")) === nextRow && Number(node.getAttribute("data-col")) === nextCol);
+		if (!target) return;
+		cells.forEach((node) => {
+			node.tabIndex = node === target ? 0 : -1;
+		});
+		target.focus();
+	}
+	function selectionFromNode(node) {
+		const id = node.getAttribute("data-dep-node") || "";
+		if (id.startsWith("d:")) return {
+			type: "dependency",
+			dependencyKey: id.slice(2)
+		};
+		if (id.startsWith("c:")) return {
+			type: "component",
+			componentId: id.slice(2)
+		};
+		return null;
+	}
+	function focusGraph(node) {
+		if (!node) return;
+		for (const item of graphScroll.querySelectorAll("[data-dep-node]")) item.tabIndex = item === node ? 0 : -1;
+		node.focus();
+	}
+	function setZoom(next) {
+		zoom = Math.min(1.8, Math.max(.6, Math.round(next * 10) / 10));
+		remember();
+		drawGraph(filteredEdges());
+	}
+	function choose(next, open) {
+		selection = next;
+		if (next?.componentId) focusId = next.componentId;
+		remember();
+		render();
+		focusSelection();
+		if (open) openInspector();
+	}
+	function mark(edge) {
+		const level = EVIDENCE.includes(edge.evidence_level) ? edge.evidence_level : "declared";
+		const version = versionLabel(edge);
+		return h("span", {
+			class: `dep-mark dep-rel-${edge.relation} evidence-${level}`,
+			title: version || dependencyName(edge.dependency_key)
+		}, LETTERS[edge.relation]);
+	}
+	function versionLabel(edge) {
+		return joinLabel([typeof edge.resolved === "string" ? edge.resolved : "", typeof edge.version === "string" ? edge.version : ""]);
+	}
+	function edgeLabel(edge) {
+		return joinLabel([
+			dependencyName(edge.dependency_key),
+			t("dep_" + edge.relation),
+			versionLabel(edge),
+			levelText(edge.evidence_level)
+		]);
+	}
+	function paintLegend() {
+		const swatch = (relation, level, text) => h("span", {
+			class: `dep-mark dep-rel-${relation} evidence-${level}`,
+			"aria-hidden": "true"
+		}, text);
+		const item = (mark, label) => h("span", { class: "dep-legend-item" }, mark, label);
+		legend.replaceChildren(...RELATIONS.map((relation) => item(swatch(relation, "verified", LETTERS[relation]), t("dep_" + relation))), h("span", {
+			class: "dep-legend-gap",
+			"aria-hidden": "true"
+		}), item(swatch("runtime", "verified", "\xA0"), t("dep_legend_verified")), item(swatch("runtime", "declared", "\xA0"), t("dep_legend_declared")), item(swatch("runtime", "inferred", "\xA0"), t("dep_legend_inferred")));
+	}
+	function syncChrome() {
+		if (header?.meta) {
+			header.meta.hidden = true;
+			header.meta.textContent = "";
+		}
+		if (header?.pills) {
+			header.pills.hidden = true;
+			header.pills.replaceChildren();
+		}
+		captureButton.hidden = !active;
+		syncCapture();
+		if (!active || !data) return;
+		const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
+		const date = capturedDate(data.capture?.captured_at);
+		const line = commit && date ? t("dep_meta", {
+			commit,
+			date
+		}) : commit ? t("dep_meta_commit", { commit }) : "";
+		if (header?.meta) {
+			header.meta.hidden = !line;
+			header.meta.textContent = line;
+		}
+		const marks = [];
+		if (data.stale === true) marks.push(statusPill("stale"));
+		if (data.partial === true) marks.push(statusPill("partial"));
+		if (header?.pills) {
+			header.pills.replaceChildren(...marks);
+			header.pills.hidden = !marks.length;
+		}
+	}
+	function syncImpact() {
+		const key = active ? selectedKey() : "";
+		if (key === impactKey) return;
+		impactKey = key;
+		impact = null;
+		if (!key) return;
+		const ticket = ++impactTicket;
+		(async () => {
+			try {
+				const result = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies/impact?dependency=${encodeURIComponent(key)}`);
+				alive();
+				if (ticket !== impactTicket) return;
+				if (result?.workspace_id !== workspaceId || result?.dependency !== key) throw Error(t("pm_scope_mismatch"));
+				impact = result;
+				renderInspector();
+			} catch (error) {
+				try {
+					alive();
+					if (ticket !== impactTicket) return;
+				} catch {
+					return;
+				}
+				if ([
+					401,
+					403,
+					404
+				].includes(error.status)) {
+					withdraw();
+					statusBox.replaceChildren(inlineError({
+						error,
+						retry: () => {
+							refresh();
+						}
+					}));
+					return;
+				}
+				impact = {
+					dependency: key,
+					error
+				};
+				renderInspector();
+			}
+		})();
+	}
+	function hintRows() {
+		const hints = [
+			...data?.verification_hints || [],
+			...(data?.components || []).flatMap((row) => row.verification_hints || []),
+			...(impact?.components || []).flatMap((row) => row.verification_hints || [])
+		];
+		const componentIds = new Set(), relations = new Set();
+		for (const edge of selectionEdges()) {
+			componentIds.add(edge.component_id);
+			relations.add(edge.relation);
+		}
+		if (selection?.type === "component") componentIds.add(selection.componentId);
+		const seen = new Set(), rows = [];
+		for (const hint of hints) {
+			if (componentIds.size && hint?.component_id && !componentIds.has(hint.component_id)) continue;
+			if (relations.size && hint?.relation && !relations.has(hint.relation)) continue;
+			const label = hint?.job_id || hint?.command || hint?.path;
+			const id = hint?.job_id || label;
+			if (!label || seen.has(id)) continue;
+			seen.add(id);
+			rows.push(hint);
+		}
+		return rows;
+	}
+	function evidenceLine(ref) {
+		if (!ref || typeof ref !== "object") return "";
+		if (typeof ref.url === "string") return ref.url;
+		const sha = shortSha(ref.commit_sha);
+		return joinLabel([ref.path && sha ? `${ref.path} @ ${sha}` : ref.path || sha, Number.isFinite(ref.line) ? t("dep_line_n", { n: ref.line }) : ""]);
+	}
+	function ownerFact(row) {
+		const owner = row?.maintenance_owner;
+		const actor = owner && typeof owner === "object" ? owner.actor : typeof owner === "string" ? owner : "";
+		return {
+			actor: typeof actor === "string" ? actor : "",
+			reason: actor ? "" : row?.maintenance_owner_reason || ""
+		};
+	}
+	function inspectorTitle() {
+		if (selection?.type === "component") return componentName(selection.componentId) || t("dep_component");
+		const name = dependencyName(selectedKey());
+		if (!impact || impact.dependency !== selectedKey() || impact.error) return name || t("ui_dependencies");
+		if (MISS.has(impact.reason)) return joinLabel([name, reasonText(t, impact.reason)]);
+		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
+		return name || t("ui_dependencies");
+	}
+	function openInspector() {
+		if (!selection || !data) return;
+		if (!panel) {
+			panel = inspector({
+				title: inspectorTitle(),
+				onClose: () => {
+					panel = null;
+					holder.append(record);
+					focusSelection();
+				}
+			});
+			panel.dataset.depInspector = "";
+			panel.querySelector("h2")?.classList.add("dep-inspector-title");
+			(main || element).append(panel);
+		}
+		renderInspector();
+	}
+	function closeInspector() {
+		panel?.close();
+	}
+	function renderInspector() {
+		if (!panel || !selection || !data) return;
+		const activeEl = document.activeElement;
+		if (panel.contains(activeEl) && [
+			"INPUT",
+			"TEXTAREA",
+			"SELECT"
+		].includes(activeEl.tagName)) return;
+		const title = panel.querySelector("h2");
+		if (title) title.textContent = inspectorTitle();
+		const edges = selectionEdges();
+		const dep = dependencyByKey().get(selectedKey());
+		const owner = ownerFact((data.components || []).find((row) => row.component_id === (selection.componentId || edges[0]?.component_id)) || data);
+		const facts = h("dl", { class: "dep-facts" });
+		const add = (label, value, note) => {
+			facts.append(h("dt", {}, label), h("dd", {}, value));
+			if (note) facts.append(h("dd", { class: "dep-note" }, note));
+		};
+		if (dep || selection.type !== "component") add(t("dep_name"), dep?.name || dependencyName(selectedKey()) || t("dep_dash"));
+		if (selection.type === "component") add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
+		for (const edge of edges) {
+			const pinned = typeof edge.resolved === "string" && edge.resolved ? edge.resolved : t("dep_dash");
+			const range = typeof edge.version === "string" && edge.version ? edge.version : t("dep_dash");
+			add(t("dep_pinned"), pinned, edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
+			add(t("dep_range"), range, !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
+			add(t("dep_level"), levelText(edge.evidence_level));
+			if (edge.basis) add(t("dep_why"), reasonText(t, edge.basis));
+			for (const ref of edge.evidence_refs || []) {
+				const line = evidenceLine(ref);
+				if (line) add(t("dep_level"), line);
+			}
+		}
+		add(t("dep_owner"), owner.actor || t("dep_dash"), owner.reason ? reasonText(t, owner.reason) : "");
+		const tests = h("div", { "data-dep-tests": "" }, h("h3", {}, t("dep_tests")));
+		const jobs = hintRows();
+		if (jobs.length) for (const hint of jobs) tests.append(h("p", {}, joinLabel([hint.job_id, hint.command])));
+		else tests.append(h("p", {}, Number(data.omitted_hints) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
+		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t("dep_affected")));
+		if (!selectedKey()) {
+			const names = [...new Set(edges.map((edge) => dependencyName(edge.dependency_key)).filter(Boolean))];
+			if (names.length) for (const name of names) affected.append(h("p", {}, name));
+			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
+		} else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
+		else if (impact.error) affected.append(inlineError({
+			error: impact.error,
+			retry: () => {
+				impactKey = "";
+				syncImpact();
+			}
+		}));
+		else if (MISS.has(impact.reason)) affected.append(h("p", {}, reasonText(t, impact.reason)));
+		else {
+			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
+			if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: impact.counts.components })));
+			if (!(impact.components || []).length && !(impact.counts && Number.isFinite(impact.counts.components))) affected.append(h("p", {}, t("dep_none_recorded")));
+		}
+		const releases = impact && Object.hasOwn(impact, "affected_releases") ? impact.affected_releases : Object.hasOwn(data, "affected_releases") ? data.affected_releases : null;
+		const releaseBlock = Array.isArray(releases) ? h("div", { "data-dep-releases": "" }, h("h3", {}, t("dep_releases")), ...releases.length ? releases.map((row) => h("p", {}, typeof row === "string" ? row : joinLabel([
+			row?.name,
+			row?.version,
+			row?.revision_id,
+			row?.id
+		]) || t("dep_dash"))) : [h("p", {}, t("dep_dash"))]) : "";
+		const discuss = selectedKey() ? h("a", {
+			class: "ui-button secondary ui-md",
+			"data-dep-discuss": "",
+			href: discussHref({
+				workspaceId,
+				refs: [],
+				title: inspectorTitle(),
+				from: "dependencies"
+			})
+		}, t("dep_check_impact")) : "";
+		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss), record);
+	}
+	function drawGraph(edges) {
+		const nodes = new Map();
+		for (const edge of edges) {
+			nodes.set("c:" + edge.component_id, {
+				id: "c:" + edge.component_id,
+				name: componentName(edge.component_id) || edge.component_id
+			});
+			nodes.set("d:" + edge.dependency_key, {
+				id: "d:" + edge.dependency_key,
+				name: dependencyName(edge.dependency_key) || edge.dependency_key
+			});
+		}
+		const visible = new Set([...nodes.keys()].map((id) => id.slice(2)));
+		const cross = [];
+		for (const link of data?.cross_repository_edges || []) {
+			if (!visible.has(link.component_id) && !visible.has(link.target_component_id)) continue;
+			const target = data.external_components?.find((row) => row.component_id === link.target_component_id) || data.components?.find((row) => row.component_id === link.target_component_id);
+			if (target) nodes.set("c:" + link.target_component_id, {
+				id: "c:" + link.target_component_id,
+				name: target.name || link.target_component_id
+			});
+			if (nodes.has("c:" + link.component_id) && nodes.has("c:" + link.target_component_id)) cross.push(link);
+		}
+		const links = [...edges.map((edge) => ({
+			from: "d:" + edge.dependency_key,
+			to: "c:" + edge.component_id,
+			relation: edge.relation,
+			level: edge.evidence_level
+		})), ...cross.map((link) => ({
+			from: "c:" + link.target_component_id,
+			to: "c:" + link.component_id,
+			relation: link.relation,
+			level: link.evidence_level
+		}))];
+		const layout = layoutGraph([...nodes.values()], links);
+		const placed = new Map(layout.positions.map((position) => [position.id, position]));
+		const width = Math.max(1, 40 + (layout.layers ? layout.layers * NODE_W + (layout.layers - 1) * GAP_X : 0));
+		const depth = layout.positions.reduce((max, position) => Math.max(max, position.y), 0);
+		const height = Math.max(76, 40 + (layout.positions.length ? (depth + 1) * NODE_H + depth * GAP_Y : 0));
+		const selectedIds = new Set();
+		if (selection?.type === "dependency" || selection?.type === "edge") selectedIds.add("d:" + selection.dependencyKey);
+		if (selection?.type === "component" || selection?.type === "edge") selectedIds.add("c:" + selection.componentId);
+		const selectedId = [...selectedIds][0] || "";
+		const incoming = new Map([...nodes.keys()].map((id) => [id, []]));
+		const outgoing = new Map([...nodes.keys()].map((id) => [id, []]));
+		for (const link of links) {
+			outgoing.get(link.from)?.push(link.to);
+			incoming.get(link.to)?.push(link.from);
+		}
+		const upstream = new Set(), downstream = new Set();
+		const walk = (start, direction, into) => {
+			const stack = [...direction.get(start) || []], seen = new Set();
+			while (stack.length) {
+				const id = stack.pop();
+				if (!id || id === start || seen.has(id)) continue;
+				seen.add(id);
+				into.add(id);
+				stack.push(...direction.get(id) || []);
+			}
+		};
+		for (const id of selectedIds) if (nodes.has(id)) {
+			walk(id, incoming, upstream);
+			walk(id, outgoing, downstream);
+		}
+		const markOf = (id) => !selectedIds.size ? "" : selectedIds.has(id) ? "selected" : upstream.has(id) || downstream.has(id) ? upstream.has(id) ? "upstream" : "downstream" : "dim";
+		const picture = svg("svg", {
+			class: "dep-graph",
+			role: "group",
+			"aria-label": t("dep_graph_label"),
+			viewBox: `0 0 ${width} ${height}`,
+			width: Math.round(width * zoom),
+			height: Math.round(height * zoom)
+		});
+		const arrivals = new Map();
+		links.forEach((link, index) => {
+			const list = arrivals.get(link.to) || [];
+			list.push(index);
+			arrivals.set(link.to, list);
+		});
+		links.forEach((link, index) => {
+			const from = placed.get(link.from), to = placed.get(link.to);
+			if (!from || !to) return;
+			const group = arrivals.get(link.to) || [index];
+			const bow = (group.indexOf(index) - (group.length - 1) / 2) * 8;
+			const x1 = PAD + from.x * 220 + NODE_W, y1 = PAD + from.y * 54 + NODE_H / 2;
+			const x2 = PAD + to.x * 220, y2 = PAD + to.y * 54 + NODE_H / 2;
+			const mid = (x1 + x2) / 2;
+			const path = svg("path", {
+				d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`,
+				class: `dep-edge dep-rel-${link.relation}${link.level === "inferred" ? " evidence-inferred" : ""}`
+			});
+			path.dataset.depMark = markOf(link.from) === "dim" && markOf(link.to) === "dim" ? "dim" : "";
+			picture.append(path);
+		});
+		for (const [id, node] of nodes) {
+			const position = placed.get(id);
+			if (!position) continue;
+			const left = PAD + position.x * 220, top = PAD + position.y * 54;
+			const group = svg("g", {
+				class: "dep-node",
+				tabindex: "-1",
+				role: "button",
+				"aria-label": node.name,
+				"data-dep-node": id,
+				"data-dep-focus": id.startsWith("d:") ? `col:${id.slice(2)}` : `row:${id.slice(2)}`,
+				"data-dep-mark": markOf(id)
+			});
+			group.append(svg("title", {}, node.name), svg("rect", {
+				x: left,
+				y: top,
+				width: NODE_W,
+				height: NODE_H,
+				rx: 6,
+				class: "dep-node-shape"
+			}), svg("text", {
+				x: left + 10,
+				y: top + 23
+			}, abbreviate(node.name)));
+			picture.append(group);
+		}
+		const focusNode = picture.querySelector(`[data-dep-node="${CSS.escape(selectedId)}"]`) || picture.querySelector("[data-dep-node]");
+		if (focusNode) focusNode.tabIndex = 0;
+		graphScroll.replaceChildren(picture);
+		graphScroll.scrollLeft = preference.graphLeft || 0;
+		graphScroll.scrollTop = preference.graphTop || 0;
+	}
+	function render() {
+		const previous = document.activeElement?.getAttribute?.("data-dep-focus");
+		element.dataset.depMode = mode;
+		matrixHost.hidden = mode !== "matrix";
+		graphHost.hidden = mode !== "graph";
+		const counted = typeof data?.counts?.edges === "number";
+		for (const chip of relationChips) {
+			const count = counted ? (data.edges || []).filter((edge) => edge.relation === chip.value).length : null;
+			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
+			chip.label.textContent = text;
+			chip.node.setAttribute("aria-label", text);
+			chip.node.setAttribute("aria-pressed", String(relationFilter.includes(chip.value)));
+		}
+		for (const chip of evidenceChips) {
+			const count = counted ? (data.edges || []).filter((edge) => edge.evidence_level === chip.value).length : null;
+			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
+			chip.label.textContent = text;
+			chip.node.setAttribute("aria-label", text);
+			chip.node.setAttribute("aria-pressed", String(evidenceFilter.includes(chip.value)));
+		}
+		sourceCommit.textContent = shortSha(data?.source?.commit_sha);
+		const edges = data ? filteredEdges() : [];
+		const names = new Map();
+		for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
+		showAllButton.hidden = mode !== "matrix" || names.size <= COLUMN_LIMIT;
+		showAllButton.textContent = t(showAll ? "dep_show_direct" : "dep_show_transitive");
+		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
+		showRowsButton.hidden = mode !== "matrix" || components.length <= ROW_LIMIT;
+		showRowsButton.textContent = showAllRows ? t("dep_show_fewer") : t("dep_show_all_rows", { n: components.length });
+		const visibleRows = !showAllRows && components.length > ROW_LIMIT ? components.slice(0, ROW_LIMIT) : components;
+		if (!focusId || !components.some((row) => row.component_id === focusId)) focusId = components[0]?.component_id || focusId;
+		let columns = [...names.keys()];
+		if (mode === "matrix" && !showAll && columns.length > COLUMN_LIMIT && focusId) {
+			const direct = new Set(edges.filter((edge) => edge.component_id === focusId).map((edge) => edge.dependency_key));
+			const limited = columns.filter((key) => direct.has(key));
+			if (limited.length) columns = limited;
+		}
+		const columnDeps = columns.map((key) => ({
+			key,
+			...dependencyByKey().get(key) || { name: key }
+		}));
+		columnDeps.sort((a, b) => KINDS.findIndex((kind) => (a.kinds || []).includes(kind)) - KINDS.findIndex((kind) => (b.kinds || []).includes(kind)) || String(a.name).localeCompare(String(b.name)));
+		legend.hidden = mode !== "matrix" || !visibleRows.length;
+		if (!legend.hidden) paintLegend();
+		if (!data || !visibleRows.length) {
+			const reason = data?.reason === "not_captured" ? t("dep_not_captured") : data && data.capture?.status === "complete" && data.counts?.components === 0 ? t("dep_empty") : data?.reason ? reasonText(t, data.reason) : data ? t("dep_no_match") : "";
+			matrixScroll.replaceChildren(reason ? emptyState({ title: reason }) : "");
+			listHost.replaceChildren(reason ? emptyState({ title: reason }) : "");
+			if (data && mode === "graph") drawGraph(edges);
+			else graphScroll.replaceChildren();
+		} else {
+			const groups = new Map();
+			for (const dep of columnDeps) {
+				const kind = KINDS.find((item) => (dep.kinds || []).includes(item)) || KINDS.find((item) => edges.some((edge) => edge.dependency_key === dep.key && edge.kind === item)) || "runtime_library";
+				if (!groups.has(kind)) groups.set(kind, []);
+				groups.get(kind).push(dep);
+			}
+			const headKind = h("tr");
+			const headName = h("tr");
+			headKind.append(h("th", {
+				scope: "col",
+				class: "dep-corner"
+			}, t("dep_component")));
+			headName.append(h("th", { class: "dep-corner" }));
+			let col = 0;
+			const colOf = new Map();
+			for (const [kind, deps] of groups) {
+				headKind.append(h("th", {
+					scope: "colgroup",
+					colspan: String(deps.length)
+				}, t("dep_kind_" + kind) === "dep_kind_" + kind ? t("ui_reason_generic") : t("dep_kind_" + kind)));
+				for (const dep of deps) {
+					colOf.set(dep.key, col);
+					const selectedCol = selection?.type === "dependency" && selection.dependencyKey === dep.key;
+					headName.append(h("th", {
+						scope: "col",
+						title: dep.name
+					}, h("button", {
+						type: "button",
+						title: dep.name,
+						"aria-label": dep.name,
+						"data-dep-focus": `col:${dep.key}`,
+						"data-row": "-1",
+						"data-col": String(col),
+						tabindex: "-1",
+						"aria-selected": String(selectedCol),
+						onclick: () => choose({
+							type: "dependency",
+							dependencyKey: dep.key
+						}, true)
+					}, abbreviate(dep.name))));
+					col += 1;
+				}
+			}
+			const body = h("tbody");
+			visibleRows.forEach((component, row) => {
+				const selectedRow = selection?.type === "component" && selection.componentId === component.component_id;
+				const line = h("tr", {}, h("th", { scope: "row" }, h("button", {
+					type: "button",
+					class: "dep-name",
+					"data-dep-focus": `row:${component.component_id}`,
+					"data-row": String(row),
+					"data-col": "-1",
+					tabindex: "-1",
+					"aria-selected": String(selectedRow),
+					onclick: () => choose({
+						type: "component",
+						componentId: component.component_id
+					}, true)
+				}, component.name)));
+				for (const dep of columnDeps) {
+					const cellEdges = edges.filter((edge) => edge.component_id === component.component_id && edge.dependency_key === dep.key);
+					const selectedCell = selection?.type === "edge" && selection.componentId === component.component_id && selection.dependencyKey === dep.key;
+					const label = joinLabel(cellEdges.map(edgeLabel));
+					line.append(h("td", {}, h("button", {
+						type: "button",
+						class: "dep-cell",
+						"data-dep-cell": cellEdges.length ? `${component.component_id}|${dep.key}` : null,
+						"data-dep-focus": `cell:${component.component_id}|${dep.key}`,
+						"data-row": String(row),
+						"data-col": String(colOf.get(dep.key)),
+						tabindex: "-1",
+						title: label || dep.name,
+						"aria-label": label || joinLabel([component.name, dep.name]),
+						"aria-selected": String(selectedCell),
+						onclick: cellEdges.length ? () => choose({
+							type: "edge",
+							componentId: component.component_id,
+							dependencyKey: dep.key
+						}, true) : null
+					}, ...cellEdges.map(mark))));
+				}
+				body.append(line);
+			});
+			const focusable = [...body.querySelectorAll("[data-row]"), ...headName.querySelectorAll("[data-row]")];
+			const current = focusable.find((node) => node.getAttribute("data-dep-focus") === focusKeyFor(selection)) || focusable.find((node) => node.getAttribute("data-row") === "0" && node.getAttribute("data-col") === "0") || focusable[0];
+			if (current) current.tabIndex = 0;
+			matrixScroll.replaceChildren(h("table", { class: "dep-matrix" }, h("thead", {}, headKind, headName), body));
+			matrixScroll.scrollLeft = preference.matrixLeft || 0;
+			matrixScroll.scrollTop = preference.matrixTop || 0;
+			listHost.replaceChildren(...components.map((component) => {
+				const own = edges.filter((edge) => edge.component_id === component.component_id);
+				return h("section", { class: "dep-group" }, h("h3", {}, component.name), ...own.map((edge) => {
+					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
+					return h("button", {
+						type: "button",
+						class: "dep-pick",
+						"data-dep-pick": `${edge.component_id}|${edge.dependency_key}`,
+						"data-dep-focus": `pick:${edge.component_id}|${edge.dependency_key}`,
+						tabindex: selectedPick ? "0" : "-1",
+						"aria-selected": String(selectedPick),
+						"aria-label": edgeLabel(edge),
+						onclick: () => choose({
+							type: "edge",
+							componentId: edge.component_id,
+							dependencyKey: edge.dependency_key
+						}, true)
+					}, h("span", {}, dependencyName(edge.dependency_key)), h("span", { class: "dep-pick-meta" }, mark(edge), versionLabel(edge)));
+				}));
+			}));
+			const picks = [...listHost.querySelectorAll("[data-dep-pick]")];
+			if (picks.length && !picks.some((node) => node.tabIndex === 0)) picks[0].tabIndex = 0;
+			if (mode === "graph") drawGraph(edges);
+		}
+		detailBody.replaceChildren();
+		if (data) {
+			if (data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
+			const omitted = [
+				"omitted_edges",
+				"omitted_hints",
+				"omitted_components"
+			].reduce((sum, key) => Number.isFinite(data[key]) && data[key] > 0 ? sum + data[key] : sum, 0);
+			if (omitted > 0) detailBody.append(h("p", { "data-dep-omitted": "" }, t("dep_omitted", { n: omitted })));
+			for (const code of data.parser_reasons || []) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			const files = h("div", { class: "dep-files" });
+			for (const file of data.files || []) {
+				const status = FILE_STATUS[file.status] ? t(FILE_STATUS[file.status]) : reasonText(t, file.status, true);
+				const note = file.reason && file.reason !== file.status ? reasonText(t, file.reason, !knownReason(file.reason)) : "";
+				files.append(h("div", {
+					class: "dep-file",
+					"data-dep-file": file.path || ""
+				}, h("span", {}, file.path || t("dep_dash")), h("span", {}, joinLabel([status, note]))));
+			}
+			for (const row of data.unreadable_paths || []) {
+				const path = typeof row === "string" ? row : row?.path;
+				files.append(h("div", {
+					class: "dep-file",
+					"data-dep-file": path || ""
+				}, h("span", {}, path || t("dep_dash")), h("span", {}, t("dep_file_unreadable"))));
+			}
+			if (files.childNodes.length) detailBody.append(files);
+			if ((revisions?.revisions || []).length || revisions?.next_cursor) {
+				detailBody.append(h("h3", {}, t("dep_revisions")));
+				for (const row of revisions?.revisions || []) detailBody.append(h("p", {}, joinLabel([
+					shortSha(row.commit_sha),
+					capturedDate(row.captured_at),
+					row.status === "partial" ? t("ui_status_partial") : row.status === "complete" ? "" : reasonText(t, row.reason, true)
+				])));
+				if (revisions?.next_cursor) detailBody.append(h("p", {}, t("dep_revisions_more")));
+			}
+		}
+		loaded.hidden = !(data?.capture?.revision_id || (data?.edges || []).length);
+		syncChrome();
+		syncImpact();
+		if (panel) renderInspector();
+		if (previous) element.querySelector(`[data-dep-focus="${CSS.escape(previous)}"]`)?.focus({ preventScroll: true });
+	}
+	async function refresh() {
+		if (!active) return;
+		const ticket = ++serial;
+		if (!data) statusBox.replaceChildren(skeleton(3));
+		try {
+			const [projection, history] = await Promise.all([api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies`), api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies/revisions`)]);
+			alive();
+			if (ticket !== serial) return;
+			if (projection?.workspace_id !== workspaceId || history?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			data = projection;
+			revisions = history;
+			statusBox.replaceChildren();
+			if (!selectionAlive()) {
+				selection = null;
+				closeInspector();
+			}
+			fillComponents();
+			fillRetract();
+			render();
+			captureForm.update();
+			declareForm.update();
+			retractForm.update();
+		} catch (error) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			if ([
+				401,
+				403,
+				404
+			].includes(error.status)) withdraw();
+			else {
+				data = null;
+				revisions = null;
+				impact = null;
+				impactKey = "";
+				closeInspector();
+				render();
+			}
+			statusBox.replaceChildren(inlineError({
+				error,
+				retry: () => {
+					refresh();
+				}
+			}));
+		}
+	}
+	function withdraw() {
+		serial++;
+		impactTicket++;
+		data = null;
+		revisions = null;
+		impact = null;
+		impactKey = "";
+		selection = null;
+		preference.selection = null;
+		closeInspector();
+		statusBox.replaceChildren();
+		render();
+		syncChrome();
+	}
+	function setActive(value) {
+		const next = Boolean(value);
+		if (next === active) {
+			syncChrome();
+			return next ? refresh() : void 0;
+		}
+		active = next;
+		if (!next) {
+			serial++;
+			impactTicket++;
+			impactKey = "";
+			impact = null;
+			closeInspector();
+			syncChrome();
+			return;
+		}
+		syncChrome();
+		return refresh();
+	}
+	render();
+	return {
+		element,
+		captureButton,
+		setActive,
+		withdraw,
+		dispose() {
+			active = false;
+			serial++;
+			impactTicket++;
+			closeInspector();
+			syncChrome();
+		}
 	};
 }
 //#endregion
@@ -12333,6 +16050,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 	const preference = viewState(namespace, workspaceId, "requirements");
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
+	let pendingFocus = null;
 	let selected = preference.selected || null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", renderedDetail = "", deliveryPages = 1;
 	const pages = {
 		work: 1,
@@ -12422,6 +16140,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		}
 	}
 	function withdraw() {
+		pendingFocus = null;
 		serial++;
 		detailSerial++;
 		busy = false;
@@ -12612,6 +16331,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 				detailBusy = false;
 				renderedDetail = "";
 			}
+			applyPending();
 		} catch (error) {
 			fail(error, ticket);
 		} finally {
@@ -12752,11 +16472,75 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		deliveryPages++;
 		await select(selected);
 	}
+	async function openRef(ref) {
+		if (!active || !plan) {
+			active = true;
+			await refresh();
+		}
+		if (ref.kind === "work_item") {
+			for (const card of cards.filter((row) => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
+			renderTable();
+			await select(ref.id, true);
+			return;
+		}
+		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id) return;
+		expanded.add(ref.id);
+		filter.value = "";
+		renderTable();
+		const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
+		if (row) {
+			row.setAttribute("aria-selected", "true");
+			row.querySelector("button")?.focus();
+			row.scrollIntoView({ block: "nearest" });
+		}
+	}
+	async function activate() {
+		if (!active) {
+			active = true;
+			await refresh();
+		}
+	}
+	function focusWork(id) {
+		pendingFocus = {
+			kind: "work_item",
+			id
+		};
+		if (!active) return activate();
+		if (!busy) applyPending();
+	}
+	function focusRequirement(id) {
+		pendingFocus = {
+			kind: "requirement",
+			id
+		};
+		if (!active) return activate();
+		if (!busy) applyPending();
+	}
+	async function applyPending() {
+		const pending = pendingFocus;
+		if (!pending || !plan) return;
+		pendingFocus = null;
+		if (pending.kind === "work_item" && !cards.some((row) => row.work_item_id === pending.id)) return;
+		if (pending.kind === "requirement" && !plan.document?.requirements?.some((row) => row.id === pending.id)) return;
+		filter.value = "";
+		await openRef({
+			...pending,
+			revision_id: plan.revision_id
+		});
+		if (pending.kind === "work_item") {
+			const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
+			target?.focus({ preventScroll: true });
+			target?.scrollIntoView({ block: "nearest" });
+		}
+	}
 	controls();
 	return {
 		element,
 		refresh,
 		withdraw,
+		openRef,
+		focusWork,
+		focusRequirement,
 		dispose: () => {
 			Object.assign(preference, {
 				selected,
@@ -12765,12 +16549,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			});
 			withdraw();
 		},
-		activate: async () => {
-			if (!active) {
-				active = true;
-				await refresh();
-			}
-		}
+		activate
 	};
 }
 //#endregion
@@ -13260,6 +17039,7 @@ function structuredAnalysis({ h, t, labelled, action, capability, legacyEligible
 }
 //#endregion
 //#region src/pm-plan-proposals.js
+var proposalReasonLabel = (t, reason) => Object.hasOwn(reasonLabels, reason) ? reasonLabel(t, reason) : t("pd_stale");
 var PROPOSE = "pm.conversation.propose";
 var ADOPT = "pm.conversation.adopt";
 var same$8 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -13305,17 +17085,17 @@ function validRequirements(values, included) {
 		"unresolved"
 	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
 }
-function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox }) {
+function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
 		workspace_id: workspaceId,
 		thread_id: threadId
 	};
 	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt;
-	let candidateFields = [], requirementFields = [], rendered = "", visible = false;
+	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewShell = false, adapterInitialized = false;
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
 	const deciding = () => writing() && permitted(true) && thread()?.capabilities?.decide === true && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === ADOPT && row.allowed === true) && capability?.plan_adoption_available !== false;
-	const fresh = () => active && head && thread()?.thread?.version === active.context.thread_version && head.version === active.context.plan_head.version && head.accepted_revision_id === active.context.plan_head.accepted_revision_id;
+	const fresh = () => !conflict && active?.adoptable === true;
 	const original = () => {
 		try {
 			return JSON.parse(adopt?.values().review || "null");
@@ -13350,7 +17130,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		action: PROPOSE,
 		capability: () => capability,
 		readable: () => visible,
-		authorized: () => writing() && caps()?.scopes?.includes("start") && !adopt?.locked(),
+		authorized: () => writing() && caps()?.scopes?.includes("start") && (!adopt?.locked() || adopt?.replaceable?.()),
 		legacyEligible: () => capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true
 	});
 	prepare = form({
@@ -13371,7 +17151,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			expected_plan_version: head.version,
 			expected_accepted_revision_id: head.accepted_revision_id
 		}),
-		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && !adopt?.locked(),
+		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && (!adopt?.locked() || adopt?.replaceable?.()),
 		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
 		label: "pcp_prepare",
 		onSaved: async (result) => {
@@ -13381,7 +17161,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			await refresh(id);
 		},
 		onStateChange: () => {
-			if (ready) updateControls();
+			if (ready) {
+				adopt?.update();
+				updateControls();
+			}
 		},
 		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), runtime.box, h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"))
 	});
@@ -13410,12 +17193,23 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (!saved?.preconditions) throw fail();
 			return saved.preconditions;
 		},
-		permitted: () => deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked(),
+		permitted: () => active?.proposal_id !== adoptedId && deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked(),
 		recoverPermitted: () => writing() && permitted(true) && caps()?.scopes?.includes("start"),
 		label: "pcp_adopt",
+		onError: (error) => {
+			if (!conversation || error.code !== "VERSION_CONFLICT") return false;
+			conflict = true;
+			updateControls();
+			return true;
+		},
 		onSaved: async () => {
+			adoptedId = active?.proposal_id;
 			await refreshParent?.();
 			await refresh();
+			if (conversation) detail.replaceChildren(h("p", {
+				"data-proposal-adopted": "",
+				role: "status"
+			}, t("pd_adopted"), " · ", backLink()));
 		},
 		onStateChange: () => {
 			if (ready) updateControls();
@@ -13428,7 +17222,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		hidden: true,
 		onclick: () => void loadMore()
 	}, t("pcp_more"));
-	const reload = h("button", {
+	const reload = conversation ? iconButton({
+		icon: "refresh-cw",
+		label: t("pcp_refresh"),
+		onClick: () => void refresh()
+	}) : h("button", {
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
@@ -13440,7 +17238,14 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	const box = h("section", {
 		class: "pm-plans",
 		"data-pm-plan-proposals": ""
-	}, h("h3", {}, t("pcp_title")), note("pcp_help"), prepareBox, h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)), notice, detail);
+	}, h("h3", {}, t(conversation ? "pd_proposed" : "pcp_title")), conversation ? "" : note("pcp_help"), prepareBox, h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)), notice, detail);
+	const tools = h("div", { "data-discussion-proposal-tools": "" });
+	if (conversation) {
+		prepareBox.open = false;
+		picker.closest(".pm-fields").remove();
+		const history = h("details", { "data-proposal-history": "" }, h("summary", {}, t("pd_history")), picker.parentElement);
+		tools.append(h("header", { class: "pd-section-header" }, h("h3", {}, t("pcp_title")), reload), prepareBox, history, more);
+	}
 	picker.addEventListener("change", () => {
 		if (adopt.locked()) {
 			picker.value = active?.proposal_id || "";
@@ -13509,13 +17314,38 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		reload.disabled = loading;
 		more.disabled = loading;
 		runtime.update(prepare);
+		if (composerNode) {
+			ask.disabled = !prepare.canSubmit();
+			ask.textContent = t(prepare.locked() ? "pm_check_original" : "pd_ask");
+			connection.hidden = runtime.eligible();
+			ask.hidden = !runtime.eligible() && !prepare.locked();
+			discussionFeedback({
+				t,
+				request: prepare,
+				node: working,
+				eligible: runtime.eligible()
+			});
+		}
 		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
+		const reviewButton = adopt.box.querySelector("[data-proposal-review]");
+		if (reviewButton) reviewButton.disabled = !fresh() && !adopt.locked();
 		if (active && active.validation.status === "format_valid") {
+			const rawReason = content.querySelector("[data-proposal-adoptable-reason]");
+			if (rawReason) rawReason.textContent = active.adoptable_reason || "";
 			const reasons = content.querySelector("[data-proposal-reason]");
 			if (reasons) {
-				const reason = capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? "pcp_stale" : reviewIssue(original()?.review);
+				const reason = capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? conversation ? "pd_stale" : "pcp_stale" : reviewIssue(original()?.review);
 				reasons.textContent = reason ? t(reason) : "";
+				if (reason === "pd_stale" && !conflict) {
+					const label = proposalReasonLabel(t, active.adoptable_reason);
+					if (label !== t("pd_stale")) reasons.textContent += " · " + label;
+				}
 				reasons.hidden = !reason;
+				const retry = content.querySelector("[data-proposal-again]");
+				if (retry) {
+					retry.hidden = fresh();
+					retry.disabled = !prepare.canSubmit();
+				}
 			}
 		}
 	}
@@ -13565,8 +17395,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		requirementFields = [];
 		detail.replaceChildren();
 		content.replaceChildren();
-		detail.append(h("h4", {}, t("pcp_review")));
-		if (p.provenance?.adapter) detail.append(h("p", { class: "muted" }, t("pm_native_origin"), " ", p.provenance.adapter));
+		detail.append(h("h4", {}, p.document?.title || t("pcp_review")));
+		if (!conversation && p.provenance?.adapter) detail.append(h("p", { class: "muted" }, t("pm_native_origin"), " ", p.provenance.adapter));
 		if (p.validation.status !== "format_valid") {
 			detail.append(note("pcp_invalid"), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error)))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
 			return;
@@ -13578,12 +17408,14 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (saved?.proposal_id) drafts[saved.proposal_id] = {
 				review: saved.review,
 				preconditions: saved.preconditions,
-				rationale: adopt.values().rationale
+				rationale: adopt.values().rationale,
+				answers: saved.answers
 			};
 			const retained = drafts[p.proposal_id];
 			saved = {
 				proposal_id: p.proposal_id,
 				review: retained?.review || defaultsFor(p),
+				answers: retained?.answers || {},
 				drafts,
 				preconditions: retained?.preconditions || {
 					expected_version: p.context.thread_version,
@@ -13607,7 +17439,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			value: edited.title
 		});
 		const accepted = acceptedDocument(p);
-		content.append(h("p", { class: "pm-note-text" }, p.document.summary), h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first")), labelled("pcp_name", title), h("h4", {}, t("pcp_candidates")));
+		if (conversation) detail.append(h("p", { class: "pm-note-text" }, p.document.summary));
+		const before = h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first"));
+		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), labelled("pcp_name", title), h("code", {}, p.proposal_id), h("code", { "data-proposal-adoptable-reason": "" }, p.adoptable_reason || ""), before);
+		if (!conversation) content.append(h("p", { class: "pm-note-text" }, p.document.summary), before, labelled("pcp_name", title));
+		content.append(h("h4", {}, t("pcp_candidates")));
 		title.addEventListener("input", () => saveEditor(title));
 		const requirementBox = h("div"), add = h("button", {
 			type: "button",
@@ -13643,6 +17479,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				keep(row.dependencies, requirementFields.filter((value) => value !== row).map((value) => [value.id.value, value.id.value]));
 			}
 		}
+		const candidateGroups = new Map();
 		for (const candidate of p.document.candidates) {
 			const row = edited.rows.find((value) => value.key === candidate.key);
 			if (!row) throw fail();
@@ -13673,7 +17510,17 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				rebuildChoices();
 				saveEditor(title);
 			});
-			content.append(item);
+			if (conversation) {
+				let group = candidateGroups.get(candidate.kind);
+				if (!group) {
+					group = h("section", { class: "pd-candidate-group" }, h("h4", {}, t("pcp_" + candidate.kind)));
+					candidateGroups.set(candidate.kind, group);
+					content.append(group);
+				}
+				item.querySelector("label").remove();
+				summary.replaceChildren(wording);
+				group.append(h("div", { class: "pd-candidate" }, h("label", { "aria-label": t("pcp_include") }, include), item));
+			} else content.append(item);
 		}
 		function addRequirement(value) {
 			const id = input("pcp_requirement_id", {
@@ -13727,14 +17574,93 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			rebuildChoices();
 		}
 		for (const row of edited.requirements) addRequirement(row);
-		content.append(h("h4", {}, t("pcp_requirements")), requirementBox, add, h("div", { "data-proposal-removed": "" }));
+		content.append(conversation ? h("details", {}, h("summary", {}, t("pcp_requirements")), requirementBox, add) : h("div", {}, h("h4", {}, t("pcp_requirements")), requirementBox, add), h("div", { "data-proposal-removed": "" }));
 		showRemoved(edited.removed_requirement_ids);
-		if (p.document.questions.length) content.append(h("details", {}, h("summary", {}, t("pcp_questions")), ...p.document.questions.map((question) => h("div", {}, h("p", {}, question.question), h("p", {}, t("pcp_why"), ": ", question.why_now), sourceQuotes(question.source_refs)))));
-		content.append(h("p", {
+		if (!conversation && p.document.questions.length) content.append(h("details", {}, h("summary", {}, t("pcp_questions")), ...p.document.questions.map((question) => h("div", {}, h("p", {}, question.question), h("p", {}, t("pcp_why"), ": ", question.why_now), sourceQuotes(question.source_refs)))));
+		if (conversation && p.document.questions.length) {
+			const answers = hidden();
+			answers.value = JSON.stringify(saved.answers || {});
+			const questions = h("section", { class: "pd-questions" }, h("h4", {}, t("pcp_questions")));
+			p.document.questions.slice(0, 3).forEach((question, index) => {
+				const answer = input("pd_answer", {
+					required: false,
+					max: 2e3,
+					value: saved.answers?.[index] || ""
+				});
+				answer.addEventListener("input", () => {
+					const draft = original();
+					adopt.set("review", JSON.stringify({
+						...draft,
+						answers: {
+							...draft.answers,
+							[index]: answer.value
+						}
+					}));
+				});
+				questions.append(h("label", {}, question.question, answer));
+			});
+			questions.append(h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: () => {
+					const values = original()?.answers || {};
+					onAnswer(p.document.questions.map((row, index) => values[index] ? row.question + "\n" + values[index] : null).filter(Boolean).join("\n\n"));
+				}
+			}, t("pd_answer_send")));
+			content.append(questions);
+		}
+		content.prepend(h("button", {
+			type: "button",
+			class: "secondary",
+			"data-proposal-again": "",
+			hidden: true,
+			onclick: () => {
+				ask?.click();
+			}
+		}, t("pd_again")));
+		content.prepend(h("p", {
 			class: "muted",
 			"data-proposal-reason": ""
-		}), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
+		}));
+		const raw = h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply));
+		if (conversation) {
+			technical.append(raw);
+			content.append(technical);
+		} else content.append(raw);
+		if (conversation && adoptedId === p.proposal_id) {
+			detail.replaceChildren(h("p", {
+				"data-proposal-adopted": "",
+				role: "status"
+			}, t("pd_adopted"), " · ", backLink()));
+			return;
+		}
 		detail.append(adopt.box);
+		if (conversation && !reviewShell) {
+			reviewShell = true;
+			const reviewBody = adopt.box.firstElementChild;
+			const extra = [...reviewBody.children].filter((node) => node !== review && node !== content);
+			const reviewMore = h("details", {
+				"data-proposal-owner-review": "",
+				open: adopt.locked()
+			}, h("summary", {}, t("pd_review")), ...extra);
+			const actions = adopt.box.querySelector(":scope > .actions");
+			reviewMore.append(actions);
+			reviewBody.append(reviewMore);
+			const choices = h("div", { class: "actions pd-review-actions" }, h("button", {
+				type: "button",
+				class: "primary",
+				"data-proposal-review": "",
+				onclick: () => {
+					reviewMore.open = true;
+					rationale.focus();
+				}
+			}, t("pd_review")), h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: onFollowUp
+			}, t("pd_follow_up")));
+			reviewBody.insertBefore(choices, content);
+		}
 		adopt.update();
 	}
 	async function choose(id) {
@@ -13752,6 +17678,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			alive();
 			if (own !== ticket) return;
 			if (result.proposal_id !== id) throw fail();
+			if (active?.proposal_id !== result.proposal_id) conflict = false;
 			active = result;
 			renderReview();
 		} catch (error) {
@@ -13768,10 +17695,27 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		rows = append ? [...rows, ...value.proposals] : value.proposals;
 		cursor = next ?? null;
 		const selected = picker.value;
-		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, row.title || row.proposal_id)));
+		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, [row.title || t("pd_proposed"), t(row.adoptable === false ? "pd_stale" : row.validation?.status === "format_valid" ? "pcp_proposal" : "pcp_invalid")].join(" · "))));
 		picker.value = selected;
 		more.hidden = cursor === null;
 		notice.replaceChildren(...!rows.length ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
+	}
+	async function summaries(list) {
+		if (list?.workspace_id !== workspaceId || !Array.isArray(list.proposals) || list.proposals.some((row) => row.thread_id !== threadId || typeof row.proposal_id !== "string")) throw fail();
+		const proposals = await Promise.all(list.proposals.map(async (row) => {
+			const p = checked(await api("GET", endpoint + "/" + encodeURIComponent(row.proposal_id)));
+			if (p.proposal_id !== row.proposal_id) throw fail();
+			return {
+				...row,
+				title: p.document?.title || t("pcp_invalid"),
+				adoptable: p.adoptable,
+				adoptable_reason: p.adoptable_reason
+			};
+		}));
+		return {
+			...list,
+			proposals
+		};
 	}
 	async function refresh(preferred) {
 		if (!enabled()) {
@@ -13789,17 +17733,21 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (own !== ticket) return;
 			if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
 			head = plans.head;
+			const detailed = await summaries(list);
+			alive();
+			if (own !== ticket) return;
 			visible = true;
 			box.hidden = false;
-			page(list);
-			const id = preferred || original()?.proposal_id || active?.proposal_id || picker.value;
-			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, id));
+			page(detailed);
+			const id = preferred || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? rows.at(-1)?.proposal_id : null);
+			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, t("pd_proposed")));
 			picker.value = id || "";
 			if (id) {
 				const result = checked(await api("GET", endpoint + "/" + encodeURIComponent(id)));
 				alive();
 				if (own !== ticket) return;
 				if (result.proposal_id !== id) throw fail();
+				if (active?.proposal_id !== result.proposal_id) conflict = false;
 				active = result;
 				renderReview();
 			}
@@ -13826,7 +17774,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			const result = await api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);
 			alive();
 			if (own !== ticket) return;
-			page(result, true);
+			const detailed = await summaries(result);
+			alive();
+			if (own !== ticket) return;
+			page(detailed, true);
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
@@ -13854,14 +17805,54 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		prepare?.update();
 		adopt?.update();
 	}
+	function composer(textarea) {
+		ask = h("button", {
+			type: "button",
+			class: "secondary",
+			"data-discussion-ask": "",
+			onclick: () => {
+				if (adopt.replaceable()) adopt.edit();
+				if (!prepare.locked()) prepare.set("purpose", textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t("pd_ask"));
+				prepare.submit();
+			}
+		}, t("pd_ask"));
+		connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
+		working = h("p", {
+			"data-discussion-working": "",
+			role: "status",
+			class: "muted"
+		});
+		composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
+		clock = setInterval(() => {
+			if (composerNode.isConnected && [
+				"running",
+				"accepted",
+				"queued",
+				"pending"
+			].includes(prepare.operation()?.status)) updateControls();
+		}, 1e3);
+		updateControls();
+		return composerNode;
+	}
 	ready = true;
 	updateControls();
 	return {
 		box,
+		tools,
+		composer,
 		refresh,
 		withdraw,
 		update(value = {}) {
-			if (value.capabilities) capability = value.capabilities;
+			if (value.capabilities) {
+				capability = value.capabilities;
+				if (conversation && !adapterInitialized) {
+					adapterInitialized = true;
+					if (!prepare.locked() && !prepare.hasDraft?.()) {
+						const available = (capability.structured_analysis?.actions?.[PROPOSE]?.adapters || []).find((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true);
+						if (available && available.adapter !== runtime.field.value) prepare.set("adapter", available.adapter);
+					}
+				}
+			}
 			if (value.head) head = value.head;
 			if (value.page) {
 				visible = true;
@@ -13871,6 +17862,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			adopt.update();
 		},
 		dispose() {
+			clearInterval(clock);
 			withdraw();
 			prepare.dispose();
 			adopt.dispose();
@@ -15365,7 +19357,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		}, h("div", { class: "pm-fact-heading" }, h("strong", { class: "pm-source" }, revision.document.title), h("span", { class: "muted" }, t("pm_gov_" + record.kind))), h("p", { class: "muted" }, t("pm_gov_" + revision.document.status), " · ", revision.document.owner_actor, revision.document.decision ? " · " + t("pm_gov_" + revision.document.decision.disposition) : ""), h("button", {
 			type: "button",
 			class: "secondary",
-			"aria-pressed": selectedId === record.record_id,
+			"aria-pressed": String(selectedId === record.record_id),
 			onclick: () => {
 				selectRecord(record.record_id);
 				refresh(true);
@@ -15787,7 +19779,907 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	}
 	return {
 		element,
-		refresh
+		refresh,
+		openRef: async (ref) => {
+			if (ref.kind !== "governance") return;
+			selectRecord(ref.id);
+			await refresh(true);
+			const row = list.querySelector(`[data-pm-governance-row="${CSS.escape(ref.id)}"]`);
+			row?.querySelector("button")?.focus();
+			row?.scrollIntoView({ block: "nearest" });
+		}
+	};
+}
+//#endregion
+//#region src/pm-register.js
+var TYPES = [
+	"risk",
+	"issue",
+	"action",
+	"change",
+	"decision"
+];
+var ROW_ID = /^(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180}$/;
+var STATUSES = [
+	"open",
+	"monitoring",
+	"observed_open",
+	"blocked",
+	"tracking",
+	"needs_review",
+	"proposed",
+	"in_progress",
+	"draft",
+	"reported_resolved",
+	"reported_done",
+	"adopted",
+	"rejected",
+	"cancelled",
+	"succeeded",
+	"failed"
+];
+var STEPS = [
+	"finding",
+	"action",
+	"work",
+	"evidence",
+	"review",
+	"proposal",
+	"decision",
+	"revision"
+];
+var TYPE_ICON = {
+	risk: "circle-alert",
+	issue: "inbox",
+	action: "check",
+	change: "refresh-cw",
+	decision: "list-checks"
+};
+var ACTION_KEYS = {
+	"pm.maintenance.repair": "reg_action_repair",
+	"pm.maintenance.repair.evidence.record": "reg_action_evidence",
+	"pm.governance.revise": "reg_action_revise",
+	"pm.governance.decide": "reg_action_decide",
+	"pm.governance.adoption.link": "reg_action_link",
+	"pm.issue.publish": "reg_action_publish",
+	"pm.issue.cancel": "reg_action_cancel",
+	"pm.meeting.follow_up.record": "reg_action_follow",
+	"pm.maintenance_review.follow_up.record": "reg_action_follow"
+};
+var AGE_KEYS = {
+	"0-7d": "reg_age_0_7",
+	"8-30d": "reg_age_8_30",
+	"31-90d": "reg_age_31_90",
+	"90d+": "reg_age_90"
+};
+var TONES = {
+	open: "info",
+	monitoring: "info",
+	observed_open: "info",
+	tracking: "info",
+	failed: "bad",
+	proposed: "review",
+	needs_review: "review",
+	succeeded: "ok"
+};
+var REPO = /^[\w.-]+\/[\w.-]+$/;
+var finite = (value) => typeof value === "number" && Number.isFinite(value);
+var known = (t, key) => {
+	const text = t(key);
+	return text === key ? "" : text;
+};
+var when$1 = (value) => {
+	const text = labelSegment(value);
+	if (!text) return "";
+	const date = new Date(text);
+	return Number.isNaN(date.valueOf()) ? "" : date.toLocaleString();
+};
+var day = (value) => {
+	const text = labelSegment(value);
+	if (!text) return "";
+	const date = new Date(text);
+	return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();
+};
+function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {} }) {
+	const preference = viewState(namespace, workspaceId, "issues");
+	let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null;
+	let loaded = false, unavailable = false, failed = null, selected = preference.selected || null;
+	let typeValue = TYPES.includes(preference.type) ? preference.type : "";
+	let debounce = null, sheet = null, retainSheet = false, opening = false;
+	const statusLine = h("div", {
+		class: "reg-status",
+		role: "status"
+	});
+	const summaryHost = h("div", {
+		class: "reg-summary",
+		"data-reg-summary": ""
+	});
+	const trends = h("details", {
+		class: "ui-disclosure reg-trends",
+		"data-reg-trends": ""
+	}, h("summary", {}, icon("chevron-right"), t("reg_trends")), summaryHost);
+	const tableHost = h("div", { "data-reg-table": "" });
+	const footer = h("div", {
+		class: "reg-footer",
+		"data-reg-footer": "",
+		hidden: true
+	});
+	const statusSelect = h("select", {
+		"data-reg-status": "",
+		"aria-label": t("reg_filter_status"),
+		onchange: () => reloadNow()
+	}, h("option", { value: "" }, t("reg_any_status")), ...STATUSES.map((status) => h("option", { value: status }, statusLabel(status))));
+	const ownerListId = `reg-owners-${workspaceId.replace(/[^\w-]/g, "")}`;
+	const ownerList = h("datalist", { id: ownerListId });
+	const ownerInput = h("input", {
+		type: "text",
+		class: "reg-owner",
+		role: "combobox",
+		"aria-autocomplete": "list",
+		"data-reg-owner": "",
+		list: ownerListId,
+		"aria-label": t("reg_filter_owner"),
+		placeholder: t("reg_filter_owner"),
+		autocomplete: "off",
+		oninput: queueReload
+	});
+	const searchInput = h("input", {
+		type: "search",
+		"data-reg-search": "",
+		"aria-label": t("reg_filter_search"),
+		placeholder: t("reg_filter_search"),
+		oninput: queueReload
+	});
+	statusSelect.value = STATUSES.includes(preference.status) ? preference.status : "";
+	ownerInput.value = preference.owner || "";
+	searchInput.value = preference.q || "";
+	const typeControl = segmented({
+		label: t("reg_col_type"),
+		value: typeValue,
+		onChange: (value) => {
+			typeValue = value || "";
+			reloadNow();
+		},
+		options: [{
+			value: "",
+			label: t("reg_all")
+		}, ...TYPES.map((type) => ({
+			value: type,
+			label: t("reg_type_" + type)
+		}))]
+	});
+	[...typeControl.querySelectorAll("button")].forEach((node, index) => node.setAttribute("data-reg-type", index ? TYPES[index - 1] : ""));
+	const layout = h("div", { class: "reg-layout" }, h("div", { class: "reg-main" }, h("div", { class: "reg-toolbar" }, typeControl, h("div", { class: "reg-toolbar-filters" }, statusSelect, ownerInput, ownerList, h("div", { class: "reg-search" }, icon("search", { size: 16 }), searchInput))), trends, statusLine, tableHost, footer));
+	const element = h("section", { "data-pm-register": "" }, layout);
+	const wideQuery = matchMedia("(min-width: 801px)");
+	function onWide() {
+		trends.open = wideQuery.matches;
+		paintTable();
+	}
+	wideQuery.addEventListener("change", onWide);
+	trends.open = wideQuery.matches;
+	function statusLabel(status) {
+		if (Object.hasOwn(statusVocabulary, status)) return t("ui_status_" + status);
+		return known(t, "reg_status_" + status) || t("ui_reason_generic");
+	}
+	function statusNode(status) {
+		if (!labelSegment(status)) return statusPill("unknown");
+		if (Object.hasOwn(statusVocabulary, status)) return statusPill(status);
+		const label = known(t, "reg_status_" + status);
+		return h("span", { class: `ui-pill tone-${TONES[status] || "neutral"}` }, label || t("ui_reason_generic"));
+	}
+	function kindLabel(kind) {
+		return known(t, "reg_kind_" + kind) || t("ui_reason_generic");
+	}
+	function stepLabel(step) {
+		return known(t, "reg_step_" + step) || t("ui_reason_generic");
+	}
+	function dash(value) {
+		return labelSegment(value) || "—";
+	}
+	function readFilters() {
+		preference.type = typeValue;
+		preference.status = statusSelect.value;
+		preference.owner = ownerInput.value;
+		preference.q = searchInput.value;
+	}
+	function resetPage() {
+		rows = [];
+		nextCursor = null;
+		summary = null;
+		totals = null;
+		coverage = null;
+		loaded = false;
+		failed = null;
+		unavailable = false;
+		selected = null;
+		preference.inspector = false;
+		closeSheet(false);
+		render();
+	}
+	function queueReload() {
+		readFilters();
+		clearTimeout(debounce);
+		debounce = setTimeout(() => {
+			debounce = null;
+			resetPage();
+			refresh();
+		}, 200);
+	}
+	function reloadNow() {
+		readFilters();
+		clearTimeout(debounce);
+		debounce = null;
+		resetPage();
+		refresh();
+	}
+	function publishMeta() {
+		if (!active || unavailable || failed || !loaded) {
+			onMeta(null);
+			return;
+		}
+		if (coverage?.complete === true && totals && typeof totals === "object") {
+			onMeta(joinLabel(TYPES.map((type) => finite(totals[type]) ? `${t("reg_type_" + type)} ${totals[type]}` : "")) || (rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown")));
+			return;
+		}
+		onMeta(rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown"));
+	}
+	function shownLine() {
+		const complete = coverage?.complete === true;
+		const sum = complete && totals ? TYPES.reduce((total, type) => total + (finite(totals[type]) ? totals[type] : 0), 0) : null;
+		return Boolean(nextCursor) || !complete || sum != null && sum !== rows.length ? rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown") : "";
+	}
+	function bar(label, value, max, attrs) {
+		const track = h("div", {
+			class: "reg-bar-track",
+			"aria-hidden": "true"
+		}, h("span", { class: "reg-bar-fill" }));
+		const fill = track.firstChild;
+		fill.style.width = max > 0 && finite(value) ? `${Math.max(0, Math.min(100, Math.round(value / max * 100)))}%` : "0%";
+		return h("div", {
+			class: "reg-bar",
+			role: "img",
+			"aria-label": t("reg_bar_value", {
+				label,
+				value
+			}),
+			...attrs
+		}, h("span", { class: "reg-bar-label" }, label), track, h("span", { class: "reg-bar-value" }, String(value)));
+	}
+	function paintSummary() {
+		summaryHost.replaceChildren();
+		trends.hidden = summary == null;
+		if (summary == null) return;
+		const ages = Array.isArray(summary.open_by_age) ? summary.open_by_age : [];
+		const maxAge = Math.max(0, ...ages.map((row) => finite(row?.count) ? row.count : 0));
+		const ageSection = h("section", {}, h("h3", {}, t("reg_open_age")), h("div", { class: "reg-age-bars" }, ...ages.filter((row) => AGE_KEYS[row?.bucket] && finite(row.count)).map((row) => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, { "data-reg-age": row.bucket }))));
+		const unknownAge = finite(summary.open_without_known_age) ? summary.open_without_known_age : coverage?.open_without_known_age;
+		if (finite(unknownAge)) ageSection.append(h("p", {
+			class: "reg-note",
+			"data-reg-unknown-age": ""
+		}, t("reg_without_age", { n: unknownAge })));
+		const weeks = (Array.isArray(summary.weekly) ? summary.weekly : []).filter((week) => labelSegment(week?.week_start) && finite(week.opened) && finite(week.resolved));
+		const maxWeek = Math.max(0, ...weeks.flatMap((row) => [row.opened, row.resolved]));
+		const chart = h("div", { class: "reg-chart" });
+		for (const week of weeks) {
+			const opened = h("span", { class: "reg-week-open" });
+			const resolved = h("span", { class: "reg-week-resolved" });
+			opened.style.height = maxWeek > 0 ? `${Math.round(week.opened / maxWeek * 32)}px` : "0px";
+			resolved.style.height = maxWeek > 0 ? `${Math.round(week.resolved / maxWeek * 32)}px` : "0px";
+			chart.append(h("div", {
+				class: "reg-week",
+				role: "img",
+				"aria-label": t("reg_week_value", {
+					week: week.week_start,
+					opened: week.opened,
+					resolved: week.resolved
+				})
+			}, h("div", {
+				class: "reg-week-bars",
+				"aria-hidden": "true"
+			}, opened, resolved)));
+		}
+		const weekSection = h("section", {}, h("h3", {}, t("reg_weekly")), h("div", { class: "reg-legend" }, h("span", {}, h("span", {
+			class: "reg-swatch",
+			"aria-hidden": "true"
+		}), t("reg_opened")), h("span", {}, h("span", {
+			class: "reg-swatch resolved",
+			"aria-hidden": "true"
+		}), t("reg_resolved"))), chart);
+		if (weeks.length) weekSection.append(h("div", { class: "reg-scale" }, h("span", {}, String(weeks[0].week_start).slice(5)), h("span", {}, String(weeks[weeks.length - 1].week_start).slice(5))));
+		const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
+		const reasonSection = h("section", { "data-reg-reasons": "" }, h("h3", {}, t("reg_blocking")));
+		if (reasons && !reasons.length) reasonSection.append(h("p", {
+			class: "reg-note",
+			"data-reg-no-reasons": ""
+		}, t("reg_no_reasons")));
+		else if (reasons) {
+			const recorded = reasons.filter((row) => labelSegment(row?.reason) && finite(row.count));
+			const maxReason = Math.max(0, ...recorded.map((row) => row.count));
+			reasonSection.append(h("div", { class: "reg-reasons" }, ...recorded.slice(0, 3).map((row) => {
+				const track = h("span", {
+					class: "reg-bar-track",
+					"aria-hidden": "true"
+				}, h("span", { class: "reg-bar-fill" }));
+				track.firstChild.style.width = maxReason > 0 ? `${Math.max(0, Math.min(100, Math.round(row.count / maxReason * 100)))}%` : "0%";
+				return h("div", {
+					class: "reg-reason",
+					role: "img",
+					"aria-label": t("reg_reason_count", {
+						reason: row.reason,
+						count: row.count
+					})
+				}, h("span", { class: "reg-reason-name" }, String(row.reason)), track, h("span", { class: "reg-reason-count" }, String(row.count)));
+			})));
+			if (recorded.length > 3) reasonSection.append(h("p", {
+				class: "reg-note",
+				"data-reg-more-reasons": ""
+			}, t("reg_more", { n: recorded.length - 3 })));
+		}
+		const blocked = finite(summary.blocked_without_reason) ? summary.blocked_without_reason : finite(coverage?.blocked_without_reason) ? coverage.blocked_without_reason : null;
+		if (blocked > 0) reasonSection.append(h("p", {
+			class: "reg-note",
+			"data-reg-blocked": ""
+		}, t("reg_no_reason_recorded", { n: blocked })));
+		summaryHost.append(ageSection, weekSection, reasonSection);
+	}
+	function relatedItems(row) {
+		const related = row.related || {};
+		const items = [];
+		for (const id of related.requirement_ids || []) if (labelSegment(id)) items.push(h("button", {
+			type: "button",
+			class: "reg-chip",
+			"data-reg-requirement": id,
+			title: id,
+			"aria-label": `${t("reg_requirement")} ${id}`,
+			onclick: () => onOpenRequirement(id)
+		}, t("reg_requirement")));
+		for (const id of related.work_item_ids || []) if (labelSegment(id)) items.push(h("button", {
+			type: "button",
+			class: "reg-chip",
+			"data-reg-work": id,
+			title: id,
+			"aria-label": `${t("reg_work")} ${id}`,
+			onclick: () => onOpenWork(id)
+		}, t("reg_work")));
+		for (const pr of related.prs || []) {
+			if (!finite(pr?.number)) continue;
+			const label = t("reg_pr", { n: pr.number });
+			if (typeof pr.repository === "string" && REPO.test(pr.repository)) items.push(h("a", {
+				class: "reg-chip",
+				"data-reg-pr": "",
+				href: `https://github.com/${pr.repository}/pull/${pr.number}`,
+				target: "_blank",
+				rel: "noopener noreferrer"
+			}, label));
+			else items.push(h("span", { class: "reg-chip" }, label));
+		}
+		return items;
+	}
+	function relatedChips(row, limit) {
+		const items = relatedItems(row);
+		if (!items.length) return "—";
+		const shown = limit ? items.slice(0, limit) : items;
+		const extra = limit ? items.length - shown.length : 0;
+		return h("div", { class: "reg-chips" }, ...shown, extra > 0 ? h("span", { class: "reg-chip-more" }, t("reg_more", { n: extra })) : null);
+	}
+	function paintOwners() {
+		const owners = [...new Set(rows.map((row) => labelSegment(row.owner)).filter(Boolean))];
+		ownerList.replaceChildren(...owners.map((owner) => h("option", { value: owner })));
+	}
+	function listMeta(row) {
+		const parts = [h("span", {}, t("reg_type_" + row.type)), statusNode(row.status)];
+		if (labelSegment(row.priority)) parts.push(h("span", {}, row.priority));
+		const who = labelSegment(row.owner) ? row.owner : day(row.due);
+		if (who) parts.push(h("span", {}, who));
+		return h("div", { class: "reg-list-meta" }, ...parts.flatMap((part, index) => index ? [h("span", {
+			class: "reg-sep",
+			"aria-hidden": "true"
+		}, "·"), part] : [part]));
+	}
+	function paintList(focusKey) {
+		const controls = [];
+		const list = h("div", {
+			class: "reg-list",
+			role: "list"
+		});
+		rows.forEach((row, index) => {
+			const active = row.row_id === selected;
+			const item = h("button", {
+				type: "button",
+				class: "reg-list-row",
+				role: "listitem",
+				"data-row-key": row.row_id,
+				"aria-selected": String(active),
+				tabindex: active || selected == null && index === 0 ? 0 : -1,
+				onclick: () => openRow(row)
+			}, h("span", { class: "reg-list-title" }, dash(row.title)), listMeta(row), labelSegment(row.next_step) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
+			item.addEventListener("keydown", (event) => {
+				if (event.target !== item) return;
+				if (![
+					"ArrowDown",
+					"ArrowUp",
+					"Home",
+					"End"
+				].includes(event.key)) return;
+				event.preventDefault();
+				const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : Math.max(0, Math.min(controls.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
+				controls.forEach((node, n) => {
+					node.tabIndex = n === next ? 0 : -1;
+				});
+				controls[next]?.focus();
+			});
+			controls.push(item);
+			list.append(item);
+		});
+		tableHost.replaceChildren(list);
+		if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
+	}
+	function paintTable() {
+		const focusKey = tableHost.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.getAttribute("data-row-key") : null;
+		const scroll = tableHost.querySelector(".ui-data-table")?.scrollTop || 0;
+		if (failed) {
+			tableHost.replaceChildren();
+			return;
+		}
+		if (unavailable) {
+			tableHost.replaceChildren(emptyState({
+				icon: "circle-alert",
+				title: t("reg_unavailable")
+			}));
+			return;
+		}
+		if (!loaded) {
+			tableHost.replaceChildren(skeleton(4));
+			return;
+		}
+		if (!rows.length) {
+			tableHost.replaceChildren(emptyState({
+				icon: "search",
+				title: t("reg_empty")
+			}));
+			return;
+		}
+		if (!wideQuery.matches) {
+			paintList(focusKey);
+			return;
+		}
+		const columns = [
+			{
+				key: "type",
+				label: t("reg_col_type"),
+				render: (row) => h("span", { class: "reg-type" }, icon(TYPE_ICON[row.type] || "circle-alert"), h("span", {}, t("reg_type_" + row.type)))
+			},
+			{
+				key: "title",
+				label: t("reg_col_title"),
+				render: (row) => h("span", { class: "reg-clamp" }, dash(row.title))
+			},
+			{
+				key: "status",
+				label: t("reg_col_status"),
+				render: (row) => statusNode(row.status)
+			},
+			{
+				key: "priority",
+				label: t("reg_col_priority"),
+				render: (row) => dash(row.priority)
+			},
+			{
+				key: "impact",
+				label: t("reg_col_impact"),
+				render: (row) => dash(row.impact)
+			},
+			{
+				key: "owner",
+				label: t("reg_col_owner"),
+				render: (row) => dash(row.owner)
+			},
+			{
+				key: "due",
+				label: t("reg_col_due"),
+				render: (row) => day(row.due) || "—"
+			},
+			{
+				key: "next",
+				label: t("reg_col_next"),
+				render: (row) => h("span", { class: "reg-clamp" }, dash(row.next_step))
+			},
+			{
+				key: "related",
+				label: t("reg_col_related"),
+				render: (row) => relatedChips(row, 2)
+			}
+		];
+		tableHost.replaceChildren(dataTable({
+			columns,
+			rows,
+			rowKey: "row_id",
+			selected,
+			onSelect: (_key, row) => openRow(row)
+		}));
+		if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
+		const scroller = tableHost.querySelector(".ui-data-table");
+		if (scroller) scroller.scrollTop = scroll;
+	}
+	function paintFooter() {
+		footer.replaceChildren();
+		const text = !failed && !unavailable && loaded ? shownLine() : "";
+		footer.hidden = !text && !nextCursor;
+		if (text) footer.append(h("p", { "data-reg-count": "" }, text));
+		if (nextCursor && !failed && !unavailable) footer.append(h("button", {
+			type: "button",
+			class: "ui-button secondary ui-sm",
+			"data-reg-more": "",
+			disabled: busy || null,
+			onclick: () => void loadList(true)
+		}, t("reg_load_more")));
+	}
+	function render() {
+		paintSummary();
+		paintOwners();
+		paintTable();
+		paintFooter();
+		publishMeta();
+	}
+	function closeSheet(retain) {
+		retainSheet = retain;
+		sheet?.close();
+		retainSheet = false;
+	}
+	function linkedRow(ref) {
+		if (!ref || typeof ref !== "object") return null;
+		return rows.find((row) => row.source?.kind === ref.kind && row.source?.id === ref.id) || null;
+	}
+	function refLink(ref, label, rowId) {
+		if (ref?.kind === "work_item" && labelSegment(ref.id)) return h("button", {
+			type: "button",
+			class: "reg-step-link",
+			"data-reg-work": ref.id,
+			title: ref.id,
+			"aria-label": `${t("reg_work")} ${ref.id}`,
+			onclick: () => onOpenWork(ref.id)
+		}, label || t("reg_work"));
+		if (ref?.kind === "requirement" && labelSegment(ref.id)) return h("button", {
+			type: "button",
+			class: "reg-step-link",
+			"data-reg-requirement": ref.id,
+			title: ref.id,
+			"aria-label": `${t("reg_requirement")} ${ref.id}`,
+			onclick: () => onOpenRequirement(ref.id)
+		}, label || t("reg_requirement"));
+		if (ref?.kind === "proposal" && isContextRef(ref)) return h("a", {
+			class: "reg-step-link",
+			href: discussHref({
+				workspaceId,
+				refs: [ref],
+				title: label || t("reg_discussion"),
+				from: "issues"
+			})
+		}, label || t("reg_kind_proposal"));
+		const match = linkedRow(ref);
+		if (match && match.row_id !== rowId) return h("button", {
+			type: "button",
+			class: "reg-step-link",
+			onclick: () => openRow(match)
+		}, label || kindLabel(ref.kind));
+		return label ? h("span", {}, label) : null;
+	}
+	function detailNodes(record) {
+		const row = record.row;
+		const unknownCodes = [];
+		const facts = h("dl", { class: "reg-facts" }, ...[
+			[t("reg_col_type"), t("reg_type_" + row.type)],
+			[t("reg_col_source"), kindLabel(row.source?.kind)],
+			[t("reg_col_impact"), dash(row.impact)],
+			[t("reg_col_priority"), dash(row.priority)],
+			[t("reg_col_owner"), dash(row.owner)],
+			[t("reg_col_due"), day(row.due) || "—"],
+			[t("reg_col_status"), statusNode(row.status)],
+			[t("reg_col_next"), dash(row.next_step)],
+			[t("reg_col_related"), relatedChips(row)]
+		].flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)]));
+		const timeline = h("ol", {
+			class: "reg-timeline",
+			"data-reg-timeline": ""
+		}, ...(Array.isArray(record.timeline) ? record.timeline : []).map((step, index) => ({
+			step,
+			index
+		})).sort((a, b) => (STEPS.indexOf(a.step?.step) < 0 ? STEPS.length : STEPS.indexOf(a.step.step)) - (STEPS.indexOf(b.step?.step) < 0 ? STEPS.length : STEPS.indexOf(b.step.step)) || a.index - b.index).map(({ step }) => {
+			if (!known(t, "reg_step_" + step?.step)) unknownCodes.push(step?.step);
+			const meta = joinLabel([step?.actor, when$1(step?.at)]);
+			const title = labelSegment(step?.title);
+			const link = refLink(step?.ref, title, row.row_id);
+			return h("li", {
+				class: "reg-step",
+				"data-reg-step": step?.step || "unknown"
+			}, h("h4", {}, stepLabel(step?.step)), meta ? h("p", { class: "reg-note" }, meta) : null, h("div", { class: "reg-step-line" }, link || (title ? h("span", {}, title) : null), labelSegment(step?.status) ? statusNode(step.status) : null));
+		}));
+		const partial = record.timeline_coverage && record.timeline_coverage.complete === false;
+		if (partial && record.timeline_coverage.partial_reason) unknownCodes.push(record.timeline_coverage.partial_reason);
+		const head = h("div", { class: "reg-timeline-head" }, h("h3", {}, t("reg_timeline")), partial ? statusPill("partial") : null);
+		const source = isContextRef(row.source) ? row.source : null;
+		const title = labelSegment(row.title) || t("reg_discussion");
+		const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action));
+		const labels = offered.map((action) => t(ACTION_KEYS[action.action] || "reg_action_open"));
+		const stepText = labelSegment(row.next_step);
+		const primary = stepText && labels.filter((label) => label === stepText).length === 1 ? stepText : "";
+		const links = h("div", { class: "reg-actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			"data-reg-discuss": "",
+			href: discussHref({
+				workspaceId,
+				refs: source ? [source] : [],
+				title,
+				from: "issues"
+			})
+		}, t("reg_discuss")), ...offered.map((action, index) => {
+			if (!ACTION_KEYS[action.action]) unknownCodes.push(action.action);
+			return h("button", {
+				type: "button",
+				class: `ui-button ${labels[index] === primary ? "primary" : "secondary"} ui-sm`,
+				"data-reg-action": action.action,
+				onclick: () => onAction(action)
+			}, labels[index]);
+		}), h("a", {
+			class: "ui-button secondary ui-sm",
+			"data-reg-propose": "",
+			href: discussHref({
+				workspaceId,
+				refs: source ? [source] : [],
+				title: t("reg_change_title", { title }),
+				from: "issues"
+			})
+		}, t("reg_propose")));
+		const fieldKey = {
+			title: "reg_col_title",
+			status: "reg_col_status",
+			owner: "reg_col_owner",
+			due: "reg_col_due",
+			impact: "reg_col_impact",
+			priority: "reg_col_priority",
+			next_step: "reg_col_next",
+			created_at: "reg_created",
+			updated_at: "reg_updated"
+		};
+		const detailBits = [];
+		if (row.type_basis === "neutral") detailBits.push(h("p", {}, t("reg_neutral")));
+		for (const [name, code] of Object.entries(row.unknowns || {})) {
+			if (!labelSegment(code)) continue;
+			const recognised = Boolean(known(t, "ui_reason_" + code));
+			const label = fieldKey[name] ? t(fieldKey[name]) : t("ui_reason_generic");
+			detailBits.push(h("p", {}, `${label}: ${reasonLabel(t, code)}`));
+			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, String(code)));
+		}
+		for (const code of unknownCodes) if (labelSegment(code)) detailBits.push(h("p", { class: "reg-note" }, String(code)));
+		return [h("div", { class: "reg-sheet-main" }, facts, head, timeline, detailBits.length ? disclosure({
+			label: t("reg_details"),
+			key: `reg-details:${workspaceId}:${row.row_id}`,
+			body: h("div", { class: "reg-detail-body" }, ...detailBits)
+		}) : null), links];
+	}
+	function paintInspector(record) {
+		const row = record.row;
+		const title = labelSegment(row.title) || t("reg_type_" + row.type);
+		if (sheet?.contains(document.activeElement) && sheet?.getAttribute("data-reg-row") === row.row_id) return;
+		if (!sheet || sheet.getAttribute("data-reg-row") !== row.row_id) {
+			closeSheet(true);
+			opening = true;
+			sheet = inspector({
+				title,
+				onClose: () => {
+					sheet = null;
+					if (!retainSheet && !opening) preference.inspector = false;
+				}
+			});
+			opening = false;
+			sheet.setAttribute("data-reg-inspector", "");
+			sheet.setAttribute("data-reg-row", row.row_id);
+			layout.append(sheet);
+		} else sheet.querySelector("h2").textContent = title;
+		sheet.body.replaceChildren(...detailNodes(record).filter(Boolean));
+	}
+	function openRow(row) {
+		selected = row.row_id;
+		preference.selected = selected;
+		preference.inspector = true;
+		render();
+		loadDetail(row.row_id);
+	}
+	function checkList(data) {
+		if (data?.workspace_id !== workspaceId || !Array.isArray(data.rows) || data.next_cursor != null && typeof data.next_cursor !== "string") throw Error(t("pm_scope_mismatch"));
+		const complete = data.coverage?.complete === true;
+		if (!complete && (data.total_by_type != null || data.summary != null)) throw Error(t("pm_scope_mismatch"));
+		if (complete && data.total_by_type != null) {
+			if (typeof data.total_by_type !== "object") throw Error(t("pm_scope_mismatch"));
+			for (const type of TYPES) if (data.total_by_type[type] != null && !finite(data.total_by_type[type])) throw Error(t("pm_scope_mismatch"));
+		}
+		for (const row of data.rows) if (!ROW_ID.test(row?.row_id || "") || !TYPES.includes(row.type) || !row.source || typeof row.source.kind !== "string" || !labelSegment(row.source.id)) throw Error(t("pm_scope_mismatch"));
+		return data;
+	}
+	function checkDetail(data, rowId) {
+		if (data?.workspace_id !== workspaceId || data.row?.row_id !== rowId || !Array.isArray(data.timeline)) throw Error(t("pm_scope_mismatch"));
+		return data;
+	}
+	function query(append) {
+		const params = new URLSearchParams();
+		if (typeValue) params.set("type", typeValue);
+		if (statusSelect.value) params.set("status", statusSelect.value);
+		if (ownerInput.value.trim()) params.set("owner", ownerInput.value.trim());
+		if (searchInput.value.trim()) params.set("q", searchInput.value.trim());
+		if (append && nextCursor) params.set("after", nextCursor);
+		params.set("limit", "50");
+		return params;
+	}
+	async function loadList(append) {
+		if (!active) return;
+		const ticket = ++serial;
+		busy = true;
+		paintFooter();
+		try {
+			const data = checkList(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register?${query(append)}`));
+			alive();
+			if (ticket !== serial) return;
+			unavailable = false;
+			failed = null;
+			loaded = true;
+			if (!append) rows = [];
+			const seen = new Set(rows.map((row) => row.row_id));
+			for (const row of data.rows) if (!seen.has(row.row_id)) {
+				seen.add(row.row_id);
+				rows.push(row);
+			}
+			nextCursor = data.next_cursor || null;
+			coverage = data.coverage || {};
+			totals = coverage.complete === true ? data.total_by_type : null;
+			summary = coverage.complete === true ? data.summary : null;
+			if (selected && !rows.some((row) => row.row_id === selected)) {
+				selected = null;
+				preference.inspector = false;
+				closeSheet(false);
+			}
+			statusLine.replaceChildren();
+			render();
+			if (preference.inspector && selected) loadDetail(selected);
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (ticket !== serial) return;
+			if ([403, 404].includes(error.status)) withdraw();
+			else fail(error);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				paintFooter();
+			}
+		}
+	}
+	async function loadDetail(rowId) {
+		const ticket = ++detailSerial;
+		const listTicket = serial;
+		try {
+			const data = checkDetail(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register/${encodeURIComponent(rowId)}`), rowId);
+			alive();
+			if (ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
+			paintInspector(data);
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (ticket !== detailSerial || listTicket !== serial) return;
+			if ([403, 404].includes(error.status)) {
+				rows = rows.filter((row) => row.row_id !== rowId);
+				if (selected === rowId) {
+					selected = null;
+					preference.inspector = false;
+					closeSheet(false);
+				}
+				render();
+				refresh();
+				return;
+			}
+			statusLine.replaceChildren(inlineError({
+				error,
+				retry: () => void loadDetail(rowId)
+			}));
+		}
+	}
+	function fail(error) {
+		serial++;
+		busy = false;
+		rows = [];
+		nextCursor = null;
+		coverage = null;
+		totals = null;
+		summary = null;
+		loaded = true;
+		unavailable = false;
+		failed = error;
+		selected = null;
+		preference.inspector = false;
+		closeSheet(false);
+		onMeta(null);
+		statusLine.replaceChildren(inlineError({
+			error,
+			retry: () => void refresh()
+		}));
+		render();
+	}
+	function withdraw() {
+		serial++;
+		detailSerial++;
+		busy = false;
+		rows = [];
+		nextCursor = null;
+		coverage = null;
+		totals = null;
+		summary = null;
+		loaded = true;
+		unavailable = true;
+		failed = null;
+		selected = null;
+		preference.inspector = false;
+		closeSheet(false);
+		statusLine.replaceChildren();
+		onMeta(null);
+		render();
+	}
+	async function refresh() {
+		if (!active) return;
+		await loadList(false);
+	}
+	function rememberScroll() {
+		preference.scrollY = window.scrollY;
+		preference.tableScroll = tableHost.querySelector(".ui-data-table")?.scrollTop || 0;
+	}
+	function restoreScroll() {
+		const y = finite(preference.scrollY) ? preference.scrollY : 0;
+		const tableY = finite(preference.tableScroll) ? preference.tableScroll : 0;
+		requestAnimationFrame(() => {
+			window.scrollTo(0, y);
+			const scroller = tableHost.querySelector(".ui-data-table");
+			if (scroller) scroller.scrollTop = tableY;
+		});
+	}
+	function setActive(value) {
+		const next = Boolean(value);
+		if (active === next) {
+			if (active) publishMeta();
+			else onMeta(null);
+			return;
+		}
+		active = next;
+		if (!active) {
+			onMeta(null);
+			closeSheet(true);
+			return;
+		}
+		refresh();
+	}
+	function dispose() {
+		active = false;
+		clearTimeout(debounce);
+		serial++;
+		detailSerial++;
+		wideQuery.removeEventListener("change", onWide);
+		readFilters();
+		rememberScroll();
+		closeSheet(false);
+	}
+	render();
+	return {
+		element,
+		refresh,
+		withdraw,
+		rememberScroll,
+		restoreScroll,
+		setActive,
+		dispose
 	};
 }
 //#endregion
@@ -16855,7 +21747,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		const row = record.current, doc = row.document;
 		detail.replaceChildren(h("h4", {}, trackedIssue(doc)), h("p", {}, stateLabel(doc.state) || t("pm_label_unknown")), h("p", { class: "muted" }, t("pmi_not_done")), fold("pmi_history", ...record.revisions.map((item) => {
 			const d = item.document, selected = d.selected;
-			return h("details", {}, h("summary", {}, `${t("pmi_revision")} ${item.sequence} · ${item.actor}`), selected.public_title ? h("h4", {}, selected.public_title) : "", selected.public_body ? h("pre", { class: "pm-note-text" }, selected.public_body) : "", selected.public_reason ? h("pre", { class: "pm-note-text" }, selected.public_reason) : "", selected.rationale ? h("p", {}, t("pmi_private_reason"), ": ", selected.rationale) : "", h("p", { class: "pm-source" }, item.revision_id, " · ", d.package_ref.package_id), h("a", { href: `#/op/${item.operation_id}` }, t("pm_operation")));
+			return h("details", {}, h("summary", {}, joinLabel([`${t("pmi_revision")} ${labelSegment(item.sequence)}`, item.actor])), selected.public_title ? h("h4", {}, selected.public_title) : "", selected.public_body ? h("pre", { class: "pm-note-text" }, selected.public_body) : "", selected.public_reason ? h("pre", { class: "pm-note-text" }, selected.public_reason) : "", selected.rationale ? h("p", {}, t("pmi_private_reason"), ": ", selected.rationale) : "", h("p", { class: "pm-source" }, item.revision_id, " · ", d.package_ref.package_id), h("a", { href: `#/op/${item.operation_id}` }, t("pm_operation")));
 		})), fold("pmi_stop", cancelEditor(row).box));
 	}
 	async function readSelected(ticket) {
@@ -21208,6 +26100,705 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	return {
 		element,
 		refresh
+	};
+}
+//#endregion
+//#region src/pm-schedule-model.js
+var DAY = 864e5;
+var ZOOM = {
+	day: 48,
+	week: 24,
+	month: 8
+};
+function dayNumber(value) {
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value)) return null;
+	const n = Date.parse(value.slice(0, 10) + "T00:00:00Z");
+	return Number.isFinite(n) ? n / DAY : null;
+}
+var firstLine = (row) => String(row.title || "").split(/\r?\n/)[0];
+var sessionAttempt = (row) => row.kind === "attempt" && row.id.startsWith("attempt:session:");
+function notObserved(row, data) {
+	if (!sessionAttempt(row) || row.status !== "unknown") return false;
+	if ((row.notes || []).some((note) => note.reason === "session_not_observed")) return true;
+	if (data.partial || !(data.unknown || []).some((note) => note.reason === "session_not_observed")) return false;
+	const candidates = data.rows.filter((value) => sessionAttempt(value) && value.status === "unknown" && value.title === value.refs?.session?.session_id && !value.refs?.recorded_state && !value.refs?.agent && !value.refs?.run_id);
+	return candidates.length === 1 && candidates[0].id === row.id;
+}
+function spans(row) {
+	if (sessionAttempt(row)) return [];
+	return [
+		"baseline",
+		"forecast",
+		"actual"
+	].flatMap((kind) => {
+		const span = row[kind];
+		if (!span) return [];
+		const start = dayNumber(span.start), end = dayNumber(span.end);
+		if (start === null && end === null) return [];
+		return [{
+			kind,
+			start,
+			end: start !== null && end !== null && end < start ? null : end,
+			open: kind === "actual" && (end === null || start !== null && end < start),
+			recordedOpen: span.open
+		}];
+	});
+}
+function chartRange(rows) {
+	const days = rows.flatMap((row) => spans(row).flatMap((span) => [span.start, span.end])).filter((n) => n !== null);
+	return days.length ? {
+		start: Math.min(...days),
+		end: Math.max(...days)
+	} : null;
+}
+function milestoneDelta(row) {
+	const baseline = dayNumber(row.baseline?.start), forecast = dayNumber(row.forecast?.start);
+	return baseline === null || forecast === null ? null : forecast - baseline;
+}
+function scheduleRef(row, data) {
+	const refs = row.refs || {};
+	if (row.kind === "milestone") return {
+		kind: "milestone",
+		id: refs.milestone_id,
+		revision_id: data.baseline?.revision_id
+	};
+	if (row.kind === "requirement") return {
+		kind: "requirement",
+		id: refs.requirement_id,
+		revision_id: refs.plan_revision_id
+	};
+	if (row.kind === "issue") return {
+		kind: "issue_mapping",
+		id: row.id.slice(6)
+	};
+	const workId = refs.work_item_id || (row.kind === "attempt" && row.parent_id?.startsWith("work:") ? row.parent_id.slice(5) : null);
+	return workId ? {
+		kind: "work_item",
+		id: workId
+	} : null;
+}
+async function readSchedule(api, workspaceId, check) {
+	const all = new Map(), notes = new Map(), reasons = new Set();
+	let after, frame, partial = false;
+	for (let page = 0; page < 10; page++) {
+		const query = new URLSearchParams({ limit: "100" });
+		if (after) query.set("after", after);
+		const next = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/schedule?${query}`);
+		check();
+		if (next?.workspace_id !== workspaceId || !Array.isArray(next.rows) || !Array.isArray(next.unscheduled)) throw Error("PM_SCHEDULE_INVALID");
+		if (frame && JSON.stringify([frame.baseline, frame.forecast]) !== JSON.stringify([next.baseline, next.forecast])) throw Error("PM_SCHEDULE_CHANGED");
+		frame = next;
+		for (const row of [...next.rows, ...next.unscheduled]) all.set(row.id, row);
+		for (const note of next.unknown || []) notes.set(JSON.stringify(note), note);
+		if (next.partial || next.truncated) {
+			partial = true;
+			reasons.add("schedule_page_partial");
+		}
+		for (const key of [
+			"attempts_truncated",
+			"attempts_unavailable",
+			"work_bindings_truncated",
+			"issues_truncated"
+		]) if (next.coverage?.[key]) reasons.add(key);
+		if (next.next_cursor === null) break;
+		if (typeof next.next_cursor !== "string" || !next.next_cursor || after === next.next_cursor) throw Error("PM_SCHEDULE_INVALID");
+		after = next.next_cursor;
+		if (page === 9) {
+			partial = true;
+			reasons.add("schedule_page_limit");
+		}
+	}
+	const rows = [...all.values()];
+	return {
+		...frame,
+		rows,
+		unscheduled: rows.filter((row) => !spans(row).length),
+		range: chartRange(rows),
+		unknown: [...notes.values()],
+		partial,
+		reasons: [...reasons]
+	};
+}
+function scheduleTree(rows, collapsed) {
+	const byId = new Map(rows.map((row) => [row.id, row])), included = new Set();
+	for (const row of rows.filter((row) => spans(row).length)) {
+		let next = row;
+		const path = new Set();
+		while (next && !path.has(next.id)) {
+			included.add(next.id);
+			path.add(next.id);
+			next = byId.get(next.parent_id);
+		}
+	}
+	const children = new Map();
+	for (const row of rows.filter((row) => included.has(row.id) && !sessionAttempt(row))) {
+		const parent = included.has(row.parent_id) ? row.parent_id : row.kind === "milestone" ? null : "unassigned";
+		if (!children.has(parent)) children.set(parent, []);
+		children.get(parent).push(row);
+	}
+	const visible = [], visited = new Set();
+	function add(row, depth, parent) {
+		if (visited.has(row.id)) return;
+		visited.add(row.id);
+		const nested = children.get(row.id) || [];
+		visible.push({
+			row,
+			depth,
+			parent,
+			expandable: nested.length > 0
+		});
+		if (!collapsed.has(row.id)) for (const child of nested) add(child, depth + 1, row.id);
+	}
+	for (const row of children.get(null) || []) add(row, 1, null);
+	if (children.has("unassigned")) add({
+		id: "unassigned",
+		kind: "group",
+		title: "",
+		status: "unknown"
+	}, 1, null);
+	for (const row of rows.filter((row) => included.has(row.id))) if (!visited.has(row.id) && !byId.has(row.parent_id)) add(row, 1, null);
+	return visible;
+}
+//#endregion
+//#region src/pm-schedule-inspector.js
+function rowStatus(row, data) {
+	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
+}
+function dateRange(span) {
+	if (!span) return t("sched_no_dates");
+	const format = (value) => value?.includes("T") ? new Intl.DateTimeFormat(navigator.language, {
+		dateStyle: "medium",
+		timeStyle: "short",
+		timeZone: "UTC"
+	}).format(new Date(value)) + " UTC" : value;
+	return [format(span.start) || "—", span.end && (!span.start || span.end >= span.start) ? format(span.end) : t("sched_open")].join(" → ");
+}
+var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
+var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
+function render(row, { workspaceId, data }) {
+	const refs = row.refs || {}, work = row.kind === "attempt" ? data.rows.find((value) => value.id === row.parent_id) : row;
+	const served = work?.refs || refs;
+	const requirements = data.rows.filter((value) => value.kind === "requirement" && value.refs?.plan_revision_id === served.plan_revision_id && (served.requirement_ids || [served.requirement_id]).includes(value.refs?.requirement_id));
+	const attempts = data.rows.filter((value) => value.kind === "attempt" && value.parent_id === (work?.id || row.id));
+	const sessions = row.kind === "attempt" ? [row] : attempts;
+	const status = section("status", rowStatus(row, data));
+	if (sessionAttempt(row)) status.append(h$1("p", { class: "ui-meta" }, row.status === "in_progress" ? t("sched_open") + " · " + t("sched_no_dates") : t("sched_no_dates")));
+	for (const attempt of sessions) {
+		const agent = attempt.refs?.agent, session = attempt.refs?.session;
+		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
+	}
+	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", {}, attempt.title), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
+	if (attempts.length) status.append(disclosure({
+		label: t("sched_attempts"),
+		body: attemptList,
+		open: true
+	}));
+	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || row.id;
+	const links = h$1("div", { class: "schedule-inspector-actions" }, h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")), h$1("a", {
+		class: "ui-button secondary",
+		href: discussHref({
+			workspaceId,
+			refs: [scheduleRef(row, data)],
+			title: row.title,
+			from: "schedule"
+		}),
+		"data-schedule-discuss": ""
+	}, t("sched_propose")));
+	const notes = [...data.unknown || [], ...row.notes || []];
+	const details = disclosure({
+		label: t("sched_details"),
+		body: h$1("div", {}, h$1("div", { class: "schedule-full-title" }, row.title), ...[
+			"baseline",
+			"forecast",
+			"actual"
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
+			data.baseline?.revision_id,
+			data.forecast?.revision_id,
+			data.as_of
+		].filter(Boolean).map((value) => h$1("code", {}, value)))
+	});
+	details.dataset.scheduleSection = "details";
+	return h$1("div", { class: "schedule-inspector-content" }, section("requirement", ...requirements.length ? requirements.map((value) => h$1("p", { class: "schedule-full-title" }, value.title)) : [unknown()]), status, section("result", unknown()), section("blocker", ["blocked", "waiting"].includes(row.status) ? statusPill(row.status) : unknown(), links), section("delivery", [
+		"accepted",
+		"merged",
+		"deployed"
+	].includes(row.status) ? statusPill(row.status) : unknown()), details);
+}
+//#endregion
+//#region src/pm-schedule.js
+function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
+	const preference = viewState(namespace, workspaceId, "schedule");
+	let zoom = Object.hasOwn(ZOOM, preference.zoom) ? preference.zoom : "week";
+	const collapsed = new Set(preference.collapsed || []);
+	let selected = preference.selected || null, active = false, serial = 0, data = null, panel = null, panelSignature = "", signature = "";
+	let domain, scale, visible = [], focusId = null;
+	const viewport = h$1("div", {
+		class: "schedule-viewport",
+		tabindex: 0,
+		role: "region",
+		"aria-label": t("sched_timeline")
+	});
+	const chart = h$1("div", { class: "schedule-chart" }), meta = h$1("div", {
+		class: "schedule-meta",
+		"aria-live": "polite"
+	});
+	const unscheduled = h$1("div", { class: "schedule-unscheduled" }), error = h$1("div");
+	const main = h$1("div", { class: "schedule-main" }, meta, error, viewport, unscheduled);
+	viewport.append(chart);
+	const legend = h$1("div", {
+		class: "schedule-legend",
+		"aria-label": t("sched_legend")
+	}, ...[
+		"baseline",
+		"forecast",
+		"actual",
+		"milestone"
+	].map((kind) => h$1("span", {}, h$1("i", {
+		class: `schedule-swatch ${kind}`,
+		"aria-hidden": "true"
+	}, kind === "milestone" ? "◆" : null), t("sched_" + kind))));
+	const toolbar = h$1("div", { class: "schedule-toolbar" }, segmented({
+		label: t("sched_zoom"),
+		options: Object.keys(ZOOM).map((value) => ({
+			value,
+			label: t("sched_" + value)
+		})),
+		value: zoom,
+		onChange: (value) => {
+			saveScroll();
+			zoom = value;
+			preference.zoom = zoom;
+			draw();
+		}
+	}), button({
+		label: t("sched_today"),
+		variant: "ghost",
+		onClick: today
+	}), legend);
+	const layout = h$1("div", { class: "schedule-layout" }, main);
+	const element = h$1("section", {
+		"data-pm-schedule": "",
+		class: "pm-schedule"
+	}, toolbar, layout);
+	viewport.addEventListener("scroll", saveScroll, { passive: true });
+	function remember() {
+		Object.assign(preference, {
+			selected,
+			zoom,
+			collapsed: [...collapsed].slice(0, 1e3)
+		});
+	}
+	function saveScroll() {
+		if (!domain || !viewport.clientWidth) return;
+		preference.anchor = domain.start + viewport.scrollLeft / scale;
+		preference.top = viewport.scrollTop;
+		const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
+		const row = [...chart.querySelectorAll("[data-schedule-row]")].find((node) => node.getBoundingClientRect().bottom > top);
+		if (row) preference.vertical = {
+			id: row.dataset.scheduleRow,
+			offset: row.getBoundingClientRect().top - top
+		};
+	}
+	function restoreScroll() {
+		viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		viewport.scrollTop = preference.top || 0;
+		if (preference.vertical) {
+			const row = chart.querySelector(`[data-schedule-row="${CSS.escape(preference.vertical.id)}"]`);
+			const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
+			if (row) viewport.scrollTop += row.getBoundingClientRect().top - top - preference.vertical.offset;
+		}
+	}
+	function today() {
+		if (!domain) return;
+		const x = (dayNumber(new Date().toISOString()) - domain.start) * scale;
+		viewport.scrollLeft = Math.max(0, x - Math.max(0, viewport.clientWidth - 328) / 2);
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = Math.max(0, x - mini.clientWidth / 2);
+		saveScroll();
+	}
+	function closePanel(clear = true) {
+		const old = selected;
+		if (!clear) selected = null;
+		panel?.close();
+		panel = null;
+		panelSignature = "";
+		if (!clear) {
+			selected = old;
+			remember();
+		}
+	}
+	function showPanel() {
+		const row = data?.rows.find((row) => row.id === selected);
+		if (!row || !active) {
+			closePanel(!row);
+			return;
+		}
+		const next = JSON.stringify([
+			row,
+			data.rows.filter((value) => value.parent_id === row.id || value.kind === "requirement"),
+			data.rows.find((value) => value.id === row.parent_id),
+			data.unknown,
+			data.baseline,
+			data.forecast
+		]);
+		if (panel && next === panelSignature) return;
+		if (!panel) {
+			panel = inspector({
+				title: firstLine(row),
+				onClose: () => {
+					const previous = selected;
+					panel = null;
+					panelSignature = "";
+					selected = null;
+					remember();
+					markSelection();
+					if (active && previous) element.querySelector(`[data-schedule-select="${CSS.escape(previous)}"]`)?.focus({ preventScroll: true });
+				}
+			});
+			panel.dataset.scheduleInspector = "";
+			layout.append(panel);
+		}
+		panel.querySelector("h2").textContent = firstLine(row);
+		const opened = [...panel.body.querySelectorAll("details")].map((node) => node.open), scroll = panel.scrollTop;
+		const focus = [...panel.body.querySelectorAll("a, summary")].indexOf(document.activeElement);
+		panel.body.replaceChildren(render(row, {
+			workspaceId,
+			data
+		}));
+		panelSignature = next;
+		[...panel.body.querySelectorAll("details")].forEach((node, i) => {
+			if (opened[i] !== void 0) node.open = opened[i];
+		});
+		panel.scrollTop = scroll;
+		if (focus >= 0) panel.body.querySelectorAll("a, summary")[focus]?.focus({ preventScroll: true });
+	}
+	function markSelection() {
+		for (const node of element.querySelectorAll("[data-schedule-select]")) {
+			const current = node.dataset.scheduleSelect === selected;
+			node.setAttribute("aria-selected", String(current));
+			node.closest(".schedule-row")?.classList.toggle("selected", current);
+		}
+	}
+	function select(id, opener) {
+		if (panel && id !== selected) closePanel();
+		opener?.focus({ preventScroll: true });
+		selected = id;
+		focusId = id;
+		remember();
+		markSelection();
+		showPanel();
+	}
+	const label = (row) => row.kind === "group" ? t("sched_unassigned") : firstLine(row);
+	function toggle(id) {
+		collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
+		remember();
+		draw();
+	}
+	function focusRow(id) {
+		focusId = id;
+		for (const node of chart.querySelectorAll("[role=treeitem]")) node.tabIndex = node.dataset.scheduleSelect === id ? 0 : -1;
+		chart.querySelector(`[data-schedule-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+	}
+	function keydown(event, item, index) {
+		if (event.target.closest("button")) return;
+		const { row, expandable, parent } = item;
+		if (![
+			"ArrowDown",
+			"ArrowUp",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End",
+			"Enter",
+			" "
+		].includes(event.key)) return;
+		event.preventDefault();
+		if (event.key === "Enter" || event.key === " ") {
+			if (row.kind === "group") toggle(row.id);
+			else select(row.id, event.currentTarget);
+			return;
+		}
+		if (event.key === "ArrowRight") {
+			if (expandable && collapsed.has(row.id)) {
+				toggle(row.id);
+				focusRow(row.id);
+			} else if (expandable) focusRow(visible[index + 1]?.row.id);
+			return;
+		}
+		if (event.key === "ArrowLeft") {
+			if (expandable && !collapsed.has(row.id)) {
+				toggle(row.id);
+				focusRow(row.id);
+			} else if (parent) focusRow(parent);
+			return;
+		}
+		const next = event.key === "Home" ? 0 : event.key === "End" ? visible.length - 1 : Math.max(0, Math.min(visible.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
+		focusRow(visible[next]?.row.id);
+	}
+	function track(row, axis = false) {
+		const node = h$1("div", {
+			class: "schedule-track" + (axis ? " schedule-axis" : ""),
+			"data-schedule-track": row?.id
+		});
+		node.style.width = `${(domain.end - domain.start + 1) * scale}px`;
+		const todayDay = dayNumber(new Date().toISOString());
+		if (zoom === "day") {
+			const weekend = h$1("span", {
+				class: "schedule-weekend",
+				"aria-hidden": "true"
+			});
+			weekend.style.backgroundImage = `repeating-linear-gradient(90deg, transparent 0, transparent ${5 * scale}px, var(--surface-2) ${5 * scale}px, var(--surface-2) ${7 * scale}px)`;
+			weekend.style.backgroundPositionX = `${-((new Date(domain.start * DAY).getUTCDay() + 6) % 7) * scale}px`;
+			node.append(weekend);
+		}
+		if (axis) {
+			const length = domain.end - domain.start + 1;
+			const step = zoom === "day" ? Math.max(1, Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
+			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
+				const instant = new Date(date * DAY);
+				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
+					month: "short",
+					day: zoom === "month" ? void 0 : "numeric",
+					timeZone: "UTC"
+				}).format(instant));
+				tick.style.left = `${(date - domain.start) * scale}px`;
+				node.append(tick);
+				if (zoom === "month") {
+					instant.setUTCMonth(instant.getUTCMonth() + step, 1);
+					date = instant.getTime() / DAY;
+				} else if (zoom === "week" && count === 0) date += (8 - instant.getUTCDay()) % 7 || 7;
+				else date += step;
+			}
+		} else if (row) {
+			const rowSpans = spans(row);
+			for (const span of rowSpans) {
+				const start = span.start ?? span.end, end = span.end ?? start;
+				const marker = row.kind === "milestone";
+				const bar = h$1("span", {
+					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
+					"data-schedule-bar": span.kind,
+					"data-open": span.open ? "true" : null,
+					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${span.open ? t("sched_open") : row[span.kind].end || "—"}`
+				}, marker ? "◆" : null);
+				bar.style.left = `${(start - domain.start) * scale}px`;
+				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
+				if (span.open) bar.append(h$1("span", { class: "schedule-bar-label" }, t("sched_open")));
+				else if (["waiting", "blocked"].includes(row.status)) bar.append(h$1("span", { class: "schedule-bar-label" }, t("ui_status_" + row.status)));
+				node.append(bar);
+			}
+			const delta = milestoneDelta(row);
+			if (row.kind === "milestone" && delta !== null && delta !== 0) {
+				const value = h$1("span", {
+					class: "schedule-delta",
+					"data-schedule-delta": ""
+				}, t("sched_delta", { n: delta > 0 ? "+" + delta : delta }));
+				value.style.left = `${(dayNumber(row.forecast.start) - domain.start) * scale + 20}px`;
+				node.append(value);
+			}
+		}
+		const line = h$1("span", {
+			class: "schedule-today",
+			"aria-label": axis ? t("sched_today") : null,
+			"aria-hidden": axis ? null : "true"
+		});
+		line.style.left = `${(todayDay - domain.start) * scale}px`;
+		node.append(line);
+		return node;
+	}
+	function draw() {
+		if (!data) return;
+		const focused = chart.contains(document.activeElement) ? document.activeElement.closest("[data-schedule-select]")?.dataset.scheduleSelect : null;
+		const now = dayNumber(new Date().toISOString());
+		domain = {
+			start: Math.min(data.range?.start ?? now, now) - 3,
+			end: Math.max(data.range?.end ?? now, now) + 5
+		};
+		scale = Math.min(ZOOM[zoom], 12e4 / (domain.end - domain.start + 1));
+		chart.style.setProperty("--schedule-width", `${(domain.end - domain.start + 1) * scale}px`);
+		visible = scheduleTree(data.rows, collapsed);
+		const axis = h$1("div", { class: "schedule-row schedule-head" }, h$1("div", { class: "schedule-tree-cell" }, t("sched_item")), h$1("div", { class: "schedule-lane" }, track(null, true)));
+		const tree = h$1("div", {
+			role: "tree",
+			"aria-label": t("sched_tree")
+		});
+		visible.forEach((item, index) => {
+			const { row, depth, expandable } = item;
+			const expand = expandable ? button({
+				icon: "chevron-right",
+				variant: "ghost",
+				label: null,
+				"aria-label": t(collapsed.has(row.id) ? "ui_expand" : "ui_collapse", { title: label(row) }),
+				tabindex: -1,
+				"aria-expanded": String(!collapsed.has(row.id)),
+				onClick: (event) => {
+					event.stopPropagation();
+					toggle(row.id);
+					focusRow(row.id);
+				}
+			}) : h$1("span", { class: "schedule-indent" });
+			const dates = [
+				"baseline",
+				"forecast",
+				"actual"
+			].filter((key) => row[key]).map((key) => `${t("sched_" + key)} ${row[key].start?.slice(0, 10) || "—"}${row[key].end && row[key].end !== row[key].start ? " → " + row[key].end.slice(0, 10) : ""}`);
+			const cell = h$1("div", {
+				class: "schedule-tree-cell",
+				role: "treeitem",
+				"aria-level": depth,
+				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
+				"aria-label": label(row),
+				tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
+				"data-schedule-select": row.id,
+				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
+				onkeydown: (event) => keydown(event, item, index)
+			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
+				class: "schedule-title",
+				title: row.title
+			}, label(row)), h$1("span", { class: "schedule-date-range" }, dates.join(" · ") || t("sched_no_dates"))), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
+			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
+			const lane = h$1("div", {
+				class: "schedule-lane",
+				tabindex: 0,
+				role: "region",
+				"aria-label": `${t("sched_timeline")} · ${label(row)}`
+			}, track(row));
+			lane.addEventListener("scroll", () => {
+				if (lane.clientWidth) {
+					preference.mini ||= {};
+					preference.mini[row.id] = domain.start + lane.scrollLeft / scale;
+				}
+			});
+			const line = h$1("div", {
+				class: "schedule-row",
+				"data-schedule-row": row.id,
+				"data-has-dates": String(spans(row).length > 0)
+			}, cell, lane);
+			tree.append(line);
+		});
+		chart.replaceChildren(axis, tree);
+		if (!visible.length) chart.replaceChildren(emptyState({ title: t("sched_empty") }));
+		restoreScroll();
+		markSelection();
+		for (const lane of chart.querySelectorAll(".schedule-lane")) {
+			const id = lane.firstElementChild?.dataset.scheduleTrack;
+			if (preference.mini?.[id] !== void 0) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
+			else if (matchMedia("(max-width: 799px)").matches) {
+				const row = data.rows.find((row) => row.id === id), dates = row ? spans(row).map((span) => span.start ?? span.end) : [];
+				if (dates.length) lane.scrollLeft = Math.max(0, (Math.min(...dates) - domain.start) * scale - 32);
+			}
+		}
+		if (focused) focusRow(focused);
+	}
+	function renderData() {
+		const next = JSON.stringify([
+			data.rows,
+			data.range,
+			data.partial,
+			data.reasons,
+			data.unknown
+		]);
+		if (next !== signature) {
+			saveScroll();
+			signature = next;
+			const details = disclosure({
+				label: t("sched_details"),
+				key: `${namespace}:${workspaceId}:schedule:details`,
+				body: h$1("div", {}, h$1("p", {}, t("sched_as_of", { date: data.as_of })), ...[...data.reasons.map((reason) => ({ reason })), ...data.unknown].map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))))
+			});
+			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
+			const delta = upcoming ? milestoneDelta(upcoming) : null;
+			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
+				variant: "ghost",
+				label: firstLine(row),
+				"data-schedule-select": row.id,
+				title: row.title,
+				onClick: (event) => select(row.id, event.currentTarget)
+			}), rowStatus(row, data))));
+			unscheduled.replaceChildren(disclosure({
+				label: t("sched_unscheduled", { n: data.unscheduled.length }),
+				key: `${namespace}:${workspaceId}:schedule:unscheduled`,
+				body: list
+			}));
+			draw();
+		}
+		if (selected && !data.rows.some((row) => row.id === selected)) {
+			closePanel();
+			selected = null;
+			remember();
+		}
+		showPanel();
+	}
+	function withdraw() {
+		serial++;
+		closePanel();
+		selected = null;
+		remember();
+		data = null;
+		signature = "";
+		domain = null;
+		chart.replaceChildren();
+		meta.replaceChildren();
+		unscheduled.replaceChildren();
+		error.replaceChildren();
+	}
+	async function refresh() {
+		if (!canRead()) {
+			withdraw();
+			return;
+		}
+		const ticket = ++serial;
+		if (!data) chart.replaceChildren(skeleton(6));
+		const check = () => {
+			alive();
+			if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
+		};
+		try {
+			const next = await readSchedule(api, workspaceId, check);
+			check();
+			if (data) {
+				const order = new Map(data.rows.map((row, index) => [row.id, index]));
+				next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+			}
+			data = next;
+			error.replaceChildren();
+			renderData();
+		} catch (failure) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			withdraw();
+			error.append(inlineError({
+				error: t(failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
+				retry: refresh
+			}));
+		}
+	}
+	return {
+		element,
+		refresh,
+		withdraw,
+		setActive(value) {
+			active = value;
+			if (!value) {
+				saveScroll();
+				closePanel(false);
+			} else if (data) {
+				restoreScroll();
+				showPanel();
+			}
+		},
+		dispose() {
+			saveScroll();
+			remember();
+			active = false;
+			serial++;
+			closePanel(false);
+			data = null;
+		}
 	};
 }
 //#endregion
@@ -26298,7 +31889,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	}];
 	const advertised = (spec) => caps()?.features?.pm_workspaces?.[spec.key] === true;
 	const storage = typeof namespace === "string" ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
-	let selected = specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
+	let selected = specs.find((spec) => advertised(spec) && capability()?.[spec.key]?.eligible_for_preflight === true)?.key || specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
 	try {
 		const saved = storage && localStorage.getItem(storage);
 		if (specs.some((spec) => spec.key === saved)) {
@@ -26327,6 +31918,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	const current = h("div", { "data-pm-native-runs": "" });
 	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
 	const requests = [];
+	let composerNode = null, ask = null, connection = null, working = null, clock = null;
 	const otherLocked = (spec) => requests.some((row) => row.spec !== spec && row.request.locked());
 	for (const spec of specs) {
 		const purpose = input("pm_native_purpose", {
@@ -26418,6 +32010,19 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
 		};
 		explanation.textContent = t(!authorized() || descriptor?.authorized === false ? "pm_native_permissions" : eligible ? selected === "bat_analysis" ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : reason[descriptor?.reason] || (selected === "bat_analysis" ? "pm_analysis_bat_unavailable" : "pm_native_unavailable"));
+		if (composerNode) {
+			const request = requests.find((row) => row.spec === active)?.request;
+			ask.textContent = t(request?.locked() ? "pm_check_original" : "pd_ask");
+			ask.hidden = !eligible && !request?.locked();
+			ask.disabled = !request?.canSubmit();
+			connection.hidden = eligible;
+			discussionFeedback({
+				t,
+				request,
+				node: working,
+				eligible
+			});
+		}
 		const source = thread() && selected === "bat_analysis" && advertised(active) ? descriptor?.selected_binding : null;
 		if (!thread()) current.replaceChildren();
 		binding.hidden = !source;
@@ -26438,7 +32043,41 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	update();
 	return {
 		box,
-		update
+		update,
+		composer(textarea) {
+			ask = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-discussion-ask": "",
+				onclick: () => {
+					const request = requests.find((row) => row.spec.key === selected)?.request;
+					if (!request) return;
+					if (!request.locked()) request.set("purpose", textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t("pd_ask"));
+					request.submit();
+				}
+			}, t("pd_ask"));
+			connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
+			working = h("p", {
+				class: "muted",
+				role: "status",
+				"data-discussion-working": ""
+			});
+			composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
+			clock = setInterval(() => {
+				const request = requests.find((row) => row.spec.key === selected)?.request;
+				if (composerNode.isConnected && [
+					"running",
+					"accepted",
+					"queued",
+					"pending"
+				].includes(request?.operation()?.status)) render();
+			}, 1e3);
+			render();
+			return composerNode;
+		},
+		dispose() {
+			clearInterval(clock);
+		}
 	};
 }
 function nativeRunState(t, run) {
@@ -26460,7 +32099,10 @@ function pmDiscussionMessage({ h, t, message, time, timestamp }) {
 		class: "pm-note",
 		"data-note-id": message.message_id,
 		"data-pm-role": assistant ? "assistant" : "user"
-	}, h("div", { class: "pm-note-stamp" }, h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content));
+	}, h("div", { class: "pm-note-stamp" }, assistant ? agentMark("pm") : h("span", {
+		class: "ui-agent-mark",
+		"aria-hidden": true
+	}, (message.actor || "?").slice(0, 2).toUpperCase()), h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", h("time", { datetime: new Date(timestamp(message.created_at)).toISOString() }, time(message.created_at))), h("div", { class: "pm-note-text" }, message.content));
 	if (assistant) article.append(h("p", { class: "muted" }, t(complete ? "pm_native_reply_recorded" : "pm_native_reply_unproven")), h("details", { class: "pm-source" }, h("summary", {}, t("pm_native_evidence")), h("p", {}, t("pm_native_origin"), " ", String(source.adapter || t("pm_native_unknown_source"))), h("p", {}, t("pm_native_run"), " ", String(provenance?.run_id || "—")), h("p", {}, t("pm_native_thread"), " ", String(source.native_thread_id || provenance?.sdk_session_id || "—")), h("p", {}, t("pm_native_turn"), " ", String(provenance?.native_turn_id || "—")), h("p", {}, t("pm_native_message"), " ", String(provenance?.native_message_id || "—")), h("p", {}, t("pm_native_context"), " ", String(provenance?.context_digest || "—"))));
 	return article;
 }
@@ -26483,7 +32125,7 @@ var threadDisclosureSelectors = [
 	"[data-pm-revision-editor]"
 ];
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage" }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value) }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -26519,7 +32161,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
 	const changed = () => {
 		if (busy || saved.intent || damaged) return;
-		saved.values = capture();
+		const values = capture();
+		if (same$3(saved.values, values)) return;
+		saved.values = values;
 		try {
 			persist();
 		} catch (error) {
@@ -26638,6 +32282,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				};
 				persist();
 				firstAttempt = true;
+				operation = null;
+				receipt.replaceChildren();
 			}
 			update();
 			const intent = saved.intent, actor = caps()?.actor;
@@ -26669,8 +32315,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
-			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", String(op.status));
+			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", statusText(op.status));
 			if (op.status === "succeeded") {
+				onBeforeSaved(op.result, saved.values);
 				saved = {
 					version: 1,
 					values: {}
@@ -26680,7 +32327,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				await onSaved(op.result);
 				guard();
 				status.replaceChildren(h("span", { class: "muted" }, t("pm_saved")));
-			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
+			} else if (!onError(op.error || {})) status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
 			receiptPolling = false;
 			if (disposed) return;
@@ -26696,8 +32343,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				status.replaceChildren(errorBox(error));
-				if (error.code === "VERSION_CONFLICT") status.append(h("p", { class: "muted" }, t("pm_stale")));
+				const handled = onError(error);
+				if (!handled) status.replaceChildren(errorBox(error));
+				if (error.code === "VERSION_CONFLICT" && !handled) status.append(h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
 			busy = false;
@@ -26711,6 +32359,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		fields,
 		update,
 		changed,
+		hasDraft: () => Object.keys(saved.values).length > 0,
+		submit: run,
+		edit: () => reset.click(),
+		replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused),
+		canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused,
+		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
 		dispose: () => {
 			disposed = true;
@@ -26729,12 +32383,50 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	};
 }
 async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false }) {
+	if (threadId) h = discussionDom(h);
 	if (!pmAvailable(caps())) {
 		main.append(h("p", {}, t("pm_unavailable")));
 		return;
 	}
 	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
 	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
+	const uiState = viewState(namespace, workspaceId, "discussions");
+	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
+	const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
+	let sendHandoff = null;
+	try {
+		sendHandoff = JSON.parse(localStorage.getItem(handoffKey));
+	} catch {}
+	if (threadId === "new" && /^pmt_[0-9a-f]{32}$/.test(sendHandoff?.threadId)) {
+		threadId = sendHandoff.threadId;
+		history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);
+	}
+	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null, titleView = null;
+	const threadRows = h("div", { class: "pd-thread-rows" });
+	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
+	const backLink = () => {
+		let savedOrigin = {};
+		try {
+			savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};
+		} catch {}
+		const source = parseDiscussRefs(new URLSearchParams({
+			from: launch.from || savedOrigin.from || "",
+			report: launch.report || savedOrigin.report || ""
+		}));
+		const origin = source.from || "overview";
+		return h("a", {
+			class: "pd-back",
+			href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
+			"data-discussion-back": "",
+			onclick: () => {
+				if (origin === "overview" && source.report) Object.assign(viewState(namespace, workspaceId, "overview"), {
+					snapshotId: source.report,
+					mode: "saved"
+				});
+			}
+		}, icon("chevron-left"), t("pd_back", { view: t("ui_" + origin) }));
+	};
 	const disclosureKey = JSON.stringify([
 		namespace,
 		workspaceId,
@@ -26764,6 +32456,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			guard: alive,
 			namespace,
 			errorBox,
+			statusText: threadId ? (value) => discussionLabel(t, "pd_op_", value) : void 0,
 			...options,
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)()
@@ -26811,7 +32504,31 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		pill: phasePill,
 		actions: [refresh]
 	});
-	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
+	const headerMeta = h("p", {
+		class: "ui-meta",
+		"data-dependencies-meta": "",
+		hidden: true
+	});
+	const headerPills = h("span", {
+		class: "dep-header-pills",
+		hidden: true
+	});
+	heading.querySelector(".ui-title-row")?.append(headerPills);
+	heading.querySelector(".ui-page-heading")?.append(headerMeta);
+	const registerMeta = h("p", {
+		class: "ui-meta",
+		"data-pm-header-meta": "",
+		hidden: true
+	});
+	heading.querySelector(".ui-page-heading")?.append(registerMeta);
+	const setHeaderMeta = (text) => {
+		registerMeta.textContent = text || "";
+		registerMeta.hidden = !text;
+	};
+	const content = h("div", {
+		class: "pm-content",
+		"data-discussions": ""
+	}), body = h("section", { class: "pm-main" }, heading, status, content);
 	const creationHome = h("div", { hidden: true }, workspaceForm.box);
 	main.append(h("div", { class: "pm-shell" }, body, creationHome));
 	let createPanel = null;
@@ -26892,8 +32609,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}) : null;
 	if (evidence) body.append(evidence.box);
 	let workbench = null;
+	const liveOverview = !threadId && caps()?.features?.pm_overview?.version === 1;
+	const overviewMeta = h("p", {
+		class: "ui-meta",
+		hidden: true
+	});
+	heading.querySelector(".ui-page-heading").append(overviewMeta);
 	const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
-	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? charter ? workspaceCharter({
+	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({
 		h,
 		t,
 		api,
@@ -26907,10 +32630,41 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox,
 		caps,
 		canRead: () => loaded && Boolean(workspace),
+		onCompare: () => {
+			openPanel(t("ui_compare"), brief.reportTools);
+			brief.prepareReports().then(() => brief.reportActions.compare());
+		},
+		onHeader: ({ meta, phase, active }) => {
+			overviewMeta.hidden = !active;
+			overviewMeta.replaceChildren(meta);
+			if (active) {
+				phasePill.hidden = !phase;
+				phasePill.textContent = phase || "";
+			}
+		},
+		onOpen: async (ref, row) => {
+			if (!ref) return;
+			const destination = ["requirement", "work_item"].includes(ref.kind) ? "requirements" : ref.kind === "milestone" && !row.kind ? "schedule" : "issues";
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`;
+			workbench?.select(destination);
+			if (destination === "requirements") await traceability?.openRef?.(ref);
+			else if (ref.kind === "governance") {
+				if (register) openIssueTool("ui_governance");
+				await governance?.openRef?.(ref);
+			} else if (ref.kind === "milestone" && destination === "schedule") {
+				const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
+				if (node) {
+					node.tabIndex = -1;
+					node.focus();
+					node.scrollIntoView({ block: "nearest" });
+				}
+			} else brief?.openRelated?.(row, main);
+		},
 		onDiscuss: () => {
-			location.hash = `#/pm/${workspaceId}/discussions`;
-			workbench?.select("discussions");
-			content.querySelector("input")?.focus();
+			location.hash = discussHref({
+				workspaceId,
+				from: "overview"
+			});
 		}
 	}) : projectBrief({
 		h,
@@ -27018,6 +32772,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (roadmap) body.insertBefore(roadmap.box, content);
+	const schedule = workspaceId && !threadId && caps()?.features?.pm_schedule?.version === 1 ? workspaceSchedule({
+		api,
+		alive,
+		namespace,
+		workspaceId,
+		canRead: () => loaded && Boolean(workspace) && caps()?.features?.pm_schedule?.version === 1 && caps()?.scopes?.some((scope) => scope === "observe" || scope === "admin")
+	}) : null;
+	if (schedule) body.insertBefore(schedule.element, content);
 	const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban ? workspaceKanban({
 		h,
 		t,
@@ -27043,7 +32805,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		qualitySelection
 	}) : null;
 	if (sprints) body.insertBefore(sprints.box, content);
-	const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
+	const meetings = workspaceId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
 		h,
 		t,
 		api,
@@ -27075,6 +32837,44 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
+	const routeRegisterAction = (action) => {
+		const name = action?.action || "";
+		const open = (viewId, section) => {
+			if (viewId) workbench?.select(viewId);
+			const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
+			if (fold instanceof HTMLDetailsElement) {
+				fold.open = true;
+				fold.scrollIntoView({ block: "nearest" });
+			}
+		};
+		if (name.startsWith("pm.meeting.")) open("discussions", "ui_meetings");
+		else if (name.includes("follow_up.record")) open("issues", "ui_follow_up");
+		else if (name.startsWith("pm.maintenance_review.")) open("issues", "ui_maintenance_review");
+		else if (name.startsWith("pm.maintenance.repair")) open("issues", "ui_repairs");
+		else if (name.startsWith("pm.governance.")) open("issues", "ui_governance");
+		else if (name.startsWith("pm.issue.")) open("requirements", "ui_publication");
+	};
+	const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1 ? workspaceRegister({
+		h,
+		t,
+		api,
+		alive,
+		namespace,
+		workspaceId,
+		errorBox,
+		onMeta: setHeaderMeta,
+		onOpenWork: (id) => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
+			workbench?.select("requirements");
+			traceability?.focusWork?.(id);
+		},
+		onOpenRequirement: (id) => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
+			workbench?.select("requirements");
+			traceability?.focusRequirement?.(id);
+		},
+		onAction: routeRegisterAction
+	}) : null;
 	const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources ? specSources({
 		h,
 		t,
@@ -27087,7 +32887,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (threadId) body.append(specifications.element);
 		else body.insertBefore(specifications.element, content);
 	}
-	const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
+	const followUp = workspaceId && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
 		h,
 		t,
 		api,
@@ -27247,13 +33047,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let detailPanel = null;
 	function openPanel(label, node) {
 		if (!node || !loaded) return;
+		if (node === reportTools) brief?.prepareReports?.();
 		detailPanel?.close();
+		schedule?.setActive(false);
 		const home = node.parentNode, next = node.nextSibling;
 		detailPanel = inspector({
 			title: label,
 			onClose: () => {
 				home.insertBefore(node, next?.parentNode === home ? next : null);
 				detailPanel = null;
+				schedule?.setActive(workbench?.selected() === "schedule");
 			}
 		});
 		node.hidden = false;
@@ -27261,13 +33064,29 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		main.append(detailPanel);
 	}
 	if (lifecycle) drawersHome.append(lifecycle.element);
+	const dependencies = workspaceId && !threadId && caps()?.features?.pm_dependencies?.version === 1 ? workspaceDependencies({
+		h,
+		t,
+		api,
+		alive,
+		namespace,
+		workspaceId,
+		permitted,
+		form,
+		errorBox,
+		main,
+		header: {
+			meta: headerMeta,
+			pills: headerPills
+		}
+	}) : null;
 	const headerActions = heading.querySelector(".ui-header-actions");
-	const primary = charter ? brief?.box.querySelector(":scope > header .primary") : null;
+	const primary = brief?.primary || (charter ? brief?.box.querySelector(":scope > header .primary") : null);
 	if (primary) {
 		headerActions.prepend(primary);
 		brief.box.querySelector(":scope > header")?.remove();
 	}
-	const reportTools = h("div", {
+	const reportTools = brief?.reportTools || h("div", {
 		class: "pm-report-tools",
 		"data-pm-report-tools": ""
 	});
@@ -27299,10 +33118,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			},
 			...charter ? [{
 				label: t("ui_compare"),
-				onSelect: () => reportTools.querySelector("button[data-report-compare]")?.click()
+				onSelect: () => {
+					if (brief?.reportActions) {
+						openPanel(t("ui_compare"), reportTools);
+						brief.prepareReports().then(() => brief.reportActions.compare());
+					} else reportTools.querySelector("button[data-report-compare]")?.click();
+				}
 			}, {
 				label: t("ui_print"),
-				onSelect: () => reportTools.querySelector("button[data-report-print]")?.click()
+				onSelect: () => brief?.reportActions ? brief.reportActions.print() : reportTools.querySelector("button[data-report-print]")?.click()
 			}] : [],
 			{
 				label: t("ui_export_brief"),
@@ -27311,23 +33135,103 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		]
 	}) : null;
 	if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
+	if (dependencies?.captureButton) headerActions.insertBefore(dependencies.captureButton, refresh);
+	const issueTools = [];
+	if (register) {
+		if (governance) issueTools.push({
+			key: "governance",
+			label: t("ui_governance"),
+			section: "ui_governance"
+		});
+		if (maintenanceRepairs) issueTools.push({
+			key: "repairs",
+			label: t("ui_repairs"),
+			section: "ui_repairs"
+		});
+		if (maintenanceReview) issueTools.push({
+			key: "review",
+			label: t("ui_maintenance_review"),
+			section: "ui_maintenance_review"
+		});
+		if (followUp) issueTools.push({
+			key: "follow",
+			label: t("ui_follow_up"),
+			section: "ui_follow_up"
+		});
+	}
+	const openIssueTool = (section) => {
+		const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
+		if (fold instanceof HTMLDetailsElement) {
+			fold.open = true;
+			fold.scrollIntoView({ block: "nearest" });
+			return;
+		}
+		body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({ block: "nearest" });
+	};
 	const overflow = menu({
 		button: iconButton({
 			icon: "more-horizontal",
 			label: t("ui_more"),
 			"data-pm-overflow": ""
 		}),
-		items: [...lifecycle ? [{
-			key: "phase",
-			label: t("ui_change_phase"),
-			onSelect: () => openPanel(t("ui_change_phase"), lifecycle.element)
-		}] : [], ...evidence ? [{
-			key: "settings",
-			label: t("ui_workspace_settings"),
-			onSelect: () => openPanel(t("ui_workspace_settings"), evidence.box)
-		}] : []]
+		items: [
+			...lifecycle ? [{
+				key: "phase",
+				label: t("ui_change_phase"),
+				onSelect: () => openPanel(t("ui_change_phase"), lifecycle.element)
+			}] : [],
+			...evidence ? [{
+				key: "settings",
+				label: t("ui_workspace_settings"),
+				onSelect: () => openPanel(t("ui_workspace_settings"), evidence.box)
+			}] : [],
+			...issueTools.map((tool) => ({
+				key: tool.key,
+				label: tool.label,
+				onSelect: () => openIssueTool(tool.section)
+			}))
+		]
 	});
-	if (lifecycle || evidence) headerActions.append(overflow);
+	if (lifecycle || evidence || issueTools.length) headerActions.append(overflow);
+	const scheduleTools = schedule && (roadmap || sprints) ? menu({
+		button: iconButton({
+			icon: "more-horizontal",
+			label: t("ui_more"),
+			"data-schedule-tools": ""
+		}),
+		items: [...roadmap ? [{
+			label: t("sched_roadmap"),
+			onSelect: () => openPanel(t("sched_roadmap"), roadmap.box)
+		}] : [], ...sprints ? [{
+			label: t("ui_sprints"),
+			onSelect: () => openPanel(t("ui_sprints"), sprints.box)
+		}] : []]
+	}) : null;
+	if (scheduleTools) {
+		headerActions.append(scheduleTools);
+		if (roadmap) drawersHome.append(roadmap.box);
+		if (sprints) drawersHome.append(sprints.box);
+	}
+	const syncIssueTools = (view) => {
+		const on = view === "issues";
+		overflow.hidden = view === "overview" ? !(lifecycle || evidence) : !(on && issueTools.length);
+		for (const key of ["phase", "settings"]) {
+			const node = overflow.querySelector(`[data-menu-key="${key}"]`);
+			if (!node) continue;
+			node.hidden = view !== "overview";
+			node.disabled = view !== "overview";
+			if (view === "overview") node.removeAttribute("aria-disabled");
+			else node.setAttribute("aria-disabled", "true");
+		}
+		for (const tool of issueTools) {
+			const node = overflow.querySelector(`[data-menu-key="${tool.key}"]`);
+			if (!node) continue;
+			node.hidden = !on;
+			if ("disabled" in node) node.disabled = !on;
+			if (on) node.removeAttribute("aria-disabled");
+			else node.setAttribute("aria-disabled", "true");
+		}
+	};
 	function secondary(label, node) {
 		if (!node) return null;
 		const card = sectionCard({ body: disclosure({
@@ -27371,18 +33275,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"schedule",
-				roadmap?.box,
-				[["ui_sprints", sprints?.box]]
+				schedule?.element || roadmap?.box,
+				schedule ? [] : [["ui_sprints", sprints?.box]]
 			],
 			[
 				"dependencies",
-				null,
+				dependencies?.element || null,
 				[["ui_policy", maintenancePolicy?.element], ["ui_baselines", releaseBaselines?.element]]
 			],
 			[
 				"issues",
-				governance?.element,
+				register?.element || governance?.element,
 				[
+					...register && governance ? [["ui_governance", governance.element]] : [],
 					["ui_repairs", maintenanceRepairs?.element],
 					["ui_maintenance_review", maintenanceReview?.element],
 					["ui_follow_up", followUp?.element]
@@ -27413,6 +33318,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sections: [region]
 			});
 		}
+		let shownView = null;
 		workbench = projectViews$1({
 			h,
 			t,
@@ -27421,17 +33327,35 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			view,
 			groups,
 			onSelect: (id) => {
+				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
+				if (id !== "issues") brief?.closeRelated?.();
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
-				window.scrollTo(0, 0);
+				schedule?.setActive(id === "schedule");
+				dependencies?.setActive(id === "dependencies");
+				brief?.setActive?.(id === "overview");
+				register?.setActive(id === "issues");
+				if (scheduleTools) scheduleTools.hidden = id !== "schedule";
+				if (id !== "overview" || !liveOverview) window.scrollTo(0, 0);
+				if (id === "issues") register?.restoreScroll();
+				else setHeaderMeta("");
+				syncIssueTools(id);
 				if (id === "requirements") traceability?.activate();
 				detailPanel?.close();
 				if (primary) primary.hidden = id !== "overview";
 				if (reportMenu) reportMenu.hidden = id !== "overview";
+				const focused = document.activeElement;
+				if (id !== "issues" && focused && register?.element.contains(focused)) document.querySelector(`[data-pm-view="${id}"]`)?.focus();
 				publishContext();
+				brief?.setActive?.(id === "overview");
+				shownView = id;
 			}
 		});
 		workbench.apply();
+		brief?.setActive?.(workbench.selected() === "overview");
+		if (scheduleTools) scheduleTools.hidden = workbench.selected() !== "schedule";
+		shownView = workbench.selected();
+		syncIssueTools(shownView);
 		if (view && view !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		if (primary) primary.hidden = workbench.selected() !== "overview";
 		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
@@ -27439,7 +33363,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const sourceSections = () => [
 		...groups.flatMap((group) => group.sections),
 		content,
+		schedule?.element,
 		resources?.element,
+		dependencies?.element,
 		traceability?.element,
 		ahp?.element,
 		lifecycle?.element,
@@ -27455,6 +33381,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sprints?.box,
 		meetings?.element,
 		governance?.element,
+		register?.element,
 		specifications?.element,
 		followUp?.element,
 		engineering?.element,
@@ -27510,8 +33437,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (mountedThread !== thread.thread_id) {
 			mountedThread = thread.thread_id;
 			content.replaceChildren();
-			threadTitle = h("h2");
-			mode = h("span", { class: "chip" });
+			threadTitle = input("pd_title", {
+				max: 160,
+				value: thread.title
+			});
+			mode = h("span", { class: "ui-pill tone-neutral" });
 			notes = h("div", {
 				class: "pm-notes",
 				"aria-label": t("pm_notes")
@@ -27524,7 +33454,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}, t("pm_earlier_notes"));
 			coverage = h("p", { class: "muted" });
 			permissions = h("p", { class: "muted" });
-			const text = input("pm_note_content", {
+			const text = input("pd_message", {
 				multiline: true,
 				max: 12e3
 			});
@@ -27542,34 +33472,63 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				params: (values) => ({ content: values.content }),
 				preconditions,
 				permitted: write,
-				label: "pm_save_note",
-				onSaved: () => load(),
-				extra: h("div", {}, labelled("pm_note_content", text), h("p", { class: "muted" }, t("pm_note_help")))
+				label: "pd_send",
+				onSaved: () => {
+					localStorage.removeItem(handoffKey);
+					return load();
+				},
+				extra: text
 			});
+			text.placeholder = t("pd_message");
+			text.dataset.discussionComposer = "";
+			if (sendHandoff?.threadId === threadId && !noteForm.locked()) noteForm.set("content", sendHandoff.content);
+			renameForm = form({
+				action: "pm.thread.rename",
+				target,
+				fields: { title: threadTitle },
+				params: (values) => ({ title: values.title.trim() }),
+				preconditions,
+				permitted: write,
+				label: "pd_save",
+				onBeforeSaved: (_result, values) => {
+					threadTitle.dataset.pmDefault = values.title;
+				},
+				onSaved: () => {
+					titleView.finish();
+					return load();
+				},
+				onStateChange: () => {
+					if (threadData) titleView?.update(threadData.thread.title);
+				},
+				extra: threadTitle
+			});
+			const threadDetails = h("details", { "data-discussion-details": "" }, h("summary", {}, t("pd_details")), renameForm.box.querySelector(".pm-receipt"));
+			titleView = discussionTitle({
+				t,
+				field: threadTitle,
+				form: renameForm,
+				value: thread.title
+			});
+			boundContext = h("div", { class: "pd-context" });
+			panelContext = h("div", { class: "pd-context-details" });
 			discussionHint = h("p", { class: "muted" });
-			const column = h("section", { class: "pm-discussion" }, h("div", { class: "pm-thread-heading" }, threadTitle, mode), discussionHint, earlier, notes, coverage);
-			if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
-				nativeAnalysis = pmNativeAnalysis({
-					h,
-					t,
-					api,
-					form,
-					input,
-					labelled,
-					caps,
-					namespace,
-					guard: alive,
-					capability: () => pmCapabilities,
-					thread: () => threadData,
-					permitted,
-					target,
-					refresh: load
-				});
-				column.append(nativeAnalysis.box, h("details", {
-					class: "pm-package-preparation",
-					"data-pm-note-only": ""
-				}, h("summary", {}, t("pm_native_note_only")), noteForm.box));
-			} else column.append(noteForm.box);
+			const column = h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleView.box)), h("div", { class: "pd-thread-meta" }, mode, boundContext)), discussionHint, h("div", { class: "pd-transcript" }, earlier, notes, coverage));
+			if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) nativeAnalysis = pmNativeAnalysis({
+				h,
+				t,
+				api,
+				form,
+				input,
+				labelled,
+				caps,
+				namespace,
+				guard: alive,
+				capability: () => pmCapabilities,
+				thread: () => threadData,
+				permitted,
+				target,
+				refresh: load
+			});
 			if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
 				proposalReview = planProposals({
 					h,
@@ -27585,9 +33544,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					thread: () => threadData,
 					permitted,
 					refresh: load,
-					errorBox
+					errorBox,
+					conversation: true,
+					backLink,
+					onFollowUp: () => text.focus(),
+					onAnswer: (value) => {
+						if (!value || noteForm.locked()) return;
+						noteForm.set("content", [text.value, value].filter(Boolean).join("\n\n"));
+						noteForm.submit();
+					}
 				});
-				column.append(proposalReview.box);
+				column.querySelector(".pd-transcript").append(proposalReview.box);
 			}
 			if (caps()?.features?.pm_workspaces?.plan_drafting) {
 				revisions = planRevisions({
@@ -27665,7 +33632,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"repo_evidence",
 				"conflicting",
 				"not_applicable"
-			].map((value) => h("option", { value }, t("pm_status_" + value))));
+			].map((value) => h("option", { value }, discussionLabel(t, "pm_status_", value))));
 			statusSelect.dataset.pmDefault = "unresolved";
 			sourceSelect = h("select", { "aria-label": t("pm_input_source") }, h("option", { value: "statement" }, t("pm_source_statement")), h("option", { value: "repository" }, t("pm_source_repository")), h("option", { value: "external" }, t("pm_source_external")));
 			sourceSelect.dataset.pmDefault = "statement";
@@ -27737,7 +33704,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (section) section.hidden = threadData?.thread.mode !== "idea" && !planForm.locked() || !threadData?.capabilities?.decide;
 					updateSourceControls();
 				},
-				extra: h("div", {}, selected, labelled("pm_plan_rationale", rationale), h("p", { class: "muted" }, t("pm_plan_help")))
+				extra: h("div", {}, selected, labelled("pm_plan_rationale", rationale), disclosure({
+					label: t("pd_details"),
+					body: h("p", { class: "muted" }, t("pm_plan_help"))
+				}))
 			});
 			if (caps()?.actions?.some((action) => action.action === "pm.thread.plan.revise")) {
 				const selected = h("input", { type: "hidden" });
@@ -27770,31 +33740,62 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					label: "pm_planning_revision_save",
 					onSaved: () => load(),
 					onStateChange: updateSourceControls,
-					extra: h("div", {}, selected, draftId, labelled("pm_planning_revision_rationale", rationale), h("p", { class: "muted" }, t("pm_planning_revision_help")))
+					extra: h("div", {}, selected, draftId, labelled("pm_planning_revision_rationale", rationale), disclosure({
+						label: t("pd_details"),
+						body: h("p", { class: "muted" }, t("pm_planning_revision_help"))
+					}))
 				});
 			}
 			const information = h("details", {
 				"data-pm-information": "",
-				open: thread.mode !== "planning"
-			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box), draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "");
-			const inspector = h("aside", {
-				class: "pm-inspector",
-				"aria-label": t("pm_inputs")
-			}, information);
-			if (brief) inspector.prepend(brief.box);
-			if (lifecycle) inspector.prepend(lifecycle.element);
-			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
+				open: true
+			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box));
+			informationPanel = information;
+			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext, threadDetails);
+			for (const node of [...column.querySelectorAll(":scope > .pm-package-preparation, :scope > .pm-packages")]) contextPane.append(node);
+			if (nativeAnalysis) contextPane.append(h("details", {}, h("summary", {}, t("pd_analysis")), nativeAnalysis.box));
+			if (meetings) contextPane.append(secondary("ui_meetings", meetings.element));
+			if (followUp) contextPane.append(secondary("ui_follow_up", followUp.element));
+			if (specifications) contextPane.append(secondary("ui_specs", specifications.element));
+			if (evidence) drawersHome.append(evidence.box);
+			const planPane = h("section", { "data-discussion-tab": "plan" }, draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "", proposalReview?.tools || "", revisions?.box || "", brief ? secondary("pm_brief_title", brief.box) : "");
+			discussionTools = discussionPanel({
+				t,
+				namespace,
+				workspaceId,
+				panes: {
+					context: contextPane,
+					inputs: h("section", { "data-discussion-tab": "inputs" }, information),
+					plan: planPane
+				}
+			});
+			column.querySelector(".pd-header-main").append(discussionTools.trigger);
+			const composer = discussionComposer({
+				t,
+				form: noteForm,
+				details: threadDetails,
+				analysis: proposalReview?.composer(text) || nativeAnalysis?.composer(text)
+			});
+			column.append(composer);
+			content.append(h("div", { class: "pm-thread-layout" }, column, discussionTools.home));
 			const disclosures = threadDisclosures.get(disclosureKey);
 			for (const selector of threadDisclosureSelectors) {
 				const element = content.querySelector(selector);
 				if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
 			}
 		}
-		threadTitle.textContent = thread.title;
-		mode.textContent = t("pm_mode_" + thread.mode);
-		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector("[data-pm-information]").open = true;
-		discussionHint.textContent = nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "" : t("pm_manual");
-		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
+		if (!renameForm.locked() && document.activeElement !== threadTitle && !threadTitle.value) threadTitle.value = thread.title;
+		titleView.update(thread.title);
+		mode.textContent = discussionLabel(t, "pm_mode_", thread.mode);
+		boundContext.replaceChildren(...discussionContext(t, thread.context, {
+			limit: 3,
+			onMore: () => discussionTools.open("context")
+		}));
+		panelContext.replaceChildren(...discussionContext(t, thread.context), ...thread.context?.length ? [] : [h("p", { class: "muted" }, t("pd_no_context"))]);
+		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) informationPanel.open = true;
+		discussionHint.textContent = "";
+		const transcript = notes.closest(".pd-transcript");
+		const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
 		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
 			h,
 			t,
@@ -27803,7 +33804,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			timestamp
 		})));
 		if (!data.messages?.length) notes.append(h("p", { class: "muted pm-empty" }, t("pm_no_notes")));
-		notes.scrollTop = bottom ? notes.scrollHeight : scroll;
+		transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
 		earlier.disabled = false;
 		coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t("pm_partial") : "";
@@ -27818,7 +33819,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const slots = data.profile?.input_slots || [];
 		for (const slot of slots) {
 			const id = typeof slot === "string" ? slot : slot.key || slot.slot || slot.id;
-			if (id && ![...slotSelect.options].some((option) => option.value === id)) slotSelect.append(h("option", { value: id }, t("pm_slot_" + id) === "pm_slot_" + id ? slot.label || id : t("pm_slot_" + id)));
+			if (id && ![...slotSelect.options].some((option) => option.value === id)) slotSelect.append(h("option", { value: id }, discussionLabel(t, "pm_slot_", id) === "pm_slot_" + id ? slot.label || id : discussionLabel(t, "pm_slot_", id)));
 		}
 		if (oldSlot) slotSelect.value = oldSlot;
 		const signature = JSON.stringify([
@@ -27846,11 +33847,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				const row = h("article", {
 					class: "pm-fact",
 					"data-input-id": item.input_id
-				}, h("div", { class: "pm-fact-heading" }, checkbox, h("strong", {}, t("pm_slot_" + item.slot) === "pm_slot_" + item.slot ? item.slot : t("pm_slot_" + item.slot)), h("span", { class: `chip ${item.status === "user_confirmed" ? "ok" : [
+				}, h("div", { class: "pm-fact-heading" }, checkbox, h("strong", {}, discussionLabel(t, "pm_slot_", item.slot) === "pm_slot_" + item.slot ? item.slot : discussionLabel(t, "pm_slot_", item.slot)), h("span", { class: `chip ${item.status === "user_confirmed" ? "ok" : [
 					"unresolved",
 					"conflicting",
 					"agent_assumption"
-				].includes(item.status) ? "warn" : ""}` }, t("pm_status_" + item.status))), h("p", { class: "pm-note-text" }, item.value), h("p", { class: "muted pm-source" }, sourceText(item)), h("p", { class: "muted" }, item.status === "user_confirmed" ? t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by }) : t("pm_unverified")));
+				].includes(item.status) ? "warn" : ""}` }, discussionLabel(t, "pm_status_", item.status))), h("p", { class: "pm-note-text" }, item.value), h("p", { class: "muted pm-source" }, sourceText(item)), h("p", { class: "muted" }, item.status === "user_confirmed" ? t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by }) : t("pm_unverified")));
 				if (item.source_candidate) row.append(reviewCandidateProof({
 					h,
 					t,
@@ -27907,7 +33908,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		draft.replaceChildren();
 		if (data.draft) {
 			const selected = data.draft.selected_inputs || [], candidates = data.draft.candidate_inputs || [];
-			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, t("pm_slot_" + item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : "", h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.plan_drafting ? "pm_planning_source_help" : "pm_draft_help")));
+			draft.append(h("h2", {}, t("pm_draft_title")), h("p", {}, data.draft.title), h("p", { class: "pm-note-text" }, data.draft.rationale), h("h3", {}, t("pm_selected")), h("ul", {}, ...selected.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_candidates")), h("ul", {}, ...candidates.map((item) => h("li", {}, item.value))), h("h3", {}, t("pm_open_planning")), h("ul", {}, ...(data.draft.unknowns || []).map((item) => h("li", {}, discussionLabel(t, "pm_slot_", item.slot)))), data.draft.candidates_truncated ? h("p", { class: "muted" }, t("pm_partial")) : "", h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.plan_drafting ? "pm_planning_source_help" : "pm_draft_help")));
 		}
 		planForm.box.closest("[data-pm-plan]").hidden = thread.mode !== "idea" && !planForm.locked() || !data.capabilities?.decide;
 		if (planningRevisionForm) planningRevisionForm.box.closest("[data-pm-planning-revision]").hidden = thread.mode !== "planning" && !planningRevisionForm.locked() || !data.capabilities?.decide;
@@ -27935,7 +33936,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					const saved = data.run;
 					if (saved?.workspace_id !== workspaceId || saved?.thread_id !== threadId || saved?.run_id !== run.run_id) throw Error(t("pm_scope_mismatch"));
 					const context = saved.context;
-					detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_version", { version: context.thread_version })), h("a", { href: `#/op/${saved.operation_id}` }, t("pm_operation")), ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) => h("section", {}, h("h4", {}, t("pm_status_" + status)), ...inputs.map((input) => h("div", {}, h("p", {}, input.value), h("small", { class: "muted" }, [
+					detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_version", { version: context.thread_version })), h("a", { href: `#/op/${saved.operation_id}` }, t("pm_operation")), ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) => h("section", {}, h("h4", {}, discussionLabel(t, "pm_status_", status)), ...inputs.map((input) => h("div", {}, h("p", {}, input.value), h("small", { class: "muted" }, [
 						input.source_ref?.ref || input.source_ref?.message_id,
 						input.source_ref?.path,
 						input.source_ref?.revision
@@ -27996,6 +33997,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				workspace = null;
 				publishContext();
 				detailPanel?.close();
+				discussionTools?.close();
 				brief?.withdraw();
 				lifecycle?.withdraw();
 				proposalReview?.withdraw();
@@ -28010,6 +34012,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				earlier.disabled = !loaded;
 			}
 		}
+	}
+	function filterThreads() {
+		for (const row of workspaceList.querySelectorAll(".pm-thread-link")) row.hidden = !row.textContent.toLocaleLowerCase().includes((uiState.search || "").toLocaleLowerCase());
 	}
 	async function load() {
 		const ticket = ++sequence;
@@ -28027,7 +34032,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		maintenanceRepairs?.withdraw();
 		maintenanceReview?.withdraw();
 		qualityReviews?.withdraw();
-		proposalReview?.withdraw();
 		qualitySelections.clear();
 		try {
 			alive();
@@ -28038,11 +34042,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				[detail, threadList, data, runs, plans, accepted, workspaceCaps] = await Promise.all([
 					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
 					api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
-					threadId ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
-					threadId && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
-					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
-					threadId && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
-					threadId && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
+					threadId && threadId !== "new" ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
+					threadId && threadId !== "new" && caps()?.features?.pm_workspaces?.context_packages ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
+					threadId && threadId !== "new" && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
+					threadId && threadId !== "new" && caps()?.features?.pm_workspaces?.plan_drafting ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
+					threadId && threadId !== "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) ? api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)
 				]);
 				alive();
 				for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
@@ -28063,52 +34067,114 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			title.textContent = workspace ? t("ui_" + (threadId ? "discussions" : workbench?.selected() || "discussions")) : t("pm_title");
 			lastList = list.workspaces || [];
 			lastThreadList = threadList;
-			workspaceList.replaceChildren(...(threadList?.threads || []).map((thread) => h("a", {
+			if (!threadSearch) {
+				threadSearch = input("pd_search", { required: false });
+				threadSearch.type = "search";
+				threadSearch.placeholder = t("pd_search");
+				threadSearch.value = uiState.search || "";
+				threadSearch.addEventListener("input", () => {
+					uiState.search = threadSearch.value;
+					filterThreads();
+				});
+			}
+			const scroll = workspaceList.scrollTop;
+			if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h("div", { class: "pd-list-header" }, threadSearch, h("a", {
+				class: "ui-button primary ui-sm",
+				href: discussHref({ workspaceId }),
+				"data-discussion-new": "",
+				title: t("pd_new"),
+				"aria-label": t("pd_new")
+			}, icon("plus"), t("pd_new"))), threadRows);
+			threadRows.replaceChildren(...(threadList?.threads || []).map((thread) => h("a", {
 				class: "pm-thread-link",
 				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
 				"aria-current": thread.thread_id === threadId ? "page" : null
-			}, h("span", {}, thread.title), h("small", {}, t("pm_mode_" + thread.mode)))));
-			if (workspace) workspaceList.append(h("a", {
-				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions`,
-				onclick: () => {
-					rememberProjectView(namespace, workspaceId, "discussions");
-					workbench?.select("discussions");
-					if (workbench) content.querySelector("input")?.focus();
-				}
-			}, t("pm_new_thread")));
-			else workspaceList.append(...lastList.map((row) => h("a", { href: `#/pm/${row.workspace_id}` }, row.name)), h("button", {
+			}, h("strong", { title: thread.title }, thread.title), h("span", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, discussionLabel(t, "pm_mode_", thread.mode)), " · ", h("time", {}, time(thread.updated_at))), ...discussionContext(t, thread.context?.slice(0, 1)))));
+			if (!workspaceId) workspaceList.replaceChildren(...lastList.map((row) => h("a", { href: `#/pm/${row.workspace_id}` }, row.name)), h("button", {
 				type: "button",
 				class: "primary",
 				onclick: showCreate
 			}, t("ui_new_workspace")));
+			filterThreads();
+			workspaceList.scrollTop = scroll;
+			workspaceList.querySelector("[data-discussion-more]")?.remove();
 			if (threadList?.next_cursor) workspaceList.append(h("button", {
 				type: "button",
 				class: "secondary",
+				"data-discussion-more": "",
 				onclick: () => {
 					threadPages++;
 					load();
 				}
 			}, t("pm_more_threads")));
 			if (data) renderThread(data);
-			else if (!content.children.length) {
+			else if (!content.querySelector(".pm-thread-layout")) {
 				if (!workspace) content.append(h("div", { class: "pm-empty" }, h("h2", {}, t("pm_start_title")), h("p", {}, t("pm_start_help"))));
 				else {
-					const title = input("pm_thread_title", { max: 160 });
+					const name = input("pd_title", {
+						max: 160,
+						value: threadId === "new" ? launch.title || t("pd_new") : ""
+					});
+					const text = input("pd_message", {
+						multiline: true,
+						max: 12e3,
+						required: threadId === "new"
+					});
+					text.placeholder = t("pd_message");
+					text.dataset.discussionComposer = "";
 					const create = form({
 						action: "pm.thread.create",
 						target: { workspace_id: workspaceId },
-						fields: { title },
-						params: (values) => ({ title: values.title.trim() }),
+						fields: {
+							title: name,
+							content: text
+						},
+						namespace: threadId === "new" ? namespace + ".discussion." + JSON.stringify(launch) : namespace,
+						params: (values) => ({
+							title: values.title.trim(),
+							...launch.refs.length ? { context: launch.refs } : {}
+						}),
 						preconditions: () => ({ expected_version: workspace.version }),
 						permitted: () => permitted(false),
-						label: "pm_create_thread",
+						label: threadId === "new" ? "pd_send" : "pm_create_thread",
+						onBeforeSaved: (result, values) => {
+							if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({
+								threadId: result.thread_id,
+								content: values.content
+							}));
+							localStorage.setItem(originKey + result.thread_id, JSON.stringify({
+								from: launch.from || "overview",
+								report: launch.report
+							}));
+						},
 						onSaved: (result) => {
 							alive();
-							location.hash = `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`;
+							location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
 						},
-						extra: labelled("pm_thread_title", title)
+						extra: threadId === "new" ? text : h("div", {}, labelled("pd_title", name), text)
 					});
-					content.append(h("section", { class: "pm-start panel" }, h("h2", {}, t("pm_new_thread")), create.box));
+					const titleDraft = threadId === "new" ? discussionTitle({
+						t,
+						field: name,
+						form: create,
+						value: name.value,
+						local: true
+					}) : null;
+					const draftPanel = discussionPanel({
+						t,
+						namespace,
+						workspaceId,
+						panes: { context: h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, launch.refs)) }
+					});
+					if (threadId === "new") discussionTools = draftPanel;
+					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleDraft?.box || h("h2", {}, t("pd_new")))), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), h("div", { class: "pd-context" }, ...discussionContext(t, launch.refs, {
+						limit: 3,
+						onMore: () => draftPanel.open("context")
+					})))), h("div", { class: "pd-transcript" }, h("p", { class: "muted pd-start" }, t("pd_empty"))), discussionComposer({
+						t,
+						form: create,
+						draft: true
+					})), launch.refs.length > 3 ? draftPanel.home : ""));
 				}
 			}
 			if (!workspaceList.isConnected) content.prepend(workspaceList);
@@ -28138,10 +34204,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				maintenanceReview,
 				qualityReviews,
 				roadmap,
+				schedule,
 				kanban,
 				sprints,
 				meetings,
 				governance,
+				register,
 				specifications,
 				followUp,
 				engineering,
@@ -28169,8 +34237,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"closed"
 			].includes(stage) ? t("ui_phase_" + stage) : "";
 			publishContext();
+			brief?.setActive?.(workbench?.selected() === "overview");
 			if (workbench?.selected() === "requirements") await traceability?.activate();
 			resources?.setActive(workbench?.selected() === "agents");
+			schedule?.setActive(workbench?.selected() === "schedule");
+			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
+			register?.setActive(workbench?.selected() === "issues");
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -28181,6 +34253,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				brief?.withdraw();
 				traceability?.withdraw();
 				resources?.withdraw();
+				schedule?.withdraw();
+				dependencies?.withdraw();
 				qualityReviews?.withdraw();
 				proposalReview?.withdraw();
 				qualitySelections.clear();
@@ -28190,12 +34264,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				handoff?.withdraw();
 				workBatches?.withdraw();
 				issues?.withdraw();
+				register?.withdraw();
 				ahp?.withdraw();
 				releaseBaselines?.withdraw();
 				maintenancePolicy?.withdraw();
 				maintenanceRepairs?.withdraw();
 				maintenanceReview?.withdraw();
 				detailPanel?.close();
+				discussionTools?.close();
 				phasePill.hidden = true;
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
@@ -28215,6 +34291,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	await load();
 	initialReadComplete = true;
 	updateForms();
+	workspaceList.scrollTop = uiState.listScroll || 0;
+	const initialTranscript = content.querySelector(".pd-transcript");
+	if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
+	if (threadId === "new") setTimeout(() => {
+		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
+	}, 0);
+	if (sendHandoff?.threadId === threadId && noteForm && !noteForm.locked()) setTimeout(() => {
+		if (!disposed) noteForm.submit();
+	}, 0);
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
 	let eventReads = Promise.resolve();
 	const off = onEvents((event) => {
@@ -28245,7 +34330,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_quality_review",
 			"pm_execution_verification",
 			"pm_maintenance_repair",
-			"pm_ahp_observation"
+			"pm_ahp_observation",
+			"pm_dependencies"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -28254,22 +34340,24 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
 		}
-		if ((deliveries || workBatches || qualityReviews || maintenanceRepairs) && [
+		if ((liveOverview || deliveries || workBatches || qualityReviews || maintenanceRepairs || schedule) && [
 			"operation",
 			"deployment",
 			"integration"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(async () => {
+				if (liveOverview) await brief?.refresh();
 				await deliveries?.refresh();
 				await workBatches?.refresh();
 				await qualityReviews?.refresh();
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
 				await traceability?.refresh();
+				await schedule?.refresh();
 			});
 			return eventReads;
 		}
-		if ((kanban || qualityReviews || maintenanceRepairs) && [
+		if ((liveOverview || kanban || qualityReviews || maintenanceRepairs || schedule) && [
 			"work_item",
 			"project",
 			"task",
@@ -28278,15 +34366,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"session"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(async () => {
+				if (liveOverview) await brief?.refresh();
 				await qualityReviews?.refresh();
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
 				await traceability?.refresh();
+				await schedule?.refresh();
 			});
 			return eventReads;
 		}
 	});
 	const dispose = () => {
+		uiState.listScroll = workspaceList.scrollTop;
+		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		if (threadId && mountedThread === threadId) {
 			const disclosures = new Map();
 			for (const selector of threadDisclosureSelectors) {
@@ -28298,15 +34390,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
 		}
 		disposed = true;
+		discussionTools?.dispose();
 		sequence++;
 		off();
 		createPanel?.close();
 		detailPanel?.close();
 		reportMenu?.dispose();
 		overflow.dispose();
+		brief?.dispose?.();
 		traceability?.dispose();
 		resources?.dispose();
+		schedule?.dispose();
+		scheduleTools?.dispose();
+		dependencies?.dispose();
+		register?.dispose();
 		proposalReview?.dispose();
+		nativeAnalysis?.dispose();
 		ahp?.dispose();
 		for (const value of forms) value.dispose();
 	};
@@ -28450,8 +34549,20 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		} catch {}
 	};
 	const link = (href, label, state = null, reading = null) => {
-		const statusText = [state ? t(state.key) : "", reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""].filter(Boolean).join(" · ");
-		const full = [label, statusText].filter(Boolean).join(" · ");
+		const presented = railPresentation(state);
+		const full = joinLabel([
+			label,
+			presented ? t(presented.labelKey) : "",
+			reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""
+		]);
+		let glyph = null;
+		if (presented?.labelKey === "rail_needs_you" || presented?.labelKey === "rail_asking") {
+			glyph = icon("circle-alert", { size: 14 });
+			glyph.classList.add("workspace-rail-alert");
+		} else if (presented?.labelKey === "rail_failed") {
+			glyph = icon("circle-x", { size: 14 });
+			glyph.classList.add("workspace-rail-failed");
+		} else if (presented?.labelKey === "rail_running") glyph = h("span", { class: "workspace-dot info" });
 		return h("a", {
 			href,
 			class: "workspace-tree-link",
@@ -28462,10 +34573,10 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}, h("span", {
 			class: "workspace-tree-label",
 			title: label
-		}, label), statusText ? h("span", {
+		}, label), presented ? h("span", {
 			class: "workspace-tree-state",
 			"aria-hidden": "true"
-		}, h("span", { class: `workspace-dot ${state?.tone || ""}` }), h("span", { class: "workspace-tree-state-label" }, statusText)) : null);
+		}, glyph) : null);
 	};
 	const workLink = (pid, item) => link(`#/work/${[
 		pid,
@@ -28609,7 +34720,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 						cursors.add(cursor);
 					}
 					const focused = sessionRows.contains(document.activeElement) ? document.activeElement.getAttribute("href") : null;
-					sessionRows.replaceChildren(...groupedSessions([...rows.values()]).map((group) => h("div", {}, h("p", { class: "muted workspace-session-group" }, group.host, " · ", group.name || group.id || t("obs_unknown")), ...group.sessions.map((session) => link(`#/session/${[session.host, session.session_id].map(encodeURIComponent).join("/")}`, session.title || session.session_id, sessionActivity(session), session.reading)))), h("p", { class: "muted" }, t("attention_loaded", { count: rows.size })));
+					sessionRows.replaceChildren(...groupedSessions([...rows.values()]).map((group) => h("div", {}, h("p", { class: "muted workspace-session-group" }, joinLabel([group.host, group.name || group.id || t("obs_unknown")])), ...group.sessions.map((session) => link(`#/session/${[session.host, session.session_id].map(encodeURIComponent).join("/")}`, session.title || session.session_id, sessionActivity(session), session.reading)))), h("p", { class: "muted" }, t("attention_loaded", { count: rows.size })));
 					if (focused) [...sessionRows.querySelectorAll("a")].find((a) => a.getAttribute("href") === focused)?.focus({ preventScroll: true });
 					more.hidden = !cursor;
 					sessionsLoaded = true;
@@ -29506,38 +35617,90 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const unread = caps?.features?.work_item_reads?.version === 1;
 	const saved = sessionStorage.getItem(storageKey) || sessionStorage.getItem("batc.tab");
 	const tab = saved === "confirm" || saved === "active" ? "active" : saved === "unread" && unread ? "unread" : "needs";
-	const tabs = h("div", {
-		class: "tabs attention-tabs",
-		role: "group",
-		"aria-label": t("nav_home")
-	}, ...[
-		"needs",
-		"active",
-		...unread ? ["unread"] : []
-	].map((value) => h("button", {
-		class: value === tab ? "on" : "",
-		"aria-pressed": String(value === tab),
-		onclick: () => {
+	const tabs = segmented({
+		label: t("nav_home"),
+		value: tab,
+		options: [
+			"needs",
+			"active",
+			...unread ? ["unread"] : []
+		].map((value) => ({
+			value,
+			label: t("attention_tab_" + value)
+		})),
+		onChange: (value) => {
 			guard();
 			sessionStorage.setItem(storageKey, value);
 			route();
 		}
-	}, t("attention_tab_" + value))));
-	const empty = h("section", {
-		class: "panel",
-		hidden: true
-	}, h("p", {}, t("empty_needs_you")), h("p", { class: "muted" }, t("empty_next_work")), h("div", { class: "actions" }, h("a", { href: "#/projects" }, t("sessions_projects")), caps?.scopes?.includes("start") && caps?.actions?.some((a) => a.action === "session.start" && a.allowed === true) ? h("a", { href: "#/start" }, t("start_title_page")) : null));
+	});
+	tabs.classList.add("global-inbox-tabs");
+	const empty = emptyState({
+		title: t("empty_needs_you"),
+		action: h("div", { class: "actions" }, h("a", {
+			class: "ui-button secondary ui-sm",
+			href: "#/projects"
+		}, t("sessions_projects")), caps?.scopes?.includes("start") && caps?.actions?.some((a) => a.action === "session.start" && a.allowed === true) ? h("a", {
+			class: "ui-button primary ui-sm",
+			href: "#/start"
+		}, t("start_title_page")) : null)
+	});
+	empty.hidden = true;
+	const notes = disclosure({
+		label: t("global_details"),
+		key: storageKey + ".notes",
+		body: h("div", {}, ...[
+			"replies",
+			"completion",
+			"problems",
+			"hosts",
+			"active",
+			"unread"
+		].map((key) => h("p", {}, h("strong", {}, t("attention_" + key)), " ", t("attention_" + key + "_note"))), h("p", {}, t("empty_next_work")))
+	});
+	let sheet = null;
+	const open = (key, title, nodes) => {
+		if (!sheet?.isConnected || sheet.dataset.inboxKey !== key) {
+			sheet?.dispose();
+			const node = inspector({
+				title,
+				onClose: () => {
+					if (sheet === node) sheet = null;
+				}
+			});
+			node.dataset.inboxKey = key;
+			sheet = node;
+			main.append(node);
+		}
+		sheet.body.replaceChildren(...[].concat(nodes).flat().filter((node) => node != null && node !== false));
+	};
 	const sections = [];
+	const reconcile = () => {
+		if (!sheet) return;
+		if (!sections.some((section) => section.list.querySelector(`[data-inbox-key="${CSS.escape(sheet.dataset.inboxKey)}"]`))) sheet.dispose();
+	};
 	const add = (key, path, field, row, options = {}) => {
-		const list = h("div", {}), status = h("div", { role: "status" });
-		const count = h("span", { class: "muted" }), more = h("button", {
+		const list = h("div", { class: "global-inbox-list" });
+		const status = h("div", { role: "status" });
+		const badge = h("span", { class: "global-group-count" });
+		const count = h("span", {
+			class: "muted",
+			"data-shown": ""
+		});
+		const more = h("button", {
 			class: "secondary",
 			hidden: true
 		}, t("load_more"));
+		const viewAll = key === "problems" ? h("a", {
+			class: "global-view-all",
+			href: "#/operations/attention"
+		}, t("global_view_all")) : null;
+		const quiet = key === "active" ? h("a", { href: "#/operations/active" }, t("operations_view_active")) : null;
 		const section = h("section", {
-			class: "panel attention-section",
-			"aria-label": t("attention_" + key)
-		}, h("h2", {}, t("attention_" + key)), h("p", { class: "muted" }, t("attention_" + key + "_note")), status, list, h("div", { class: "actions attention-footer" }, count, more, key === "problems" || key === "active" ? h("a", { href: "#/operations/" + (key === "problems" ? "attention" : "active") }, t(key === "problems" ? "operations_view_attention" : "operations_view_active")) : null));
+			class: "global-group",
+			"aria-label": t("attention_" + key),
+			"data-inbox-group": key
+		}, h("div", { class: "global-group-head" }, h("h2", {}, t("attention_" + key)), badge, viewAll), status, list, h("div", { class: "global-group-foot" }, count, more, quiet));
 		const state = {
 			key,
 			path,
@@ -29547,6 +35710,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section,
 			list,
 			status,
+			badge,
 			count,
 			more,
 			pages: 1,
@@ -29557,25 +35721,70 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		sections.push(state);
 		return section;
 	};
-	const hostRow = (x) => h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, x.host), h("div", { class: "muted" }, x.error || t("stale_reason_" + x.stale_reason))));
-	main.append(pageHeader({ title: t("nav_home") }), tabs, empty, ...tab === "needs" ? [
-		add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
-		add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
-		add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {
+	const hostRow = (x, present) => inboxRow({
+		h,
+		key: x.host,
+		title: x.host,
+		href: `#/host/${encodeURIComponent(x.host)}`,
+		meta: x.error || reasonText$1(x.stale_reason),
+		pill: statusPill("stale"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: `#/host/${encodeURIComponent(x.host)}`
+		}, t("global_review")),
+		detailsLabel: t("global_details_for", { title: x.host }),
+		onOpen: () => present(x.host, x.host, [h("p", {}, reasonText$1(x.stale_reason) || t("reason_unavailable")), disclosure({
+			label: t("global_details"),
+			body: h("dl", { class: "kv" }, h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, x.stale_reason || x.error || "—")))
+		})])
+	});
+	const approvals = caps?.actions?.some((action) => action.action === "session.approve_pending" && action.allowed === true) ? h("section", {
+		class: "global-group",
+		"aria-label": t("global_approvals")
+	}, h("div", { class: "global-group-head" }, h("h2", {}, t("global_approvals"))), h("div", { class: "global-inbox-list" }, inboxRow({
+		h,
+		key: "approvals",
+		title: t("bulk_title"),
+		href: "#/approvals",
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: "#/approvals"
+		}, t("global_review"))
+	}))) : null;
+	main.append(...[
+		pageHeader({
+			title: t("nav_home"),
+			actions: [iconButton({
+				icon: "refresh-cw",
+				label: t("global_refresh"),
+				onClick: () => refresh().catch(() => {})
+			})]
+		}),
+		tabs,
+		empty,
+		...tab === "needs" ? [
+			approvals,
+			add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
+			add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
+			add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {
+				cursor: "next_before",
+				param: "before"
+			}),
+			add("hosts", "/hosts", "hosts", hostRow, { filter: (x) => x.stale })
+		] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
 			cursor: "next_before",
 			param: "before"
-		}),
-		add("hosts", "/hosts", "hosts", hostRow, { filter: (x) => x.stale })
-	] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
-		cursor: "next_before",
-		param: "before"
-	})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)]);
+		})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)],
+		notes
+	].filter((node) => node != null && node !== false));
 	let serial = Promise.resolve();
 	const load = async (section, wanted) => {
 		guard();
 		section.busy = true;
 		section.more.disabled = true;
-		if (section.size === null) section.status.replaceChildren(h("p", { class: "muted" }, t("loading")));
+		if (section.size === null) section.status.replaceChildren(skeleton(3));
+		const focusKey = section.list.contains(document.activeElement) ? document.activeElement.closest("[data-inbox-key]")?.dataset.inboxKey : null;
+		const focusLabel = document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent || "";
 		try {
 			let cursor = null, pages = 0;
 			const items = new Map(), seen = new Set();
@@ -29592,11 +35801,20 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section.pages = pages;
 			section.size = items.size;
 			section.partial = cursor !== null;
-			section.list.replaceChildren(...items.size ? [...items.values()].map(section.row) : [h("p", { class: "muted" }, t("attention_empty"))]);
-			section.count.textContent = t("attention_loaded", { count: items.size });
+			section.list.replaceChildren(...items.size ? [...items.values()].map((item) => section.row(item, open)) : []);
+			section.badge.hidden = Boolean(section.partial);
+			section.badge.textContent = section.partial ? "" : String(items.size);
+			section.count.hidden = !section.partial;
+			section.count.textContent = section.partial ? t("global_shown", { count: items.size }) : "";
 			section.status.replaceChildren();
 			section.more.hidden = cursor === null;
+			section.section.hidden = items.size === 0;
 			section.section.dataset.fresh = "true";
+			if (focusKey) {
+				const row = section.list.querySelector(`[data-inbox-key="${CSS.escape(focusKey)}"]`);
+				([...row?.querySelectorAll("a, button") || []].find((node) => (node.getAttribute("aria-label") || node.textContent) === focusLabel) || row)?.focus({ preventScroll: true });
+			}
+			reconcile();
 			if (tab === "needs") onPending(sections.every((item) => item.section.dataset.fresh === "true") ? {
 				count: sections.reduce((sum, item) => sum + item.size, 0),
 				partial: sections.some((item) => item.partial)
@@ -29608,8 +35826,11 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			if ([403, 404].includes(error.status)) {
 				section.list.replaceChildren();
 				section.count.replaceChildren();
+				section.badge.textContent = "";
 				section.size = null;
 				section.more.hidden = true;
+				section.section.hidden = false;
+				reconcile();
 			}
 			section.status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("attention_not_updated")));
 			throw error;
@@ -29621,10 +35842,11 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const refresh = (only, wanted) => {
 		const work = serial.catch(() => {}).then(async () => {
 			guard();
-			const results = await Promise.allSettled((only ? [only] : sections).map((s) => load(s, only ? wanted : s.pages)));
+			const results = await Promise.allSettled((only ? [only] : sections).map((item) => load(item, only ? wanted : item.pages)));
 			guard();
-			empty.hidden = tab !== "needs" || !sections.every((s) => s.size === 0 && s.section.dataset.fresh === "true");
-			const failed = results.find((r) => r.status === "rejected");
+			const settled = sections.every((item) => item.size === 0 && item.section.dataset.fresh === "true");
+			empty.hidden = tab !== "needs" || Boolean(approvals) || !settled;
+			const failed = results.find((item) => item.status === "rejected");
 			if (failed) throw failed.reason;
 		});
 		serial = work;
@@ -32948,7 +39170,15 @@ async function mountFleet(main, { h, t }) {
 //#endregion
 //#region src/tailscale.js
 init_transport();
-function mountTailscale(main, { h, t }) {
+function mountTailscale(main, { h, t, presentation } = {}) {
+	if (!nativeDesktop && presentation === "note") {
+		const note = h("section", {
+			class: "global-tailscale-note",
+			"aria-label": t("tailscale_title")
+		}, h("p", {}, t("tailscale_browser")));
+		main.append(note);
+		return () => note.remove();
+	}
 	const panel = h("section", {
 		class: "panel",
 		"aria-label": t("tailscale_title")
@@ -33805,15 +40035,18 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 }
 //#endregion
 //#region src/operation-list.js
-function operationList({ h, t, api, guard, row, statuses }) {
-	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false;
-	const list = h("div", {
-		class: "panel",
-		"data-operation-list": ""
-	}), count = h("p", {
+function operationList({ h, t, api, guard, statuses, namespace }) {
+	const memory = viewState(namespace || "", "", "operations:" + (statuses || "all"));
+	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, query = memory.query || "";
+	let sheet = null, request = 0;
+	const list = h("div", { "data-operation-list": "" });
+	const count = h("p", {
 		class: "muted",
 		"data-operation-count": ""
-	}), status = h("div", { role: "status" });
+	});
+	const status = h("div", { role: "status" });
+	const inspectorHost = h("div", { class: "global-ops-inspector" });
+	const layout = h("div", { class: "global-ops" }, list, inspectorHost);
 	const current = () => {
 		try {
 			guard();
@@ -33822,28 +40055,154 @@ function operationList({ h, t, api, guard, row, statuses }) {
 			return false;
 		}
 	};
-	const update = () => {
-		more.hidden = before === null;
-		more.disabled = pending > 0 || failed;
-		refresh.disabled = pending > 0;
-	};
 	const more = h("button", {
 		class: "secondary",
 		onclick: () => load(true).catch(() => {})
 	}, t("operations_more"));
-	const refresh = h("button", {
-		class: "secondary",
-		onclick: () => load().catch(() => {})
-	}, t("refresh"));
-	const box = h("div", {}, count, list, status, h("div", { class: "actions" }, more, refresh));
+	const box = h("div", {}, count, layout, status, h("div", { class: "actions" }, more));
+	const update = () => {
+		more.hidden = before === null;
+		more.disabled = pending > 0 || failed;
+	};
+	const visible = () => {
+		const needle = query.trim().toLocaleLowerCase();
+		if (!needle) return rows;
+		return rows.filter((op) => [
+			actionLabel(op.action),
+			op.action,
+			op.actor,
+			operationTargetText(op),
+			op.operation_id,
+			op.status,
+			op.status_reason
+		].join("\n").toLocaleLowerCase().includes(needle));
+	};
+	const columns = [
+		{
+			key: "action",
+			label: t("global_col_action"),
+			render: (op) => actionLabel(op.action)
+		},
+		{
+			key: "target",
+			label: t("global_col_target"),
+			render: (op) => operationTargetText(op) || "—"
+		},
+		{
+			key: "status",
+			label: t("global_col_status"),
+			render: (op) => statusPill(operationStatusKey(op.status))
+		},
+		{
+			key: "actor",
+			label: t("actor"),
+			render: (op) => op.actor || "—"
+		},
+		{
+			key: "started",
+			label: t("created"),
+			render: (op) => formatTime(op.created_at) || "—"
+		},
+		{
+			key: "duration",
+			label: t("global_col_duration"),
+			render: (op) => operationDuration(op) || "—"
+		}
+	];
+	function body(op) {
+		const steps = Array.isArray(op.steps) ? op.steps : [];
+		const precise = t("op_" + op.status);
+		return [
+			statusPill(operationStatusKey(op.status)),
+			h("p", { class: "muted" }, operationMeta(op, formatTime(op.created_at)) || "—"),
+			op.status_reason ? h("p", {}, op.status_reason) : null,
+			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			disclosure({
+				label: t("global_details"),
+				key: "operations." + op.operation_id,
+				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
+					step.name,
+					step.status,
+					step.error?.code
+				]))))
+			})
+		];
+	}
+	async function fill(op) {
+		const id = op.operation_id;
+		const token = ++request;
+		if (!sheet?.isConnected || sheet.dataset.operationId !== id) {
+			const previous = sheet;
+			sheet = null;
+			previous?.dispose();
+			const node = inspector({
+				title: actionLabel(op.action),
+				onClose: () => {
+					if (sheet !== node) return;
+					memory.selected = "";
+					sheet = null;
+					layout.classList.remove("has-inspector");
+				}
+			});
+			node.dataset.operationId = id;
+			sheet = node;
+			inspectorHost.append(node);
+			layout.classList.add("has-inspector");
+		}
+		sheet.body.replaceChildren(skeleton(3));
+		let record = op;
+		try {
+			const data = await api("GET", "/operations/" + encodeURIComponent(id));
+			if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
+			if (data?.operation?.operation_id === id) record = {
+				...op,
+				...data.operation
+			};
+		} catch (error) {
+			if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
+			if ([403, 404].includes(error.status)) {
+				rows = rows.filter((item) => item.operation_id !== id);
+				sheet.dispose();
+				paint();
+				return;
+			}
+			sheet.body.replaceChildren(inlineError({ error }), ...body(op).filter(Boolean));
+			return;
+		}
+		if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
+		sheet.body.replaceChildren(...body(record).filter(Boolean));
+	}
+	function paint() {
+		const focus = list.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.dataset.rowKey : null;
+		const shown = visible();
+		if (!rows.length) list.replaceChildren(emptyState({ title: t("operations_empty") }));
+		else if (!shown.length) list.replaceChildren(emptyState({ title: t("global_no_match") }));
+		else list.replaceChildren(dataTable({
+			columns,
+			rows: shown,
+			rowKey: "operation_id",
+			selected: memory.selected,
+			onSelect: (key, row) => {
+				memory.selected = key;
+				fill(row).catch(() => {});
+			}
+		}));
+		if (focus) list.querySelector(`[data-row-key="${CSS.escape(focus)}"]`)?.focus({ preventScroll: true });
+		count.hidden = before === null;
+		count.textContent = before === null ? "" : t("global_shown", { count: rows.length });
+		if (sheet?.isConnected && memory.selected) {
+			if (!rows.find((op) => op.operation_id === memory.selected)) sheet.dispose();
+		}
+	}
 	function load(append = false) {
 		pending++;
 		update();
 		const job = queue.catch(() => {}).then(async () => {
 			guard();
 			if (append && before === null) return;
-			const first = [...list.children].find((el) => el.getBoundingClientRect().bottom >= 0);
-			const anchor = first?.dataset.operationId, top = first?.getBoundingClientRect().top;
+			const anchor = [...list.querySelectorAll("[data-row-key]")].find((el) => el.getBoundingClientRect().bottom >= 0);
+			const anchorId = anchor?.dataset.rowKey;
+			const top = anchor?.getBoundingClientRect().top;
 			let next = append ? before : null, candidate = append ? [...rows] : [], read = 0;
 			const targetPages = append ? 1 : pages;
 			for (let i = 0; i < targetPages; i++) {
@@ -33863,15 +40222,14 @@ function operationList({ h, t, api, guard, row, statuses }) {
 			pages = append ? pages + read : read;
 			before = next;
 			failed = false;
-			list.replaceChildren(...rows.length ? rows.map((op) => {
-				const el = row(op);
-				el.dataset.operationId = op.operation_id;
-				return el;
-			}) : [h("p", { class: "muted" }, t("operations_empty"))]);
-			count.textContent = t("operations_loaded", { count: rows.length });
+			paint();
 			status.replaceChildren();
-			const restored = [...list.children].find((el) => el.dataset.operationId === anchor);
+			const restored = anchorId ? list.querySelector(`[data-row-key="${CSS.escape(anchorId)}"]`) : null;
 			if (restored && top !== void 0) window.scrollBy(0, restored.getBoundingClientRect().top - top);
+			if (memory.selected) {
+				const selected = rows.find((op) => op.operation_id === memory.selected);
+				if (selected && sheet?.isConnected) fill(selected).catch(() => {});
+			}
 		}).catch((error) => {
 			if (current()) {
 				failed = true;
@@ -33888,7 +40246,11 @@ function operationList({ h, t, api, guard, row, statuses }) {
 	update();
 	return {
 		box,
-		load
+		load,
+		filter(text) {
+			query = memory.query = text || "";
+			paint();
+		}
 	};
 }
 //#endregion
@@ -36852,7 +43214,10 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e)))
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
-	container.append(pageHeader({ title: t("ar_title") }), h("p", { class: "muted" }, t("ar_help")), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
+	container.append(pageHeader({ title: t("ar_title") }), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("ar_help"))
+	}), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
 	function update() {
 		content.update();
 		const fixed = busy || frozen();
@@ -37182,6 +43547,7 @@ var state = {
 	token: null,
 	caps: null,
 	lastEvent: 0,
+	lastEventAt: 0,
 	listeners: new Set(),
 	namespace: "",
 	epoch: 0,
@@ -37241,6 +43607,7 @@ function disconnect() {
 	state.token = null;
 	state.caps = null;
 	state.lastEvent = 0;
+	state.lastEventAt = 0;
 	state.online = false;
 	state.viewReady = false;
 	state.sync = null;
@@ -38078,6 +44445,7 @@ async function streamEvents() {
 				if (page.sync?.checkpoint?.cursor !== cursor || !page.sync?.checkpoint?.token) throw new Error("Invalid central event checkpoint");
 				state.sync = page.sync.checkpoint;
 			}
+			if (cursor !== state.lastEvent) state.lastEventAt = Date.now();
 			state.lastEvent = cursor;
 			saveCursor();
 			state.refreshCycle = null;
@@ -38239,32 +44607,80 @@ function sessionBadges(s) {
 		s.pending ? chip(t("pending_" + s.pending.kind), "stale") : null
 	];
 }
-function light(s) {
-	return h("span", {
-		class: `light ${s.pending ? "pending" : s.streaming ? "streaming" : s.loaded ? "ok" : ""}`,
-		title: s.streaming ? t("state_streaming") : s.loaded ? t("state_loaded") : t("state_unloaded")
-	});
-}
-function sessionRow(s) {
-	return h("div", { class: "row" }, light(s), h("div", { class: "grow" }, h("a", {
-		class: "title",
-		href: `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`
-	}, s.title || s.session_id), h("div", { class: "muted" }, [
-		s.workspace,
+function sessionRow(s, open) {
+	const title = s.title || s.session_id;
+	const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
+	const key = JSON.stringify([s.host, s.session_id]);
+	const asking = s.pending?.kind === "ask_user";
+	const permission = s.pending?.kind === "permission";
+	const meta = joinLabel([
+		s.host,
 		s.agent_kind,
-		s.worktree_branch
-	].filter(Boolean).join(" · "))), h("div", { class: "actions session-badges" }, ...sessionBadges(s)), h("span", { class: "muted" }, when(s.last_activity_at)));
+		s.worktree_branch,
+		s.pending?.kind ? t("pending_" + s.pending.kind) : "",
+		s.stale ? reasonText$1(s.stale_reason) : ""
+	]);
+	return inboxRow({
+		h,
+		key,
+		title,
+		href,
+		meta,
+		pill: statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href
+		}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+		detailsLabel: t("global_details_for", { title }),
+		onOpen: () => open?.(key, title, [
+			statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+			meta ? h("p", {}, meta) : null,
+			disclosure({
+				label: t("global_details"),
+				body: h("dl", { class: "kv" }, h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, s.session_id || "—")), h("dt", {}, t("host")), h("dd", {}, s.host || "—"), s.pending?.kind ? [h("dt", {}, t("global_state")), h("dd", {}, t("pending_" + s.pending.kind))] : null, s.stale_reason ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(s.stale_reason), " ", h("code", {}, String(s.stale_reason)))] : null)
+			})
+		])
+	});
 }
 var epoch = (x) => x ? new Date(x * 1e3).toISOString() : "";
 function opStatus(op) {
 	const started = op.status === "succeeded" && ["session.start", "repository.continue"].includes(op.action);
 	return h("span", { class: `status-${op.status}` }, t(started ? "start_dispatched" : "op_" + op.status));
 }
-function opRow(op) {
-	return h("div", { class: "row" }, h("div", { class: "grow" }, h("a", {
-		class: "title",
-		href: `#/op/${op.operation_id}`
-	}, op.action), h("div", { class: "muted" }, [op.actor, when(epoch(op.created_at))].join(" · ")), op.status_reason ? h("div", { class: "muted" }, op.status_reason) : null), opStatus(op), op.error_code ? chip(op.error_code, "bad") : null);
+function opRow(op, open) {
+	const title = actionLabel(op.action);
+	const href = `#/op/${encodeURIComponent(op.operation_id)}`;
+	const key = op.operation_id;
+	const meta = operationMeta(op, formatTime(op.created_at));
+	const needs = [
+		"needs_attention",
+		"uncertain",
+		"failed"
+	].includes(op.status);
+	const precise = t("op_" + op.status);
+	return inboxRow({
+		h,
+		key,
+		title,
+		href,
+		meta,
+		pill: statusPill(operationStatusKey(op.status)),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href
+		}, t(needs ? "global_review" : "global_open")),
+		detailsLabel: t("global_details_for", { title }),
+		onOpen: () => open?.(key, title, [
+			statusPill(operationStatusKey(op.status)),
+			meta ? h("p", { class: "muted" }, meta) : null,
+			op.status_reason ? h("p", {}, op.status_reason) : null,
+			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			disclosure({
+				label: t("global_details"),
+				body: h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)
+			})
+		])
+	});
 }
 async function viewHome(main) {
 	const connection = {
@@ -38327,7 +44743,10 @@ async function viewSessions(main) {
 		class: "session-project-link",
 		href: "#/projects"
 	}, t("sessions_projects")));
-	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), h("p", { class: "muted" }, t("sessions_intro")), h("div", { class: "filters session-filters" }, search, hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
+	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("sessions_intro"))
+	}), h("div", { class: "filters session-filters" }, search, hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
 		"aria-label": t("sessions_title"),
 		class: "session-results"
 	}, count, list, h("div", { class: "session-pagination" }, more, h("span", { class: "muted" }, t("sessions_page_note"))))));
@@ -39488,6 +45907,7 @@ function checkpointPanel(host, sid) {
 }
 async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceRepository) {
 	freshPage();
+	let reload = async () => {};
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -39530,7 +45950,14 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 		groups.get(key).push(r);
 	}
 	const environments = [...groups.values()].map(environmentCard);
-	main.append(pageHeader({ title: t("nav_delivery") }), ...environments.map((e) => e.card));
+	main.append(pageHeader({
+		title: t("nav_delivery"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => reload().catch(() => {})
+		})]
+	}), ...environments.map((e) => e.card));
 	if (source) main.append(h("p", { class: "note" }, t("delivery_source_context"), " ", h("code", {}, source.id)));
 	let selectedMethod = "";
 	let reviewedPreview = null;
@@ -39676,7 +46103,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 			if (!holdCard()) fill(card, errorBox(e));
 		}
 	};
-	const reload = async (fromEvent = true) => {
+	reload = async (fromEvent = true) => {
 		await settleRefreshes([...environments.map((e) => e.load(fromEvent)), load(null, fromEvent)]);
 	};
 	await reload(false);
@@ -40359,10 +46786,15 @@ function integrationStatus(op, act) {
 	return out;
 }
 async function viewOperations(main, filter = "all") {
+	const selected = [
+		"all",
+		"attention",
+		"active"
+	].includes(filter) ? filter : "all";
 	const statuses = {
 		attention: "needs_attention,uncertain",
 		active: "accepted,running,waiting_checks,waiting_external"
-	}[filter];
+	}[selected];
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -40373,17 +46805,42 @@ async function viewOperations(main, filter = "all") {
 		t,
 		api,
 		guard: () => assertView(connection),
-		row: opRow,
-		statuses
+		statuses,
+		namespace: state.namespace
 	});
-	main.append(pageHeader({ title: t("nav_operations") }), h("div", { class: "actions" }, ...[
-		["all", "operations_all"],
-		["attention", "tab_needs_you"],
-		["active", "tab_to_confirm"]
-	].map(([id, label]) => h("a", {
-		href: `#/operations/${id}`,
-		class: filter === id ? "on" : ""
-	}, t(label)))), list.box);
+	const memory = viewState(state.namespace || "", "", "operations:" + (statuses || "all"));
+	const search = h("input", {
+		type: "search",
+		"aria-label": t("global_search_operations"),
+		placeholder: t("global_search_operations"),
+		value: memory.query || ""
+	});
+	search.addEventListener("input", () => list.filter(search.value));
+	const searchField = h("div", { class: "workspace-search global-ops-search" }, icon("search", { size: 16 }), search);
+	const filters = segmented({
+		label: t("global_ops_filter"),
+		value: selected,
+		options: [
+			["all", "operations_all"],
+			["attention", "tab_needs_you"],
+			["active", "tab_to_confirm"]
+		].map(([value, label]) => ({
+			value,
+			label: t(label)
+		})),
+		onChange: (value) => {
+			location.hash = "#/operations/" + value;
+		}
+	});
+	main.append(pageHeader({
+		title: t("nav_operations"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => list.load().catch(() => {})
+		})]
+	}), h("div", { class: "global-ops-tools" }, filters, searchField), list.box);
+	if (memory.query) list.filter(memory.query);
 	await list.load().catch(() => {});
 	const reload = debounceRefresh(() => list.load(), 500);
 	return onEvents((ev) => {
@@ -40498,7 +46955,10 @@ async function viewOperation(main, id) {
 				return;
 			}
 			freshPage();
-			fill(panel, pageHeader({ title: op.action }), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(op.error_code, "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, h("dt", {}, "Target"), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, "Refs"), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, "Result"), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
+			fill(panel, pageHeader({
+				title: actionLabel(op.action),
+				pill: statusPill(operationStatusKey(op.status))
+			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, s.status), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
@@ -40529,40 +46989,113 @@ function mergeRecovery(op) {
 		"data-merge-recovery": true
 	}, h("h2", {}, t("delivery_merge_recovery")), h("p", { class: "note" }, t("delivery_merge_held")), h("dl", { class: "kv" }, ...["source", "destination"].flatMap((label, i) => [h("dt", {}, t("delivery_merge_" + label)), h("dd", {}, h("code", {}, refs.carrier_paths?.[i] || t("obs_unknown")))])), ...frames.map((step) => h("p", {}, h("code", {}, step.name), " · ", t(step.status === "succeeded" ? "delivery_merge_ack" : "delivery_merge_no_ack"), " · ", observationTime(step.finished_at || step.started_at))), h("p", {}, t("delivery_merge_safe_reads")), h("p", { class: "muted" }, t("delivery_merge_closeout")), refs.host && refs.session_id ? observationLink("session", `${refs.host}/${refs.session_id}`) : null);
 }
-function viewSettings(main) {
-	if (state.caps?.managed_installation) return viewManagedSettings(main);
-	if (nativeDesktop) return viewNativeSettings(main);
-	if (state.token && state.caps && state.token === "managed-browser-session") {
-		main.append(pageHeader({ title: t("nav_settings") }), h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), h("p", {}, t("connected_as", {
-			actor: state.caps.actor,
-			scopes: state.caps.scopes.join(", ")
-		})), h("p", { class: "muted" }, t("managed_browser_help")), h("button", {
-			class: "secondary",
-			onclick: () => {
-				disconnect();
-				route();
+function fleetEmpty() {
+	return h("section", { class: "panel" }, emptyState({
+		title: t("global_fleet_empty"),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href: setupGuide()
+		}, t("global_setup_guide"))
+	}));
+}
+function connectionFacts() {
+	const endpoint = state.endpoint || (state.token ? location.origin : "");
+	const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+	const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+	return h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), h("dd", {}, h("span", { class: `ui-pill tone-${tone}` }, t(key))), h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
+}
+function openSettings(main, { exclusive = false } = {}) {
+	const frame = settingsFrame({
+		h,
+		t,
+		exclusive,
+		sections: [
+			{
+				id: "connection",
+				label: t("global_nav_connection")
+			},
+			{
+				id: "desktop",
+				label: t("global_nav_desktop"),
+				hidden: true
+			},
+			{
+				id: "models",
+				label: t("global_nav_models"),
+				hidden: true
+			},
+			{
+				id: "fleet",
+				label: t("global_nav_fleet"),
+				hidden: true
+			},
+			{
+				id: "updates",
+				label: t("global_nav_updates"),
+				hidden: true
+			},
+			{
+				id: "about",
+				label: t("global_nav_about")
 			}
-		}, t("disconnect"))));
-		return mountTailscale(main, {
-			h,
-			t
-		});
-	}
+		]
+	});
+	if (state.token && state.caps) main.append(pageHeader({
+		title: t("ui_settings"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => route()
+		})]
+	}));
+	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("a", { href: setupGuide() }, t("global_setup_guide"))));
+	main.append(frame.root);
+	return frame;
+}
+function viewBrowserSettings(main) {
+	const frame = openSettings(main, { exclusive: true });
+	const managed = state.token === browserSessionToken;
+	const facts = connectionFacts();
+	facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {
+		actor: state.caps.actor,
+		scopes: state.caps.scopes.join(", ")
+	})));
+	const footer = h("div", { class: "global-card-footer" });
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, managed ? disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("managed_browser_help"))
+	}) : null, h("button", {
+		class: "danger",
+		onclick: () => {
+			disconnect();
+			route();
+		}
+	}, t("disconnect")), footer));
+	const note = mountTailscale(footer, {
+		h,
+		t,
+		presentation: "note"
+	});
+	frame.show("fleet");
+	frame.panel("fleet").append(fleetEmpty());
+	return note;
+}
+function viewBrowserSignedOut(main) {
 	const input = h("input", {
 		type: "password",
 		autocomplete: "off",
 		placeholder: "batc_…"
 	});
 	const remember = h("input", { type: "checkbox" });
-	const info = h("p", { class: "muted" });
-	if (state.caps) info.textContent = t("connected_as", {
-		actor: state.caps.actor,
-		scopes: state.caps.scopes.join(", ")
+	const info = h("p", {
+		class: "muted",
+		role: "status"
 	});
-	else if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
-	main.append(pageHeader({ title: t("nav_settings") }), h("div", { class: "panel" }, h("div", { class: "filters connection-controls" }, h("label", { class: "connection-token" }, t("token"), input), h("button", {
-		class: "primary",
-		onclick: async () => {
+	if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
+	const form = h("form", {
+		class: "global-connect-form",
+		onsubmit: async (event) => {
+			event.preventDefault();
 			disconnect();
 			state.token = input.value.trim();
 			try {
@@ -40575,17 +47108,35 @@ function viewSettings(main) {
 				info.replaceChildren(errorBox(e));
 			}
 		}
-	}, t("connect")), h("button", {
-		class: "secondary",
-		onclick: () => {
-			disconnect();
-			route();
-		}
-	}, t("disconnect"))), h("label", {}, remember, " ", t("remember")), h("p", { class: "muted" }, t("token_help")), info));
-	return mountTailscale(main, {
+	}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
+		class: "primary",
+		type: "submit"
+	}, t("connect")), h("a", {
+		class: "global-quiet-link",
+		href: setupGuide()
+	}, t("global_setup_guide"))), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("token_help"))
+	}), info);
+	const footer = h("div", { class: "global-card-footer" });
+	const root = firstRunCard({
 		h,
-		t
+		t,
+		body: form,
+		footer
 	});
+	main.append(root);
+	mountTailscale(footer, {
+		h,
+		t,
+		presentation: "note"
+	});
+}
+function viewSettings(main) {
+	if (state.caps?.managed_installation) return viewManagedSettings(main);
+	if (nativeDesktop) return viewNativeSettings(main);
+	if (state.token && state.caps) return viewBrowserSettings(main);
+	viewBrowserSignedOut(main);
 }
 async function viewManagedSettings(main) {
 	const connection = {
@@ -40595,11 +47146,15 @@ async function viewManagedSettings(main) {
 	};
 	const guard = () => assertView(connection);
 	const status = h("div", { role: "status" });
-	const local = h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), h("p", {}, t("connected_as", {
+	const frame = openSettings(main, { exclusive: !nativeDesktop });
+	const local = h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), connectionFacts(), h("p", {}, t("connected_as", {
 		actor: state.caps.actor,
 		scopes: state.caps.scopes.join(", ")
-	})), h("p", { class: "muted" }, t("managed_background_help")), h("details", { "data-managed-locations": "" }, h("summary", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))), status);
-	main.append(pageHeader({ title: t("nav_settings") }), local);
+	})), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("managed_background_help"))
+	}), h("details", { "data-managed-locations": "" }, h("summary", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))), status);
+	frame.panel("connection").append(local);
 	const setup = managedSetupPanel({
 		h,
 		t,
@@ -40615,7 +47170,7 @@ async function viewManagedSettings(main) {
 			state.caps = caps;
 		}
 	});
-	main.append(setup.box);
+	frame.panel("connection").append(setup.box);
 	await setup.load();
 	try {
 		guard();
@@ -40624,9 +47179,9 @@ async function viewManagedSettings(main) {
 		if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(error.code)) return;
 		throw error;
 	}
-	const fleetRoot = h("div");
-	main.append(fleetRoot);
-	let disposeFleet;
+	const fleetRoot = frame.panel("fleet");
+	frame.show("fleet");
+	let disposeFleet, disposeTailscale;
 	if (nativeDesktop) {
 		const login = h("input", {
 			type: "checkbox",
@@ -40719,10 +47274,11 @@ async function viewManagedSettings(main) {
 						contract_version: "2026-10-08"
 					});
 				} }, h("p", { class: "muted" }, t("managed_join_help")), h("div", { class: "capture-fields" }, h("label", {}, t("desktop_endpoint"), endpoint), h("label", {}, t("desktop_expected_actor"), actor)), review);
-				main.append(h("details", {
+				frame.panel("desktop").append(h("details", {
 					class: "panel",
 					"data-managed-join": ""
 				}, h("summary", {}, t("managed_join_existing")), form));
+				frame.show("desktop");
 			}
 		} catch (error) {
 			if (connection.generation === generation) status.append(errorBox(error));
@@ -40731,21 +47287,33 @@ async function viewManagedSettings(main) {
 			h,
 			t
 		});
-	} else local.append(h("p", { class: "muted" }, t("managed_browser_help")), h("button", {
-		class: "secondary",
-		onclick: () => {
-			disconnect();
-			route();
-		}
-	}, t("disconnect")));
-	const disposeTailscale = mountTailscale(fleetRoot, {
-		h,
-		t
-	});
+		disposeTailscale = mountTailscale(fleetRoot, {
+			h,
+			t
+		});
+	} else {
+		const footer = h("div", { class: "global-card-footer" });
+		local.append(disclosure({
+			label: t("global_details"),
+			body: h("p", {}, t("managed_browser_help"))
+		}), h("button", {
+			class: "danger",
+			onclick: () => {
+				disconnect();
+				route();
+			}
+		}, t("disconnect")), footer);
+		disposeTailscale = mountTailscale(footer, {
+			h,
+			t,
+			presentation: "note"
+		});
+		fleetRoot.append(fleetEmpty());
+	}
 	return () => {
 		setup.dispose();
 		disposeFleet?.();
-		disposeTailscale();
+		disposeTailscale?.();
 	};
 }
 async function nativeTransition(kind, config = null) {
@@ -40843,16 +47411,20 @@ async function viewNativeSettings(main) {
 	const enroll = action("enroll", "desktop_add_credential");
 	const reload = action("reload", "desktop_reload_configuration");
 	const forget = action("forget", "desktop_forget_credential");
-	const leave = action("disconnect", "disconnect");
+	const leave = action("disconnect", "disconnect", "danger");
 	const actions = h("div", { class: "actions" }, connect, enroll, reload, leave);
 	const saved = h("div", {}, h("p", { class: "muted" }, t("desktop_forget_help")), forget);
 	const connectionDetails = h("details", {}, h("summary", {}, t("connection_details")), technicalDetails, help);
 	const introduction = h("details", {}, h("summary", {}, t("delivery_setup_title")), h("ol", {}, h("li", {}, t("delivery_setup_central")), h("li", {}, t("delivery_setup_identity")), h("li", {}, t("delivery_setup_mode"))));
 	const localDetails = h("details", { class: "panel" }, h("summary", {}, t("desktop_local")), h("p", { class: "muted" }, t("desktop_dashboard_only")));
-	main.append(pageHeader({ title: t("nav_settings") }), h("section", {
+	const frame = openSettings(main);
+	frame.panel("connection").append(h("section", {
 		class: "panel native-connection",
 		"aria-label": t("desktop_connection")
-	}, h("h2", {}, t("desktop_connection")), setup, details, platform, actions, info, connectionDetails, introduction, saved), localDetails, fleetRoot, updateRoot);
+	}, h("h2", {}, t("desktop_connection")), setup, details, platform, actions, info, connectionDetails, introduction, saved));
+	frame.panel("desktop").append(localDetails);
+	frame.panel("fleet").append(fleetRoot);
+	frame.panel("updates").append(updateRoot);
 	const showInfo = () => {
 		info.replaceChildren();
 		if (state.caps) info.append(h("p", {}, t("connected_as", {
@@ -40954,7 +47526,15 @@ async function viewNativeSettings(main) {
 		if (mine === generation) info.append(errorBox(error));
 	}
 	if (mine !== generation) return;
-	if (firstConnection) return () => disposeUpdates?.();
+	if (disposeUpdates) frame.show("updates");
+	if (firstConnection) {
+		setup.prepend(h("span", {
+			class: "brand-mark",
+			"aria-hidden": "true"
+		}), h("p", {}, t("global_first_sentence")), h("a", { href: setupGuide() }, t("global_setup_guide")));
+		return () => disposeUpdates?.();
+	}
+	frame.show("desktop");
 	const disposeFleet = await mountFleet(fleetRoot, {
 		h,
 		t
@@ -40968,6 +47548,7 @@ async function viewNativeSettings(main) {
 		h,
 		t
 	});
+	frame.show("fleet");
 	return () => {
 		disposeFleet?.();
 		disposeUpdates?.();
@@ -41027,22 +47608,16 @@ function indent(el, depth) {
 	return el;
 }
 function stateChip(c) {
-	const cls = {
-		done: "ok",
-		awaiting_approval: "warn",
-		doing: "info",
-		waiting: "warn"
-	}[c.display_state] || "";
-	return chip(t("wi_state_" + c.display_state), cls);
+	return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
 	return [
-		c.doing ? chip(`${t("wi_state_doing")} ${c.doing}`, "info") : null,
-		c.awaiting_approval ? chip(`${t("wi_state_awaiting_approval")} ${c.awaiting_approval}`, "warn") : null,
-		chip(t("wi_done_of", {
+		c.doing ? h("span", { class: "ui-pill tone-info" }, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+		c.awaiting_approval ? h("span", { class: "ui-pill tone-review" }, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+		h("span", { class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "") }, t("wi_done_of", {
 			done: c.done,
 			total: c.total
-		}), c.total && c.done === c.total ? "ok" : "")
+		}))
 	];
 }
 function orderButtons(sibs, i, key, run) {
@@ -41207,7 +47782,17 @@ async function viewProjects(main) {
 		}
 	});
 	const showArchived = h("input", { type: "checkbox" });
-	main.append(pageHeader({ title: t("nav_projects") }), h("p", { class: "muted" }, t("projects_help")), manageNote() || "", create.box, out, tree, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+	main.append(pageHeader({
+		title: t("nav_projects"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => render().catch(() => {})
+		})]
+	}), disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("projects_help"))
+	}), manageNote() || "", create.box, out, tree, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens;
 		try {
@@ -41450,7 +48035,7 @@ async function viewProject(main, pid) {
 			const row = indent(h("div", { class: "row tree" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
 				class: "title",
 				href: `#/item/${w.work_item_id}`
-			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, w.completion.pending ? chip(t("needs_decision"), "warn") : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
+			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
 			if (may("manage") && !p.archived) dr.box.prepend(h("div", { class: "actions" }, ...orderButtons(sibs, i, "work_item_id", run)));
 			if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({
 				h,
@@ -41912,11 +48497,37 @@ function eventDetail(b) {
 function linkedItems(items) {
 	return h("p", { class: "muted" }, t("linked_items"), ": ", ...items.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/item/${x.work_item_id}` }, x.title)]));
 }
-function workItemRow(w) {
-	return h("div", { class: "row" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
-		class: "title",
-		href: `#/item/${w.work_item_id}`
-	}, w.title), h("div", { class: "muted" }, [w.project_name, w.completion.claimed_by && t("claimed_by", { who: w.completion.claimed_by })].filter(Boolean).join(" · "))), w.reading?.unread ? chip(t("reading_unread")) : null, w.completion.pending ? chip(t("needs_decision"), "warn") : null);
+function workItemRow(w, open) {
+	const title = w.title || w.work_item_id;
+	const href = `#/item/${encodeURIComponent(w.work_item_id)}`;
+	const key = w.work_item_id;
+	const meta = joinLabel([
+		w.project_name,
+		w.completion?.claimed_by ? t("claimed_by", { who: w.completion.claimed_by }) : "",
+		w.reading?.unread ? t("reading_unread") : ""
+	]);
+	return inboxRow({
+		h,
+		key,
+		title,
+		href,
+		meta,
+		pill: statusPill(workStatusKey(w.completion?.display_state)),
+		action: h("a", {
+			class: "ui-button secondary ui-sm",
+			href
+		}, t("global_review")),
+		detailsLabel: t("global_details_for", { title }),
+		onOpen: () => open?.(key, title, [
+			statusPill(workStatusKey(w.completion?.display_state)),
+			meta ? h("p", {}, meta) : null,
+			w.completion?.pending ? h("p", {}, t("needs_decision")) : null,
+			disclosure({
+				label: t("global_details"),
+				body: h("dl", { class: "kv" }, h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, w.work_item_id || "—")))
+			})
+		])
+	});
 }
 async function viewCleanup(main, section, ident) {
 	const connection = {
@@ -42305,7 +48916,21 @@ async function viewCleanup(main, section, ident) {
 			fill(retainedOut, errorBox(e));
 		}
 	}
-	main.append(pageHeader({ title: t("nav_cleanup") }), h("p", { class: "muted" }, t("cleanup_intro")), section === "task" || supportsTask ? h("p", { class: "muted" }, t("cleanup_task_help")) : "");
+	main.append(pageHeader({
+		title: t("nav_cleanup"),
+		actions: [iconButton({
+			icon: "refresh-cw",
+			label: t("global_refresh"),
+			onClick: () => settleRefreshes([
+				loadHistory(),
+				loadRetained(),
+				refreshCleanup(true)
+			]).catch(() => {})
+		})]
+	}), disclosure({
+		label: t("global_details"),
+		body: h("div", {}, h("p", {}, t("cleanup_intro")), section === "task" || supportsTask ? h("p", {}, t("cleanup_task_help")) : null)
+	}));
 	if (section === "resource") {
 		try {
 			const data = await api("GET", `/cleanup-tombstones/${encodeURIComponent(ident)}`);
@@ -42359,6 +48984,7 @@ async function viewApprovals(main) {
 		opStatus,
 		storageKey: `batc.approvals.${connection.namespace}`
 	});
+	panel.box.classList.add("global-form");
 	main.append(h("a", { href: "#/sessions" }, t("sessions_title")), pageHeader({ title: t("bulk_title") }), panel.box);
 	try {
 		await panel.refresh();
@@ -42742,7 +49368,7 @@ function mountWorkspace(name) {
 var teardown = null;
 var generation = 0;
 async function route() {
-	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
+	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (nextName === "pm") {
 		if (nextView?.startsWith("pmt_")) {
 			nextThread = nextView;
@@ -42762,7 +49388,7 @@ async function route() {
 		teardown = null;
 	}
 	freshPage();
-	let [name, ...rest] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
+	let [name, ...rest] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (name === "home" && state.token && state.caps?.managed_installation && !state.caps.hosts?.length) name = "settings";
 	mountWorkspace(name);
 	paintConnection(true);
@@ -42823,7 +49449,13 @@ async function route() {
 			onEvents,
 			errorBox
 		});
-		main.append(preferences.box);
+		const slot = main.querySelector("[data-settings-models]");
+		const tab = main.querySelector("[data-settings-nav=\"models\"]");
+		if (slot) {
+			slot.append(preferences.box);
+			if (tab) tab.hidden = false;
+			if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
+		} else main.append(preferences.box);
 	}
 	if (name === "project" && state.caps?.features?.project_skills?.version === 1) {
 		const connection = {

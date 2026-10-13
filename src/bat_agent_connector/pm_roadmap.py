@@ -10,9 +10,9 @@ import hashlib
 import json
 import re
 import time
-from datetime import date
 
 from . import pm_evidence, pm_plans, pm_snapshots, pm_workspace
+from .iso_time import parse_date
 from .operations import ActionDef, OperationError
 
 MAX_MILESTONES = 100
@@ -57,7 +57,7 @@ def _date(value):
     if not isinstance(value, str) or not _DATE.fullmatch(value):
         raise _bad("INVALID_PARAMS", "Dates must be YYYY-MM-DD calendar dates or null for unknown")
     try:
-        date.fromisoformat(value)
+        parse_date(value)
     except ValueError:
         raise _bad("INVALID_PARAMS", "The calendar date does not exist") from None
     return value
