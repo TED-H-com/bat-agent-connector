@@ -123,6 +123,9 @@
   operation after lost replies. Shared browser/Tauri UI, CLI, MCP and canonical workflow `.9`
   preserve the same request; human checkouts and remote refs remain unchanged.
 
+- Windows Fleet core tests give PowerShell fixtures their own bounded startup phase before the unchanged work
+  deadline, and start them one at a time.
+
 - Add central durable `session.start`, exact workspace discovery and a shared start form. Save
   the original request before submission; reconcile unknown start/send outcomes and preserve retained
   worktrees for reviewed cleanup. Publish the same workflow in canonical agent skill `.8`.

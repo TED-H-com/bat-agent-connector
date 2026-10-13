@@ -2,9 +2,10 @@
 use bat_fleet_core::{discovery::Backend, installation::canonical_local, windows_startup::Codec};
 use std::{
     path::PathBuf,
-    process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
+#[path = "support/powershell.rs"]
+mod powershell_fixture;
 #[path = "support/public_installation.rs"]
 mod public_installation;
 struct Temp(PathBuf);
@@ -211,20 +212,13 @@ fn public_rust_layout_previews_and_applies_startup_without_legacy_files() {
 fn real_wscript_shell_shortcut_uses_kit_format_but_modified_arguments_refuse() {
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use windows_sys::Win32::Storage::FileSystem::GetShortPathNameW;
-    struct Owned(Child);
-    impl Drop for Owned {
-        fn drop(&mut self) {
-            let _ = self.0.kill();
-            let _ = self.0.wait();
-        }
-    }
     let t = Temp::new();
     let c = t.codec();
     // Read-only relative to the installed system: all shortcuts/targets live in this temp fixture.
     let script = t.0.join("write-fixture.ps1");
     std::fs::write(
         &script,
-        br#"$ErrorActionPreference='Stop'
+        [powershell_fixture::READY_SCRIPT, r#"$ErrorActionPreference='Stop'
 $r=$env:BAT_FLEET_STARTUP_FIXTURE
 $ws=New-Object -ComObject WScript.Shell
 $link=Join-Path $r 'fixture.lnk'
@@ -258,11 +252,9 @@ $sc.Save()
 $read=$ws.CreateShortcut($link)
 $diagnostic=@{target=$read.TargetPath;arguments=$read.Arguments;working=$read.WorkingDirectory} | ConvertTo-Json -Compress
 [IO.File]::WriteAllText((Join-Path $r 'fixture-diagnostic.json'),$diagnostic)
-"#,
+"#].concat(),
     )
     .unwrap();
-    let exe = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
     let long_root = canonical_local(&t.0).unwrap();
     let input: Vec<u16> = long_root.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut output = vec![0u16; 32768];
@@ -284,44 +276,22 @@ $diagnostic=@{target=$read.TargetPath;arguments=$read.Arguments;working=$read.Wo
                 if backend == Backend::Rust && case == "reparse" {
                     continue; // the PS case proves directory aliases are not resolved into ownership
                 }
-                let mut child = Owned(
-                    Command::new(&exe)
-                        .args([
-                            "-NoProfile",
-                            "-NonInteractive",
-                            "-ExecutionPolicy",
-                            "Bypass",
-                            "-File",
-                        ])
-                        .arg(&script)
-                        .env("BAT_FLEET_STARTUP_FIXTURE", root)
-                        .env("BAT_FLEET_STARTUP_CASE", case)
-                        .env(
-                            "BAT_FLEET_STARTUP_BACKEND",
-                            if backend == Backend::Powershell {
-                                "powershell"
-                            } else {
-                                "rust"
-                            },
-                        )
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
-                        .unwrap(),
-                );
-                let until = Instant::now() + Duration::from_secs(30);
-                loop {
-                    if let Some(status) = child.0.try_wait().unwrap() {
-                        assert!(
-                            status.success(),
-                            "fixture creation failed: {backend:?}/{spelling}/{case}"
-                        );
-                        break;
-                    }
-                    assert!(Instant::now() < until);
-                    std::thread::sleep(Duration::from_millis(20));
-                }
+                let process = powershell_fixture::Fixture::new();
+                let mut command = powershell_fixture::command();
+                command
+                    .args(["-ExecutionPolicy", "Bypass", "-File"])
+                    .arg(&script)
+                    .env("BAT_FLEET_STARTUP_FIXTURE", root)
+                    .env("BAT_FLEET_STARTUP_CASE", case)
+                    .env(
+                        "BAT_FLEET_STARTUP_BACKEND",
+                        if backend == Backend::Powershell {
+                            "powershell"
+                        } else {
+                            "rust"
+                        },
+                    );
+                process.run(&mut command, Duration::from_secs(30));
                 let bytes = std::fs::read(t.0.join("fixture.lnk")).unwrap();
                 let actual = c.classify(&bytes);
                 let expected = if matches!(case, "exact" | "case") {
