@@ -1382,6 +1382,16 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                             .as_ref()
                             .is_some_and(|pattern| pattern.is_match(&value))
                 }
+                "tz" if path.ends_with("/resources") => {
+                    (1..=64).contains(&value.len())
+                        && value
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b"/_.+-".contains(&b))
+                        && !value.contains("//")
+                        && !value.contains("..")
+                        && !value.starts_with('/')
+                        && !value.ends_with('/')
+                }
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
                         && serde_json::from_str::<serde_json::Value>(&value)
@@ -1946,6 +1956,17 @@ mod tests {
             "{root}?since=2026-10-01T00%3A00%3A00Z&until=2026-10-12T12%3A00%3A00.000Z"
         )))
         .is_ok());
+        assert!(validate_request(&get(&format!(
+            "{root}?since=2026-10-01T00%3A00%3A00Z&until=2026-10-08T00%3A00%3A00Z&tz=Asia%2FTaipei"
+        )))
+        .is_ok());
+        assert!(validate_request(&get(&format!("{root}?tz=UTC"))).is_ok());
+        assert!(validate_request(&get(&format!("{root}?tz=Etc%2FGMT%2B8"))).is_ok());
+        assert!(validate_request(&get(&format!("{root}?tz=America%2FArgentina%2FBuenos_Aires"))).is_ok());
+        assert!(validate_request(&get(
+            "/pm/workspaces/ws_11111111111111111111111111111111/plans?tz=UTC"
+        ))
+        .is_err());
         for query in [
             "path=/private/session.jsonl",
             "refresh=1",
@@ -1953,6 +1974,13 @@ mod tests {
             "since=yesterday",
             "since=2026-10-01",
             "since=2026-10-01T00:00:00Z&since=2026-10-02T00:00:00Z",
+            "tz=",
+            "tz=../UTC",
+            "tz=/UTC",
+            "tz=UTC/",
+            "tz=America//New_York",
+            "tz=Not%20A%20Zone",
+            "tz=UTC&tz=Asia%2FTaipei",
         ] {
             assert!(
                 validate_request(&get(&format!("{root}?{query}"))).is_err(),

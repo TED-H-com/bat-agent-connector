@@ -262,7 +262,8 @@ action、schema、外部同步、派工政策或 native 權限。
 
 #122 已將 `feat/pm-v12-resource-observation-20261012` 合併為 `2bf152d`，從 #121 接續。新增中央定期收集
 明確綁定的本機 Codex／Claude 用量檔、原 cursor／去重、有限來源配額窗與共用資源頁。
-精確範圍、來源格式、權限及剩餘工作见 [Agent resource observations](agent-resource-observation.md)。
+精確範圍、來源格式、權限及剩餘工作見 [Agent resource observations](agent-resource-observation.md)。
+同一投影現在附帶每日本地用量桶，供之後的趨勢圖使用；這還不是圖表 UI。
 這不是完整第 3 節：遠端主機、完整配額、合格交付／返工歸因、容量、區間預測和策略安排仍待做。
 候選檢查、合併後主線 Windows 失敗及安裝／live 界線見
 [資源交接](../handoff/2026-10-12-pm-v1.2-resources.md)。

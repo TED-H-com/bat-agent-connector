@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
+  an optional IANA `tz` (default UTC) and returns per-source local days for the selected
+  window. A day is complete only when the stored cursor had reached EOF at or after that
+  day; missing counters and uncovered days stay null, and withdrawn sources omit buckets
+  together with their totals.
+
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
   the mapping, or the name on the published issue when the mapping omits it,

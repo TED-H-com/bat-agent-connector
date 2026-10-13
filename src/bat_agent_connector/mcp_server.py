@@ -760,9 +760,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read due time, policy limits and current blockers; this never starts work."""
         return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
 
-    async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None) -> dict[str, Any]:
-        """Read observed local CLI usage and reported quota; never collect or dispatch from a read."""
-        return await pm_daemon("pm_resources_get", workspace_id=workspace_id, since=since, until=until)
+    async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None,
+                               tz: str | None = None) -> dict[str, Any]:
+        """Read observed local CLI usage, daily buckets and reported quota; never collect or dispatch from a read."""
+        return await pm_daemon("pm_resources_get", workspace_id=workspace_id, since=since, until=until, tz=tz)
 
     async def pm_ahp_adapters_list(workspace_id: str) -> dict[str, Any]:
         """List administrator-granted AHP observer IDs; never returns endpoints or credentials."""
