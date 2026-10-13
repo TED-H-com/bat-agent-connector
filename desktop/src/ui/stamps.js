@@ -29,8 +29,20 @@ export function timeLabel(t, key, vars) {
 export function refreshTimeStamps(root = document, now = Date.now()) {
   for (const node of root.querySelectorAll('time[data-ui-time]')) {
     const text = (node.dataset.uiTime === 'date' ? compactDate : compactTime)(node.dateTime, {locale, now});
-    // Keep the node itself, focus, selection and all surrounding content intact.
-    if (text && node.textContent !== text) node.textContent = text;
+    if (!text || node.textContent === text) continue;
+    // timeStamp creates one text node. Retain it so a selection spanning this
+    // stamp stays attached; restore endpoints inside the changed text as well.
+    const content = node.firstChild, selection = document.getSelection();
+    if (content?.nodeType !== Node.TEXT_NODE) continue;
+    const anchor = selection?.anchorNode, focus = selection?.focusNode;
+    const anchorOffset = selection?.anchorOffset, focusOffset = selection?.focusOffset;
+    const selected = anchor === content || focus === content, length = content.length;
+    content.data = text;
+    if (selected) {
+      const offset = (target, value) => target !== content ? value
+        : value === length ? text.length : Math.min(value, text.length);
+      selection.setBaseAndExtent(anchor, offset(anchor, anchorOffset), focus, offset(focus, focusOffset));
+    }
   }
 }
 let started = false;

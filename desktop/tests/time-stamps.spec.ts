@@ -34,3 +34,28 @@ for (const locale of ['en', 'zh-TW']) test(`shared stamps tick without rebuildin
   await expect(page.locator('input')).toHaveValue('retained draft');
   await context.close();
 });
+
+for (const locale of ['en', 'zh-TW']) test(`ticker retains a backward text selection inside a stamp ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, timezoneId:'UTC'}), page = await context.newPage();
+  const now = Date.parse('2026-10-13T15:14:00Z');
+  await page.clock.install({time:now});
+  await page.goto('/ui-components.html');
+  await page.evaluate(async now => {
+    const {timeStamp, startTimeTicker} = await import('/src/ui/stamps.js');
+    const stamp = timeStamp((now - 59 * 60000) / 1000) as HTMLElement;
+    document.getElementById('fixture')!.append(stamp);
+    const content = stamp.firstChild!;
+    (window as any).stampText = content;
+    document.getSelection()!.setBaseAndExtent(content, content.textContent!.length, content, 0);
+    startTimeTicker();
+  }, now);
+  await page.clock.fastForward(60000);
+  await expect(page.locator('time')).toHaveText(locale === 'en' ? '1h ago' : '1 小時前');
+  expect(await page.evaluate(() => {
+    const content = document.querySelector('time')!.firstChild!, selection = document.getSelection()!;
+    return {same:content === (window as any).stampText, text:selection.toString(),
+      anchor:selection.anchorNode === content && selection.anchorOffset === content.textContent!.length,
+      focus:selection.focusNode === content && selection.focusOffset === 0};
+  })).toEqual({same:true, text:locale === 'en' ? '1h ago' : '1 小時前', anchor:true, focus:true});
+  await context.close();
+});

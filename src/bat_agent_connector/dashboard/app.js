@@ -11298,7 +11298,17 @@ function refreshTimeStamps(root = document, now = Date.now()) {
 			locale,
 			now
 		});
-		if (text && node.textContent !== text) node.textContent = text;
+		if (!text || node.textContent === text) continue;
+		const content = node.firstChild, selection = document.getSelection();
+		if (content?.nodeType !== Node.TEXT_NODE) continue;
+		const anchor = selection?.anchorNode, focus = selection?.focusNode;
+		const anchorOffset = selection?.anchorOffset, focusOffset = selection?.focusOffset;
+		const selected = anchor === content || focus === content, length = content.length;
+		content.data = text;
+		if (selected) {
+			const offset = (target, value) => target !== content ? value : value === length ? text.length : Math.min(value, text.length);
+			selection.setBaseAndExtent(anchor, offset(anchor, anchorOffset), focus, offset(focus, focusOffset));
+		}
 	}
 }
 var started = false;
