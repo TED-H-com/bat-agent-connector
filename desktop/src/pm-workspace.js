@@ -203,6 +203,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
+  // Navigation preference must not wait for unrelated secondary reads to settle.
+  if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
   let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
   const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
@@ -243,7 +245,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let lastList = [], lastThreadList = null;
   function publishContext() {
     const stage = workspace ? lifecycle?.phase?.() : null;
-    if (workspace && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
     phasePill.hidden = !['idea','planning','development','maintain','paused','closed'].includes(stage);
     phasePill.textContent = phasePill.hidden ? '' : t('ui_phase_' + stage);
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',

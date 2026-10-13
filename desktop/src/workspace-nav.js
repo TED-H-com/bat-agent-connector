@@ -7,7 +7,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   let saved = [], hasPreference = false;
   try {const raw = sessionStorage.getItem(key); saved = JSON.parse(raw || '[]'); hasPreference = raw !== null;} catch { /* local preference only */ }
   const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
-  let pmWorkspace = null, bindingSource = false, globalTree = false, contextVersion = 0;
+  let pmWorkspace = null, bindingSource = false, bindingKnown = false, globalTree = false, contextVersion = 0;
   let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
   const status = h('div', {class: 'workspace-tree-status', role: 'status'});
   const tree = h('div', {class: 'workspace-tree'});
@@ -68,7 +68,8 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     });
     const nodes = projectNodes(roots);
     tree.replaceChildren(h('ul', {}, ...nodes));
-    if (!nodes.length) tree.append(h('p', {class: 'muted'}, t(query ? 'workspace_no_match' : pmWorkspace && !globalTree ? 'ui_no_bound_projects' : 'no_projects')));
+    if (!nodes.length) tree.append(h('p', {class: 'muted'}, t(query ? 'workspace_no_match'
+      : pmWorkspace && !globalTree ? bindingKnown ? 'ui_no_bound_projects' : 'ui_work_links_unavailable' : 'no_projects')));
     if (focus) [...tree.querySelectorAll('[data-tree-key]')].find(node => node.dataset.treeKey === focus)?.focus({preventScroll: true});
     filterSessions();
   };
@@ -108,7 +109,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
           const flatten = rows => rows.flatMap(row => [row, ...flatten(row.children || [])]);
           nextRoots = flatten(nextRoots).filter(row => ids.has(row.project_id)).map(row => ({...row, children: []}));
         }
-        current(); roots = nextRoots;
+        current(); roots = nextRoots; bindingKnown = bindingSource;
         if (!roots.length) projects.clear();
         if (!hasPreference && !expanded.size && roots.length) {expanded.add(roots[0].project_id); hasPreference = true; persist();}
         const ids = new Set();
@@ -152,7 +153,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         status.replaceChildren(); render();
       } catch (error) {
         if (version !== contextVersion || disposed) return;
-        alive(); if ([403, 404].includes(error.status)) {roots = []; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
+        alive(); if ([403, 404].includes(error.status)) {roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
         status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('workspace_stale')),
           h('button', {class: 'mini', onclick: () => refresh().catch(() => {})}, t('workspace_refresh')));
         throw error;
@@ -184,7 +185,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   return {box, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
     pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++;
-    roots = []; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false;
+    roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false;
     sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});
   }, select(hash) {

@@ -66,6 +66,7 @@ test('binding withdrawal removes Work rows; workspace names never imply bindings
   await page.locator('[data-pm-view=discussions]').click(); await page.locator('[data-pm-view=overview]').click();
   await page.reload(); await expect(page.locator('.workspace-tree').first()).not.toContainText('Documentation search');
   await expect(page.locator('.workspace-tree-status')).toContainText('scope');
+  await expect(page.locator('.workspace-tree').first()).toContainText('Work links unavailable');
 });
 test('mobile drawer traps focus, closes on Escape and returns to its opener', async ({page}) => {
   await page.setViewportSize({width:390,height:844});const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
@@ -178,4 +179,19 @@ for (const name of ['A workspace with a long descriptive project name that still
   expect(top!.height).toBe(48);expect(bounds!.y).toBeGreaterThanOrEqual(top!.y);expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(top!.y+48);
   await page.locator('#workspace-menu').click();await expect(page.locator('.shell-workspace-block')).toContainText(name);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+test('missing binding capability is unknown; an accessible empty binding page is known empty',async({page})=>{
+  const f=fixture();let supported=false;
+  await mountConversation(page,false,async input=>{
+    const result=await f.dispatch(input),path=input.path.split('?')[0];
+    if(path==='/bootstrap'||path==='/capabilities') {
+      const caps=path==='/bootstrap'?result.data.capabilities:result.data;caps.features.pm_workspaces.work_evidence=supported;
+    }
+    if(path===`/pm/workspaces/${workspaceId}/projects`) result.data.bindings=[];
+    return result;
+  });
+  await page.goto(route);const tree=page.locator('.workspace-tree').first();
+  await expect(tree).toContainText('Work links unavailable');await expect(tree).not.toContainText('No linked projects');
+  supported=true;await page.reload();await expect(tree).toContainText('No linked projects');
+  expect(f.pm.base.state.writes).toHaveLength(0);
 });

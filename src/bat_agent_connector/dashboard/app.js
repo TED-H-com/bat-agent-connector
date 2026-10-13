@@ -172,6 +172,7 @@ var uiStrings = {
 		ui_menu: "Open navigation",
 		ui_pending_loaded: "{n} pending loaded{more}",
 		ui_no_bound_projects: "No linked projects",
+		ui_work_links_unavailable: "Work links unavailable",
 		ui_bindings: "Project bindings",
 		ui_evidence: "Evidence",
 		ui_quality: "Quality reviews",
@@ -239,6 +240,7 @@ var uiStrings = {
 		ui_menu: "開啟導覽",
 		ui_pending_loaded: "已載入 {n} 筆待處理{more}",
 		ui_no_bound_projects: "尚無連結專案",
+		ui_work_links_unavailable: "無法取得工作連結",
 		ui_bindings: "專案綁定",
 		ui_evidence: "成果證據",
 		ui_quality: "品質審閱",
@@ -25306,6 +25308,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		main.append(h("p", {}, t("pm_unavailable")));
 		return;
 	}
+	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
 	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
 	const disclosureKey = JSON.stringify([
 		namespace,
@@ -25406,7 +25409,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let lastList = [], lastThreadList = null;
 	function publishContext() {
 		const stage = workspace ? lifecycle?.phase?.() : null;
-		if (workspace && threadId) rememberProjectView(namespace, workspaceId, "discussions");
 		phasePill.hidden = ![
 			"idea",
 			"planning",
@@ -26975,7 +26977,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		hasPreference = raw !== null;
 	} catch {}
 	const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
-	let pmWorkspace = null, bindingSource = false, globalTree = false, contextVersion = 0;
+	let pmWorkspace = null, bindingSource = false, bindingKnown = false, globalTree = false, contextVersion = 0;
 	let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
 	const status = h("div", {
 		class: "workspace-tree-status",
@@ -27067,7 +27069,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		});
 		const nodes = projectNodes(roots);
 		tree.replaceChildren(h("ul", {}, ...nodes));
-		if (!nodes.length) tree.append(h("p", { class: "muted" }, t(query ? "workspace_no_match" : pmWorkspace && !globalTree ? "ui_no_bound_projects" : "no_projects")));
+		if (!nodes.length) tree.append(h("p", { class: "muted" }, t(query ? "workspace_no_match" : pmWorkspace && !globalTree ? bindingKnown ? "ui_no_bound_projects" : "ui_work_links_unavailable" : "no_projects")));
 		if (focus) [...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus)?.focus({ preventScroll: true });
 		filterSessions();
 	};
@@ -27115,6 +27117,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				}
 				current();
 				roots = nextRoots;
+				bindingKnown = bindingSource;
 				if (!roots.length) projects.clear();
 				if (!hasPreference && !expanded.size && roots.length) {
 					expanded.add(roots[0].project_id);
@@ -27172,6 +27175,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				alive();
 				if ([403, 404].includes(error.status)) {
 					roots = [];
+					bindingKnown = false;
 					projects.clear();
 					sessionRows.replaceChildren();
 					more.hidden = true;
@@ -27229,6 +27233,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			globalTree = all;
 			contextVersion++;
 			roots = [];
+			bindingKnown = false;
 			projects.clear();
 			sessionRows.replaceChildren();
 			sessionsLoaded = false;
