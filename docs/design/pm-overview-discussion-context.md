@@ -45,11 +45,12 @@ CI 成功、merge 或 deploy 都不能單獨建立 requirement acceptance。
 Attention 只使用明確中央關係：未決 change、仍可採用的 conversation proposal（plan head 與討論內容未變）、
 較新的 plan head、生命週期尚未核對的操作、未解決（含 monitoring）的 issue／dependency、risk／assumption、
 目前維護 finding。Deviation 只有 forecast 晚於 baseline（`delta_days`）或原合格需求品質
-被明確 revoke 且尚未重新驗收。只讀目前 review heads，略過 `review_superseded`，任何目前有效驗收都會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
+被明確 revoke 且尚未重新驗收。以目前 review heads 為掃描單位，並讀同一 subject 最新的明確 revocation；開啟新審閱不清除偏差，
+只有目前有效驗收會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
 blocker／品質撤回／生命週期待處理為 high，一般決策／治理風險／日期偏差為 medium；
 finding 沿用原 severity，未提供則 low。這不是模型風險評分。
 
-每次掃描最多 50 個目前 work bindings、50 個 SQL 篩選後的未解決 governance records、50 個 quality review heads、
+每次掃描最多 50 個目前 work bindings、50 個 SQL 篩選後的未解決 governance records、50 個 quality review heads（每個最多加讀一筆撤回來源）、
 50 個仍可採用的 proposals；每個 work 最多 20 個 delivery records；生命週期最多 20 個 inflight；
 roadmap 沿用原有最多 100 個里程碑的文件上限。Finding 每來源最多 50 筆。
 `coverage.sources.*.next_cursor` 是對應既有來源清單 API 的 cursor，供詳情繼續讀取，

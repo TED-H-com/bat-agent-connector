@@ -178,19 +178,30 @@ class Projection:
     def quality(self, plan, work):
         from . import pm_quality_reviews
         def decode(stub):
-            row = pm_quality_reviews._review(self.ops, self.wid, stub['review_id'])
-            pm_quality_reviews._access(self.ops, self.principal, row)
-            return pm_quality_reviews._view(self.ops, self.principal, row)
-        rows = self.current('quality', 'pm_quality_reviews', """SELECT r.review_id,r.sequence
+            result = []
+            for rid in dict.fromkeys((stub['review_id'], stub['revoked_review_id'])):
+                if rid is None:
+                    continue
+                row = pm_quality_reviews._review(self.ops, self.wid, rid)
+                pm_quality_reviews._access(self.ops, self.principal, row)
+                result.append(pm_quality_reviews._view(self.ops, self.principal, row))
+            return result
+        # Keep the fifty-subject head budget. An unassessed new head cannot erase
+        # the latest explicit revocation for that same centrally recorded subject.
+        subjects = self.current('quality', 'pm_quality_reviews', """SELECT r.review_id,r.sequence,
+            (SELECT old.review_id FROM pm_quality_reviews old
+             JOIN pm_quality_review_records revoked ON revoked.review_id=old.review_id AND revoked.kind='revocation'
+             WHERE old.workspace_id=r.workspace_id AND old.work_item_id=r.work_item_id AND old.subject_key=r.subject_key
+             ORDER BY old.sequence DESC LIMIT 1) AS revoked_review_id
             FROM pm_quality_reviews r JOIN pm_quality_review_heads h ON h.review_id=r.review_id
             WHERE r.workspace_id=? ORDER BY r.sequence LIMIT ?""", decode)
+        rows = [row for subject in subjects for row in subject]
         accepted, reviewing, deliveries, revoked = set(), set(), [], {}
         if not plan:
             return accepted, reviewing, deliveries
         requirements = {r['id']: r for r in plan['document']['requirements']}
         for row in rows:
-            if ('review_superseded' in row['applicability_reasons']
-                    or row['work_item_id'] not in work or not self.visible(row, 'quality')):
+            if row['work_item_id'] not in work or not self.visible(row, 'quality'):
                 continue
             binding = work[row['work_item_id']]['binding']
             context = row['context']

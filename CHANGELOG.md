@@ -4,7 +4,8 @@
 
 - Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
   with adopted-requirement progress, explicit blockers, decisions, schedule/quality
-  deviations, current review/proposal state, rollback evidence and bounded source
+  deviations that retain revoked acceptance until reacceptance, current review/proposal
+  state, rollback evidence and bounded source
   coverage. Hidden lifecycle transitions and filtered pending operations remain
   incomplete. Hidden or oversized sources stay partial; source references respect
   the whole document's limit. Reads share a snapshot and request-local source cache.

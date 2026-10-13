@@ -1569,8 +1569,9 @@ This live projection is separate from fixed DocumentSnapshots. Read `unknown`,
 per-source `coverage`, `attention_truncated` and `recent_deliveries_complete` before
 stating totals. Progress uses only the adopted plan's requirements; accepted,
 merged, deployed and rolled_back are distinct evidence states. Only current review
-heads, unresolved governance and still-adoptable proposals contribute. Reacceptance
-clears a revoked-quality deviation. No maintenance policy means complete
+heads (plus each subject’s latest explicit revocation), unresolved governance and
+still-adoptable proposals contribute. Opening a new review does not clear a revoked
+acceptance; current reacceptance clears the deviation. No maintenance policy means complete
 not_configured findings, not an unavailable source. source_limit means references
 were omitted to respect the whole document's lineage bound; never infer totals.
 Source cursors belong to existing source-list tools, not to the overview call.
