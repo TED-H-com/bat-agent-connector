@@ -7,6 +7,13 @@ import {homedir} from 'node:os';
 import assert from 'node:assert/strict';
 import {chromium, expect as baseExpect} from '@playwright/test';
 const expect = baseExpect.configure({timeout: 30000});
+// A summary click toggles. Open only when the disclosure is closed, then prove it stayed open.
+async function openDisclosure(summary) {
+  const details = summary.locator('xpath=ancestor-or-self::details[1]');
+  await expect(summary).toBeVisible();
+  for (let attempt = 0; attempt < 2 && !await details.evaluate(node => node.open); attempt += 1) await summary.click();
+  await expect(details).toHaveJSProperty('open', true);
+}
 const source = resolve('..'), backend = resolve(process.env.BATC_PM_BACKEND || source);
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
@@ -76,7 +83,7 @@ try {
   const message = (await read()).messages[0];
   assert.equal(typeof message.created_at, 'number');
   await expect(page.locator('.pm-note time')).toHaveAttribute('datetime', new Date(message.created_at * 1000).toISOString());
-  await page.locator('[data-pm-add-input] summary').click();
+  await openDisclosure(page.locator('[data-pm-add-input] > summary'));
   const input = page.locator('[data-pm-action="pm.input.record"]');
   for (const [slot, value] of [['problem', 'Make the first action visible'], ['alternatives', 'Offer a guided tour later']]) {
     await input.getByLabel('Topic', {exact:true}).selectOption(slot);
@@ -87,7 +94,7 @@ try {
   }
   const original = (await read()).inputs.find(item => item.slot === 'problem');
   await page.locator(`[data-input-id="${original.input_id}"] input[type=checkbox]`).check();
-  await page.locator(`[data-input-id="${original.input_id}"] summary`).click();
+  await openDisclosure(page.locator(`[data-input-id="${original.input_id}"] summary`));
   const confirm = page.locator(`[data-input-id="${original.input_id}"] [data-pm-action="pm.input.confirm"]`);
   await confirm.getByLabel('Why this statement is confirmed', {exact:true}).fill('The owner selected this outcome');
   await confirm.getByRole('button', {name:'Confirm statement', exact:true}).click();
@@ -104,11 +111,11 @@ try {
   const data = await read(); assert.equal(data.thread.mode, 'planning'); assert.equal(data.draft.execution_authorized, false);
   assert.equal(data.draft.adopted, false); assert.deepEqual(data.draft.selected_input_ids, [confirmed.input_id]);
   assert.equal(data.draft.candidate_inputs.length, 1); assert.equal(data.messages.length, 1);
-  await page.locator('[data-pm-revision-editor] > summary').click();
+  await openDisclosure(page.locator('[data-pm-revision-editor] > summary'));
   await page.getByLabel('Plan title', {exact:true}).fill('First useful action');
   await page.getByRole('button', {name:'Save plan revision', exact:true}).click();
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
-  await page.locator('[data-pm-revision] > summary').click();
+  await openDisclosure(page.locator('[data-pm-revision] > summary'));
   await expect(page.locator('.pm-plan-document')).toContainText('First useful action');
   await expect(page.locator('[data-pm-action="pm.plan.adopt"] button[type="submit"]')).toBeDisabled();
   const plansResponse = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans`, {headers:{Authorization:'Bearer '+fixture.token}});
@@ -118,16 +125,17 @@ try {
   const revision = await revisionResponse.json();
   assert.deepEqual(revision.plan.document.selected_inputs.map(input=>input.input_id), [confirmed.input_id]);
   assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
-  // Planning keeps inputs behind its normal disclosure after reload.
-  await page.locator('[data-pm-information] > summary').click();
-  await page.locator('[data-pm-add-input] > summary').click();
+  // Planning keeps inputs behind its normal disclosure after reload. Open is idempotent:
+  // a pending request or an earlier refresh may already have expanded the section.
+  await openDisclosure(page.locator('[data-pm-information] > summary'));
+  await openDisclosure(page.locator('[data-pm-add-input] > summary'));
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
   await input.getByRole('button', {name:'Save input', exact:true}).click();
   await expect(page.locator('.pm-facts')).toContainText('Budget still needs an owner decision');
   const later = (await read()).inputs.find(item=>item.slot==='finance');
   await page.locator(`[data-input-id="${later.input_id}"] input[type=checkbox]`).check();
-  await page.locator('[data-pm-planning-revision] > summary').click();
+  await openDisclosure(page.locator('[data-pm-planning-revision] > summary'));
   const revise = page.locator('[data-pm-action="pm.thread.plan.revise"]');
   await revise.getByLabel('Why update this direction?', {exact:true}).fill('Include the new financial question without treating it as settled.');
   await revise.getByRole('button', {name:'Save updated Planning draft', exact:true}).click();
@@ -184,16 +192,16 @@ try {
   console.log('PM fixture recovered the Refresh click after a deliberately earlier background catalog read.');
   await expect(projectForm.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Track this existing project in the PM workspace');
   await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
-  await page.locator('[data-pm-work] > summary').click();
-  await page.getByText('Track this work',{exact:true}).first().click();
+  await openDisclosure(page.locator('[data-pm-work] > summary'));
+  await openDisclosure(page.locator('[data-pm-work] details > summary').filter({hasText:'Track this work'}));
   const workForm=page.locator('[data-pm-action="pm.work.bind"]');
   await workForm.getByLabel('Why associate this work?',{exact:true}).fill('Preserve the actual work identity');
   await workForm.getByRole('button',{name:'Track this work',exact:true}).click();
   await expect(page.locator('[data-pm-work] > summary')).toContainText('Tracked here');
-  await page.locator('[data-pm-work] > summary').click();
+  await openDisclosure(page.locator('[data-pm-work] > summary'));
   await page.locator('[data-pm-action="pm.evidence.capture"] button[type="submit"]').click();
   await expect(page.locator('[data-pm-evidence]')).toContainText('Definition of Done has not been assessed.');
-  await page.locator('[data-pm-fact] > summary').click();
+  await openDisclosure(page.locator('[data-pm-fact] > summary'));
   await expect(page.locator('[data-pm-fact]')).toContainText('To do');
   const captured=await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/work/${work.work_item_id}/capture`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
   assert.equal(captured.capture.work_item_id,work.work_item_id); assert.equal(captured.capture.dod,'unassessed');
@@ -201,11 +209,11 @@ try {
   assert.equal(captured.capture.execution_authorized,false);
   const comparison = page.locator('[data-pm-plan-diff]');
   await expect(comparison).toHaveCount(1);
-  await page.locator('[data-pm-plan-comparison] > summary').click();
+  await openDisclosure(page.locator('[data-pm-plan-comparison] > summary'));
   await expect(comparison.getByRole('button',{name:'Compare versions',exact:true})).toBeDisabled();
   await comparison.getByLabel('From version',{exact:true}).selectOption(plans.revisions[0].revision_id);
   await comparison.getByLabel('To version',{exact:true}).selectOption(updatedPlans.head.latest_revision_id);
-  await comparison.locator('[data-pm-diff-bindings] > summary').click();
+  await openDisclosure(comparison.locator('[data-pm-diff-bindings] > summary'));
   const associations = await (await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/work`, {headers:{Authorization:'Bearer '+fixture.token}})).json();
   const association = associations.bindings.find(binding=>binding.work_item_id===work.work_item_id);
   assert.ok(association);
@@ -230,7 +238,7 @@ try {
   await expect(comparisonResult).toContainText('Budget still needs an owner decision');
   await comparisonResult.getByText('Title and Markdown',{exact:true}).click();
   await expect(comparisonResult).toContainText('effect on scope has not been classified');
-  await comparisonResult.locator('summary').filter({hasText:'Review candidate'}).click();
+  await openDisclosure(comparisonResult.locator('summary').filter({hasText:'Review candidate'}));
   await expect(comparisonResult).toContainText('Title and work state were not saved');
   await page.locator('[data-pm-action="pm.snapshot.create"] button[type="submit"]').click();
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
@@ -241,7 +249,7 @@ try {
   assert.equal(brief.snapshot.work[0].capture.capture_id,captured.capture.capture_id);
   assert.equal(brief.snapshot.brief.deviations.status,'unassessed');
   const exports = page.locator('[data-pm-brief-export]');
-  await exports.locator('summary').click();
+  await openDisclosure(exports.locator('summary'));
   await exports.getByLabel('Report language',{exact:true}).selectOption('en');
   for (const format of ['markdown','html','svg']) {
     await exports.getByLabel('File format',{exact:true}).selectOption(format);
@@ -271,13 +279,13 @@ try {
   const activity=page.locator('[data-pm-lifecycle]');
   await expect(activity.locator('.pm-lifecycle-stage')).toHaveText('Idea');
   // Discussion planning did not change the independent workspace management stage.
-  await activity.locator('[data-pm-lifecycle-controls]>summary').click();
+  await openDisclosure(activity.locator('[data-pm-lifecycle-controls]>summary'));
   for(const [kind,label,reason,stage] of [
     ['pause','Pause new work','Keep the selected project context without new investment.','Paused'],
     ['close','Close this management workspace','Retain the completed discussion and original work.','Closed'],
     ['reopen','Reopen workspace','Resume selected development without replaying old requests.','Development'],
   ]){
-    await activity.locator(`[data-pm-lifecycle-intent="${kind}"]>summary`).click();
+    await openDisclosure(activity.locator(`[data-pm-lifecycle-intent="${kind}"]>summary`));
     const editor=activity.locator(`[data-pm-action="pm.lifecycle.${kind}"]`);
     if(kind==='reopen')await editor.getByLabel('Management stage',{exact:true}).selectOption('development');
     await editor.getByLabel('Reason and retained context',{exact:true}).fill(reason);

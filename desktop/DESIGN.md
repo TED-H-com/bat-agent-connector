@@ -64,6 +64,10 @@ traceability, work flow and existing editing tools. Summary sequence and adopted
 plan identity remain distinct. Report sources and full plan text expand on demand.
 RTM uses an expandable table with a work inspector; source IDs wrap below titles.
 Keep requirement order, expanded rows and filters stable during source refreshes.
+Discussion disclosures on a PM thread keep the open or closed state the reader
+chose. Live updates and Refresh do not collapse or expand them. A pending
+original request opens Inputs when that thread is first shown, including after
+a reload, and a later refresh leaves a reader-closed section closed.
 Remove withdrawn source facts from rows, counts and the inspector together.
 Composed labels drop a missing segment. A Brief section without a recorded status
 says Unknown, and an issue link uses the repository name on the mapping or, when

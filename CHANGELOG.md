@@ -65,6 +65,10 @@
   credential enrollment are outside this delivery. Real-environment acceptance is user-owned;
   these exclusions do not claim corresponding features or tests are complete.
 
+- Keep PM discussion disclosures as the reader left them during live updates and
+  Refresh. A pending original request still opens Inputs when the thread is first
+  shown, including after a reload, and does not expand that section again later.
+
 - Backport the official GLib iterator fix for RUSTSEC-2024-0429 into the Linux
   desktop dependency graph. Preserve the original crate version/license and exact
   source inventory; require resolved-source verification, an optimized iterator
