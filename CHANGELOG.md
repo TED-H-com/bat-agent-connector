@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Unify retained and new disclosure labels and chevrons.
+
 - Share compact, bilingual timestamps across the Web/Tauri views, with timezone
   tooltips, calendar-safe dates and one visibility-aware minute ticker.
 

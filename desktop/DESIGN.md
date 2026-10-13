@@ -98,6 +98,10 @@ and makes background content inert. `returnFocus` accepts an element or a callba
 resolved at close. It focuses a connected, rendered target outside hidden/inert
 ancestors, falling back to the creation-time opener under the same checks.
 
+All `details > summary` elements, including retained legacy forms, share the same
+chevron, 13px/500 label and 90-degree open rotation through `ui/components.css`.
+Native summary markers are hidden without rebuilding their contents.
+
 Canonical evidence labels: Not started, In progress, Waiting, In review, Accepted,
 Blocked, Done, Merged, Deployed, Unknown, Not assessed, Partial, Stale, Read-only,
 Draft, Adopted, Historical. Done describes content only; it does not mean delivered.
