@@ -1,12 +1,12 @@
 """Sourced RAID, change proposals and direction decisions; never work execution."""
 from __future__ import annotations
 
-import datetime as dt
 import json
 import re
 import time
 
 from . import pm_plans, pm_snapshots, pm_sprints, pm_workspace
+from .iso_time import parse_datetime
 from .operations import ActionDef, OperationError, OperationService
 
 KINDS = ('risk', 'assumption', 'issue', 'dependency', 'drift', 'change')
@@ -158,7 +158,7 @@ def _review_time(value):
     try:
         if value[-1] != 'Z' and (int(value[-5:-3]) > 23 or int(value[-2:]) > 59):
             raise ValueError
-        parsed = dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
+        parsed = parse_datetime(value)
         if not -24 * 3600 < parsed.utcoffset().total_seconds() < 24 * 3600:
             raise ValueError
     except ValueError:

@@ -19,6 +19,7 @@ from . import confinement, registry, resource_policy, task_control
 from .client import BatClient, event_session_id
 from .errors import BatError, ConnectionLost, InvokeError, InvokeTimeout, TaskControlRefused, WriteRefused
 from .fleet import Fleet
+from .iso_time import parse_datetime
 from .redact import redact
 from .safety import Audit
 from .summarize import clip, iso_local, summarize_message, summarize_pending, ts_to_ms
@@ -527,9 +528,7 @@ def marker_ms(after: Any) -> int | None:
     if tail.isdigit() and len(tail) >= 10:
         return ts_to_ms(int(tail))
     try:
-        from datetime import datetime
-
-        return int(datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp() * 1000)
+        return int(parse_datetime(s).timestamp() * 1000)
     except ValueError:
         raise BatError(f"cannot parse after={s!r}: pass the turn_marker from session_relay/session_send") from None
 
