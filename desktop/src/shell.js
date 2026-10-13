@@ -46,7 +46,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   aside.querySelector('.workspace-nav-footer').replaceChildren(h('a', {href: '#/home'}, icon('inbox'), t('ui_pending')), tools,
     h('a', {href: '#/settings'}, icon('settings'), t('ui_settings')));
   function switcher(label, className) {
-    const trigger = button({variant: 'ghost', label, icon: 'chevron-down', class: className, 'aria-label': t('ui_switch_workspace')});
+    const trigger = button({variant: 'ghost', label: h('span', {class: 'shell-workspace-name'}, label), icon: 'chevron-down',
+      class: className, title: label, 'aria-label': `${t('ui_switch_workspace')}: ${label}`});
     const control = menu({button: trigger, items: [...workspaces.map(row => ({label: row.name, href: `#/pm/${row.workspace_id}`})),
       ...(creator && currentRoute === 'pm' ? [{label: t('ui_new_workspace'), icon: 'plus', onSelect: () => {
         closeDrawer(false); if (!media.matches) toggle.focus(); creator?.();

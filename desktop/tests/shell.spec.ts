@@ -164,3 +164,18 @@ test('Overview rereads the selected fixed report after leaving for Settings',asy
   await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
   await expect(picker).toHaveValue(selected);expect(f.pm.base.state.writes).toHaveLength(0);
 });
+for (const name of ['A workspace with a long descriptive project name that still fits the central name limit', '跨團隊產品改善與長期維護計畫的工作空間名稱，需要在導覽列中完整保留並維持清楚的版面']) test(`long workspace label stays within the mobile topbar: ${name}`,async({page})=>{
+  await page.setViewportSize({width:390,height:844});const f=fixture();
+  await mountConversation(page,false,async input=>{
+    const result=await f.dispatch(input);
+    if(result.data?.workspace?.workspace_id===workspaceId) result.data.workspace.name=name;
+    for(const row of result.data?.workspaces||[]) if(row.workspace_id===workspaceId) row.name=name;
+    return result;
+  });
+  await page.goto(route);const crumb=page.locator('.shell-crumb-workspace');await expect(crumb).toHaveAttribute('title',name);
+  await expect(crumb).toHaveAccessibleName('Switch workspace: '+name);
+  const top=await page.locator('.top').boundingBox(), bounds=await crumb.boundingBox();
+  expect(top!.height).toBe(48);expect(bounds!.y).toBeGreaterThanOrEqual(top!.y);expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(top!.y+48);
+  await page.locator('#workspace-menu').click();await expect(page.locator('.shell-workspace-block')).toContainText(name);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

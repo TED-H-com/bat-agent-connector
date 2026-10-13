@@ -8825,10 +8825,11 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		const control = menu({
 			button: button({
 				variant: "ghost",
-				label,
+				label: h$1("span", { class: "shell-workspace-name" }, label),
 				icon: "chevron-down",
 				class: className,
-				"aria-label": t("ui_switch_workspace")
+				title: label,
+				"aria-label": `${t("ui_switch_workspace")}: ${label}`
 			}),
 			items: [...workspaces.map((row) => ({
 				label: row.name,
