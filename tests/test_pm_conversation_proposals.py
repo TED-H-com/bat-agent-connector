@@ -579,8 +579,11 @@ async def test_rename_during_adoption_is_retryable_after_original_children_finis
     refusal, writes = attempts[0]
     assert refusal is not None
     assert refusal.code == 'PM_CONVERSATION_ADOPTION_IN_PROGRESS' and refusal.status == 409
-    assert 'Adoption in progress. Try again in a moment.' in refusal.message
-    assert '正在採用提案，請稍後再試。' in refusal.message
+    # Waiting alone never clears a paused adoption, so the message names what unblocks rename.
+    assert 'Rename is refused until the adoption finishes.' in refusal.message
+    assert 'Resume or cancel a paused adoption (needs_attention) first.' in refusal.message
+    assert '採用完成前不能改名；已暫停（needs_attention）的採用請先繼續或取消。' in refusal.message
+    assert 'Try again in a moment' not in refusal.message
     assert writes == 0
     assert done['status'] == 'succeeded', done
     assert all(child['status'] == 'succeeded' for child in adoption._children(ops.db, done))

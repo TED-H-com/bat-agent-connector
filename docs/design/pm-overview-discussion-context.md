@@ -85,7 +85,15 @@ revision 與 source walk 只在該次請求內快取；下一次讀取重新驗�
 `pm.thread.create` 的 params 新增可選 `context`：有順序、不可重複、最多八筆。
 `title` 仍必填、非空、最多 160 字元；target 與 workspace `expected_version` 保持不變。
 所有來源必須在同一 workspace 且當下可見；任一失敗整個 create 拒絕。
-新增的討論來源驗證錯誤提供英文與繁體中文（臺灣）訊息。
+新增的討論來源驗證錯誤提供英文與繁體中文（臺灣）訊息：
+
+| code | status | 意義 |
+| --- | --- | --- |
+| `PM_CONTEXT_INVALID` | 422 | 超過八筆、欄位或識別格式不符、或重複的來源 |
+| `PM_CONTEXT_SOURCE_UNAVAILABLE` | 404 | 來源不存在、不屬於此 workspace、或目前不可見；不區分哪一種 |
+| `PM_CONTEXT_TOO_LARGE` | 413 | 已授權的來源歷程超過帶入討論的上限（例如 issue mapping 超過 100 筆 revision） |
+
+三者都拒絕整個 create，不寫入任何 context 列。
 
 | kind | id／額外必要欄位 |
 | --- | --- |
@@ -127,7 +135,9 @@ updated_at，保留 context、原 ID、草稿及歷史；重播沿用原 operati
 Adoption 接受 proposal 原 version 或目前 thread version，並重查內容版本、固定 plan head、原 children
 及最後執行條件；新訊息仍為 `VERSION_CONFLICT`。每個 child 沿用原 operation key 與當下 CAS。
 該 thread 存在尚未終結的 `pm.conversation.adopt` 時，rename 的 admission 與執行前檢查皆以
-`PM_CONVERSATION_ADOPTION_IN_PROGRESS`（409）拒絕；完成後重讀 version 即可重試改名。
+`PM_CONVERSATION_ADOPTION_IN_PROGRESS`（409）拒絕，直到採用結束（succeeded／failed／cancelled）。
+暫停在 `needs_attention` 的採用不會自行結束，必須先以原 operation 明確繼續（resume）或取消（cancel）；
+單純等待沒有用。採用結束後重讀 version 即可重試改名。
 這保護已建立但尚未執行的 child CAS，不中止採用或重建任何 child。
 Proposal get／list 每筆提供 `adoptable` 布林與 `adoptable_reason`（可採用時為 null）。
 依序檢查：沒有有效 proposal document digest 為 `invalid_proposal`、同一 proposal 有讀者可見且
