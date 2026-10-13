@@ -2,9 +2,6 @@
 
 ## Next release (unreleased)
 
-- Date/time inputs are validated the same way on every supported Python version; an
-  hour of 24 is rejected.
-
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
   the mapping, or the name on the published issue when the mapping omits it,
@@ -30,6 +27,9 @@
   desktop dependency graph. Preserve the original crate version/license and exact
   source inventory; require resolved-source verification, an optimized iterator
   regression, and a packaged release WebView smoke test in desktop CI.
+
+- Date/time inputs are validated the same way on every supported Python version; an
+  hour of 24 is rejected.
 
 - Add published-version starts through explicit repository/host/workspace bindings. Preview the
   exact branch head, fetch its fixed SHA into a fresh managed carrier, and recover the original
