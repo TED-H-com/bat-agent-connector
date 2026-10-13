@@ -13,7 +13,8 @@ loopback HTTP. The journal, configuration and Git repositories live in a unique
 disk directory under `~/agent-work/tmp/pytest`, removed after the fixture exits.
 `BATC_PM_BACKEND` and `BATC_PM_PYTHON` can select another checkout/interpreter,
 as in `test:pm`. `BATC_WALKTHROUGH_SHOTS` selects an artifact directory; otherwise
-screenshots go under `$TMPDIR/shots`. Each screenshot disables animations.
+screenshots go under `$TMPDIR/shots`, falling back to the ignored repo-local
+`desktop/test-results/walkthrough`. Each screenshot disables animations.
 
 The fixture uses the registered operations to create the project, charter inputs,
 accepted two-requirement plan, acceptance criteria, bound work and open issue.
@@ -44,18 +45,25 @@ Screenshot names start with `en-1440-` or `zh-TW-390-`.
 | Propose | Native analysis returns six review rows, the 15-minute criterion and unchecked referral exclusion | `06-proposal.png` |
 | Review | Rationale is entered and Adopt is enabled | `07-review.png` |
 | Adopt | Lose one acknowledgement after admission; Check original request repeats the exact key and envelope. UI receipt checks reach Adopted and link to the new accepted revision | `08-adopted.png` |
-| Return | Overview uses the new plan head and retains the goal and completed decision | `09-decision-overview.png` |
-| Register | Decision filter includes the adopted revision and opens its inspector | `10-decision-register.png` |
+| Resolve review | Secondary action opens a rationale naming the adopted revision; the person edits it before sending | `09-resolution-review.png` |
+| Resolve | Lost acknowledgement recovers the exact original key and full finding; readback shows Reported resolved and Not assessed | `10-issue-resolved.png` |
+| Return | Goal remains, new plan head is visible, blocker count is zero, issue leaves Needs attention and adopted revision appears under Recently decided with its actor | `11-decision-overview.png` |
+| Decision register | Recent decision opens its exact inspector; decision filter includes that same adopted revision | `12-decision-register.png` |
+| Issue register | Issue remains in the register with Reported resolved status | `13-resolved-register.png` |
 
 Before returning to Overview, fixture read-only verification requires exactly
-four browser parent operations, two HTTP adoption attempts with the same key,
-one new durable adoption, unchanged stable requirement IDs, no excluded work in
+five browser parent operations, two identical HTTP adoption attempts and two
+identical resolution attempts, one new durable adoption and one finding revision,
+unchanged stable requirement IDs, no excluded work in
 the accepted plan, a Git HEAD matching the adoption receipt, no execution
 authorization, no task dispatch, no BAT/provider writes and unchanged manual
-checkout and remote refs. The script records all API response statuses and page
+checkout and remote refs. Resolution preserves every original finding field except
+status and rationale, all affected IDs, original source identities and the original
+snapshot. The version advances once, snapshot count stays unchanged and verification
+remains unassessed. The script records all API response statuses and page
 errors. The optional bearer-session probe and unconfigured current maintenance
 observation may return 404; only these exact reads and the deliberately lost
-adoption acknowledgement are allowed to fail.
+adoption and resolution acknowledgements are allowed to fail.
 Completion waits use the UI's own receipt state, without polling the API from the
 test. The stdin verification reads the journal after that UI proof.
 
@@ -67,30 +75,32 @@ Central readback can render Adopted while that original receipt is still being
 checked. If its recovery form remains in Details, the test requires its terminal
 Saved marker before proceeding; a retained disabled control is not a new write.
 
-## Current contract blockers
+## Decision loop contract
 
-The walkthrough deliberately fails at Return, preserving both owner requirements:
+The integrated backend recognizes retained `governance.goal` input and returns
+completed history through `recent_decisions`, its nullable count and complete/truncated
+flags. Overview keeps pending decisions separate from completed history, and fixed
+reports never borrow live history. See the [Overview contract](pm-overview-discussion-context.md).
 
-- Adoption records the retained goal as `governance.goal`, while `pm_overview`
-  recognizes only exact `value`, `goal` or `problem` slots. The updated charter
-  contains the goal, but the answer line reports Not set / 未設定, with
-  `plan.goal = null` and `no_explicit_goal` from central.
-- Overview's Decisions / 待決事項 is a pending-attention projection. Once the
-  revision is adopted and the proposal becomes non-adoptable, its decision is
-  absent from that projection. The response contains no adopted-decision history.
-  Changing the pending count or fabricating an attention row would misrepresent
-  this contract.
+Adoption alone leaves the sourced issue open. Resolve issue is an explicit durable
+`pm.governance.revise` form, available only to the assigned writer or current workspace
+owner with the registered action and observe/manage scopes. It reads the original
+record, retains the full finding and original sources, uses `expected_version`, settles
+the original operation, then rereads the finding and Overview. A changed baseline must
+be reviewed; withdrawn sources remove the controls, and late reads cannot revive them.
+Resolution is a report, not requirement acceptance or verification. See the
+[governance sequence](pm-governance.md).
 
-Per the task boundary, no backend fields, goal-slot mappings, adoption semantics
-or decision-history contract were changed. The final Register step is implemented
-but remains unreached after the Return failure. The original open issue also
-remains open: plan adoption does not revise governance or rebind work implicitly.
+No product contract blocker remains in this walkthrough. Saved adoption context
+receipts read the fixed plan title and revision number; the original purpose stays in
+Details. Context-chip/list labels and shared time formatting remain owned by the
+parallel cross-view sweep.
 
-`test:walkthrough` is available locally but is not added to the existing passing
-`test:pm` CI step until these contract decisions are resolved. A nonzero exit is
-required for the missing owner experience; there is no expected-failure bypass.
+`test:walkthrough` has its own Linux CI step alongside `test:pm`, outside the existing
+central scripts' ten-minute step budget. There is no expected-failure bypass.
+Two consecutive complete local runs took 34.33 and 34.47 seconds including cleanup;
+the separate CI step has a two-minute timeout to cover both locales and overhead.
 Failures include locale, width, step, elapsed time, recent HTTP statuses, operation
 keys, the last UI-observed Overview response and a failure screenshot.
-Two consecutive local runs reached the same Return failure in both locales in
-32.5 and 34.0 seconds total, with the adoption and central safety checks passing.
-These are runtimes to the reported boundary, not passing end-to-end results.
+This proves real-central browser acceptance with mock external transports, not
+installed native or live-provider acceptance.

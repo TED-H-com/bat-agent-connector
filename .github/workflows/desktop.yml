@@ -136,6 +136,12 @@ jobs:
           npm run test:orchestration
           npm run test:labels
           npm run test:attention
+      - name: PM decision walkthrough with actual central service (English and zh-TW)
+        if: runner.os == 'Linux'
+        timeout-minutes: 2
+        env:
+          BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
+        run: npm run test:walkthrough
       - name: Preserve shared UI fixture evidence
         if: runner.os == 'Linux' && always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
