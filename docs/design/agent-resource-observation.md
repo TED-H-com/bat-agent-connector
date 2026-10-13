@@ -146,8 +146,9 @@ days. MCP omits `buckets` and `tz` unless the caller set them, so a newer client
 read a daemon that does not know those keys.
 
 When `buckets=day` is set, the object is `{granularity: "day", tz, series}` and the window
-may span at most 92 local dates. A longer span is the 92-date error above, not the 366-day
-error. Each series is one source that still contributes totals: `source_id`, `adapter`,
+may span at most 92 local dates. A window of 93–366 days returns the 92-date error; a
+longer window returns the 366-day error first. Each series is one source that still
+contributes totals: `source_id`, `adapter`,
 `cli` (`codex` or `claude`, the adapter name before the first hyphen) and `days`. A day is
 `{date, tokens, complete}`. `date` is the local calendar day. `tokens` has `input`,
 `cache_read`, `cache_write`, `output`, `reasoning` and `total`, each a number or null.

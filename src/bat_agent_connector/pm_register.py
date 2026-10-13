@@ -424,8 +424,12 @@ def _governance_history(ops, principal, workspace_id, record_id):
     return steps, truncated, bad
 
 
-def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limit=100, next_sequence=None):
-    """Keep the newest ``cap`` visible records. One 409/413 record is skipped; the source stays partial."""
+def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limit=100, next_sequence=None, admit=None):
+    """Keep the newest ``cap`` visible records. One 409/413 record is skipped; the source stays partial.
+
+    ``admit`` decides lineage visibility before a record enters the window, so a
+    hidden record takes no slot and does not make the source partial.
+    """
     size = min(PAGE, page_limit)
     after, kept, truncated, bad, seen = 0, deque(), False, False, set()
     while True:
@@ -442,6 +446,15 @@ def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limi
             continue
         size = min(PAGE, page_limit)
         for item in list(page.get(key) or []):
+            if admit is not None:
+                try:
+                    if not admit(item):
+                        continue
+                except OperationError as exc:
+                    if not _conflict(exc):
+                        raise
+                    truncated, bad = True, True
+                    continue
             kept.append(item)
             if len(kept) > cap:
                 kept.popleft()
@@ -453,6 +466,20 @@ def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limi
             return list(kept), True, bad
         seen.add(cursor)
         after = cursor
+
+
+def _lineage_admit(ops, principal, build):
+    """A ``_newest`` admit callback: only a record that yields a lineage-visible row takes a slot."""
+    lineage = _lineage(ops)
+
+    def admit(item):
+        row = build(item)
+        if not row:
+            return False
+        if lineage is None:
+            return True
+        return lineage.visible_roots(ops.db, principal, lineage.document_roots(ops.db, _public(row)))
+    return admit
 
 
 def _policy_rules(ops, principal, workspace_id):
@@ -607,7 +634,8 @@ def _collect_repairs(ops, principal, workspace_id):
     records, truncated, bad = _newest(
         lambda after, limit: list_repairs(ops, principal, workspace_id, after=after, limit=limit),
         "repairs", MAX_SCAN, cursors=("next_after",), page_limit=50,
-        next_sequence=_workspace_stub(ops, "pm_maintenance_repairs", workspace_id))
+        next_sequence=_workspace_stub(ops, "pm_maintenance_repairs", workspace_id),
+        admit=_lineage_admit(ops, principal, lambda repair: _repair_row(ops, workspace_id, repair)))
     rows = []
     for repair in records:
         row = _repair_row(ops, workspace_id, repair)
@@ -1052,11 +1080,21 @@ def _collect_mappings(ops, principal, workspace_id):
     from .pm_issue_mappings import list_mappings
     if not _table(ops.db, "pm_issue_revisions"):
         return [], False, False
+    skipped = []
+
+    def fetch(after, limit):
+        page = list_mappings(ops, principal, workspace_id, after=after, limit=limit)
+        # A mapping whose sources could not be checked (409) is skipped, not hidden.
+        if (page.get("coverage") or {}).get("source_incomplete"):
+            skipped.append(after)
+        return page
     currents, truncated, bad = _newest(
-        lambda after, limit: list_mappings(ops, principal, workspace_id, after=after, limit=limit), "mappings", MAX_SCAN,
+        fetch, "mappings", MAX_SCAN,
         next_sequence=_next_sequence(ops, "SELECT MIN(sequence) FROM pm_issue_revisions WHERE workspace_id=? "
                                       "GROUP BY mapping_id HAVING MIN(sequence)>? ORDER BY MIN(sequence) LIMIT 1",
-                                      (workspace_id,)))
+                                      (workspace_id,)),
+        admit=_lineage_admit(ops, principal, lambda current: _mapping_row(ops, workspace_id, current, None, 0)))
+    truncated, bad = truncated or bool(skipped), bad or bool(skipped)
     ids = [row["mapping_id"] for row in currents if isinstance(row.get("mapping_id"), str)]
     created, sequences = {}, {}
     if ids:

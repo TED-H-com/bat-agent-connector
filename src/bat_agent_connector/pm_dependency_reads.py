@@ -19,13 +19,21 @@ FRESHNESS = {"stale": None, "stale_reason": "repository_head_not_observed"}
 
 def _current(ops, principal, wid):
     if not principal.allows("observe"):
-        raise dep.bad("FORBIDDEN", 403)
+        raise OperationError("FORBIDDEN", "Dependency reads require observe scope / 讀取相依需要觀察權限", 403)
     pm_workspace.require_member(ops.db, principal, wid)
     try:
         return dep.current_binding(ops, principal, wid)
     except OperationError:
         # All source-derived rows, versions and counts withdraw as a unit.
         return None
+
+
+def _peer_selection(result, doc):
+    """Expose why the frozen peer set may miss visible peers; such a read is partial."""
+    reasons = [reason for reason in doc.get("peer_selection_reasons") or [] if isinstance(reason, str)]
+    if reasons:
+        result["cross_repository"] = {**result["cross_repository"], "selection_reasons": reasons}
+        result["partial"] = True
 
 
 def _empty(wid):
@@ -53,9 +61,14 @@ def _visible_record(ops, principal, wid, revision_id):
     return saved
 
 
-def discover_peers(ops, principal, wid):
-    """Capture a bounded peer selection once; reads never repopulate its hidden slots."""
-    rows = ops.db.execute("""SELECT h.workspace_id,h.revision_id FROM pm_dependency_heads h
+_PEER_PAGE = 64
+# Candidate heads examined per capture, visible or not. Keep this synchronous
+# scan small: the journal connection belongs to the event-loop thread.
+MAX_PEER_SCAN = 128
+
+
+def _peer_candidates(ops, principal, wid, cursor, limit):
+    return ops.db.execute("""SELECT h.workspace_id,h.revision_id FROM pm_dependency_heads h
         JOIN pm_workspaces w ON w.workspace_id=h.workspace_id
         JOIN pm_workspace_worktrees b ON b.workspace_id=w.workspace_id
         JOIN pm_dependency_revisions r ON r.revision_id=h.revision_id
@@ -64,23 +77,59 @@ def discover_peers(ops, principal, wid):
         AND EXISTS (SELECT 1 FROM json_each(w.repositories) j WHERE j.value=json_extract(b.binding,'$.target.repository'))
         AND json_extract(r.source_binding,'$.binding_digest')=json_extract(b.binding,'$.binding_digest')
         AND json_extract(r.source_binding,'$.operation_id')=json_extract(b.binding,'$.operation_id')
-        ORDER BY h.workspace_id LIMIT ?""", (wid, principal.admin, principal.actor, MAX_REPOSITORIES)).fetchall()
-    peers, repositories, size = [], set(), 0
-    for row in rows:
-        if _current(ops, principal, row["workspace_id"]) is not None:
+        AND (h.workspace_id>? OR (h.workspace_id=? AND h.revision_id>?))
+        ORDER BY h.workspace_id,h.revision_id LIMIT ?""",
+        (wid, principal.admin, principal.actor, cursor[0], cursor[0], cursor[1], limit)).fetchall()
+
+
+def discover_peers(ops, principal, wid, reasons=None):
+    """Capture a bounded peer selection once; reads never repopulate its hidden slots.
+
+    Visibility, same-repository, duplicate-repository and byte-budget filters run
+    before the ``MAX_REPOSITORIES`` cap, so a hidden or ineligible row takes no
+    slot. ``reasons`` receives ``peer_scan_limit`` when the candidate scan bound
+    stops with candidates left, and ``peer_byte_budget`` when a visible peer did
+    not fit the byte budget.
+    """
+    reasons = [] if reasons is None else reasons
+    own = _current(ops, principal, wid)
+    own_repository = own["target"]["repository"] if own else None
+    peers, repositories, size, scanned, cursor = [], set(), 0, 0, ("", "")
+    while len(peers) < MAX_REPOSITORIES:
+        limit = min(_PEER_PAGE, MAX_PEER_SCAN - scanned)
+        rows = _peer_candidates(ops, principal, wid, cursor, limit + 1)
+        more = len(rows) > limit
+        if limit <= 0:
+            if more:
+                reasons.append("peer_scan_limit")
+            break
+        for row in rows[:limit]:
+            scanned += 1
+            cursor = (row["workspace_id"], row["revision_id"])
+            if _current(ops, principal, row["workspace_id"]) is None:
+                continue
             try:
                 record = _visible_record(ops, principal, row["workspace_id"], row["revision_id"])
             except OperationError:
                 continue
             repository = record["document"]["repository"]
-            # Freeze this bounded selection; later readers never refill hidden slots.
+            # Same-repository rows are never shown as peers, so they take no slot either.
+            if repository == own_repository or repository in repositories:
+                continue
             length = _size(record["document"])
-            if repository in repositories or size + length > MAX_PEER_BYTES:
+            if size + length > MAX_PEER_BYTES:
+                if "peer_byte_budget" not in reasons:
+                    reasons.append("peer_byte_budget")
                 continue
             repositories.add(repository)
             size += length
+            # Freeze this bounded selection; later readers never refill hidden slots.
             peers.append({"workspace_id": row["workspace_id"], "revision_id": row["revision_id"],
                           "document_digest": record["document_digest"]})
+            if len(peers) >= MAX_REPOSITORIES:
+                break
+        if not more:
+            break
     return peers
 
 
@@ -190,7 +239,9 @@ def get(ops, principal, workspace_id):
     for dependency in doc["dependencies"]:
         for kind in dependency["kinds"]:
             grouped[kind].append(dependency)
-    result.update({key: value for key, value in doc.items() if key not in {"dependencies", "peer_revisions"}})
+    result.update({key: value for key, value in doc.items()
+                   if key not in {"dependencies", "peer_revisions", "peer_selection_reasons"}})
+    _peer_selection(result, doc)
     result.update(dependencies=grouped, declared=declarations, **FRESHNESS,
         reason=None, maintenance_owner=owner, maintenance_owner_reason=None if owner else "not_named_in_visible_policy",
         components=[{**c, "maintenance_owner": owner, "maintenance_owner_reason": None if owner else "not_named_in_visible_policy"} for c in doc["components"]])
@@ -250,7 +301,8 @@ def impact(ops, principal, workspace_id, *, dependency):
               **FRESHNESS, "partial": current["partial"], "components": [],
               "coverage": "captured_edges_only", "declared": [], "counts": None}
     if current["capture"]["revision_id"] is None:
-        return result
+        # Distinguish a withdrawn source from one that was never captured.
+        return {**result, "reason": current["reason"], "cross_repository": current["cross_repository"]}
     flat = [d for values in current["dependencies"].values() for d in values]
     doc = {**current, "dependencies": list({d["key"]: d for d in flat}.values())}
     saved = _visible_record(ops, principal, workspace_id, current["capture"]["revision_id"])["document"]
@@ -288,6 +340,7 @@ def impact(ops, principal, workspace_id, *, dependency):
     result["partial"] = True
     result["reason"] = "bounded_captured_graph"
     result["cross_repository"] = {"status": "bounded", "complete": False}
+    _peer_selection(result, saved)
     result["counts"] = {"components": len(result["components"]), "basis": "visible_captured_graph", "partial": True}
     # Impact may repeat evidence along several paths. Keep a bounded prefix of
     # complete component rows, with counts explicitly referring to returned rows.
