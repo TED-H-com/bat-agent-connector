@@ -222,9 +222,19 @@ async function walkthrough(locale, width) {
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).scrollIntoViewIfNeeded();
     await screenshot(9, 'resolution-review');
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).click();
-    await resolutionForm.getByRole('button', {name: l.retry, exact: true}).click();
-    await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.resolved);
-    await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.unassessed);
+    const resolutionRetry = resolutionForm.getByRole('button', {name: l.retry, exact: true});
+    await resolutionRetry.click();
+    const resolved = proposal.locator('[data-issue-resolved]');
+    await expect.poll(async () => {
+      if (await resolved.isVisible()) return true;
+      // A lost acknowledgement briefly closes the central write gate. Keep
+      // checking through the original-request UI as it recovers, never start
+      // another resolution. An acknowledged operation is checked by its ID.
+      if (await resolutionRetry.count() && await resolutionRetry.isVisible() && await resolutionRetry.isEnabled()) await resolutionRetry.click();
+      return false;
+    }, {intervals: [1000, 1500, 2000]}).toBe(true);
+    await expect(resolved).toContainText(l.resolved);
+    await expect(resolved).toContainText(l.unassessed);
     await expect(proposal.locator('[data-issue-resolve-open]')).toHaveCount(0);
     const resolutionRequests = requests.filter(row => row.body.action === 'pm.governance.revise');
     assert.equal(resolutionRequests.length, 2);
@@ -243,7 +253,7 @@ async function walkthrough(locale, width) {
     console.log(JSON.stringify({locale, width, centralSafetyVerified: true, browserOperations: 5, adoptionAttempts: 2, resolutionAttempts: 2}));
     step = 'decision-overview';
     await openPmSection(page, 'overview');
-    await expect(metric('goal')).toContainText(copy.updated);
+    await expect(page.locator('[data-overview-meta]')).toContainText(copy.updated);
     await expect(page.locator('.pm-main > .ui-page-header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
     await expect(metric('goal')).toContainText(copy.goal);
     await expect(metric('blocker').locator('.ui-metric-value')).toHaveText('0');

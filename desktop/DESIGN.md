@@ -216,19 +216,28 @@ held read cannot block a newer withdrawal.
 Overview defaults to the central `pm_overview` live projection. The shared header
 shows the plan title, adoption date, live/report mode and visible lifecycle stage;
 the plan journal sequence is never displayed as a version. Four equal status
-columns answer goal, accepted requirements, blockers and decisions. Null remains a
+columns answer goal, accepted requirements, blockers and open decisions. The live
+Goal card shows only the goal or its existing unknown/unconfirmed state; the header
+supplies plan title and adoption date. Saved reports retain their fixed baseline
+provenance. Not-started requirements leave empty progress track in both themes;
+accepted, review, in-progress and blocked shares keep their true proportions. Null remains a
 dash, incomplete classification keeps only its known denominator with Partial, and
 complete coverage describes the scan rather than project completion. Unknown
 reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
-The Decisions card retains the central pending count and adds Recently decided:
+The Open decisions card (待決事項) retains the central pending count and adds Recently decided:
 up to five visible completed decisions, with their title, relative time and actor.
 Each row opens the exact Issues & changes register inspector. Missing history is
 Unknown; incomplete or capped history is Partial and describes only loaded rows.
 It never substitutes the history total for the pending count. Saved reports do
 not borrow live decision history.
+
+Completed decisions use past-event ages: just now / 剛剛 below one minute, then
+5m ago / 5 分鐘前, 3h ago / 3 小時前, or 2d ago / 2 天前. Attention retains compact
+waiting ages, with <1m / 不到 1 分鐘 below a minute. Live projection refreshes
+update both kinds of cached ages without replacing their rows.
 
 An adopted discussion with an open sourced issue offers one secondary Resolve
 issue action to its assigned writer or explicit workspace owner, with the action's

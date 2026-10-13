@@ -7,6 +7,8 @@ import {overview} from './demo/overview.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 import {openPmPanel, openPmSection} from './pm-navigation.ts';
 
+const colorScheme = process.env.BATC_UI_TEST_SCHEME === 'dark' ? 'dark' : 'light';
+test.use({colorScheme});
 const root = (page: Page) => page.locator('[data-pm-overview]');
 const metric = (page: Page, key: string) => root(page).locator(`[data-overview-metric="${key}"]`);
 function fixture(locale = 'en') {
@@ -61,15 +63,98 @@ function decided(f: ReturnType<typeof fixture>) {
   return row;
 }
 
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
+  test(`progress leaves not-started track empty at true proportions ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}, testInfo) => {
+    const context = await browser.newContext({baseURL, locale, colorScheme,
+      viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+    const page = await context.newPage(), f = fixture(locale); await boot(page, f, native);
+    expect(await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(colorScheme === 'dark');
+    const bar = metric(page, 'progress').locator('.ui-metric-bar');
+    const segments = () => bar.evaluate(node => [...node.children].map(child => ({
+      color: getComputedStyle(child).backgroundColor,
+      share: child.getBoundingClientRect().width / node.getBoundingClientRect().width,
+    })));
+    const mixed = await segments();
+    for (const [index, share] of [3 / 8, 1 / 8, 2 / 8, 1 / 8, 1 / 8].entries()) expect(mixed[index].share).toBeCloseTo(share, 2);
+    expect(mixed[4].color).toBe('rgba(0, 0, 0, 0)');
+    expect(new Set(mixed.slice(0, 4).map(row => row.color)).size).toBe(4);
+    expect(mixed.slice(0, 4).every(row => row.color !== 'rgba(0, 0, 0, 0)')).toBe(true);
+    f.state.data.progress = {requirements: 2, accepted: 0, in_review: 0, in_progress: 0, blocked: 0, not_started: 2};
+    await refresh(page); await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '0 of 2 accepted' : '2 項中 0 項已驗收');
+    const empty = await segments();
+    expect(empty.slice(0, 4).every(row => row.share === 0)).toBe(true);
+    expect(empty[4]).toEqual({share: 1, color: 'rgba(0, 0, 0, 0)'});
+    expect(await bar.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+    const dir = process.env.TMPDIR ? `${process.env.TMPDIR}/overview-polish` : testInfo.outputPath('overview-polish'); mkdirSync(dir, {recursive: true});
+    await page.screenshot({path: `${dir}/${locale}-${native ? 'native' : 'web'}-${colorScheme}-empty.png`, fullPage: true, animations: 'disabled'});
+    f.state.data.progress = {...f.state.data.progress, requirements: 4, in_progress: 1, blocked: 1};
+    await refresh(page); await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '0 of 4 accepted' : '4 項中 0 項已驗收');
+    const started = await segments();
+    expect(started[2].share).toBeCloseTo(.25, 2); expect(started[3].share).toBeCloseTo(.25, 2); expect(started[4].share).toBeCloseTo(.5, 2);
+    expect(started[2].color).toBe(mixed[2].color); expect(started[3].color).toBe(mixed[3].color);
+    expect(f.state.writes).toEqual([]); await context.close();
+  });
+
+  test(`live ages distinguish waiting from decided without replacing rows ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}) => {
+    const context = await browser.newContext({baseURL, locale, colorScheme});
+    const page = await context.newPage(), f = fixture(locale), decision = decided(f), now = f.state.data.as_of;
+    f.state.data.attention[0].since = decision.decided_at = now;
+    await boot(page, f, native);
+    const waiting = root(page).locator('[data-overview-row]').first(), completed = root(page).locator(`[data-overview-decided="${decision.key}"]`);
+    await waiting.evaluate(node => {(window as any).clockAttention = node;});
+    await completed.evaluate(node => {(window as any).clockDecision = node;});
+    for (const [seconds, enWait, zhWait, enPast, zhPast] of [
+      [0, '<1m', '不到 1 分鐘', 'just now', '剛剛'], [59, '<1m', '不到 1 分鐘', 'just now', '剛剛'],
+      [60, '1m', '1 分鐘', '1m ago', '1 分鐘前'], [300, '5m', '5 分鐘', '5m ago', '5 分鐘前'],
+      [10800, '3h', '3 小時', '3h ago', '3 小時前'], [172800, '2d', '2 天', '2d ago', '2 天前'],
+    ] as const) {
+      f.state.data.as_of = now + seconds; await refresh(page);
+      await expect(waiting.locator('[data-overview-age]')).toHaveText(locale === 'en' ? enWait : zhWait);
+      await expect(completed.locator('[data-overview-decided-meta]')).toHaveText(`${locale === 'en' ? enPast : zhPast} · ${decision.actor}`);
+      expect(await waiting.evaluate(node => node === (window as any).clockAttention)).toBe(true);
+      expect(await completed.evaluate(node => node === (window as any).clockDecision)).toBe(true);
+      await expect(root(page)).not.toContainText(/\b0m\b|0 分鐘/);
+    }
+    decision.decided_at = null as any; f.state.data.attention[0].since = null;
+    await refresh(page); await expect(completed.locator('[data-overview-decided-meta]')).toHaveText(decision.actor);
+    await expect(waiting.locator('[data-overview-age]')).toHaveCount(0);
+    expect(f.state.writes).toEqual([]); await context.close();
+  });
+
+  test(`live goal omits repeated provenance while saved and unknown states remain ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}) => {
+    const context = await browser.newContext({baseURL, locale, colorScheme});
+    const page = await context.newPage(), f = fixture(locale); await boot(page, f, native);
+    await expect(metric(page, 'decision').locator(':scope > .ui-meta')).toHaveText(locale === 'en' ? 'Open decisions' : '待決事項');
+    await expect(metric(page, 'goal')).toContainText(f.copy.goal);
+    await expect(metric(page, 'goal')).not.toContainText(f.state.data.plan.title);
+    await expect(metric(page, 'goal')).not.toContainText(locale === 'en' ? 'adopted' : '採用');
+    await expect(page.locator('[data-overview-meta]')).toContainText(f.state.data.plan.title);
+    await expect(page.locator('[data-overview-meta]')).toContainText(locale === 'en' ? 'adopted' : '採用');
+    f.state.data.plan.goal = null; f.state.data.unknown = [{field: 'plan.goal', reason: 'unknown'}];
+    await refresh(page); await expect(metric(page, 'goal').locator('.ui-metric-value')).toHaveText('—');
+    await expect(metric(page, 'goal').locator('[data-status=unknown]')).toHaveCount(1);
+    f.state.data.unknown = [{field: 'plan.goal', reason: 'goal_unconfirmed'}];
+    await refresh(page); await expect(metric(page, 'goal').locator('[data-status=unconfirmed]')).toHaveCount(1);
+    await expect(metric(page, 'goal').locator('[data-status=unknown]')).toHaveCount(0);
+    f.state.data.unknown = [{field: 'plan.goal', reason: 'no_explicit_goal'}];
+    await refresh(page); await expect(metric(page, 'goal')).toContainText(locale === 'en' ? 'Not set' : '未設定');
+    let fixedTitle = '';
+    f.state.reportPatch = snapshot => {fixedTitle = snapshot.baseline.document.title; expect(snapshot.baseline.adoption.created_at).toBeGreaterThan(0);};
+    await report(page, f.ids.snap1); await expect(metric(page, 'goal')).toContainText(fixedTitle);
+    await expect(metric(page, 'goal')).toContainText(locale === 'en' ? 'adopted' : '採用');
+    expect(f.state.writes).toEqual([]); await context.close();
+  });
+}
+
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`completed decision opens its register inspector ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
   const page = await context.newPage(), f = fixture(locale), row = decided(f);
   await boot(page, f, native);
   await expect(metric(page, 'decision').locator('.ui-metric-value')).toHaveText('2');
   const recent = metric(page, 'decision').locator('[data-overview-recent-decisions]');
   await expect(recent).toContainText(locale === 'en' ? 'Recently decided' : '近期決策');
   await expect(recent).toContainText(row.title); await expect(recent).toContainText(f.ids.actor);
-  await expect(recent).toContainText(locale === 'en' ? '1h' : '1 小時');
+  await expect(recent).toContainText(locale === 'en' ? '1h ago' : '1 小時前');
   await recent.getByRole('button').click();
   await expect(page.locator(`[data-reg-inspector][data-reg-row="${row.key}"]`)).toBeVisible();
   expect(f.state.writes).toEqual([]); await context.close();
@@ -91,7 +176,7 @@ test('completed history distinguishes missing, incomplete, capped and empty sour
 });
 
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`five-second project answer ${locale} ${width}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}, colorScheme: 'light', reducedMotion: 'reduce'});
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}, colorScheme, reducedMotion: 'reduce'});
   const page = await context.newPage(), f = fixture(locale), errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => {if (m.type() === 'error' && !m.text().startsWith('Failed to load resource:')) errors.push(m.text());});
@@ -129,7 +214,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await page.screenshot({path: `${dir}/overview-${locale}-${width}.png`, fullPage: true});
   if (width === 1440) {await page.screenshot({path: `${dir}/overview-${locale}-${width}-fold.png`});}
   if (width === 1440 && locale === 'en') {
-    await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${dir}/overview-en-1440-dark.png`, fullPage: true}); await page.emulateMedia({colorScheme: 'light'});
+    await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${dir}/overview-en-1440-dark.png`, fullPage: true}); await page.emulateMedia({colorScheme});
   }
   const details = root(page).locator(':scope > div > details'); await details.locator(':scope > summary').click();
   expect(await root(page).innerText()).not.toMatch(/\b(undefined|null|NaN|ov_\w+)\b/);
@@ -390,7 +475,7 @@ test('decisions card distinguishes unknown, missing and truncated items', async 
 });
 
 for (const locale of ['en', 'zh-TW']) test(`selected report has a loading state ${locale}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale}), page = await context.newPage(), f = fixture(locale); await boot(page, f);
+  const context = await browser.newContext({baseURL, locale, colorScheme}), page = await context.newPage(), f = fixture(locale); await boot(page, f);
   await openPmPanel(page, 'ui_report'); await expect(page.locator('[data-pm-report-tools] select')).toBeEnabled();
   let release!: () => void; f.state.heldReport = new Promise<void>(resolve => {release = resolve;});
   try {
@@ -403,7 +488,7 @@ for (const locale of ['en', 'zh-TW']) test(`selected report has a loading state 
 });
 
 test('epoch dates are local while milestone calendar dates stay fixed', async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale: 'en', timezoneId: 'Asia/Taipei'}), page = await context.newPage(), f = fixture();
+  const context = await browser.newContext({baseURL, locale: 'en', colorScheme, timezoneId: 'Asia/Taipei'}), page = await context.newPage(), f = fixture();
   f.state.data.plan.adopted_at = Date.parse('2026-10-11T20:00:00Z') / 1000;
   f.state.reportPatch = saved => {saved.as_of = Date.parse('2026-10-12T20:00:00Z') / 1000;};
   await boot(page, f); await expect(page.locator('[data-overview-meta]')).toContainText('adopted Oct 12');

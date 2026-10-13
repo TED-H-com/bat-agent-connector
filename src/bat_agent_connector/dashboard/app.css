@@ -1746,6 +1746,7 @@ body.pm-mode #main { padding: 0; }
 .pm-overview-status [data-overview-metric="goal"] .ui-metric-value { font-size: var(--fs-body); line-height: 1.5; }
 .pm-overview-status [data-overview-metric="progress"] .ui-metric-value { font-size: var(--fs-title); line-height: 1.35; }
 .pm-overview-status .ui-disclosure { margin-top: var(--space-2); }
+.pm-overview-status [data-overview-metric="progress"] .ui-metric-bar .tone-neutral { background: transparent; }
 .pm-overview-columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; margin-block: var(--space-4); }
 .pm-overview-side { display: grid; gap: var(--space-4); min-width: 0; }
 .pm-overview .ui-section-card { min-width: 0; margin: 0; }

@@ -42,7 +42,7 @@ var overviewStrings = {
 		ov_goal: "Goal",
 		ov_progress: "Progress",
 		ov_blockers: "Blockers",
-		ov_decisions: "Decisions",
+		ov_decisions: "Open decisions",
 		ov_recent_decisions: "Recently decided",
 		ov_accepted: "{accepted} of {total} accepted",
 		ov_requirements: "{n} requirements",
@@ -97,6 +97,9 @@ var overviewStrings = {
 		ov_hour: "{n}h",
 		ov_minute: "{n}m",
 		ov_delta: "+{n}d",
+		ov_just_now: "just now",
+		ov_under_minute: "<1m",
+		ov_ago: "{age} ago",
 		ov_partial_history: "More reports available",
 		ov_loading_report: "Loading report…",
 		ov_report_previous: "Previous report",
@@ -162,6 +165,9 @@ var overviewStrings = {
 		ov_hour: "{n} 小時",
 		ov_minute: "{n} 分鐘",
 		ov_delta: "+{n} 天",
+		ov_just_now: "剛剛",
+		ov_under_minute: "不到 1 分鐘",
+		ov_ago: "{age}前",
 		ov_partial_history: "還有其他報告",
 		ov_loading_report: "正在載入報告…",
 		ov_report_previous: "上一份報告",
@@ -16089,7 +16095,7 @@ function workspaceOverview(options) {
 		const goal = metric({
 			label: t("ov_goal"),
 			value: data?.plan?.goal ?? "—",
-			context: h("div", {}, !data?.plan?.goal ? goalReason === "goal_unconfirmed" ? statusPill("unconfirmed") : !goalReason || goalReason === "unknown" ? statusPill("unknown") : h("span", { class: "ui-meta" }, reasonLabel(t, goalReason)) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
+			context: h("div", {}, !data?.plan?.goal ? goalReason === "goal_unconfirmed" ? statusPill("unconfirmed") : !goalReason || goalReason === "unknown" ? statusPill("unknown") : h("span", { class: "ui-meta" }, reasonLabel(t, goalReason)) : null, fixed ? h("div", {}, data?.plan?.title || "—") : null, fixed && data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
 		});
 		goal.dataset.overviewMetric = "goal";
 		if (fixed && savedPartial()) goal.append(statusPill("partial"));
@@ -16127,19 +16133,25 @@ function workspaceOverview(options) {
 			"data-overview-status": ""
 		}, goal, progress, ...metrics);
 	}
-	function age(since) {
+	function age(since, past = false) {
 		if (!Number.isFinite(since) || !Number.isFinite(projection?.as_of)) return null;
 		const seconds = Math.max(0, projection.as_of - since);
+		if (seconds < 60) return t(past ? "ov_just_now" : "ov_under_minute");
 		const [key, unit] = seconds >= 86400 ? ["ov_day", 86400] : seconds >= 3600 ? ["ov_hour", 3600] : ["ov_minute", 60];
-		return t(key, { n: Math.floor(seconds / unit) });
+		const elapsed = t(key, { n: Math.floor(seconds / unit) });
+		return past ? t("ov_ago", { age: elapsed }) : elapsed;
 	}
+	const decisionMeta = (row) => [age(row.decided_at, true), row.actor].filter(Boolean).join(" · ");
 	function recentDecisions(data) {
 		const rows = Array.isArray(data?.recent_decisions) ? data.recent_decisions : null;
 		const partial = rows && (data.recent_decisions_complete !== true || data.recent_decisions_truncated === true);
 		return h("section", {
 			class: "pm-overview-decisions" + (rows?.length === 0 && !partial ? " pm-overview-decisions-empty" : ""),
 			"data-overview-recent-decisions": ""
-		}, h("h3", {}, t("ov_recent_decisions")), ...(rows || []).map((row) => h("div", { "data-overview-decided": row.key }, itemLink(row, "decided"), h("div", { class: "ui-meta" }, [age(row.decided_at), row.actor].filter(Boolean).join(" · ")))), !rows ? statusPill("unknown") : partial ? h("div", { class: "ui-meta" }, statusPill("partial"), " ", t("ov_showing", { n: rows.length })) : !rows.length && data.recent_decisions_count === 0 ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null);
+		}, h("h3", {}, t("ov_recent_decisions")), ...(rows || []).map((row) => h("div", { "data-overview-decided": row.key }, itemLink(row, "decided"), h("div", {
+			class: "ui-meta",
+			"data-overview-decided-meta": ""
+		}, decisionMeta(row)))), !rows ? statusPill("unknown") : partial ? h("div", { class: "ui-meta" }, statusPill("partial"), " ", t("ov_showing", { n: rows.length })) : !rows.length && data.recent_decisions_count === 0 ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null);
 	}
 	function contextText(row) {
 		const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
@@ -16519,6 +16531,10 @@ function workspaceOverview(options) {
 		for (const row of projection.attention) {
 			const node = attentionNodes.get(row.key)?.node.querySelector("[data-overview-age]"), value = age(row.since);
 			if (node && value !== null && node.textContent !== value) node.textContent = value;
+		}
+		for (const row of Array.isArray(projection.recent_decisions) ? projection.recent_decisions : []) {
+			const node = content.querySelector(`[data-overview-decided="${CSS.escape(row.key)}"] [data-overview-decided-meta]`), value = decisionMeta(row);
+			if (node && node.textContent !== value) node.textContent = value;
 		}
 		const next = JSON.stringify([{
 			...projection,

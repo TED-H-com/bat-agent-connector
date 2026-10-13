@@ -71,10 +71,13 @@
   and saved reports on demand. Unknown values stay explicit, saved reports never mix in live data,
   and a burst of live events coalesces into one read per source. Open Overview issue and risk
   attention items in the Issues & changes inspector, retaining the exact source and a meaningful
-  title for Discuss with PM. Keep the pending Decisions count and show Recently decided
+  title for Discuss with PM. Label the pending count Open decisions (待決事項), show Recently decided
   with visible completed decision titles, times and actors, linking their exact register
   inspectors. An adopted discussion offers an authorized, editable Resolve issue form;
-  reported resolution preserves the original finding and remains unassessed.
+  reported resolution preserves the original finding and remains unassessed. Leave not-started
+  progress as empty track, retain colored states at their true proportions, and omit repeated
+  plan provenance from the live Goal card. Completed decisions say just now or use “ago”;
+  attention keeps compact waiting ages, and both advance on live refresh.
 - Polish Discussions with inline renaming, compact context and thread rows, and a paired composer
   toolbar. Proposal freshness follows central adoptability, an adopted proposal links its accepted
   revision, and first-message drafts and original-key recovery survive reloads. Keep unsent PM

@@ -4,6 +4,8 @@ import {demoProject} from './demo/project.ts';
 import {overviewGovernance} from './demo/overview.ts';
 import {mountConversation} from './conversation-fixture.ts';
 
+const colorScheme = process.env.BATC_UI_TEST_SCHEME === 'dark' ? 'dark' : 'light';
+test.use({colorScheme});
 function fixture({locale = 'en', role = 'owner', assigned = false, manage = true, registered = true} = {}) {
   const f = demoFixture({locale, discussions: true}), root = `/pm/workspaces/${f.ids.workspaceId}`;
   const finding: any = overviewGovernance(demoProject(locale))[0]; finding.record.kind = 'issue';
@@ -61,7 +63,7 @@ function fixture({locale = 'en', role = 'owner', assigned = false, manage = true
 const resolution = (page: any) => page.locator('[data-proposal-resolution]');
 
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`explicit resolution preserves the finding ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
   const page = await context.newPage(), f = fixture({locale}), original = structuredClone(f.finding.revision.document);
   await mountConversation(page, native, f.dispatch); await page.goto(f.route);
   await resolution(page).locator('[data-issue-resolve-open]').click();
