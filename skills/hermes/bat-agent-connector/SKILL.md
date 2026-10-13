@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "8438d977a0c1f730c7424288b08ee884454916d73de7024b77a2bf3592b5416d"
+  canonical_sha256: "fe671799957e754a2e9f605ee11b581f6a3e658259d7b44f8700c1640f0a9c95"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1653,7 +1653,11 @@ These read the immutable Git capture and current visibility; they never refresh 
 Unknown counts stay null and partial counts cover only the captured catalog. Freshness is
 `stale: null` with `stale_reason: repository_head_not_observed`; never label the pinned commit as current
 repository HEAD. Honor `parser_reasons`, `unreadable_paths` and any `projection_omitted_collections`;
-an omitted collection is not evidence that no dependencies exist.
+an omitted collection is not evidence that no dependencies exist. Large captures retain a deterministic
+partial inventory with `capture_budget` and `omitted_edges`/`omitted_hints`/`omitted_components`;
+these counts describe observed omissions, not repository totals. Informational `parser_notes` alone
+are not missing coverage. Python extras are optional runtime edges, with extra identities preserved.
+Impact reason `dependency_omitted` or `capture_budget` must not be read as dependency absence.
 
 To capture, submit `pm.dependencies.capture` with target `{workspace_id}`, params
 `{repository, commit_sha}` from `source`, and preconditions `{expected_version: version,

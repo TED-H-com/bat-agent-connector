@@ -1,6 +1,7 @@
 """Durable dependency captures and sourced declarations; Connector is the authority."""
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
@@ -8,7 +9,7 @@ from urllib.parse import urlsplit
 
 from . import pm_access, pm_runs, pm_spec_sources, pm_workspace
 from .operations import ActionDef, OperationError, OperationService
-from .pm_dependency_budget import MAX_CAPTURE_BYTES, MAX_DECLARATION_BYTES, bounded
+from .pm_dependency_budget import MAX_CAPTURE_BYTES, MAX_DECLARATION_BYTES, bounded, trim_inventory
 from .pm_dependency_parser import KINDS, RELATIONS, Inventory, dependency_key, stable, text
 from .pm_dependency_paths import MAX_FILES, MAX_TOTAL_BYTES, safe_path
 from .pm_release_baselines import _json, _snapshot
@@ -247,10 +248,12 @@ async def _run(ctx):
     if ctx.op["action"] == ACTIONS[0]:
         from .pm_dependency_sources import collect
         source = await collect(ops, principal, wid, binding)
-        inventory = Inventory(binding["target"]["repository"], binding["source_sha"], source["files"], source["contents"]).parse()
+        parser = Inventory(binding["target"]["repository"], binding["source_sha"], source["files"], source["contents"])
+        inventory = await asyncio.to_thread(parser.parse)
         from .pm_dependency_reads import discover_peers
         inventory["peer_revisions"] = discover_peers(ops, principal, wid)
         inventory.update(files=source["files"], tree_sha=source["tree_sha"], catalog_reasons=source["catalog_reasons"], unreadable_paths=source["unreadable_paths"])
+        inventory = await asyncio.to_thread(trim_inventory, inventory, limit=MAX_CAPTURE_BYTES - 8192)
         # No await between this final host/workspace frame and the atomic CAS+receipt.
         await pm_spec_sources._guard(ops, principal, wid, binding)
 

@@ -224,7 +224,7 @@ def revisions(ops, principal, workspace_id, *, after=0, limit=20):
     result = {"workspace_id": workspace_id, "revisions": [], "next_cursor": None, "reason": None}
     if binding is None:
         return {**result, "reason": "source_unavailable"}
-    rows = ops.db.execute("""SELECT r.revision_id,r.created_at,r.sequence,s.summary FROM pm_dependency_revisions r
+    rows = ops.db.execute("""SELECT r.revision_id,r.sequence,s.summary FROM pm_dependency_revisions r
         LEFT JOIN pm_dependency_revision_summaries s ON s.revision_id=r.revision_id
         WHERE r.workspace_id=? AND r.source_key=? AND r.sequence>? ORDER BY r.sequence LIMIT ?""",
         (workspace_id, dep.source_key(binding), after, limit + 1)).fetchall()
@@ -232,7 +232,7 @@ def revisions(ops, principal, workspace_id, *, after=0, limit=20):
         # Source identity/access was checked once above. Old rows have explicit
         # unknown metadata; no migration or full-document decode happens on reads.
         summary = json.loads(row["summary"]) if row["summary"] is not None else {
-            "revision_id": row["revision_id"], "captured_at": row["created_at"], "commit_sha": None,
+            "revision_id": row["revision_id"], "captured_at": None, "commit_sha": None,
             "status": "unknown", "partial": True, "reason": "summary_not_recorded",
             "repository": binding["target"]["repository"], "binding_digest": binding["binding_digest"]}
         result["revisions"].append({**summary, **FRESHNESS})
@@ -258,7 +258,9 @@ def impact(ops, principal, workspace_id, *, dependency):
     documents = [doc, *peers]
     if not any(d["key"] == dependency for document in documents for d in document["dependencies"]) and not any(
             d["dependency_key"] == dependency for d in current["declared"]):
-        return {**result, "partial": True, "reason": "dependency_not_observed"}
+        omitted = any(d["key"] == dependency for d in saved["dependencies"])
+        reason = "dependency_omitted" if omitted else "capture_budget" if saved.get("omitted_edges") else "dependency_not_observed"
+        return {**result, "partial": True, "reason": reason}
     edges = [e for d in documents for e in d["edges"]]
     links = _links(documents)
     reached = {e["component_id"]: 1 for e in edges if e["dependency_key"] == dependency}

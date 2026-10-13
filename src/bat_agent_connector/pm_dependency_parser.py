@@ -9,7 +9,7 @@ import re
 import shlex
 import sys
 
-from .pm_dependency_budget import MAX_COMMAND_BYTES
+from .pm_dependency_budget import MAX_COMMAND_BYTES, trim_inventory
 from .pm_dependency_paths import MAX_EDGES, safe_path
 
 if sys.version_info >= (3, 11):
@@ -51,24 +51,39 @@ def requirement(value):
 
 
 def _commands(command):
-    """Literal command words only; quoted mentions and shell substitutions aren't calls."""
-    if "\n" in command:
-        return [words for line in command.splitlines() for words in _commands(line)]
-    try:
-        words = shlex.split(command, comments=True)
-    except ValueError:
-        return []
-    groups, current = [], []
-    for word in words:
-        if word in {"&&", ";", "||", "|"}:
-            if current:
-                groups.append(current)
+    """Split literal shell subcommands before unquoting their argument words."""
+    segments, current = [], []
+    quote, escaped, comment = None, False, False
+    for char in command:
+        if comment:
+            if char != "\n":
+                continue
+            comment = False
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\" and quote != "'":
+            current.append(char)
+            escaped = True
+        elif quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+        elif char in {"'", '"'}:
+            current.append(char)
+            quote = char
+        elif char == "#" and (not current or current[-1].isspace()):
+            comment = True
+        elif char in ";&|\n":
+            segments.append("".join(current))
             current = []
         else:
-            current.append(word)
-    if current:
-        groups.append(current)
-    return groups
+            current.append(char)
+    segments.append("".join(current))
+    try:
+        return [words for part in segments if (words := shlex.split(part))]
+    except ValueError:
+        return []
 
 
 def unwrapped(words):
@@ -95,10 +110,41 @@ def _scalar(value):
     return value
 
 
+def _yaml_comment(value):
+    quote = None
+    for i, char in enumerate(value):
+        if char in {"'", '"'} and (i == 0 or value[i - 1] != "\\"):
+            quote = None if quote == char else char if quote is None else quote
+        if char == "#" and quote is None and (i == 0 or value[i - 1].isspace()):
+            return value[:i].rstrip()
+    return value.rstrip()
+
+
+def _directory(value):
+    value = _scalar(value)
+    if not value or any(c in value for c in "$`{}[]*&!|>\n") or value.startswith(("/", "~")):
+        return None
+    return value
+
+
+def _inline_defaults(value):
+    # Deliberately small flow-map subset. Unsupported syntax stays unknown.
+    if not value.startswith("{") or not value.endswith("}"):
+        return None
+    directory = NotImplemented
+    for field in value[1:-1].split(","):
+        key, sep, item = field.strip().partition(":")
+        if not sep or key not in {"shell", "working-directory"} or not item.strip():
+            return None
+        if key == "working-directory":
+            directory = _directory(item)
+    return directory
+
+
 def workflow(content):
-    """Literal YAML subset; indentation confines defaults and step fields."""
+    """Literal YAML subset; resolve scoped defaults after reading every key."""
     rows, job, step, block = [], None, None, None
-    default_dir, job_dir, stack = ".", ".", []
+    defaults, stack = {}, []
     seen_jobs = False
     for number, line in enumerate(content.splitlines(), 1):
         if len(line) > 8192 or "\t" in line:
@@ -113,20 +159,31 @@ def workflow(content):
         while stack and stack[-1][0] >= indent:
             stack.pop()
         parents = [key for _, key in stack]
-        stripped = line.strip()
+        stripped = _yaml_comment(line.strip())
         if stripped == "jobs:" and not parents:
             seen_jobs, job, step = True, None, None
         elif parents == ["jobs"] and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*:", stripped):
-            job, step, job_dir = stripped[:-1], None, default_dir
-        if stripped.startswith("working-directory:"):
-            directory = _scalar(stripped.partition(":")[2])
-            if parents == ["defaults", "run"]:
-                default_dir = directory
-            elif parents == ["jobs", job, "defaults", "run"]:
-                job_dir = directory
+            job, step = stripped[:-1], None
+        scope = job if parents[:2] == ["jobs", job] else None
+        base = ["jobs", job] if scope is not None else []
+        key, separator, value = stripped.partition(":")
+        value = value.strip()
+        if separator and key == "defaults" and parents == base:
+            if value:
+                defaults[scope] = None
+        elif separator and key == "run" and parents == base + ["defaults"]:
+            if value:
+                directory = _inline_defaults(value)
+                if directory is not NotImplemented:
+                    defaults[scope] = directory
+        elif key == "working-directory" and parents == base + ["defaults", "run"]:
+            defaults[scope] = _directory(value)
+        elif parents == base + ["defaults", "run"] and key != "shell":
+            defaults[scope] = None
+        elif parents == base + ["defaults"] and key != "run":
+            defaults[scope] = None
         if parents == ["jobs", job, "steps"] and stripped.startswith("- "):
-            step = {"job_id": job, "line": number, "command": "", "uses": None,
-                    "working_directory": job_dir, "name": None}
+            step = {"job_id": job, "line": number, "command": "", "uses": None, "name": None}
             rows.append(step)
             stack.append((indent, "step"))
             stripped = stripped[2:].strip()
@@ -149,10 +206,15 @@ def workflow(content):
                 block = key_indent
             else:
                 step["command"] = _scalar(value)
+        elif key == "working-directory":
+            step["working_directory"] = _directory(value)
         else:
-            step[{"working-directory": "working_directory"}.get(key, key)] = _scalar(value)
+            step[key] = _scalar(value)
     if not seen_jobs:
         raise ValueError("unsupported_workflow_yaml")
+    for step in rows:
+        step.setdefault("working_directory", defaults.get(step["job_id"], defaults.get(None, ".")))
+        step["working_directory_reason"] = "workflow_directory_unknown" if step["working_directory"] is None else None
     return rows
 
 
@@ -167,15 +229,41 @@ def _nearest(path, name, parsed):
         folder = posixpath.dirname(folder)
 
 
+class MemberMatcher:
+    """Per-capture compiled patterns and path results, with polynomial matching."""
+    def __init__(self):
+        self.compiled, self.results = {}, {}
+
+    def matches(self, relative, patterns):
+        if not isinstance(patterns, list):
+            return False
+        for pattern in patterns:
+            if not isinstance(pattern, str) or len(pattern) > 800 or len(pattern.split("/")) > 16:
+                continue
+            key = (relative, pattern)
+            if key not in self.results:
+                if pattern not in self.compiled:
+                    parts = []
+                    for part in pattern.rstrip("/").split("/"):
+                        if part == "**" and parts and parts[-1] is None:
+                            continue
+                        parts.append(None if part == "**" else re.compile(fnmatch.translate(part)))
+                    self.compiled[pattern] = parts
+                parts = relative.split("/")
+                reached = {0}
+                for segment in self.compiled[pattern]:
+                    if segment is None:
+                        reached = set(range(min(reached), len(parts) + 1)) if reached else set()
+                    else:
+                        reached = {i + 1 for i in reached if i < len(parts) and segment.fullmatch(parts[i])}
+                self.results[key] = len(parts) in reached
+            if self.results[key]:
+                return True
+        return False
+
+
 def member_path(relative, patterns):
-    def matches(parts, pattern):
-        if not pattern:
-            return not parts
-        if pattern[0] == "**":
-            return matches(parts, pattern[1:]) or bool(parts) and matches(parts[1:], pattern)
-        return bool(parts) and fnmatch.fnmatchcase(parts[0], pattern[0]) and matches(parts[1:], pattern[1:])
-    return isinstance(patterns, list) and any(isinstance(p, str) and len(p) <= 800 and len(p.split("/")) <= 16
-        and matches(relative.split("/"), p.rstrip("/").split("/")) for p in patterns)
+    return MemberMatcher().matches(relative, patterns)
 
 
 def _go(content, sums=False):
@@ -216,15 +304,21 @@ class Inventory:
         self.contents, self.parsed = contents, {}
         self.components, self.dependencies, self.edges, self.hints = [], {}, [], []
         self.reasons = set()
+        self.notes, self.unsupported_fields = set(), []
+        self.matcher, self.coverage_cache, self.lock_indexes = MemberMatcher(), {}, {}
+        self.omitted_edges = 0
 
     def ref(self, path, **extra):
         row = next(row for row in self.files if row["path"] == path)
-        if "command" in extra:
-            raw = extra["command"].encode("utf-8")
+        for field in ("command", "script", "job_id", "declaration_group"):
+            if field not in extra:
+                continue
+            raw = extra[field].encode("utf-8")
             if len(raw) > MAX_COMMAND_BYTES:
-                extra.update(command=raw[:MAX_COMMAND_BYTES].decode("utf-8", errors="ignore"),
-                             command_truncated=True, command_sha256=hashlib.sha256(raw).hexdigest())
-                self.reasons.add("evidence_command_truncated")
+                extra[field] = raw[:MAX_COMMAND_BYTES].decode("utf-8", errors="ignore")
+                extra[field + "_truncated"] = True
+                extra[field + "_sha256"] = hashlib.sha256(raw).hexdigest()
+                self.reasons.add("evidence_" + field + "_truncated")
         return {"repository": self.repository, "path": path, "commit_sha": self.commit, "blob_sha": row["blob_sha"], **extra}
 
     def parse(self):
@@ -242,6 +336,8 @@ class Inventory:
                         raise ValueError("expected_object")
                 elif path.startswith(".github/workflows/"):
                     value = workflow(content)
+                    if any(step["working_directory"] is None for step in value):
+                        self.reasons.add("workflow_directory_unknown")
                 elif name in {"go.mod", "go.sum"}:
                     value = _go(content, name == "go.sum")
                 elif name.startswith("requirements"):
@@ -267,10 +363,13 @@ class Inventory:
                 unnamed = ecosystem == "npm" and declared is None
                 if unnamed:
                     declared = path
-                    self.reasons.add("npm_package_name_not_declared")
+                    self.notes.add("npm_package_name_not_declared")
                 if declared is None:
                     if ecosystem in {"python", "cargo"} and ("workspace" in value or "tool" in value or "build-system" in value):
-                        self.reasons.add("manifest_without_package")
+                        if ecosystem == "cargo" and "workspace" in value or ecosystem == "python" and "workspace" in value.get("tool", {}).get("uv", {}):
+                            self.notes.add("manifest_without_package")
+                        else:
+                            self.reasons.add("manifest_without_package")
                         continue
                     raise ValueError
                 declared = text(declared)
@@ -278,15 +377,24 @@ class Inventory:
                     "ecosystem": ecosystem, "manifest_path": path, "repository": self.repository, "commit_sha": self.commit,
                     "name_reason": "package_name_not_declared" if unnamed else None,
                     "published_name": None if unnamed or value.get("private") is True or package.get("publish") is False or package.get("publish") == [] else declared,
-                    "version": package.get("version") if isinstance(package.get("version"), str) else None,
+                    "version": text(package["version"]) if isinstance(package.get("version"), str) else None,
                     "version_reason": None if isinstance(package.get("version"), str) else "not_declared",
                     "evidence_refs": [self.ref(path)], "maintenance_owner": None,
                     "maintenance_owner_reason": "not_named_in_visible_policy", "verification_hints": []}
                 self.components.append(component)
                 if ecosystem == "cargo" and isinstance(package.get("version"), dict):
                     version, refs, reason = self.cargo_inherit(component, "package", "version", package["version"])
-                    component.update(version=version, version_reason=reason)
+                    component.update(version=text(version) if version is not None else None, version_reason=reason)
                     component["evidence_refs"].extend(refs)
+                if ecosystem == "cargo" and isinstance(package.get("publish"), dict):
+                    publish, refs, reason = self.cargo_inherit(component, "package", "publish", package["publish"])
+                    component.update(published_name=None if reason or publish is False or publish == [] else declared,
+                                     published_name_reason=reason)
+                    component["evidence_refs"].extend(refs)
+                if ecosystem == "npm":
+                    for script, command in value.get("scripts", {}).items():
+                        script.encode("utf-8")
+                        command.encode("utf-8")
                 self.component(component, value)
             except (ValueError, TypeError, KeyError, AttributeError):
                 row = next(r for r in self.files if r["path"] == path)
@@ -304,6 +412,9 @@ class Inventory:
                 merged[key] = {**edge, "edge_id": stable("pmde_", *key), "bases": [edge["basis"]]}
                 continue
             saved = merged[key]
+            if "optional" in edge or "optional" in saved:
+                saved["optional"] = edge.get("optional", False) and saved.get("optional", False)
+                saved["extras"] = sorted(set(saved.get("extras", []) + edge.get("extras", [])))
             if edge["basis"] not in saved["bases"]:
                 saved["bases"].append(edge["basis"])
             for ref in edge["evidence_refs"]:
@@ -315,10 +426,14 @@ class Inventory:
             if any(ref["path"] in invalid_files for ref in edge["evidence_refs"]):
                 edge.update(resolved=None, evidence_level="declared", resolution_reason="lockfile_unparsable")
         used = {e["dependency_key"] for e in self.edges}
+        kinds = {}
+        for edge in self.edges:
+            kinds.setdefault(edge["dependency_key"], set()).add(edge["kind"])
         for key in used:
-            self.dependencies[key]["kinds"] = sorted({e["kind"] for e in self.edges if e["dependency_key"] == key})
-        return {"components": self.components, "dependencies": [d for k, d in sorted(self.dependencies.items()) if k in used],
-                "edges": self.edges, "verification_hints": self.hints, "parser_reasons": sorted(self.reasons)}
+            self.dependencies[key]["kinds"] = sorted(kinds[key])
+        return trim_inventory({"components": self.components, "dependencies": [d for k, d in sorted(self.dependencies.items()) if k in used],
+                "edges": self.edges, "verification_hints": self.hints, "parser_reasons": sorted(self.reasons), "parser_notes": sorted(self.notes),
+                "unsupported_fields": self.unsupported_fields, "omitted_edges": self.omitted_edges})
 
     def cargo_workspace(self, component):
         path, root = _nearest(component["manifest_path"], "Cargo.toml", {
@@ -327,7 +442,7 @@ class Inventory:
             return None, None
         relative = posixpath.relpath(posixpath.dirname(component["manifest_path"]) or ".", posixpath.dirname(path) or ".")
         workspace = root["workspace"]
-        if relative == "." or (member_path(relative, workspace.get("members", [])) and not member_path(relative, workspace.get("exclude", []))):
+        if relative == "." or (self.matcher.matches(relative, workspace.get("members", [])) and not self.matcher.matches(relative, workspace.get("exclude", []))):
             return path, workspace
         return None, None
 
@@ -342,6 +457,12 @@ class Inventory:
         return inherited, [self.ref(path, workspace_field=section + "." + name)], None
 
     def lock_coverage(self, component, path, lock):
+        key = (component["component_id"], path)
+        if key not in self.coverage_cache:
+            self.coverage_cache[key] = self._lock_coverage(component, path, lock)
+        return self.coverage_cache[key]
+
+    def _lock_coverage(self, component, path, lock):
         eco = component["ecosystem"]
         relative = posixpath.relpath(posixpath.dirname(component["manifest_path"]) or ".", posixpath.dirname(path) or ".")
         if relative == ".":
@@ -352,16 +473,24 @@ class Inventory:
             root, _ = self.cargo_workspace(component)
             if root and posixpath.dirname(root) == posixpath.dirname(path):
                 return True, [self.ref(root, basis="workspace_membership")]
-            return any(isinstance(component["version"], str) and p.get("name") == component["name"] and p.get("version") == component["version"] and "source" not in p
-                       for p in lock.get("package", [])), []
+            # A known workspace must explicitly cover this path; namesakes are not members.
+            _, workspace_root = _nearest(component["manifest_path"], "Cargo.toml", {
+                p: v for p, v in self.parsed.items() if p.endswith("Cargo.toml") and isinstance(v, dict) and "workspace" in v})
+            if workspace_root is not None:
+                return False, []
+            namesakes = [v for p, v in self.parsed.items() if posixpath.basename(p) == "Cargo.toml"
+                         and v.get("package", {}).get("name") == component["name"]
+                         and v.get("package", {}).get("version") == component["version"]]
+            if len(namesakes) != 1:
+                return False, []
+            return sum(isinstance(component["version"], str) and p.get("name") == component["name"] and p.get("version") == component["version"] and "source" not in p
+                       for p in lock.get("package", [])) == 1, []
         if eco == "python":
             root = posixpath.join(posixpath.dirname(path), "pyproject.toml")
             workspace = self.parsed.get(root, {}).get("tool", {}).get("uv", {}).get("workspace", {})
-            if member_path(relative, workspace.get("members", [])) and not member_path(relative, workspace.get("exclude", [])):
+            if self.matcher.matches(relative, workspace.get("members", [])) and not self.matcher.matches(relative, workspace.get("exclude", [])):
                 return True, [self.ref(root, basis="workspace_membership")]
             name = package_name(eco, component["name"])
-            if name in {package_name(eco, n) for n in lock.get("manifest", {}).get("members", [])}:
-                return True, []
             for entry in lock.get("package", []):
                 if package_name(eco, entry.get("name", "")) == name and any(
                         entry.get("source", {}).get(kind) == relative for kind in ("editable", "virtual")):
@@ -396,7 +525,12 @@ class Inventory:
                 # go.sum is a checksum catalog, not a resolver's lockfile.
                 return None, None, [], "go_sum_not_lockfile"
             else:
-                versions = {text(p["version"]) for p in lock.get("package", []) if package_name(eco, p.get("name", "")) == package_name(eco, name)}
+                if (path, eco) not in self.lock_indexes:
+                    index = {}
+                    for entry in lock.get("package", []):
+                        index.setdefault(package_name(eco, entry.get("name", "")), []).append(entry)
+                    self.lock_indexes[path, eco] = index
+                versions = {text(p["version"]) for p in self.lock_indexes[path, eco].get(package_name(eco, name), [])}
                 if len(versions) != 1:
                     return None, None, [], "no_unique_lock_resolution"
                 version, bins = next(iter(versions)), []
@@ -406,12 +540,13 @@ class Inventory:
             row.update(status="unparsable", reason="unsupported_lock_structure")
             return None, None, [], "lockfile_unparsable"
 
-    def add(self, component, name, version, relation, *, basis, refs=None, kind=None, ecosystem=None, resolved=True, version_reason=None):
+    def add(self, component, name, version, relation, *, basis, refs=None, kind=None, ecosystem=None, resolved=True, version_reason=None, optional=False, extra=None):
         name = text(name)
         if version is not None:
             version = text(version)
         if len(self.edges) >= MAX_EDGES:
-            self.reasons.add("edge_limit")
+            self.reasons.add("capture_budget")
+            self.omitted_edges += 1
             return
         eco = ecosystem or component["ecosystem"]
         kind = kind or ("runtime_library" if relation == "runtime" else "build_test_toolchain")
@@ -423,7 +558,7 @@ class Inventory:
         version_resolved, lock_ref, _, reason = self.resolution(component, name) if resolved else (None, None, [], "go_sum_not_lockfile" if eco == "go" else "not_lockfile_dependency")
         if lock_ref:
             refs = [*refs, *lock_ref]
-        self.edges.append({"edge_id": stable("pmde_", component["component_id"], key, relation, basis, refs),
+        self.edges.append({**({"optional": True, "extras": [extra]} if optional else {}), "edge_id": stable("pmde_", component["component_id"], key, relation, basis, refs),
             "component_id": component["component_id"], "dependency_key": key, "direction": "component_to_dependency",
             "relation": relation, "kind": kind, "version": version, "resolved": version_resolved,
             "version_reason": version_reason or ("not_declared" if version is None else None),
@@ -453,6 +588,61 @@ class Inventory:
         else:
             self.add(component, name, version, "build", basis="dev_unclassified", refs=[manifest_ref])
 
+    def unsupported(self, component, field):
+        self.reasons.add("unsupported_field")
+        # The source path and bounded field identify unsupported forms without echoing values.
+        ref = self.ref(component["manifest_path"], declaration_group=field)
+        field = ref.pop("declaration_group")
+        self.unsupported_fields.append({**ref, "field": field})
+
+    def python_dev_groups(self, component, tool):
+        def group(field, values, poetry=False):
+            try:
+                if poetry:
+                    if not isinstance(values, dict):
+                        raise ValueError
+                    requirements = []
+                    for name, value in values.items():
+                        if isinstance(value, dict):
+                            value = value.get("version") or value.get("git") or value.get("path")
+                        requirements.append((text(name), text(value)))
+                else:
+                    if not isinstance(values, list):
+                        raise ValueError
+                    requirements = [requirement(raw) for raw in values]
+                for name, version in requirements:
+                    self.dev(component, name, version, "python_dev_group", group=field)
+            except (ValueError, TypeError, AttributeError):
+                self.unsupported(component, field)
+
+        for manager in ("uv", "pdm", "poetry"):
+            settings = tool.get(manager, {})
+            if not isinstance(settings, dict):
+                self.unsupported(component, "tool." + manager)
+                continue
+            field = "tool." + manager + ".dev-dependencies"
+            if "dev-dependencies" in settings:
+                values = settings["dev-dependencies"]
+                if manager == "pdm":
+                    if not isinstance(values, dict):
+                        self.unsupported(component, field)
+                    else:
+                        for name, deps in values.items():
+                            group(field + "." + name, deps)
+                else:
+                    group(field, values, poetry=manager == "poetry")
+            if manager == "poetry" and "group" in settings:
+                groups = settings["group"]
+                if not isinstance(groups, dict):
+                    self.unsupported(component, "tool.poetry.group")
+                else:
+                    for name, definition in groups.items():
+                        field = "tool.poetry.group." + name + ".dependencies"
+                        if not isinstance(definition, dict) or "dependencies" not in definition:
+                            self.unsupported(component, field)
+                        else:
+                            group(field, definition["dependencies"], poetry=True)
+
     def component(self, c, value):
         eco = c["ecosystem"]
         if eco == "python":
@@ -461,8 +651,8 @@ class Inventory:
             if not isinstance(dynamic, list):
                 raise ValueError("dynamic_list_required")
             c.update(runtime_dependencies_status="declared", runtime_dependencies_reason=None)
+            dynamic_sources = set()
             if "dependencies" in dynamic:
-                self.reasons.add("python_dynamic_dependencies")
                 c.update(runtime_dependencies_status="unknown", runtime_dependencies_reason="dynamic_source_not_explicit")
                 source = value.get("tool", {}).get("setuptools", {}).get("dynamic", {}).get("dependencies", {})
                 paths = source.get("file", []) if isinstance(source, dict) else []
@@ -474,6 +664,7 @@ class Inventory:
                             complete = False
                             continue
                         path = posixpath.join(posixpath.dirname(c["manifest_path"]), relative)
+                        dynamic_sources.add(path)
                         requirements = self.parsed.get(path)
                         if not posixpath.basename(path).startswith("requirements") or not isinstance(requirements, list):
                             complete = False
@@ -483,6 +674,10 @@ class Inventory:
                                      refs=[self.ref(c["manifest_path"]), self.ref(path)])
                     c.update(runtime_dependencies_status="declared_dynamic_files" if complete else "partial",
                              runtime_dependencies_reason=None if complete else "dynamic_source_unavailable")
+                if c["runtime_dependencies_reason"]:
+                    self.reasons.add("python_dynamic_dependencies")
+                else:
+                    self.notes.add("python_dynamic_dependencies")
             if not isinstance(project.get("dependencies", []), list) or not isinstance(value.get("build-system", {}).get("requires", []), list):
                 raise ValueError("dependency_list_required")
             for raw in project.get("dependencies", []):
@@ -505,11 +700,22 @@ class Inventory:
                                 self.reasons.add("python_dependency_group_unavailable")
                             continue
                         name, version = requirement(raw)
-                        self.dev(c, name, version, "python_" + identity + ":" + group, group=identity + ":" + group)
+                        if identity == "extra":
+                            ref = self.ref(c["manifest_path"], declaration_group="extra:" + group)
+                            self.add(c, name, version, "runtime", basis="project.optional-dependencies",
+                                     refs=[ref], optional=True, extra=ref["declaration_group"][6:])
+                        else:
+                            self.dev(c, name, version, "python_group", group="group:" + group)
             for path, values in self.parsed.items():
-                if "dependencies" not in dynamic and posixpath.basename(path).startswith("requirements") and posixpath.dirname(path) == posixpath.dirname(c["manifest_path"]):
+                if posixpath.basename(path).startswith("requirements") and posixpath.dirname(path) == posixpath.dirname(c["manifest_path"]):
+                    if path in dynamic_sources:
+                        continue
+                    if "dependencies" in dynamic and not dynamic_sources:
+                        self.notes.add("requirements_excluded_dynamic_source_unknown")
+                        continue
                     for name, version in values:
                         self.add(c, name, version, "build", basis="dev_unclassified", refs=[self.ref(path)])
+            self.python_dev_groups(c, value.get("tool", {}))
         elif eco == "npm":
             for field, reason in (("peerDependencies", "npm_peer_dependencies_not_captured"), ("optionalDependencies", "npm_optional_dependencies_not_captured")):
                 if value.get(field):
@@ -549,11 +755,22 @@ class Inventory:
                 continue
             for step in steps:
                 cwd = step["working_directory"]
-                commands = _commands(step["command"])
-                if commands and len(commands[0]) == 2 and commands[0][0] == "cd":
-                    cwd = posixpath.join(cwd, commands[0][1])
-                if "$" not in cwd and posixpath.normpath(cwd) == directory:
-                    yield path, step
+                if cwd is None:
+                    self.reasons.add("workflow_directory_unknown")
+                for words in _commands(step["command"]):
+                    if words and words[0] == "cd":
+                        target = _directory(words[1]) if len(words) == 2 and words[1] != "-" else None
+                        if target is None or any(c in (target or "") for c in "()"):
+                            cwd = None
+                            self.reasons.add("workflow_directory_unknown")
+                        elif cwd is not None:
+                            cwd = posixpath.normpath(posixpath.join(cwd, target))
+                        continue
+                    if any(c in word for word in words for c in "()`"):
+                        cwd = None
+                        self.reasons.add("workflow_directory_unknown")
+                    if cwd is not None and posixpath.normpath(cwd) == directory:
+                        yield path, {**step, "command": shlex.join(words), "working_directory": cwd}
 
     def step_relations(self, component, step):
         relations = set()

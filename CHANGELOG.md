@@ -6,8 +6,10 @@
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
   immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
   current membership and source withdrawal; capture never executes repository code. Lockfile
-  versions count as verified only for components the lockfile covers, unsupported fields make a
-  capture partial, and freshness stays unknown until a repository head is observed.
+  versions count as verified only for components the lockfile covers (never by name alone),
+  unsupported fields make a capture partial, and freshness stays unknown until a repository head
+  is observed. Optional extras and tool-specific dev groups keep their roles; an oversized
+  manifest is stored as a deterministic partial capture with its omission count.
 
 - Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
   with adopted-requirement progress, explicit blockers, decisions, schedule/quality
