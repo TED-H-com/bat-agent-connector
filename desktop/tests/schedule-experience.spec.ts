@@ -381,6 +381,42 @@ test('open work item bars include Waiting and Blocked labels and delta/bar label
   }
 });
 
+test('inspector shows visible schedule dates and milestone delta, links milestones to a valid requirement, and resolves issue row requirements and repo#number', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    data.unscheduled.push({
+      id: `issue:${project.ids.issueMapping}`, parent_id: `work:${project.ids.work.email}`, kind: 'issue',
+      title: 'Issue #42: Email sign-in error state', status: 'in_progress', blocked: null, waiting: null, depends_on: [],
+      refs: {
+        mapping_id: project.ids.issueMapping, work_item_id: project.ids.work.email,
+        requirement_ids: [project.ids.requirements.email],
+        issue: {provider: 'github', repository: project.ids.repository, number: 42},
+      },
+    });
+  }});
+  await expect(page.locator('[data-schedule-track="milestone:recovery_review"] [data-schedule-bar="baseline"]')).toHaveAttribute('title', 'Baseline · 2026-10-16');
+  await item(page, 'milestone:recovery_review').click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  const statusSection = inspector.locator('[data-schedule-section="status"]');
+  await expect(statusSection).toContainText('Baseline: 2026-10-16');
+  await expect(statusSection).toContainText('Forecast: 2026-10-19');
+  await expect(statusSection).toContainText('+3d');
+  await expect(statusSection).not.toContainText('2026-10-16 → 2026-10-16');
+
+  await inspector.locator('a[href*="/requirements"]').click();
+  await expect(page.locator('[data-pm-rtm]')).toBeVisible();
+  await expect(page.locator('[data-pm-rtm] [aria-selected="true"]')).toHaveCount(1);
+
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/schedule`);
+  const region = page.locator('[data-pm-schedule]');
+  await region.locator('.schedule-unscheduled summary').click();
+  await region.locator(`.schedule-unscheduled [data-schedule-select="issue:${project.ids.issueMapping}"]`).click();
+  await expect(inspector.locator('[data-schedule-section="requirement"]')).toContainText(f.copy.requirements[0].text);
+  await inspector.locator('[data-schedule-section="details"] > summary').click();
+  await expect(inspector.locator('[data-schedule-section="details"]')).toContainText(`${project.ids.repository}#42`);
+});
+
+
 
 
 

@@ -144,7 +144,8 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
         const start = span.start ?? span.end, end = span.end ?? start;
         const marker = row.kind === 'milestone';
         const endText = span.open ? t('sched_open') : span.end === null ? reasonLabel(t, 'terminal_time_unrecorded') : row[span.kind].end || '—';
-        const barTitle = `${t('sched_' + span.kind)} · ${row[span.kind].start || '—'} → ${endText}`;
+        const rangeText = !span.open && span.end !== null && row[span.kind].end && row[span.kind].end === row[span.kind].start ? row[span.kind].start : `${row[span.kind].start || '—'} → ${endText}`;
+        const barTitle = `${t('sched_' + span.kind)} · ${rangeText}`;
         const bar = h('span', {class: `schedule-bar ${span.kind}${marker ? ' milestone' : ''}${span.open ? ' open' : ''}${row.status === 'blocked' ? ' blocked' : ''}`,
           role: 'img', 'aria-label': barTitle, 'data-schedule-bar': span.kind, 'data-open': span.open ? 'true' : null,
           title: barTitle}, marker ? '◆' : null);

@@ -28464,17 +28464,25 @@ function dateRange(span) {
 		timeZone: "UTC"
 	}).format(new Date(value)) + " UTC" : value;
 	const validEnd = span.end && (!span.start || dayNumber(span.end) >= dayNumber(span.start)) ? span.end : null;
+	if (validEnd && validEnd === span.start) return format(span.start) || "—";
 	return [format(span.start) || "—", validEnd ? format(validEnd) : span.open === true ? t("sched_open") : reasonLabel(t, "terminal_time_unrecorded")].join(" → ");
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
 function render(row, { workspaceId, data }) {
-	const refs = row.refs || {}, work = row.kind === "attempt" ? data.rows.find((value) => value.id === row.parent_id) : row;
-	const served = work?.refs || refs;
-	const requirements = data.rows.filter((value) => value.kind === "requirement" && value.refs?.plan_revision_id === served.plan_revision_id && (served.requirement_ids || [served.requirement_id]).includes(value.refs?.requirement_id));
+	const refs = row.refs || {}, work = row.kind === "attempt" || row.kind === "issue" ? data.rows.find((value) => value.id === row.parent_id) : row;
+	const served = work?.refs || refs, reqIds = served.requirement_ids || (served.requirement_id ? [served.requirement_id] : []);
+	const requirements = data.rows.filter((value) => value.kind === "requirement" && (!served.plan_revision_id || value.refs?.plan_revision_id === served.plan_revision_id) && reqIds.includes(value.refs?.requirement_id));
 	const attempts = data.rows.filter((value) => value.kind === "attempt" && value.parent_id === (work?.id || row.id));
 	const sessions = row.kind === "attempt" ? [row] : attempts;
 	const status = section("status", rowStatus(row, data));
+	for (const key of [
+		"baseline",
+		"forecast",
+		"actual"
+	].filter((key) => row[key])) status.append(h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key])));
+	const delta = milestoneDelta(row);
+	if (row.kind === "milestone" && delta !== null && delta !== 0) status.append(h$1("p", {}, t("sched_delta", { n: delta > 0 ? "+" + delta : delta })));
 	if (sessionAttempt(row)) status.append(h$1("p", { class: "ui-meta" }, row.status === "in_progress" ? t("sched_open") + " · " + t("sched_no_dates") : t("sched_no_dates")));
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
@@ -28487,8 +28495,8 @@ function render(row, { workspaceId, data }) {
 		body: attemptList,
 		open: true
 	}));
-	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || row.id;
-	const links = h$1("div", { class: "schedule-inspector-actions" }, h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")), h$1("a", {
+	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || refs.requirement_ids?.[0] || served.requirement_ids?.[0] || null;
+	const links = h$1("div", { class: "schedule-inspector-actions" }, select ? h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")) : null, h$1("a", {
 		class: "ui-button secondary",
 		href: discussHref({
 			workspaceId,
@@ -28505,7 +28513,7 @@ function render(row, { workspaceId, data }) {
 			"baseline",
 			"forecast",
 			"actual"
-		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), refs.issue ? h$1("code", {}, `${refs.issue.repository}#${refs.issue.number}`) : null, ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
 			data.baseline?.revision_id,
 			data.forecast?.revision_id,
 			data.as_of
@@ -28777,7 +28785,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
 				const endText = span.open ? t("sched_open") : span.end === null ? reasonLabel(t, "terminal_time_unrecorded") : row[span.kind].end || "—";
-				const barTitle = `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${endText}`;
+				const rangeText = !span.open && span.end !== null && row[span.kind].end && row[span.kind].end === row[span.kind].start ? row[span.kind].start : `${row[span.kind].start || "—"} → ${endText}`;
+				const barTitle = `${t("sched_" + span.kind)} · ${rangeText}`;
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
 					role: "img",
