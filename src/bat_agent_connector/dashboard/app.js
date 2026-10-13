@@ -16615,8 +16615,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			ecosystem: ecosystemInput,
 			kind: kindSelect,
 			version: versionInput,
-			relation: relationSelect,
 			evidence: evidenceSelect,
+			relation: relationSelect,
 			path: pathInput,
 			url: urlInput,
 			note: noteInput
@@ -16647,7 +16647,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		},
 		extra: h("div", { class: "dep-fields" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput), sourceCommit, labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
 	});
-	const retractSelect = h("select", { "aria-label": t("dep_retract") });
+	relationOptions();
+	const retractSelect = h("select", { "aria-label": t("dep_declaration") });
 	const retractForm = form({
 		action: "pm.dependencies.retract",
 		target: { workspace_id: workspaceId },
@@ -16657,8 +16658,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		preconditions,
 		onSaved: () => refresh(),
 		params: (values) => ({ declaration_id: values.declaration_id }),
-		extra: h("div", { class: "dep-fields" }, labelled("dep_retract", retractSelect))
+		extra: h("div", { class: "dep-fields" }, labelled("dep_declaration", retractSelect))
 	});
+	retractForm.box.querySelector("button[type=submit]").className = "secondary";
 	const record = disclosure({
 		label: t("dep_record"),
 		body: h("div", {}, declareForm.box, retractForm.box),
@@ -16668,6 +16670,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			"dep-record"
 		])
 	});
+	record.dataset.depRecord = "";
 	const holder = h("div", {}, record);
 	const element = h("section", {
 		class: "dep-view",
@@ -16681,7 +16684,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function fillRetract() {
 		const value = retractSelect.value;
 		const rows = data?.declared || [];
-		retractSelect.replaceChildren(...rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
+		retractSelect.replaceChildren(...!data ? [] : rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
 		if ([...retractSelect.options].some((option) => option.value === value)) retractSelect.value = value;
 	}
 	function moveGrid(event, root) {
@@ -16806,8 +16809,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (key === impactKey) return;
 		impactKey = key;
 		impact = null;
-		if (!key) return;
 		const ticket = ++impactTicket;
+		if (!key) return;
 		(async () => {
 			try {
 				const result = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies/impact?dependency=${encodeURIComponent(key)}`);
@@ -16899,7 +16902,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				returnFocus: () => focusTarget(focusKeyFor(selection)),
 				onClose: () => {
 					panel = null;
-					holder.append(record);
 				}
 			});
 			panel.dataset.depInspector = "";
@@ -17016,7 +17018,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				from: "dependencies"
 			})
 		}, t("dep_discuss")) : "";
-		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss), record);
+		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss));
+		if (activeEl?.matches("[data-dep-discuss]")) panel.querySelector("[data-dep-discuss]")?.focus({ preventScroll: true });
 	}
 	function drawGraph(edges) {
 		const nodes = new Map();
@@ -17149,6 +17152,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function render() {
 		const previous = document.activeElement?.getAttribute?.("data-dep-focus");
 		element.dataset.depMode = mode;
+		toolbar.hidden = !data;
+		details.hidden = !data;
+		holder.hidden = !data;
 		matrixHost.hidden = mode !== "matrix";
 		graphHost.hidden = mode !== "graph";
 		const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);
@@ -17167,7 +17173,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			chip.node.setAttribute("aria-label", text);
 			chip.node.setAttribute("aria-pressed", String(evidenceFilter.includes(chip.value)));
 		}
-		sourceCommit.textContent = shortSha(data?.source?.commit_sha);
+		sourceCommit.textContent = data?.source?.commit_sha ? t("dep_meta_commit", { commit: shortSha(data.source.commit_sha) }) : "";
 		const edges = data ? filteredEdges() : [];
 		const names = new Map();
 		for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
@@ -17381,6 +17387,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			data = projection;
 			revisions = history;
 			statusBox.replaceChildren();
+			impactTicket++;
+			impactKey = "";
 			if (!selectionAlive()) {
 				selection = null;
 				closeInspector();
@@ -17403,14 +17411,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				403,
 				404
 			].includes(error.status)) withdraw();
-			else {
-				data = null;
-				revisions = null;
-				impact = null;
-				impactKey = "";
-				closeInspector();
-				render();
-			}
+			else clearData();
 			statusBox.replaceChildren(inlineError({
 				error,
 				retry: () => {
@@ -17418,6 +17419,20 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				}
 			}));
 		}
+	}
+	function clearData() {
+		impactTicket++;
+		data = null;
+		revisions = null;
+		impact = null;
+		impactKey = "";
+		closeInspector();
+		fillComponents();
+		fillRetract();
+		render();
+		captureForm.update();
+		declareForm.update();
+		retractForm.update();
 	}
 	function withdraw() {
 		serial++;
@@ -17430,8 +17445,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		preference.selection = null;
 		closeInspector();
 		statusBox.replaceChildren();
+		fillComponents();
+		fillRetract();
 		render();
-		syncChrome();
+		captureForm.update();
+		declareForm.update();
+		retractForm.update();
 	}
 	function setActive(value) {
 		const next = Boolean(value);

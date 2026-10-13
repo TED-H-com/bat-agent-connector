@@ -259,7 +259,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   evidenceSelect.addEventListener('change', relationOptions);
   relationOptions();
   const declareForm = form({action: 'pm.dependencies.declare', target: {workspace_id: workspaceId}, label: 'dep_declare',
-    fields: {component: componentSelect, name: nameInput, ecosystem: ecosystemInput, kind: kindSelect, version: versionInput, relation: relationSelect, evidence: evidenceSelect, path: pathInput, url: urlInput, note: noteInput},
+    fields: {component: componentSelect, name: nameInput, ecosystem: ecosystemInput, kind: kindSelect, version: versionInput, evidence: evidenceSelect, relation: relationSelect, path: pathInput, url: urlInput, note: noteInput},
     permitted: () => permitted(true) && ready() && Boolean(data?.capture?.revision_id), preconditions, onSaved: () => refresh(),
     params: values => {
       const url = values.url.trim(), path = values.path.trim();
@@ -271,11 +271,14 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     extra: h('div', {class: 'dep-fields'}, labelled('dep_component', componentSelect), labelled('dep_name', nameInput), labelled('dep_ecosystem', ecosystemInput),
       labelled('dep_kind', kindSelect), labelled('dep_version', versionInput), labelled('dep_level', evidenceSelect), labelled('dep_relation', relationSelect),
       labelled('dep_source_path', pathInput), sourceCommit, labelled('dep_source_url', urlInput), labelled('dep_note', noteInput))});
-  const retractSelect = h('select', {'aria-label': t('dep_retract')});
+  relationOptions(); // Restored evidence determines the translated relation options.
+  const retractSelect = h('select', {'aria-label': t('dep_declaration')});
   const retractForm = form({action: 'pm.dependencies.retract', target: {workspace_id: workspaceId}, label: 'dep_retract', fields: {declaration_id: retractSelect},
     permitted: () => permitted(true) && ready() && /^pmdecl_[0-9a-f]{32}$/.test(retractSelect.value), preconditions, onSaved: () => refresh(),
-    params: values => ({declaration_id: values.declaration_id}), extra: h('div', {class: 'dep-fields'}, labelled('dep_retract', retractSelect))});
+    params: values => ({declaration_id: values.declaration_id}), extra: h('div', {class: 'dep-fields'}, labelled('dep_declaration', retractSelect))});
+  retractForm.box.querySelector('button[type=submit]').className = 'secondary';
   const record = disclosure({label: t('dep_record'), body: h('div', {}, declareForm.box, retractForm.box), key: JSON.stringify([namespace, workspaceId, 'dep-record'])});
+  record.dataset.depRecord = '';
   const holder = h('div', {}, record);
   const element = h('section', {class: 'dep-view', 'data-dep-view': ''}, toolbar, statusBox, captureForm.box, matrixHost, graphHost, details, holder);
 
@@ -287,7 +290,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   function fillRetract() {
     const value = retractSelect.value;
     const rows = data?.declared || [];
-    retractSelect.replaceChildren(...(rows.length ? rows.map(row => h('option', {value: row.declaration_id}, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t('dep_' + row.relation) : '']))) : [h('option', {value: ''}, t('dep_none_recorded'))]));
+    retractSelect.replaceChildren(...(!data ? [] : rows.length ? rows.map(row => h('option', {value: row.declaration_id}, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t('dep_' + row.relation) : '']))) : [h('option', {value: ''}, t('dep_none_recorded'))]));
     if ([...retractSelect.options].some(option => option.value === value)) retractSelect.value = value;
   }
   function moveGrid(event, root) {
@@ -370,8 +373,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     const key = active ? selectedKey() : '';
     if (key === impactKey) return;
     impactKey = key; impact = null;
-    if (!key) return;
     const ticket = ++impactTicket;
+    if (!key) return;
     void (async () => {
       try {
         const result = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies/impact?dependency=${encodeURIComponent(key)}`);
@@ -424,7 +427,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   function openInspector() {
     if (!selection || !data) return;
     if (!panel) {
-      panel = inspector({title: inspectorTitle(), returnFocus: () => focusTarget(focusKeyFor(selection)), onClose: () => {panel = null; holder.append(record);}});
+      panel = inspector({title: inspectorTitle(), returnFocus: () => focusTarget(focusKeyFor(selection)), onClose: () => {panel = null;}});
       panel.dataset.depInspector = '';
       panel.querySelector('h2')?.classList.add('dep-inspector-title');
       (main || element).append(panel);
@@ -498,7 +501,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     const subject = selectedKey() ? dependencyName(selectedKey()) : componentName(selection.componentId);
     const discussionTitle = joinLabel([subject, shortSha(data.capture?.commit_sha) ? t('dep_meta_commit', {commit: shortSha(data.capture.commit_sha)}) : '']);
     const discuss = selection ? h('a', {class: 'ui-button secondary ui-md', 'data-dep-discuss': '', href: discussHref({workspaceId, refs: [], title: discussionTitle, from: 'dependencies'})}, t('dep_discuss')) : '';
-    panel.body.replaceChildren(facts, tests, affected, releaseBlock, h('div', {class: 'dep-actions'}, discuss), record);
+    panel.body.replaceChildren(facts, tests, affected, releaseBlock, h('div', {class: 'dep-actions'}, discuss));
+    if (activeEl?.matches('[data-dep-discuss]')) panel.querySelector('[data-dep-discuss]')?.focus({preventScroll: true});
   }
   function drawGraph(edges) {
     const nodes = new Map();
@@ -572,6 +576,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   function render() {
     const previous = document.activeElement?.getAttribute?.('data-dep-focus');
     element.dataset.depMode = mode;
+    toolbar.hidden = !data; details.hidden = !data; holder.hidden = !data;
     matrixHost.hidden = mode !== 'matrix';
     graphHost.hidden = mode !== 'graph';
     const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);
@@ -586,7 +591,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       const text = count == null ? t('dep_' + chip.value) : `${t('dep_' + chip.value)} ${count}`;
       chip.label.textContent = text; chip.node.setAttribute('aria-label', text); chip.node.setAttribute('aria-pressed', String(evidenceFilter.includes(chip.value)));
     }
-    sourceCommit.textContent = shortSha(data?.source?.commit_sha);
+    sourceCommit.textContent = data?.source?.commit_sha ? t('dep_meta_commit', {commit: shortSha(data.source.commit_sha)}) : '';
     const edges = data ? filteredEdges() : [];
     const names = new Map();
     for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
@@ -714,19 +719,27 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       alive(); if (ticket !== serial) return;
       if (projection?.workspace_id !== workspaceId || history?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
       data = projection; revisions = history; statusBox.replaceChildren();
+      impactTicket++; impactKey = ''; // An open selection must reread the refreshed projection's impact.
       if (!selectionAlive()) {selection = null; closeInspector();}
       fillComponents(); fillRetract(); render();
       captureForm.update(); declareForm.update(); retractForm.update();
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
       if ([401, 403, 404].includes(error.status)) withdraw();
-      else {data = null; revisions = null; impact = null; impactKey = ''; closeInspector(); render();}
+      else clearData();
       statusBox.replaceChildren(inlineError({error, retry: () => {void refresh();}}));
     }
   }
+  function clearData() {
+    impactTicket++; data = null; revisions = null; impact = null; impactKey = '';
+    closeInspector(); fillComponents(); fillRetract(); render();
+    captureForm.update(); declareForm.update(); retractForm.update();
+  }
   function withdraw() {
     serial++; impactTicket++; data = null; revisions = null; impact = null; impactKey = ''; selection = null; preference.selection = null;
-    closeInspector(); statusBox.replaceChildren(); render(); syncChrome();
+    closeInspector(); statusBox.replaceChildren();
+    fillComponents(); fillRetract(); render();
+    captureForm.update(); declareForm.update(); retractForm.update();
   }
   function setActive(value) {
     const next = Boolean(value);

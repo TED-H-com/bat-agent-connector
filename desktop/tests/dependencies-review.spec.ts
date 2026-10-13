@@ -192,3 +192,89 @@ test('SF-1: uncaptured inventory has no partial badge, zero chips or freshness c
   await expect(page.locator('[data-dep-freshness]')).toHaveCount(0);
   await expect(page.locator('[data-dep-view]')).toContainText('Not captured yet');
 });
+
+for (const status of [403, 404, 409, 413]) test(`BLOCKER-7: failed read ${status} clears options, forms and all source surfaces`, async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  const harness = await mount(page, {manage: true});
+  const declare = page.locator('[data-pm-action="pm.dependencies.declare"]');
+  const retract = page.locator('[data-pm-action="pm.dependencies.retract"]');
+  await expect(declare.getByLabel('Component', {exact: true}).locator('option')).toHaveCount(2);
+  await expect(retract.locator('option')).toHaveCount(1);
+  await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
+  await declare.getByLabel('Name', {exact: true}).fill('preserved-draft');
+  await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`).click();
+  harness.fail(status);
+  await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-dep-inspector]')).toHaveCount(0);
+  await expect(declare.getByLabel('Component', {exact: true}).locator('option')).toHaveCount(0);
+  await expect(retract.locator('option')).toHaveCount(0);
+  await expect(declare.locator('button[type=submit]')).toBeDisabled();
+  await expect(retract.locator('button[type=submit]')).toBeDisabled();
+  await expect(page.locator('[data-dep-capture]')).toBeDisabled();
+  await expect(page.locator('.dep-toolbar')).toBeHidden();
+  await expect(page.locator('[data-dep-details]')).toBeHidden();
+  await expect(page.locator('[data-dep-record]')).toBeHidden();
+  await expect(page.locator('[data-dep-cell], [data-dep-node], [data-dep-pick]')).toHaveCount(0);
+  await expect(page.locator('[data-dependencies-meta]')).toBeHidden();
+  // Retry calls Dependencies.refresh directly, rather than the workspace's form update.
+  await page.locator('[data-dep-view] > [role=status]').getByRole('button', {name: 'Retry', exact: true}).click();
+  await expect(declare.locator('button[type=submit]')).toBeDisabled();
+  harness.fail(0);
+  await page.locator('[data-dep-view] > [role=status]').getByRole('button', {name: 'Retry', exact: true}).click();
+  await expect(page.locator('.dep-toolbar')).toBeVisible();
+  await expect(declare.getByLabel('Name', {exact: true})).toHaveValue('preserved-draft');
+  expect(harness.posts).toEqual([]);
+});
+
+test('SF-3 part 1: open inspector rereads impact and preserves its focused action', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  let version = 1;
+  const harness = await mount(page, {impact: doc => ({...doc, components: [{...doc.components[0], name: `affected-${version}`}], counts: {components: 1, basis: 'returned_components', partial: true}})});
+  await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`).click();
+  await expect(page.locator('[data-dep-affected]')).toContainText('affected-1');
+  const discuss = page.locator('[data-dep-discuss]');
+  await discuss.focus();
+  version++;
+  await harness.event();
+  await expect(page.locator('[data-dep-affected]')).toContainText('affected-2');
+  await expect(discuss).toBeFocused();
+  expect(harness.impacts()).toBeGreaterThanOrEqual(2);
+  version++;
+  await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-dep-affected]')).toContainText('affected-3');
+});
+
+test.describe('zh-TW draft', () => {
+test.use({locale: 'zh-TW'});
+test('SF-5: inferred draft restores translated relations and record form stays on page', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page, {locale: 'zh-TW', manage: true});
+  // Use stable form fields here; the locale-specific option copy is checked after reload.
+  const form = page.locator('[data-pm-action="pm.dependencies.declare"]');
+  const selects = form.locator('select');
+  await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
+  await selects.nth(2).selectOption('inferred');
+  await selects.nth(3).selectOption('runtime');
+  await form.locator('input').first().fill('draft-pkg');
+  await page.reload();
+  await expect(selects.nth(2)).toHaveValue('inferred');
+  await expect(selects.nth(3)).toHaveValue('runtime');
+  await expect(selects.nth(3).locator('option')).toHaveText(['執行期', '建置', '測試', '契約', '參考']);
+  await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`).click();
+  await expect(page.locator('[data-dep-inspector] [data-pm-action]')).toHaveCount(0);
+  await expect(page.locator('[data-dep-view] [data-pm-action="pm.dependencies.declare"]')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(form.locator('input').first()).toHaveValue('draft-pkg');
+});
+});
+
+
+test('M2: relation form labels source and declaration with a single primary action', async ({page}) => {
+  await mount(page, {manage: true});
+  await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
+  await expect(page.locator('[data-dep-source-commit]')).toHaveText('Captured at c0ffee1');
+  const retract = page.locator('[data-pm-action="pm.dependencies.retract"]');
+  await expect(retract.getByLabel('Declaration', {exact: true})).toBeVisible();
+  await expect(retract.locator('button[type=submit]')).toHaveClass(/secondary/);
+  await expect(page.locator('[data-dep-record] button.primary[type=submit]')).toHaveCount(1);
+});

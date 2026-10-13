@@ -440,7 +440,12 @@ miss says why the dependency is outside this projection, which is not the same a
 impact. Discuss with PM opens a discussion for dependency and component selections without
 a context ref (the backend has no dependency context kind). Its title names the item
 and captured commit. Declare and retract stay owner actions in a
-disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
+disclosure on the main page, never reparented into an inspector. Inferred drafts
+restore all five translated relations. The source commit and declaration select
+have labels; retract is secondary. Projection refresh rereads an open impact and
+retains focus on its action. Failed reads remove options, disable mutation forms,
+and hide the toolbar, Details and record disclosure with the rows and inspector;
+drafts and original operation keys remain intact. Details lists every manifest and unreadable path. Unknown reason codes use
 the shared wording, and the raw code appears only there.
 
 ## Issues & changes
