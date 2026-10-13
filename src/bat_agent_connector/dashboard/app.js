@@ -18992,10 +18992,6 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				await refreshParent?.();
 				await refresh();
 			}
-			if (conversation) detail.replaceChildren(h("p", {
-				"data-proposal-adopted": "",
-				role: "status"
-			}, t("pd_adopted"), " · ", backLink()));
 		},
 		onStateChange: () => {
 			if (ready) updateControls();
@@ -19182,13 +19178,6 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		detail.replaceChildren();
 		content.replaceChildren();
 		detail.append(h("h4", {}, p.document?.title || t("pcp_review")));
-		if (conversation && adoptedId === p.proposal_id) {
-			detail.replaceChildren(h("p", {
-				"data-proposal-adopted": "",
-				role: "status"
-			}, t("pd_adopted"), " · ", backLink()));
-			return;
-		}
 		if (conversation && adopted()) {
 			const confirmation = h("div", { "data-proposal-adopted": "" }, statusPill("adopted"));
 			if (typeof p.adopted_revision_id === "string" && /^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id)) confirmation.append(" · ", h("a", {

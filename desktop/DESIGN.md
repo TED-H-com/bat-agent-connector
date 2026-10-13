@@ -308,6 +308,8 @@ and central VERSION_CONFLICT show Out of date and Ask PM again while retaining
 review drafts. An adopted proposal uses the central adopted reason and revision ID
 to show Adopted and open the accepted revision in Plan, without another adoption or
 Ask PM again action. Raw reason codes stay in Details.
+Successful receipt recovery refreshes this same central adopted view; a local
+success message must not replace its accepted-revision link.
 The clock runs only during actual operation checks. Exhausted polling shows Status
 not checked; refresh and PM events re-read the known original operation ID and reset
 the backoff. Only label changes update the live region; elapsed time is hidden from

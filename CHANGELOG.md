@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Preserve the central Adopted status and accepted-revision link immediately after
+  a PM proposal adoption, including recovery of its original receipt.
+
 - Keep checking acknowledged PM operations while central waits for child operations
   or checks, using the original receipt and bounded backoff.
 

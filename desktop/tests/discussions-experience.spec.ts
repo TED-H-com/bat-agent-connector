@@ -67,6 +67,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await adopt.getByLabel(zh ? '採用這組更新的理由' : 'Reason for adopting this update').fill(zh ? '保留未決事項並採用審閱後的範圍。' : 'Adopt the reviewed scope and preserve open decisions.');
     await adopt.getByRole('button', {name: zh ? '採用這組更新' : 'Adopt this update', exact: true}).click();
     await expect(page.locator('[data-proposal-adopted]')).toBeVisible();
+    await expect(page.locator('[data-proposal-adopted] [data-status=adopted]')).toHaveText(zh ? '已採用' : 'Adopted');
+    await expect(page.locator('[data-proposal-adopted-revision]')).toHaveText(zh ? '已採用版本' : 'Accepted revision');
     expect(f.discussion.writes.at(-1).body.action).toBe('pm.conversation.adopt');
     if (width < 1200) {await page.locator('[data-discussion-panel-toggle]').click(); await expect(page.locator('.pd-panel-overlay')).toHaveAttribute('aria-modal', 'true');}
     if (width === 390) await page.screenshot({path: `${dir}/discussions-sheet-${locale}-390.png`});

@@ -188,6 +188,7 @@ ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key�
 「已過期／再次詢問 PM」，不清除審閱文字，也不以另一個 key 重送原採用。
 已知原操作進入 `waiting_external` 或 `waiting_checks` 時仍以原 ID 做有限次回執檢查，
 讓等待子操作的採用完成後能更新介面；不重建請求或重送開始。
+成功查回採用回執後仍顯示中央的已採用狀態與已採用版本連結，不以本機成功提示取代。
 
 
 Overview review corrections: event pages coalesce post-event projection reads without
