@@ -58,7 +58,7 @@ try {
     }
     await page.locator('[data-view="overview"]').click();
     await page.screenshot({ path: resolve(output, `page-${lang}-${width}.png`), fullPage: true });
-    for (const section of ['architecture', 'windows']) {
+    for (const section of ['workflow', 'features', 'architecture', 'windows']) {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
       await page.screenshot({
         path: resolve(output, `${section}-${lang}-${width}.png`),
@@ -80,6 +80,8 @@ try {
     const changed = lang === 'en' ? 'zh' : 'en';
     await page.locator(`[data-language="${changed}"]`).click();
     assert.equal(new URL(page.url()).hash, '#workflow');
+    await page.locator('#workflow').scrollIntoViewIfNeeded();
+    await page.screenshot({path: resolve(output, `language-switch-${lang}-${width}.png`)});
     await page.reload();
     assert.equal(await page.locator('html').getAttribute('data-lang'), changed);
     await page.goto(base); // Saved preference remains available without URL override.
