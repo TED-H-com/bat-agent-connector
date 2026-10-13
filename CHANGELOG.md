@@ -4,10 +4,14 @@
 
 - Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
   with adopted-requirement progress, explicit blockers, decisions, schedule/quality
-  deviations, visible delivery evidence and bounded source coverage. Saved reports
-  retain their fixed snapshot semantics.
+  deviations, current review/proposal state, rollback evidence and bounded source
+  coverage. Hidden or oversized sources stay partial; source references respect
+  the whole document's limit. Reads share a snapshot and request-local source cache.
+  Saved reports retain their fixed snapshot semantics.
 - Bind up to eight original context items when creating a PM discussion and rename
-  threads with durable version checks. Current source withdrawal redacts chips and
+  threads with durable version checks while preserving title-only proposal adoption.
+  Version 3 profiles retain compatibility with version 2 plan documents. Bound
+  analysis references use each original revision's operation. Source withdrawal redacts chips and
   protects analysis derived from their frozen context; English and Traditional
   Chinese validation messages accompany the new context errors.
 
