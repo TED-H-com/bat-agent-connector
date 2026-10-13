@@ -10,8 +10,9 @@ import json
 import re
 import time
 
-from . import pm_profiles, pm_workspace
+from . import pm_profiles, pm_read_cache, pm_workspace
 from .operations import ActionDef, OperationError
+from .pm_release_baselines import _snapshot_read
 
 THREAD_ID = re.compile(r"pmt_[0-9a-f]{32}")
 INPUT_ID = re.compile(r"pmi_[0-9a-f]{32}")
@@ -57,6 +58,9 @@ def install(ops):
             "CREATE INDEX IF NOT EXISTS pm_thread_workspace ON pm_threads(workspace_id,created_at,thread_id)",
             "CREATE INDEX IF NOT EXISTS pm_messages_thread ON pm_messages(thread_id,sequence)",
             "CREATE INDEX IF NOT EXISTS pm_inputs_thread ON pm_inputs(thread_id,sequence)",
+            "CREATE TABLE IF NOT EXISTS pm_thread_content_heads (thread_id TEXT PRIMARY KEY, version INTEGER NOT NULL)",
+            "CREATE INDEX IF NOT EXISTS pm_discussion_versions ON pm_discussion_applied "
+            "(json_extract(result,'$.thread_id'), json_extract(result,'$.version'))",
         ):
             ops.db.execute(statement)
         from . import pm_thread_contexts
@@ -344,6 +348,10 @@ def _apply(ctx, thread):
                 db.execute("INSERT INTO pm_planning_drafts VALUES(?,?,?,?,?,?,?,?,?,?,?)", values)
             db.execute("UPDATE pm_threads SET mode='planning',draft_id=? WHERE thread_id=?", (result["draft_id"], thread_id))
         db.execute("UPDATE pm_threads SET version=version+1,updated_at=? WHERE thread_id=?", (now, thread_id))
+    # Cosmetic titles keep their own CAS/version but do not advance content.
+    content_version = _content_version(db, thread) if action == 'pm.thread.rename' else result['version']
+    db.execute('INSERT INTO pm_thread_content_heads VALUES(?,?) ON CONFLICT(thread_id) DO UPDATE SET version=excluded.version',
+        (thread_id, content_version))
     result["workspace_id"] = workspace_id
     ctx.service.journal.api_event("pm_thread", thread_id, action,
         {**result, "operation_id": ctx.operation_id}, actor=ctx.actor)
@@ -388,7 +396,13 @@ def _capabilities(ops, workspace, principal):
             "adopt": False, "dispatch": False}
 
 
+@_snapshot_read
 def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
+    with pm_read_cache.scope(ops.db):
+        return _list_threads(ops, principal, workspace_id, limit=limit, after=after)
+
+
+def _list_threads(ops, principal, workspace_id, *, limit, after):
     workspace = _read(ops, principal, workspace_id)
     _limit(limit)
     if after is not None:
@@ -407,6 +421,34 @@ def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
             "capabilities": _capabilities(ops, workspace, principal), **pm_profiles.catalog(),
             "runtime": {"available": False, "adapter": "bat", "legacy": True,
                         "reason": "external_tool_policy_unverified"}}
+
+
+def _content_version(db, thread):
+    row = db.execute('SELECT version FROM pm_thread_content_heads WHERE thread_id=?', (thread['thread_id'],)).fetchone()
+    if row:
+        return row[0]
+    # Existing journals need no migration/backfill. One indexed historical head
+    # read provides the equivalent content version until the next normal write.
+    row = db.execute("""SELECT json_extract(a.result,'$.version') FROM pm_discussion_applied a
+        JOIN operations o USING(operation_id) WHERE json_extract(a.result,'$.thread_id')=?
+        AND o.action!='pm.thread.rename' ORDER BY json_extract(a.result,'$.version') DESC LIMIT 1""",
+        (thread['thread_id'],)).fetchone()
+    return row[0] if row else thread['version']
+
+
+def content_unchanged(db, thread, version, *, allowed_operations=()):
+    """Compare content versions; original adoption children remain accountable."""
+    if type(version) is not int or not 1 <= version <= thread['version']:
+        return False
+    if _content_version(db, thread) <= version:
+        return True
+    if not allowed_operations:
+        return False
+    changed = db.execute("""SELECT 1 FROM pm_discussion_applied a JOIN operations o USING(operation_id)
+        WHERE json_extract(a.result,'$.thread_id')=? AND json_extract(a.result,'$.version')>?
+        AND o.action!='pm.thread.rename' AND a.operation_id NOT IN (SELECT value FROM json_each(?)) LIMIT 1""",
+        (thread['thread_id'], version, json.dumps(allowed_operations))).fetchone()
+    return changed is None
 
 
 def _thread_sources_visible(db, principal, thread_id):

@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 
-from . import pm_access, pm_source_lineage, pm_workspace
+from . import pm_access, pm_read_cache, pm_source_lineage, pm_workspace
 from .operations import OperationError, OperationService
 
 MAX_CONTEXTS = 8
@@ -68,6 +68,7 @@ def _table(ops, name):
         raise unavailable()
 
 
+@pm_read_cache.memoized
 def resolve(ops, principal, wid, ref):
     """Use original domain readers; never resolve an ID globally or by title."""
     from . import (
@@ -88,11 +89,13 @@ def resolve(ops, principal, wid, ref):
     pm_workspace.require_member(ops.db, principal, wid)
     kind, identity = ref['kind'], ref['id']
     sources = []
+    primary = None
     if kind in {'plan_revision', 'requirement'}:
         _table(ops, 'pm_plan_revisions')
         rid = identity if kind == 'plan_revision' else ref['revision_id']
         record = pm_plans.get_plan(ops, principal, wid, rid)['plan']
         sources = pm_plans.source_operation_ids(ops.db, wid, rid)
+        primary = record['operation_id']
         doc = record['document']
         if kind == 'requirement':
             summary = next((r for r in doc['requirements'] if r['id'] == identity), None)
@@ -138,6 +141,7 @@ def resolve(ops, principal, wid, ref):
         record = pm_governance.get_record(ops, principal, wid, identity)
         summary = record['revision']['document']
         label, sources = summary['title'], [record['record']['operation_id'], record['revision']['operation_id']]
+        primary = record['revision']['operation_id']
     elif kind == 'finding':
         _table(ops, 'pm_github_observations')
         record = pm_maintenance_findings.get_finding(ops, principal, wid,
@@ -170,8 +174,9 @@ def resolve(ops, principal, wid, ref):
         from . import pm_issue_mappings
         _table(ops, 'pm_issue_revisions')
         # The neighbouring historical reader has no page parameter. Cap its input.
-        rows = ops.db.execute('SELECT sequence FROM pm_issue_revisions WHERE workspace_id=? AND mapping_id=? LIMIT 101', (wid, identity)).fetchall()
-        if len(rows) > 100:
+        access_rows = ops.db.execute('SELECT document FROM pm_issue_revisions WHERE workspace_id=? AND mapping_id=? ORDER BY sequence LIMIT 101', (wid, identity)).fetchall()
+        pm_issue_mappings._access(ops, principal, wid, [{'document': json.loads(row[0])} for row in access_rows])
+        if len(access_rows) > 100:
             raise OperationError('PM_CONTEXT_TOO_LARGE', 'Context history exceeds its bound / 討論來源歷程超出上限', 413)
         record = pm_issue_mappings.get_mapping(ops, principal, wid, identity)['current']
         summary = record['document']
@@ -195,7 +200,7 @@ def resolve(ops, principal, wid, ref):
         summary = {'title': label, 'kind': meeting['kind'], 'draft': record['draft'], 'completion': record['completion']}
     pm_access.require_operation_sources(ops.db, principal, sources)
     pm_source_lineage.require_document(ops.db, principal, summary)
-    return {'label': label, 'summary': summary, 'source_operation_ids': sources}
+    return {'label': label, 'summary': summary, 'source_operation_ids': sources, 'operation_id': primary or sources[0]}
 
 
 def admission(ops, principal, wid, refs):
@@ -235,7 +240,7 @@ def read(ops, principal, wid, thread_id, *, summaries=False):
         else:
             item.update(**ref, available=True, label=value['label'], bound_label=row['label_at_bind'])
             if summaries:
-                item.update(summary=value['summary'], source_operation_ids=value['source_operation_ids'])
+                item.update(summary=value['summary'], source_operation_ids=value['source_operation_ids'], operation_id=value['operation_id'])
         result.append(item)
     return result
 
