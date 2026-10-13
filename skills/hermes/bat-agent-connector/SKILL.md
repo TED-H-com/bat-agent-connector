@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "0d7eda2381701a429d2dfd5d4db850cf3b30a4a66a63fa75f9df7226f48a64b9"
+  canonical_sha256: "5e3cf941290960b94aa4e8809e6af401240c3ae169414c41ef65f81a06319bb6"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1591,8 +1591,12 @@ Use `pm_register_list(workspace_id, type?, status?, owner?, q?, after?, limit?)`
 `pm_register_get(workspace_id, row_id)` with your own observe principal. The register
 is a read-only projection of existing governance, finding, repair, follow-up, proposal,
 issue-mapping, meeting and plan-adoption records. It does not discuss, propose, repair
-or dispatch. Pass `after` back as `next_cursor`. Totals and the summary are present
-only when `coverage.complete` is true; a hidden or withdrawn source is omitted from
-rows and counts together. Do not invent links the timeline does not return.
+or dispatch. Pass the opaque `next_cursor` back as `after`; it is a base64url sequence
+token with no padding. A row id is path-safe, for example `governance.pmgov_…`, and is
+passed without percent-encoding. Totals and the summary are present only when
+`coverage.complete` is true for the sources that match the active type filter. A hidden
+row is omitted from rows, counts and summary together. One hidden or oversized record
+does not fail the page. Blocked rows without a stored reason are counted in
+`coverage.blocked_without_reason`. Do not invent links the timeline does not return.
 See `docs/design/pm-register.md` for the record mapping.
 <!-- END CANONICAL WORKFLOW -->
