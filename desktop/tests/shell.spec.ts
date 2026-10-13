@@ -66,7 +66,15 @@ test('binding withdrawal removes Work rows; workspace names never imply bindings
   await page.locator('[data-pm-view=discussions]').click(); await page.locator('[data-pm-view=overview]').click();
   await page.reload(); await expect(page.locator('.workspace-tree').first()).not.toContainText('Documentation search');
   await expect(page.locator('.workspace-tree-status')).toContainText('scope');
-  await expect(page.locator('.workspace-tree').first()).toContainText('Work links unavailable');
+  const failure = page.locator('[data-work-read-error]');
+  await expect(failure.locator('summary')).toHaveText('Work links unavailable');
+  await expect(failure.locator('details')).not.toHaveAttribute('open', '');
+  await expect(failure.getByRole('button', {name: 'Retry', exact: true})).toBeVisible();
+  f.state.denyBindings = false;
+  await failure.getByRole('button', {name: 'Retry', exact: true}).click();
+  await expect(page.locator('.workspace-tree').first()).toContainText('Documentation search');
+  await expect(failure).toHaveCount(0);
+  expect(f.pm.base.state.writes).toHaveLength(0);
 });
 test('mobile drawer traps focus, closes on Escape and returns to its opener', async ({page}) => {
   await page.setViewportSize({width:390,height:844});const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
@@ -192,9 +200,35 @@ test('missing binding capability is unknown; an accessible empty binding page is
     return result;
   });
   await page.goto(route);const tree=page.locator('.workspace-tree').first();
-  await expect(tree).toContainText('Work links unavailable');await expect(tree).not.toContainText('No linked projects');
-  supported=true;await page.reload();await expect(tree).toContainText('No linked projects');
-  hiddenProject=true;await page.reload();await expect(tree).toContainText('Work links unavailable');
+  const search=page.getByRole('searchbox',{name:'Search loaded projects and work'});
+  await expect(tree).toHaveAttribute('data-binding-state','unknown');
+  await expect(tree).toHaveText('');await expect(page.locator('[data-work-read-error]')).toHaveCount(0);
+  await search.fill('missing');await expect(tree).toContainText('Work links unavailable');
   await expect(tree).not.toContainText('No linked projects');
+  supported=true;await page.reload();await expect(tree).toHaveAttribute('data-binding-state','empty');
+  await expect(tree).toHaveText('');await expect(page.locator('[data-work-read-error]')).toHaveCount(0);
+  await search.fill('missing');await expect(tree).toContainText('No matching');
+  await expect(tree).not.toContainText('unavailable');
+  hiddenProject=true;await page.reload();await expect(tree).toHaveAttribute('data-binding-state','unknown');
+  await expect(tree).toHaveText('');await search.fill('missing');await expect(tree).toContainText('Work links unavailable');
+  await expect(tree).not.toContainText('No linked projects');
+  expect(f.pm.base.state.writes).toHaveLength(0);
+});
+
+for (const width of [390, 768, 1440]) test(`sidebar rows share icon and text columns at ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(route);
+  if (width < 1000) await page.locator('#workspace-menu').click();
+  const textStart = async (selector: string) => {
+    const row = page.locator(selector).first(); await expect(row).toBeVisible(); return (await row.boundingBox())!.x;
+  };
+  const start = await textStart('[data-pm-view=overview] > span');
+  expect(await textStart('.shell-all-projects > span')).toBe(start);
+  await page.locator('.shell-all-projects').click();
+  if (width < 1000) await page.locator('#workspace-menu').click();
+  expect(await textStart('.workspace-session-tree > summary > span')).toBe(start);
+  await expect(page.locator('.workspace-project-row .workspace-tree-label').first()).toBeVisible();
+  expect(await textStart('.workspace-project-row .workspace-tree-label')).toBe(start);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(f.pm.base.state.writes).toHaveLength(0);
 });

@@ -173,6 +173,7 @@ var uiStrings = {
 		ui_pending_loaded: "{n} pending loaded{more}",
 		ui_no_bound_projects: "No linked projects",
 		ui_work_links_unavailable: "Work links unavailable",
+		ui_work_unavailable: "Work unavailable",
 		ui_bindings: "Project bindings",
 		ui_evidence: "Evidence",
 		ui_quality: "Quality reviews",
@@ -241,6 +242,7 @@ var uiStrings = {
 		ui_pending_loaded: "已載入 {n} 筆待處理{more}",
 		ui_no_bound_projects: "尚無連結專案",
 		ui_work_links_unavailable: "無法取得工作連結",
+		ui_work_unavailable: "無法取得工作資料",
 		ui_bindings: "專案綁定",
 		ui_evidence: "成果證據",
 		ui_quality: "品質審閱",
@@ -8905,7 +8907,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			}, String(threadCount) + (threadMore ? "+" : "")) : null))), h$1("a", {
 				class: "shell-all-projects",
 				href: "#/projects"
-			}, t("ui_all_projects")));
+			}, h$1("span", {}, t("ui_all_projects"))));
 			crumb.append(switcher(workspace.name, "shell-crumb-workspace"));
 			const routeTitle = currentRoute === "pm" ? t("ui_" + currentView) : [
 				"session",
@@ -27031,7 +27033,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			refresh().catch(() => {});
 		}
 	}, t("load_more"));
-	const sessionTree = h("details", { class: "workspace-session-tree" }, h("summary", {}, t("nav_sessions")), sessionRows, more);
+	const sessionTree = h("details", { class: "workspace-session-tree" }, h("summary", {}, icon("chevron-right", { size: 20 }), h("span", {}, t("nav_sessions"))), sessionRows, more);
 	const search = h("input", {
 		type: "search",
 		"aria-label": t("workspace_search"),
@@ -27106,7 +27108,9 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		});
 		const nodes = projectNodes(roots);
 		tree.replaceChildren(h("ul", {}, ...nodes));
-		if (!nodes.length) tree.append(h("p", { class: "muted" }, t(query ? "workspace_no_match" : pmWorkspace && !globalTree ? bindingKnown ? "ui_no_bound_projects" : "ui_work_links_unavailable" : "no_projects")));
+		const bound = pmWorkspace && !globalTree;
+		tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? "available" : "empty" : "unknown" : "global";
+		if (!nodes.length && (query || !bound)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : query ? "workspace_no_match" : "no_projects")));
 		if (focus) [...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus)?.focus({ preventScroll: true });
 		filterSessions();
 	};
@@ -27219,10 +27223,15 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 					more.hidden = true;
 					render();
 				}
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("workspace_stale")), h("button", {
-					class: "mini",
-					onclick: () => refresh().catch(() => {})
-				}, t("workspace_refresh")));
+				const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
+				status.replaceChildren(h("div", {
+					class: "workspace-read-error",
+					"data-work-read-error": ""
+				}, icon("circle-alert", { size: 20 }), h("details", {}, h("summary", { title: detail.textContent }, label), detail, roots.length ? h("p", { class: "muted" }, t("workspace_stale")) : null), iconButton({
+					icon: "refresh-cw",
+					label: t("ui_retry"),
+					onClick: () => refresh().catch(() => {})
+				})));
 				throw error;
 			}
 		});
@@ -27275,6 +27284,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			projects.clear();
 			sessionRows.replaceChildren();
 			sessionsLoaded = false;
+			status.replaceChildren();
 			sessionTree.hidden = Boolean(id) && !all;
 			box.querySelector(".workspace-nav-heading").hidden = Boolean(id) && !all;
 			render();

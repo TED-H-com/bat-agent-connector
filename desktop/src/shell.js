@@ -69,7 +69,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
           'aria-current': currentRoute === 'pm' && currentView === id ? 'page' : 'false', onclick: () => {location.hash = `#/pm/${workspace.workspace_id}/${id}`;}},
           icon(viewIcons[id], {size: 20}), h('span', {}, t('ui_' + id)), id === 'discussions' && threadCount !== null
             ? h('span', {class: 'shell-count', title: t('ui_threads_loaded', {n: threadCount, more: threadMore ? '+' : ''}), 'aria-label': t('ui_threads_loaded', {n: threadCount, more: threadMore ? '+' : ''})}, String(threadCount) + (threadMore ? '+' : '')) : null))),
-        h('a', {class: 'shell-all-projects', href: '#/projects'}, t('ui_all_projects')));
+        h('a', {class: 'shell-all-projects', href: '#/projects'}, h('span', {}, t('ui_all_projects'))));
       crumb.append(switcher(workspace.name, 'shell-crumb-workspace'));
       const routeTitle = currentRoute === 'pm' ? t('ui_' + currentView) : ['session', 'work', 'item', 'project'].includes(currentRoute) ? t('ui_work') : t(({home: 'ui_pending', settings: 'ui_settings', operations: 'nav_operations', delivery: 'nav_delivery', cleanup: 'nav_cleanup', 'artifact-review': 'ar_nav', projects: 'ui_all_projects'})[currentRoute] || 'nav_sessions');
       crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, routeTitle));

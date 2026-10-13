@@ -1,6 +1,7 @@
 // Persistent navigation over central IDs. Workspace labels never assign a project.
 import {groupedSessions, sessionActivity} from './state/sessions.js';
 import {icon} from './ui/icons.js';
+import {iconButton} from './ui/components.js';
 
 export function workspaceNavigation({h, t, api, guard, onEvents, namespace, errorBox}) {
   const key = `batc.tree.${namespace}`;
@@ -15,7 +16,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const sessionRows = h('div', {class: 'workspace-tree'});
   const more = h('button', {class: 'mini', hidden: true, onclick: () => {sessionPages++; refresh().catch(() => {});}}, t('load_more'));
   const sessionTree = h('details', {class: 'workspace-session-tree'},
-    h('summary', {}, t('nav_sessions')), sessionRows, more);
+    h('summary', {}, icon('chevron-right', {size: 20}), h('span', {}, t('nav_sessions'))), sessionRows, more);
   const search = h('input', {type: 'search', 'aria-label': t('workspace_search'), placeholder: t('ui_search_work')});
   const box = h('aside', {class: 'workspace-nav', 'aria-label': t('workspace_navigation')},
     h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')),
@@ -68,8 +69,12 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     });
     const nodes = projectNodes(roots);
     tree.replaceChildren(h('ul', {}, ...nodes));
-    if (!nodes.length) tree.append(h('p', {class: 'muted'}, t(query ? 'workspace_no_match'
-      : pmWorkspace && !globalTree ? bindingKnown ? 'ui_no_bound_projects' : 'ui_work_links_unavailable' : 'no_projects')));
+    const bound = pmWorkspace && !globalTree;
+    tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? 'available' : 'empty' : 'unknown' : 'global';
+    // No permanent empty/unavailable sentence in the rail. A search still explains
+    // whether its missing results are known empty or cannot currently be read.
+    if (!nodes.length && (query || !bound)) tree.append(h('p', {class: 'muted workspace-tree-hint'},
+      t(bound && !bindingKnown ? 'ui_work_links_unavailable' : query ? 'workspace_no_match' : 'no_projects')));
     if (focus) [...tree.querySelectorAll('[data-tree-key]')].find(node => node.dataset.treeKey === focus)?.focus({preventScroll: true});
     filterSessions();
   };
@@ -157,8 +162,13 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
       } catch (error) {
         if (version !== contextVersion || disposed) return;
         alive(); if ([403, 404].includes(error.status)) {roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
-        status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('workspace_stale')),
-          h('button', {class: 'mini', onclick: () => refresh().catch(() => {})}, t('workspace_refresh')));
+        // Keep the exact error available on demand, including refresh-cycle reporting.
+        const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? 'ui_work_links_unavailable' : 'ui_work_unavailable');
+        status.replaceChildren(h('div', {class: 'workspace-read-error', 'data-work-read-error': ''},
+          icon('circle-alert', {size: 20}),
+          h('details', {}, h('summary', {title: detail.textContent}, label), detail,
+            roots.length ? h('p', {class: 'muted'}, t('workspace_stale')) : null),
+          iconButton({icon: 'refresh-cw', label: t('ui_retry'), onClick: () => refresh().catch(() => {})})));
         throw error;
       }
     });
@@ -188,7 +198,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   return {box, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
     pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++;
-    roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false;
+    roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
     sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});
   }, select(hash) {

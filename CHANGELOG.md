@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Align sidebar rows on one icon/text grid; show Work read failures with compact
+  details and Retry, while unsupported or empty Work sources stay quiet.
+
 - Add shared UX v2 light/dark tokens, accessible UI primitives and local Lucide icons.
 - Unify the Web/Tauri workspace shell with compact navigation, explicit bound work,
   a mobile drawer, canonical PM view routes and namespace-scoped view preferences.

@@ -98,8 +98,10 @@ are omitted. With no selected PM workspace, the existing global tree remains.
 Work uses central workspace/project bindings, never matching names, paths or repos.
 A bound session opens the existing work/session view without changing the selected
 PM workspace. All projects opens the global tree. Manual sessions remain read-only.
-Missing binding capability, withdrawn bindings and inaccessible bound projects show
-an unavailable state. Only a successfully read empty binding list means no links.
+The rail uses a shared icon/text grid. Missing capability and empty binding lists
+add no permanent message. Failed reads show a compact error with Retry and expandable
+details; scope withdrawal clears rows. A search distinguishes unavailable data from
+no matches. Only a successfully read empty binding list means no links.
 
 | View | Existing content and secondary tools |
 | --- | --- |

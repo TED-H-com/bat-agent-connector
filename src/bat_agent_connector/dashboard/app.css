@@ -1201,3 +1201,36 @@ body.pm-mode #main { padding: 0; }
   main:has(> .ui-inspector) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; }
   main > .ui-inspector { grid-column: 2; grid-row: 1; }
 }
+
+/* One rail grid: 8px inset, 20px icon, 12px gap, then the text column. */
+.workspace-nav { --rail-icon: 20px; --rail-gap: var(--space-3); --rail-inset: var(--space-2); }
+.pm-project-views button, .workspace-nav-footer > a, .workspace-nav-footer > .ui-menu > button,
+.shell-all-projects, .workspace-session-tree > summary, .workspace-read-error {
+  display: grid; grid-template-columns: var(--rail-icon) minmax(0, 1fr) auto;
+  column-gap: var(--rail-gap); align-items: center; padding: 6px var(--rail-inset); min-height: 36px;
+}
+.workspace-nav-footer .ui-icon { width: var(--rail-icon); height: var(--rail-icon); }
+.workspace-nav-footer > .ui-menu > button { width: 100%; text-align: left; justify-content: start; border: 0; }
+.shell-all-projects > span { grid-column: 2; }
+.workspace-session-tree > summary { list-style: none; color: var(--text-2); }
+.workspace-session-tree > summary::-webkit-details-marker, .workspace-read-error summary::-webkit-details-marker { display: none; }
+.workspace-session-tree[open] > summary > .ui-icon { transform: rotate(90deg); }
+.workspace-project-row { gap: var(--rail-gap); padding-left: var(--rail-inset); }
+.workspace-project-row > .workspace-tree-toggle { width: var(--rail-icon); min-width: var(--rail-icon); padding: 0; }
+.workspace-project-row > .workspace-tree-link { padding-left: 0; }
+.workspace-tree-link { gap: var(--rail-gap); padding-left: var(--rail-inset); padding-right: var(--rail-inset); }
+.workspace-tree-link > .workspace-dot { flex: 0 0 var(--rail-icon); background: none; display: grid; place-items: center; }
+.workspace-tree-link > .workspace-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.workspace-tree-link > .workspace-dot.info::before { background: var(--info); }
+.workspace-tree-link > .workspace-dot.stale::before { background: var(--warn); }
+.workspace-project-row .workspace-dot { display: none; }
+.workspace-tree-hint, .workspace-session-group { padding-left: calc(var(--rail-inset) + var(--rail-icon) + var(--rail-gap)); margin-left: 0; font-size: var(--fs-small); }
+.workspace-read-error { color: var(--bad); align-items: start; }
+.workspace-read-error > .ui-icon { margin-top: 6px; }
+.workspace-read-error > details { min-width: 0; }
+.workspace-read-error summary { cursor: pointer; list-style: none; padding: 6px 0; font-size: var(--fs-caption); }
+.workspace-read-error p { font-size: var(--fs-caption); margin: var(--space-1) 0; }
+.workspace-read-error > .ui-icon-button { color: var(--text-2); }
+@media (max-width: 999px) {
+  .shell-all-projects, .workspace-session-tree > summary, .workspace-nav-footer > .ui-menu > button { min-height: 44px; }
+}
