@@ -38,7 +38,11 @@ export function milestoneDelta(row) {
 }
 export function scheduleRef(row, data) {
   const refs = row.refs || {};
-  if (row.kind === 'milestone') return {kind: 'milestone', id: refs.milestone_id, revision_id: data.baseline?.revision_id};
+  if (row.kind === 'milestone') {
+    const hasBaseline = row.baseline ? Boolean(row.baseline.start || row.baseline.end) : row.baseline !== null && !row.forecast;
+    if (!refs.milestone_id || !data?.baseline?.revision_id || !hasBaseline || (refs.revision_id && refs.revision_id !== data.baseline.revision_id)) return null;
+    return {kind: 'milestone', id: refs.milestone_id, revision_id: data.baseline.revision_id};
+  }
   if (row.kind === 'requirement') return {kind: 'requirement', id: refs.requirement_id, revision_id: refs.plan_revision_id};
   if (row.kind === 'issue') return {kind: 'issue_mapping', id: row.id.slice('issue:'.length)};
   const workId = refs.work_item_id || (row.kind === 'attempt' && row.parent_id?.startsWith('work:') ? row.parent_id.slice(5) : null);

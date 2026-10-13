@@ -205,6 +205,7 @@ var scheduleStrings = {
 		sched_run: "Open run",
 		sched_requirements: "Open in Requirements",
 		sched_propose: "Propose change",
+		sched_change_title: "Change: {title}",
 		sched_roadmap: "Roadmap",
 		sched_error: "Schedule unavailable",
 		sched_changed: "Schedule changed during loading. Refresh to read it again.",
@@ -249,6 +250,7 @@ var scheduleStrings = {
 		sched_run: "開啟執行紀錄",
 		sched_requirements: "在需求中開啟",
 		sched_propose: "提議變更",
+		sched_change_title: "變更：{title}",
 		sched_roadmap: "路線圖",
 		sched_error: "無法取得時程",
 		sched_changed: "載入期間時程已變更，請重新整理。",
@@ -28342,11 +28344,15 @@ function milestoneDelta(row) {
 }
 function scheduleRef(row, data) {
 	const refs = row.refs || {};
-	if (row.kind === "milestone") return {
-		kind: "milestone",
-		id: refs.milestone_id,
-		revision_id: data.baseline?.revision_id
-	};
+	if (row.kind === "milestone") {
+		const hasBaseline = row.baseline ? Boolean(row.baseline.start || row.baseline.end) : row.baseline !== null && !row.forecast;
+		if (!refs.milestone_id || !data?.baseline?.revision_id || !hasBaseline || refs.revision_id && refs.revision_id !== data.baseline.revision_id) return null;
+		return {
+			kind: "milestone",
+			id: refs.milestone_id,
+			revision_id: data.baseline.revision_id
+		};
+	}
 	if (row.kind === "requirement") return {
 		kind: "requirement",
 		id: refs.requirement_id,
@@ -28501,7 +28507,7 @@ function render(row, { workspaceId, data }) {
 		href: discussHref({
 			workspaceId,
 			refs: [scheduleRef(row, data)],
-			title: row.title,
+			title: t("sched_change_title", { title: firstLine(row) }),
 			from: "schedule"
 		}),
 		"data-schedule-discuss": ""

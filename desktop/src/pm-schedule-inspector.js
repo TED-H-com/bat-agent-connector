@@ -4,7 +4,7 @@ import {t} from './i18n.js';
 import {agentMark, disclosure, statusPill} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
-import {dayNumber, milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
+import {dayNumber, firstLine, milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
 
 export function rowStatus(row, data) {
   return notObserved(row, data) ? h('span', {class: 'ui-pill tone-neutral'}, t('sched_not_observed')) : statusPill(row.status);
@@ -51,7 +51,7 @@ export function render(row, {workspaceId, data}) {
   const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || refs.requirement_ids?.[0] || served.requirement_ids?.[0] || null;
   const links = h('div', {class: 'schedule-inspector-actions'},
     select ? h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({select})}`}, t('sched_requirements')) : null,
-    h('a', {class: 'ui-button secondary', href: discussHref({workspaceId, refs: [scheduleRef(row, data)], title: row.title, from: 'schedule'}), 'data-schedule-discuss': ''}, t('sched_propose')));
+    h('a', {class: 'ui-button secondary', href: discussHref({workspaceId, refs: [scheduleRef(row, data)], title: t('sched_change_title', {title: firstLine(row)}), from: 'schedule'}), 'data-schedule-discuss': ''}, t('sched_propose')));
   const notes = [...data.unknown || [], ...row.notes || []];
   const details = disclosure({label: t('sched_details'), body: h('div', {},
     h('div', {class: 'schedule-full-title'}, row.title),

@@ -46,6 +46,9 @@ test('tree uses explicit parents, preserves undated ancestors and never invents 
 });
 test('discussion references contain exact backend identities only', () => {
   assert.deepEqual(scheduleRef({kind: 'milestone', refs: {milestone_id: 'review', plan_revision_id: 'ignored'}}, {baseline: {revision_id: 'baseline'}}), {kind: 'milestone', id: 'review', revision_id: 'baseline'});
+  assert.equal(scheduleRef({kind: 'milestone', refs: {milestone_id: 'forecast_only'}, baseline: null, forecast: {start: '2026-10-20', end: '2026-10-20'}}, {baseline: {revision_id: 'baseline'}, forecast: {revision_id: 'forecast'}}), null);
+  assert.equal(scheduleRef({kind: 'milestone', refs: {milestone_id: 'mismatched', revision_id: 'other'}}, {baseline: {revision_id: 'baseline'}}), null);
+  assert.equal(scheduleRef({kind: 'milestone', refs: {milestone_id: 'no_baseline_doc'}}, {baseline: null}), null);
   assert.deepEqual(scheduleRef({kind: 'issue', id: 'issue:mapping', refs: {}}, {}), {kind: 'issue_mapping', id: 'mapping'});
   assert.deepEqual(scheduleRef({kind: 'attempt', parent_id: 'work:work-id', refs: {}}, {}), {kind: 'work_item', id: 'work-id'});
 });

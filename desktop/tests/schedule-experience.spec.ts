@@ -71,7 +71,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(inspector.locator('[data-status=read_only]')).toBeVisible();
   await expect(inspector.locator('a[href*="run"]')).toHaveCount(0);
   const href = await inspector.locator('[data-schedule-discuss]').getAttribute('href');
-  expect(parseDiscussRefs(href!.split('?')[1])).toEqual({refs: [{kind: 'work_item', id: f.ids.work.resetEmail}], title: f.copy.work.resetEmail, from: 'schedule', report: ''});
+  expect(parseDiscussRefs(href!.split('?')[1])).toEqual({refs: [{kind: 'work_item', id: f.ids.work.resetEmail}], title: locale === 'en' ? `Change: ${f.copy.work.resetEmail}` : `變更：${f.copy.work.resetEmail}`, from: 'schedule', report: ''});
   await expect(inspector.locator('a[href*="/requirements?select="]')).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/requirements?select=${f.ids.work.resetEmail}`);
   await noOverflow(page); await shot(page, `schedule-inspector-${locale}-${width}`);
   await page.keyboard.press('Escape'); await expect(inspector).toHaveCount(0); await expect(work).toBeFocused();
@@ -470,6 +470,35 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
     await context.close();
   }
 });
+
+test('Propose change uses Change: {firstLine} and omits milestone ref when milestone has no baseline in baseline revision', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    const req = data.unscheduled.find((r: any) => r.refs?.requirement_id === project.ids.requirements.resetEmail);
+    if (req) req.title = 'First line of requirement\nSecond line with details';
+    const launch = data.rows.find((r: any) => r.id === 'milestone:launch');
+    if (launch) launch.baseline = null;
+  }});
+  await item(page, `requirement:${f.ids.planV3}:${f.ids.requirements.resetEmail}`).click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  const reqHref = await inspector.locator('[data-schedule-discuss]').getAttribute('href');
+  expect(parseDiscussRefs(reqHref!.split('?')[1])).toEqual({
+    refs: [{kind: 'requirement', id: f.ids.requirements.resetEmail, revision_id: f.ids.planV3}],
+    title: 'Change: First line of requirement',
+    from: 'schedule',
+    report: '',
+  });
+
+  await item(page, 'milestone:launch').click();
+  const launchHref = await inspector.locator('[data-schedule-discuss]').getAttribute('href');
+  expect(parseDiscussRefs(launchHref!.split('?')[1])).toEqual({
+    refs: [],
+    title: 'Change: Launch',
+    from: 'schedule',
+    report: '',
+  });
+});
+
 
 
 
