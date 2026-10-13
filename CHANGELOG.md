@@ -11,6 +11,8 @@
   timelines follow each stored foreign key one hop in both directions. A hidden target is
   skipped. A target that returns 409 or 413 stays off the timeline and marks that source
   partial. A lineage-hidden repair does not remove a visible finding's repair action.
+  A meeting read that starts after a follow-up sequence reports that cutoff in
+  `coverage.histories.follow_ups.after`.
   A hidden row is
   omitted from rows, counts and summary together and does not fail the page. Row ids are
   path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds

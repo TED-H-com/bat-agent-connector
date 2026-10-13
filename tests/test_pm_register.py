@@ -660,6 +660,24 @@ async def test_meeting_history_cap_marks_only_that_source(ops, monkeypatch):
     assert risks["coverage"]["complete"] is True and risks["total_by_type"]["risk"] == 0
 
 
+async def test_meeting_follow_up_cutoff_is_reported_on_the_history(meeting_ops):
+    data, _sprint, _snap, target = await meeting(meeting_ops, kind="retro")
+    await apply(meeting_ops, target, "draft", who=CONTRIBUTOR, **draft_params("retro"))
+    await note(meeting_ops, target)
+    await complete(meeting_ops, target)
+    for status, result in (("blocked", "First block"), ("open", "Unblocked"), ("reported_done", "Done now")):
+        await apply(meeting_ops, target, "follow_up.record", follow_up_id="check_quality", status=status, result=result)
+    wid, mid = data["workspace_id"], target["meeting_id"]
+    cutoff = meeting_ops.db.execute("SELECT sequence FROM pm_meeting_follow_up_events WHERE meeting_id=? ORDER BY sequence LIMIT 1",
+                                    (mid,)).fetchone()["sequence"]
+    detail = pm_meetings.get_meeting(meeting_ops, READER, wid, mid, follow_up_after=cutoff)
+    assert detail["coverage"]["histories"]["follow_ups"]["after"] == cutoff
+    assert detail["coverage"]["histories"]["notes"]["after"] == 0
+    plain = pm_meetings.get_meeting(meeting_ops, READER, wid, mid)
+    zero = pm_meetings.get_meeting(meeting_ops, READER, wid, mid, follow_up_after=0)
+    assert json.dumps(plain, sort_keys=True, default=str) == json.dumps(zero, sort_keys=True, default=str)
+
+
 async def test_review_history_cap_keeps_the_newest_event(ops, monkeypatch):
     from bat_agent_connector import pm_maintenance_review
     monkeypatch.setattr(pm_register, "HISTORY_REVIEW", 1)
