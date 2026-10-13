@@ -28,6 +28,7 @@ from bat_agent_connector.operations import OperationError
 from bat_agent_connector.task_verifier import ObservedVerifier, VerificationSettings
 from tests import test_pm_execution_verification as verifier
 from tests import test_pm_member_lifecycle_acceptance as member
+from tests.operation_helpers import stop_workers, worker_details
 from tests.pm_joined_delivery_helpers import settle
 from tests.pm_joined_lifecycle_helpers import OWNER, assert_manual_preserved, engineering, execute
 from tests.test_checkpoints import git
@@ -49,29 +50,33 @@ async def advance(w, parent, rounds=3):
     Publication and its later observation are different registered operations.
     Newly admitted children wait for the next bounded scheduler iteration; they
     cannot inherit a nearly exhausted deadline from a completed earlier child.
+    Failures join this service's workers before fixture journal teardown.
     """
     ops = w['d'].ops
-    for _ in range(rounds):
-        ops.wake(parent['operation_id'])  # Only waiting_external; never force an uncertain child.
-        started = time.monotonic()
-        await ops.run_due()
-        active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
-        if not active:
-            continue
-        _, pending = await asyncio.wait([task for _, task in active],
-            timeout=max(0, 60 - (time.monotonic() - started)))
-        assert not pending, [(oid, ops.get(oid)['action'], ops.get(oid)['status'])
-            for oid, task in active if task in pending]
-        outcomes = []
-        for oid, task in active:
-            task.result()  # Persisted status alone does not prove the worker finished.
-            outcome = ops.get(oid)
-            assert outcome['status'] not in {'accepted', 'running'}, outcome
-            outcomes.append((outcome['action'], outcome['status']))
-        print('Repair attempt wave:', round(time.monotonic() - started, 3), outcomes, flush=True)
-    result = ops.get(parent['operation_id'])
-    assert result['error_code'] != 'INTERNAL', result
-    return result
+    try:
+        for _ in range(rounds):
+            ops.wake(parent['operation_id'])  # Only waiting_external; never force an uncertain child.
+            started = time.monotonic()
+            await ops.run_due()
+            active = tuple((oid, task) for oid, task in ops._active.items() if not task.done())
+            if not active:
+                continue
+            _, pending = await asyncio.wait([task for _, task in active],
+                timeout=max(0, 60 - (time.monotonic() - started)))
+            assert not pending, 'Repair attempt wave did not settle within 60s\n' + worker_details(ops)
+            outcomes = []
+            for oid, task in active:
+                task.result()  # Persisted status alone does not prove the worker finished.
+                outcome = ops.get(oid)
+                assert outcome['status'] not in {'accepted', 'running'}, outcome
+                outcomes.append((outcome['action'], outcome['status']))
+            print('Repair attempt wave:', round(time.monotonic() - started, 3), outcomes, flush=True)
+        result = ops.get(parent['operation_id'])
+        assert result['error_code'] != 'INTERNAL', result
+        return result
+    except BaseException:
+        await stop_workers(ops)
+        raise
 
 
 async def enter_maintenance(w, mock):

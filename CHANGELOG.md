@@ -29,6 +29,9 @@
   test workers before journal teardown, preserving the existing deadline and original-key
   recovery.
 
+- Apply the same worker diagnostics and failure cleanup to joined maintenance's
+  captured attempt waves, without changing the 60-second bound or durable receipts.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
