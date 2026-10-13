@@ -39,7 +39,11 @@ async function boot(page: Page, f: ReturnType<typeof fixture>, native = false) {
   await expect(metric(page, 'progress')).toContainText('3');
   await expect(page.getByRole('button', {name: /^Refresh$|^重新整理$/})).toBeEnabled();
 }
-async function refresh(page: Page) {const control = page.locator('.pm-main > .ui-page-header').getByRole('button', {name: /Refresh|重新整理/}); await control.focus(); await control.press('Enter');}
+async function refresh(page: Page) {
+  const control = page.locator('.pm-main > .ui-page-header').getByRole('button', {name: /Refresh|重新整理/});
+  // Overview may finish before the other mounted projections in this workspace read.
+  await expect(control).toBeEnabled(); await control.focus(); await control.press('Enter');
+}
 async function report(page: Page, id: string) {
   await openPmPanel(page, 'ui_report'); await page.locator('[data-pm-report-tools] select').selectOption(id); await page.keyboard.press('Escape');
   await expect(root(page)).toHaveAttribute('data-overview-mode', 'saved');

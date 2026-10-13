@@ -7,7 +7,7 @@ import {schedulePage} from './demo/schedule.ts';
 import {fixture as roadmapFixture, path as roadmapPath} from './pm-roadmap-fixture.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
-async function start(page: Page, locale = 'en', options: {native?: boolean; pageSize?: number; mutate?: (data: any) => void} = {}) {
+async function start(page: Page, locale = 'en', options: {native?: boolean; withoutBrief?: boolean; pageSize?: number; mutate?: (data: any) => void} = {}) {
   const fixture = demoFixture({locale}), project = demoProject(locale);
   const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, completed: 0, overviewReads: 0};
   await page.clock.setFixedTime(DEMO_NOW);
@@ -28,7 +28,12 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; page
     if (url.pathname === '/events' && state.cursor) return {status: 200, data: {events: Number(url.searchParams.get('after')) < state.cursor
       ? [{seq: state.cursor, resource_type: 'work_item', resource_id: fixture.ids.work.email, kind: 'work_item.updated'}] : [],
       next_cursor: state.cursor, head_cursor: state.cursor, has_more: false, sync: {checkpoint: {cursor: state.cursor, token: `demo-${state.cursor}`}}}};
-    return fixture.dispatch(input);
+    const result = await fixture.dispatch(input);
+    if (options.withoutBrief && ['/bootstrap', '/capabilities'].includes(url.pathname)) {
+      const caps = url.pathname === '/bootstrap' ? result.data.capabilities : result.data;
+      delete caps.features.pm_workspaces.brief_snapshots;
+    }
+    return result;
   });
   await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/schedule`);
   await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
@@ -230,4 +235,15 @@ test('ten-page limit has a visible Partial state and a reason in Details', async
   const meta = page.locator('[data-pm-schedule] .schedule-meta');
   await expect(meta).toContainText('10 loaded'); await expect(meta.locator('[data-status=partial]')).toBeVisible();
   await meta.locator('summary').click(); await expect(meta).toContainText('Refresh page limit reached'); expect(f.writes).toEqual([]);
+});
+
+// Capabilities can advertise the projection without mounting a Brief/Overview view.
+test('schedule events still refresh without a mounted Overview', async ({page}) => {
+  const f = await start(page, 'en', {withoutBrief: true});
+  await expect(page.locator('[data-pm-overview]')).toHaveCount(0);
+  const reads = f.calls.length;
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
+  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
+  expect(f.state.overviewReads).toBe(0); expect(f.writes).toEqual([]);
 });

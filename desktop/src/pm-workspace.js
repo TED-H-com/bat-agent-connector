@@ -865,10 +865,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     // Refresh live projections together without locking the workspace Refresh control.
     // A held row read must still permit a newer read to withdraw its source.
     if ((liveOverview||deliveries||workBatches||qualityReviews||maintenanceRepairs||schedule) && ['operation','deployment','integration'].includes(event.resource_type)) {
-      eventReads=eventReads.catch(()=>{}).then(async()=>{if (liveOverview) await brief.refresh();await deliveries?.refresh();await workBatches?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});return eventReads;
+      eventReads=eventReads.catch(()=>{}).then(async()=>{if (liveOverview) await brief?.refresh();await deliveries?.refresh();await workBatches?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});return eventReads;
     }
     if ((liveOverview||kanban||qualityReviews||maintenanceRepairs||schedule) && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
-      eventReads = eventReads.catch(() => {}).then(async () => {if (liveOverview) await brief.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});
+      eventReads = eventReads.catch(() => {}).then(async () => {if (liveOverview) await brief?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});
       return eventReads;
     }
   });

@@ -30503,7 +30503,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"integration"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(async () => {
-				if (liveOverview) await brief.refresh();
+				if (liveOverview) await brief?.refresh();
 				await deliveries?.refresh();
 				await workBatches?.refresh();
 				await qualityReviews?.refresh();
@@ -30523,7 +30523,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"session"
 		].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(async () => {
-				if (liveOverview) await brief.refresh();
+				if (liveOverview) await brief?.refresh();
 				await qualityReviews?.refresh();
 				await maintenanceRepairs?.refresh();
 				await kanban?.refresh();
