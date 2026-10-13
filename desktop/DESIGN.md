@@ -98,6 +98,8 @@ are omitted. With no selected PM workspace, the existing global tree remains.
 Work uses central workspace/project bindings, never matching names, paths or repos.
 A bound session opens the existing work/session view without changing the selected
 PM workspace. All projects opens the global tree. Manual sessions remain read-only.
+Missing binding capability, withdrawn bindings and inaccessible bound projects show
+an unavailable state. Only a successfully read empty binding list means no links.
 
 | View | Existing content and secondary tools |
 | --- | --- |
@@ -119,6 +121,8 @@ view (Overview where available). Old direct thread routes are replaced in histor
 Workspace/view preferences are bounded and keyed by connection namespace, including
 principal. View switches retain mounted controls, filters, expansions and selection;
 no fetched records are stored in preference maps. Back/forward follows view URLs.
+Opening a thread immediately remembers Discussions. Returning from Settings rereads
+selected report, requirement and resource records before presenting their facts.
 
 ## Headers, copy and acceptance
 
@@ -134,3 +138,6 @@ alignment, contrast, wrapped Chinese labels and document overflow. Test keyboard
 selection, drawer/menu/inspector Escape and focus return, history, state restoration,
 original-key recovery, zero unauthorized writes and source withdrawal. Regenerate
 the browser assets from source; Web and Tauri must use the same implementation.
+`tests/ui-components.spec.ts` exercises the DOM primitives in a CSP-constrained
+source harness. `tests/shell.spec.ts` covers workspace context, navigation history,
+withdrawal, namespace isolation, responsive focus behavior and theme overrides.
