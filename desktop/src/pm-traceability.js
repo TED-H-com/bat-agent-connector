@@ -144,7 +144,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
           h('button', {type: 'button', class: 'ui-button ghost pm-requirement-open', 'data-rtm-select': req.id,
             onclick: () => void select(req.id)}, t('wv_open_requirement')),
           ...linked(req).map(workRow), !linked(req).length ? emptyState({title:t('wb_no_work')}) : null),
-        compactRow: req => {
+        compactBelow: 720, compactRow: req => {
           const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
           const coverage = deliveryCoverage(source), prs = prGroups(source.deliveries).length;
           const workLabel = work.length === 1 ? 'wv_compact_work_one' : 'wv_compact_work';

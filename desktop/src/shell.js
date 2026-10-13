@@ -130,7 +130,9 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     return ['pm_workspace', 'pm_lifecycle'].includes(event.resource_type) ? refresh() : undefined;
   });
   render();
-  return {update, refresh, setRoute(name) {currentRoute = name; serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();},
+  return {update, refresh, setRoute(name) {currentRoute = name;
+      if (name === 'pm') {const routeView = location.hash.split('?')[0].split('/')[3]; currentView = routeView === 'discussions' ? 'discussions' : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split('/')[2]);}
+      serial++; closeDrawer(false); navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === 'projects'); render();},
     pending({count, partial} = {}) {for (const badge of pendingCounts) {
       const known = Number.isSafeInteger(count) && count > 0;
       badge.hidden = !known; badge.textContent = known ? String(count) + (partial ? '+' : '') : '';

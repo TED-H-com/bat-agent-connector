@@ -126,8 +126,12 @@ export function pageHeader({title, mark, pill, meta, actions = [], overflow} = {
     if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
     if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
   });
+  const heading = h('h1', {}, title);
+  const nameHeading = () => {heading.title = heading.textContent; heading.setAttribute('aria-label', heading.textContent);};
+  nameHeading();
+  new MutationObserver(nameHeading).observe(heading, {childList: true, characterData: true, subtree: true});
   return h('header', {class: 'ui-page-header'}, h('div', {class: 'ui-page-heading'},
-    h('div', {class: 'ui-title-row'}, mark, h('h1', {}, title), pill),
+    h('div', {class: 'ui-title-row'}, mark, heading, pill),
     meta ? (meta instanceof Node ? meta : h('p', {class: 'ui-meta'}, meta)) : null),
   actionRow);
 }
@@ -248,7 +252,10 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
   }
   function keys(event) {
     if (dock && (root.hidden || media.matches)) return;
-    if (event.key === 'Escape') {event.preventDefault(); close();}
+    if (event.key === 'Escape') {
+      if (!root.contains(event.target) && event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable=false])')) return;
+      event.preventDefault(); close();
+    }
     else if (!media.matches) trapFocus(root, event);
   }
   let closed = false;
@@ -292,11 +299,11 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
   });
   return Object.assign(root, {body, close, open, dispose: dock ? destroy : close});
 }
-export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs} = {}) {
-  const compact = () => compactRow && matchMedia('(max-width: 799px)').matches;
+export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs} = {}) {
+  const compact = () => compactRow && (matchMedia('(max-width: 799px)').matches || root.clientWidth < compactBelow);
   const keyFor = row => typeof rowKey === 'function' ? rowKey(row) : row[rowKey];
   const hasSelection = rows.some(row => keyFor(row) === selected);
-  const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-label': t('ui_more')}) : null,
+  const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-hidden': 'true'}) : null,
     ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, 'data-secondary': column.secondary || null, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
   const root = h('div', {class: 'ui-data-table' + (compactRow ? ' ui-data-table-responsive' : ''), tabindex: compactRow ? null : 0}, table), controls = [];
   rows.forEach((row, i) => {
@@ -317,7 +324,7 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
         if (compactRow) tr.setAttribute('aria-expanded', String(open));
         toggle.setAttribute('aria-label', t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key})); onToggle(key, open);
       };
-      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), onClick: () => toggleExpansion()});
+      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), tabindex: -1, onClick: () => toggleExpansion()});
       if (compactRow) tr.setAttribute('aria-expanded', String(open));
       tr.append(h('td', {}, toggle)); tbody.append(tr, detail);
     } else tbody.append(tr);
@@ -327,7 +334,7 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
     tr.addEventListener('keydown', event => {
       if (event.target !== tr) return;
       if (['Enter', ' '].includes(event.key)) {event.preventDefault(); if (compact() && toggleExpansion) toggleExpansion(); else select();}
-      if (compact() && toggleExpansion && ['ArrowRight', 'ArrowLeft'].includes(event.key)) {event.preventDefault(); toggleExpansion(event.key === 'ArrowRight');}
+      if (toggleExpansion && ['ArrowRight', 'ArrowLeft'].includes(event.key)) {event.preventDefault(); toggleExpansion(event.key === 'ArrowRight');}
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? controls.length - 1
           : Math.max(0, Math.min(controls.length - 1, i + (event.key === 'ArrowUp' ? -1 : 1)));

@@ -10488,7 +10488,18 @@ function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
 		if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
 		if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
 	});
-	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, h$1("h1", {}, title), pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), actionRow);
+	const heading = h$1("h1", {}, title);
+	const nameHeading = () => {
+		heading.title = heading.textContent;
+		heading.setAttribute("aria-label", heading.textContent);
+	};
+	nameHeading();
+	new MutationObserver(nameHeading).observe(heading, {
+		childList: true,
+		characterData: true,
+		subtree: true
+	});
+	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, heading, pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), actionRow);
 }
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
@@ -10730,6 +10741,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 	function keys(event) {
 		if (dock && (root.hidden || media.matches)) return;
 		if (event.key === "Escape") {
+			if (!root.contains(event.target) && event.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) return;
 			event.preventDefault();
 			close();
 		} else if (!media.matches) trapFocus(root, event);
@@ -10797,11 +10809,11 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 		dispose: dock ? destroy : close
 	});
 }
-function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs } = {}) {
-	const compact = () => compactRow && matchMedia("(max-width: 799px)").matches;
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs } = {}) {
+	const compact = () => compactRow && (matchMedia("(max-width: 799px)").matches || root.clientWidth < compactBelow);
 	const keyFor = (row) => typeof rowKey === "function" ? rowKey(row) : row[rowKey];
 	const hasSelection = rows.some((row) => keyFor(row) === selected);
-	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
+	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-hidden": "true" }) : null, ...columns.map((column) => h$1("th", {
 		scope: "col",
 		"data-column": column.key,
 		"data-secondary": column.secondary || null,
@@ -10853,6 +10865,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 				icon: "chevron-right",
 				label: t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }),
 				"aria-expanded": String(open),
+				tabindex: -1,
 				onClick: () => toggleExpansion()
 			});
 			if (compactRow) tr.setAttribute("aria-expanded", String(open));
@@ -10875,7 +10888,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 				if (compact() && toggleExpansion) toggleExpansion();
 				else select();
 			}
-			if (compact() && toggleExpansion && ["ArrowRight", "ArrowLeft"].includes(event.key)) {
+			if (toggleExpansion && ["ArrowRight", "ArrowLeft"].includes(event.key)) {
 				event.preventDefault();
 				toggleExpansion(event.key === "ArrowRight");
 			}
@@ -11369,6 +11382,10 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		refresh,
 		setRoute(name) {
 			currentRoute = name;
+			if (name === "pm") {
+				const routeView = location.hash.split("?")[0].split("/")[3];
+				currentView = routeView === "discussions" ? "discussions" : availableProjectViews(caps()).includes(routeView) ? routeView : lastProjectView(namespace, location.hash.split("/")[2]);
+			}
 			serial++;
 			closeDrawer(false);
 			navigation.setWorkspace(workspace?.workspace_id || null, Boolean(caps()?.features?.pm_workspaces?.work_evidence), name === "projects");
@@ -18529,6 +18546,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					"data-rtm-select": req.id,
 					onclick: () => void select(req.id)
 				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? emptyState({ title: t("wb_no_work") }) : null),
+				compactBelow: 720,
 				compactRow: (req) => {
 					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
 					const coverage = deliveryCoverage(source), prs = prGroups(source.deliveries).length;
@@ -38757,12 +38775,15 @@ function calcSidebarBounds(windowWidth = window.innerWidth) {
 }
 function setupSidebarResizer({ aside, workspace, t }) {
 	if (!aside || !workspace) return { dispose() {} };
-	let savedWidth = window.innerWidth < 1200 ? 232 : 248;
+	let savedWidth = window.innerWidth < 1200 ? 232 : 248, customWidth = false;
 	try {
 		const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
 		if (raw !== null) {
 			const parsed = parseInt(raw, 10);
-			if (!Number.isNaN(parsed) && parsed >= 200) savedWidth = parsed;
+			if (!Number.isNaN(parsed) && parsed >= 200) {
+				savedWidth = parsed;
+				customWidth = true;
+			}
 		}
 	} catch {}
 	const resizer = document.createElement("div");
@@ -38783,9 +38804,12 @@ function setupSidebarResizer({ aside, workspace, t }) {
 		resizer.setAttribute("aria-valuenow", String(clamped));
 		resizer.setAttribute("aria-valuemin", String(minAllowed));
 		resizer.setAttribute("aria-valuemax", String(maxAllowed));
-		if (persist) try {
-			localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
-		} catch {}
+		if (persist) {
+			customWidth = true;
+			try {
+				localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
+			} catch {}
+		}
 		return clamped;
 	};
 	let currentWidth = applyWidth(savedWidth, false);
@@ -38892,6 +38916,7 @@ function setupSidebarResizer({ aside, workspace, t }) {
 		if (!isMobileLayout()) currentWidth = applyWidth(248, true);
 	};
 	const onWindowResize = () => {
+		if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : 248;
 		if (isMobileLayout()) cancelDrag();
 		if (!isMobileLayout()) currentWidth = applyWidth(currentWidth, false);
 	};
@@ -38954,7 +38979,7 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 		infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
 		const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
 		infoToggle.setAttribute("aria-label", label);
-		infoToggle.replaceChildren(icon(isInfoCollapsed ? "chevron-down" : "chevron-up"));
+		infoToggle.replaceChildren(icon("info"));
 	};
 	infoToggle.addEventListener("click", () => {
 		if (!alive()) return;
@@ -38986,7 +39011,7 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow 
 		composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
 		const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
 		const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-		composerToggle.replaceChildren(icon(isComposerCollapsed ? "chevron-down" : "chevron-up"));
+		composerToggle.replaceChildren(icon("pencil"));
 		composerToggle.setAttribute("aria-label", baseText + draftSuffix);
 		composerToggle.classList.toggle("has-draft", hasDraft);
 	};
