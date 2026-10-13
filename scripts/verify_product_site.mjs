@@ -57,6 +57,7 @@ try {
       await page.screenshot({ path: resolve(output, `${view}-${lang}-${width}.png`) });
     }
     await page.locator('[data-view="overview"]').click();
+    await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
     await page.screenshot({ path: resolve(output, `page-${lang}-${width}.png`), fullPage: true });
     for (const section of ['workflow', 'features', 'architecture', 'windows']) {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
