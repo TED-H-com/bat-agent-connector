@@ -1,7 +1,7 @@
 // Register pages for the member sign-in demo. Shapes follow pm_register._view / get_register.
 // The unfiltered list ends after three rows, the way a lineage-root budget ends a page early.
 // The cursor is opaque. Callers pass it back unchanged.
-import {hexId, type DemoProject} from './project.ts';
+import {digest, hexId, type DemoProject} from './project.ts';
 
 export const REGISTER_PAGE_CURSOR = 'cmVnMQ';
 
@@ -34,12 +34,13 @@ export function registerIds(project: DemoProject) {
   const finding = findingId(project);
   return {
     finding: `finding.${finding}`,
+    findingSource: finding,
+    findingRef: {kind: 'finding' as const, id: finding, observation_id: hexId('pmgh_', 1, 32), document_digest: digest(1)},
     decision: `plan_revision.${project.ids.planV3}`,
     change: `proposal.${project.ids.proposalId}`,
     mapping: `issue_mapping.${project.ids.issueMapping}`,
     risk: `governance.${riskId()}`,
     action: `follow_up.${followId()}`,
-    findingSource: finding,
   };
 }
 
@@ -64,20 +65,24 @@ function rowsFor(project: DemoProject) {
   const ids = registerIds(project);
   const finding = findingId(project);
   return [
-    row(project, {row_id: ids.finding, type: 'issue', basis: 'neutral', title: text.finding, status: 'observed_open', owner: null,
-      impact: text.impact, priority: text.priority, next_step: text.next, source: {kind: 'finding', id: finding},
+    row(project, {row_id: ids.finding, type: 'issue', basis: 'neutral', title: null, status: 'observed_open', owner: null,
+      impact: text.impact, priority: text.priority, next_step: null, source: {kind: 'finding', id: finding},
       requirements: [project.ids.requirements.email], work: [project.ids.work.email],
       prs: [{repository: project.ids.repository, number: 87}],
-      actions: [{action: 'pm.maintenance.repair', target: {workspace_id: project.ids.workspaceId, finding_id: finding}, required: {rule_key: 'dependency', finding_ref: finding}}],
+      actions: [{action: 'pm.maintenance.repair', target: {workspace_id: project.ids.workspaceId}, required: {
+        policy_id: hexId('pmmp_', 1, 32), rule_key: 'dependency',
+        finding_ref: {observation_id: ids.findingRef.observation_id, document_digest: ids.findingRef.document_digest, finding_id: finding},
+      }}],
       unknowns: {owner: 'not_recorded'}}),
     row(project, {row_id: ids.decision, type: 'decision', basis: 'explicit', title: project.copy.decisions.budget, status: 'open', owner: project.ids.actor,
-      due: '2026-10-20', source: {kind: 'plan_revision', id: project.ids.planV3}}),
+      due: '2026-10-20T12:00:00.000+00:00', source: {kind: 'plan_revision', id: project.ids.planV3}}),
     row(project, {row_id: ids.change, type: 'change', basis: 'explicit', title: project.copy.proposalTitle, status: 'proposed', owner: project.ids.actor,
       source: {kind: 'proposal', id: project.ids.proposalId}}),
     row(project, {row_id: ids.mapping, type: 'issue', basis: 'explicit', title: null, status: 'tracking', owner: null,
       source: {kind: 'issue_mapping', id: project.ids.issueMapping}, unknowns: {title: 'not_recorded', owner: 'not_recorded'}}),
     row(project, {row_id: ids.risk, type: 'risk', basis: 'explicit', title: text.risk, status: 'blocked', owner: project.ids.actor,
-      source: {kind: 'governance', id: riskId()}}),
+      source: {kind: 'governance', id: riskId()},
+      actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId}, required: {}}]}),
     row(project, {row_id: ids.action, type: 'action', basis: 'explicit', title: text.action, status: 'in_progress', owner: project.ids.actor,
       source: {kind: 'follow_up', id: followId()}}),
   ];
@@ -106,9 +111,6 @@ function summary(project: DemoProject, selected: ReturnType<typeof rowsFor>, rea
     open_by_age: ages(counts),
     weekly: weeks.map((week_start, index) => ({week_start, opened: index === weeks.length - 1 ? (reasons.length ? 2 : 1) : 0, resolved: index === weeks.length - 1 ? 1 : 0})),
     blocking_reasons: reasons,
-    blocked_without_reason: selected.filter(item => item.status === 'blocked').length && reasons.length === 0
-      ? selected.filter(item => item.status === 'blocked').length
-      : selected.some(item => item.status === 'blocked') ? 1 : 0,
   };
 }
 
@@ -181,13 +183,13 @@ function step(name: string, project: DemoProject, spec: {title?: string | null, 
 export function registerDetail(project: DemoProject, rowId: string) {
   const row = rowsFor(project).find(item => item.row_id === rowId);
   if (!row) return bad(404, 'NOT_FOUND', 'Register row not found');
-  const text = labels(project);
   let timeline;
   if (rowId === registerIds(project).finding) {
+    const at = (offset: number) => new Date(project.now + offset).toISOString();
     timeline = [
-      step('work', project, {title: project.copy.work.email, actor: project.ids.actor, status: 'in_progress', ref: {kind: 'work_item', id: project.ids.work.email}}),
-      step('finding', project, {title: text.finding, status: 'observed_open', ref: row.source}),
-      step('action', project, {title: text.next, actor: project.ids.actor, status: 'open', ref: {kind: 'repair', id: hexId('pmrp_', 1, 32)}}),
+      step('finding', project, {title: null, status: 'observed_open', ref: row.source, at: at(0)}),
+      step('action', project, {title: null, actor: project.ids.actor, status: 'open', ref: {kind: 'repair', id: hexId('pmrp_', 1, 32)}, at: at(60_000)}),
+      step('work', project, {title: project.copy.work.email, actor: project.ids.actor, status: 'in_progress', ref: {kind: 'work_item', id: project.ids.work.email}, at: at(120_000)}),
     ];
   } else if (row.type === 'decision') {
     timeline = [step('decision', project, {title: row.title, actor: project.ids.actor, status: row.status, ref: row.source})];
@@ -209,4 +211,19 @@ export function registerDetail(project: DemoProject, rowId: string) {
 
 export function registerLabels(project: DemoProject) {
   return labels(project);
+}
+
+export function registerMaintenanceRoutes(project: DemoProject, rest: string) {
+  const workspace_id = project.ids.workspaceId;
+  if (rest === '/maintenance-policies/current') return {status: 200, data: {workspace_id, policy: null, visibility_filtered: false}};
+  if (rest === '/release-baselines/current') return {status: 200, data: {workspace_id, baseline: null, visibility_filtered: false}};
+  if (rest === '/lifecycle') return {status: 200, data: {workspace_id, lifecycle: {revision: 1}}};
+  if (rest === '/maintenance-findings/current') {
+    const finding = findingId(project);
+    return {status: 200, data: {workspace_id, visibility_filtered: false,
+      observation_ref: {observation_id: hexId('pmgh_', 1, 32), document_digest: digest(1)},
+      sources: {issues: {status: 'complete', findings: [{finding_id: finding, native: {number: 87}, facts: {labels: ['dependency']}, existing_pull_request: null, existing_work: []}]}}}};
+  }
+  if (rest === '/maintenance-repairs') return {status: 200, data: {workspace_id, repairs: [], next_after: null}};
+  return null;
 }

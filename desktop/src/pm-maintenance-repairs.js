@@ -9,6 +9,8 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   const editors=new Map(),choices=new Map(),status=h('div',{role:'status'}),facts=h('div'),budget=h('div'),startView=h('div'),proofView=h('div');
   const hidden=()=>h('input',{type:'hidden'}),startFields={selection:hidden(),context:hidden()};
   const select=label=>h('select',{'aria-label':t(label)}),finding=select('pmr_finding'),rule=select('pmr_rule'),history=select('pmr_history'),evidence=select('pmr_evidence');
+  finding.dataset.pmRepairFinding='';
+  let pendingFinding='';
   const line=(label,value)=>h('p',{class:'pm-source'},h('strong',{},t(label)+': '),String(value??t('pmr_none'))),text=label=>h('p',{class:'muted'},t(label));
   const state=value=>t('pmr_status_'+(['accepted','queued','pending','running','succeeded','failed','cancelled','needs_attention','not_admitted','passed','blocked'].includes(value)?value:'unknown'));
   const link=id=>h('a',{href:`#/op/${encodeURIComponent(id)}`},t('pm_operation'));
@@ -160,7 +162,8 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       policy=p.policy;baseline=b.baseline;lifecycle=l.lifecycle;findings=f;
       const rows=await pages('maintenance-repairs','repairs','next_after',ticket);if(!valid(ticket)||!rows)return;rows.forEach(validate);
       status.replaceChildren();if(filtered){const notice=text('pmr_filtered');notice.dataset.repairFiltered='';status.append(notice);}ready=true;const saved=parse(startFields.selection);
-      options(finding,issueRows().map(row=>[row.finding_id,`${t('pmr_issue')} #${row.native.number} · ${(row.facts.labels||[]).join(' · ')}`]),saved?.finding_ref?.finding_id);
+      options(finding,issueRows().map(row=>[row.finding_id,`${t('pmr_issue')} #${row.native.number} · ${(row.facts.labels||[]).join(' · ')}`]),pendingFinding||saved?.finding_ref?.finding_id);
+      pendingFinding='';
       options(rule,rules().map(row=>[row.key,`${row.key} · ${t('pmp_'+row.work_kind)}`]),saved?.rule_key);
       options(history,rows.map(row=>[row.repair_id,`${t('pmr_issue')} #${row.context.finding.native.number} · ${row.context.rule.key} · ${state(row.operation_status)}`]),selected);
       if(selected){const data=check(await api('GET',`${base}/maintenance-repairs/${encodeURIComponent(selected)}`));if(!valid(ticket))return;repair=validate(data.repair);if(repair.repair_id!==selected)throw invalid();facts.append(render(repair));await loadProof(ticket);}else{proof=null;proofView.replaceChildren();}
@@ -169,5 +172,6 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       if(!owner())status.append(text('pmr_owner'));else if(!active())status.append(text('pmr_stopped'));else if(!rules().length)status.append(text('pmr_no_rules'));
       update();
     }catch(error){if(valid(ticket))failure(error);}}
-  update();return {element,refresh,withdraw};
+  function focusFinding(ref){const id=typeof ref?.finding_id==='string'?ref.finding_id:'';if(!id)return;pendingFinding=id;if([...finding.options].some(option=>option.value===id))finding.value=id;}
+  update();return {element,refresh,withdraw,focusFinding};
 }

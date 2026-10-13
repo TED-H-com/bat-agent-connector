@@ -364,19 +364,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
     ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(governance)body.insertBefore(governance.element,content);
+  let openRegisterForm = () => {};
   const routeRegisterAction = action => {
     const name = action?.action || '';
-    const open = (viewId, section) => {
-      if (viewId) workbench?.select(viewId);
-      const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
-      if (fold instanceof HTMLDetailsElement) {fold.open = true; fold.scrollIntoView({block: 'nearest'});}
-    };
-    if (name.startsWith('pm.meeting.')) open('discussions', 'ui_meetings');
-    else if (name.includes('follow_up.record')) open('issues', 'ui_follow_up');
-    else if (name.startsWith('pm.maintenance_review.')) open('issues', 'ui_maintenance_review');
-    else if (name.startsWith('pm.maintenance.repair')) open('issues', 'ui_repairs');
-    else if (name.startsWith('pm.governance.')) open('issues', 'ui_governance');
-    else if (name.startsWith('pm.issue.')) open('requirements', 'ui_publication');
+    if (name.startsWith('pm.maintenance_review.')) openRegisterForm('issues', 'ui_maintenance_review');
+    else if (name.startsWith('pm.maintenance.repair')) {maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref); openRegisterForm('issues', 'ui_repairs');}
+    else if (name.startsWith('pm.governance.')) openRegisterForm('issues', 'ui_governance');
+    else if (name.startsWith('pm.issue.')) openRegisterForm('requirements', 'ui_publication');
+    else if (name.startsWith('pm.meeting.')) openRegisterForm('discussions', 'ui_meetings');
+    else if (name.includes('follow_up.record')) openRegisterForm('issues', 'ui_follow_up');
   };
   const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1
     ? workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta: setHeaderMeta,
@@ -391,7 +387,25 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         workbench?.select('requirements');
         void traceability?.focusRequirement?.(id);
       },
-      onAction: routeRegisterAction}) : null;
+      onAction: routeRegisterAction,
+      nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === 'work_item' ? kanban?.titleFor?.(id) : '') || ''}) : null;
+  openRegisterForm = (viewId, section) => {
+    const host = body.querySelector(`[data-pm-section="${section}"]`);
+    if (!host) return;
+    if (matchMedia('(max-width: 1199px)').matches) register?.closeSheet?.(true);
+    if (viewId && workspaceId) {
+      location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${viewId}`;
+      workbench?.select(viewId);
+    }
+    const fold = host.querySelector(':scope > details');
+    const focusForm = root => {
+      const field = [...root.querySelectorAll('input:not([type="hidden"]), select, textarea')].find(node => !node.disabled);
+      (field || root.querySelector('summary'))?.focus();
+      root.scrollIntoView({block: 'nearest'});
+    };
+    if (fold instanceof HTMLDetailsElement) {fold.open = true; queueMicrotask(() => focusForm(fold)); return;}
+    queueMicrotask(() => focusForm(host));
+  };
   const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources
     ? specSources({h,t,api,alive,workspaceId,errorBox}) : null;
   if (specifications) {
@@ -477,8 +491,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (followUp) issueTools.push({key: 'follow', label: t('ui_follow_up'), section: 'ui_follow_up'});
   }
   const openIssueTool = section => {
+    if (matchMedia('(max-width: 1199px)').matches) register?.closeSheet?.(true);
     const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
-    if (fold instanceof HTMLDetailsElement) {fold.open = true; fold.scrollIntoView({block: 'nearest'}); return;}
+    if (fold instanceof HTMLDetailsElement) {
+      fold.open = true;
+      queueMicrotask(() => {fold.querySelector('summary')?.focus(); fold.scrollIntoView({block: 'nearest'});});
+      return;
+    }
     body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({block: 'nearest'});
   };
   const overflow = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-overflow': ''}), items: [

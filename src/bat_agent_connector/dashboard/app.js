@@ -4073,9 +4073,12 @@ var pmRegisterStrings = {
 		reg_more: "+{n} more",
 		reg_shown: "{n} shown",
 		reg_none_shown: "None shown",
+		reg_matching: "{n} matching",
 		reg_load_more: "Load more",
 		reg_empty: "No matching records",
 		reg_unavailable: "Source unavailable",
+		reg_pair: "{label}: {value}",
+		reg_pull_requests: "Pull requests",
 		reg_open_age: "Open by age",
 		reg_age_0_7: "0–7 days",
 		reg_age_8_30: "8–30 days",
@@ -4140,6 +4143,17 @@ var pmRegisterStrings = {
 		reg_status_cancelled: "Cancelled",
 		reg_status_succeeded: "Succeeded",
 		reg_status_failed: "Failed",
+		reg_status_running: "Running",
+		reg_status_uncertain: "Uncertain",
+		reg_status_needs_attention: "Needs attention",
+		reg_status_waiting_checks: "Waiting for checks",
+		reg_status_waiting_external: "Waiting externally",
+		reg_status_accepted: "Accepted for processing",
+		reg_status_format_valid: "Format valid",
+		reg_status_recorded_discussion_decision: "Recorded decision",
+		reg_status_continue_maintenance: "Continue maintenance",
+		reg_status_bounded_repair_proposal: "Bounded repair proposal",
+		reg_status_adopted_direction: "Adopted direction",
 		reg_action_repair: "Turn into work",
 		reg_action_evidence: "Record evidence",
 		reg_action_revise: "Revise record",
@@ -4168,16 +4182,19 @@ var pmRegisterStrings = {
 		reg_more: "+{n} 項",
 		reg_shown: "顯示 {n} 筆",
 		reg_none_shown: "目前沒有顯示",
+		reg_matching: "{n} 筆符合",
 		reg_load_more: "載入更多",
 		reg_empty: "沒有符合的紀錄",
 		reg_unavailable: "來源無法取得",
-		reg_open_age: "未決時間",
+		reg_pair: "{label}：{value}",
+		reg_pull_requests: "提取請求",
+		reg_open_age: "未決事項年齡",
 		reg_age_0_7: "0–7 天",
 		reg_age_8_30: "8–30 天",
 		reg_age_31_90: "31–90 天",
 		reg_age_90: "超過 90 天",
 		reg_without_age: "{n} 筆沒有已知時間",
-		reg_weekly: "新開與已解決",
+		reg_weekly: "新增／解決趨勢",
 		reg_opened: "新開",
 		reg_resolved: "已解決",
 		reg_blocking: "受阻原因",
@@ -4218,7 +4235,7 @@ var pmRegisterStrings = {
 		reg_kind_repair: "修復",
 		reg_kind_follow_up: "後續",
 		reg_kind_proposal: "提案",
-		reg_kind_issue_mapping: "GitHub issue",
+		reg_kind_issue_mapping: "GitHub 議題",
 		reg_kind_meeting: "會議",
 		reg_kind_plan_revision: "計畫",
 		reg_kind_requirement: "需求",
@@ -4235,12 +4252,23 @@ var pmRegisterStrings = {
 		reg_status_cancelled: "已取消",
 		reg_status_succeeded: "已成功",
 		reg_status_failed: "失敗",
+		reg_status_running: "執行中",
+		reg_status_uncertain: "尚未確定",
+		reg_status_needs_attention: "需要留意",
+		reg_status_waiting_checks: "等待檢查",
+		reg_status_waiting_external: "等待外部",
+		reg_status_accepted: "已受理",
+		reg_status_format_valid: "格式有效",
+		reg_status_recorded_discussion_decision: "已記錄的決定",
+		reg_status_continue_maintenance: "繼續維護",
+		reg_status_bounded_repair_proposal: "有界限的修復提案",
+		reg_status_adopted_direction: "已採用方向",
 		reg_action_repair: "轉成工作",
 		reg_action_evidence: "記錄證據",
 		reg_action_revise: "修訂紀錄",
 		reg_action_decide: "記錄決定",
 		reg_action_link: "連結採用",
-		reg_action_publish: "發布 issue",
+		reg_action_publish: "發布議題",
 		reg_action_cancel: "停止追蹤",
 		reg_action_follow: "記錄後續",
 		reg_action_open: "開啟動作",
@@ -14113,6 +14141,11 @@ function workspaceOverview(options) {
 		});
 		return reportRead;
 	}
+	function labelFor(kind, id) {
+		if (kind !== "requirement") return "";
+		const text = plan?.document?.requirements?.find((row) => row.id === id)?.text;
+		return typeof text === "string" ? text : "";
+	}
 	return {
 		box,
 		primary,
@@ -14123,6 +14156,7 @@ function workspaceOverview(options) {
 		withdraw,
 		prepareReports,
 		openRelated,
+		labelFor,
 		closeRelated: () => {
 			if (relatedSelection) closeReader();
 		},
@@ -16029,7 +16063,13 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 				class: "muted",
 				"data-rtm-filtered": ""
 			}, t("wb_partial")));
-			if (focus) detail.querySelector("h3")?.focus({ preventScroll: true });
+			if (focus) {
+				const heading = detail.querySelector("h3");
+				if (matchMedia("(max-width: 1100px)").matches) {
+					detail.scrollIntoView({ block: "start" });
+					heading?.focus();
+				} else heading?.focus({ preventScroll: true });
+			}
 		} catch (error) {
 			if (ticket === detailSerial) fail(error, generation);
 		}
@@ -16118,10 +16158,30 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			revision_id: plan.revision_id
 		});
 		if (pending.kind === "work_item") {
-			const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
-			target?.focus({ preventScroll: true });
-			target?.scrollIntoView({ block: "nearest" });
+			if (matchMedia("(max-width: 1100px)").matches) {
+				detail.scrollIntoView({ block: "start" });
+				detail.querySelector("h3")?.focus();
+			} else {
+				const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
+				target?.focus({ preventScroll: true });
+				target?.scrollIntoView({ block: "nearest" });
+			}
+		} else if (pending.kind === "requirement") {
+			const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(pending.id)}"]`);
+			row?.querySelector("button")?.focus();
+			row?.scrollIntoView({ block: "nearest" });
 		}
+	}
+	function labelFor(kind, id) {
+		if (kind === "requirement") {
+			const text = plan?.document?.requirements?.find((row) => row.id === id)?.text;
+			return typeof text === "string" ? text : "";
+		}
+		if (kind === "work_item") {
+			const title = cards.find((row) => row.work_item_id === id)?.work?.title;
+			return typeof title === "string" ? title : "";
+		}
+		return "";
 	}
 	controls();
 	return {
@@ -16131,6 +16191,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		openRef,
 		focusWork,
 		focusRequirement,
+		labelFor,
 		dispose: () => {
 			Object.assign(preference, {
 				selected,
@@ -19406,17 +19467,18 @@ var STATUSES = [
 	"rejected",
 	"cancelled",
 	"succeeded",
-	"failed"
-];
-var STEPS = [
-	"finding",
-	"action",
-	"work",
-	"evidence",
-	"review",
-	"proposal",
-	"decision",
-	"revision"
+	"failed",
+	"running",
+	"uncertain",
+	"needs_attention",
+	"waiting_checks",
+	"waiting_external",
+	"accepted",
+	"format_valid",
+	"recorded_discussion_decision",
+	"continue_maintenance",
+	"bounded_repair_proposal",
+	"adopted_direction"
 ];
 var TYPE_ICON = {
 	risk: "circle-alert",
@@ -19450,9 +19512,25 @@ var TONES = {
 	failed: "bad",
 	proposed: "review",
 	needs_review: "review",
-	succeeded: "ok"
+	succeeded: "ok",
+	running: "info",
+	uncertain: "review",
+	needs_attention: "review",
+	waiting_checks: "info",
+	waiting_external: "info",
+	accepted: "info",
+	format_valid: "review",
+	recorded_discussion_decision: "info",
+	continue_maintenance: "info",
+	bounded_repair_proposal: "review",
+	adopted_direction: "ok"
 };
 var REPO = /^[\w.-]+\/[\w.-]+$/;
+var DEPTH_PAGES = 20;
+var shortTime = new Intl.DateTimeFormat(void 0, {
+	dateStyle: "short",
+	timeStyle: "short"
+});
 var finite = (value) => typeof value === "number" && Number.isFinite(value);
 var known = (t, key) => {
 	const text = t(key);
@@ -19462,7 +19540,7 @@ var when$1 = (value) => {
 	const text = labelSegment(value);
 	if (!text) return "";
 	const date = new Date(text);
-	return Number.isNaN(date.valueOf()) ? "" : date.toLocaleString();
+	return Number.isNaN(date.valueOf()) ? "" : shortTime.format(date);
 };
 var day = (value) => {
 	const text = labelSegment(value);
@@ -19470,9 +19548,10 @@ var day = (value) => {
 	const date = new Date(text);
 	return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();
 };
-function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {} }) {
+function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}, nameFor = () => "" }) {
 	const preference = viewState(namespace, workspaceId, "issues");
 	let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null;
+	let trail = null, trailAgain = false, trailQuery = "";
 	let loaded = false, unavailable = false, failed = null, selected = preference.selected || null;
 	let typeValue = TYPES.includes(preference.type) ? preference.type : "";
 	let debounce = null, sheet = null, retainSheet = false, opening = false;
@@ -19511,6 +19590,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		"aria-label": t("reg_filter_owner"),
 		placeholder: t("reg_filter_owner"),
 		autocomplete: "off",
+		maxlength: "200",
 		oninput: queueReload
 	});
 	const searchInput = h("input", {
@@ -19518,6 +19598,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		"data-reg-search": "",
 		"aria-label": t("reg_filter_search"),
 		placeholder: t("reg_filter_search"),
+		maxlength: "200",
 		oninput: queueReload
 	});
 	statusSelect.value = STATUSES.includes(preference.status) ? preference.status : "";
@@ -19548,13 +19629,19 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	wideQuery.addEventListener("change", onWide);
 	trends.open = wideQuery.matches;
+	function vocabularyStatus(status) {
+		return status !== "accepted" && Object.hasOwn(statusVocabulary, status);
+	}
+	function statusKnown(status) {
+		return vocabularyStatus(status) || Boolean(known(t, "reg_status_" + status));
+	}
 	function statusLabel(status) {
-		if (Object.hasOwn(statusVocabulary, status)) return t("ui_status_" + status);
+		if (vocabularyStatus(status)) return t("ui_status_" + status);
 		return known(t, "reg_status_" + status) || t("ui_reason_generic");
 	}
 	function statusNode(status) {
 		if (!labelSegment(status)) return statusPill("unknown");
-		if (Object.hasOwn(statusVocabulary, status)) return statusPill(status);
+		if (vocabularyStatus(status)) return statusPill(status);
 		const label = known(t, "reg_status_" + status);
 		return h("span", { class: `ui-pill tone-${TONES[status] || "neutral"}` }, label || t("ui_reason_generic"));
 	}
@@ -19606,6 +19693,10 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	function publishMeta() {
 		if (!active || unavailable || failed || !loaded) {
 			onMeta(null);
+			return;
+		}
+		if (typeValue && coverage?.complete === true) {
+			onMeta(t("reg_matching", { n: totals && finite(totals[typeValue]) ? totals[typeValue] : rows.length }));
 			return;
 		}
 		if (coverage?.complete === true && totals && typeof totals === "object") {
@@ -19713,25 +19804,53 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}, t("reg_no_reason_recorded", { n: blocked })));
 		summaryHost.append(ageSection, weekSection, reasonSection);
 	}
+	function displayTitle(row) {
+		const title = labelSegment(row?.title);
+		if (title) return title;
+		if (!(row?.source?.kind === "finding" || String(row?.row_id || "").startsWith("finding."))) return "";
+		const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
+		const kind = t("reg_kind_finding");
+		return qualifier ? `${kind} · ${qualifier}` : kind;
+	}
+	function findingContext(action) {
+		const ref = action?.required?.finding_ref;
+		if (!ref || typeof ref !== "object") return null;
+		const id = labelSegment(ref.finding_id) || labelSegment(ref.id);
+		if (!id) return null;
+		const built = {
+			kind: "finding",
+			id,
+			observation_id: ref.observation_id,
+			document_digest: ref.document_digest
+		};
+		return isContextRef(built) ? built : null;
+	}
+	function contextRefs(row) {
+		const refs = [];
+		if (isContextRef(row?.source)) refs.push(row.source);
+		for (const action of Array.isArray(row?.available_actions) ? row.available_actions : []) {
+			const finding = findingContext(action);
+			if (finding && !refs.some((item) => item.kind === finding.kind && item.id === finding.id && item.observation_id === finding.observation_id && item.document_digest === finding.document_digest)) refs.push(finding);
+		}
+		return refs.slice(0, 8);
+	}
+	function namedChip(kind, id, fallback, attrs, onclick) {
+		const name = labelSegment(nameFor(kind, id));
+		const text = name || fallback;
+		return h("button", {
+			type: "button",
+			class: "reg-chip",
+			title: name || id,
+			"aria-label": name || `${fallback} ${id}`,
+			onclick,
+			...attrs
+		}, h("span", { class: "reg-chip-label" }, text));
+	}
 	function relatedItems(row) {
 		const related = row.related || {};
 		const items = [];
-		for (const id of related.requirement_ids || []) if (labelSegment(id)) items.push(h("button", {
-			type: "button",
-			class: "reg-chip",
-			"data-reg-requirement": id,
-			title: id,
-			"aria-label": `${t("reg_requirement")} ${id}`,
-			onclick: () => onOpenRequirement(id)
-		}, t("reg_requirement")));
-		for (const id of related.work_item_ids || []) if (labelSegment(id)) items.push(h("button", {
-			type: "button",
-			class: "reg-chip",
-			"data-reg-work": id,
-			title: id,
-			"aria-label": `${t("reg_work")} ${id}`,
-			onclick: () => onOpenWork(id)
-		}, t("reg_work")));
+		for (const id of related.requirement_ids || []) if (labelSegment(id)) items.push(namedChip("requirement", id, t("reg_requirement"), { "data-reg-requirement": id }, () => onOpenRequirement(id)));
+		for (const id of related.work_item_ids || []) if (labelSegment(id)) items.push(namedChip("work_item", id, t("reg_work"), { "data-reg-work": id }, () => onOpenWork(id)));
 		for (const pr of related.prs || []) {
 			if (!finite(pr?.number)) continue;
 			const label = t("reg_pr", { n: pr.number });
@@ -19741,7 +19860,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				href: `https://github.com/${pr.repository}/pull/${pr.number}`,
 				target: "_blank",
 				rel: "noopener noreferrer"
-			}, label));
+			}, h("span", { class: "reg-chip-label" }, label)));
 			else items.push(h("span", { class: "reg-chip" }, label));
 		}
 		return items;
@@ -19758,10 +19877,10 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		ownerList.replaceChildren(...owners.map((owner) => h("option", { value: owner })));
 	}
 	function listMeta(row) {
-		const parts = [h("span", {}, t("reg_type_" + row.type)), statusNode(row.status)];
-		if (labelSegment(row.priority)) parts.push(h("span", {}, row.priority));
+		const parts = [h("span", { class: "reg-list-type" }, t("reg_type_" + row.type)), statusNode(row.status)];
+		if (labelSegment(row.priority)) parts.push(h("span", { class: "reg-list-priority" }, row.priority));
 		const who = labelSegment(row.owner) ? row.owner : day(row.due);
-		if (who) parts.push(h("span", {}, who));
+		if (who) parts.push(h("span", { class: "reg-list-who" }, who));
 		return h("div", { class: "reg-list-meta" }, ...parts.flatMap((part, index) => index ? [h("span", {
 			class: "reg-sep",
 			"aria-hidden": "true"
@@ -19771,21 +19890,22 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const controls = [];
 		const list = h("div", {
 			class: "reg-list",
-			role: "list"
+			role: "list",
+			tabindex: "-1"
 		});
 		rows.forEach((row, index) => {
-			const active = row.row_id === selected;
-			const item = h("button", {
+			const current = row.row_id === selected;
+			const button = h("button", {
 				type: "button",
 				class: "reg-list-row",
-				role: "listitem",
 				"data-row-key": row.row_id,
-				"aria-selected": String(active),
-				tabindex: active || selected == null && index === 0 ? 0 : -1,
+				"aria-current": current ? "true" : null,
+				"aria-selected": current ? "true" : null,
+				tabindex: current || selected == null && index === 0 ? 0 : -1,
 				onclick: () => openRow(row)
-			}, h("span", { class: "reg-list-title" }, dash(row.title)), listMeta(row), labelSegment(row.next_step) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
-			item.addEventListener("keydown", (event) => {
-				if (event.target !== item) return;
+			}, h("span", { class: "reg-list-title" }, dash(displayTitle(row))), listMeta(row), labelSegment(row.next_step) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
+			button.addEventListener("keydown", (event) => {
+				if (event.target !== button) return;
 				if (![
 					"ArrowDown",
 					"ArrowUp",
@@ -19799,8 +19919,8 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				});
 				controls[next]?.focus();
 			});
-			controls.push(item);
-			list.append(item);
+			controls.push(button);
+			list.append(h("div", { role: "listitem" }, button));
 		});
 		tableHost.replaceChildren(list);
 		if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
@@ -19843,7 +19963,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			{
 				key: "title",
 				label: t("reg_col_title"),
-				render: (row) => h("span", { class: "reg-clamp" }, dash(row.title))
+				render: (row) => h("span", { class: "reg-clamp" }, dash(displayTitle(row)))
 			},
 			{
 				key: "status",
@@ -19863,7 +19983,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			{
 				key: "owner",
 				label: t("reg_col_owner"),
-				render: (row) => dash(row.owner)
+				render: (row) => h("span", { class: "reg-owner-cell" }, dash(row.owner))
 			},
 			{
 				key: "due",
@@ -19969,14 +20089,13 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			[t("reg_col_next"), dash(row.next_step)],
 			[t("reg_col_related"), relatedChips(row)]
 		].flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)]));
+		if (labelSegment(row.status) && !statusKnown(row.status)) unknownCodes.push(row.status);
 		const timeline = h("ol", {
 			class: "reg-timeline",
 			"data-reg-timeline": ""
-		}, ...(Array.isArray(record.timeline) ? record.timeline : []).map((step, index) => ({
-			step,
-			index
-		})).sort((a, b) => (STEPS.indexOf(a.step?.step) < 0 ? STEPS.length : STEPS.indexOf(a.step.step)) - (STEPS.indexOf(b.step?.step) < 0 ? STEPS.length : STEPS.indexOf(b.step.step)) || a.index - b.index).map(({ step }) => {
-			if (!known(t, "reg_step_" + step?.step)) unknownCodes.push(step?.step);
+		}, ...(Array.isArray(record.timeline) ? record.timeline : []).map((step) => {
+			if (labelSegment(step?.step) && !known(t, "reg_step_" + step.step)) unknownCodes.push(step.step);
+			if (labelSegment(step?.status) && !statusKnown(step.status)) unknownCodes.push(step.status);
 			const meta = joinLabel([step?.actor, when$1(step?.at)]);
 			const title = labelSegment(step?.title);
 			const link = refLink(step?.ref, title, row.row_id);
@@ -19986,10 +20105,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			}, h("h4", {}, stepLabel(step?.step)), meta ? h("p", { class: "reg-note" }, meta) : null, h("div", { class: "reg-step-line" }, link || (title ? h("span", {}, title) : null), labelSegment(step?.status) ? statusNode(step.status) : null));
 		}));
 		const partial = record.timeline_coverage && record.timeline_coverage.complete === false;
-		if (partial && record.timeline_coverage.partial_reason) unknownCodes.push(record.timeline_coverage.partial_reason);
 		const head = h("div", { class: "reg-timeline-head" }, h("h3", {}, t("reg_timeline")), partial ? statusPill("partial") : null);
-		const source = isContextRef(row.source) ? row.source : null;
-		const title = labelSegment(row.title) || t("reg_discussion");
+		const refs = contextRefs(row);
+		const title = displayTitle(row) || t("reg_discussion");
 		const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action));
 		const labels = offered.map((action) => t(ACTION_KEYS[action.action] || "reg_action_open"));
 		const stepText = labelSegment(row.next_step);
@@ -19999,7 +20117,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			"data-reg-discuss": "",
 			href: discussHref({
 				workspaceId,
-				refs: source ? [source] : [],
+				refs,
 				title,
 				from: "issues"
 			})
@@ -20016,7 +20134,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			"data-reg-propose": "",
 			href: discussHref({
 				workspaceId,
-				refs: source ? [source] : [],
+				refs,
 				title: t("reg_change_title", { title }),
 				from: "issues"
 			})
@@ -20030,28 +20148,47 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			priority: "reg_col_priority",
 			next_step: "reg_col_next",
 			created_at: "reg_created",
-			updated_at: "reg_updated"
+			updated_at: "reg_updated",
+			pull_requests: "reg_pull_requests"
 		};
 		const detailBits = [];
 		if (row.type_basis === "neutral") detailBits.push(h("p", {}, t("reg_neutral")));
+		if (partial && labelSegment(record.timeline_coverage.partial_reason)) {
+			const code = String(record.timeline_coverage.partial_reason);
+			const recognised = Boolean(known(t, "ui_reason_" + code));
+			detailBits.push(h("p", {}, recognised ? reasonLabel(t, code) : t("ui_reason_generic")));
+			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, code));
+		}
 		for (const [name, code] of Object.entries(row.unknowns || {})) {
 			if (!labelSegment(code)) continue;
 			const recognised = Boolean(known(t, "ui_reason_" + code));
 			const label = fieldKey[name] ? t(fieldKey[name]) : t("ui_reason_generic");
-			detailBits.push(h("p", {}, `${label}: ${reasonLabel(t, code)}`));
+			detailBits.push(h("p", {}, t("reg_pair", {
+				label,
+				value: reasonLabel(t, code)
+			})));
 			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, String(code)));
 		}
-		for (const code of unknownCodes) if (labelSegment(code)) detailBits.push(h("p", { class: "reg-note" }, String(code)));
+		const seenCodes = new Set();
+		for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {
+			seenCodes.add(String(code));
+			detailBits.push(h("p", { class: "reg-note" }, String(code)));
+		}
 		return [h("div", { class: "reg-sheet-main" }, facts, head, timeline, detailBits.length ? disclosure({
 			label: t("reg_details"),
 			key: `reg-details:${workspaceId}:${row.row_id}`,
 			body: h("div", { class: "reg-detail-body" }, ...detailBits)
 		}) : null), links];
 	}
+	function focusSelectedRow() {
+		const row = selected ? tableHost.querySelector(`[data-row-key="${CSS.escape(selected)}"]`) : null;
+		const fallback = tableHost.querySelector(".ui-data-table") || tableHost.querySelector(".reg-list") || tableHost;
+		(row || fallback)?.focus();
+	}
 	function paintInspector(record) {
+		if (!active) return;
 		const row = record.row;
-		const title = labelSegment(row.title) || t("reg_type_" + row.type);
-		if (sheet?.contains(document.activeElement) && sheet?.getAttribute("data-reg-row") === row.row_id) return;
+		const title = displayTitle(row) || t("reg_type_" + row.type);
 		if (!sheet || sheet.getAttribute("data-reg-row") !== row.row_id) {
 			closeSheet(true);
 			opening = true;
@@ -20060,6 +20197,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				onClose: () => {
 					sheet = null;
 					if (!retainSheet && !opening) preference.inspector = false;
+					queueMicrotask(() => {
+						if (!opening && !sheet && active) focusSelectedRow();
+					});
 				}
 			});
 			opening = false;
@@ -20091,53 +20231,84 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		if (data?.workspace_id !== workspaceId || data.row?.row_id !== rowId || !Array.isArray(data.timeline)) throw Error(t("pm_scope_mismatch"));
 		return data;
 	}
-	function query(append) {
+	function pageQuery(cursor) {
 		const params = new URLSearchParams();
 		if (typeValue) params.set("type", typeValue);
 		if (statusSelect.value) params.set("status", statusSelect.value);
 		if (ownerInput.value.trim()) params.set("owner", ownerInput.value.trim());
 		if (searchInput.value.trim()) params.set("q", searchInput.value.trim());
-		if (append && nextCursor) params.set("after", nextCursor);
+		if (cursor) params.set("after", cursor);
 		params.set("limit", "50");
 		return params;
 	}
+	async function readPage(cursor, ticket) {
+		const data = checkList(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register?${pageQuery(cursor)}`));
+		alive();
+		if (!active || ticket !== serial) return null;
+		return data;
+	}
 	async function loadList(append) {
-		if (!active) return;
+		if (!active || append && !nextCursor) return;
 		const ticket = ++serial;
 		busy = true;
 		paintFooter();
+		const prior = rows.slice();
+		const depth = prior.length;
+		const kept = selected ? prior.find((row) => row.row_id === selected) || null : null;
+		const beforeSig = kept ? JSON.stringify(kept) : "";
 		try {
-			const data = checkList(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register?${query(append)}`));
-			alive();
-			if (ticket !== serial) return;
-			unavailable = false;
-			failed = null;
-			loaded = true;
-			if (!append) rows = [];
-			const seen = new Set(rows.map((row) => row.row_id));
-			for (const row of data.rows) if (!seen.has(row.row_id)) {
-				seen.add(row.row_id);
-				rows.push(row);
+			const merged = append ? prior.slice() : [];
+			const seen = new Set(merged.map((row) => row.row_id));
+			let cursor = append ? nextCursor : null;
+			let meta = null;
+			let lastCursor = null;
+			const target = append ? depth + 1 : Math.max(depth, 1);
+			for (let page = 0; page < (append ? 1 : DEPTH_PAGES) && active && ticket === serial; page++) {
+				const data = await readPage(cursor, ticket);
+				if (!data) return;
+				if (!meta) meta = data;
+				for (const row of data.rows) if (!seen.has(row.row_id)) {
+					seen.add(row.row_id);
+					merged.push(row);
+				}
+				lastCursor = data.next_cursor || null;
+				cursor = lastCursor;
+				if (append || !cursor || merged.length >= target) break;
 			}
-			nextCursor = data.next_cursor || null;
-			coverage = data.coverage || {};
-			totals = coverage.complete === true ? data.total_by_type : null;
-			summary = coverage.complete === true ? data.summary : null;
-			if (selected && !rows.some((row) => row.row_id === selected)) {
+			if (!active || ticket !== serial || !meta) return;
+			let stale = false;
+			if (!append && kept && !seen.has(kept.row_id)) {
+				merged.push(kept);
+				seen.add(kept.row_id);
+				stale = true;
+			}
+			if (selected && !seen.has(selected)) {
 				selected = null;
+				preference.selected = null;
 				preference.inspector = false;
 				closeSheet(false);
 			}
+			const current = selected ? merged.find((row) => row.row_id === selected) : null;
+			const changed = Boolean(beforeSig) && JSON.stringify(current) !== beforeSig;
+			rows = merged;
+			nextCursor = lastCursor;
+			coverage = meta.coverage || {};
+			totals = coverage.complete === true ? meta.total_by_type : null;
+			summary = coverage.complete === true ? meta.summary : null;
+			unavailable = false;
+			failed = null;
+			loaded = true;
 			statusLine.replaceChildren();
 			render();
-			if (preference.inspector && selected) loadDetail(selected);
+			const showSheet = Boolean(sheet) || matchMedia("(min-width: 1200px)").matches;
+			if (preference.inspector && selected && (changed || stale || showSheet && !sheet)) loadDetail(selected, showSheet);
 		} catch (error) {
 			try {
 				alive();
 			} catch {
 				return;
 			}
-			if (ticket !== serial) return;
+			if (!active || ticket !== serial) return;
 			if ([403, 404].includes(error.status)) withdraw();
 			else fail(error);
 		} finally {
@@ -20147,13 +20318,15 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			}
 		}
 	}
-	async function loadDetail(rowId) {
+	async function loadDetail(rowId, paint = true) {
+		if (!active) return;
 		const ticket = ++detailSerial;
 		const listTicket = serial;
 		try {
 			const data = checkDetail(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register/${encodeURIComponent(rowId)}`), rowId);
 			alive();
-			if (ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
+			if (!active || ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
+			if (!paint) return;
 			paintInspector(data);
 		} catch (error) {
 			try {
@@ -20161,11 +20334,14 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			} catch {
 				return;
 			}
-			if (ticket !== detailSerial || listTicket !== serial) return;
+			if (!active || ticket !== detailSerial || listTicket !== serial) return;
 			if ([403, 404].includes(error.status)) {
 				rows = rows.filter((row) => row.row_id !== rowId);
+				totals = null;
+				summary = null;
 				if (selected === rowId) {
 					selected = null;
+					preference.selected = null;
 					preference.inspector = false;
 					closeSheet(false);
 				}
@@ -20219,9 +20395,30 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		onMeta(null);
 		render();
 	}
-	async function refresh() {
-		if (!active) return;
-		await loadList(false);
+	function refresh() {
+		if (!active) return Promise.resolve();
+		const query = String(pageQuery());
+		if (trail && trailQuery === query) {
+			trailAgain = true;
+			return trail;
+		}
+		const run = (async () => {
+			try {
+				do {
+					trailAgain = false;
+					trailQuery = String(pageQuery());
+					await loadList(false);
+				} while (trailAgain && active && String(pageQuery()) === trailQuery);
+			} finally {
+				if (trail === run) {
+					trail = null;
+					trailQuery = "";
+				}
+			}
+		})();
+		trail = run;
+		trailQuery = query;
+		return run;
 	}
 	function rememberScroll() {
 		preference.scrollY = window.scrollY;
@@ -20245,11 +20442,19 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}
 		active = next;
 		if (!active) {
+			serial++;
+			detailSerial++;
+			busy = false;
 			onMeta(null);
 			closeSheet(true);
 			return;
 		}
-		refresh();
+		refresh().then(() => {
+			if (!active || sheet || matchMedia("(min-width: 1200px)").matches) return;
+			const current = document.activeElement;
+			if (current && current !== document.body && current.getClientRects().length && !current.closest("[hidden], [inert]")) return;
+			focusSelectedRow();
+		});
 	}
 	function dispose() {
 		active = false;
@@ -20269,7 +20474,8 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		rememberScroll,
 		restoreScroll,
 		setActive,
-		dispose
+		dispose,
+		closeSheet
 	};
 }
 //#endregion
@@ -24803,10 +25009,15 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 			}
 		}
 	}
+	function titleFor(id) {
+		const title = rows.get(id)?.card?.work?.title;
+		return typeof title === "string" ? title : "";
+	}
 	return {
 		element,
 		box: element,
-		refresh
+		refresh,
+		titleFor
 	};
 }
 //#endregion
@@ -28615,6 +28826,8 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		context: hidden()
 	};
 	const select = (label) => h("select", { "aria-label": t(label) }), finding = select("pmr_finding"), rule = select("pmr_rule"), history = select("pmr_history"), evidence = select("pmr_evidence");
+	finding.dataset.pmRepairFinding = "";
+	let pendingFinding = "";
 	const line = (label, value) => h("p", { class: "pm-source" }, h("strong", {}, t(label) + ": "), String(value ?? t("pmr_none"))), text = (label) => h("p", { class: "muted" }, t(label));
 	const state = (value) => t("pmr_status_" + ([
 		"accepted",
@@ -29071,7 +29284,8 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			}
 			ready = true;
 			const saved = parse(startFields.selection);
-			options(finding, issueRows().map((row) => [row.finding_id, `${t("pmr_issue")} #${row.native.number} · ${(row.facts.labels || []).join(" · ")}`]), saved?.finding_ref?.finding_id);
+			options(finding, issueRows().map((row) => [row.finding_id, `${t("pmr_issue")} #${row.native.number} · ${(row.facts.labels || []).join(" · ")}`]), pendingFinding || saved?.finding_ref?.finding_id);
+			pendingFinding = "";
 			options(rule, rules().map((row) => [row.key, `${row.key} · ${t("pmp_" + row.work_kind)}`]), saved?.rule_key);
 			options(history, rows.map((row) => [row.repair_id, `${t("pmr_issue")} #${row.context.finding.native.number} · ${row.context.rule.key} · ${state(row.operation_status)}`]), selected);
 			if (selected) {
@@ -29096,11 +29310,18 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			if (valid(ticket)) failure(error);
 		}
 	}
+	function focusFinding(ref) {
+		const id = typeof ref?.finding_id === "string" ? ref.finding_id : "";
+		if (!id) return;
+		pendingFinding = id;
+		if ([...finding.options].some((option) => option.value === id)) finding.value = id;
+	}
 	update();
 	return {
 		element,
 		refresh,
-		withdraw
+		withdraw,
+		focusFinding
 	};
 }
 //#endregion
@@ -32444,22 +32665,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
+	let openRegisterForm = () => {};
 	const routeRegisterAction = (action) => {
 		const name = action?.action || "";
-		const open = (viewId, section) => {
-			if (viewId) workbench?.select(viewId);
-			const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
-			if (fold instanceof HTMLDetailsElement) {
-				fold.open = true;
-				fold.scrollIntoView({ block: "nearest" });
-			}
-		};
-		if (name.startsWith("pm.meeting.")) open("discussions", "ui_meetings");
-		else if (name.includes("follow_up.record")) open("issues", "ui_follow_up");
-		else if (name.startsWith("pm.maintenance_review.")) open("issues", "ui_maintenance_review");
-		else if (name.startsWith("pm.maintenance.repair")) open("issues", "ui_repairs");
-		else if (name.startsWith("pm.governance.")) open("issues", "ui_governance");
-		else if (name.startsWith("pm.issue.")) open("requirements", "ui_publication");
+		if (name.startsWith("pm.maintenance_review.")) openRegisterForm("issues", "ui_maintenance_review");
+		else if (name.startsWith("pm.maintenance.repair")) {
+			maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref);
+			openRegisterForm("issues", "ui_repairs");
+		} else if (name.startsWith("pm.governance.")) openRegisterForm("issues", "ui_governance");
+		else if (name.startsWith("pm.issue.")) openRegisterForm("requirements", "ui_publication");
+		else if (name.startsWith("pm.meeting.")) openRegisterForm("discussions", "ui_meetings");
+		else if (name.includes("follow_up.record")) openRegisterForm("issues", "ui_follow_up");
 	};
 	const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1 ? workspaceRegister({
 		h,
@@ -32480,8 +32696,29 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			workbench?.select("requirements");
 			traceability?.focusRequirement?.(id);
 		},
-		onAction: routeRegisterAction
+		onAction: routeRegisterAction,
+		nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === "work_item" ? kanban?.titleFor?.(id) : "") || ""
 	}) : null;
+	openRegisterForm = (viewId, section) => {
+		const host = body.querySelector(`[data-pm-section="${section}"]`);
+		if (!host) return;
+		if (matchMedia("(max-width: 1199px)").matches) register?.closeSheet?.(true);
+		if (viewId && workspaceId) {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${viewId}`;
+			workbench?.select(viewId);
+		}
+		const fold = host.querySelector(":scope > details");
+		const focusForm = (root) => {
+			([...root.querySelectorAll("input:not([type=\"hidden\"]), select, textarea")].find((node) => !node.disabled) || root.querySelector("summary"))?.focus();
+			root.scrollIntoView({ block: "nearest" });
+		};
+		if (fold instanceof HTMLDetailsElement) {
+			fold.open = true;
+			queueMicrotask(() => focusForm(fold));
+			return;
+		}
+		queueMicrotask(() => focusForm(host));
+	};
 	const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources ? specSources({
 		h,
 		t,
@@ -32768,10 +33005,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		});
 	}
 	const openIssueTool = (section) => {
+		if (matchMedia("(max-width: 1199px)").matches) register?.closeSheet?.(true);
 		const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
 		if (fold instanceof HTMLDetailsElement) {
 			fold.open = true;
-			fold.scrollIntoView({ block: "nearest" });
+			queueMicrotask(() => {
+				fold.querySelector("summary")?.focus();
+				fold.scrollIntoView({ block: "nearest" });
+			});
 			return;
 		}
 		body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({ block: "nearest" });

@@ -9,8 +9,7 @@ import {joinLabel, labelSegment} from './label-text.js';
 // Age bars are informational. The register API has no age filter.
 const TYPES = ['risk', 'issue', 'action', 'change', 'decision'];
 const ROW_ID = /^(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180}$/;
-const STATUSES = ['open', 'monitoring', 'observed_open', 'blocked', 'tracking', 'needs_review', 'proposed', 'in_progress', 'draft', 'reported_resolved', 'reported_done', 'adopted', 'rejected', 'cancelled', 'succeeded', 'failed'];
-const STEPS = ['finding', 'action', 'work', 'evidence', 'review', 'proposal', 'decision', 'revision'];
+const STATUSES = ['open', 'monitoring', 'observed_open', 'blocked', 'tracking', 'needs_review', 'proposed', 'in_progress', 'draft', 'reported_resolved', 'reported_done', 'adopted', 'rejected', 'cancelled', 'succeeded', 'failed', 'running', 'uncertain', 'needs_attention', 'waiting_checks', 'waiting_external', 'accepted', 'format_valid', 'recorded_discussion_decision', 'continue_maintenance', 'bounded_repair_proposal', 'adopted_direction'];
 const TYPE_ICON = {risk: 'circle-alert', issue: 'inbox', action: 'check', change: 'refresh-cw', decision: 'list-checks'};
 const ACTION_KEYS = {
   'pm.maintenance.repair': 'reg_action_repair',
@@ -24,17 +23,20 @@ const ACTION_KEYS = {
   'pm.maintenance_review.follow_up.record': 'reg_action_follow',
 };
 const AGE_KEYS = {'0-7d': 'reg_age_0_7', '8-30d': 'reg_age_8_30', '31-90d': 'reg_age_31_90', '90d+': 'reg_age_90'};
-const TONES = {open: 'info', monitoring: 'info', observed_open: 'info', tracking: 'info', failed: 'bad', proposed: 'review', needs_review: 'review', succeeded: 'ok'};
+const TONES = {open: 'info', monitoring: 'info', observed_open: 'info', tracking: 'info', failed: 'bad', proposed: 'review', needs_review: 'review', succeeded: 'ok', running: 'info', uncertain: 'review', needs_attention: 'review', waiting_checks: 'info', waiting_external: 'info', accepted: 'info', format_valid: 'review', recorded_discussion_decision: 'info', continue_maintenance: 'info', bounded_repair_proposal: 'review', adopted_direction: 'ok'};
 const REPO = /^[\w.-]+\/[\w.-]+$/;
+const DEPTH_PAGES = 20;
+const shortTime = new Intl.DateTimeFormat(undefined, {dateStyle: 'short', timeStyle: 'short'});
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const known = (t, key) => {const text = t(key); return text === key ? '' : text;};
-const when = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? '' : date.toLocaleString();};
+const when = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? '' : shortTime.format(date);};
 const day = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();};
 
-export function workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}}) {
+export function workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}, nameFor = () => ''}) {
   const preference = viewState(namespace, workspaceId, 'issues');
   let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null;
+  let trail = null, trailAgain = false, trailQuery = '';
   let loaded = false, unavailable = false, failed = null, selected = preference.selected || null;
   let typeValue = TYPES.includes(preference.type) ? preference.type : '';
   let debounce = null, sheet = null, retainSheet = false, opening = false;
@@ -50,8 +52,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   const ownerListId = `reg-owners-${workspaceId.replace(/[^\w-]/g, '')}`;
   const ownerList = h('datalist', {id: ownerListId});
   const ownerInput = h('input', {type: 'text', class: 'reg-owner', role: 'combobox', 'aria-autocomplete': 'list', 'data-reg-owner': '',
-    list: ownerListId, 'aria-label': t('reg_filter_owner'), placeholder: t('reg_filter_owner'), autocomplete: 'off', oninput: queueReload});
-  const searchInput = h('input', {type: 'search', 'data-reg-search': '', 'aria-label': t('reg_filter_search'), placeholder: t('reg_filter_search'), oninput: queueReload});
+    list: ownerListId, 'aria-label': t('reg_filter_owner'), placeholder: t('reg_filter_owner'), autocomplete: 'off', maxlength: '200', oninput: queueReload});
+  const searchInput = h('input', {type: 'search', 'data-reg-search': '', 'aria-label': t('reg_filter_search'), placeholder: t('reg_filter_search'), maxlength: '200', oninput: queueReload});
   statusSelect.value = STATUSES.includes(preference.status) ? preference.status : '';
   ownerInput.value = preference.owner || '';
   searchInput.value = preference.q || '';
@@ -68,13 +70,18 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   function onWide() {trends.open = wideQuery.matches; paintTable();}
   wideQuery.addEventListener('change', onWide);
   trends.open = wideQuery.matches;
+  function vocabularyStatus(status) {
+    // Operation "accepted" means accepted for processing, not the vocabulary's inspected result.
+    return status !== 'accepted' && Object.hasOwn(statusVocabulary, status);
+  }
+  function statusKnown(status) {return vocabularyStatus(status) || Boolean(known(t, 'reg_status_' + status));}
   function statusLabel(status) {
-    if (Object.hasOwn(statusVocabulary, status)) return t('ui_status_' + status);
+    if (vocabularyStatus(status)) return t('ui_status_' + status);
     return known(t, 'reg_status_' + status) || t('ui_reason_generic');
   }
   function statusNode(status) {
     if (!labelSegment(status)) return statusPill('unknown');
-    if (Object.hasOwn(statusVocabulary, status)) return statusPill(status);
+    if (vocabularyStatus(status)) return statusPill(status);
     const label = known(t, 'reg_status_' + status);
     return h('span', {class: `ui-pill tone-${TONES[status] || 'neutral'}`}, label || t('ui_reason_generic'));
   }
@@ -95,6 +102,11 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   function reloadNow() {readFilters(); clearTimeout(debounce); debounce = null; resetPage(); void refresh();}
   function publishMeta() {
     if (!active || unavailable || failed || !loaded) {onMeta(null); return;}
+    if (typeValue && coverage?.complete === true) {
+      const count = totals && finite(totals[typeValue]) ? totals[typeValue] : rows.length;
+      onMeta(t('reg_matching', {n: count}));
+      return;
+    }
     if (coverage?.complete === true && totals && typeof totals === 'object') {
       const line = joinLabel(TYPES.map(type => finite(totals[type]) ? `${t('reg_type_' + type)} ${totals[type]}` : ''));
       onMeta(line || (rows.length ? t('reg_shown', {n: rows.length}) : t('reg_none_shown')));
@@ -159,18 +171,48 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (blocked > 0) reasonSection.append(h('p', {class: 'reg-note', 'data-reg-blocked': ''}, t('reg_no_reason_recorded', {n: blocked})));
     summaryHost.append(ageSection, weekSection, reasonSection);
   }
+  function displayTitle(row) {
+    const title = labelSegment(row?.title);
+    if (title) return title;
+    const finding = row?.source?.kind === 'finding' || String(row?.row_id || '').startsWith('finding.');
+    if (!finding) return '';
+    const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
+    const kind = t('reg_kind_finding');
+    return qualifier ? `${kind} · ${qualifier}` : kind;
+  }
+  function findingContext(action) {
+    const ref = action?.required?.finding_ref;
+    if (!ref || typeof ref !== 'object') return null;
+    const id = labelSegment(ref.finding_id) || labelSegment(ref.id);
+    if (!id) return null;
+    const built = {kind: 'finding', id, observation_id: ref.observation_id, document_digest: ref.document_digest};
+    return isContextRef(built) ? built : null;
+  }
+  function contextRefs(row) {
+    const refs = [];
+    if (isContextRef(row?.source)) refs.push(row.source);
+    for (const action of Array.isArray(row?.available_actions) ? row.available_actions : []) {
+      const finding = findingContext(action);
+      if (finding && !refs.some(item => item.kind === finding.kind && item.id === finding.id && item.observation_id === finding.observation_id && item.document_digest === finding.document_digest)) refs.push(finding);
+    }
+    return refs.slice(0, 8);
+  }
+  function namedChip(kind, id, fallback, attrs, onclick) {
+    const name = labelSegment(nameFor(kind, id));
+    const text = name || fallback;
+    return h('button', {type: 'button', class: 'reg-chip', title: name || id, 'aria-label': name || `${fallback} ${id}`, onclick, ...attrs},
+      h('span', {class: 'reg-chip-label'}, text));
+  }
   function relatedItems(row) {
     const related = row.related || {};
     const items = [];
-    for (const id of related.requirement_ids || []) if (labelSegment(id)) items.push(h('button', {type: 'button', class: 'reg-chip', 'data-reg-requirement': id,
-      title: id, 'aria-label': `${t('reg_requirement')} ${id}`, onclick: () => onOpenRequirement(id)}, t('reg_requirement')));
-    for (const id of related.work_item_ids || []) if (labelSegment(id)) items.push(h('button', {type: 'button', class: 'reg-chip', 'data-reg-work': id,
-      title: id, 'aria-label': `${t('reg_work')} ${id}`, onclick: () => onOpenWork(id)}, t('reg_work')));
+    for (const id of related.requirement_ids || []) if (labelSegment(id)) items.push(namedChip('requirement', id, t('reg_requirement'), {'data-reg-requirement': id}, () => onOpenRequirement(id)));
+    for (const id of related.work_item_ids || []) if (labelSegment(id)) items.push(namedChip('work_item', id, t('reg_work'), {'data-reg-work': id}, () => onOpenWork(id)));
     for (const pr of related.prs || []) {
       if (!finite(pr?.number)) continue;
       const label = t('reg_pr', {n: pr.number});
       if (typeof pr.repository === 'string' && REPO.test(pr.repository)) items.push(h('a', {class: 'reg-chip', 'data-reg-pr': '', href: `https://github.com/${pr.repository}/pull/${pr.number}`,
-        target: '_blank', rel: 'noopener noreferrer'}, label));
+        target: '_blank', rel: 'noopener noreferrer'}, h('span', {class: 'reg-chip-label'}, label)));
       else items.push(h('span', {class: 'reg-chip'}, label));
     }
     return items;
@@ -187,23 +229,24 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     ownerList.replaceChildren(...owners.map(owner => h('option', {value: owner})));
   }
   function listMeta(row) {
-    const parts = [h('span', {}, t('reg_type_' + row.type)), statusNode(row.status)];
-    if (labelSegment(row.priority)) parts.push(h('span', {}, row.priority));
+    const parts = [h('span', {class: 'reg-list-type'}, t('reg_type_' + row.type)), statusNode(row.status)];
+    if (labelSegment(row.priority)) parts.push(h('span', {class: 'reg-list-priority'}, row.priority));
     const who = labelSegment(row.owner) ? row.owner : day(row.due);
-    if (who) parts.push(h('span', {}, who));
+    if (who) parts.push(h('span', {class: 'reg-list-who'}, who));
     return h('div', {class: 'reg-list-meta'}, ...parts.flatMap((part, index) => index ? [h('span', {class: 'reg-sep', 'aria-hidden': 'true'}, '·'), part] : [part]));
   }
   function paintList(focusKey) {
     const controls = [];
-    const list = h('div', {class: 'reg-list', role: 'list'});
+    const list = h('div', {class: 'reg-list', role: 'list', tabindex: '-1'});
     rows.forEach((row, index) => {
-      const active = row.row_id === selected;
-      const item = h('button', {type: 'button', class: 'reg-list-row', role: 'listitem', 'data-row-key': row.row_id,
-        'aria-selected': String(active), tabindex: active || selected == null && index === 0 ? 0 : -1, onclick: () => openRow(row)},
-        h('span', {class: 'reg-list-title'}, dash(row.title)), listMeta(row),
+      const current = row.row_id === selected;
+      const button = h('button', {type: 'button', class: 'reg-list-row', 'data-row-key': row.row_id,
+        'aria-current': current ? 'true' : null, 'aria-selected': current ? 'true' : null,
+        tabindex: current || selected == null && index === 0 ? 0 : -1, onclick: () => openRow(row)},
+        h('span', {class: 'reg-list-title'}, dash(displayTitle(row))), listMeta(row),
         labelSegment(row.next_step) ? h('span', {class: 'reg-list-next'}, row.next_step) : null);
-      item.addEventListener('keydown', event => {
-        if (event.target !== item) return;
+      button.addEventListener('keydown', event => {
+        if (event.target !== button) return;
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
         const next = event.key === 'Home' ? 0 : event.key === 'End' ? controls.length - 1
@@ -211,8 +254,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
         controls.forEach((node, n) => {node.tabIndex = n === next ? 0 : -1;});
         controls[next]?.focus();
       });
-      controls.push(item);
-      list.append(item);
+      controls.push(button);
+      list.append(h('div', {role: 'listitem'}, button));
     });
     tableHost.replaceChildren(list);
     if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll: true});
@@ -227,11 +270,11 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (!wideQuery.matches) {paintList(focusKey); return;}
     const columns = [
       {key: 'type', label: t('reg_col_type'), render: row => h('span', {class: 'reg-type'}, icon(TYPE_ICON[row.type] || 'circle-alert'), h('span', {}, t('reg_type_' + row.type)))},
-      {key: 'title', label: t('reg_col_title'), render: row => h('span', {class: 'reg-clamp'}, dash(row.title))},
+      {key: 'title', label: t('reg_col_title'), render: row => h('span', {class: 'reg-clamp'}, dash(displayTitle(row)))},
       {key: 'status', label: t('reg_col_status'), render: row => statusNode(row.status)},
       {key: 'priority', label: t('reg_col_priority'), render: row => dash(row.priority)},
       {key: 'impact', label: t('reg_col_impact'), render: row => dash(row.impact)},
-      {key: 'owner', label: t('reg_col_owner'), render: row => dash(row.owner)},
+      {key: 'owner', label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
       {key: 'due', label: t('reg_col_due'), render: row => day(row.due) || '—'},
       {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
       {key: 'related', label: t('reg_col_related'), render: row => relatedChips(row, 2)},
@@ -284,10 +327,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       [t('reg_col_related'), relatedChips(row)],
     ];
     const facts = h('dl', {class: 'reg-facts'}, ...pairs.flatMap(([label, value]) => [h('dt', {}, label), h('dd', {}, value)]));
-    const ordered = (Array.isArray(record.timeline) ? record.timeline : []).map((step, index) => ({step, index}))
-      .sort((a, b) => (STEPS.indexOf(a.step?.step) < 0 ? STEPS.length : STEPS.indexOf(a.step.step)) - (STEPS.indexOf(b.step?.step) < 0 ? STEPS.length : STEPS.indexOf(b.step.step)) || a.index - b.index);
-    const timeline = h('ol', {class: 'reg-timeline', 'data-reg-timeline': ''}, ...ordered.map(({step}) => {
-      if (!known(t, 'reg_step_' + step?.step)) unknownCodes.push(step?.step);
+    if (labelSegment(row.status) && !statusKnown(row.status)) unknownCodes.push(row.status);
+    const timeline = h('ol', {class: 'reg-timeline', 'data-reg-timeline': ''}, ...(Array.isArray(record.timeline) ? record.timeline : []).map(step => {
+      if (labelSegment(step?.step) && !known(t, 'reg_step_' + step.step)) unknownCodes.push(step.step);
+      if (labelSegment(step?.status) && !statusKnown(step.status)) unknownCodes.push(step.status);
       const meta = joinLabel([step?.actor, when(step?.at)]);
       const title = labelSegment(step?.title);
       const link = refLink(step?.ref, title, row.row_id);
@@ -297,47 +340,62 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
         h('div', {class: 'reg-step-line'}, link || (title ? h('span', {}, title) : null), labelSegment(step?.status) ? statusNode(step.status) : null));
     }));
     const partial = record.timeline_coverage && record.timeline_coverage.complete === false;
-    if (partial && record.timeline_coverage.partial_reason) unknownCodes.push(record.timeline_coverage.partial_reason);
     const head = h('div', {class: 'reg-timeline-head'}, h('h3', {}, t('reg_timeline')), partial ? statusPill('partial') : null);
-    const source = isContextRef(row.source) ? row.source : null;
-    const title = labelSegment(row.title) || t('reg_discussion');
+    const refs = contextRefs(row);
+    const title = displayTitle(row) || t('reg_discussion');
     const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter(action => labelSegment(action?.action));
     const labels = offered.map(action => t(ACTION_KEYS[action.action] || 'reg_action_open'));
     const stepText = labelSegment(row.next_step);
     const primary = stepText && labels.filter(label => label === stepText).length === 1 ? stepText : '';
     const links = h('div', {class: 'reg-actions'},
-      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-discuss': '', href: discussHref({workspaceId, refs: source ? [source] : [], title, from: 'issues'})}, t('reg_discuss')),
+      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-discuss': '', href: discussHref({workspaceId, refs, title, from: 'issues'})}, t('reg_discuss')),
       ...offered.map((action, index) => {
         const key = ACTION_KEYS[action.action];
         if (!key) unknownCodes.push(action.action);
         return h('button', {type: 'button', class: `ui-button ${labels[index] === primary ? 'primary' : 'secondary'} ui-sm`, 'data-reg-action': action.action,
           onclick: () => onAction(action)}, labels[index]);
       }),
-      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-propose': '', href: discussHref({workspaceId, refs: source ? [source] : [], title: t('reg_change_title', {title}), from: 'issues'})}, t('reg_propose')));
-    const fieldKey = {title: 'reg_col_title', status: 'reg_col_status', owner: 'reg_col_owner', due: 'reg_col_due', impact: 'reg_col_impact', priority: 'reg_col_priority', next_step: 'reg_col_next', created_at: 'reg_created', updated_at: 'reg_updated'};
+      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-propose': '', href: discussHref({workspaceId, refs, title: t('reg_change_title', {title}), from: 'issues'})}, t('reg_propose')));
+    const fieldKey = {title: 'reg_col_title', status: 'reg_col_status', owner: 'reg_col_owner', due: 'reg_col_due', impact: 'reg_col_impact', priority: 'reg_col_priority', next_step: 'reg_col_next', created_at: 'reg_created', updated_at: 'reg_updated', pull_requests: 'reg_pull_requests'};
     const detailBits = [];
     if (row.type_basis === 'neutral') detailBits.push(h('p', {}, t('reg_neutral')));
+    if (partial && labelSegment(record.timeline_coverage.partial_reason)) {
+      const code = String(record.timeline_coverage.partial_reason);
+      const recognised = Boolean(known(t, 'ui_reason_' + code));
+      detailBits.push(h('p', {}, recognised ? reasonLabel(t, code) : t('ui_reason_generic')));
+      if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, code));
+    }
     for (const [name, code] of Object.entries(row.unknowns || {})) {
       if (!labelSegment(code)) continue;
       const recognised = Boolean(known(t, 'ui_reason_' + code));
       const label = fieldKey[name] ? t(fieldKey[name]) : t('ui_reason_generic');
-      detailBits.push(h('p', {}, `${label}: ${reasonLabel(t, code)}`));
+      detailBits.push(h('p', {}, t('reg_pair', {label, value: reasonLabel(t, code)})));
       if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, String(code)));
     }
-    for (const code of unknownCodes) if (labelSegment(code)) detailBits.push(h('p', {class: 'reg-note'}, String(code)));
+    const seenCodes = new Set();
+    for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {seenCodes.add(String(code)); detailBits.push(h('p', {class: 'reg-note'}, String(code)));}
     const extra = detailBits.length ? disclosure({label: t('reg_details'), key: `reg-details:${workspaceId}:${row.row_id}`,
       body: h('div', {class: 'reg-detail-body'}, ...detailBits)}) : null;
     return [h('div', {class: 'reg-sheet-main'}, facts, head, timeline, extra), links];
   }
+  function focusSelectedRow() {
+    const row = selected ? tableHost.querySelector(`[data-row-key="${CSS.escape(selected)}"]`) : null;
+    const fallback = tableHost.querySelector('.ui-data-table') || tableHost.querySelector('.reg-list') || tableHost;
+    (row || fallback)?.focus();
+  }
   function paintInspector(record) {
+    if (!active) return;
     const row = record.row;
-    const title = labelSegment(row.title) || t('reg_type_' + row.type);
-    const focused = sheet?.contains(document.activeElement);
-    if (focused && sheet?.getAttribute('data-reg-row') === row.row_id) return;
+    const title = displayTitle(row) || t('reg_type_' + row.type);
     if (!sheet || sheet.getAttribute('data-reg-row') !== row.row_id) {
       closeSheet(true);
       opening = true;
-      sheet = inspector({title, onClose: () => {sheet = null; if (!retainSheet && !opening) preference.inspector = false;}});
+      sheet = inspector({title, onClose: () => {
+        sheet = null;
+        if (!retainSheet && !opening) preference.inspector = false;
+        // close() focuses its captured opener after onClose. A rebuilt row is disconnected, so focus again on the next turn.
+        queueMicrotask(() => {if (!opening && !sheet && active) focusSelectedRow();});
+      }});
       opening = false;
       sheet.setAttribute('data-reg-inspector', '');
       sheet.setAttribute('data-reg-row', row.row_id);
@@ -369,58 +427,90 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (data?.workspace_id !== workspaceId || data.row?.row_id !== rowId || !Array.isArray(data.timeline)) throw Error(t('pm_scope_mismatch'));
     return data;
   }
-  function query(append) {
+  function pageQuery(cursor) {
     const params = new URLSearchParams();
     if (typeValue) params.set('type', typeValue);
     if (statusSelect.value) params.set('status', statusSelect.value);
     if (ownerInput.value.trim()) params.set('owner', ownerInput.value.trim());
     if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
-    if (append && nextCursor) params.set('after', nextCursor);
+    if (cursor) params.set('after', cursor);
     params.set('limit', '50');
     return params;
   }
+  async function readPage(cursor, ticket) {
+    const data = checkList(await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/register?${pageQuery(cursor)}`));
+    alive();
+    if (!active || ticket !== serial) return null;
+    return data;
+  }
   async function loadList(append) {
-    if (!active) return;
+    if (!active || (append && !nextCursor)) return;
     const ticket = ++serial;
     busy = true;
     paintFooter();
+    const prior = rows.slice();
+    const depth = prior.length;
+    const kept = selected ? prior.find(row => row.row_id === selected) || null : null;
+    const beforeSig = kept ? JSON.stringify(kept) : '';
     try {
-      const data = checkList(await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/register?${query(append)}`));
-      alive();
-      if (ticket !== serial) return;
+      const merged = append ? prior.slice() : [];
+      const seen = new Set(merged.map(row => row.row_id));
+      let cursor = append ? nextCursor : null;
+      let meta = null;
+      let lastCursor = null;
+      const target = append ? depth + 1 : Math.max(depth, 1);
+      for (let page = 0; page < (append ? 1 : DEPTH_PAGES) && active && ticket === serial; page++) {
+        const data = await readPage(cursor, ticket);
+        if (!data) return;
+        if (!meta) meta = data;
+        for (const row of data.rows) if (!seen.has(row.row_id)) {seen.add(row.row_id); merged.push(row);}
+        lastCursor = data.next_cursor || null;
+        cursor = lastCursor;
+        if (append || !cursor || merged.length >= target) break;
+      }
+      if (!active || ticket !== serial || !meta) return;
+      let stale = false;
+      if (!append && kept && !seen.has(kept.row_id)) {merged.push(kept); seen.add(kept.row_id); stale = true;}
+      if (selected && !seen.has(selected)) {selected = null; preference.selected = null; preference.inspector = false; closeSheet(false);}
+      const current = selected ? merged.find(row => row.row_id === selected) : null;
+      const changed = Boolean(beforeSig) && JSON.stringify(current) !== beforeSig;
+      rows = merged;
+      nextCursor = lastCursor;
+      coverage = meta.coverage || {};
+      totals = coverage.complete === true ? meta.total_by_type : null;
+      summary = coverage.complete === true ? meta.summary : null;
       unavailable = false; failed = null; loaded = true;
-      if (!append) rows = [];
-      const seen = new Set(rows.map(row => row.row_id));
-      for (const row of data.rows) if (!seen.has(row.row_id)) {seen.add(row.row_id); rows.push(row);}
-      nextCursor = data.next_cursor || null;
-      coverage = data.coverage || {};
-      totals = coverage.complete === true ? data.total_by_type : null;
-      summary = coverage.complete === true ? data.summary : null;
-      if (selected && !rows.some(row => row.row_id === selected)) {selected = null; preference.inspector = false; closeSheet(false);}
       statusLine.replaceChildren();
       render();
-      if (preference.inspector && selected) void loadDetail(selected);
+      // Below 1200 the inspector is a modal sheet. A refresh or a return keeps the selection
+      // and leaves that sheet closed. The side panel (1200 and above) still restores.
+      const showSheet = Boolean(sheet) || matchMedia('(min-width: 1200px)').matches;
+      if (preference.inspector && selected && (changed || stale || (showSheet && !sheet))) void loadDetail(selected, showSheet);
     } catch (error) {
       try {alive();} catch {return;}
-      if (ticket !== serial) return;
+      if (!active || ticket !== serial) return;
       if ([403, 404].includes(error.status)) withdraw();
       else fail(error);
     } finally {if (ticket === serial) {busy = false; paintFooter();}}
   }
-  async function loadDetail(rowId) {
+  async function loadDetail(rowId, paint = true) {
+    if (!active) return;
     const ticket = ++detailSerial;
     const listTicket = serial;
     try {
       const data = checkDetail(await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/register/${encodeURIComponent(rowId)}`), rowId);
       alive();
-      if (ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
+      if (!active || ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
+      // A closed modal stays closed. The read still drops the row when the detail is gone.
+      if (!paint) return;
       paintInspector(data);
     } catch (error) {
       try {alive();} catch {return;}
-      if (ticket !== detailSerial || listTicket !== serial) return;
+      if (!active || ticket !== detailSerial || listTicket !== serial) return;
       if ([403, 404].includes(error.status)) {
         rows = rows.filter(row => row.row_id !== rowId);
-        if (selected === rowId) {selected = null; preference.inspector = false; closeSheet(false);}
+        totals = null; summary = null;
+        if (selected === rowId) {selected = null; preference.selected = null; preference.inspector = false; closeSheet(false);}
         render();
         void refresh();
         return;
@@ -447,9 +537,20 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     onMeta(null);
     render();
   }
-  async function refresh() {
-    if (!active) return;
-    await loadList(false);
+  function refresh() {
+    if (!active) return Promise.resolve();
+    const query = String(pageQuery());
+    // Same filters share one trailing read. A new filter invalidates the read in flight.
+    if (trail && trailQuery === query) {trailAgain = true; return trail;}
+    const run = (async () => {
+      try {
+        do {trailAgain = false; trailQuery = String(pageQuery()); await loadList(false);}
+        while (trailAgain && active && String(pageQuery()) === trailQuery);
+      } finally {if (trail === run) {trail = null; trailQuery = '';}}
+    })();
+    trail = run;
+    trailQuery = query;
+    return run;
   }
   function rememberScroll() {
     preference.scrollY = window.scrollY;
@@ -468,8 +569,15 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const next = Boolean(value);
     if (active === next) {if (active) publishMeta(); else onMeta(null); return;}
     active = next;
-    if (!active) {onMeta(null); closeSheet(true); return;}
-    void refresh();
+    if (!active) {serial++; detailSerial++; busy = false; onMeta(null); closeSheet(true); return;}
+    void refresh().then(() => {
+      if (!active || sheet || matchMedia('(min-width: 1200px)').matches) return;
+      const current = document.activeElement;
+      // A related-item inspector or its destination heading may own focus while
+      // this first read settles. Do not replace that visible reading position.
+      if (current && current !== document.body && current.getClientRects().length && !current.closest('[hidden], [inert]')) return;
+      focusSelectedRow();
+    });
   }
   function dispose() {
     active = false; clearTimeout(debounce); serial++; detailSerial++;
@@ -477,5 +585,5 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     readFilters(); rememberScroll(); closeSheet(false);
   }
   render();
-  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose};
+  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet};
 }

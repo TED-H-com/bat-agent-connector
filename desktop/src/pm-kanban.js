@@ -211,5 +211,6 @@ export function workspaceKanban({h, t, api, alive, workspaceId, errorBox, projec
     catch (error) {if (ticket === serial) unavailable(error);}
     finally {if (ticket === serial) {reading = false; more.disabled = false;}}
   }
-  return {element, box: element, refresh};
+  function titleFor(id) {const title = rows.get(id)?.card?.work?.title; return typeof title === 'string' ? title : '';}
+  return {element, box: element, refresh, titleFor};
 }

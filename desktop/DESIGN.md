@@ -368,21 +368,50 @@ the shared wording, and the raw code appears only there.
 ## Issues & changes
 
 When `features.pm_register.version` is 1, the view reads `GET /pm/workspaces/{id}/register`
-and `GET …/register/{row_id}`. Type counts and the summary (open-by-age, twelve weeks,
-blocking reasons) appear only when `coverage.complete` is true. Otherwise the header
-meta is the number of rows shown, and an empty blocking-reason list says that no
-reason field was recorded. The summary is one 120px strip of three blocks above the
-table. At 800px and below it collapses into a closed Trends disclosure, and the rows
-become a list (title, one meta line, next step) instead of the wide table. The table
-shows the type word; Source stays in the inspector facts. Filters are one toolbar:
-type, status, exact owner and title search, with accessible names and no visible
-field labels. Pages follow `next_cursor`; row ids and cursors are passed through
-unchanged. The inspector shows the stored processing timeline. Discuss and Propose
-change use the shared discussion link, bound only when the row source is a context
-ref. Requirement and work links open the Requirements selection. A 403 or 404 drops
-the rows, counts and inspector together. Governance, repairs, review and follow-up
-keep their durable forms in collapsed disclosures, opened from the header overflow.
-Header actions and capture hints belong to their active view; an empty overflow is hidden.
+and `GET …/register/{row_id}`. Type counts appear in the header only when
+`coverage.complete` is true and no type filter is set. A type filter with complete
+coverage says how many records match. Otherwise the header meta is the number of
+rows shown. An empty blocking-reason list says that no reason field was recorded.
+The summary is one 120px strip of three blocks. At 800px and below it collapses
+into a Trends disclosure directly under the toolbar, closed until opened, and the
+rows become a list (title, one meta line, next step) instead of the wide table.
+The list is a list, a list item, and a button. The selected button sets
+`aria-current` and `aria-selected`.
+
+A refresh keeps the pages already loaded, up to twenty, and keeps a selected row
+until that row's own detail read says it is gone. Overlapping refreshes of the
+same filters share one trailing list read. A changed filter starts its own read
+and drops the one still in flight. The open row is read again when its list row
+changed or it was kept beyond the loaded pages. At 1200px and above, returning
+to the view restores the side panel and reads that row. Below 1200px a refresh
+or a return keeps the selection and leaves the sheet closed until the row is
+opened again, and a return moves focus to that row. A detail read in that case
+still drops the row when it is gone, without opening the sheet. Leaving the view cancels register reads that are
+still in flight and closes the inspector.
+Search and owner accept at most 200 characters.
+
+The table shows the type word; Source stays in the inspector facts. A finding with
+no title is named from its kind and its impact or priority. Long owner text
+ellipsizes. Related requirement and work chips use a loaded name when one is known.
+Filters are one toolbar: type, status, exact owner and title search, with accessible
+names and no visible field labels. Pages follow `next_cursor`; row ids and cursors
+are passed through unchanged.
+
+The inspector shows the processing timeline in the order the server sent. Status
+wording covers the operation, decision and direction states the register emits. An
+operation that is accepted for processing does not use the inspected-result word
+“Accepted”. An unrecognised status uses the generic wording, and the raw code is
+only in Details. Discuss and Propose change use the shared discussion link. A
+finding binds the finding ref on its action when that object is a context ref.
+Requirement and work links open the Requirements selection. Below 1200px, a row
+action closes the sheet, keeps the selection, and moves focus to the form. Those
+actions navigate with the view URL.
+
+A 403 or 404 on the list drops the rows, counts and inspector together. A 403 or
+404 on one row drops that row and clears the counts until the list is read again.
+Governance, repairs, review and follow-up keep their durable forms in collapsed
+disclosures, opened from the header overflow. Header actions and capture hints
+belong to their active view; an empty overflow is hidden.
 
 ## Agents
 
