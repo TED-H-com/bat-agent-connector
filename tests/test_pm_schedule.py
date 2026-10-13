@@ -1126,7 +1126,9 @@ async def test_one_lineage_limit_hides_one_issue_mapping(ops):
                    revision_id="pmir_" + "d" * 32, operation_id="op_" + "d" * 16)
     listed = pm_issue_mappings.list_mappings(ops, OWNER, wid)
     assert [row["mapping_id"] for row in listed["mappings"]] == ["pmim_" + "d" * 32]
-    assert listed["coverage"]["visibility_filtered"] is True
+    # The list reports a mapping it could not check separately from a hidden one.
+    assert listed["coverage"]["source_incomplete"] is True
+    assert listed["coverage"]["visibility_filtered"] is False
     body = check(schedule(ops, wid), wid)
     assert f"issue:pmim_{'d' * 32}" in by_id(body)
     assert f"issue:pmim_{'c' * 32}" not in by_id(body)

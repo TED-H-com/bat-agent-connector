@@ -914,7 +914,8 @@ def _issues(ops, principal, workspace_id, milestones, notes, coverage):
     while scanned < _ISSUE_SCAN:
         limit = min(50, _ISSUE_SCAN - scanned)
         page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=limit)
-        if page["coverage"]["visibility_filtered"]:
+        # The schedule documents a 409-skipped mapping as hidden, the same as a 404.
+        if page["coverage"]["visibility_filtered"] or page["coverage"].get("source_incomplete"):
             coverage["visibility_filtered"] = True
         scanned += page["coverage"].get("scanned", len(page["mappings"]))
         binding_ids, mapping_ids = [], []
