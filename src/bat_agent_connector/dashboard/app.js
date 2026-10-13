@@ -28533,7 +28533,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	let zoom = Object.hasOwn(ZOOM, preference.zoom) ? preference.zoom : "week";
 	const collapsed = new Set(preference.collapsed || []);
 	let selected = preference.selected || null, active = false, serial = 0, data = null, panel = null, panelSignature = "", signature = "";
-	let domain, scale, visible = [], focusId = null;
+	let domain, scale, visible = [], focusId = null, syncingLanes = false;
 	const viewport = h$1("div", {
 		class: "schedule-viewport",
 		tabindex: 0,
@@ -28592,7 +28592,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function saveScroll() {
 		if (!domain || !viewport.clientWidth) return;
-		preference.anchor = domain.start + viewport.scrollLeft / scale;
+		if (matchMedia("(min-width: 800px)").matches) preference.anchor = domain.start + viewport.scrollLeft / scale;
 		preference.top = viewport.scrollTop;
 		const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
 		const row = [...chart.querySelectorAll("[data-schedule-row]")].find((node) => node.getBoundingClientRect().bottom > top);
@@ -28602,7 +28602,11 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		};
 	}
 	function restoreScroll() {
-		viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		const left = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		viewport.scrollLeft = left;
+		syncingLanes = true;
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = left;
+		syncingLanes = false;
 		viewport.scrollTop = preference.top || 0;
 		if (preference.vertical) {
 			const row = chart.querySelector(`[data-schedule-row="${CSS.escape(preference.vertical.id)}"]`);
@@ -28614,8 +28618,13 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!domain) return;
 		const x = (dayNumber(new Date().toISOString()) - domain.start) * scale;
 		viewport.scrollLeft = Math.max(0, x - Math.max(0, viewport.clientWidth - 328) / 2);
-		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = Math.max(0, x - mini.clientWidth / 2);
-		saveScroll();
+		const firstLane = chart.querySelector("[data-has-dates=\"true\"] .schedule-lane") || chart.querySelector(".schedule-lane");
+		const miniLeft = firstLane ? Math.max(0, x - firstLane.clientWidth / 2) : 0;
+		syncingLanes = true;
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = miniLeft;
+		syncingLanes = false;
+		if (matchMedia("(max-width: 799px)").matches && firstLane?.clientWidth) preference.anchor = domain.start + miniLeft / scale;
+		else saveScroll();
 	}
 	function closePanel(clear = true) {
 		const old = selected;
@@ -28763,7 +28772,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		if (axis) {
 			const length = domain.end - domain.start + 1;
-			const step = zoom === "day" ? Math.max(1, Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
+			const step = zoom === "day" ? Math.max(2, Math.ceil(72 / scale), Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
 			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
 				const instant = new Date(date * DAY$1);
 				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
@@ -28886,11 +28895,12 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
 			const lane = h$1("div", { class: "schedule-lane" }, track(row));
 			lane.addEventListener("scroll", () => {
-				if (lane.clientWidth) {
-					preference.mini ||= {};
-					preference.mini[row.id] = domain.start + lane.scrollLeft / scale;
-				}
-			});
+				if (syncingLanes || !lane.clientWidth) return;
+				syncingLanes = true;
+				preference.anchor = domain.start + lane.scrollLeft / scale;
+				for (const other of chart.querySelectorAll(".schedule-lane")) if (other !== lane) other.scrollLeft = lane.scrollLeft;
+				syncingLanes = false;
+			}, { passive: true });
 			const line = h$1("div", {
 				class: "schedule-row",
 				"data-schedule-row": row.id,
@@ -28902,14 +28912,6 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!visible.length) chart.replaceChildren(emptyState({ title: t("sched_empty") }));
 		restoreScroll();
 		markSelection();
-		for (const lane of chart.querySelectorAll(".schedule-lane")) {
-			const id = lane.firstElementChild?.dataset.scheduleTrack;
-			if (preference.mini?.[id] !== void 0) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
-			else if (matchMedia("(max-width: 799px)").matches) {
-				const row = data.rows.find((row) => row.id === id), dates = row ? spans(row).map((span) => span.start ?? span.end) : [];
-				if (dates.length) lane.scrollLeft = Math.max(0, (Math.min(...dates) - domain.start) * scale - 32);
-			}
-		}
 		if (focused) focusRow(focused);
 	}
 	function renderData() {

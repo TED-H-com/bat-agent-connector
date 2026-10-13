@@ -416,6 +416,62 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
   await expect(inspector.locator('[data-schedule-section="details"]')).toContainText(`${project.ids.repository}#42`);
 });
 
+test('viewport has no nested vertical scroll cap, Day ticks and Today marker never collide in EN or zh-TW, and mobile rows share one horizontal origin', async ({browser, baseURL}) => {
+  for (const locale of ['en', 'zh-TW'] as const) {
+    const context = await browser.newContext({locale, baseURL, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+    await start(page, locale);
+    const vpStyle = await page.locator('.schedule-viewport').evaluate(el => ({
+      maxHeight: getComputedStyle(el).maxHeight,
+      overflowY: getComputedStyle(el).overflowY,
+    }));
+    expect(vpStyle.maxHeight).toBe('none');
+
+    const zooms = locale === 'en' ? ['Day', 'Week', 'Month'] : ['日', '週', '月'];
+    for (const label of zooms) {
+      await page.getByRole('radio', {name: label, exact: true}).click();
+      const check = await page.evaluate(() => {
+        const axis = document.querySelector('.schedule-axis') as HTMLElement;
+        const axisRect = axis.getBoundingClientRect();
+        const todayRect = axis.querySelector('.schedule-today')!.getBoundingClientRect();
+        const ticks = [...axis.querySelectorAll('.schedule-tick')].map(el => {
+          const r = el.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const tr = range.getBoundingClientRect();
+          return {boxLeft: r.left - axisRect.left, boxRight: r.right - axisRect.left, textRight: tr.right - axisRect.left, textBottom: tr.bottom, textLeft: tr.left, textRightAbs: tr.right};
+        });
+        let overlaps = 0, todayCutsText = false;
+        for (let i = 0; i < ticks.length - 1; i++) {
+          if (ticks[i + 1].boxLeft - ticks[i].boxRight < 0 || ticks[i + 1].boxLeft + 8 - ticks[i].textRight < 2) overlaps++;
+        }
+        for (const tk of ticks) {
+          if (todayRect.left >= tk.textLeft - 1 && todayRect.left <= tk.textRightAbs + 1 && todayRect.top < tk.textBottom) todayCutsText = true;
+        }
+        return {overlaps, todayCutsText};
+      });
+      expect(check).toEqual({overlaps: 0, todayCutsText: false});
+    }
+
+    await page.setViewportSize({width: 390, height: 844});
+    const mobileAlign = async () => page.evaluate(() => {
+      const lanes = [...document.querySelectorAll('.schedule-row[data-has-dates="true"] .schedule-lane')] as HTMLElement[];
+      const scrolls = new Set(lanes.map(l => Math.round(l.scrollLeft)));
+      const todayX = new Set(lanes.map(l => Math.round(l.querySelector('.schedule-today')!.getBoundingClientRect().left)));
+      return {laneCount: lanes.length, uniqueScrolls: scrolls.size, uniqueTodayX: todayX.size};
+    });
+    expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
+    await page.getByRole('button', {name: locale === 'en' ? 'Today' : '今天', exact: true}).click();
+    expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
+    await page.locator('.schedule-row[data-has-dates="true"] .schedule-lane').first().evaluate(node => {
+      node.scrollLeft = 180;
+      node.dispatchEvent(new Event('scroll'));
+    });
+    expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
+    await context.close();
+  }
+});
+
+
 
 
 
