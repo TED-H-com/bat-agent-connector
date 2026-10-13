@@ -145,13 +145,17 @@ When `features.pm_register.version` is 1, the view reads `GET /pm/workspaces/{id
 and `GET …/register/{row_id}`. Type counts and the summary (open-by-age, twelve weeks,
 blocking reasons) appear only when `coverage.complete` is true. Otherwise the header
 meta is the number of rows shown, and an empty blocking-reason list says that no
-reason field was recorded. Filters are the API's type, status, exact owner and title
-search. Pages follow `next_cursor`; row ids and cursors are passed through unchanged.
-The inspector shows the stored processing timeline. Discuss and Propose change use
-the shared discussion link, bound only when the row source is a context ref.
-Requirement and work links open the Requirements selection. A 403 or 404 drops the
-rows, counts and inspector together. Governance, repairs, review and follow-up keep
-their durable forms in collapsed disclosures, opened from the header overflow.
+reason field was recorded. The summary is one 120px strip of three blocks above the
+table. At 800px and below it collapses into a closed Trends disclosure, and the rows
+become a list (title, one meta line, next step) instead of the wide table. The table
+shows the type word; Source stays in the inspector facts. Filters are one toolbar:
+type, status, exact owner and title search, with accessible names and no visible
+field labels. Pages follow `next_cursor`; row ids and cursors are passed through
+unchanged. The inspector shows the stored processing timeline. Discuss and Propose
+change use the shared discussion link, bound only when the row source is a context
+ref. Requirement and work links open the Requirements selection. A 403 or 404 drops
+the rows, counts and inspector together. Governance, repairs, review and follow-up
+keep their durable forms in collapsed disclosures, opened from the header overflow.
 
 Routes are `#/pm/<workspace>/<view>` and
 `#/pm/<workspace>/discussions/<thread>`. A workspace-only route restores its last

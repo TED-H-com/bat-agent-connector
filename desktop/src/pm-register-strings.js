@@ -2,6 +2,7 @@ export const pmRegisterStrings = {
   en: {
     reg_all: 'All', reg_type_risk: 'Risk', reg_type_issue: 'Issue', reg_type_action: 'Action', reg_type_change: 'Change', reg_type_decision: 'Decision',
     reg_filter_status: 'Status', reg_any_status: 'Any status', reg_filter_owner: 'Owner', reg_filter_search: 'Search titles',
+    reg_trends: 'Trends', reg_more: '+{n} more',
     reg_shown: '{n} shown', reg_none_shown: 'None shown', reg_load_more: 'Load more', reg_empty: 'No matching records', reg_unavailable: 'Source unavailable',
     reg_open_age: 'Open by age', reg_age_0_7: '0–7 days', reg_age_8_30: '8–30 days', reg_age_31_90: '31–90 days', reg_age_90: '90+ days',
     reg_without_age: '{n} without a known age', reg_weekly: 'Opened and resolved', reg_opened: 'Opened', reg_resolved: 'Resolved',
@@ -29,6 +30,7 @@ export const pmRegisterStrings = {
   'zh-TW': {
     reg_all: '全部', reg_type_risk: '風險', reg_type_issue: '問題', reg_type_action: '行動', reg_type_change: '變更', reg_type_decision: '決定',
     reg_filter_status: '狀態', reg_any_status: '任何狀態', reg_filter_owner: '負責人', reg_filter_search: '搜尋標題',
+    reg_trends: '趨勢', reg_more: '+{n} 項',
     reg_shown: '顯示 {n} 筆', reg_none_shown: '目前沒有顯示', reg_load_more: '載入更多', reg_empty: '沒有符合的紀錄', reg_unavailable: '來源無法取得',
     reg_open_age: '未決時間', reg_age_0_7: '0–7 天', reg_age_8_30: '8–30 天', reg_age_31_90: '31–90 天', reg_age_90: '超過 90 天',
     reg_without_age: '{n} 筆沒有已知時間', reg_weekly: '新開與已解決', reg_opened: '新開', reg_resolved: '已解決',

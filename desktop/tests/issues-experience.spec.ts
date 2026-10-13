@@ -10,7 +10,7 @@ const locales = ['en', 'zh-TW'] as const;
 type Locale = typeof locales[number];
 
 function shotDir() {
-  return `${process.env.TMPDIR || '/tmp'}/shots`;
+  return `${process.env.TMPDIR || '/tmp'}/shots2`;
 }
 
 async function openView(page: Page, id: string) {
@@ -104,6 +104,9 @@ for (const locale of locales) {
     await expect(page.locator('.reg-week').first()).toHaveAttribute('aria-label', /.+/);
     const table = page.locator('[data-pm-register] tbody tr');
     await expect(table).toHaveCount(3);
+    await expect(table.first()).toContainText(copy.zh ? '問題' : 'Issue');
+    await expect(page.locator('[data-pm-register] thead')).not.toContainText(copy.zh ? '來源' : 'Source');
+    await expect(table.first().locator('.reg-chip-more')).toHaveText(copy.zh ? '+1 項' : '+1 more');
     await expect(page.locator('[data-pm-register]')).toContainText(copy.labels.finding);
     await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.risk);
     await expect(page.locator('[data-reg-count]')).toHaveText(copy.shown(3));
@@ -206,9 +209,24 @@ for (const locale of locales) {
     await expect(page.locator('[data-reg-summary]')).toBeVisible();
     for (const width of [1440, 768, 390]) {
       await page.setViewportSize({width, height: width === 390 ? 844 : 900});
-      await expect(page.locator('[data-pm-register] tbody tr').first()).toBeVisible();
+      const narrow = width <= 800;
+      if (narrow) {
+        await expect(page.locator('[data-pm-register] .reg-list-row').first()).toBeVisible();
+        await expect(page.locator('[data-pm-register] table')).toHaveCount(0);
+      } else {
+        await expect(page.locator('[data-pm-register] tbody tr').first()).toBeVisible();
+      }
       await expectNoOverflow(page);
       await page.screenshot({path: `${shotDir()}/issues-${locale}-${width}.png`, fullPage: true});
+      if (width === 768) {
+        await page.locator('[data-reg-trends] > summary').click();
+        await expect(page.locator('[data-reg-summary]')).toBeVisible();
+        await expect(page.locator('[data-reg-trends]')).toContainText(copy.zh ? '趨勢' : 'Trends');
+        await expectNoOverflow(page);
+        await page.screenshot({path: `${shotDir()}/issues-${locale}-768-trends.png`, fullPage: true});
+        await page.locator('[data-reg-trends] > summary').click();
+        await expect(page.locator('[data-reg-summary]')).toBeHidden();
+      }
     }
     await page.setViewportSize({width: 390, height: 844});
     await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();

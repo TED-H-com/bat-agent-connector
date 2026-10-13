@@ -3034,6 +3034,8 @@ var pmRegisterStrings = {
 		reg_any_status: "Any status",
 		reg_filter_owner: "Owner",
 		reg_filter_search: "Search titles",
+		reg_trends: "Trends",
+		reg_more: "+{n} more",
 		reg_shown: "{n} shown",
 		reg_none_shown: "None shown",
 		reg_load_more: "Load more",
@@ -3127,6 +3129,8 @@ var pmRegisterStrings = {
 		reg_any_status: "任何狀態",
 		reg_filter_owner: "負責人",
 		reg_filter_search: "搜尋標題",
+		reg_trends: "趨勢",
+		reg_more: "+{n} 項",
 		reg_shown: "顯示 {n} 筆",
 		reg_none_shown: "目前沒有顯示",
 		reg_load_more: "載入更多",
@@ -15053,11 +15057,18 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	let loaded = false, unavailable = false, failed = null, selected = preference.selected || null;
 	let typeValue = TYPES.includes(preference.type) ? preference.type : "";
 	let debounce = null, sheet = null, retainSheet = false, opening = false;
-	const statusLine = h("div", { role: "status" });
-	const summaryHost = h("div", {
-		"data-reg-summary": "",
-		hidden: true
+	const statusLine = h("div", {
+		class: "reg-status",
+		role: "status"
 	});
+	const summaryHost = h("div", {
+		class: "reg-summary",
+		"data-reg-summary": ""
+	});
+	const trends = h("details", {
+		class: "ui-disclosure reg-trends",
+		"data-reg-trends": ""
+	}, h("summary", {}, icon("chevron-right"), t("reg_trends")), summaryHost);
 	const tableHost = h("div", { "data-reg-table": "" });
 	const footer = h("div", {
 		class: "reg-footer",
@@ -15066,17 +15077,28 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	});
 	const statusSelect = h("select", {
 		"data-reg-status": "",
+		"aria-label": t("reg_filter_status"),
 		onchange: () => reloadNow()
 	}, h("option", { value: "" }, t("reg_any_status")), ...STATUSES.map((status) => h("option", { value: status }, statusLabel(status))));
+	const ownerListId = `reg-owners-${workspaceId.replace(/[^\w-]/g, "")}`;
+	const ownerList = h("datalist", { id: ownerListId });
 	const ownerInput = h("input", {
 		type: "text",
+		class: "reg-owner",
+		role: "combobox",
+		"aria-autocomplete": "list",
 		"data-reg-owner": "",
+		list: ownerListId,
+		"aria-label": t("reg_filter_owner"),
+		placeholder: t("reg_filter_owner"),
 		autocomplete: "off",
 		oninput: queueReload
 	});
 	const searchInput = h("input", {
 		type: "search",
 		"data-reg-search": "",
+		"aria-label": t("reg_filter_search"),
+		placeholder: t("reg_filter_search"),
 		oninput: queueReload
 	});
 	statusSelect.value = STATUSES.includes(preference.status) ? preference.status : "";
@@ -15098,15 +15120,15 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}))]
 	});
 	[...typeControl.querySelectorAll("button")].forEach((node, index) => node.setAttribute("data-reg-type", index ? TYPES[index - 1] : ""));
-	const layout = h("div", { class: "reg-layout" }, h("div", { class: "reg-main" }, h("div", { class: "reg-filters" }, typeControl, h("div", { class: "reg-fields" }, field(t("reg_filter_status"), statusSelect), field(t("reg_filter_owner"), ownerInput), field(t("reg_filter_search"), searchInput))), summaryHost, statusLine, tableHost, footer));
+	const layout = h("div", { class: "reg-layout" }, h("div", { class: "reg-main" }, h("div", { class: "reg-toolbar" }, typeControl, h("div", { class: "reg-toolbar-filters" }, statusSelect, ownerInput, ownerList, h("div", { class: "reg-search" }, icon("search", { size: 16 }), searchInput))), trends, statusLine, tableHost, footer));
 	const element = h("section", { "data-pm-register": "" }, layout);
-	const pinCharts = () => {
-		for (const node of element.querySelectorAll(".reg-chart")) node.scrollLeft = node.scrollWidth;
-	};
-	window.addEventListener("resize", pinCharts);
-	function field(label, control) {
-		return h("label", { class: "reg-field" }, h("span", {}, label), control);
+	const wideQuery = matchMedia("(min-width: 801px)");
+	function onWide() {
+		trends.open = wideQuery.matches;
+		paintTable();
 	}
+	wideQuery.addEventListener("change", onWide);
+	trends.open = wideQuery.matches;
 	function statusLabel(status) {
 		if (Object.hasOwn(statusVocabulary, status)) return t("ui_status_" + status);
 		return known(t, "reg_status_" + status) || t("ui_reason_generic");
@@ -15197,26 +15219,24 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	function paintSummary() {
 		summaryHost.replaceChildren();
-		summaryHost.hidden = summary == null;
+		trends.hidden = summary == null;
 		if (summary == null) return;
 		const ages = Array.isArray(summary.open_by_age) ? summary.open_by_age : [];
 		const maxAge = Math.max(0, ...ages.map((row) => finite(row?.count) ? row.count : 0));
-		const ageSection = h("section", {}, h("h3", {}, t("reg_open_age")), h("div", { class: "reg-bars" }, ...ages.filter((row) => AGE_KEYS[row?.bucket] && finite(row.count)).map((row) => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, { "data-reg-age": row.bucket }))));
-		const unknownAge = coverage?.open_without_known_age;
+		const ageSection = h("section", {}, h("h3", {}, t("reg_open_age")), h("div", { class: "reg-age-bars" }, ...ages.filter((row) => AGE_KEYS[row?.bucket] && finite(row.count)).map((row) => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, { "data-reg-age": row.bucket }))));
+		const unknownAge = finite(summary.open_without_known_age) ? summary.open_without_known_age : coverage?.open_without_known_age;
 		if (finite(unknownAge)) ageSection.append(h("p", {
 			class: "reg-note",
 			"data-reg-unknown-age": ""
 		}, t("reg_without_age", { n: unknownAge })));
-		const weeks = Array.isArray(summary.weekly) ? summary.weekly : [];
-		const maxWeek = Math.max(0, ...weeks.flatMap((row) => [row?.opened, row?.resolved].filter(finite)));
+		const weeks = (Array.isArray(summary.weekly) ? summary.weekly : []).filter((week) => labelSegment(week?.week_start) && finite(week.opened) && finite(week.resolved));
+		const maxWeek = Math.max(0, ...weeks.flatMap((row) => [row.opened, row.resolved]));
 		const chart = h("div", { class: "reg-chart" });
 		for (const week of weeks) {
-			if (!labelSegment(week?.week_start) || !finite(week.opened) || !finite(week.resolved)) continue;
 			const opened = h("span", { class: "reg-week-open" });
 			const resolved = h("span", { class: "reg-week-resolved" });
-			opened.style.height = maxWeek > 0 ? `${Math.round(week.opened / maxWeek * 64)}px` : "0px";
-			resolved.style.height = maxWeek > 0 ? `${Math.round(week.resolved / maxWeek * 64)}px` : "0px";
-			const short = String(week.week_start).slice(5);
+			opened.style.height = maxWeek > 0 ? `${Math.round(week.opened / maxWeek * 32)}px` : "0px";
+			resolved.style.height = maxWeek > 0 ? `${Math.round(week.resolved / maxWeek * 32)}px` : "0px";
 			chart.append(h("div", {
 				class: "reg-week",
 				role: "img",
@@ -15228,7 +15248,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			}, h("div", {
 				class: "reg-week-bars",
 				"aria-hidden": "true"
-			}, opened, resolved), h("span", { class: "reg-week-label" }, short)));
+			}, opened, resolved)));
 		}
 		const weekSection = h("section", {}, h("h3", {}, t("reg_weekly")), h("div", { class: "reg-legend" }, h("span", {}, h("span", {
 			class: "reg-swatch",
@@ -15237,6 +15257,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			class: "reg-swatch resolved",
 			"aria-hidden": "true"
 		}), t("reg_resolved"))), chart);
+		if (weeks.length) weekSection.append(h("div", { class: "reg-scale" }, h("span", {}, String(weeks[0].week_start).slice(5)), h("span", {}, String(weeks[weeks.length - 1].week_start).slice(5))));
 		const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
 		const reasonSection = h("section", { "data-reg-reasons": "" }, h("h3", {}, t("reg_blocking")));
 		if (reasons && !reasons.length) reasonSection.append(h("p", {
@@ -15244,12 +15265,27 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			"data-reg-no-reasons": ""
 		}, t("reg_no_reasons")));
 		else if (reasons) {
-			const maxReason = Math.max(0, ...reasons.map((row) => finite(row?.count) ? row.count : 0));
-			const reasonBars = reasons.filter((row) => labelSegment(row?.reason) && finite(row.count)).map((row) => bar(String(row.reason), row.count, maxReason, { "aria-label": t("reg_reason_count", {
-				reason: row.reason,
-				count: row.count
-			}) }));
-			reasonSection.append(h("div", { class: "reg-bars" }, ...reasonBars));
+			const recorded = reasons.filter((row) => labelSegment(row?.reason) && finite(row.count));
+			const maxReason = Math.max(0, ...recorded.map((row) => row.count));
+			reasonSection.append(h("div", { class: "reg-reasons" }, ...recorded.slice(0, 3).map((row) => {
+				const track = h("span", {
+					class: "reg-bar-track",
+					"aria-hidden": "true"
+				}, h("span", { class: "reg-bar-fill" }));
+				track.firstChild.style.width = maxReason > 0 ? `${Math.max(0, Math.min(100, Math.round(row.count / maxReason * 100)))}%` : "0%";
+				return h("div", {
+					class: "reg-reason",
+					role: "img",
+					"aria-label": t("reg_reason_count", {
+						reason: row.reason,
+						count: row.count
+					})
+				}, h("span", { class: "reg-reason-name" }, String(row.reason)), track, h("span", { class: "reg-reason-count" }, String(row.count)));
+			})));
+			if (recorded.length > 3) reasonSection.append(h("p", {
+				class: "reg-note",
+				"data-reg-more-reasons": ""
+			}, t("reg_more", { n: recorded.length - 3 })));
 		}
 		const blocked = finite(summary.blocked_without_reason) ? summary.blocked_without_reason : finite(coverage?.blocked_without_reason) ? coverage.blocked_without_reason : null;
 		if (blocked > 0) reasonSection.append(h("p", {
@@ -15257,22 +15293,21 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			"data-reg-blocked": ""
 		}, t("reg_no_reason_recorded", { n: blocked })));
 		summaryHost.append(ageSection, weekSection, reasonSection);
-		requestAnimationFrame(pinCharts);
 	}
-	function relatedChips(row) {
+	function relatedItems(row) {
 		const related = row.related || {};
-		const chips = [];
-		for (const id of related.requirement_ids || []) if (labelSegment(id)) chips.push(h("button", {
+		const items = [];
+		for (const id of related.requirement_ids || []) if (labelSegment(id)) items.push(h("button", {
 			type: "button",
-			class: "ui-button ghost ui-sm",
+			class: "reg-chip",
 			"data-reg-requirement": id,
 			title: id,
 			"aria-label": `${t("reg_requirement")} ${id}`,
 			onclick: () => onOpenRequirement(id)
 		}, t("reg_requirement")));
-		for (const id of related.work_item_ids || []) if (labelSegment(id)) chips.push(h("button", {
+		for (const id of related.work_item_ids || []) if (labelSegment(id)) items.push(h("button", {
 			type: "button",
-			class: "ui-button ghost ui-sm",
+			class: "reg-chip",
 			"data-reg-work": id,
 			title: id,
 			"aria-label": `${t("reg_work")} ${id}`,
@@ -15281,16 +15316,75 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		for (const pr of related.prs || []) {
 			if (!finite(pr?.number)) continue;
 			const label = t("reg_pr", { n: pr.number });
-			if (typeof pr.repository === "string" && REPO.test(pr.repository)) chips.push(h("a", {
-				class: "ui-button ghost ui-sm",
+			if (typeof pr.repository === "string" && REPO.test(pr.repository)) items.push(h("a", {
+				class: "reg-chip",
 				"data-reg-pr": "",
 				href: `https://github.com/${pr.repository}/pull/${pr.number}`,
 				target: "_blank",
 				rel: "noopener noreferrer"
 			}, label));
-			else chips.push(h("span", { class: "ui-context-chip" }, label));
+			else items.push(h("span", { class: "reg-chip" }, label));
 		}
-		return chips.length ? h("div", { class: "reg-chips" }, ...chips) : "—";
+		return items;
+	}
+	function relatedChips(row, limit) {
+		const items = relatedItems(row);
+		if (!items.length) return "—";
+		const shown = limit ? items.slice(0, limit) : items;
+		const extra = limit ? items.length - shown.length : 0;
+		return h("div", { class: "reg-chips" }, ...shown, extra > 0 ? h("span", { class: "reg-chip-more" }, t("reg_more", { n: extra })) : null);
+	}
+	function paintOwners() {
+		const owners = [...new Set(rows.map((row) => labelSegment(row.owner)).filter(Boolean))];
+		ownerList.replaceChildren(...owners.map((owner) => h("option", { value: owner })));
+	}
+	function listMeta(row) {
+		const parts = [h("span", {}, t("reg_type_" + row.type)), statusNode(row.status)];
+		if (labelSegment(row.priority)) parts.push(h("span", {}, row.priority));
+		const who = labelSegment(row.owner) ? row.owner : day(row.due);
+		if (who) parts.push(h("span", {}, who));
+		return h("div", { class: "reg-list-meta" }, ...parts.flatMap((part, index) => index ? [h("span", {
+			class: "reg-sep",
+			"aria-hidden": "true"
+		}, "·"), part] : [part]));
+	}
+	function paintList(focusKey) {
+		const controls = [];
+		const list = h("div", {
+			class: "reg-list",
+			role: "list"
+		});
+		rows.forEach((row, index) => {
+			const active = row.row_id === selected;
+			const item = h("button", {
+				type: "button",
+				class: "reg-list-row",
+				role: "listitem",
+				"data-row-key": row.row_id,
+				"aria-selected": String(active),
+				tabindex: active || selected == null && index === 0 ? 0 : -1,
+				onclick: () => openRow(row)
+			}, h("span", { class: "reg-list-title" }, dash(row.title)), listMeta(row), labelSegment(row.next_step) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
+			item.addEventListener("keydown", (event) => {
+				if (event.target !== item) return;
+				if (![
+					"ArrowDown",
+					"ArrowUp",
+					"Home",
+					"End"
+				].includes(event.key)) return;
+				event.preventDefault();
+				const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : Math.max(0, Math.min(controls.length - 1, index + (event.key === "ArrowUp" ? -1 : 1)));
+				controls.forEach((node, n) => {
+					node.tabIndex = n === next ? 0 : -1;
+				});
+				controls[next]?.focus();
+			});
+			controls.push(item);
+			list.append(item);
+		});
+		tableHost.replaceChildren(list);
+		if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
 	}
 	function paintTable() {
 		const focusKey = tableHost.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.getAttribute("data-row-key") : null;
@@ -15317,31 +15411,35 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			}));
 			return;
 		}
+		if (!wideQuery.matches) {
+			paintList(focusKey);
+			return;
+		}
 		const columns = [
 			{
 				key: "type",
 				label: t("reg_col_type"),
-				render: (row) => h("span", { class: "reg-type-icon" }, icon(TYPE_ICON[row.type] || "circle-alert", { label: t("reg_type_" + row.type) }))
+				render: (row) => h("span", { class: "reg-type" }, icon(TYPE_ICON[row.type] || "circle-alert"), h("span", {}, t("reg_type_" + row.type)))
 			},
 			{
 				key: "title",
 				label: t("reg_col_title"),
-				render: (row) => dash(row.title)
+				render: (row) => h("span", { class: "reg-clamp" }, dash(row.title))
 			},
 			{
-				key: "source",
-				label: t("reg_col_source"),
-				render: (row) => kindLabel(row.source?.kind)
-			},
-			{
-				key: "impact",
-				label: t("reg_col_impact"),
-				render: (row) => dash(row.impact)
+				key: "status",
+				label: t("reg_col_status"),
+				render: (row) => statusNode(row.status)
 			},
 			{
 				key: "priority",
 				label: t("reg_col_priority"),
 				render: (row) => dash(row.priority)
+			},
+			{
+				key: "impact",
+				label: t("reg_col_impact"),
+				render: (row) => dash(row.impact)
 			},
 			{
 				key: "owner",
@@ -15354,19 +15452,14 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				render: (row) => day(row.due) || "—"
 			},
 			{
-				key: "status",
-				label: t("reg_col_status"),
-				render: (row) => statusNode(row.status)
-			},
-			{
 				key: "next",
 				label: t("reg_col_next"),
-				render: (row) => dash(row.next_step)
+				render: (row) => h("span", { class: "reg-clamp" }, dash(row.next_step))
 			},
 			{
 				key: "related",
 				label: t("reg_col_related"),
-				render: (row) => relatedChips(row)
+				render: (row) => relatedChips(row, 2)
 			}
 		];
 		tableHost.replaceChildren(dataTable({
@@ -15395,6 +15488,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	function render() {
 		paintSummary();
+		paintOwners();
 		paintTable();
 		paintFooter();
 		publishMeta();
@@ -15411,7 +15505,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	function refLink(ref, label, rowId) {
 		if (ref?.kind === "work_item" && labelSegment(ref.id)) return h("button", {
 			type: "button",
-			class: "ui-button ghost ui-sm",
+			class: "reg-step-link",
 			"data-reg-work": ref.id,
 			title: ref.id,
 			"aria-label": `${t("reg_work")} ${ref.id}`,
@@ -15419,14 +15513,14 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}, label || t("reg_work"));
 		if (ref?.kind === "requirement" && labelSegment(ref.id)) return h("button", {
 			type: "button",
-			class: "ui-button ghost ui-sm",
+			class: "reg-step-link",
 			"data-reg-requirement": ref.id,
 			title: ref.id,
 			"aria-label": `${t("reg_requirement")} ${ref.id}`,
 			onclick: () => onOpenRequirement(ref.id)
 		}, label || t("reg_requirement"));
 		if (ref?.kind === "proposal" && isContextRef(ref)) return h("a", {
-			class: "ui-button ghost ui-sm",
+			class: "reg-step-link",
 			href: discussHref({
 				workspaceId,
 				refs: [ref],
@@ -15437,7 +15531,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const match = linkedRow(ref);
 		if (match && match.row_id !== rowId) return h("button", {
 			type: "button",
-			class: "ui-button ghost ui-sm",
+			class: "reg-step-link",
 			onclick: () => openRow(match)
 		}, label || kindLabel(ref.kind));
 		return label ? h("span", {}, label) : null;
@@ -15447,7 +15541,6 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const unknownCodes = [];
 		const facts = h("dl", { class: "reg-facts" }, ...[
 			[t("reg_col_type"), t("reg_type_" + row.type)],
-			[t("reg_col_title"), dash(row.title)],
 			[t("reg_col_source"), kindLabel(row.source?.kind)],
 			[t("reg_col_impact"), dash(row.impact)],
 			[t("reg_col_priority"), dash(row.priority)],
@@ -15463,22 +15556,27 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}, ...(Array.isArray(record.timeline) ? record.timeline : []).map((step, index) => ({
 			step,
 			index
-		})).sort((a, b) => (STEPS.indexOf(a.step?.step) < 0 ? STEPS.length : STEPS.indexOf(a.step.step)) - (STEPS.indexOf(b.step?.step) < 0 ? STEPS.length : STEPS.indexOf(b.step.step)) || a.index - b.index).map(({ step }, index) => {
+		})).sort((a, b) => (STEPS.indexOf(a.step?.step) < 0 ? STEPS.length : STEPS.indexOf(a.step.step)) - (STEPS.indexOf(b.step?.step) < 0 ? STEPS.length : STEPS.indexOf(b.step.step)) || a.index - b.index).map(({ step }) => {
 			if (!known(t, "reg_step_" + step?.step)) unknownCodes.push(step?.step);
 			const meta = joinLabel([step?.actor, when$1(step?.at)]);
 			const title = labelSegment(step?.title);
+			const link = refLink(step?.ref, title, row.row_id);
 			return h("li", {
 				class: "reg-step",
 				"data-reg-step": step?.step || "unknown"
-			}, h("h4", {}, stepLabel(step?.step)), meta ? h("p", { class: "reg-note" }, meta) : null, refLink(step?.ref, title, row.row_id), labelSegment(step?.status) ? statusNode(step.status) : null);
+			}, h("h4", {}, stepLabel(step?.step)), meta ? h("p", { class: "reg-note" }, meta) : null, h("div", { class: "reg-step-line" }, link || (title ? h("span", {}, title) : null), labelSegment(step?.status) ? statusNode(step.status) : null));
 		}));
 		const partial = record.timeline_coverage && record.timeline_coverage.complete === false;
 		if (partial && record.timeline_coverage.partial_reason) unknownCodes.push(record.timeline_coverage.partial_reason);
 		const head = h("div", { class: "reg-timeline-head" }, h("h3", {}, t("reg_timeline")), partial ? statusPill("partial") : null);
 		const source = isContextRef(row.source) ? row.source : null;
 		const title = labelSegment(row.title) || t("reg_discussion");
+		const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action));
+		const labels = offered.map((action) => t(ACTION_KEYS[action.action] || "reg_action_open"));
+		const stepText = labelSegment(row.next_step);
+		const primary = stepText && labels.filter((label) => label === stepText).length === 1 ? stepText : "";
 		const links = h("div", { class: "reg-actions" }, h("a", {
-			class: "ui-button ghost ui-sm",
+			class: "ui-button secondary ui-sm",
 			"data-reg-discuss": "",
 			href: discussHref({
 				workspaceId,
@@ -15486,17 +15584,16 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				title,
 				from: "issues"
 			})
-		}, t("reg_discuss")), ...(Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action)).map((action) => {
-			const key = ACTION_KEYS[action.action];
-			if (!key) unknownCodes.push(action.action);
+		}, t("reg_discuss")), ...offered.map((action, index) => {
+			if (!ACTION_KEYS[action.action]) unknownCodes.push(action.action);
 			return h("button", {
 				type: "button",
-				class: "ui-button secondary ui-sm",
+				class: `ui-button ${labels[index] === primary ? "primary" : "secondary"} ui-sm`,
 				"data-reg-action": action.action,
 				onclick: () => onAction(action)
-			}, t(key || "reg_action_open"));
+			}, labels[index]);
 		}), h("a", {
-			class: "ui-button ghost ui-sm",
+			class: "ui-button secondary ui-sm",
 			"data-reg-propose": "",
 			href: discussHref({
 				workspaceId,
@@ -15526,13 +15623,11 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, String(code)));
 		}
 		for (const code of unknownCodes) if (labelSegment(code)) detailBits.push(h("p", { class: "reg-note" }, String(code)));
-		return [
-			facts,
-			head,
-			timeline,
-			links,
-			detailBits.length ? h("details", { class: "ui-disclosure" }, h("summary", {}, t("reg_details")), ...detailBits) : null
-		];
+		return [h("div", { class: "reg-sheet-main" }, facts, head, timeline, detailBits.length ? disclosure({
+			label: t("reg_details"),
+			key: `reg-details:${workspaceId}:${row.row_id}`,
+			body: h("div", { class: "reg-detail-body" }, ...detailBits)
+		}) : null), links];
 	}
 	function paintInspector(record) {
 		const row = record.row;
@@ -15742,7 +15837,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		clearTimeout(debounce);
 		serial++;
 		detailSerial++;
-		window.removeEventListener("resize", pinCharts);
+		wideQuery.removeEventListener("change", onWide);
 		readFilters();
 		rememberScroll();
 		closeSheet(false);
