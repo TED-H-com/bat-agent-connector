@@ -395,6 +395,11 @@ mini timelines; the document never scrolls horizontally.
 
 ## Dependencies
 
+Matrix and list selection buttons use pressed state. Graph nodes do the same, with
+a distinct selected fill. Home/End follow the graph's visual column/row order.
+Activation, live reads and inspector close resolve focus by stable item key in the
+currently visible matrix, list or graph; inspectors receive a return-focus callback.
+
 The question on this view is which checks have to be run again if one dependency changes.
 It reads the current dependency projection, its revisions, and one impact query. Capture,
 declare, and retract stay the durable dependency actions, using the projection version,

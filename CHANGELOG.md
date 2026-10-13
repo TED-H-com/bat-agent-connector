@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Preserve Dependencies keyboard focus across activation, live reads and inspector
+  close in the matrix, graph and narrow list; expose valid selection semantics.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,

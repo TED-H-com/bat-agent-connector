@@ -16241,11 +16241,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (selection.type === "component") return (data.components || []).some((row) => row.component_id === selection.componentId) || (data.external_components || []).some((row) => row.component_id === selection.componentId);
 		return allEdges().some((edge) => edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey);
 	}
-	const focusKeyFor = (value) => value?.type === "edge" ? `cell:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const narrow = () => matchMedia("(max-width: 800px)").matches;
+	const focusKeyFor = (value) => value?.type === "edge" ? mode === "graph" ? `col:${value.dependencyKey}` : `${narrow() ? "pick" : "cell"}:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const activeFocusHost = () => mode === "graph" ? graphHost : narrow() ? listHost : matrixScroll;
+	const focusTarget = (key) => key ? activeFocusHost().querySelector(`[data-dep-focus="${CSS.escape(key)}"]`) : null;
 	const focusSelection = () => {
-		const key = focusKeyFor(selection);
-		if (!key) return;
-		element.querySelector(`[data-dep-focus="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+		focusTarget(focusKeyFor(selection))?.focus({ preventScroll: true });
 	};
 	const search = h("input", {
 		type: "search",
@@ -16326,8 +16327,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	const matrixScroll = h("div", {
 		class: "dep-matrix-scroll",
 		"data-dep-matrix": "",
-		tabindex: "0",
-		role: "grid",
 		"aria-label": t("dep_matrix")
 	});
 	const listHost = h("div", {
@@ -16851,10 +16850,10 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (!panel) {
 			panel = inspector({
 				title: inspectorTitle(),
+				returnFocus: () => focusTarget(focusKeyFor(selection)),
 				onClose: () => {
 					panel = null;
 					holder.append(record);
-					focusSelection();
 				}
 			});
 			panel.dataset.depInspector = "";
@@ -17035,7 +17034,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			path.dataset.depMark = markOf(link.from) === "dim" && markOf(link.to) === "dim" ? "dim" : "";
 			picture.append(path);
 		});
-		for (const [id, node] of nodes) {
+		const visualOrder = [...nodes].sort(([a], [b]) => placed.get(a).x - placed.get(b).x || placed.get(a).y - placed.get(b).y);
+		for (const [id, node] of visualOrder) {
 			const position = placed.get(id);
 			if (!position) continue;
 			const left = PAD + position.x * 220, top = PAD + position.y * 54;
@@ -17044,6 +17044,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				tabindex: "-1",
 				role: "button",
 				"aria-label": node.name,
+				"aria-pressed": String(selectedIds.has(id)),
 				"data-dep-node": id,
 				"data-dep-focus": id.startsWith("d:") ? `col:${id.slice(2)}` : `row:${id.slice(2)}`,
 				"data-dep-mark": markOf(id)
@@ -17152,7 +17153,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-row": "-1",
 						"data-col": String(col),
 						tabindex: "-1",
-						"aria-selected": String(selectedCol),
+						"aria-pressed": String(selectedCol),
 						onclick: () => choose({
 							type: "dependency",
 							dependencyKey: dep.key
@@ -17171,7 +17172,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					"data-row": String(row),
 					"data-col": "-1",
 					tabindex: "-1",
-					"aria-selected": String(selectedRow),
+					"aria-pressed": String(selectedRow),
 					onclick: () => choose({
 						type: "component",
 						componentId: component.component_id
@@ -17191,7 +17192,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						tabindex: "-1",
 						title: label || dep.name,
 						"aria-label": label || joinLabel([component.name, dep.name]),
-						"aria-selected": String(selectedCell),
+						"aria-pressed": String(selectedCell),
 						onclick: cellEdges.length ? () => choose({
 							type: "edge",
 							componentId: component.component_id,
@@ -17209,7 +17210,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			matrixScroll.scrollTop = preference.matrixTop || 0;
 			listHost.replaceChildren(...components.map((component) => {
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
-				return h("section", { class: "dep-group" }, h("h3", {}, component.name), ...own.map((edge) => {
+				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
 					return h("button", {
 						type: "button",
@@ -17217,7 +17218,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-dep-pick": `${edge.component_id}|${edge.dependency_key}`,
 						"data-dep-focus": `pick:${edge.component_id}|${edge.dependency_key}`,
 						tabindex: selectedPick ? "0" : "-1",
-						"aria-selected": String(selectedPick),
+						"aria-pressed": String(selectedPick),
 						"aria-label": edgeLabel(edge),
 						onclick: () => choose({
 							type: "edge",
@@ -17259,7 +17260,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			}
 			if (files.childNodes.length) detailBody.append(files);
 			if ((revisions?.revisions || []).length || revisions?.next_cursor) {
-				detailBody.append(h("h3", {}, t("dep_revisions")));
+				detailBody.append(h("h2", {}, t("dep_revisions")));
 				for (const row of revisions?.revisions || []) detailBody.append(h("p", {}, joinLabel([
 					shortSha(row.commit_sha),
 					capturedDate(row.captured_at),
@@ -17272,7 +17273,13 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		syncChrome();
 		syncImpact();
 		if (panel) renderInspector();
-		if (previous) element.querySelector(`[data-dep-focus="${CSS.escape(previous)}"]`)?.focus({ preventScroll: true });
+		if (previous) {
+			const target = focusTarget(previous);
+			if (target) {
+				for (const node of activeFocusHost().querySelectorAll("[data-dep-focus]")) node.tabIndex = node === target ? 0 : -1;
+				target.focus({ preventScroll: true });
+			}
+		}
 	}
 	async function refresh() {
 		if (!active) return;

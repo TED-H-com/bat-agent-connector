@@ -25,7 +25,7 @@
 .dep-matrix button:focus-visible, .dep-pick:focus-visible, .dep-graph [data-dep-node]:focus > .dep-node-shape { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dep-name { display: block; max-width: 160px; overflow-wrap: anywhere; }
 .dep-cell { display: flex; flex-wrap: wrap; gap: 2px; min-width: 36px; min-height: 28px; align-items: center; }
-.dep-cell[aria-selected=true], .dep-matrix button[aria-selected=true] { background: var(--accent-soft); border-radius: var(--r-xs); }
+.dep-cell[aria-pressed=true], .dep-matrix button[aria-pressed=true] { background: var(--accent-soft); border-radius: var(--r-xs); }
 .dep-mark { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 3px; border-radius: var(--r-xs); font-size: var(--fs-caption); font-weight: 650; line-height: 1; color: var(--tone); background: transparent; }
 .dep-rel-runtime { --tone: var(--info); --tone-soft: var(--info-soft); }
 .dep-rel-build { --tone: var(--warn); --tone-soft: var(--warn-soft); }
@@ -41,9 +41,9 @@
 .dep-legend .dep-mark { min-width: 14px; }
 .dep-list { display: none; }
 .dep-group { display: grid; gap: var(--space-2); margin: 0 0 var(--space-4); }
-.dep-group h3 { margin: 0; font-size: var(--fs-section); }
+.dep-group h2 { margin: 0; font-size: var(--fs-section); }
 .dep-pick { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); width: 100%; text-align: left; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--space-2) var(--space-3); font: inherit; }
-.dep-pick[aria-selected=true] { background: var(--accent-soft); border-color: var(--accent); }
+.dep-pick[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent); }
 .dep-pick-meta { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-2); }
 .dep-graph-bar { display: flex; align-items: center; gap: var(--space-2); }
 .dep-loaded { color: var(--text-3); font-size: var(--fs-caption); }
@@ -82,3 +82,6 @@
 @media (max-width: 640px) {
   .pm-shell .dep-search input[type=search] { font-size: var(--fs-input-mobile); }
 }
+
+.dep-graph [data-dep-mark=selected] > .dep-node-shape { fill: var(--accent-soft); stroke-width: 2.5; }
+.dep-view [data-dep-details] h2 { font-size: var(--fs-section); }

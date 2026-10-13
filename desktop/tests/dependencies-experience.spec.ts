@@ -185,7 +185,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
   await openView(page, 'dependencies');
   await expect(page.locator('[data-dep-relation=test]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-dep-relation=runtime]')).toHaveAttribute('aria-pressed', 'false');
-  await expect(pytest).toHaveAttribute('aria-selected', 'true');
+  await expect(pytest).toHaveAttribute('aria-pressed', 'true');
   await expectNoOverflow(page);
   const text = await page.locator('#main').innerText();
   expect(text).not.toMatch(/\b(?:undefined|null|NaN)\b/);
