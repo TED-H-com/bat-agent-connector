@@ -71,7 +71,7 @@ const STRINGS = {
     managed_browser_connected: "已連線至本機 Connector", managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
     delivery_list_prs: "瀏覽 Pull Requests",
     delivery_no_prs: "找不到 PR。",
-    delivery_refresh_prs: "重新整理",
+    delivery_refresh_prs: "重新整理這一頁的 PR",
 
     delivery_search_prs: "搜尋這一頁的 PR", delivery_choose_repository: "請先選取或填入已連結的儲存庫。",
     delivery_pr_page: "第 {page} 頁", delivery_pr_stale: "清單尚未重新驗證；更新成功後才能選取。", delivery_pr_invalid: "PR 清單回應與選取的儲存庫不一致。",
@@ -974,7 +974,7 @@ const STRINGS = {
 
     delivery_list_prs: "List Pull Requests",
     delivery_no_prs: "No PRs found.",
-    delivery_refresh_prs: "Refresh",
+    delivery_refresh_prs: "Refresh this page of PRs",
     delivery_choose_pr: "Choose a repository to load PRs.",
     delivery_search_prs: "Search this page of PRs", delivery_choose_repository: "Choose or enter a configured repository first.",
     delivery_pr_page: "Page {page}", delivery_pr_stale: "This list has not been revalidated. Refresh before selecting.", delivery_pr_invalid: "The PR list does not match the selected repository.",
