@@ -138,7 +138,8 @@ repo、語言／runtime、library、API／schema、build／test toolchain、外�
 缺結束證據的 session 不從最後一筆輸出自行推算結束。
 
 目前可讀的投影是 [專案時程](pm-schedule.md)。它只回傳已記錄的 baseline、forecast
-與明確執行證據，並把沒有日期的列留在未排期清單。這一版沒有階段列、推算預測、
+與明確執行證據，並把沒有日期的列留在未排期清單。需求文字原樣保留。`after` 是不透明游標。
+隱藏的工作、issue 與 attempt 不會出現在列、游標或狀態碼裡。這一版沒有階段列、推算預測、
 critical path、token 歸因或拖曳改期。
 
 支援日／週／月縮放、今日定位、關鍵依賴追蹤與同步工作詳情。日期拖動產生時程提案，

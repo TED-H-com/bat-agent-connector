@@ -6,12 +6,15 @@ path, phase rows, or token attribution, and it does not write.
 """
 from __future__ import annotations
 
+import base64
 import json
 import math
 import re
+from contextvars import ContextVar
 from datetime import datetime, timezone
 
-from . import pm_evidence, pm_roadmap, work_items
+from . import pm_evidence, pm_roadmap, pm_source_lineage, work_items
+from .operations import STATES as OPERATION_STATES
 from .operations import TERMINAL as OPERATION_TERMINAL
 from .operations import OperationError
 
@@ -19,12 +22,14 @@ MAX_WORK = 200
 MAX_LINKS_PER_WORK = 50
 MAX_LINKS_TOTAL = 200
 MAX_ISSUES = 200
-MAX_RUNS = 200
 MAX_BYTES = 2_000_000
+_BINDING_CHUNK = 200
+_RUNS_PER_SESSION = 3
 _RANGE_BOUND = {"start": "0000-00-00", "end": "0000-00-00"}
 _PAGE_DEFAULT = 100
 _RANK = {"milestone": 0, "requirement": 1, "issue": 2, "work": 3, "attempt": 4}
-_CURSOR = re.compile(r"^(milestone|requirement|issue|work|attempt):[A-Za-z0-9_.:/+-]{1,360}$")
+_CURSOR_TOKEN = re.compile(r"^[A-Za-z0-9_-]{1,4096}$")
+_CURSOR_RAW_MAX = 3072
 _DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 _SHA = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _MERGE_ACTIONS = frozenset({"github.pr.merge", "delivery.merge_and_deploy"})
@@ -32,6 +37,8 @@ _RUNNING = frozenset({"running", "streaming", "starting", "active"})
 _TASK_WAIT = {"waiting_permission": "permission", "quota_limited": "quota", "human_owned": "human", "needs_ted": "human"}
 _OPERATION_WAIT = {"waiting_checks": "checks", "waiting_external": "external"}
 _SOURCE_FLAGS = ("attempts_truncated", "attempts_unavailable", "work_bindings_truncated", "issues_truncated")
+_OPERATION_KINDS = tuple(f"operation.{name}" for name in OPERATION_STATES)
+_CACHE = ContextVar("pm_schedule_cache", default=None)
 
 
 def capabilities():
@@ -45,20 +52,49 @@ def read(ops, principal, workspace_id, *, after=None, limit=None):
     if type(limit) is not int or not 1 <= limit <= _PAGE_DEFAULT:
         raise OperationError("INVALID_PARAMS", "limit must be 1-100", 422)
     cursor = _cursor(after)
-    with ops.journal.tx():
-        pm_roadmap._member(ops, principal, workspace_id)
-        loaded = _load(ops, principal, workspace_id)
-        page, more = _slice(loaded["nodes"], cursor, limit)
-        return _project(loaded, page, more)
+    token = _CACHE.set({})
+    try:
+        with pm_source_lineage.memoized_reads():
+            with ops.journal.read_tx():
+                pm_roadmap._member(ops, principal, workspace_id)
+                loaded = _load(ops, principal, workspace_id)
+                ordered = sorted(loaded["nodes"], key=lambda node: (_RANK[node["kind"]], node["id"]))
+                if cursor is not None:
+                    ordered = [node for node in ordered if (_RANK[node["kind"]], node["id"]) > cursor]
+                return _fit(loaded, ordered, limit)
+    finally:
+        _CACHE.reset(token)
+
+
+def _encode_cursor(row_id):
+    return base64.urlsafe_b64encode(row_id.encode()).rstrip(b"=").decode("ascii")
 
 
 def _cursor(after):
     if after is None:
         return None
-    if not isinstance(after, str) or not _CURSOR.fullmatch(after):
-        raise OperationError("INVALID_PARAMS", "after must be a schedule row id", 422)
-    kind, _rest = after.split(":", 1)
-    return _RANK[kind], after
+    if not isinstance(after, str) or not _CURSOR_TOKEN.fullmatch(after):
+        raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
+    padded = after + "=" * (-len(after) % 4)
+    try:
+        text = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except (ValueError, UnicodeError):
+        raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422) from None
+    kind, sep, rest = text.partition(":")
+    if sep != ":" or kind not in _RANK or not rest or len(text) > _CURSOR_RAW_MAX:
+        raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
+    if any(ord(char) < 32 or ord(char) == 127 for char in text):
+        raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
+    return _RANK[kind], text
+
+
+def _cached(key, factory):
+    cache = _CACHE.get()
+    if cache is None:
+        return factory()
+    if key not in cache:
+        cache[key] = factory()
+    return cache[key]
 
 
 def _instant(value):
@@ -79,6 +115,14 @@ def _label(value, limit):
             or any(ord(char) < 32 or ord(char) == 127 for char in text)):
         return None
     return text
+
+
+def _plain(value):
+    """Non-blank planning or issue text. Newlines, tabs and a leading slash stay."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
 
 
 def _span(value):
@@ -124,7 +168,7 @@ def _load(ops, principal, workspace_id):
     issues = _issues(ops, principal, workspace_id, milestones, notes, coverage)
     if works:
         _note(notes, "work.depends_on", "no_work_dependency_contract")
-    return {"workspace_id": workspace_id, "nodes": [*milestones, *requirements.values(), *issues, *works, *attempts],
+    return {"workspace_id": workspace_id, "db": db, "nodes": [*milestones, *requirements.values(), *issues, *works, *attempts],
             "baseline": baseline, "forecast": forecast, "notes": notes, "coverage": coverage}
 
 
@@ -168,19 +212,20 @@ def _requirements(ops, principal, workspace_id, milestones, notes, coverage):
         if revision not in plans:
             plans[revision] = _plan(ops, principal, workspace_id, revision, coverage)
         plan = plans[revision]
-        source = None if plan is None else next((item for item in plan["document"].get("requirements") or []
-                                                  if item.get("id") == rid), None)
-        title = _label((source or {}).get("text"), 4000)
-        if source is None or title is None:
-            if plan is not None:
-                _note(notes, "requirement", "requirement_text_unavailable")
+        if plan is None:
             continue
+        source = next((item for item in plan["document"].get("requirements") or [] if item.get("id") == rid), None)
+        # Planning input is kept verbatim. A missing text still emits the row so edges stay valid.
+        title = _plain((source or {}).get("text")) if source else None
+        if title is None:
+            _note(notes, "requirement", "requirement_text_unavailable")
+            title = rid
         parent_ids = list(dict.fromkeys(parents))
         parent = parent_ids[0] if len(parent_ids) == 1 else None
         if parent is None:
             _note(notes, "requirement.parent", "multiple_explicit_milestones")
         deps = []
-        for dep in source.get("depends_on") or []:
+        for dep in (source or {}).get("depends_on") or []:
             if (revision, dep) in grouped:
                 deps.append(f"requirement:{revision}:{dep}")
             else:
@@ -192,38 +237,54 @@ def _requirements(ops, principal, workspace_id, milestones, notes, coverage):
             refs["milestone_ids"] = [item.split(":", 1)[1] for item in parent_ids]
         rows[(revision, rid)] = _node(f"requirement:{revision}:{rid}", parent, "requirement", title, "unknown",
                                       None, None, None, deps, refs)
+    present = {node["id"] for node in rows.values()}
+    for node in rows.values():
+        node["depends_on"] = [dep for dep in node["depends_on"] if dep in present]
     if outside:
         _note(notes, "requirement.depends_on", "requirement_dependency_outside_baseline")
     return rows
 
 
 def _plan(ops, principal, workspace_id, revision, coverage):
-    from . import pm_plans
-    try:
-        return pm_plans.get_plan(ops, principal, workspace_id, revision)["plan"]
-    except OperationError as error:
-        if error.status == 403:
+    key = ("plan", workspace_id, revision)
+
+    def load():
+        from . import pm_plans
+        try:
+            return pm_plans.get_plan(ops, principal, workspace_id, revision)["plan"]
+        except OperationError as error:
+            if error.status == 403:
+                raise
+            if error.status == 404:
+                coverage["visibility_filtered"] = True
+                return None
             raise
-        if error.status == 404:
-            coverage["visibility_filtered"] = True
-            return None
-        raise
+
+    cache = _CACHE.get()
+    if cache is not None and key in cache:
+        return cache[key]
+    plan = load()
+    if cache is not None:
+        cache[key] = plan
+    return plan
 
 
 def _works(ops, principal, workspace_id, milestones, requirements, notes, coverage):
     db = ops.db
-    bindings = db.execute("""SELECT b.* FROM pm_work_bindings b WHERE workspace_id=? AND NOT EXISTS(
-        SELECT 1 FROM pm_work_bindings n WHERE n.workspace_id=b.workspace_id AND n.work_item_id=b.work_item_id
-        AND n.sequence>b.sequence) ORDER BY sequence LIMIT ?""", (workspace_id, MAX_WORK + 1)).fetchall()
-    if len(bindings) > MAX_WORK:
+    selected, truncated = [], False
+    for row in _current_bindings(db, workspace_id):
+        binding = {**dict(row), "requirement_ids": json.loads(row["requirement_ids"])}
+        if not _in_scope(binding, milestones):
+            continue
+        if not _work_visible(db, principal, binding["work_item_id"], coverage):
+            continue
+        if len(selected) >= MAX_WORK:
+            truncated = True
+            break
+        selected.append(binding)
+    if truncated:
         coverage["work_bindings_truncated"] = True
         _note(notes, "work", "binding_page_truncated")
-        bindings = bindings[:MAX_WORK]
-    selected = []
-    for row in bindings:
-        binding = {**dict(row), "requirement_ids": json.loads(row["requirement_ids"])}
-        if _in_scope(binding, milestones):
-            selected.append(binding)
     items = _work_items(db, [row["work_item_id"] for row in selected])
     links, truncated_works = _links(db, [row["work_item_id"] for row in selected], coverage, notes)
     evidence = _evidence(ops, principal, workspace_id, links, notes, coverage)
@@ -234,12 +295,42 @@ def _works(ops, principal, workspace_id, milestones, requirements, notes, covera
             _note(notes, "work", "work_item_unavailable")
             continue
         own = links.get(binding["work_item_id"], [])
+        unavailable = any((link["kind"] == "operation" and link["ref"] in evidence["missing_operations"])
+                          or (link["kind"] == "task" and link["ref"] in evidence["missing_tasks"]) for link in own)
         attempt_rows = [row for row in (_attempt(binding["work_item_id"], link, evidence, notes) for link in own) if row]
         attempts.extend(attempt_rows)
         parent = _work_parent(binding, milestones, requirements, notes)
-        works.append(_work_node(db, binding, item, parent, attempt_rows, binding["work_item_id"] in truncated_works,
-                                evidence, notes))
+        withheld = unavailable or binding["work_item_id"] in truncated_works
+        works.append(_work_node(db, binding, item, parent, attempt_rows, withheld, evidence, notes))
     return works, attempts
+
+
+def _current_bindings(db, workspace_id):
+    sequence = 0
+    while True:
+        rows = db.execute("""SELECT b.* FROM pm_work_bindings b WHERE b.workspace_id=? AND b.sequence>? AND NOT EXISTS(
+            SELECT 1 FROM pm_work_bindings n WHERE n.workspace_id=b.workspace_id AND n.work_item_id=b.work_item_id
+            AND n.sequence>b.sequence) ORDER BY b.sequence LIMIT ?""",
+                          (workspace_id, sequence, _BINDING_CHUNK)).fetchall()
+        if not rows:
+            return
+        yield from rows
+        sequence = rows[-1]["sequence"]
+        if len(rows) < _BINDING_CHUNK:
+            return
+
+
+def _work_visible(db, principal, work_id, coverage):
+    def load():
+        try:
+            return pm_source_lineage.visible(db, principal, "work_item", work_id)
+        except OperationError:
+            return False
+
+    allowed = _cached(("work", work_id), load)
+    if not allowed:
+        coverage["visibility_filtered"] = True
+    return allowed
 
 
 def _in_scope(binding, milestones):
@@ -297,11 +388,13 @@ def _evidence(ops, principal, workspace_id, links, notes, coverage):
             elif row["kind"] == "task":
                 tasks.append(row["ref"])
     loaded_sessions, unobserved = _sessions(ops, principal, workspace_id, sessions, coverage)
-    loaded_operations, ends = _operations(ops, principal, workspace_id, operations, notes, coverage)
-    loaded_tasks = _tasks(ops, principal, workspace_id, tasks, notes, coverage)
+    loaded_operations, ends, missing_operations = _operations(ops, principal, workspace_id, operations, notes, coverage)
+    loaded_tasks, missing_tasks = _tasks(ops, principal, workspace_id, tasks, notes, coverage)
     return {"db": ops.db, "sessions": loaded_sessions, "unobserved_sessions": unobserved,
-            "operations": loaded_operations, "ends": ends,
-            "tasks": loaded_tasks, "runs": _runs(ops, principal, workspace_id, list(loaded_sessions), notes, coverage),
+            "operations": loaded_operations, "ends": ends, "missing_operations": missing_operations,
+            "tasks": loaded_tasks, "missing_tasks": missing_tasks,
+            "operation_since": _operation_since(ops.db, loaded_operations),
+            "runs": _runs(ops, principal, workspace_id, list(loaded_sessions), notes, coverage),
             "merges": _merges(ops.db, list(loaded_operations)),
             "deployments": _deployments(ops.db, list(loaded_operations))}
 
@@ -320,8 +413,12 @@ def _sessions(ops, principal, workspace_id, refs, coverage):
     by_ref = {f"{row['host']}/{row['session_id']}": row for row in rows}
     found, unobserved = {}, set()
     for _host, _sid, ref in pairs:
-        # Visibility does not need the observation row. A hidden link must not become an attempt.
-        if not pm_evidence._session_visible(ops, principal, workspace_id, ref):
+        # Visibility does not need the observation row. A lineage error hides this one record.
+        try:
+            allowed = pm_evidence._session_visible(ops, principal, workspace_id, ref)
+        except OperationError:
+            allowed = False
+        if not allowed:
             coverage["visibility_filtered"] = True
             continue
         row = by_ref.get(ref)
@@ -334,7 +431,7 @@ def _sessions(ops, principal, workspace_id, refs, coverage):
 
 def _operations(ops, principal, workspace_id, ids, notes, coverage):
     ids = list(dict.fromkeys(ids))
-    found, terminal = {}, []
+    found, missing = {}, set()
     if ids:
         existing = {row[0] for row in ops.db.execute(
             f"SELECT operation_id FROM operations WHERE operation_id IN ({_marks(ids)})", tuple(ids))}  # noqa: S608
@@ -347,37 +444,78 @@ def _operations(ops, principal, workspace_id, ids, notes, coverage):
                 coverage["visibility_filtered"] = True
             else:
                 # No row, so visibility cannot be proved. Omit the id and mark the page partial.
+                missing.add(operation_id)
                 coverage["attempts_unavailable"] = True
                 _note(notes, "attempt.operation", "operation_record_missing")
             continue
         found[operation_id] = op
-        if op.get("status") in OPERATION_TERMINAL:
-            terminal.append(operation_id)
+    return found, _operation_ends(ops.db, found), missing
+
+
+def _operation_ends(db, operations):
+    """Terminal end is that status's own step time, not an earlier succeeded step."""
+    terminal = {oid: op.get("status") for oid, op in operations.items() if op.get("status") in OPERATION_TERMINAL}
+    if not terminal:
+        return {}
+    ids = list(terminal)
+    rows = db.execute(
+        f"""SELECT operation_id, status, MAX(finished_at) AS finished_at FROM operation_steps
+            WHERE finished_at IS NOT NULL AND status IN ('succeeded','failed','cancelled')
+            AND operation_id IN ({_marks(ids)}) GROUP BY operation_id, status""", tuple(ids)).fetchall()  # noqa: S608
+    by_status = {}
+    for row in rows:
+        by_status.setdefault(row["operation_id"], {})[row["status"]] = row["finished_at"]
     ends = {}
-    if terminal:
-        for row in ops.db.execute(
-                f"""SELECT operation_id, MAX(finished_at) AS finished_at FROM operation_steps
-                    WHERE status='succeeded' AND finished_at IS NOT NULL AND operation_id IN ({_marks(terminal)})
-                    GROUP BY operation_id""", tuple(terminal)):  # noqa: S608
-            ends[row["operation_id"]] = _instant(row["finished_at"])
-    return found, ends
+    for operation_id, status in terminal.items():
+        stamp = by_status.get(operation_id, {}).get(status)
+        if stamp is not None:
+            ends[operation_id] = _instant(stamp)
+    return ends
+
+
+def _operation_since(db, operations):
+    wanted = {oid: op.get("status") for oid, op in operations.items() if op.get("status") in _OPERATION_WAIT}
+    if not wanted:
+        return {}
+    ids, kinds = list(wanted), list(_OPERATION_KINDS)
+    rows = db.execute(
+        f"""SELECT resource_id, body, created_at FROM (
+                SELECT resource_id, body, created_at,
+                    ROW_NUMBER() OVER (PARTITION BY resource_id ORDER BY seq DESC) AS n
+                FROM api_events WHERE resource_type='operation' AND resource_id IN ({_marks(ids)})
+                AND kind IN ({_marks(kinds)})) WHERE n=1""", (*ids, *kinds)).fetchall()  # noqa: S608
+    found = {}
+    for row in rows:
+        status = wanted.get(row["resource_id"])
+        try:
+            body = json.loads(row["body"])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(body, dict) and body.get("to") == status:
+            found[row["resource_id"]] = _instant(row["created_at"])
+    return found
 
 
 def _tasks(ops, principal, workspace_id, ids, notes, coverage):
     ids = list(dict.fromkeys(ids))
     if not ids:
-        return {}
+        return {}, set()
     rows = ops.db.execute(
         f"""SELECT task_id, state, submitted_at, delivered_at, lead_agent, host, session_id, verifying_started_at
             FROM tasks WHERE task_id IN ({_marks(ids)})""", tuple(ids)).fetchall()  # noqa: S608
     present = {row["task_id"]: row for row in rows}
-    found = {}
+    found, missing = {}, set()
     for task_id in ids:
         if task_id not in present:
+            missing.add(task_id)
             coverage["attempts_unavailable"] = True
             _note(notes, "attempt.task", "task_record_missing")
             continue
-        if not pm_evidence._task_visible(ops, principal, workspace_id, task_id):
+        try:
+            allowed = pm_evidence._task_visible(ops, principal, workspace_id, task_id)
+        except OperationError:
+            allowed = False
+        if not allowed:
             coverage["visibility_filtered"] = True
             continue
         found[task_id] = present[task_id]
@@ -388,44 +526,89 @@ def _tasks(ops, principal, workspace_id, ids, notes, coverage):
                     AND json_extract(body,'$.to') IN ('done','failed') AND task_id IN ({_marks(list(found))})
                     GROUP BY task_id""", tuple(found)):  # noqa: S608
             ends[row["task_id"]] = row["created_at"]
-    return {task_id: {"row": row, "terminal_at": ends.get(task_id)} for task_id, row in found.items()}
+    since = _task_since(ops.db, found)
+    return ({task_id: {"row": row, "terminal_at": ends.get(task_id), "since": since.get(task_id)}
+             for task_id, row in found.items()}, missing)
+
+
+def _task_since(db, rows):
+    waiting = {task_id: row["state"] for task_id, row in rows.items() if row["state"] in _TASK_WAIT}
+    if not waiting:
+        return {}
+    ids = list(waiting)
+    fetched = db.execute(
+        f"""SELECT task_id, body, created_at FROM (
+                SELECT task_id, body, created_at,
+                    ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY event_id DESC) AS n
+                FROM events WHERE kind='state' AND task_id IN ({_marks(ids)})) WHERE n=1""",  # noqa: S608
+        tuple(ids)).fetchall()
+    found = {}
+    for row in fetched:
+        try:
+            body = json.loads(row["body"])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(body, dict) and body.get("to") == waiting[row["task_id"]]:
+            found[row["task_id"]] = _instant(row["created_at"])
+    return found
 
 
 def _runs(ops, principal, workspace_id, refs, notes, coverage):
+    """Attach refs.run_id only from visible runs bound to a linked observed session."""
     db = ops.db
     if not refs or not _table(db, "pm_runs") or not _table(db, "pm_run_state"):
         return {}
-    rows = db.execute("""SELECT r.run_id, r.operation_id, json_extract(s.session_binding,'$.host') AS host,
-        json_extract(s.session_binding,'$.session_id') AS session_id FROM pm_runs r JOIN pm_run_state s USING(run_id)
-        WHERE r.workspace_id=? LIMIT ?""", (workspace_id, MAX_RUNS + 1)).fetchall()
-    if len(rows) > MAX_RUNS:
-        _note(notes, "attempt.run_id", "run_index_truncated")
+    pairs = []
+    for ref in dict.fromkeys(refs):
+        host, sep, sid = ref.partition("/")
+        if sep and host and sid:
+            pairs.append((host, sid, ref))
+    if not pairs:
         return {}
+    marks = ",".join("(?,?)" for _ in pairs)
+    args = [workspace_id]
+    for host, sid, _ref in pairs:
+        args.extend((host, sid))
+    rows = db.execute(
+        f"""SELECT run_id, operation_id, context, host, session_id FROM (
+                SELECT r.run_id AS run_id, r.operation_id AS operation_id, r.context AS context,
+                    json_extract(s.session_binding,'$.host') AS host,
+                    json_extract(s.session_binding,'$.session_id') AS session_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY json_extract(s.session_binding,'$.host'),
+                            json_extract(s.session_binding,'$.session_id')
+                        ORDER BY r.created_at, r.run_id) AS n
+                FROM pm_runs r JOIN pm_run_state s USING(run_id)
+                WHERE r.workspace_id=? AND (json_extract(s.session_binding,'$.host'),
+                    json_extract(s.session_binding,'$.session_id')) IN ({marks})
+            ) WHERE n<=?""", (*args, _RUNS_PER_SESSION)).fetchall()  # noqa: S608
     grouped = {}
     for row in rows:
         grouped.setdefault((row["host"], row["session_id"]), []).append(row)
     from . import pm_runs
     found, ambiguous = {}, False
-    for ref in refs:
-        host, _, sid = ref.partition("/")
-        matches = grouped.get((host, sid), [])
-        if len(matches) > 1:
+    for host, sid, ref in pairs:
+        visible_ids = []
+        for match in grouped.get((host, sid), []):
+            try:
+                body = json.loads(match["context"]) if match["context"] else {}
+            except (TypeError, ValueError):
+                body = {}
+            if not isinstance(body, dict):
+                body = {}
+            try:
+                allowed = pm_runs.source_visible(db, principal, {"operation_id": match["operation_id"], "context": body})
+            except OperationError:
+                allowed = False
+            if allowed:
+                visible_ids.append(match["run_id"])
+            else:
+                coverage["visibility_filtered"] = True
+        if len(visible_ids) > 1:
             ambiguous = True
             continue
-        if len(matches) != 1:
-            continue
-        match = matches[0]
-        raw = db.execute("SELECT context FROM pm_runs WHERE run_id=?", (match["run_id"],)).fetchone()
-        try:
-            body = json.loads(raw[0]) if raw else {}
-        except (TypeError, ValueError):
-            body = {}
-        if not isinstance(body, dict):
-            body = {}
-        if not pm_runs.source_visible(db, principal, {"operation_id": match["operation_id"], "context": body}):
-            coverage["visibility_filtered"] = True
-            continue
-        found[ref] = match["run_id"]
+        if len(visible_ids) == 1:
+            found[ref] = visible_ids[0]
     if ambiguous:
         _note(notes, "attempt.run_id", "multiple_explicit_runs")
     return found
@@ -519,7 +702,7 @@ def _operation_attempt(work_id, operation_id, evidence, notes):
         _note(notes, "actual.end", "terminal_time_unrecorded")
         if start:
             actual = {"start": start, "end": None, "open": False}
-    status, waiting, recorded = _operation_status(status_name)
+    status, waiting, recorded = _operation_status(status_name, evidence["operation_since"].get(operation_id))
     refs = {"operation_id": operation_id}
     if recorded:
         refs["recorded_state"] = recorded
@@ -531,9 +714,9 @@ def _operation_attempt(work_id, operation_id, evidence, notes):
                  str(op.get("action") or operation_id), status, None, None, actual, [], refs, waiting=waiting)
 
 
-def _operation_status(status_name):
+def _operation_status(status_name, since):
     if status_name in _OPERATION_WAIT:
-        return "waiting", {"reason": _OPERATION_WAIT[status_name], "since": None}, None
+        return "waiting", {"reason": _OPERATION_WAIT[status_name], "since": since}, None
     if status_name in {"accepted", "running"}:
         return "in_progress", None, None
     if status_name == "succeeded":
@@ -560,7 +743,7 @@ def _task_attempt(work_id, task_id, evidence, notes):
     actual = None
     if start or end or (terminal and start):
         actual = {"start": start, "end": end, "open": False if terminal else end is None}
-    status, waiting, recorded = _task_status(row)
+    status, waiting, recorded = _task_status(row, loaded.get("since"))
     refs = {"task_id": task_id}
     if row["lead_agent"] in {"codex", "claude"}:
         refs["agent"] = {"cli": row["lead_agent"]}
@@ -578,12 +761,12 @@ def _task_attempt(work_id, task_id, evidence, notes):
                  actual, [], refs, waiting=waiting)
 
 
-def _task_status(row):
+def _task_status(row, since):
     state = row["state"]
     if state == "verifying":
-        return "in_review", {"reason": "review", "since": _instant(row["verifying_started_at"])}, None
+        return "in_review", None, None
     if state in _TASK_WAIT:
-        return "waiting", {"reason": _TASK_WAIT[state], "since": None}, None
+        return "waiting", {"reason": _TASK_WAIT[state], "since": since}, None
     if state in {"queued", "dispatching", "accepted", "running"}:
         return "in_progress", None, None
     if state == "done":
@@ -634,11 +817,12 @@ def _work_node(db, binding, item, parent, attempts, truncated, evidence, notes):
         status = "in_review"
     elif item["state"] == "doing" or open_attempt:
         status = "in_progress"
-    elif item["state"] == "todo" and not attempts:
+    elif item["state"] == "todo" and not attempts and not truncated:
         status = "not_started"
     else:
         status = "unknown"
-        if attempts and item["state"] == "todo":
+        finished = any((row.get("actual") or {}).get("end") and not (row.get("actual") or {}).get("open") for row in attempts)
+        if finished and item["state"] == "todo":
             _note(notes, "work.status", "attempt_finished_is_not_work_completion")
     waiting = None
     if status == "waiting":
@@ -647,6 +831,9 @@ def _work_node(db, binding, item, parent, attempts, truncated, evidence, notes):
         if since is None:
             _note(notes, "waiting.since", "state_time_unrecorded")
     actual = None if truncated else _work_actual(completion, merged, attempts)
+    if actual and actual.get("start") and actual.get("end") and actual["end"] < actual["start"]:
+        actual = {"start": actual["start"], "end": None, "open": True}
+        _note(notes, "work.actual", "inconsistent_dates")
     if truncated and status == "not_started":
         status = "unknown"
     refs = {"work_item_id": item["work_item_id"], "binding_id": binding["binding_id"],
@@ -658,9 +845,18 @@ def _work_node(db, binding, item, parent, attempts, truncated, evidence, notes):
 
 
 def _state_since(db, work_id, state):
-    row = db.execute("""SELECT created_at FROM api_events WHERE resource_type='work_item' AND resource_id=?
-        AND kind='work_item.state' AND json_extract(body,'$.to')=? ORDER BY seq DESC LIMIT 1""", (work_id, state)).fetchone()
-    return _instant(row[0]) if row else None
+    """Latest work_item.state event, and only when its `to` is the current state."""
+    row = db.execute("""SELECT body, created_at FROM api_events WHERE resource_type='work_item' AND resource_id=?
+        AND kind='work_item.state' ORDER BY seq DESC LIMIT 1""", (work_id,)).fetchone()
+    if row is None:
+        return None
+    try:
+        body = json.loads(row["body"])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(body, dict) or body.get("to") != state:
+        return None
+    return _instant(row["created_at"])
 
 
 def _work_actual(completion, merged, attempts):
@@ -698,32 +894,81 @@ def _issues(ops, principal, workspace_id, milestones, notes, coverage):
         collected = collected[:MAX_ISSUES]
         coverage["issues_truncated"] = True
         _note(notes, "issue", "mapping_page_truncated")
-    return [row for row in (_issue(mapping, milestones, notes) for mapping in collected) if row]
+    binding_ids, mapping_ids = [], []
+    for mapping in collected:
+        document = mapping.get("document") if isinstance(mapping.get("document"), dict) else {}
+        relation = document.get("relation") if isinstance(document.get("relation"), dict) else {}
+        if isinstance(relation.get("binding_id"), str):
+            binding_ids.append(relation["binding_id"])
+        if isinstance(mapping.get("mapping_id"), str):
+            mapping_ids.append(mapping["mapping_id"])
+    plans = _binding_plans(ops.db, workspace_id, binding_ids)
+    published = _published_titles(ops.db, workspace_id, mapping_ids)
+    return [row for row in (_issue(ops, principal, mapping, milestones, notes, coverage, plans, published)
+                            for mapping in collected) if row]
 
 
-def _issue(mapping, milestones, notes):
+def _binding_plans(db, workspace_id, binding_ids):
+    ids = list(dict.fromkeys(binding_ids))
+    if not ids or not _table(db, "pm_work_bindings"):
+        return {}
+    rows = db.execute(
+        f"""SELECT binding_id, plan_revision_id FROM pm_work_bindings WHERE workspace_id=?
+            AND binding_id IN ({_marks(ids)})""", (workspace_id, *ids)).fetchall()  # noqa: S608
+    return {row["binding_id"]: row["plan_revision_id"] for row in rows}
+
+
+def _published_titles(db, workspace_id, mapping_ids):
+    ids = list(dict.fromkeys(mapping_ids))
+    if not ids:
+        return {}
+    rows = db.execute(
+        f"""SELECT mapping_id, document FROM pm_issue_revisions WHERE workspace_id=?
+            AND mapping_id IN ({_marks(ids)}) ORDER BY sequence""", (workspace_id, *ids)).fetchall()  # noqa: S608
+    found = {}
+    for row in rows:
+        try:
+            document = json.loads(row["document"])
+        except (TypeError, ValueError):
+            continue
+        selected = document.get("selected") if isinstance(document.get("selected"), dict) else {}
+        title = _plain(selected.get("public_title"))
+        if title:
+            found[row["mapping_id"]] = title
+    return found
+
+
+def _issue(ops, principal, mapping, milestones, notes, coverage, plans, published):
     document = mapping["document"]
     relation = document.get("relation") if isinstance(document.get("relation"), dict) else {}
     issue = document.get("issue") if isinstance(document.get("issue"), dict) else {}
     selected = document.get("selected") if isinstance(document.get("selected"), dict) else {}
-    title = _label(issue.get("title"), 200) or _label(selected.get("public_title"), 200)
+    work_id = relation.get("work_item_id")
+    if isinstance(work_id, str) and not _work_visible(ops.db, principal, work_id, coverage):
+        return None
+    title = _plain(selected.get("public_title")) or _plain(published.get(mapping["mapping_id"]))
+    number, repository = issue.get("number"), issue.get("repository") if isinstance(issue.get("repository"), str) else relation.get("repository")
+    if title is None and isinstance(repository, str) and repository.strip() and type(number) is int and number > 0:
+        title = f"{repository.strip()}#{number}"
     if title is None:
         _note(notes, "issue.title", "issue_title_unavailable")
         return None
     requirement_ids = [rid for rid in relation.get("requirement_ids") or [] if isinstance(rid, str)]
-    in_baseline = [rid for rid in requirement_ids if any(rid in (milestone["refs"].get("requirement_ids") or [])
-                                                         for milestone in milestones)]
-    covered = [milestone for milestone in milestones if in_baseline and set(in_baseline) <= set(
-        milestone["refs"].get("requirement_ids") or [])]
+    revision = plans.get(relation.get("binding_id")) if isinstance(relation.get("binding_id"), str) else None
+    in_baseline = [rid for rid in requirement_ids if any(
+        milestone["refs"].get("plan_revision_id") == revision and rid in (milestone["refs"].get("requirement_ids") or [])
+        for milestone in milestones)]
+    covered = [milestone for milestone in milestones if revision and in_baseline
+               and milestone["refs"].get("plan_revision_id") == revision
+               and set(in_baseline) <= set(milestone["refs"].get("requirement_ids") or [])]
     parent = covered[0]["id"] if len(covered) == 1 else None
-    number, repository = issue.get("number"), relation.get("repository")
     refs = {}
     if isinstance(repository, str) and type(number) is int and number > 0:
         refs["issue"] = {"repository": repository, "number": number}
     if isinstance(document.get("state"), str):
         refs["tracking_state"] = document["state"]
-    if isinstance(relation.get("work_item_id"), str):
-        refs["work_item_id"] = relation["work_item_id"]
+    if isinstance(work_id, str):
+        refs["work_item_id"] = work_id
     if requirement_ids:
         refs["requirement_ids"] = requirement_ids
     return _node(f"issue:{mapping['mapping_id']}", parent, "issue", title, "unknown", None, None, None, [], refs)
@@ -738,39 +983,65 @@ def _node(row_id, parent, kind, title, status, baseline, forecast, actual, depen
     return node
 
 
-def _slice(nodes, cursor, limit):
-    ordered = sorted(nodes, key=lambda node: (_RANK[node["kind"]], node["id"]))
-    if cursor is not None:
-        ordered = [node for node in ordered if (_RANK[node["kind"]], node["id"]) > cursor]
-    return ordered[:limit], len(ordered) > limit
-
-
 def _dumps(payload):
     return json.dumps(payload, ensure_ascii=False).encode()
 
 
-def _project(loaded, page, more):
-    """Cut by encoded size. Each public row is encoded once; the envelope is the worst case."""
-    if not page:
-        return _body(loaded, [], more)
-    encoded = [(node, _dumps(_public(node)), _scheduled(node)) for node in page]
-    longest = max(page, key=lambda node: len(node["id"].encode()))["id"]
+def _lineage_open(db):
+    def load():
+        if not pm_source_lineage.installed(db):
+            return False
+        return db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is not None
+
+    return _cached("lineage_open", load)
+
+
+def _row_roots(db, public):
+    found = set()
+    for kind, identity in pm_source_lineage.references(public):
+        found.update(pm_source_lineage.roots(db, kind, identity))
+    return found
+
+
+def _fit(loaded, ordered, limit):
+    """Keep a sort-order prefix that fits the byte cap and the 64-root lineage budget."""
+    if not ordered:
+        return _body(loaded, [], False)
+    longest = max((_encode_cursor(node["id"]) for node in ordered), key=len)
     envelope = len(_dumps(_frame(loaded, [], [], partial=True, cursor=longest, range_value=_RANGE_BOUND)))
-    kept, counts, used, cut = [], [0, 0], 0, False
-    for node, raw, scheduled in encoded:
-        slot = 0 if scheduled else 1
+    lineage = _lineage_open(loaded["db"])
+    kept, counts, used, union = [], [0, 0], 0, set()
+    index = 0
+    while index < len(ordered) and len(kept) < limit:
+        node = ordered[index]
+        public = _public(node)
+        raw = _dumps(public)
+        slot = 0 if _scheduled(node) else 1
         extra = len(raw) + (2 if counts[slot] else 0)
+        row_roots = set()
+        if lineage:
+            try:
+                row_roots = _row_roots(loaded["db"], public)
+            except OperationError:
+                loaded["coverage"]["visibility_filtered"] = True
+                index += 1
+                continue
+            if len(row_roots) > pm_source_lineage.MAX_ROOTS:
+                loaded["coverage"]["visibility_filtered"] = True
+                index += 1
+                continue
+            if len(union | row_roots) > pm_source_lineage.MAX_ROOTS:
+                break
         if envelope + used + extra > MAX_BYTES:
             if not kept:
                 raise OperationError("PM_SCHEDULE_TOO_LARGE", "One schedule row exceeds the read limit", 413)
-            cut = True
             break
+        union |= row_roots
         kept.append(node)
         counts[slot] += 1
         used += extra
-    if cut:
-        more = True
-    return _body(loaded, kept, more)
+        index += 1
+    return _body(loaded, kept, index < len(ordered))
 
 
 def _body(loaded, selected, more):
@@ -780,7 +1051,7 @@ def _body(loaded, selected, more):
         (rows if _scheduled(node) else unscheduled).append(public)
     source_partial = any(loaded["coverage"][key] for key in _SOURCE_FLAGS)
     partial = bool(more or source_partial)
-    cursor = selected[-1]["id"] if more and selected else None
+    cursor = _encode_cursor(selected[-1]["id"]) if more and selected else None
     return _frame(loaded, rows, unscheduled, partial=partial, cursor=cursor, range_value=_range(rows))
 
 
