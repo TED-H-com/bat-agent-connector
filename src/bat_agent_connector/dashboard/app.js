@@ -18585,7 +18585,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	}
 	function setActive(value) {
 		if (visible === value) {
-			if (value && plan) {
+			if (value && signature) {
 				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
 				if (!id) currentMilestone = null;
 				if (id && id !== currentMilestone && (id !== selected || !detail.element)) select(id, id !== selected);

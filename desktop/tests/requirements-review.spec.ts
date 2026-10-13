@@ -205,6 +205,21 @@ test('S7 Requirements resolves milestones and clears unknown selection through B
   expect(f.writes).toEqual([]);
 });
 
+test('S7 Requirements opens unassigned work without an adopted plan after the read completes', async ({page}) => {
+  const f = reviewFixture();
+  f.overrides.push((url, r) => {
+    if (url.pathname.endsWith('/plans/accepted')) {r.data.plan = null; r.data.head.accepted_revision_id = null;}
+    if (url.pathname.endsWith('/plans/head')) r.data.head.accepted_revision_id = null;
+    return r;
+  });
+  await f.mount(page, 'requirements');
+  await expect(page.locator(`[data-rtm-select="${f.ids.work.email}"]`)).toBeVisible();
+  await expect(page.locator('[data-pm-rtm] > .actions > button').first()).toBeEnabled();
+  await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.ids.workspaceId}/requirements?select=${f.ids.work.email}`);
+  await expect(page.locator('[data-work-inspector] > header h2')).toHaveText('Email sign-in');
+  expect(f.writes).toEqual([]);
+});
+
 test('M1 hidden Board does not fan out on a Requirements event', async ({page}) => {
   const f = reviewFixture(); await f.mount(page, 'requirements'); await expect(page.locator('[data-rtm-requirement]')).toHaveCount(8);
   await page.waitForTimeout(1200); const before = f.reads.length; f.emit(); await expect.poll(() => f.reads.slice(before).filter(path => path.includes('/deliveries')).length).toBeGreaterThan(0);

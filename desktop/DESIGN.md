@@ -360,6 +360,7 @@ catalogue withdrawal clears the view. Inspector actions retain their nodes acros
 age updates, and closing returns to the current selection.
 Milestone destinations apply once for the current route. Live refresh retains the
 reader's search and restores group-heading focus by central milestone identity.
+An authorized unassigned-work read can resolve a work destination without an adopted plan.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
 intact into drawers reached from the Requirements overflow and work inspector;
