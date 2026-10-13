@@ -65,3 +65,9 @@ plan identity remain distinct. Report sources and full plan text expand on deman
 RTM uses an expandable table with a work inspector; source IDs wrap below titles.
 Keep requirement order, expanded rows and filters stable during source refreshes.
 Remove withdrawn source facts from rows, counts and the inspector together.
+
+Agent resources uses the same compact navigation, table and inspector. Separate
+source-reported models from requested model context, and observed tokens from current
+quota windows. Missing counters stay unknown. Source failures withdraw numbers and
+model details together. Filters and a selected inspector keep their place during
+background reads; the toolbar can pause view updates without stopping collection.

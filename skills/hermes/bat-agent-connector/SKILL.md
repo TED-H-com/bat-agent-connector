@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "f52bfcd23331e3c262eee43916f856b6adee698932b983b5fb402c1bbc78fc10"
+  canonical_sha256: "0d7eda2381701a429d2dfd5d4db850cf3b30a4a66a63fa75f9df7226f48a64b9"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1567,4 +1567,21 @@ missing/withdrawn sources hide affected original records. Manual/foreign sources
 stay read-only. Do not supply URLs/tokens, launch or sign in a host, send/interrupt/
 resume/dispose a session, infer completion/cost from status, or treat this observer
 as create-own, a PM writer, a general native CLI adapter or an adapter switch.
+
+
+### Agent resource observations
+
+Use `pm_resources_get(workspace_id, since?, until?)` with your own observe principal.
+This reads the same projection as the project Agent resources page; it never starts
+collection, CLI processes, model calls or dispatch. Workspace membership is checked
+on every read. UTC/offset timestamps select at most 366 days; the default is seven days.
+
+Only administrator-bound local Codex rollout v1 and Claude transcript v1 files are
+covered. Do not discover files, infer project ownership from paths, or treat missing
+sources as zero consumption. Inspect each source status, observation coverage and
+metric inclusion definition. Requested model and reported model are different facts.
+Quota windows require an explicit opaque pool binding and a fresh source report;
+never add shared balances or convert tokens into subscription quota. Capacity,
+accepted-work performance and remaining-work forecasts are not supplied by this
+increment. See `docs/design/agent-resource-observation.md` for the exact scope.
 <!-- END CANONICAL WORKFLOW -->

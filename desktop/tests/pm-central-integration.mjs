@@ -296,13 +296,21 @@ try {
   await page.goto(origin + '/dashboard/#/pm/' + workspaceId);
   await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
   await expect(page.locator('[data-pm-charter]')).toContainText('No adopted plan in this summary');
+  child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');
+  assert.equal((await next()).usage_connected,true);
+  await page.locator('[data-pm-view="agents"]').click();
+  await expect(page.locator('[data-pm-resources]')).toContainText('1,000');
+  await page.locator('[data-resource-select="Implementation"]').click();
+  await expect(page.locator('[data-resource-detail]')).toContainText('fixture-model');
+  await expect(page.locator('[data-resource-detail]')).toContainText('Input includes cache');
+  await expect(page.locator('[data-resource-quota]')).toContainText('No current quota balance');
   await page.locator('[data-pm-view="rtm"]').click();
   await expect(page.locator('[data-pm-rtm]')).toContainText('First useful action');
   await expect(page.locator('[data-pm-rtm]')).toContainText('Unassigned / other plan versions');
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.message.append','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
   assert.deepEqual(errors, []);
-  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen, fixed Charter and unassigned RTM work; zero hosts or tasks.');
+  console.log('Actual central PM browser flow passed: workspace, Idea, source confirmation, retained candidate, Planning and immutable professional plan draft, explicit work association, fixed plan comparison with unchanged work, evidence, five-section Brief and exact Markdown/HTML/SVG downloads, independent pause/close/reopen, fixed Charter, unassigned RTM work and recurring local usage through the central resource API; zero hosts or tasks.');
 } catch(error) {
   console.error('Synthetic PM fixture state:',await failureDetails().catch(()=>({unavailable:true})));
   throw error;
