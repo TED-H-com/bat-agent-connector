@@ -55,6 +55,7 @@ async function prepare(page, scenario, locale) {
   });
   await page.goto(origin + demoRoute());
   await expect(page.locator('[data-overview-status]')).toContainText(zh ? '8 項中 3 項已驗收' : '3 of 8 accepted');
+  await expect(page.locator('.shell-workspace-switch')).toContainText(fixture.copy.name);
   async function openView(view) {
     const entry = page.locator(`[data-pm-view="${view}"]`);
     await entry.waitFor({state: 'attached'});
@@ -102,7 +103,9 @@ async function prepare(page, scenario, locale) {
   } else if (scenario === 'schedule') {
     await openView('schedule');
     await expect(page.locator('.schedule-chart [data-schedule-row]').first()).toBeVisible();
-    composition = 'Recorded baseline, forecast and actual timeline; recovery review forecast is three days late. Undated session attempts remain unscheduled.';
+    await page.locator('[data-schedule-row="milestone:design_review"] button[aria-expanded=true]').click();
+    await expect(page.locator('[data-schedule-row="milestone:recovery_review"] [data-schedule-delta]')).toContainText('+3');
+    composition = 'Recorded baseline, forecast and actual timeline; Design review collapsed through its normal control to show Recovery review forecast three days late. Undated session attempts remain unscheduled.';
   } else if (scenario === 'dependencies') {
     await openView('dependencies');
     await page.getByRole('radio', {name: zh ? '關係圖' : 'Graph', exact: true}).click();
@@ -114,10 +117,15 @@ async function prepare(page, scenario, locale) {
     await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(12);
     composition = 'Twelve synthetic work items in five workflow lanes; accepted content, work in review and waiting work keep their recorded states.';
   } else if (scenario === 'session') {
-    await page.goto(origin + demoRoute('manual'));
+    // A hash navigation keeps the selected project and its in-app connection.
+    await page.evaluate(hash => {location.hash = hash;}, new URL(origin + demoRoute('manual')).hash);
+    await expect(page.locator('.shell-crumb-workspace')).toContainText(fixture.copy.name);
+    await expect(page.locator('.shell-workspace-switch')).toContainText(fixture.copy.name);
     await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '這是有人在 BAT 開啟的工作階段' : 'Started in BAT by a person');
     await expect(page.locator('#main')).toContainText(fixture.copy.manualNote);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
+    await expect(page.getByRole('button', {name: zh ? '送出' : 'Send', exact: true})).toHaveCount(0);
+    await expect(page.getByRole('button', {name: zh ? '中斷這一輪' : 'Interrupt turn', exact: true})).toHaveCount(0);
     composition = 'Manual BAT session on demo-host, read-only transcript; no reply, answer or interrupt controls and no writes.';
   }
   if (scenario !== 'discussions') assert.equal(writes.length, 0, 'Browsing must not write');
