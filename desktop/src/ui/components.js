@@ -153,33 +153,49 @@ export function inspector({title, onClose = () => {}}) {
     document.addEventListener('keydown', keys); media.addEventListener('change', resize);});
   return Object.assign(root, {body, close, dispose: close});
 }
-export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}}) {
+export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow}) {
+  const compact = () => compactRow && matchMedia('(max-width: 799px)').matches;
+  const keyFor = row => typeof rowKey === 'function' ? rowKey(row) : row[rowKey];
+  const hasSelection = rows.some(row => keyFor(row) === selected);
   const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-label': t('ui_more')}) : null,
-    ...columns.map(column => h('th', {scope: 'col', class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
-  const root = h('div', {class: 'ui-data-table', tabindex: 0}, table), controls = [];
+    ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
+  const root = h('div', {class: 'ui-data-table' + (compactRow ? ' ui-data-table-responsive' : ''), tabindex: compactRow ? null : 0}, table), controls = [];
   rows.forEach((row, i) => {
-    const key = typeof rowKey === 'function' ? rowKey(row) : row[rowKey], active = key === selected;
-    const tr = h('tr', {'data-row-key': key, tabindex: active || selected == null && i === 0 ? 0 : -1,
-      'aria-selected': String(active), onclick: event => {if (!event.target.closest('button, a, input, select')) select();}});
+    const key = keyFor(row), active = key === selected;
+    let toggleExpansion;
+    const tr = h('tr', {'data-row-key': key, tabindex: active || !hasSelection && i === 0 ? 0 : -1,
+      'aria-selected': String(active), onclick: event => {if (!event.target.closest('button, a, input, select')) {
+        if (compact() && toggleExpansion) {tr.focus(); toggleExpansion();} else select();
+      }}});
     function select() {controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1; node.setAttribute('aria-selected', String(node === tr));}); onSelect(key, row);}
     if (expandable) {
       const open = expanded.has(key);
-      const detail = h('tr', {hidden: !open}, h('td', {colspan: columns.length + 1}, typeof expandable === 'function' ? expandable(row) : ''));
-      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), onClick: () => {
-        detail.hidden = !detail.hidden; toggle.setAttribute('aria-expanded', String(!detail.hidden));
-        toggle.setAttribute('aria-label', t(detail.hidden ? 'ui_expand' : 'ui_collapse', {title: row.title || key})); onToggle(key, !detail.hidden);}});
+      const detail = h('tr', {hidden: !open, class: 'ui-data-table-detail'}, h('td', {colspan: columns.length + 1}, typeof expandable === 'function' ? expandable(row) : ''));
+      toggleExpansion = (open = detail.hidden) => {
+        detail.hidden = !open;
+        toggle.setAttribute('aria-expanded', String(open));
+        if (compactRow) tr.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key})); onToggle(key, open);
+      };
+      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), onClick: () => toggleExpansion()});
+      if (compactRow) tr.setAttribute('aria-expanded', String(open));
       tr.append(h('td', {}, toggle)); tbody.append(tr, detail);
     } else tbody.append(tr);
-    tr.append(...columns.map(column => h('td', {class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));
+    tr.append(...columns.map(column => h('td', {'data-column': column.key, class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));
+    if (compactRow) tr.append(h('td', {class: 'ui-data-table-compact', colspan: columns.length + (expandable ? 1 : 0)},
+      expandable ? drawIcon('chevron-right') : null, compactRow(row)));
     tr.addEventListener('keydown', event => {
       if (event.target !== tr) return;
-      if (['Enter', ' '].includes(event.key)) {event.preventDefault(); select();}
+      if (['Enter', ' '].includes(event.key)) {event.preventDefault(); if (compact() && toggleExpansion) toggleExpansion(); else select();}
+      if (compact() && toggleExpansion && ['ArrowRight', 'ArrowLeft'].includes(event.key)) {event.preventDefault(); toggleExpansion(event.key === 'ArrowRight');}
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? controls.length - 1
           : Math.max(0, Math.min(controls.length - 1, i + (event.key === 'ArrowUp' ? -1 : 1)));
         controls.forEach((node, n) => {node.tabIndex = n === next ? 0 : -1;}); controls[next]?.focus();
       }
-    }); controls.push(tr);
+    });
+    tr.addEventListener('focus', () => controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1;}));
+    controls.push(tr);
   });
   return root;
 }

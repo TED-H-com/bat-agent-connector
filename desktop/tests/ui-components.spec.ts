@@ -82,3 +82,23 @@ test('controlled table expansion restores the saved row without replacing its to
   await toggle.focus(); await page.keyboard.press('Enter'); await expect(toggle).toBeFocused();
   await expect(page.locator('body')).toHaveAttribute('data-expansion', '["saved",false]');
 });
+
+test('compact table rows have one target and preserve expansion when resized', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 900}); await mount(page);
+  await page.evaluate(async () => {
+    const {dataTable} = await import('/src/ui/components.js');
+    const {h} = await import('/src/ui/dom.js');
+    document.querySelector('.ui-data-table')!.replaceWith(dataTable({columns: [{key: 'title', label: 'Work'}],
+      rows: [{id: 'compact', title: 'Compact work'}], rowKey: 'id', selected: 'nested-work', compactRow: row => h('span', {}, row.title),
+      expandable: () => 'Saved criteria', onSelect: key => {document.body.dataset.selection = key;}}));
+  });
+  const row = page.locator('[data-row-key=compact]');
+  await expect(row).toHaveAttribute('tabindex', '0');
+  await expect(row.locator('button')).toBeHidden(); await row.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByText('Saved criteria')).toBeVisible(); await expect(row).toBeFocused();
+  await page.keyboard.press('ArrowLeft'); await expect(page.getByText('Saved criteria')).toBeHidden();
+  await page.keyboard.press('ArrowRight'); await expect(page.getByText('Saved criteria')).toBeVisible();
+  await page.setViewportSize({width: 1440, height: 900});
+  await expect(row.locator('button')).toHaveAttribute('aria-expanded', 'true');
+  await row.focus(); await page.keyboard.press('Enter'); await expect(page.locator('body')).toHaveAttribute('data-selection', 'compact');
+});

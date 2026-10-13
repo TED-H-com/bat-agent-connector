@@ -35,7 +35,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     disclosure({label: t('wb_sources'), body: h('div', {}, h('p', {}, t('wb_acceptance_separate')), h('p', {}, t('wb_no_phase')))}));
   const detail = workInspector({t, workspaceId, from: 'requirements', mount: layout, tools: () => tools(), onClose: () => {
     detailSerial++; if (!preserveSelection) {const id = selected; selected = null; preference.selected = null; markSelection();
-      if (id) tables.querySelector(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)?.focus({preventScroll: true});
+      if (id) selectionTarget(id)?.focus({preventScroll: true});
       const [path, query] = location.hash.split('?'), params = new URLSearchParams(query); params.delete('select');
       history.replaceState(null, '', path + (params.size ? '?' + params : ''));}
   }});
@@ -53,6 +53,16 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   const deliverySource = req => ({deliveries: [...new Map(linked(req).flatMap(card => sources.get(card.work_item_id)?.deliveries || []).map(row => [row.operation_id, row])).values()]});
   const milestoneFor = req => milestones.filter(row => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
   const issueLabel = row => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t('wv_issue', {number: row.document.issue.number})]);
+  const acceptancePill = req => statusPill(requirementReviews(plan, req, reviews).length ? 'accepted' : 'not_assessed');
+  const deployPill = req => {
+    const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter(group => group.rows.some(row => row.deployment?.verified === true && row.deployment.is_current === true)).length;
+    return statusPill(deployed && deployed === groups.length ? 'deployed' : deployed ? 'partial' : 'unknown');
+  };
+  const milestoneLabel = req => {
+    const label = milestoneFor(req).map(row => labelSegment(row.title)).filter(Boolean).join(' · ');
+    return h('span', {class: 'pm-requirement-milestone', title: label || t('wv_no_milestone'), 'aria-label': label || t('wv_no_milestone')}, label || '—');
+  };
+  const selectionTarget = id => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find(node => node.getClientRects().length);
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw() {
@@ -98,15 +108,26 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         onSelect: (id, row) => {tables.querySelector(`[data-row-key="${CSS.escape(id)}"]`)?.focus(); void select(id);},
         expandable: req => h('div', {class: 'pm-requirement-expanded'}, h('h3', {}, t('wv_criteria')),
           h('ul', {}, ...(req.acceptance || []).map(row => h('li', {}, labelSegment(row.text)))),
+          h('button', {type: 'button', class: 'ui-button ghost pm-requirement-open', 'data-rtm-select': req.id,
+            onclick: () => void select(req.id)}, t('wv_open_requirement')),
           ...linked(req).map(workRow), !linked(req).length ? h('p', {class: 'ui-meta'}, t('wb_no_work')) : null),
+        compactRow: req => {
+          const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
+          const partialPRs = work.some(card => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
+          return h('div', {class: 'pm-requirement-summary'}, h('span', {class: 'pm-requirement-title', title: labelSegment(req.text)}, labelSegment(req.text)),
+            h('div', {class: 'pm-requirement-facts'},
+              h('span', {'aria-label': t('wv_acceptance')}, acceptancePill(req)), h('span', {'aria-label': t('wv_deploy')}, deployPill(req)),
+              h('span', {}, t(cursors.work != null ? 'wv_compact_work_loaded' : 'wv_compact_work', {n: work.length})),
+              h('span', {}, t(!feature('engineering_delivery') ? 'wv_compact_prs_unknown' : partialPRs ? 'wv_compact_prs_loaded' : 'wv_compact_prs', {n: prGroups(source.deliveries).length})), milestoneLabel(req)),
+            blocked ? h('div', {class: 'pm-requirement-blocker'}, icon('circle-alert'), blockerText(t, blocked)) : null);
+        },
         columns: [
           {key: 'title', label: t('wv_requirement')},
-          {key: 'milestone', label: t('wv_milestone'), render: req => milestoneFor(req).map(row => row.title).join(' · ') || h('span', {'aria-label': t('wv_no_milestone'), title: t('wv_no_milestone')}, '—')},
+          {key: 'milestone', label: t('wv_milestone'), render: milestoneLabel},
           {key: 'work', label: t('wv_work'), numeric: true, render: req => cursors.work != null ? t('wv_loaded', {n: linked(req).length}) : String(linked(req).length)},
           {key: 'pr', label: t('wv_pr'), render: req => h('div', {class: 'pm-work-inline'}, ...prPills(deliverySource(req)))},
-          {key: 'acceptance', label: t('wv_acceptance'), render: req => statusPill(requirementReviews(plan, req, reviews).length ? 'accepted' : 'not_assessed')},
-          {key: 'deploy', label: t('wv_deploy'), render: req => {const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter(group => group.rows.some(row => row.deployment?.verified === true && row.deployment.is_current === true)).length;
-            return statusPill(deployed && deployed === groups.length ? 'deployed' : deployed ? 'partial' : 'unknown');}},
+          {key: 'acceptance', label: t('wv_acceptance'), render: acceptancePill},
+          {key: 'deploy', label: t('wv_deploy'), render: deployPill},
           {key: 'blocker', label: t('wv_next_blocker'), render: req => {const card = linked(req).find(blockedWork); return card ? blockerText(t, card) : h('span', {class: 'ui-meta'}, t('ui_status_unknown'));}},
         ]});
       for (const row of table.querySelectorAll('[data-row-key]')) {row.dataset.rtmRequirement = row.dataset.rowKey; row.querySelector('button').dataset.rtmToggle = row.dataset.rowKey;}
@@ -187,12 +208,12 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       if (card) for (const req of plan?.document?.requirements || []) if (linked(req).includes(card)) expanded.add(req.id);
       renderTable();
     }
-    const opener = tables.querySelector(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`);
+    const opener = selectionTarget(id);
     if (scroll) {opener?.scrollIntoView({block: 'center'}); opener?.focus({preventScroll: true});}
     markSelection();
     const ticket = ++detailSerial, generation = serial;
     if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(h('p', {role: 'status'}, t('wb_detail_loading')));}
-    if (requirement) {detail.show({title: requirement.text, plan, requirement, accepted: requirementReviews(plan, requirement, reviews).length > 0}); return;}
+    if (requirement) {const blocked = linked(requirement).find(blockedWork); detail.show({title: requirement.text, plan, requirement, milestones: milestoneFor(requirement), blocker: blocked ? blockerText(t, blocked) : null, accepted: requirementReviews(plan, requirement, reviews).length > 0}); return;}
     try {
       const data = scope(await api('GET', `${endpoint}/kanban/${id}`)); alive(); if (ticket !== detailSerial || generation !== serial) return;
       cardCheck(data.card, id); if (data.card.binding.binding_id !== card.binding.binding_id) throw Error(t('wb_plan_changed'));
@@ -201,6 +222,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       const changed = JSON.stringify(sources.get(id)) !== JSON.stringify(read.get(id));
       sources.set(id, read.get(id)); if (changed) renderTable();
       detail.show({title: data.card.work.title, card: data.card, source: read.get(id), plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : null, issues: issuesFor(data.card),
+        milestones: milestones.filter(row => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some(id => data.card.binding.requirement_ids?.includes(id))),
         requirements: plan?.document?.requirements?.filter(req => data.card.binding.plan_revision_id === plan.revision_id && data.card.binding.requirement_ids?.includes(req.id)) || [],
         onMore: () => {deliveryPages++; void select(id, false, true);}});
     } catch (error) {if (ticket === detailSerial) fail(error, generation);}

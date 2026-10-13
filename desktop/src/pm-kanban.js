@@ -3,7 +3,7 @@ import {pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, 
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
-import {workInspector, workStatus, blockedWork, blockerText, workAgents, prPills, readWorkSources} from './pm-work-inspector.js';
+import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
@@ -29,10 +29,11 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), onClose: () => {
     detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; markSelection();}
+    requestAnimationFrame(updateEdges);
   }});
   const note = key => h('p', {class: 'ui-meta'}, t(key));
   const elapsed = value => {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '—';
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
     if (value < 60) return t('pm_kanban_seconds');
     const [key, divisor] = value < 3600 ? ['minutes', 60] : value < 86400 ? ['hours', 3600] : ['days', 86400];
     return t('pm_kanban_' + key, {count: Math.floor(value / divisor)});
@@ -85,13 +86,16 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   function preview(card) {
     const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
-    return [h('h3', {}, firstLabel(card.work.title, t('ui_work_item'))),
-      h('div', {class: 'pm-board-requirements'}, ...(reqs.length ? reqs.map(req => contextChip({text: firstLabel(req.text, req.id)}))
-        : [contextChip({text: card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(' · ') : t('wv_no_requirement')})])),
-      h('div', {class: 'pm-kanban-card-meta'}, h('span', {class: 'pm-work-inline'}, ...workAgents(source).map(agentMark), !workAgents(source).length ? agentMark(null) : null),
-        h('span', {title: t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age')}, elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds))),
-      h('div', {class: 'pm-work-inline'}, ...prPills(source), blockedWork(card) ? h('span', {class: 'pm-board-blocker', tabindex: 0, title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), t('ui_status_blocked')) : null),
-      h('span', {class: 'pm-board-state'}, statusPill(workStatus(card))),
+    const chip = text => {const node = contextChip({text}); node.title = text; return node;};
+    const age = elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
+    return [h('h3', {title: firstLabel(card.work.title, t('ui_work_item'))}, firstLabel(card.work.title, t('ui_work_item'))),
+      h('div', {class: 'pm-board-requirements'}, ...(reqs.length ? reqs.map(req => chip(firstLabel(req.text, req.id)))
+        : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(' · ') : t('wv_no_requirement'))])),
+      h('div', {class: 'pm-kanban-card-meta'}, ...workAgents(source).map(agentMark).filter(mark => mark.textContent !== '?'),
+        ...prGroups(source?.deliveries).map(({target, rows}) => {const node = contextChip({text: `PR #${target.pull_number}`});
+          node.title = joinLabel([target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]); return node;}), blockedWork(card) ? h('span', {class: 'pm-board-blocker', tabindex: 0, title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), t('ui_status_blocked')) : null,
+        group.value !== 'status' ? h('span', {class: 'pm-board-state'}, statusPill(workStatus(card))) : null,
+        age ? h('span', {class: 'pm-board-age', title: t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age')}, age) : null),
       coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h('span', {class: 'ui-meta'}, t('pm_kanban_partial_sources')) : null].filter(Boolean);
   }
   function makeCard(card) {
@@ -108,7 +112,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
           const available = next?.querySelector('.pm-kanban-cards')?.hidden ? [] : [...(next?.querySelectorAll('[data-pm-kanban-work]:not([hidden])') || [])];
           target = available[index] || available[0] || next?.querySelector('button');
         } else target = cards[event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : index + (event.key === 'ArrowUp' ? -1 : 1)];
-        target?.focus();
+        target?.focus({preventScroll: true}); if (target) revealCard(target);
       }
     }); return node;
   }
@@ -136,7 +140,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     }
     for (const entry of rows.values()) {
       const {card, node} = entry;
-      if (entry.pending && (!node.contains(document.activeElement) || node === document.activeElement)) {node.replaceChildren(...preview(card)); entry.pending = false;}
+      if ((entry.pending || force) && (!node.contains(document.activeElement) || node === document.activeElement)) {node.replaceChildren(...preview(card)); entry.pending = false;}
       const matches = (!query || joinLabel([card.work.title, ...requirements(card).map(req => req.text)], ' ').toLocaleLowerCase().includes(query))
         && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value))
         && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value));
@@ -150,6 +154,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       else lane.querySelector('.pm-kanban-count').textContent = lane.querySelectorAll('[data-pm-kanban-work]:not([hidden])').length;
     }
     markSelection();
+    requestAnimationFrame(updateEdges);
   }
   function markSelection() {for (const {node, card} of rows.values()) node.setAttribute('aria-pressed', String(selected === card.work_item_id));}
   function present(data, append = false) {
@@ -169,14 +174,21 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (selected && !rows.has(selected)) closeRetaining();
     else if (selected && active && detail.element) showDetail(rows.get(selected).card);
   }
-  function showDetail(card) {detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null, requirements: requirements(card), source: sources.get(card.work_item_id),
-    onMore: () => {deliveryPages++; void select(card.work_item_id, true);}});}
+  function showDetail(card) {
+    const opening = !detail.element;
+    detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null, requirements: requirements(card),
+    milestones: milestones.filter(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id))), source: sources.get(card.work_item_id),
+    onMore: () => {deliveryPages++; void select(card.work_item_id, true);}});
+    if (opening) requestAnimationFrame(() => {const node = rows.get(card.work_item_id)?.node;
+      if (selected === card.work_item_id && node?.isConnected && detail.element) revealCard(node);});
+  }
   async function select(id, retain = false) {
     const current = rows.get(id); if (!current) return;
     if (selected !== id) deliveryPages = 1;
     selected = id; preference.selected = id; markSelection();
     const generation = serial, ticket = ++detailSerial;
-    if (!retain) {detail.show({title: current.card.work.title}); detail.element.body.replaceChildren(note('pm_kanban_detail_loading'));}
+    if (!retain) {detail.show({title: current.card.work.title}); detail.element.body.replaceChildren(note('pm_kanban_detail_loading'));
+      requestAnimationFrame(() => {if (selected === id && current.node.isConnected && detail.element) revealCard(current.node);});}
     try {
       const data = await api('GET', `${endpoint}/kanban/${id}`); alive(); if (generation !== serial || ticket !== detailSerial) return;
       if (data.workspace_id !== workspaceId) throw Error(t('pm_kanban_scope_error')); checkCard(data.card, id);
@@ -215,11 +227,19 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     // Reread all previously loaded pages to remove withdrawn records as well.
     pages++; await refresh();
   }
-  list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft;});
+  function updateEdges() {
+    content.classList.toggle('pm-board-clipped-start', list.scrollLeft > 1);
+    content.classList.toggle('pm-board-clipped-end', list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
+  }
+  function revealCard(node) {
+    node.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'instant'}); updateEdges();
+  }
+  const resize = new ResizeObserver(updateEdges); resize.observe(list);
+  list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
   function setActive(value) {
     if (active === value) return; active = value;
     if (!value) {preference.scroll = window.scrollY; closeRetaining();}
     else {if (selected && rows.has(selected)) void select(selected, true); list.scrollLeft = preference.laneScroll || 0; requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));}
   }
-  return {element, box: element, meta, refresh, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: withdraw};
+  return {element, box: element, meta, refresh, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {resize.disconnect(); withdraw();}};
 }

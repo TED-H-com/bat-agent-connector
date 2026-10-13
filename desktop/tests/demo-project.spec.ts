@@ -148,7 +148,7 @@ for (const {locale, width} of cases) {
     const rtm = page.locator('[data-pm-rtm]');
     for (const requirement of copy.requirements) await expect(rtm).toContainText(requirement.text);
     await expect(rtm).toContainText(locale === 'zh-TW' ? '未評估' : 'Not assessed');
-    await rtm.locator(`[data-rtm-toggle="${ids.requirements.email}"]`).click();
+    await rtm.locator(width < 800 ? `[data-rtm-requirement="${ids.requirements.email}"]` : `[data-rtm-toggle="${ids.requirements.email}"]`).click();
     await expect(rtm).toContainText(copy.work.email);
     await expect(rtm).toContainText(locale === 'en' ? 'example/membership · Issue #41' : 'example/membership · 議題 #41');
     await rtm.locator(`[data-rtm-select="${ids.work.email}"]`).click();

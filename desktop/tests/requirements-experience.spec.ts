@@ -5,6 +5,13 @@ import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 const order = ['requirements', 'status', 'result', 'blocker', 'delivery', 'details'];
+async function tableFits(page: any) {
+  expect(await page.locator('.pm-requirements-tables, .pm-requirements .ui-data-table').evaluateAll(nodes =>
+    nodes.every(node => node.scrollWidth <= node.clientWidth))).toBe(true);
+  expect(await page.locator('.pm-requirements .ui-data-table :is(th, td):visible').evaluateAll(nodes =>
+    nodes.every(node => node.scrollWidth <= node.clientWidth))).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+}
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`requirements delivery experience ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
@@ -15,11 +22,27 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   const rtm = page.locator('[data-pm-rtm]');
   await expect(rtm.locator('[data-rtm-requirement]')).toHaveCount(8);
   await expect(page.locator('[data-pm-view="requirements"]')).toHaveAttribute('aria-current', 'page');
-  const out = `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
+  await tableFits(page);
+  const emailRow = rtm.locator(`[data-rtm-requirement="${ids.requirements.email}"]`);
+  if (width < 800) {
+    await expect(rtm.locator('thead')).toBeHidden();
+    await expect(emailRow.locator('.pm-requirement-facts')).toContainText(locale === 'en' ? '1 work' : '1 項工作');
+    await expect(emailRow.locator('.pm-requirement-facts')).toContainText(locale === 'en' ? '2 PRs' : '2 個 PR');
+    await expect(emailRow.locator('.pm-requirement-blocker')).toHaveCount(0);
+    await expect(rtm.locator('.pm-requirement-blocker:visible')).toHaveCount(1);
+    // The summary is the only row target; its desktop chevron is hidden.
+    await expect(emailRow.locator('button:visible, a:visible')).toHaveCount(0);
+    await expect(emailRow).toHaveAttribute('tabindex', '0');
+  } else {
+    await expect(emailRow.locator('[data-column=milestone]')).toBeVisible();
+    await expect(emailRow.locator('[data-column=blocker]')).toBeVisible();
+    await expect(emailRow.locator('.pm-requirement-milestone').first()).toHaveAttribute('title', /.+/);
+  }
+  const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/requirements-${locale}-${width}.png`, fullPage: true});
   const search = rtm.locator('input[type=search]'); await search.fill('#41');
   await expect(rtm.locator('[data-rtm-requirement]')).toHaveCount(1);
-  const toggle = rtm.locator(`[data-rtm-toggle="${ids.requirements.email}"]`); await toggle.focus(); await page.keyboard.press('Enter');
+  const toggle = rtm.locator(width < 800 ? `[data-rtm-requirement="${ids.requirements.email}"]` : `[data-rtm-toggle="${ids.requirements.email}"]`); await toggle.focus(); await page.keyboard.press('Enter');
   await expect(toggle).toBeFocused(); await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const work = rtm.locator(`[data-rtm-work="${ids.work.email}"]`); await expect(work).toContainText('×3');
   await expect(work).toContainText('PR #87'); await expect(work).toContainText('PR #91');
@@ -34,16 +57,45 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(pr87).toContainText(locale === 'en' ? 'Deploy' : '部署');
   await expect(inspector.locator('[data-rtm-pr="91"] [data-status=deployed]')).toHaveCount(1);
   await expect(inspector.locator('[data-status=accepted]')).toHaveCount(0);
+  await expect(inspector.locator('[data-work-section=status]')).toContainText(locale === 'en' ? 'Owner · Not recorded' : '負責人 · 未記錄');
+  await expect(inspector.locator('[data-work-section=blocker] p').first()).toHaveText(locale === 'en' ? 'Unknown' : '未知');
+  await expect(inspector.locator('[data-work-section=requirements]')).toContainText(locale === 'en' ? 'Milestone' : '里程碑');
+  if (width >= 1200) {
+    await expect(emailRow.locator('[data-column=milestone]')).toBeHidden();
+    await expect(emailRow.locator('[data-column=blocker]')).toBeHidden();
+    await expect(rtm.locator('th:visible')).toHaveText(['', locale === 'en' ? 'Requirement' : '需求', locale === 'en' ? 'Work' : '工作', 'PR', locale === 'en' ? 'Acceptance' : '驗收', locale === 'en' ? 'Deploy' : '部署']);
+    expect(await emailRow.locator('[data-column=title]').evaluate(node => node.clientWidth)).toBeGreaterThan(180);
+    expect(await emailRow.evaluate(node => {
+      const edge = node.querySelector('[data-column=deploy]')!.getBoundingClientRect().right;
+      return Math.abs(edge - node.getBoundingClientRect().right) < 1;
+    })).toBe(true);
+  }
+  await tableFits(page);
   await page.screenshot({path: `${out}/requirements-inspector-${locale}-${width}.png`, fullPage: false});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.locator('body').innerText()).not.toMatch(/\b(?:undefined|null|NaN|wv_\w+)\b/);
   await page.keyboard.press('Escape'); await expect(select).toBeFocused();
+  if (width >= 800) {await expect(emailRow.locator('[data-column=milestone]')).toBeVisible(); await expect(emailRow.locator('[data-column=blocker]')).toBeVisible();}
+  if (width < 800) {
+    await rtm.getByRole('button', {name: locale === 'en' ? 'Open requirement' : '開啟需求', exact: true}).click();
+    await expect(inspector.locator('[data-work-section=requirements]')).toContainText(fixture.copy.requirements[0].text);
+    await page.keyboard.press('Escape');
+    await expect(rtm.getByRole('button', {name: locale === 'en' ? 'Open requirement' : '開啟需求', exact: true})).toBeFocused();
+    await toggle.focus(); await page.keyboard.press('ArrowLeft'); await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('ArrowRight'); await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  }
   await search.fill('No matching requirement');
   await expect(rtm.locator('[data-rtm-requirement]')).toHaveCount(0);
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${ids.workspaceId}/requirements?select=${ids.work.email}`);
   await expect(inspector.locator('[data-work-attempt]')).toHaveCount(3);
   await expect(search).toHaveValue(''); await expect(select).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(rtm.locator('[data-rtm-requirement][tabindex="0"]')).toHaveCount(1);
+  if (width < 800) {
+    const first = rtm.locator('[data-rtm-requirement]').first(), second = rtm.locator('[data-rtm-requirement]').nth(1);
+    await first.focus(); await page.keyboard.press('ArrowDown'); await expect(second).toBeFocused();
+    await page.keyboard.press('Enter'); await expect(second).toHaveAttribute('aria-expanded', 'true');
+  }
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${ids.workspaceId}/requirements?select=${ids.requirements.email}`);
   await expect(inspector.locator('[data-work-section=requirements]')).toContainText(fixture.copy.requirements[0].text);
   expect(parseDiscussRefs(new URLSearchParams((await inspector.locator('[data-work-discuss]').getAttribute('href'))!.split('?')[1])).refs).toEqual([

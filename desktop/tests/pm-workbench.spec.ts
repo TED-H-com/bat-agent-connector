@@ -143,7 +143,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`workb
   const out=process.env.BATC_WORKBENCH_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/charter-${locale}-${width}.png`,fullPage:true});}
   if(width<1000)await page.locator('#workspace-menu').click();
   await page.locator('[data-pm-view="requirements"]').click();await expect(rtm(page).locator('[data-rtm-requirement]')).toHaveCount(2);
-  await rtm(page).locator('[data-rtm-requirement]').first().getByRole('button').click();await rtm(page).locator('[data-rtm-select]').first().click();
+  const row=rtm(page).locator('[data-rtm-requirement]').first();await (width<800?row:row.getByRole('button')).click();await rtm(page).locator('[data-rtm-work] [data-rtm-select]').first().click();
   await expect(rtm(page).locator('[data-rtm-pr]')).toHaveCount(2);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await rtm(page).innerText()).not.toMatch(/\b(?:undefined|null|wb_\w+)\b/);

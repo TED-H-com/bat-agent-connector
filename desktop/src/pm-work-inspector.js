@@ -102,9 +102,11 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     const requirementRows = requirement ? [requirement] : requirements;
     served.append(...(requirementRows.length ? requirementRows.map(row => h('div', {}, paragraph(firstLabel(row.text, row.id)),
       row.acceptance?.length ? h('ul', {}, ...row.acceptance.map(item => h('li', {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? 'ui_reason_unavailable' : 'wv_no_requirement'))]));
+    if (data.milestones) served.append(paragraph(t('wv_milestone'), ' · ', joinLabel(data.milestones.map(row => row.title)) || t('wv_no_milestone')));
     if (card) {
       state.append(h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)), card.column === 'accepted' ? h('span', {}, t('wv_content_approved')) : null,
-        ...workAgents(source).map(agentMark)), paragraph(t('wv_owner'), ' · ', labelSegment(card.assignment?.actor) || reasonLabel(t, card.assignment?.reason)));
+        ...workAgents(source).map(agentMark)), paragraph(t('wv_owner'), ' · ', labelSegment(card.assignment?.actor) ||
+          (card.assignment?.reason === 'creator_is_not_assignee' ? t('wv_not_recorded') : reasonLabel(t, card.assignment?.reason))));
       for (const session of source.sessions || []) state.append(paragraph(h('a', {
         href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`,
       }, firstLabel(session.title, t('wv_session'))), ' ', session.api_access === 'managed' && session.provenance === 'connector_managed' ? null : statusPill('read_only')));
@@ -122,7 +124,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
             return joinLabel([label.startsWith('pm_kanban_') ? t('pm_kanban_fact') : label, state.startsWith('pm_kanban_') ? t('ui_status_unknown') : state]);
           }))));
       } else result.append(paragraph(t('wv_no_result')));
-      blocker.append(paragraph(blockedWork(card) ? statusPill('blocked') : unknown(), ' ', blockerText(t, card)),
+      blocker.append(paragraph(blockedWork(card) ? statusPill('blocked') : unknown(), blockedWork(card) ? ' ' + blockerText(t, card) : null),
         paragraph(t('wv_next'), ' · ', h('a', {href}, t('wv_discuss'))));
       const groups = prGroups(source.deliveries);
       for (const {target, rows} of groups) delivery.append(h('div', {class: 'pm-work-delivery', 'data-rtm-pr': target.pull_number},
@@ -142,7 +144,8 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
             t('pm_kanban_state_' + labelSegment(row.status)).startsWith('pm_kanban_') ? t('ui_status_unknown') : t('pm_kanban_state_' + labelSegment(row.status))),
           // The existing projection has accepted_at/observed_at, neither proves execution start/end.
           paragraph(h('span', {title: t('wv_unknown_times')}, '— – —')))));
-    } else {state.append(statusPill(data.accepted ? 'accepted' : 'not_assessed')); result.append(paragraph(t('wv_no_result'))); blocker.append(unknown()); delivery.append(paragraph(t('wb_acceptance_separate')));}
+    } else {state.append(statusPill(data.accepted ? 'accepted' : 'not_assessed')); result.append(paragraph(t('wv_no_result')));
+      blocker.append(data.blocker ? paragraph(statusPill('blocked'), ' ', data.blocker) : unknown()); delivery.append(paragraph(t('wb_acceptance_separate')));}
     // Details is last and retains original identities/timing, not a second interpretation.
     const details = disclosure({label: t('wv_details'), body: h('div', {},
       plan?.adoption ? paragraph(t('wb_approved_by', {actor: labelSegment(plan.adoption.adopted_by)}), ' · ', stamp(plan.adoption.created_at)) : null,

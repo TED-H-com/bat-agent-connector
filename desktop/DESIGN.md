@@ -212,6 +212,15 @@ and omits missing label fragments. Header totals require complete catalogues;
 partial reads say “loaded”. Content approval, merge, deployment and requirement
 acceptance are separate states. An unknown blocker is never counted as zero.
 
+Below 800px the shared table's optional `compactRow` renders each requirement as
+one expandable summary target: two-line title, wrapping acceptance/deployment pills,
+work/PR counts and milestone, followed only by recorded blockers. Enter/Space or a
+tap toggles it; Left/Right collapse/expand. The expanded content retains criteria,
+stacked work rows and an Open requirement action. Desktop selection stays unchanged.
+With the inspector docked, Milestone and Next blocker move out of the table; both
+remain in the inspector. Explicit column tracks reclaim that width, milestones
+ellipsis with full titles, PR pills wrap, and Work remains numeric and right-aligned.
+
 Board uses neutral lanes and compact cards with explicit requirement/session
 associations. Search, requirement/agent filters, grouping and collapsed lanes are
 view preferences. Below 800px lanes stack; wider boards scroll horizontally inside
@@ -219,6 +228,14 @@ the board. Arrow keys navigate cards and lanes; Enter opens the inspector. Live
 updates defer lane movement while that lane is hovered or focused, but withdrawal
 removes inaccessible facts immediately. Local transitions are 140ms and respect
 reduced motion.
+
+Card requirement chips are single-line with full titles. Unknown agents and ages
+leave no placeholder. One metadata row holds known agent marks, PR chips, blocker
+flags and a right-aligned age; the status pill appears only outside status grouping.
+PR chip titles retain merge evidence, with full receipts in the inspector. A subtle
+edge fade signals clipped desktop lanes. Opening a card or navigating with arrows
+scrolls it into view inside the board. Inspector facts state unknown/absent values
+once; a recorded blocker retains both its status and reason.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
 six ordered sections: Requirements served; Status & ownership; Latest result;

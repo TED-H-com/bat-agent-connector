@@ -68,7 +68,22 @@
 .ui-data-table tr[aria-selected=true] > td { background: var(--accent-soft); }
 .ui-data-table tr[aria-selected=true] > td:first-child { box-shadow: inset 2px 0 var(--accent); }
 .ui-data-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
-.ui-data-table [aria-expanded=true] .ui-icon { transform: rotate(90deg); }
+.ui-data-table [aria-expanded=true] > .ui-icon,
+.ui-data-table [aria-expanded=true] > .ui-data-table-compact > .ui-icon { transform: rotate(90deg); }
+.ui-data-table-compact { display: none; }
+@media (max-width: 799px) {
+  .ui-data-table-responsive { overflow: visible; }
+  .ui-data-table-responsive table, .ui-data-table-responsive tbody { display: block; }
+  .ui-data-table-responsive thead, .ui-data-table-responsive [data-row-key] > td { display: none; }
+  .ui-data-table-responsive tr:not([hidden]) { display: block; }
+  .ui-data-table-responsive [data-row-key] > .ui-data-table-compact { display: flex; align-items: start; gap: var(--space-2); min-height: 44px; height: auto; padding: var(--space-3); cursor: pointer; }
+  .ui-data-table-compact > .ui-icon { flex: none; margin-top: var(--space-1); transition: transform 140ms ease-out; }
+  .ui-data-table-compact > :last-child { min-width: 0; flex: 1; }
+  .ui-data-table-responsive .ui-data-table-detail > td { display: block; height: auto; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-data-table-compact > .ui-icon { transition: none; }
+}
 @media (max-width: 1199px) {
   .ui-inspector { position: fixed; inset: 0 0 0 auto; max-height: none; z-index: 50; box-shadow: var(--shadow-overlay); }
 }

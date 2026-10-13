@@ -38,6 +38,13 @@ function h$1(tag, attrs = {}, ...children) {
 //#region src/pm-work-view-strings.js
 var workViewStrings = {
 	en: {
+		wv_open_requirement: "Open requirement",
+		wv_not_recorded: "Not recorded",
+		wv_compact_prs_unknown: "PRs unknown",
+		wv_compact_work: "{n} work",
+		wv_compact_prs: "{n} PRs",
+		wv_compact_work_loaded: "{n} work loaded",
+		wv_compact_prs_loaded: "{n} PRs loaded",
 		wv_requirements_unavailable: "Requirement records unavailable",
 		wv_board_unavailable: "Work records unavailable",
 		wv_blocked_one: "1 recorded blocker",
@@ -94,6 +101,13 @@ var workViewStrings = {
 		wv_refresh: "Refresh"
 	},
 	"zh-TW": {
+		wv_open_requirement: "開啟需求",
+		wv_not_recorded: "未記錄",
+		wv_compact_prs_unknown: "PR 未知",
+		wv_compact_work: "{n} 項工作",
+		wv_compact_prs: "{n} 個 PR",
+		wv_compact_work_loaded: "已載入 {n} 項工作",
+		wv_compact_prs_loaded: "已載入 {n} 個 PR",
 		wv_requirements_unavailable: "無法取得需求紀錄",
 		wv_board_unavailable: "無法取得工作紀錄",
 		wv_blocked_one: "1 項已記錄阻礙",
@@ -8853,23 +8867,33 @@ function inspector({ title, onClose = () => {} }) {
 		dispose: close
 	});
 }
-function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {} }) {
-	const tbody = h$1("tbody");
-	const root = h$1("div", {
-		class: "ui-data-table",
-		tabindex: 0
-	}, h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow }) {
+	const compact = () => compactRow && matchMedia("(max-width: 799px)").matches;
+	const keyFor = (row) => typeof rowKey === "function" ? rowKey(row) : row[rowKey];
+	const hasSelection = rows.some((row) => keyFor(row) === selected);
+	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
 		scope: "col",
+		"data-column": column.key,
 		class: column.numeric ? "numeric" : ""
-	}, column.label)))), tbody)), controls = [];
+	}, column.label)))), tbody);
+	const root = h$1("div", {
+		class: "ui-data-table" + (compactRow ? " ui-data-table-responsive" : ""),
+		tabindex: compactRow ? null : 0
+	}, table), controls = [];
 	rows.forEach((row, i) => {
-		const key = typeof rowKey === "function" ? rowKey(row) : row[rowKey], active = key === selected;
+		const key = keyFor(row), active = key === selected;
+		let toggleExpansion;
 		const tr = h$1("tr", {
 			"data-row-key": key,
-			tabindex: active || selected == null && i === 0 ? 0 : -1,
+			tabindex: active || !hasSelection && i === 0 ? 0 : -1,
 			"aria-selected": String(active),
 			onclick: (event) => {
-				if (!event.target.closest("button, a, input, select")) select();
+				if (!event.target.closest("button, a, input, select")) {
+					if (compact() && toggleExpansion) {
+						tr.focus();
+						toggleExpansion();
+					} else select();
+				}
 			}
 		});
 		function select() {
@@ -8881,27 +8905,45 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		}
 		if (expandable) {
 			const open = expanded.has(key);
-			const detail = h$1("tr", { hidden: !open }, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			const detail = h$1("tr", {
+				hidden: !open,
+				class: "ui-data-table-detail"
+			}, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			toggleExpansion = (open = detail.hidden) => {
+				detail.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				if (compactRow) tr.setAttribute("aria-expanded", String(open));
+				toggle.setAttribute("aria-label", t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }));
+				onToggle(key, open);
+			};
 			const toggle = iconButton({
 				icon: "chevron-right",
 				label: t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }),
 				"aria-expanded": String(open),
-				onClick: () => {
-					detail.hidden = !detail.hidden;
-					toggle.setAttribute("aria-expanded", String(!detail.hidden));
-					toggle.setAttribute("aria-label", t(detail.hidden ? "ui_expand" : "ui_collapse", { title: row.title || key }));
-					onToggle(key, !detail.hidden);
-				}
+				onClick: () => toggleExpansion()
 			});
+			if (compactRow) tr.setAttribute("aria-expanded", String(open));
 			tr.append(h$1("td", {}, toggle));
 			tbody.append(tr, detail);
 		} else tbody.append(tr);
-		tr.append(...columns.map((column) => h$1("td", { class: column.numeric ? "numeric" : "" }, column.render ? column.render(row) : row[column.key] ?? "—")));
+		tr.append(...columns.map((column) => h$1("td", {
+			"data-column": column.key,
+			class: column.numeric ? "numeric" : ""
+		}, column.render ? column.render(row) : row[column.key] ?? "—")));
+		if (compactRow) tr.append(h$1("td", {
+			class: "ui-data-table-compact",
+			colspan: columns.length + (expandable ? 1 : 0)
+		}, expandable ? icon("chevron-right") : null, compactRow(row)));
 		tr.addEventListener("keydown", (event) => {
 			if (event.target !== tr) return;
 			if (["Enter", " "].includes(event.key)) {
 				event.preventDefault();
-				select();
+				if (compact() && toggleExpansion) toggleExpansion();
+				else select();
+			}
+			if (compact() && toggleExpansion && ["ArrowRight", "ArrowLeft"].includes(event.key)) {
+				event.preventDefault();
+				toggleExpansion(event.key === "ArrowRight");
 			}
 			if ([
 				"ArrowDown",
@@ -8917,6 +8959,9 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 				controls[next]?.focus();
 			}
 		});
+		tr.addEventListener("focus", () => controls.forEach((node) => {
+			node.tabIndex = node === tr ? 0 : -1;
+		}));
 		controls.push(tr);
 	});
 	return root;
@@ -11503,8 +11548,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		const [served, state, result, blocker, delivery] = sections;
 		const requirementRows = requirement ? [requirement] : requirements;
 		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
+		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
-			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || reasonLabel(t, card.assignment?.reason)));
+			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
 			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
 			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
 			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
@@ -11524,7 +11570,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
 				}))));
 			} else result.append(paragraph(t("wv_no_result")));
-			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), " ", blockerText(t, card)), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
+			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
 			const groups = prGroups(source.deliveries);
 			for (const { target, rows } of groups) delivery.append(h$1("div", {
 				class: "pm-work-delivery",
@@ -11544,7 +11590,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		} else {
 			state.append(statusPill(data.accepted ? "accepted" : "not_assessed"));
 			result.append(paragraph(t("wv_no_result")));
-			blocker.append(unknown());
+			blocker.append(data.blocker ? paragraph(statusPill("blocked"), " ", data.blocker) : unknown());
 			delivery.append(paragraph(t("wb_acceptance_separate")));
 		}
 		const details = disclosure({
@@ -11662,7 +11708,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				selected = null;
 				preference.selected = null;
 				markSelection();
-				if (id) tables.querySelector(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+				if (id) selectionTarget(id)?.focus({ preventScroll: true });
 				const [path, query] = location.hash.split("?"), params = new URLSearchParams(query);
 				params.delete("select");
 				history.replaceState(null, "", path + (params.size ? "?" + params : ""));
@@ -11684,6 +11730,20 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	const deliverySource = (req) => ({ deliveries: [...new Map(linked(req).flatMap((card) => sources.get(card.work_item_id)?.deliveries || []).map((row) => [row.operation_id, row])).values()] });
 	const milestoneFor = (req) => milestones.filter((row) => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
 	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wv_issue", { number: row.document.issue.number })]);
+	const acceptancePill = (req) => statusPill(requirementReviews(plan, req, reviews).length ? "accepted" : "not_assessed");
+	const deployPill = (req) => {
+		const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
+		return statusPill(deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown");
+	};
+	const milestoneLabel = (req) => {
+		const label = milestoneFor(req).map((row) => labelSegment(row.title)).filter(Boolean).join(" · ");
+		return h$1("span", {
+			class: "pm-requirement-milestone",
+			title: label || t("wv_no_milestone"),
+			"aria-label": label || t("wv_no_milestone")
+		}, label || "—");
+	};
+	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
 	function controls() {
 		for (const [kind, button] of Object.entries(moreButtons)) {
 			button.disabled = busy;
@@ -11789,7 +11849,20 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					tables.querySelector(`[data-row-key="${CSS.escape(id)}"]`)?.focus();
 					select(id);
 				},
-				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h3", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
+				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h3", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), h$1("button", {
+					type: "button",
+					class: "ui-button ghost pm-requirement-open",
+					"data-rtm-select": req.id,
+					onclick: () => void select(req.id)
+				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
+				compactRow: (req) => {
+					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
+					const partialPRs = work.some((card) => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
+					return h$1("div", { class: "pm-requirement-summary" }, h$1("span", {
+						class: "pm-requirement-title",
+						title: labelSegment(req.text)
+					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", { "aria-label": t("wv_acceptance") }, acceptancePill(req)), h$1("span", { "aria-label": t("wv_deploy") }, deployPill(req)), h$1("span", {}, t(cursors.work != null ? "wv_compact_work_loaded" : "wv_compact_work", { n: work.length })), h$1("span", {}, t(!feature("engineering_delivery") ? "wv_compact_prs_unknown" : partialPRs ? "wv_compact_prs_loaded" : "wv_compact_prs", { n: prGroups(source.deliveries).length })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
+				},
 				columns: [
 					{
 						key: "title",
@@ -11798,10 +11871,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					{
 						key: "milestone",
 						label: t("wv_milestone"),
-						render: (req) => milestoneFor(req).map((row) => row.title).join(" · ") || h$1("span", {
-							"aria-label": t("wv_no_milestone"),
-							title: t("wv_no_milestone")
-						}, "—")
+						render: milestoneLabel
 					},
 					{
 						key: "work",
@@ -11817,15 +11887,12 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					{
 						key: "acceptance",
 						label: t("wv_acceptance"),
-						render: (req) => statusPill(requirementReviews(plan, req, reviews).length ? "accepted" : "not_assessed")
+						render: acceptancePill
 					},
 					{
 						key: "deploy",
 						label: t("wv_deploy"),
-						render: (req) => {
-							const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
-							return statusPill(deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown");
-						}
+						render: deployPill
 					},
 					{
 						key: "blocker",
@@ -12013,7 +12080,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 			renderTable();
 		}
-		const opener = tables.querySelector(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`);
+		const opener = selectionTarget(id);
 		if (scroll) {
 			opener?.scrollIntoView({ block: "center" });
 			opener?.focus({ preventScroll: true });
@@ -12025,10 +12092,13 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			detail.element.body.replaceChildren(h$1("p", { role: "status" }, t("wb_detail_loading")));
 		}
 		if (requirement) {
+			const blocked = linked(requirement).find(blockedWork);
 			detail.show({
 				title: requirement.text,
 				plan,
 				requirement,
+				milestones: milestoneFor(requirement),
+				blocker: blocked ? blockerText(t, blocked) : null,
 				accepted: requirementReviews(plan, requirement, reviews).length > 0
 			});
 			return;
@@ -12062,6 +12132,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				source: read.get(id),
 				plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : null,
 				issues: issuesFor(data.card),
+				milestones: milestones.filter((row) => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some((id) => data.card.binding.requirement_ids?.includes(id))),
 				requirements: plan?.document?.requirements?.filter((req) => data.card.binding.plan_revision_id === plan.revision_id && data.card.binding.requirement_ids?.includes(req.id)) || [],
 				onMore: () => {
 					deliveryPages++;
@@ -19451,7 +19522,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 	}, ...["status", "milestone"].map((value) => h$1("option", { value }, t("wv_" + value))));
 	group.value = preference.group || "status";
-	const layout = h$1("div", { class: "pm-work-layout" }, h$1("div", { class: "pm-board-content" }, list));
+	const content = h$1("div", { class: "pm-board-content" }, list), layout = h$1("div", { class: "pm-work-layout" }, content);
 	const element = h$1("section", {
 		class: "pm-kanban",
 		"data-pm-kanban": ""
@@ -19476,11 +19547,12 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				preference.selected = null;
 				markSelection();
 			}
+			requestAnimationFrame(updateEdges);
 		}
 	});
 	const note = (key) => h$1("p", { class: "ui-meta" }, t(key));
 	const elapsed = (value) => {
-		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "—";
+		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
 		if (value < 60) return t("pm_kanban_seconds");
 		const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
 		return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
@@ -19572,17 +19644,28 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	}
 	function preview(card) {
 		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
+		const chip = (text) => {
+			const node = contextChip({ text });
+			node.title = text;
+			return node;
+		};
+		const age = elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
 		return [
-			h$1("h3", {}, firstLabel(card.work.title, t("ui_work_item"))),
-			h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => contextChip({ text: firstLabel(req.text, req.id) })) : [contextChip({ text: card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(" · ") : t("wv_no_requirement") })]),
-			h$1("div", { class: "pm-kanban-card-meta" }, h$1("span", { class: "pm-work-inline" }, ...workAgents(source).map(agentMark), !workAgents(source).length ? agentMark(null) : null), h$1("span", { title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age") }, elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds))),
-			h$1("div", { class: "pm-work-inline" }, ...prPills(source), blockedWork(card) ? h$1("span", {
+			h$1("h3", { title: firstLabel(card.work.title, t("ui_work_item")) }, firstLabel(card.work.title, t("ui_work_item"))),
+			h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => chip(firstLabel(req.text, req.id))) : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(" · ") : t("wv_no_requirement"))]),
+			h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+				const node = contextChip({ text: `PR #${target.pull_number}` });
+				node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
+				return node;
+			}), blockedWork(card) ? h$1("span", {
 				class: "pm-board-blocker",
 				tabindex: 0,
 				title: blockerText(t, card),
 				"aria-label": blockerText(t, card)
-			}, icon("circle-alert"), t("ui_status_blocked")) : null),
-			h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))),
+			}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
+				class: "pm-board-age",
+				title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
+			}, age) : null),
 			coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null
 		].filter(Boolean);
 	}
@@ -19620,7 +19703,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					const available = next?.querySelector(".pm-kanban-cards")?.hidden ? [] : [...next?.querySelectorAll("[data-pm-kanban-work]:not([hidden])") || []];
 					target = available[index] || available[0] || next?.querySelector("button");
 				} else target = cards[event.key === "Home" ? 0 : event.key === "End" ? cards.length - 1 : index + (event.key === "ArrowUp" ? -1 : 1)];
-				target?.focus();
+				target?.focus({ preventScroll: true });
+				if (target) revealCard(target);
 			}
 		});
 		return node;
@@ -19661,7 +19745,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 		for (const entry of rows.values()) {
 			const { card, node } = entry;
-			if (entry.pending && (!node.contains(document.activeElement) || node === document.activeElement)) {
+			if ((entry.pending || force) && (!node.contains(document.activeElement) || node === document.activeElement)) {
 				node.replaceChildren(...preview(card));
 				entry.pending = false;
 			}
@@ -19673,6 +19757,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		for (const [key, lane] of currentLanes) if (!groupKeys.includes(key) && !lane.querySelector("[data-pm-kanban-work]")) lane.remove();
 		else lane.querySelector(".pm-kanban-count").textContent = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length;
 		markSelection();
+		requestAnimationFrame(updateEdges);
 	}
 	function markSelection() {
 		for (const { node, card } of rows.values()) node.setAttribute("aria-pressed", String(selected === card.work_item_id));
@@ -19715,16 +19800,22 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		else if (selected && active && detail.element) showDetail(rows.get(selected).card);
 	}
 	function showDetail(card) {
+		const opening = !detail.element;
 		detail.show({
 			title: card.work.title,
 			card,
 			plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null,
 			requirements: requirements(card),
+			milestones: milestones.filter((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id))),
 			source: sources.get(card.work_item_id),
 			onMore: () => {
 				deliveryPages++;
 				select(card.work_item_id, true);
 			}
+		});
+		if (opening) requestAnimationFrame(() => {
+			const node = rows.get(card.work_item_id)?.node;
+			if (selected === card.work_item_id && node?.isConnected && detail.element) revealCard(node);
 		});
 	}
 	async function select(id, retain = false) {
@@ -19738,6 +19829,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (!retain) {
 			detail.show({ title: current.card.work.title });
 			detail.element.body.replaceChildren(note("pm_kanban_detail_loading"));
+			requestAnimationFrame(() => {
+				if (selected === id && current.node.isConnected && detail.element) revealCard(current.node);
+			});
 		}
 		try {
 			const data = await api("GET", `${endpoint}/kanban/${id}`);
@@ -19836,8 +19930,23 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		pages++;
 		await refresh();
 	}
+	function updateEdges() {
+		content.classList.toggle("pm-board-clipped-start", list.scrollLeft > 1);
+		content.classList.toggle("pm-board-clipped-end", list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
+	}
+	function revealCard(node) {
+		node.scrollIntoView({
+			block: "nearest",
+			inline: "nearest",
+			behavior: "instant"
+		});
+		updateEdges();
+	}
+	const resize = new ResizeObserver(updateEdges);
+	resize.observe(list);
 	list.addEventListener("scroll", () => {
 		preference.laneScroll = list.scrollLeft;
+		updateEdges();
 	});
 	function setActive(value) {
 		if (active === value) return;
@@ -19862,7 +19971,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		setTools: (value) => {
 			toolItems = value;
 		},
-		dispose: withdraw
+		dispose: () => {
+			resize.disconnect();
+			withdraw();
+		}
 	};
 }
 //#endregion

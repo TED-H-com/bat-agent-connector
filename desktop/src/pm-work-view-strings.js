@@ -1,5 +1,8 @@
 export const workViewStrings = {
   en: {
+    wv_open_requirement: 'Open requirement', wv_not_recorded: 'Not recorded',
+    wv_compact_prs_unknown: 'PRs unknown',
+    wv_compact_work: '{n} work', wv_compact_prs: '{n} PRs', wv_compact_work_loaded: '{n} work loaded', wv_compact_prs_loaded: '{n} PRs loaded',
     wv_requirements_unavailable: 'Requirement records unavailable', wv_board_unavailable: 'Work records unavailable', wv_blocked_one: '1 recorded blocker',
     wv_issue: 'Issue #{number}', wv_search: 'Search requirements or issues', wv_group: 'Group by', wv_none: 'None', wv_milestone: 'Milestone', wv_phase: 'Phase', wv_status: 'Status',
     wv_requirements_count: '{n} requirements', wv_work_count: '{n} work items', wv_loaded: '{n} loaded', wv_accepted_count: '{n} accepted', wv_blocked_count: '{n} recorded blockers',
@@ -13,6 +16,9 @@ export const workViewStrings = {
     wv_content_approved: 'Content approved', wv_read_only: 'Read-only', wv_source_details: 'Sources and original records', wv_refresh: 'Refresh',
   },
   'zh-TW': {
+    wv_open_requirement: '開啟需求', wv_not_recorded: '未記錄',
+    wv_compact_prs_unknown: 'PR 未知',
+    wv_compact_work: '{n} 項工作', wv_compact_prs: '{n} 個 PR', wv_compact_work_loaded: '已載入 {n} 項工作', wv_compact_prs_loaded: '已載入 {n} 個 PR',
     wv_requirements_unavailable: '無法取得需求紀錄', wv_board_unavailable: '無法取得工作紀錄', wv_blocked_one: '1 項已記錄阻礙',
     wv_issue: '議題 #{number}', wv_search: '搜尋需求或議題', wv_group: '分組方式', wv_none: '不分組', wv_milestone: '里程碑', wv_phase: '階段', wv_status: '狀態',
     wv_requirements_count: '{n} 項需求', wv_work_count: '{n} 項工作', wv_loaded: '已載入 {n} 筆', wv_accepted_count: '{n} 項已驗收', wv_blocked_count: '{n} 項已記錄阻礙',

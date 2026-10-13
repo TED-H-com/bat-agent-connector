@@ -17,7 +17,9 @@ test('central stages form a board with compact cards and accounting available on
   await page.getByText('Board details',{exact:true}).click();
   await expect(page.locator('[data-pm-kanban]')).toContainText('Latest page: 2 WIP');
   await expect(page.locator('[data-pm-kanban]')).toContainText('More work remains outside this page');
-  await expect(row(page,2)).toContainText('In review');
+  await expect(page.locator('[data-pm-kanban-column=review]')).toHaveAttribute('aria-label','In review');
+  await expect(page.locator('[data-pm-kanban-column=review]')).toContainText('Password recovery');
+  await expect(row(page,2).locator('.pm-board-state')).toHaveCount(0);
   await expect(page.getByRole('tab')).toHaveCount(0);
   await expect(page.locator('[draggable=true]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban] input[type=search]')).toHaveCount(1);
@@ -31,7 +33,8 @@ test('pagination deduplicates a rebound work by stable identity without claiming
   await page.getByRole('button',{name:'Load more work',exact:true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
   await expect(row(page,1)).toContainText('explicitly reassociated');
-  await expect(row(page,3)).toContainText('Done');
+  await expect(page.locator('[data-pm-kanban-column=accepted]')).toHaveAttribute('aria-label','Content approved');
+  await expect(page.locator('[data-pm-kanban-column=accepted]')).toContainText('Account settings');
   await row(page,3).click(); await expect(detail(page)).toContainText('DoD unassessed'); await page.keyboard.press('Escape');
   await expect(page.locator('[data-pm-kanban]')).toContainText('Latest page: 1 WIP');
   await expect(page.locator('[data-pm-kanban] .ui-page-header')).toContainText('3 work items');
