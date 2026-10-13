@@ -402,7 +402,8 @@ async def test_fifty_work_items_use_bounded_sql_and_read_snapshot(ops):  # noqa:
     print('50-work overview median seconds:', statistics.median(times), 'SQL/read:', len(statements) / 5)
 
 
-async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served, monkeypatch):  # noqa: F811
+@pytest.mark.parametrize('withdrawal', ['lineage', 'list_filter', 'transition'])
+async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served, monkeypatch, withdrawal):  # noqa: F811
     from tests import test_pm_lifecycle as life
     from tests.test_pm_api import OWNER as API_OWNER
     from tests.test_pm_workspace import member
@@ -416,9 +417,19 @@ async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served,
     pending = d.ops.create(API_OWNER, action='pm.synthetic.invest', target={'workspace_id': ws['workspace_id']},
         params={}, preconditions={}, idempotency_key=uuid.uuid4().hex)[0]
     await life.decide(d.ops, ws['workspace_id'], who=API_OWNER)
-    root = d.ops.db.execute("SELECT operation_id FROM operations WHERE action='pm.workspace.create'").fetchone()[0]
-    d.ops.db.execute('INSERT INTO pm_source_lineage VALUES(?,?,?,?)', ('operation', pending['operation_id'], root, pending['operation_id']))
-    assert not pm_source_lineage.visible(d.ops.db, reader, 'operation', pending['operation_id'])
+    from bat_agent_connector import pm_lifecycle
+    if withdrawal == 'lineage':
+        root = d.ops.db.execute("SELECT operation_id FROM operations WHERE action='pm.workspace.create'").fetchone()[0]
+        d.ops.db.execute('INSERT INTO pm_source_lineage VALUES(?,?,?,?)', ('operation', pending['operation_id'], root, pending['operation_id']))
+        assert not pm_source_lineage.visible(d.ops.db, reader, 'operation', pending['operation_id'])
+    elif withdrawal == 'list_filter':
+        original = pm_lifecycle._visible
+        monkeypatch.setattr(pm_lifecycle, '_visible', lambda db, principal, oid:
+            oid != pending['operation_id'] and original(db, principal, oid))
+        page = pm_lifecycle.list_inflight(d.ops, reader, ws['workspace_id'])
+        assert page['visibility_filtered'] and page['next_cursor'] is None
+    else:
+        monkeypatch.setattr(pm_lifecycle, '_transition_visible', lambda *args: False)
     auth = token(d, reader.actor, *reader.scopes)
     status, http_out = await http(port, 'GET', f"/api/v1/pm/workspaces/{ws['workspace_id']}/overview", tok=auth)
     assert status == 200, http_out
@@ -432,7 +443,8 @@ async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served,
         await fleet.close()
     for result in (http_out, rpc_out, mcp_out):
         assert pending['operation_id'] not in str(result)
-        assert result['coverage']['sources']['lifecycle_inflight']['omitted'] == 1
+        assert result['coverage']['sources']['lifecycle_inflight']['omitted'] == (None if withdrawal == 'transition' else 1)
+        assert {'field': 'lifecycle_inflight', 'reason': 'source_unavailable'} in result['unknown']
         assert not result['coverage']['sources']['lifecycle_inflight']['complete']
         assert result['attention_counts']['decision'] is None and result['attention_truncated']
 

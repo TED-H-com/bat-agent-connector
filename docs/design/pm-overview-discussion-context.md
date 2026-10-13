@@ -62,7 +62,8 @@ Deviation count 的完整性同時依賴 plan、work、roadmap、forecast、qual
 `source_unavailable`，不是 `not_recorded`。沒有維護政策時 findings 為 `not_configured`、涵蓋完整；
 所有來源 stopped／disabled 時為 `not_applicable`、涵蓋完整，因此空 risk 可確實回傳 0。
 隱藏的 lifecycle pending operation 不輸出 ID／狀態，只記 `coverage.sources.lifecycle_inflight.omitted`，
-並將該來源標為不完整。
+並將該來源標為不完整（`source_unavailable`）。這包含 inflight 清單先行過濾的來源；整個 transition
+不可見時 omitted 為 null，不推測筆數。缺少 coverage 的來源不可當作完整。
 
 整份輸出共用既有 64 個 original roots 上限。必要時依序省略 pending operation IDs、quality deviation
 的 work IDs、delivery operation IDs；仍超限時省略最後的 delivery 整列。各受影響來源標記

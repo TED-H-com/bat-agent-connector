@@ -91,12 +91,17 @@ class Projection:
 
     def plan(self):
         from . import pm_plans
+        self.coverage['plan_candidate'] = {'complete': True, 'next_cursor': None}
         if not pm_source_lineage._table(self.ops.db, 'pm_plan_heads'):
+            self.incomplete('plan', 'source_unavailable')
+            self.incomplete('plan_candidate', 'source_unavailable')
             self.missing('progress', 'no_adopted_plan')
             return None, None
         head = pm_plans.head(self.ops.db, self.wid)
         # A withdrawn newer draft must not hide the otherwise visible adopted plan.
         rid = head['accepted_revision_id']
+        if not rid:
+            self.coverage['plan'] = {'complete': True, 'next_cursor': None}
         page = self.source('plan', 'pm_plan_revisions', lambda: pm_plans.get_plan(
             self.ops, self.principal, self.wid, rid)) if rid else None
         plan = page['plan'] if page else None
@@ -240,6 +245,7 @@ class Projection:
 
     def roadmap(self, plan, states):
         from . import pm_roadmap
+        self.coverage['forecast'] = {'complete': True, 'next_cursor': None}
         if not pm_source_lineage._table(self.ops.db, 'pm_roadmap_heads'):
             self.missing('milestones', 'source_unavailable')
             self.coverage['roadmap'] = {'complete': False, 'next_cursor': None}
@@ -378,6 +384,7 @@ class Projection:
 
     def lifecycle(self):
         from . import pm_lifecycle, pm_lifecycle_gates
+        self.coverage['lifecycle_inflight'] = {'complete': True, 'next_cursor': None}
         head = pm_lifecycle_gates.head(self.ops.db, self.wid)
         if head['stage'] is None:
             self.missing('lifecycle', 'not_recorded')
@@ -386,9 +393,14 @@ class Projection:
             row = pm_lifecycle._transition(self.ops.db, self.wid, head['transition_id'])
             if not pm_lifecycle._transition_visible(self.ops.db, self.principal, row):
                 self.missing('lifecycle', 'source_unavailable')
+                self.incomplete('lifecycle_inflight', 'source_unavailable')
+                self.coverage['lifecycle_inflight']['omitted'] = None
                 return None
             page = self.source('lifecycle_inflight', 'pm_lifecycle_inflight', lambda: pm_lifecycle.list_inflight(
                 self.ops, self.principal, self.wid, limit=20))
+            if page and page.get('visibility_filtered'):
+                self.incomplete('lifecycle_inflight', 'source_unavailable')
+                self.coverage['lifecycle_inflight']['omitted'] = page['omitted']
             pending = [item for item in page['inflight'] if item and item['disposition'] in {'unresolved', 'held'}] if page else []
             visible = []
             for item in pending:
@@ -403,7 +415,7 @@ class Projection:
             omitted = len(pending) - len(visible)
             if omitted:
                 self.incomplete('lifecycle_inflight', 'source_unavailable')
-                self.coverage['lifecycle_inflight']['omitted'] = omitted
+                self.coverage['lifecycle_inflight']['omitted'] = omitted + (page.get('omitted') or 0)
             pending = visible
             if pending:
                 self.add('decision', row['reason'], {'kind': 'lifecycle_transition', 'id': head['transition_id']},
@@ -466,7 +478,7 @@ class Projection:
         complete = all(value['complete'] for value in self.coverage.values())
         groups = {'blocker': ('governance',), 'decision': ('governance', 'plan_candidate', 'proposals', 'lifecycle_inflight'),
                   'deviation': ('plan', 'work', 'roadmap', 'forecast', 'quality'), 'risk': ('governance', 'findings')}
-        attention_complete = {kind: all(self.coverage.get(k, {'complete': True})['complete'] for k in sources)
+        attention_complete = {kind: all(self.coverage.get(k, {'complete': False})['complete'] for k in sources)
                               for kind, sources in groups.items()}
         return {**output,
             'attention_truncated': len(attention) > ATTENTION_LIMIT or not all(attention_complete.values())

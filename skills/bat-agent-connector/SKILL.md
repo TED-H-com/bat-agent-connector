@@ -1574,6 +1574,8 @@ clears a revoked-quality deviation. No maintenance policy means complete
 not_configured findings, not an unavailable source. source_limit means references
 were omitted to respect the whole document's lineage bound; never infer totals.
 Source cursors belong to existing source-list tools, not to the overview call.
+Hidden lifecycle inflight sources remain incomplete, including rows filtered by
+the source list; omitted is null when the transition itself is unavailable.
 Reads never collect or dispatch.
 
 `pm.thread.create` accepts ordered `context` refs (at most eight) in addition to

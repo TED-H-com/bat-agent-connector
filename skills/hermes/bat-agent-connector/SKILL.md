@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "368a36de82ecdbc26a33bb54d5edd9c0d8312445160b4293893aa303ba654cf7"
+  canonical_sha256: "d73b37f247e36e5253e25dbf349101c493e9a61d3faf5f3aa6db33af899a3cd7"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1597,6 +1597,8 @@ clears a revoked-quality deviation. No maintenance policy means complete
 not_configured findings, not an unavailable source. source_limit means references
 were omitted to respect the whole document's lineage bound; never infer totals.
 Source cursors belong to existing source-list tools, not to the overview call.
+Hidden lifecycle inflight sources remain incomplete, including rows filtered by
+the source list; omitted is null when the transition itself is unavailable.
 Reads never collect or dispatch.
 
 `pm.thread.create` accepts ordered `context` refs (at most eight) in addition to
