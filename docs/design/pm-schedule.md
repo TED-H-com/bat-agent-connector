@@ -86,7 +86,7 @@ Operation attempt 的結束時刻：成功用狀態為 `succeeded` 的步驟 `fi
 
 ## 可見性
 
-操作、session、task 沿用 evidence 的可見性；issue 沿用 mapping 的來源檢查。工作項目在計入上限之前先過 `pm_source_lineage.visible`；409 也算隱藏。看不到的紀錄不影響列、日期、順序或標籤。來源撤回後，該列和由它算出的起訖一起消失，下一次讀取也不會再出現。隱藏的工作、它的 attempt 與掛在它上面的 issue 一起不出現。隱藏工作的 id 不出現在列 id、`parent_id`、attempt id 或游標。預設讀取與帶 `after` 的讀取都是 200；不能用狀態碼判斷某個 id 在不在。Session 或 task 的 lineage 查詢若丟出 `OperationError`，只隱藏那一筆，整頁仍然回來。
+操作、session、task 沿用 evidence 的可見性；issue 沿用 mapping 的來源檢查。工作項目在計入上限之前先過 `pm_source_lineage.visible`；409 也算隱藏。計畫讀取的 409 與單筆 issue 對應的 lineage 409 同樣只隱藏那一筆，不讓整頁失敗。看不到的紀錄不影響列、日期、順序或標籤。來源撤回後，該列和由它算出的起訖一起消失，下一次讀取也不會再出現。隱藏的工作、它的 attempt 與掛在它上面的 issue 一起不出現。隱藏工作的 id 不出現在列 id、`parent_id`、attempt id 或游標。預設讀取與帶 `after` 的讀取都是 200；不能用狀態碼判斷某個 id 在不在。Session 或 task 的 lineage 查詢若丟出 `OperationError`，只隱藏那一筆，整頁仍然回來。
 
 Session 連結還在、`sessions_observed` 沒有該列、而且 `pm_evidence._session_visible` 為真時，仍列出 attempt。狀態是 `unknown`，標題是 session id，`refs.session` 是 `{host, session_id, read_only: true}`，沒有 baseline、forecast 或 actual，並記 `attempt.session` / `session_not_observed`。沒有觀察列就沒有 provenance，所以不能標成 managed。不可見的 session 不列，只把 `visibility_filtered` 設為 true；先查可見性，不靠觀察列是否存在。
 

@@ -260,7 +260,7 @@ def _plan(ops, principal, workspace_id, revision, coverage):
         except OperationError as error:
             if error.status == 403:
                 raise
-            if error.status == 404:
+            if error.status in (404, 409):
                 coverage["visibility_filtered"] = True
                 return None
             raise

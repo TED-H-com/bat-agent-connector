@@ -902,7 +902,8 @@ async def test_issue_rows_keep_titles_cancelled_state_and_plan_revision(ops, mon
     assert not any(node["kind"] == "issue" for node in nodes(hidden))
 
 
-def _tracked_issue(service, wid, work_id, binding, title, *, mapping_id, package_id, revision_id, operation_id):
+def _tracked_issue(service, wid, work_id, binding, title, *, mapping_id, package_id, revision_id, operation_id,
+                  evidence_refs=None):
     """Insert one digest-valid package and issue revision that list_mappings can read."""
     row = service.db.execute("SELECT * FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?",
                              (wid, binding["binding_id"])).fetchone()
@@ -918,7 +919,7 @@ def _tracked_issue(service, wid, work_id, binding, title, *, mapping_id, package
                             "binding_document_digest": pm_work_packages._digest(parsed),
                             "work_version": item_row["version"], "work_fingerprint": work_items.fingerprint(item_row),
                             "project_version": project["version"]},
-               "evidence_refs": [], "dod_ref": None, "git_binding": None}
+               "evidence_refs": list(evidence_refs or []), "dod_ref": None, "git_binding": None}
     package_op = "op_" + package_id[-32:]
     document = {"workspace_id": wid, "package_id": package_id, "work_item_id": work_id,
                 "previous_package_id": None, "operation_id": package_op, "context": context}
@@ -963,6 +964,60 @@ async def test_hidden_work_issue_does_not_consume_the_issue_cap(ops, monkeypatch
     assert hidden["work_item_id"] not in json.dumps(body)
     assert body["coverage"]["issues_truncated"] is False and body["partial"] is False
     assert body["coverage"]["visibility_filtered"] is True
+
+
+def corrupt_plan_digest(service, revision_id):
+    service.db.execute("DROP TRIGGER IF EXISTS pm_plan_revisions_update_immutable")
+    service.db.execute("UPDATE pm_plan_revisions SET document_digest=? WHERE revision_id=?", ("0" * 64, revision_id))
+    service.db.execute("CREATE TRIGGER pm_plan_revisions_update_immutable BEFORE UPDATE ON pm_plan_revisions "
+                       "BEGIN SELECT RAISE(ABORT, 'PM plan history is immutable'); END")
+
+
+async def test_a_corrupt_plan_is_hidden_instead_of_failing_the_read(ops):
+    target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
+        {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
+    wid, rev = target["workspace_id"], saved["revision_id"]
+    work = await work_for(ops, target)
+    await bind_work(ops, work, plan_revision_id=rev, requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone({"revision_id": rev}, requirement_ids=["login", "billing"])])
+    corrupt_plan_digest(ops, rev)
+    body = check(schedule(ops, wid), wid)
+    assert f"requirement:{rev}:login" not in by_id(body)
+    assert f"requirement:{rev}:billing" not in by_id(body)
+    assert "milestone:release" in by_id(body)
+    assert body["coverage"]["visibility_filtered"] is True
+    assert body["partial"] is False
+
+
+async def test_one_lineage_limit_hides_one_issue_mapping(ops):
+    target, plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pm_source_lineage.schema(ops.journal)
+    pm_evidence_id = "pme_" + "c" * 32
+    ref = "mock-host/lineage-session"
+    for index in range(65):
+        original = "op_" + f"{index:032x}"
+        ops.db.execute("INSERT INTO pm_source_lineage VALUES('session',?,?,?)", (ref, original, original))
+    server_id = ops.db.execute("SELECT server_id FROM pm_workspaces WHERE workspace_id=?", (wid,)).fetchone()[0]
+    ops.db.execute("""INSERT INTO pm_evidence(evidence_id,server_id,workspace_id,source_kind,source_id,fact_digest,
+        source_observed_at,captured_at,journal_cursor,document,access_operations) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        (pm_evidence_id, server_id, wid, "session_observation", ref, "e" * 64, 1.0, 1.0, 1,
+         json.dumps({"facts": {"resource_id": ref}}), "[]"))
+    _tracked_issue(ops, wid, work["work_item_id"], binding, "Blocked by lineage",
+                   mapping_id="pmim_" + "c" * 32, package_id="pmwp_" + "c" * 32,
+                   revision_id="pmir_" + "c" * 32, operation_id="op_" + "c" * 16,
+                   evidence_refs=[{"evidence_id": pm_evidence_id, "fact_digest": "e" * 64}])
+    _tracked_issue(ops, wid, work["work_item_id"], binding, "Visible issue",
+                   mapping_id="pmim_" + "d" * 32, package_id="pmwp_" + "d" * 32,
+                   revision_id="pmir_" + "d" * 32, operation_id="op_" + "d" * 16)
+    listed = pm_issue_mappings.list_mappings(ops, OWNER, wid)
+    assert [row["mapping_id"] for row in listed["mappings"]] == ["pmim_" + "d" * 32]
+    assert listed["coverage"]["visibility_filtered"] is True
+    body = check(schedule(ops, wid), wid)
+    assert f"issue:pmim_{'d' * 32}" in by_id(body)
+    assert f"issue:pmim_{'c' * 32}" not in by_id(body)
+    assert body["coverage"]["visibility_filtered"] is True
+    assert body["partial"] is False
 
 
 async def test_schedule_cursor_round_trips_any_session_id(ops):

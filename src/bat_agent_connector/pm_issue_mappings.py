@@ -497,7 +497,8 @@ def list_mappings(ops, principal, workspace_id, *, after=0, limit=50):
                 _access(ops, principal, workspace_id, rows)
                 result["mappings"].append(rows[-1])
             except OperationError as error:
-                if error.status != 404:
+                # A lineage limit on one mapping must not fail the rest of the page.
+                if error.status not in (404, 409):
                     raise
                 result["coverage"]["visibility_filtered"] = True
             more = index + 1 < len(ids)
