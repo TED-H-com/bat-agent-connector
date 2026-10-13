@@ -67,7 +67,7 @@ test('a purported valid proposal with an empty candidate key fails closed',async
   await expect(panel(page)).toContainText('does not match its original discussion or sources');await expect(editor(page)).toHaveCount(0);expect(f.state.writes).toEqual([]);
 });
 test('known baseline changes preserve edits and refuse a fresh adoption',async({page})=>{
-  const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);await editor(page).getByLabel('Plan title',{exact:true}).fill('Retained draft');f.state.head.version++;
+  const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);await editor(page).getByLabel('Plan title',{exact:true}).fill('Retained draft');f.state.head.version++;f.state.proposals[0].adoptable=false;f.state.proposals[0].adoptable_reason='plan_head_changed';
   await page.evaluate(()=>(window as any).proposalRefresh());await expect(editor(page).getByLabel('Plan title',{exact:true})).toHaveValue('Retained draft');await expect(editor(page)).toContainText('discussion or plan has changed');await expect(editor(page).locator('button[type=submit]')).toBeDisabled();
 });
 test('unknown admission retries the exact original key after the discussion moves',async({page})=>{
@@ -113,7 +113,25 @@ test('a proposal that omits original commitments without declaring removal fails
   await mountProposal(page,f);await panel(page).getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);await expect(panel(page)).toContainText('does not match its original discussion or sources');await expect(editor(page)).toHaveCount(0);
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`proposal review ${locale} ${width}`,async({page},info)=>{
-  const f=proposalFixture();f.save();await page.setViewportSize({width,height:900});await mountProposal(page,f,locale);await panel(page).locator('select').filter({has:page.locator(`option[value="${proposalId}"]`)}).selectOption(proposalId);await expect(editor(page)).toBeVisible();
+  const f=proposalFixture();f.save();await page.setViewportSize({width,height:width===390?844:900});await mountProposal(page,f,locale);await panel(page).locator('select').filter({has:page.locator(`option[value="${proposalId}"]`)}).selectOption(proposalId);await expect(editor(page)).toBeVisible();
   expect(await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(node=>node.getBoundingClientRect().right>innerWidth+1).map(node=>({tag:node.tagName,class:node.className})))).toEqual([]);
   expect(await panel(page).innerText()).not.toMatch(/pcp_[a-z_]+/);const out=process.env.BATC_PM_PROPOSAL_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/proposal-${locale}-${width}.png`,fullPage:true});
+});
+
+for(const locale of ['en','zh-TW'])for(const width of [390,1440])test(`central adoptability survives rename and withdraws on content change ${locale} ${width}`,async({page},info)=>{
+  const f=proposalFixture(),p=f.save();await page.setViewportSize({width,height:width===390?844:900});await mountProposal(page,f,locale);
+  await panel(page).locator('select').filter({has:page.locator(`option[value="${proposalId}"]`)}).selectOption(proposalId);
+  const form=editor(page);await expect(form).toBeVisible();
+  await form.locator('textarea').last().fill('Owner rationale / 採用理由');
+  f.state.thread.thread.version++;f.state.thread.thread.title='Renamed discussion';
+  await page.evaluate(()=>(window as any).proposalRefresh());
+  await expect(form.locator('button[type=submit]')).toBeEnabled();
+  const out=process.env.BATC_PM_PROPOSAL_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
+  await page.screenshot({path:`${out}/renamed-adoptable-${locale}-${width}.png`,fullPage:true});
+  f.state.thread.thread.version++;p.adoptable=false;p.adoptable_reason='content_changed';
+  await page.evaluate(()=>(window as any).proposalRefresh());
+  await expect(form.locator('button[type=submit]')).toBeDisabled();
+  await expect(form.locator('textarea').last()).toHaveValue('Owner rationale / 採用理由');
+  expect(f.state.writes).toEqual([]);
+  await page.screenshot({path:`${out}/content-changed-${locale}-${width}.png`,fullPage:true});
 });

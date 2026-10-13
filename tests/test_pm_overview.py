@@ -262,6 +262,32 @@ async def test_reacceptance_clears_superseded_revocation(reviewed):
     assert not any(a.get('reason') == 'quality_revoked' for a in result['attention'])
 
 
+@pytest.mark.parametrize('revoke_unassessed', [False, True])
+async def test_revocation_survives_open_review_until_reaccepted(reviewed, revoke_unassessed):
+    w, service = reviewed, reviewed['d'].ops
+    old = await _revoked(w)
+    before = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    deviation = next(a for a in before['attention'] if a.get('reason') == 'quality_revoked')
+    newer = await quality.new_review(w, previous=old['review_id'])
+    opened = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    assert opened['attention_counts']['deviation'] == 1
+    assert opened['progress']['accepted'] == 0 and opened['progress']['in_review'] == 1
+    assert next(a for a in opened['attention'] if a.get('reason') == 'quality_revoked') == deviation
+    if revoke_unassessed:
+        await quality.execute(w, dict(action=quality.quality.REVOKE,
+            target={'workspace_id': w['workspace_id'], 'review_id': newer['review_id']},
+            params={'reason': 'Close the unassessed round'}, preconditions={'expected_version': 1},
+            idempotency_key=uuid.uuid4().hex), actor=quality.REVIEWER)
+        newer = await quality.new_review(w, previous=newer['review_id'])
+        still_revoked = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+        assert still_revoked['attention_counts']['deviation'] == 1
+    await quality.execute(w, quality.assessment(w, newer), actor=quality.REVIEWER)
+    accepted = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    assert accepted['progress']['accepted'] == 1
+    assert accepted['attention_counts']['deviation'] == 0
+    assert not any(a.get('reason') == 'quality_revoked' for a in accepted['attention'])
+
+
 async def test_quality_history_does_not_consume_current_review_budget(reviewed):
     w, service = reviewed, reviewed['d'].ops
     for dod in (False, True):
@@ -402,7 +428,8 @@ async def test_fifty_work_items_use_bounded_sql_and_read_snapshot(ops):  # noqa:
     print('50-work overview median seconds:', statistics.median(times), 'SQL/read:', len(statements) / 5)
 
 
-async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served, monkeypatch):  # noqa: F811
+@pytest.mark.parametrize('withdrawal', ['lineage', 'list_filter', 'transition'])
+async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served, monkeypatch, withdrawal):  # noqa: F811
     from tests import test_pm_lifecycle as life
     from tests.test_pm_api import OWNER as API_OWNER
     from tests.test_pm_workspace import member
@@ -416,9 +443,19 @@ async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served,
     pending = d.ops.create(API_OWNER, action='pm.synthetic.invest', target={'workspace_id': ws['workspace_id']},
         params={}, preconditions={}, idempotency_key=uuid.uuid4().hex)[0]
     await life.decide(d.ops, ws['workspace_id'], who=API_OWNER)
-    root = d.ops.db.execute("SELECT operation_id FROM operations WHERE action='pm.workspace.create'").fetchone()[0]
-    d.ops.db.execute('INSERT INTO pm_source_lineage VALUES(?,?,?,?)', ('operation', pending['operation_id'], root, pending['operation_id']))
-    assert not pm_source_lineage.visible(d.ops.db, reader, 'operation', pending['operation_id'])
+    from bat_agent_connector import pm_lifecycle
+    if withdrawal == 'lineage':
+        root = d.ops.db.execute("SELECT operation_id FROM operations WHERE action='pm.workspace.create'").fetchone()[0]
+        d.ops.db.execute('INSERT INTO pm_source_lineage VALUES(?,?,?,?)', ('operation', pending['operation_id'], root, pending['operation_id']))
+        assert not pm_source_lineage.visible(d.ops.db, reader, 'operation', pending['operation_id'])
+    elif withdrawal == 'list_filter':
+        original = pm_lifecycle._visible
+        monkeypatch.setattr(pm_lifecycle, '_visible', lambda db, principal, oid:
+            oid != pending['operation_id'] and original(db, principal, oid))
+        page = pm_lifecycle.list_inflight(d.ops, reader, ws['workspace_id'])
+        assert page['visibility_filtered'] and page['next_cursor'] is None
+    else:
+        monkeypatch.setattr(pm_lifecycle, '_transition_visible', lambda *args: False)
     auth = token(d, reader.actor, *reader.scopes)
     status, http_out = await http(port, 'GET', f"/api/v1/pm/workspaces/{ws['workspace_id']}/overview", tok=auth)
     assert status == 200, http_out
@@ -432,7 +469,8 @@ async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served,
         await fleet.close()
     for result in (http_out, rpc_out, mcp_out):
         assert pending['operation_id'] not in str(result)
-        assert result['coverage']['sources']['lifecycle_inflight']['omitted'] == 1
+        assert result['coverage']['sources']['lifecycle_inflight']['omitted'] == (None if withdrawal == 'transition' else 1)
+        assert {'field': 'lifecycle_inflight', 'reason': 'source_unavailable'} in result['unknown']
         assert not result['coverage']['sources']['lifecycle_inflight']['complete']
         assert result['attention_counts']['decision'] is None and result['attention_truncated']
 
@@ -498,7 +536,7 @@ async def test_overview_budgets_combined_work_and_operation_roots(delivery_ready
     out = pm_overview.read(service, delivery_tests.DELIVERER, w['workspace_id'])
     assert pm_source_lineage.read_response(service.db, delivery_tests.DELIVERER, out) == out
     assert len(out['recent_deliveries']) == 2
-    assert out['attention_truncated'] and not out['recent_deliveries_complete']
+    assert out['attention_truncated'] and out['recent_deliveries_complete']
     assert any(u['reason'] == 'source_limit' for u in out['unknown'])
     # Also exercise the ordered shedding when pending and deviation references
     # accompany deliveries; these use the very same explicit central lineages.
@@ -510,5 +548,74 @@ async def test_overview_budgets_combined_work_and_operation_roots(delivery_ready
     assert len(pm_source_lineage.document_roots(service.db, output)) <= 64
     assert all('operation_id' not in row for row in output['attention'][0]['pending_operations'])
     assert all('work_item_id' not in row['context'] for row in output['attention'][1:])
-    assert {'field': 'quality', 'reason': 'source_limit'} in projection.unknown
-    assert {'field': 'lifecycle_inflight', 'reason': 'source_limit'} in projection.unknown
+    assert projection.unknown == [{'field': 'attention_references', 'reason': 'source_limit'}]
+
+
+async def test_trimming_attention_references_preserves_complete_source_counts(reviewed, monkeypatch):
+    w, service = reviewed, reviewed['d'].ops
+    await _revoked(w)
+    before = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    original = pm_source_lineage.document_roots
+
+    def limited(db, value):
+        if isinstance(value, dict) and 'attention' in value and 'recent_deliveries' in value and any(
+                'work_item_id' in item['context'] for item in value['attention'] if item.get('reason') == 'quality_revoked'):
+            raise OperationError('PM_SOURCE_LINEAGE_LIMIT', 'Fixture union exceeds the document budget', 409)
+        return original(db, value)
+
+    monkeypatch.setattr(pm_source_lineage, 'document_roots', limited)
+    after = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    assert before['progress']['complete'] and before['progress']['in_review'] == 1
+    assert after['progress'] == before['progress']
+    assert after['attention_counts'] == before['attention_counts']
+    assert after['recent_deliveries_complete'] == before['recent_deliveries_complete'] is True
+    assert after['coverage']['sources']['quality']['complete']
+    assert after['attention_truncated']
+    assert not after['coverage']['sources']['attention_references']['complete']
+    assert after['unknown'] == [*before['unknown'], {'field': 'attention_references', 'reason': 'source_limit'}]
+    assert all('work_item_id' not in item['context'] for item in after['attention'] if item.get('reason') == 'quality_revoked')
+    assert len(pm_source_lineage.document_roots(service.db, after)) <= 64
+
+
+@pytest.mark.parametrize('status', [409, 413])
+@pytest.mark.parametrize('source', ['plan', 'pending'])
+async def test_size_limits_are_incomplete_not_unavailable(ops, monkeypatch, status, source):  # noqa: F811
+    from bat_agent_connector import pm_lifecycle, pm_plans
+    from tests import test_pm_lifecycle as life
+
+    def limited(*args, **kwargs):
+        raise OperationError('SOURCE_LIMIT', 'Fixture source exceeds its bound', status)
+
+    if source == 'plan':
+        target, _ = await origins(ops)
+        wid = target['workspace_id']
+        monkeypatch.setattr(pm_plans, 'get_plan', limited)
+        fields = ('plan', 'progress')
+    else:
+        pm_lifecycle.install(ops)
+        wid = (await workspace(ops))['workspace_id']
+        async def effect(ctx):
+            return {}
+        life.register(ops, effect)
+        pending = life.submit(ops, wid)
+        await life.decide(ops, wid)
+        original = pm_source_lineage.visible
+        def visibility(db, principal, kind, identity):
+            if kind == 'operation' and identity == pending['operation_id']:
+                return limited()
+            return original(db, principal, kind, identity)
+        monkeypatch.setattr(pm_source_lineage, 'visible', visibility)
+        fields = ('lifecycle_inflight',)
+    result = pm_overview.read(ops, OWNER, wid)
+    for field in fields:
+        assert {'field': field, 'reason': 'source_incomplete'} in result['unknown']
+        assert {'field': field, 'reason': 'source_unavailable'} not in result['unknown']
+    assert not result['coverage']['sources'][fields[0]]['complete']
+    if source == 'plan':
+        assert result['plan'] is result['progress'] is None
+        assert result['attention_counts']['deviation'] is None
+    else:
+        assert result['coverage']['sources']['lifecycle_inflight']['omitted'] == 1
+        assert result['attention_counts']['decision'] is None
+        assert pending['operation_id'] not in str(result)
+    assert result['attention_truncated']

@@ -17,7 +17,7 @@ export function proposalFixture(){
     requirements:[{id:'member_login',source_key:'login',acceptance_keys:['reset'],priority:'must',depends_on:[]}],removed_requirement_ids:[],
     questions:[{question:'Which identity provider is already in use?',why_now:'Its reset behavior affects implementation.',source_refs:['message.owner']}]};
     const proposal={proposal_id:proposalId,thread_id:threadId,workspace_id:workspaceId,operation_id:'op_'+'3'.repeat(32),run_id:'pmr_'+'5'.repeat(32),document_digest:'a'.repeat(64),
-      raw_reply:JSON.stringify(document),validation:{status:'format_valid',errors:[]},document,context:{thread_version:4,plan_head:structuredClone(state.head),accepted_plan:null,
+      adoptable:true,adoptable_reason:null,raw_reply:JSON.stringify(document),validation:{status:'format_valid',errors:[]},document,context:{thread_version:4,plan_head:structuredClone(state.head),accepted_plan:null,
         source_references:{'message.owner':{kind:'message',id:'pmm_'+'6'.repeat(32),quote:'付費會員要能登入與忘記密碼；這輪不要推薦碼。 <img src=x onerror=alert(1)>',digest:'b'.repeat(64)}},coverage:{complete:true}}};
     state.proposals=[proposal];return proposal;};
   const dispatch=async(input:any)=>{const url=new URL(input.path,'http://fixture'),pathname=url.pathname;
@@ -27,7 +27,7 @@ export function proposalFixture(){
     if(input.method==='GET'){
       if(state.gate)await state.gate;
       if(pathname.endsWith('/plans'))return {status:200,data:{workspace_id:workspaceId,head:structuredClone(state.head),revisions:[]}};
-      if(pathname.endsWith('/conversation-proposals')){const partial=state.partial&&!url.searchParams.get('after')?.match(/[1-9]/);return {status:200,data:{version:1,workspace_id:workspaceId,proposals:partial?[]:state.proposals.map((p:any)=>({proposal_id:p.proposal_id,thread_id:p.thread_id,operation_id:p.operation_id,run_id:p.run_id,document_digest:p.document_digest,validation:p.validation})),next_cursor:partial?4:null,coverage:{visibility_filtered:partial}}};}
+      if(pathname.endsWith('/conversation-proposals')){const partial=state.partial&&!url.searchParams.get('after')?.match(/[1-9]/);return {status:200,data:{version:1,workspace_id:workspaceId,proposals:partial?[]:state.proposals.map((p:any)=>({proposal_id:p.proposal_id,thread_id:p.thread_id,operation_id:p.operation_id,run_id:p.run_id,document_digest:p.document_digest,validation:p.validation,adoptable:p.adoptable,adoptable_reason:p.adoptable_reason})),next_cursor:partial?4:null,coverage:{visibility_filtered:partial}}};}
       if(pathname.includes('/conversation-proposals/'))return {status:200,data:{version:1,workspace_id:workspaceId,proposal:structuredClone(state.proposals.find((p:any)=>pathname.endsWith(p.proposal_id)))}};
       if(pathname.startsWith('/operations/')){const op=[...state.ops.values()].find((op:any)=>pathname.endsWith(op.operation_id));return {status:200,data:{operation:structuredClone(op)}};}
     }
