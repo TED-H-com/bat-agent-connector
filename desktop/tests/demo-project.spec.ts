@@ -35,8 +35,8 @@ async function expectNoJunk(page: Page) {
 }
 
 const viewTitle = {
-  en: {overview: 'Overview', discussions: 'Discussions', requirements: 'Requirements', schedule: 'Schedule', dependencies: 'Dependencies', agents: 'Agents', board: 'Board'},
-  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', dependencies: '技術相依', agents: 'Agent 資源', board: '工作看板'},
+  en: {overview: 'Overview', discussions: 'Discussions', requirements: 'Requirements', schedule: 'Schedule', dependencies: 'Dependencies', issues: 'Issues & changes', agents: 'Agents', board: 'Board'},
+  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', dependencies: '技術相依', issues: '問題與變更', agents: 'Agent 資源', board: '工作看板'},
 } as const;
 
 type DemoLocale = keyof typeof viewTitle;
@@ -65,12 +65,12 @@ async function expectView(page: Page, locale: DemoLocale, width: number, view: P
   for (const [selector, visible] of [
     ['[data-overview-discuss]', view === 'overview'], ['[data-pm-report-menu]', view === 'overview'],
     ['[data-schedule-tools]', view === 'schedule'], ['[data-dep-capture]', view === 'dependencies'],
-    ['[data-dependencies-meta]', view === 'dependencies'],
+    ['[data-dependencies-meta]', view === 'dependencies'], ['[data-pm-header-meta]', view === 'issues'],
+    ['[data-pm-overflow]', view === 'overview' || view === 'issues'],
   ] as const) {
     if (visible) await expect(page.locator(selector)).toBeVisible();
     else await expect(page.locator(selector)).toBeHidden();
   }
-  if (view !== 'overview') await expect(page.locator('[data-pm-overflow]')).toBeHidden();
   await expect(page.locator(`[data-pm-view="${view}"]`)).toHaveAttribute('aria-current', 'page');
 }
 
@@ -113,6 +113,25 @@ test('unknown demo routes fail loudly and pages keep their cursors', async () =>
   expect(deliveries.data.next_after).toBeNull();
   expect(deliveries.data.deliveries[0]).not.toHaveProperty('seq');
   expect(deliveries.data.requirement_acceptance).toBe('not_evaluated_by_delivery');
+  const register = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?limit=50`});
+  expect(register.status).toBe(200);
+  expect(register.data.rows).toHaveLength(3);
+  expect(register.data.next_cursor).toBe('cmVnMQ');
+  expect(register.data.coverage.complete).toBe(true);
+  expect(register.data.total_by_type).toEqual({risk: 1, issue: 2, action: 1, change: 1, decision: 1});
+  expect(register.data.summary.blocking_reasons).toHaveLength(1);
+  const registerNext = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?after=${register.data.next_cursor}&limit=50`});
+  expect(registerNext.data.rows).toHaveLength(3);
+  expect(registerNext.data.next_cursor).toBeNull();
+  const registerPartial = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?owner=unavailable-source&limit=50`});
+  expect(registerPartial.data.coverage.complete).toBe(false);
+  expect(registerPartial.data.total_by_type).toBeNull();
+  expect(registerPartial.data.summary).toBeNull();
+  const registerChange = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?type=change&limit=50`});
+  expect(registerChange.data.summary.blocking_reasons).toEqual([]);
+  expect(registerChange.data.coverage.blocked_without_reason).toBe(0);
+  const registerEmpty = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?q=&limit=50`});
+  expect(registerEmpty.status).toBe(400);
   const other = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/work/${ids.work.audit}/deliveries`});
   expect(other.data.deliveries).toEqual([]);
   expect(demoRoute('board')).toBe(demoRoute('charter'));
@@ -122,7 +141,7 @@ test('unknown demo routes fail loudly and pages keep their cursors', async () =>
 });
 
 for (const {locale, width} of cases) {
-  test(`Overview opens a bound discussion draft in ${locale} at ${width}`, async ({browser, baseURL}) => {
+  test(`Overview and Issues open bound discussion drafts in ${locale} at ${width}`, async ({browser, baseURL}) => {
     // Use the authorized discussion fixture for composer focus. The browsing demo below
     // remains observe-only, with all of its write controls and manual sessions read-only.
     const fixture = demoFixture({locale, discussions: true});
@@ -144,6 +163,28 @@ for (const {locale, width} of cases) {
     await page.getByRole('link', {name: locale === 'zh-TW' ? '返回專案總覽' : 'Back to Overview', exact: true}).click();
     await expectView(page, locale, width, 'overview', fixture.copy.name);
     await expect(page.locator('[data-overview-status]')).toBeVisible();
+    await openView(page, 'issues');
+    await expectView(page, locale, width, 'issues', fixture.copy.name);
+    await page.locator('[data-pm-overflow]').click();
+    await expect(page.locator('[data-menu-key=governance]')).toBeVisible();
+    await expect(page.locator('[data-menu-key=phase]')).toBeHidden();
+    await expect(page.locator('[data-menu-key=settings]')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await page.locator('[data-reg-type=decision]').click();
+    await page.locator('[data-row-key]').filter({hasText: fixture.copy.decisions.budget}).click();
+    const issueDiscuss = page.locator('[data-reg-discuss]');
+    const issueLaunch = parseDiscussRefs((await issueDiscuss.getAttribute('href'))!.split('?')[1]);
+    expect(issueLaunch.refs).toEqual([{kind: 'plan_revision', id: fixture.ids.planV3}]);
+    expect(issueLaunch.from).toBe('issues');
+    await issueDiscuss.click();
+    await expect(page).toHaveURL(/\/discussions\/new\?/);
+    await expect(page.locator('[data-discussion-title]')).toHaveText(fixture.copy.decisions.budget);
+    await expect(page.locator('[data-discussion-context=plan_revision]').first()).toBeVisible();
+    await expect(page.locator('[data-discussion-composer]')).toBeFocused();
+    await shot(page, `issues-discuss-launch-${locale}-${width}`);
+    await page.getByRole('link', {name: locale === 'zh-TW' ? '返回問題與變更' : 'Back to Issues & changes', exact: true}).click();
+    await expectView(page, locale, width, 'issues', fixture.copy.name);
+    await expect(page.locator('[data-reg-type=decision]')).toHaveAttribute('aria-checked', 'true');
     await expectNoJunk(page);
     expect(fixture.discussion.writes).toHaveLength(0);
     await context.close();

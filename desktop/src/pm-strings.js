@@ -6,6 +6,7 @@ import {pmContextBundleStrings} from './pm-context-bundle-strings.js';
 import {pmGovernanceStrings} from './pm-governance-strings.js';
 import {pmLifecycleStrings} from './pm-lifecycle-strings.js';
 import {pmIssueStrings} from './pm-issue-strings.js';
+import {pmRegisterStrings} from './pm-register-strings.js';
 import {specSourceStrings} from './pm-spec-sources-strings.js';
 import {pmFollowUpStrings} from './pm-follow-up-strings.js';
 import {followUpAnalysisStrings} from './pm-follow-up-analysis-strings.js';
@@ -21,6 +22,7 @@ export const pmStrings = {
     ...resourceStrings.en,
     ...pmPlanProposalStrings.en,
     ...pmIssueStrings.en,
+    ...pmRegisterStrings.en,
     ...pmLifecycleStrings.en,
     ...pmSprintStrings.en,
     ...pmKanbanStrings.en,
@@ -261,6 +263,7 @@ export const pmStrings = {
     ...resourceStrings['zh-TW'],
     ...pmPlanProposalStrings['zh-TW'],
     ...pmIssueStrings['zh-TW'],
+    ...pmRegisterStrings['zh-TW'],
     ...pmLifecycleStrings['zh-TW'],
     ...pmSprintStrings['zh-TW'],
     ...pmKanbanStrings['zh-TW'],

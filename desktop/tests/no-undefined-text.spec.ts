@@ -15,13 +15,50 @@ function withResources(base: ReturnType<typeof workbenchFixture>) {
     checked_at: at, successful_at: at, first_at: at, last_at: at,
     configurations: [{actual_model: 'example-codex', requested_model: 'example-codex', effort: 'high', cli_version: '0.120.0'}],
   }], quota_pools: []};
+  const findingId = `pmfn_${'a'.repeat(32)}`;
+  const rowId = `finding.${findingId}`;
+  const registerRow = {
+    row_id: rowId, type: 'issue', type_basis: 'neutral', title: null, status: null, owner: null,
+    due: null, impact: null, priority: null, next_step: null, created_at: null, updated_at: null,
+    source: {kind: 'finding', id: findingId}, related: {requirement_ids: [], work_item_ids: [], prs: []},
+    available_actions: [], unknowns: {title: 'not_recorded', owner: 'not_recorded'},
+  };
+  const coverage = {complete: false, partial_reason: 'incomplete', open_without_known_age: null, blocked_without_reason: null};
+  let mappings: any[] = [];
   return async (input: any) => {
     const path = new URL(input.path, 'http://fixture').pathname;
     if (path.endsWith('/resources')) return {status: 200, data: structuredClone(resources)};
+    if (path.endsWith('/register')) return {status: 200, data: {
+      workspace_id: workspaceId, as_of: at, rows: [structuredClone(registerRow)], next_cursor: null,
+      total_by_type: null, summary: null, coverage: structuredClone(coverage),
+    }};
+    const registerDetail = path.match(/\/register\/([^/]+)$/);
+    if (registerDetail) {
+      if (decodeURIComponent(registerDetail[1]) !== rowId) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Not found'}}};
+      return {status: 200, data: {
+        workspace_id: workspaceId, as_of: at, row: structuredClone(registerRow),
+        timeline: [{step: 'finding', at, title: null, ref: structuredClone(registerRow.source), status: null}],
+        timeline_coverage: {complete: true, partial_reason: null, sources: []},
+        coverage: structuredClone(coverage),
+      }};
+    }
+    const mappingDetail = path.match(/\/issue-mappings\/(pmim_[0-9a-f]{32})$/);
+    if (mappingDetail) {
+      const row = mappings.find(item => item.mapping_id === mappingDetail[1]);
+      if (!row) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Not found'}}};
+      const current = structuredClone(row);
+      current.document.package_ref = {package_id: 'pkg_publication'};
+      current.operation_id = `op_${'e'.repeat(32)}`;
+      delete current.actor;
+      return {status: 200, data: {version: 1, workspace_id: workspaceId, mapping_id: current.mapping_id,
+        execution_authorized: false, current, revisions: [structuredClone(current)]}};
+    }
     const result = await base.dispatch(input);
+    if (path.endsWith('/issue-mappings')) mappings = result.data?.mappings || [];
     if (path === '/bootstrap' || path === '/capabilities') {
       const caps = path === '/bootstrap' ? result.data.capabilities : result.data;
       caps.features.pm_resources = {version: 1};
+      caps.features.pm_register = {version: 1};
     }
     return result;
   };
@@ -64,6 +101,17 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
   const issue = page.locator('[data-pm-issue-mappings]').getByRole('button', {name: `example/library · #41 · ${tracking}`, exact: true});
   await expect(issue).toBeVisible();
   await expect(page.locator('[data-pm-issue-mappings]').getByRole('button', {name: `example/library · #42 · ${tracking}`, exact: true})).toBeVisible();
+  await issue.click();
+  await page.locator('[data-pm-issue-mappings] summary').filter({hasText: zh ? '發布歷史' : 'Publication history'}).click();
+  await expect(page.locator('[data-pm-issue-mappings]')).toContainText(zh ? '版本 1' : 'Revision 1');
+  await assertNoMissingLabels(page);
+
+  await openPmSection(page, 'issues');
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(1);
+  await page.locator('[data-pm-register] tbody tr').click();
+  await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+  await expect(page.locator('[data-reg-step="finding"]')).toBeVisible();
+  await page.locator('[data-reg-inspector] summary').filter({hasText: zh ? '詳細資料' : 'Details'}).click();
   await assertNoMissingLabels(page);
 
   await page.goto(pmRoute);

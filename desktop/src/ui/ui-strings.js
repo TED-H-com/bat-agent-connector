@@ -36,7 +36,7 @@ export const uiStrings = {
     ui_handoff: 'Package handoff', ui_specs: 'Spec sources', ui_materialization: 'Spec materialization', ui_publication: 'Issue publication',
     ui_meetings: 'Meetings', ui_sprints: 'Sprints', ui_follow_up: 'Follow-ups', ui_repairs: 'Maintenance repairs',
     ui_maintenance_review: 'Maintenance review', ui_policy: 'Maintenance policy', ui_baselines: 'Release baselines',
-    ui_batches: 'Work batches', ui_observations: 'AHP observations'},
+    ui_batches: 'Work batches', ui_observations: 'AHP observations', ui_governance: 'Governance'},
   'zh-TW': {ui_reason_detail: '{label}（{code}）', ui_search_work: '搜尋工作', ui_report_versions: '版本', ui_save_snapshot: '儲存快照', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出摘要', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
     ui_more: '更多操作', ui_expand: '展開{title}', ui_collapse: '收合{title}',
     ui_overview: '專案總覽', ui_discussions: '討論', ui_requirements: '需求', ui_schedule: '時程',
@@ -52,12 +52,14 @@ export const uiStrings = {
     ui_handoff: '工作包交接', ui_specs: '規格來源', ui_materialization: '規格產出', ui_publication: '議題發布',
     ui_meetings: '會議', ui_sprints: '衝刺', ui_follow_up: '後續追蹤', ui_repairs: '維護修復',
     ui_maintenance_review: '維護審閱', ui_policy: '維護政策', ui_baselines: '發布基準',
-    ui_batches: '工作批次', ui_observations: 'AHP 觀察'},
+    ui_batches: '工作批次', ui_observations: 'AHP 觀察', ui_governance: '治理'},
 };
 for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]['ui_status_' + key] = row[lang];
 
 // Shared projection reasons. New server codes stay readable without leaking into body copy.
 export const reasonLabels = Object.freeze({
+  not_on_current_revision: ['Not on this revision', '不在這個版本'],
+  repository_name_not_stored: ['Repository name was not stored', '沒有儲存儲存庫名稱'],
   host_unreachable: ['Host unreachable', '主機連不上'],
   host_not_refreshed: ['Not refreshed', '很久沒更新'],
   not_enumerated: ['Missing from listing', '上次列舉沒有出現'],
@@ -145,7 +147,7 @@ export const reasonLabels = Object.freeze({
   no_explicit_goal: ['Not set', '未設定'], goal_unconfirmed: ['Unconfirmed', '待確認'],
   no_adopted_plan: ['No adopted plan', '尚無已採用計畫'],
   source_limit: ['Partial', '部分'], partial_page: ['Partial', '部分'],
-  source_incomplete: ['Sources incomplete', '來源不完整'], incomplete_sources: ['Sources incomplete', '來源不完整'],
+  source_incomplete: ['Source is incomplete', '來源不完整'], incomplete_sources: ['Sources incomplete', '來源不完整'],
   source_unavailable: ['Source unavailable', '無法取得來源'], unavailable: ['Not available', '無法取得'],
   not_configured: ['Not configured', '尚未設定'], not_applicable: ['Not applicable', '不適用'],
   not_recorded: ['Not recorded', '尚無紀錄'], no_roadmap_baseline: ['No milestone baseline', '尚無里程碑基準'],

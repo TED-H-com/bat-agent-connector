@@ -960,6 +960,10 @@
   switch and one list per group, browser Settings shows one section at a time, and rail rows show a status
   mark instead of a status word.
 
+- Issues & changes reads the central register: type counts and the summary appear only when coverage is
+  complete, with honest pagination, a compact summary strip, list rows on narrow screens, and a processing
+  timeline with Discuss and Propose change.
+
 ## 0.2.4 (unreleased)
 
 - Turn markers: `session_send` and `session_relay` return `turn_marker` / `after_ms` (the host-side id and

@@ -16,6 +16,7 @@ import {workspaceSpecMaterialization} from './pm-spec-materialization.js';
 import {workspaceWorkBatches} from './pm-work-batches.js';
 // PM facts and operations remain central; this client submits explicit durable requests.
 import {workspaceGovernance} from './pm-governance.js';
+import {workspaceRegister} from './pm-register.js';
 import {workspacePackageHandoff} from './pm-package-handoff.js';
 import {workspaceLifecycle} from './pm-lifecycle.js';
 import {workspaceIssueMappings} from './pm-issue-mappings.js';
@@ -269,6 +270,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const headerPills = h('span', {class: 'dep-header-pills', hidden: true});
   heading.querySelector('.ui-title-row')?.append(headerPills);
   heading.querySelector('.ui-page-heading')?.append(headerMeta);
+  const registerMeta = h('p', {class: 'ui-meta', 'data-pm-header-meta': '', hidden: true});
+  heading.querySelector('.ui-page-heading')?.append(registerMeta);
+  const setHeaderMeta = text => {registerMeta.textContent = text || ''; registerMeta.hidden = !text;};
   const content = h('div', {class: 'pm-content', 'data-discussions': ''}), body = h('section', {class: 'pm-main'}, heading, status, content);
   const creationHome = h('div', {hidden: true}, workspaceForm.box);
   main.append(h('div', {class: 'pm-shell'}, body, creationHome));
@@ -316,7 +320,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' && !row.kind ? 'schedule' : 'issues';
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
-        else if (ref.kind === 'governance') await governance?.openRef?.(ref);
+        else if (ref.kind === 'governance') {
+          if (register) openIssueTool('ui_governance');
+          await governance?.openRef?.(ref);
+        }
         else if (ref.kind === 'milestone' && destination === 'schedule') {
           const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
@@ -360,6 +367,34 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
     ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(governance)body.insertBefore(governance.element,content);
+  const routeRegisterAction = action => {
+    const name = action?.action || '';
+    const open = (viewId, section) => {
+      if (viewId) workbench?.select(viewId);
+      const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
+      if (fold instanceof HTMLDetailsElement) {fold.open = true; fold.scrollIntoView({block: 'nearest'});}
+    };
+    if (name.startsWith('pm.meeting.')) open('discussions', 'ui_meetings');
+    else if (name.includes('follow_up.record')) open('issues', 'ui_follow_up');
+    else if (name.startsWith('pm.maintenance_review.')) open('issues', 'ui_maintenance_review');
+    else if (name.startsWith('pm.maintenance.repair')) open('issues', 'ui_repairs');
+    else if (name.startsWith('pm.governance.')) open('issues', 'ui_governance');
+    else if (name.startsWith('pm.issue.')) open('requirements', 'ui_publication');
+  };
+  const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1
+    ? workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta: setHeaderMeta,
+      onOpenWork: id => {
+        // Select the mounted Requirements view before restoring its record focus.
+        location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
+        workbench?.select('requirements');
+        void traceability?.focusWork?.(id);
+      },
+      onOpenRequirement: id => {
+        location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
+        workbench?.select('requirements');
+        void traceability?.focusRequirement?.(id);
+      },
+      onAction: routeRegisterAction}) : null;
   const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources
     ? specSources({h,t,api,alive,workspaceId,errorBox}) : null;
   if (specifications) {
@@ -437,17 +472,45 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   ]}) : null;
   if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
   if (dependencies?.captureButton) headerActions.insertBefore(dependencies.captureButton, refresh);
+  const issueTools = [];
+  if (register) {
+    if (governance) issueTools.push({key: 'governance', label: t('ui_governance'), section: 'ui_governance'});
+    if (maintenanceRepairs) issueTools.push({key: 'repairs', label: t('ui_repairs'), section: 'ui_repairs'});
+    if (maintenanceReview) issueTools.push({key: 'review', label: t('ui_maintenance_review'), section: 'ui_maintenance_review'});
+    if (followUp) issueTools.push({key: 'follow', label: t('ui_follow_up'), section: 'ui_follow_up'});
+  }
+  const openIssueTool = section => {
+    const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
+    if (fold instanceof HTMLDetailsElement) {fold.open = true; fold.scrollIntoView({block: 'nearest'}); return;}
+    body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({block: 'nearest'});
+  };
   const overflow = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-overflow': ''}), items: [
     ...(lifecycle ? [{key: 'phase', label: t('ui_change_phase'), onSelect: () => openPanel(t('ui_change_phase'), lifecycle.element)}] : []),
     ...(evidence ? [{key: 'settings', label: t('ui_workspace_settings'), onSelect: () => openPanel(t('ui_workspace_settings'), evidence.box)}] : []),
+    ...issueTools.map(tool => ({key: tool.key, label: tool.label, disabled: true, onSelect: () => openIssueTool(tool.section)})),
   ]});
-  if (lifecycle || evidence) headerActions.append(overflow);
+  if (lifecycle || evidence || issueTools.length) headerActions.append(overflow);
   const scheduleTools = schedule && (roadmap || sprints) ? menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-schedule-tools': ''}), items: [
     ...(roadmap ? [{label: t('sched_roadmap'), onSelect: () => openPanel(t('sched_roadmap'), roadmap.box)}] : []),
     ...(sprints ? [{label: t('ui_sprints'), onSelect: () => openPanel(t('ui_sprints'), sprints.box)}] : []),
   ]}) : null;
   if (scheduleTools) {headerActions.append(scheduleTools); if (roadmap) drawersHome.append(roadmap.box); if (sprints) drawersHome.append(sprints.box);}
 
+  const syncIssueTools = view => {
+    const on = view === 'issues';
+    overflow.hidden = view !== 'overview' && !(on && issueTools.length);
+    for (const key of ['phase', 'settings']) {
+      const node = overflow.querySelector(`[data-menu-key="${key}"]`);
+      if (node) node.hidden = view !== 'overview';
+    }
+    for (const tool of issueTools) {
+      const node = overflow.querySelector(`[data-menu-key="${tool.key}"]`);
+      if (!node) continue;
+      node.hidden = !on;
+      if ('disabled' in node) node.disabled = !on;
+      if (on) node.removeAttribute('aria-disabled'); else node.setAttribute('aria-disabled', 'true');
+    }
+  };
   function secondary(label, node) {
     if (!node) return null;
     const card = sectionCard({body: disclosure({label: t(label), key: JSON.stringify([namespace, workspaceId, label]), body: node})});
@@ -463,7 +526,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]]],
       ['schedule', schedule?.element || roadmap?.box, schedule ? [] : [['ui_sprints', sprints?.box]]],
       ['dependencies', dependencies?.element || null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
-      ['issues', governance?.element, [['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
+      ['issues', register?.element || governance?.element, [...(register && governance ? [['ui_governance', governance.element]] : []), ['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
       ['agents', resources?.element, [['ui_observations', ahp?.element]]],
       ['board', kanban?.element, [['ui_batches', workBatches?.element]]],
     ];
@@ -477,28 +540,37 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       groups.push({id, sections: [region]});
     }
+    let shownView = null;
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
+      if (shownView === 'issues' && id !== 'issues') register?.rememberScroll();
       if (id !== 'issues') brief?.closeRelated?.();
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents'); schedule?.setActive(id === 'schedule');
       void dependencies?.setActive(id === 'dependencies');
       brief?.setActive?.(id === 'overview');
+      register?.setActive(id === 'issues');
       if (scheduleTools) scheduleTools.hidden = id !== 'schedule';
-      overflow.hidden = id !== 'overview';
       if (id !== 'overview' || !liveOverview) window.scrollTo(0, 0);
+      if (id === 'issues') register?.restoreScroll();
+      else setHeaderMeta('');
+      syncIssueTools(id);
       if (id === 'requirements') void traceability?.activate();
       detailPanel?.close(); if (primary) primary.hidden = id !== 'overview';
       if (reportMenu) reportMenu.hidden = id !== 'overview';
+      const focused = document.activeElement;
+      if (id !== 'issues' && focused && register?.element.contains(focused)) document.querySelector(`[data-pm-view="${id}"]`)?.focus();
       publishContext();
       brief?.setActive?.(id === 'overview');
+      shownView = id;
     }});
     workbench.apply(); brief?.setActive?.(workbench.selected() === 'overview');
     if (scheduleTools) scheduleTools.hidden = workbench.selected() !== 'schedule';
-    overflow.hidden = workbench.selected() !== 'overview';
+    shownView = workbench.selected();
+    syncIssueTools(shownView);
     if (view && view !== workbench.selected()) history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
     if (primary) primary.hidden = workbench.selected() !== 'overview';
     if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
   }
-  const sourceSections = () => [...groups.flatMap(group => group.sections), content, schedule?.element, resources?.element, dependencies?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  const sourceSections = () => [...groups.flatMap(group => group.sections), content, schedule?.element, resources?.element, dependencies?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, register?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -898,7 +970,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         alive(); if (ticket !== sequence) return;
       }
       worktreeChoice?.update();
-      for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
+      for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         if (section) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
@@ -912,13 +984,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       resources?.setActive(workbench?.selected() === 'agents');
       schedule?.setActive(workbench?.selected() === 'schedule');
       if (dependencies) await dependencies.setActive(workbench?.selected() === 'dependencies');
+      register?.setActive(workbench?.selected() === 'issues');
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();resources?.withdraw();schedule?.withdraw();dependencies?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
-        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
+        lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();register?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         detailPanel?.close(); discussionTools?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
         for (const section of sourceSections()) section.hidden = true;
@@ -969,7 +1042,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; discussionTools?.dispose(); sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
-    brief?.dispose?.();traceability?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();
+    brief?.dispose?.();traceability?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
     proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };

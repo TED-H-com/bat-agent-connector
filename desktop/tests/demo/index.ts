@@ -11,6 +11,7 @@ import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap
 import {schedulePage} from './schedule.ts';
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
+import {registerDetail, registerList} from './register.ts';
 import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
 import {dependencyDocument, dependencyImpact, dependencyRevisions} from './dependencies.ts';
 import {globalRoutes} from './global.ts';
@@ -107,6 +108,9 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     return ok(dependencyImpact(project, key));
   }
   if (rest === '/dependencies') return ok(dependencyDocument(project));
+  if (rest === '/register') return registerList(project, url);
+  const registerRow = rest.match(/^\/register\/([^/]+)$/);
+  if (registerRow) return registerDetail(project, segment(registerRow[1]));
   if (rest === '/threads') return ok(threadList(project, url));
   const thread = rest.match(/^\/threads\/([^/]+)$/);
   if (thread) {

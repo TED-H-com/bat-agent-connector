@@ -135,7 +135,7 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 | Requirements | RTM; quality reviews and execution verification, evidence, specs, work packages (including deliveries), handoff and issue publication |
 | Schedule | Roadmap baseline/forecast/observation; sprints |
 | Dependencies | Maintenance policy, checks, workload and release baselines |
-| Issues & changes | Governance and findings; repairs, review and follow-ups |
+| Issues & changes | Register of risks, issues, actions, changes and decisions when `pm_register` is available; otherwise governance stays primary. Repairs, review, follow-ups and governance remain collapsed disclosures |
 | Agents | Resource observations; AHP |
 | Board | Kanban; work batches |
 
@@ -335,6 +335,24 @@ impact. Check impact opens a discussion with no context ref; the dependency name
 the impact summary are in the title. Declare and retract stay owner actions in a
 disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
 the shared wording, and the raw code appears only there.
+
+## Issues & changes
+
+When `features.pm_register.version` is 1, the view reads `GET /pm/workspaces/{id}/register`
+and `GET …/register/{row_id}`. Type counts and the summary (open-by-age, twelve weeks,
+blocking reasons) appear only when `coverage.complete` is true. Otherwise the header
+meta is the number of rows shown, and an empty blocking-reason list says that no
+reason field was recorded. The summary is one 120px strip of three blocks above the
+table. At 800px and below it collapses into a closed Trends disclosure, and the rows
+become a list (title, one meta line, next step) instead of the wide table. The table
+shows the type word; Source stays in the inspector facts. Filters are one toolbar:
+type, status, exact owner and title search, with accessible names and no visible
+field labels. Pages follow `next_cursor`; row ids and cursors are passed through
+unchanged. The inspector shows the stored processing timeline. Discuss and Propose
+change use the shared discussion link, bound only when the row source is a context
+ref. Requirement and work links open the Requirements selection. A 403 or 404 drops
+the rows, counts and inspector together. Governance, repairs, review and follow-up
+keep their durable forms in collapsed disclosures, opened from the header overflow.
 
 ## Agents
 
