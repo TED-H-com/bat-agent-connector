@@ -35,3 +35,17 @@ export function sessionActivity(session) {
   if (session.streaming === false) return {key: "obs_value_not_streaming", tone: ""};
   return {key: "sessions_activity_unknown", tone: ""};
 }
+
+// One status-pill key for the session header. Manual and unconfirmed sessions stay read-only.
+export function sessionStatus(session) {
+  if (session?.api_access !== "managed") return "read_only";
+  const kind = session.pending?.kind;
+  if (kind === "permission" || kind === "ask_user") return "asking_you";
+  if (session.pending) return "needs_you";
+  if (session.state?.lifecycle === "ended" || session.gone_at || ["gone", "missing"].includes(session.state?.enumeration))
+    return "stopped";
+  if (runtimeStale(session)) return "stale";
+  if (session.streaming === true) return "running";
+  if (session.streaming === false) return "waiting";
+  return "unknown";
+}

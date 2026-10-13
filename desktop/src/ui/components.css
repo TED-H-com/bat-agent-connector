@@ -54,6 +54,10 @@
 .ui-menu-panel [role=menuitem] { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--r-xs); min-height: 32px; padding: 6px 10px; font: inherit; text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
 .ui-menu-panel [role=menuitem]:focus, .ui-menu-panel [role=menuitem]:hover { background: var(--surface-2); }
 .ui-inspector { position: sticky; top: 64px; width: 400px; max-width: 100%; max-height: calc(100vh - 80px); overflow: auto; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
+.ui-inspector[hidden] { display: none; }
+@media (min-width: 1200px) {
+  .ui-inspector-dock > header > .ui-icon-button { display: none; }
+}
 .ui-inspector > header { display: flex; align-items: center; gap: var(--space-2); }
 .ui-inspector h2 { flex: 1; font-size: var(--fs-section); margin: 0; }
 .ui-inspector-body { margin-top: var(--space-4); }

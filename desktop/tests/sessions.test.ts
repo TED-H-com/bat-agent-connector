@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {groupedSessions, workspaceGroup, matchesSession, runtimeStale, sessionActivity} from '../src/state/sessions.js';
+import {groupedSessions, workspaceGroup, matchesSession, runtimeStale, sessionActivity, sessionStatus} from '../src/state/sessions.js';
 
 test('workspace groups keep host and recorded workspace identity distinct', () => {
   const rows = [{host: 'a', workspace: 'same', workspace_id: 'one'}, {host: 'a', workspace: 'same', workspace_id: 'two'},
@@ -22,6 +22,19 @@ test('idle, unknown and missing sessions are never inferred completed', () => {
   assert.equal(sessionActivity({streaming: false, state: {enumeration: 'gone'}}).key, 'sessions_not_seen');
   assert.equal(sessionActivity({state: {lifecycle: 'ended'}}).key, 'obs_value_ended');
   assert.equal(sessionActivity({pending: {kind: 'ask_user'}, streaming: false}).key, 'pending_ask_user');
+});
+
+test('session status keeps manual sessions read-only and does not invent a running state', () => {
+  assert.equal(sessionStatus({api_access: 'read_only', streaming: true}), 'read_only');
+  assert.equal(sessionStatus({api_access: 'managed', streaming: true}), 'running');
+  assert.equal(sessionStatus({api_access: 'managed', streaming: false}), 'waiting');
+  assert.equal(sessionStatus({api_access: 'managed', pending: {kind: 'permission'}}), 'asking_you');
+  assert.equal(sessionStatus({api_access: 'managed', pending: {kind: 'ask_user'}}), 'asking_you');
+  assert.equal(sessionStatus({api_access: 'managed', pending: {kind: 'other'}}), 'needs_you');
+  assert.equal(sessionStatus({api_access: 'managed', state: {lifecycle: 'ended'}, streaming: true}), 'stopped');
+  assert.equal(sessionStatus({api_access: 'managed', gone_at: '2026-01-01', streaming: false}), 'stopped');
+  assert.equal(sessionStatus({api_access: 'managed', stale: true, streaming: true}), 'stale');
+  assert.equal(sessionStatus({api_access: 'managed'}), 'unknown');
 });
 
 test('fresh enumeration does not freshen stale runtime or pending evidence', () => {
