@@ -259,7 +259,7 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
   };
   // Withdrawal: drop every row and its text together.
   const clear = () => {
-    rows = new Map(); viewport.replaceChildren(); caption.textContent = ""; notice.hidden = true;
+    rows = new Map(); initialized = false; viewport.replaceChildren(); caption.textContent = ""; notice.hidden = true;
     status.textContent = ""; fallback.replaceChildren(); last = null; unseen = 0; indicator();
   };
   const setUserLabel = label => {

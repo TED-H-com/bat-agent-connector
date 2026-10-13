@@ -582,3 +582,19 @@ Session inspector subsections use level-three headings under Results; there is
 one Messages landmark. Label details, Send record and Session details have distinct
 disclosure names. Session drawers inherit the shared 400px width, and mobile sheets
 fill the viewport.
+
+A session GET returning 403, 404 or 410 withdraws the whole Session workspace:
+clear transcript, title facts, Delivery and inspector, hide the composer, preserve
+the stored draft, and show one inline state with Back. Pending reads cannot repaint.
+Withdrawal stops timers; an explicit later session event may establish new evidence.
+Transient read failures use exponential retries from 1 to 30 seconds; replayed events
+obey the same delay. Message failures show a transcript state and Retry; oversized
+windows retry once with ten messages. Known error codes have localized recovery
+actions, with the code retained only in Error details.
+
+Session Delivery reuses the work inspector's contract validation and PR grouping.
+Keep validated rows during reads, replace only changed content, show Unknown on
+a first transient failure and Not updated with Retry on a later one. A source
+withdrawal removes cached receipts and their derived counts. A partial window states
+the number shown and more; filtered sources stay Partial. Provider origins determine
+PR links; merging, verified current deployment and acceptance remain separate.

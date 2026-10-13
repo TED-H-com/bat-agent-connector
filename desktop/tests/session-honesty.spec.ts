@@ -163,14 +163,14 @@ test('delivery shows unknown, partial, grouped and validated receipts honestly',
   // Two receipts for one PR read as one row; links use the provider origin.
   respond = ids => page200(ids, [receipt(87, 1), receipt(87, 2, 'https://git.example.test', true)]);
   await delivery.getByRole('button', {name: 'Retry', exact: true}).click();
-  await expect(delivery.locator('.session-delivery-row')).toHaveCount(1);
-  await expect(delivery.locator('.session-delivery-row')).toContainText('Deployed');
-  await expect(delivery.locator('.session-delivery-row a')).toHaveAttribute('href', 'https://git.example.test/example/signin/pull/87');
+  await expect(delivery.locator('[data-session-pr]')).toHaveCount(1);
+  await expect(delivery.locator('[data-session-pr]')).toContainText('Deployed');
+  await expect(delivery.locator('[data-session-pr] a')).toHaveAttribute('href', 'https://git.example.test/example/signin/pull/87');
   // Refreshes swap rows only after a validated read: no empty frame, no flicker.
   await page.evaluate(() => {
     const node = document.querySelector('.session-delivery-pills')!;
     (window as any).__emptyFrames = 0;
-    new MutationObserver(() => {if (!node.querySelector('.session-delivery-row')) (window as any).__emptyFrames++;}).observe(node, {childList: true, subtree: true});
+    new MutationObserver(() => {if (!node.querySelector('[data-session-pr]')) (window as any).__emptyFrames++;}).observe(node, {childList: true, subtree: true});
   });
   const reads = s.log.filter(row => deliveriesPath.test(row.path.split('?')[0])).length;
   s.sessionEvent('implement');
@@ -181,7 +181,7 @@ test('delivery shows unknown, partial, grouped and validated receipts honestly',
   respond = () => ({status: 500, data: {error: {code: 'INTERNAL', message: 'Delivery read failed'}}});
   s.sessionEvent('implement');
   await expect(delivery.locator('[data-session-delivery-state=stale]')).toContainText('Not updated');
-  await expect(delivery.locator('.session-delivery-row')).toHaveCount(1);
+  await expect(delivery.locator('[data-session-pr]')).toHaveCount(1);
   // A response for another scope never renders.
   respond = ids => ({...page200(ids, [receipt(666, 9, 'https://git.example.test', true)]), data: {...page200(ids, []).data, workspace_id: 'ws_' + 'f'.repeat(32), deliveries: [receipt(666, 9)]}});
   s.sessionEvent('implement');
@@ -308,4 +308,114 @@ test('checkpoints on a capable host: quiet at rest, honest notes, and a way into
     }
     await s.context.close();
   }
+});
+
+for (const status of [403, 404, 410]) {
+  test(`delivery withdrawal removes cached receipts and their count (${status})`, async ({browser}) => {
+    let unavailable = false;
+    const s = await openSession(browser, {overrides: [(input, url) => unavailable && deliveriesPath.test(url.pathname)
+      ? {status, data: {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'Delivery unavailable'}}} : undefined]});
+    await fromRequirements(s.page, s.ids, 'implement');
+    const result = s.page.locator('[data-workspace-result]');
+    await expect(result).toContainText('PR #87');
+    unavailable = true;
+    s.sessionEvent('implement');
+    await expect(result.locator('[data-session-delivery-state=removed]')).toBeVisible();
+    await expect(result.locator('[data-session-pr]')).toHaveCount(0);
+    expect(await result.innerText()).not.toMatch(/PR #|Merged|Deployed|shown/);
+    await s.context.close();
+  });
+}
+
+test('withdrawal clears immediately while a message response is held; late text cannot return', async ({browser}) => {
+  let hold = false, waiting = false, release!: () => void;
+  const gate = new Promise<void>(resolve => {release = resolve;});
+  const s = await openSession(browser, {overrides: [async (input, url) => {
+    if (hold && url.pathname === '/sessions/demo-host/signin-implement/messages') {
+      waiting = true; await gate;
+      return {status: 200, data: {messages: [{id: 'late', role: 'assistant', text: 'Withdrawn secret text'}], next_offset: null}};
+    }
+    if (hold && url.pathname === '/sessions/demo-host/signin-implement') return {status: 410, data: {error: {code: 'NOT_FOUND', message: 'Gone'}}};
+    return undefined;
+  }]});
+  await fromRequirements(s.page, s.ids, 'implement');
+  await expect(s.page.locator('.conversation-scroll .msg')).toHaveCount(18);
+  hold = true; s.sessionEvent('implement');
+  await expect.poll(() => waiting).toBe(true);
+  await expect(s.page.locator('[data-session-withdrawn]')).toBeVisible();
+  await expect(s.page.locator('.conversation-scroll .msg, .ui-inspector, #workspace-message-input')).toHaveCount(0);
+  release();
+  await s.page.waitForTimeout(500);
+  expect(await visibleText(s.page)).not.toContain('Withdrawn secret text');
+  await s.context.close();
+});
+
+test('a late Delivery retry cannot revive a withdrawn session', async ({browser}) => {
+  let failing = false, hold = false, waiting = false, gone = false, release!: () => void;
+  const gate = new Promise<void>(resolve => {release = resolve;});
+  const s = await openSession(browser, {overrides: [async (input, url) => {
+    if (gone && url.pathname === '/sessions/demo-host/signin-implement') return notFound;
+    if (deliveriesPath.test(url.pathname) && hold) {
+      waiting = true; await gate; return page200(s.ids, [receipt(666, 9)]);
+    }
+    if (deliveriesPath.test(url.pathname) && failing) return {status: 500, data: {error: {code: 'INTERNAL', message: 'Delivery unavailable'}}};
+    return undefined;
+  }]});
+  await fromRequirements(s.page, s.ids, 'implement');
+  const result = s.page.locator('[data-workspace-result]');
+  await expect(result).toContainText('PR #87');
+  failing = true; s.sessionEvent('implement');
+  await expect(result.locator('[data-session-delivery-state=stale]')).toBeVisible();
+  hold = true; await result.getByRole('button', {name: 'Retry', exact: true}).click();
+  await expect.poll(() => waiting).toBe(true);
+  gone = true; s.sessionEvent('implement');
+  await expect(s.page.locator('[data-session-withdrawn]')).toBeVisible();
+  release(); await s.page.waitForTimeout(500);
+  expect(await visibleText(s.page)).not.toMatch(/666|PR #87/);
+  await expect(s.page.locator('.ui-inspector')).toHaveCount(0);
+  await s.context.close();
+});
+
+test('send retries and question drafts survive reload with their original operation keys', async ({browser}) => {
+  let refuse = true;
+  const s = await openSession(browser, {overrides: [(input, url) => {
+    const body = input.body as any;
+    if (refuse && input.method === 'POST' && url.pathname === '/operations' && ['session.send', 'session.answer'].includes(body?.action))
+      return {status: 409, data: {error: {code: body.action === 'session.send' ? 'SESSION_BUSY' : 'PENDING_CHANGED', message: 'Conflict'}}};
+    return undefined;
+  }]});
+  const {page} = s;
+  await fromRequirements(page, s.ids, 'implement');
+  await page.locator('#workspace-message-input textarea').fill('Keep this exact intent.');
+  await page.locator('.composer-queue input').uncheck();
+  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect(page.locator('[data-session-error=SESSION_BUSY]')).toBeVisible();
+  const first = s.writes.find(row => row.body?.action === 'session.send');
+  await page.reload();
+  await expect(page.locator('#workspace-message-input textarea')).toHaveValue('Keep this exact intent.');
+  refuse = false;
+  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect(page.locator('.session-send-line')).toContainText('Sent');
+  const sends = s.writes.filter(row => row.body?.action === 'session.send');
+  expect(sends).toHaveLength(2); expect(sends[1].idempotency_key).toBe(first.idempotency_key);
+  expect(sends[1].body).toEqual(first.body);
+  const question = {kind: 'ask_user', toolUseId: 'toolu_draft', questions: [{question: 'Which threshold?', options: ['3', '5']}]};
+  s.overrides.push(async (input, url) => {
+    if (url.pathname !== '/sessions/demo-host/ratelimit-review') return undefined;
+    const base = await s.fixture.dispatch({method: 'GET', path: url.pathname}); base.data.session.pending = question; return base;
+  });
+  refuse = true;
+  await go(page, `#/session/${s.ids.host}/${s.ids.sessions.review}`);
+  await page.getByRole('textbox', {name: 'Which threshold?'}).fill('5');
+  await page.getByRole('button', {name: 'Answer', exact: true}).click();
+  await expect(page.locator('[data-session-error=PENDING_CHANGED]')).toBeVisible();
+  const answer = s.writes.find(row => row.body?.action === 'session.answer');
+  await page.reload();
+  await expect(page.getByRole('textbox', {name: 'Which threshold?'})).toHaveValue('5');
+  refuse = false;
+  await page.getByRole('button', {name: 'Answer', exact: true}).click();
+  await expect.poll(() => s.writes.filter(row => row.body?.action === 'session.answer').length).toBe(2);
+  const answers = s.writes.filter(row => row.body?.action === 'session.answer');
+  expect(answers[1].idempotency_key).toBe(answer.idempotency_key); expect(answers[1].body).toEqual(answer.body);
+  await s.context.close();
 });

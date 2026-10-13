@@ -6,6 +6,7 @@ import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, 
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
+import {checkDelivery, prGroups, prPills} from './pm-work-inspector.js';
 import {viewState} from './ui/view-state.js';
 import {h as dom} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
@@ -1267,6 +1268,40 @@ async function viewHostDiscovery(main, host) {
   return () => {off(); repair?.dispose();};
 }
 
+// Session read and write errors: one short localized line and its recovery; the raw code stays in Details.
+const SESSION_ERROR_LINES = {SESSION_BUSY: "session_err_busy", PENDING_CHANGED: "session_err_changed", NOT_FOUND: "session_err_gone",
+  PAYLOAD_TOO_LARGE: "session_err_too_large", INTERNAL: "session_err_server", FORBIDDEN: "session_err_forbidden"};
+function sessionErrorLine(e) {
+  const code = typeof e?.code === "string" ? e.code : "";
+  if (Object.hasOwn(SESSION_ERROR_LINES, code)) return t(SESSION_ERROR_LINES[code]);
+  if (e?.status === 403) return t("session_err_forbidden");
+  if (e?.status === 404 || e?.status === 410) return t("session_err_gone");
+  if (e?.status === 413) return t("session_err_too_large");
+  if (e?.status >= 500) return t("session_err_server");
+  // Client-made errors (offline, changed view, local checks) already carry a localized message.
+  if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
+  return t("session_err_unknown");
+}
+function sessionErrorBox(e, action = null) {
+  // Like errorBox: a caught refresh error still keeps its event batch unacknowledged.
+  if (state.refreshCycle) state.refreshCycle.error ||= e;
+  const code = typeof e?.code === "string" ? e.code : "";
+  const detail = [code, e?.status ? `HTTP ${e.status}` : "", e?.message && e.message !== code ? e.message : ""].filter(Boolean).join(" · ");
+  return h("div", {class: "session-error", role: "alert", "data-session-error": code},
+    h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, sessionErrorLine(e)),
+      action ? h("button", {type: "button", class: "session-error-action", onclick: action.run}, action.label) : null),
+    detail ? disclosure({label: t("session_error_details"), body: h("p", {class: "muted"}, h("code", {}, detail))}) : null);
+}
+// Pull-request links come from the receipt's provider origin, never a hard-coded host.
+function sessionPullHref(target) {
+  try {
+    const origin = new URL(target?.provider_origin);
+    if (origin.protocol !== "https:" || !/^[\w.-]+\/[\w.-]+$/.test(target.repository || "")) return null;
+    const web = origin.hostname === "api.github.com" ? "https://github.com" : origin.origin;
+    return `${web}/${target.repository}/pull/${target.pull_number}`;
+  } catch { return null; }
+}
+
 async function viewSession(main, host, sid, context = null) {
   const queryAt = String(sid).indexOf("?");
   let fromQuery = "";
@@ -1274,10 +1309,16 @@ async function viewSession(main, host, sid, context = null) {
     fromQuery = new URLSearchParams(String(sid).slice(queryAt + 1)).get("from") || "";
     sid = String(sid).slice(0, queryAt);
   }
+  if (!fromQuery && location.hash.startsWith("#/session/")) fromQuery = new URLSearchParams(location.hash.split("?")[1] || "").get("from") || "";
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
   const projectViews = new Set(["overview", "discussions", "requirements", "schedule", "dependencies", "issues", "agents", "board"]);
-  const originView = () => projectViews.has(fromQuery) ? fromQuery : (projectViews.has(sessionFromMemory) ? sessionFromMemory : "");
+  // The project view that opened this session rides on its history entry, so a reload keeps the way back.
+  const savedOrigin = history.state && typeof history.state === "object" ? history.state.batcSessionFrom : "";
+  if (projectViews.has(sessionFromMemory) && savedOrigin !== sessionFromMemory)
+    try { history.replaceState({...(history.state && typeof history.state === "object" ? history.state : {}), batcSessionFrom: sessionFromMemory}, ""); } catch { /* unavailable */ }
+  const originView = () => projectViews.has(fromQuery) ? fromQuery : projectViews.has(sessionFromMemory) ? sessionFromMemory
+    : projectViews.has(savedOrigin) ? savedOrigin : "";
   const head = h("div", { class: "workspace-session-heading" });
   const titleNode = h("span");
   const markSlot = h("span", {class: "session-mark"});
@@ -1286,7 +1327,7 @@ async function viewSession(main, host, sid, context = null) {
   const backSlot = h("p", {class: "session-back", hidden: true});
   const metadata = h("div", {class: "workspace-metadata"});
   const result = h("section", {class: "workspace-result", "data-workspace-result": ""});
-  let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0;
+  let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30;
   const readingSupported = state.caps?.features?.session_reading?.version === 1;
   const saveReading = async (action, params, preconditions = {}) => {
     const op = await submit(action, {host, session_id: sid}, params, preconditions, `${action}.${host}.${sid}`);
@@ -1301,33 +1342,49 @@ async function viewSession(main, host, sid, context = null) {
     older: () => loadMessages(nextMessageOffset, false),
     latest: () => loadMessages(0, true),
   } : null});
-  const pending = h("div", { class: "session-asking-region", "data-pending-controls": "" }), status = h("div", { class: "muted" });
+  const pending = h("div", { class: "session-asking-region", "data-pending-controls": "" });
+  const status = h("div", { class: "muted session-status" });
   const scope = `send.${host}.${sid}`, draftKey = `batc.draft.${connection.namespace}.${scope}`;
   const box = h("textarea", { placeholder: t("send_placeholder") });
   try { box.value = localStorage.getItem(draftKey) || ""; } catch { /* unavailable */ }
   box.oninput = () => { try { localStorage.setItem(draftKey, box.value); } catch { /* unavailable */ } };
   const queue = h("input", { type: "checkbox" });
-  let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null;
-  const allowed = action => readReady && row?.api_access === "managed" && may("operate")
+  let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
+  // Withdrawal (404/410/403 on the session read) is a settled state, not a failure to retry every second.
+  let withdrawn = "", retryTimer = null, retryDelay = 1000, retryAt = 0, disposed = false, observationRequest = 0;
+  const allowed = action => !withdrawn && readReady && row?.api_access === "managed" && may("operate")
     && state.caps?.hosts?.find(item => item.host === host)?.writes !== false
     && state.caps?.actions?.find(item => item.action === action)?.allowed !== false;
   const identity = pend => pend ? JSON.stringify({kind: pend.kind, toolUseId: pend.toolUseId,
     toolName: pend.toolName, input_preview: pend.input_preview, questions: pend.questions}) : "";
+  try {
+    const savedQueue = localStorage.getItem(draftKey + ".queue");
+    if (savedQueue === "true" || savedQueue === "false") {queue.checked = savedQueue === "true"; queueKnown = true;}
+  } catch { /* unavailable */ }
+  queue.onchange = () => {try {localStorage.setItem(draftKey + ".queue", String(queue.checked));} catch { /* unavailable */ }};
+  const accessRecovery = () => ({label: t("obs_axis_connection"), run: () => {location.hash = "#/connection";}});
+  const goneRecovery = () => ({label: t("ui_back"), run: () => {location.hash = originHref()?.href || "#/sessions";}});
+  const sendRecovery = e => e?.code === "SESSION_BUSY" && !queue.checked
+    ? {label: t("session_err_queue"), run: () => {queue.checked = true; send.click();}}
+    : e?.status === 403 || e?.code === "FORBIDDEN" ? accessRecovery()
+    : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => send.click()};
   const send = h("button", { class: "primary", disabled: true, onclick: async () => {
-    if (!box.value.trim()) return;
+    if (!box.value.trim() || send.disabled) return;
     const submitted = box.value;
     sending = true; send.disabled = true;
     try {
       assertView(connection);
+      queue.onchange();
       const op = await submit("session.send", { host, session_id: sid }, { text: submitted, queue: queue.checked }, {}, scope);
       assertView(connection);
       paintSend(op);
+      // The reader asked for this turn: follow it into view once it lands.
       if (op.status === "succeeded") conversation.follow();
       if (op.status === "succeeded" && box.value === submitted) {
-        box.value = ""; try { localStorage.removeItem(draftKey); } catch { /* unavailable */ }
+        box.value = ""; try { localStorage.removeItem(draftKey); localStorage.removeItem(draftKey + ".queue"); } catch { /* unavailable */ }
         mobileLayout?.updateDraft();
       }
-    } catch (e) { status.replaceChildren(errorBox(e)); }
+    } catch (e) { status.replaceChildren(sessionErrorBox(e, sendRecovery(e))); }
     finally { sending = false; send.disabled = !allowed("session.send"); }
   } }, t("send"));
   const stop = button({variant: "danger", size: "sm", label: t("interrupt"), disabled: true, hidden: true, onClick: async () => {
@@ -1335,7 +1392,7 @@ async function viewSession(main, host, sid, context = null) {
       assertView(connection);
       const op = await submit("session.interrupt", { host, session_id: sid }, { mode: "soft" }, {}, `interrupt.${host}.${sid}`);
       assertView(connection); status.replaceChildren(opStatus(op));
-    } catch (e) { status.replaceChildren(errorBox(e)); }
+    } catch (e) { status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => stop.click()})); }
   }});
   const paintSend = op => {
     const id = typeof op?.operation_id === "string" ? op.operation_id : "";
@@ -1356,10 +1413,11 @@ async function viewSession(main, host, sid, context = null) {
   const sendReason = h("p", {class: "muted session-send-reason", hidden: true});
   const composerRow = h("div", {class: "composer-row"}, h("label", {class: "composer-queue"}, queue, t("queue_behind")), send);
   const composer = h("div", {hidden: true, id: "workspace-message-input"}, box, composerRow);
+  // Read-only sessions get one plain line instead of a composer card.
   const readonly = h("p", { class: "muted session-readonly", "data-session-readonly": "", hidden: true });
   let capture, permissions, batHandoff, sourcesPanel;
   const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
-  const controls = h("div", { class: "panel workspace-composer" }, pending, sendReason, composer, status);
+  const controls = h("div", { class: "panel workspace-composer", hidden: true }, pending, sendReason, composer);
   const labels = sessionLabelsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     target: {host, session_id: sid}, storageKey: `batc.labels.${connection.namespace}.${JSON.stringify([host, sid])}`, errorBox, opStatus});
   const cps = checkpointPanel(host, sid);
@@ -1368,17 +1426,18 @@ async function viewSession(main, host, sid, context = null) {
     guard: () => assertView(connection), host, sessionId: sid, errorBox}) : null;
   instructions?.box.addEventListener("toggle", () => {if (instructions.box.open) instructions.refresh();});
   const deliveryPills = h("div", {class: "session-delivery-pills"});
-  const sourcesBody = h("div", {"data-session-sources": ""}, h("p", {class: "muted session-quiet"}, t("session_sources_empty")));
+  const sourcesEmpty = () => h("p", {class: "muted session-quiet"}, t("session_sources_empty"));
+  const sourcesBody = h("div", {"data-session-sources": ""}, sourcesEmpty());
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
   const results = inspector({title: t("session_results"), dock: true, returnFocus: () => openResults});
   const openResults = iconButton({icon: "inbox", label: t("session_results"), onClick: () => results.open()});
   const wide = matchMedia("(min-width: 1200px)");
-  const syncWide = () => {openResults.hidden = wide.matches;};
+  const syncWide = () => {openResults.hidden = wide.matches || Boolean(withdrawn);};
   syncWide(); wide.addEventListener("change", syncWide);
-  const sessionSection = (name, title, body) => h("section", {class: "session-section"},
-    h("h3", {class: "session-section-title"}, icon(name, {size: 16}), title), body);
+  const sessionSection = (name, title, body, action = null) => h("section", {class: "session-section"},
+    h("div", {class: "session-section-head"}, h("h3", {class: "session-section-title"}, icon(name, {size: 16}), title), action), body);
   const changesSection = sessionSection("folder", t("session_changes"), h("div", {class: "session-changes"}, captureSlot, artifactSlot));
   const slotVisible = slot => [...slot.children].some(child => !child.hidden);
   const syncChanges = () => {changesSection.hidden = !slotVisible(captureSlot) && !slotVisible(artifactSlot);};
@@ -1399,18 +1458,23 @@ async function viewSession(main, host, sid, context = null) {
     sessionSection("check", t("session_delivery"), result),
     sessionSection("inbox", t("session_sources"), sourcesBody),
     batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
-  const lane = h("section", {class: "workspace-conversation"}, conversation.box, readonly, controls);
+  const lane = h("section", {class: "workspace-conversation"}, conversation.box, readonly, controls, status);
   const mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection),
     infoRow: conversation.box.querySelector(".conversation-caption"), composerRow });
   if (context?.picker) main.append(context.picker);
-  main.append(head, h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results));
-  const paintOrigin = () => {
+  const workspaceNode = h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results);
+  const withdrawnSlot = h("div", {class: "session-withdrawn"});
+  main.append(head, workspaceNode);
+  const originHref = () => {
     const view = originView(), workspaceId = lastWorkspace(connection.namespace);
+    return view && workspaceId ? {href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`, view} : null;
+  };
+  const paintOrigin = () => {
+    const origin = originHref();
     backSlot.replaceChildren();
-    if (!view || !workspaceId) {backSlot.hidden = true; return;}
+    if (!origin) {backSlot.hidden = true; return;}
     backSlot.hidden = false;
-    backSlot.append(h("a", {href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`, "data-session-back": view},
-      t("session_back", {view: t("ui_" + view)})));
+    backSlot.append(h("a", {href: origin.href, "data-session-back": origin.view}, t("session_back", {view: t("ui_" + origin.view)})));
   };
   const paintDiscuss = items => {
     const link = overflow.querySelector("[data-menu-key=discuss]");
@@ -1419,36 +1483,77 @@ async function viewSession(main, host, sid, context = null) {
     if (!workspaceId) {link.hidden = true; link.setAttribute("aria-disabled", "true"); return;}
     const refs = (items || []).map(item => ({kind: "work_item", id: item.work_item_id})).filter(isContextRef);
     link.hidden = false; link.removeAttribute("aria-disabled");
+    // An unknown title stays empty; the session ID is not a title.
     link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || "", from: originView()}));
   };
-  let deliveryTicket = 0;
+  let deliveryTicket = 0, deliveryItems = [], sourceItemId = "";
+  const deliveryKnown = new Map();
   const loadDelivery = async items => {
     const ticket = ++deliveryTicket;
-    deliveryPills.replaceChildren();
+    deliveryItems = items || [];
     const workspaceId = lastWorkspace(connection.namespace);
-    const linked = (items || []).filter(item => isContextRef({kind: "work_item", id: item.work_item_id}));
-    if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && linked[0]) {
-      sourcesPanel = resultSourcesPanel({h, t, api, guard: () => assertView(connection), workItemId: linked[0].work_item_id,
+    const linked = [...new Map(deliveryItems.filter(item => isContextRef({kind: "work_item", id: item.work_item_id}))
+      .map(item => [item.work_item_id, item])).values()];
+    const current = () => {assertView(connection); return !disposed && ticket === deliveryTicket;};
+    const sourceId = linked[0]?.work_item_id || "";
+    if (sourceItemId !== sourceId) {
+      sourcesPanel?.dispose(); sourcesPanel = null; sourceItemId = sourceId;
+      sourcesBody.replaceChildren(sourcesEmpty());
+    }
+    if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && sourceId) {
+      sourcesPanel = resultSourcesPanel({h, t, api, guard: () => {assertView(connection); if (withdrawn || disposed) throw Error(t("session_err_gone"));}, workItemId: sourceId,
         linkTarget, onEvents, errorBox});
       sourcesBody.replaceChildren(sourcesPanel.box);
     }
-    if (!workspaceId || !linked.length) return;
-    for (const item of linked) {
-      try {
-        const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(item.work_item_id)}/deliveries?limit=20`);
-        assertView(connection);
-        if (ticket !== deliveryTicket) return;
-        for (const receipt of data.deliveries || []) {
-          const pull = receipt.target?.pull_number;
-          const bits = [];
-          if (pull && receipt.target?.repository) bits.push(h("a", {
-            href: `https://github.com/${receipt.target.repository}/pull/${pull}`, target: "_blank", rel: "noopener"}, `PR #${pull}`));
-          if (receipt.merge?.merged === true) bits.push(statusPill("merged"));
-          if (receipt.deployment?.verified === true && receipt.deployment?.is_current === true) bits.push(statusPill("deployed"));
-          if (bits.length) deliveryPills.append(h("div", {class: "session-delivery-row"}, ...bits));
-        }
-      } catch { if (ticket !== deliveryTicket) return; }
+    const ids = new Set(linked.map(item => item.work_item_id));
+    for (const id of deliveryKnown.keys()) if (!ids.has(id)) deliveryKnown.delete(id);
+    if (!workspaceId || !linked.length || !state.caps?.features?.pm_workspaces?.engineering_delivery) {
+      deliveryKnown.clear(); deliveryPills.replaceChildren(); return;
     }
+    const nextKnown = new Map(deliveryKnown), failed = new Set(), removed = new Set();
+    // Keep the last validated rows while reading. Publish the complete batch once.
+    for (const item of linked) {
+      const id = item.work_item_id;
+      try {
+        const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(id)}/deliveries?after=0&limit=20`),
+          workspaceId, id, 0, t);
+        if (!current()) return;
+        nextKnown.set(id, {deliveries: data.deliveries, next: data.next_after ?? null, filtered: data.source_visibility_filtered === true});
+      } catch (error) {
+        if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) && current()) {
+          if ([403, 404, 410].includes(error?.status)) {
+            nextKnown.delete(id); removed.add(id);
+            if (sourceItemId === id) {sourcesPanel?.dispose(); sourcesPanel = null; sourcesBody.replaceChildren(sourcesEmpty());}
+          } else failed.add(id);
+        } else throw error;
+      }
+    }
+    if (!current()) return;
+    deliveryKnown.clear(); for (const [id, known] of nextKnown) deliveryKnown.set(id, known);
+    const retry = () => button({variant: "ghost", size: "sm", label: t("ui_retry"), onClick: () => loadDelivery(deliveryItems).catch(() => {})});
+    const receipts = linked.flatMap(item => deliveryKnown.get(item.work_item_id)?.deliveries || []);
+    const groups = prGroups(receipts), pills = prPills({deliveries: receipts});
+    const nodes = groups.map(({target, rows}, index) => {
+      const href = sessionPullHref(target);
+      const deployed = rows.some(receipt => receipt.deployment?.verified === true && receipt.deployment?.is_current === true);
+      return h("div", {class: "session-delivery-row", "data-session-pr": String(target.pull_number)},
+        href ? h("a", {href, target: "_blank", rel: "noopener", class: "session-delivery-link"}, pills[index]) : pills[index],
+        deployed ? statusPill("deployed") : null);
+    });
+    // A deployment can have a fixed commit target without a PR. Preserve that evidence too.
+    for (const receipt of receipts.filter(receipt => !receipt.target?.pull_number && receipt.deployment))
+      nodes.push(h("div", {class: "session-delivery-row"}, statusPill(receipt.deployment.verified === true && receipt.deployment.is_current === true ? "deployed" : "unknown")));
+    if (removed.size) nodes.push(h("p", {class: "session-delivery-state", "data-session-delivery-state": "removed"}, t("session_delivery_removed")));
+    if (linked.some(item => !deliveryKnown.has(item.work_item_id) && !removed.has(item.work_item_id)))
+      nodes.push(h("p", {class: "session-delivery-state", "data-session-delivery-state": "unknown"}, statusPill("unknown"), retry()));
+    if (linked.some(item => failed.has(item.work_item_id) && deliveryKnown.has(item.work_item_id)))
+      nodes.push(h("p", {class: "session-delivery-state", "data-session-delivery-state": "stale"}, t("session_delivery_stale"), " · ", retry()));
+    if (linked.some(item => deliveryKnown.get(item.work_item_id)?.next != null))
+      nodes.push(h("p", {class: "session-delivery-state", "data-session-delivery-state": "partial"}, t("session_delivery_more", {count: groups.length})));
+    else if (linked.some(item => deliveryKnown.get(item.work_item_id)?.filtered)) nodes.push(statusPill("partial"));
+    if (!nodes.length) nodes.push(h("p", {class: "muted"}, t("session_delivery_none")));
+    const content = h("div", {class: "session-delivery-pills"}, ...nodes);
+    if (!deliveryPills.isEqualNode(content)) deliveryPills.replaceChildren(...content.childNodes);
   };
   const renderPending = () => {
     const pend = row.api_access === "managed" ? row.pending : null;
@@ -1472,7 +1577,14 @@ async function viewSession(main, host, sid, context = null) {
         const op = await submit("session.answer", { host, session_id: sid }, { ...params, tool_use_id: pend.toolUseId }, {}, answerScope);
         assertView(connection); status.replaceChildren(opStatus(op));
         if (op.status === "succeeded") await loadObservation();
-      } catch (e) { status.replaceChildren(errorBox(e)); }
+      } catch (e) {
+        status.replaceChildren(sessionErrorBox(e, e?.code === "PENDING_CHANGED"
+          ? {label: t("session_err_review"), run: async () => {
+            await refresh().catch(() => {});
+            pending.querySelector("button:not(:disabled), input")?.focus();
+          }}
+          : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {label: t("ui_retry"), run: () => answer(params)}));
+      }
     };
     const actions = h("div", { class: "actions session-asking-actions" });
     const card = h("div", { class: "session-asking", role: "group", "aria-label": t("pending_" + pend.kind) },
@@ -1504,7 +1616,7 @@ async function viewSession(main, host, sid, context = null) {
   const updateControls = () => {
     permissions?.update();
     send.disabled = !allowed("session.send") || sending; stop.disabled = !allowed("session.interrupt");
-    stop.hidden = row?.api_access !== "managed";
+    stop.hidden = withdrawn || row?.api_access !== "managed";
     let reason = "";
     if (row?.api_access === "managed" && send.disabled && !sending) {
       if (!readReady) reason = t("session_send_waiting");
@@ -1517,14 +1629,14 @@ async function viewSession(main, host, sid, context = null) {
       control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
   };
   const applyObservation = data => {
-    const first = !row;
     row = data.session || (data.cleanup?.length ? {host, session_id: sid, provenance: "unknown", api_access: "read_only"} : null);
     if (!row) throw new Error(t("obs_unknown"));
     rememberObservation("session", `${host}/${sid}`, data, [`host:${host}`,
       ...(data.work_items || []).map(item => `work_item:${item.work_item_id}`),
       ...(data.relations_summary || []).flatMap(relation => [`execution:${relation.execution_id}`, `task:${relation.execution_id}`]),
       ...(data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : [])]);
-    if (first) queue.checked = Boolean(row.streaming);
+    if (!queueKnown) {queue.checked = Boolean(row.streaming); queueKnown = true;}
+    // Unknown stays unknown: no ID as a title and no BAT mark for an unreported agent.
     titleNode.textContent = row.title || t("session_untitled");
     markSlot.replaceChildren(agentMark(row.agent_kind));
     pillSlot.replaceChildren(statusPill(sessionStatus(row)));
@@ -1548,7 +1660,7 @@ async function viewSession(main, host, sid, context = null) {
       h("dl", { class: "kv" },
         h("dt", {}, t("host")), h("dd", {}, h("a", {href: `#/host/${encodeURIComponent(host)}`}, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""),
         h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
-        h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")),
+        h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
         h("dt", {}, t("observed")), h("dd", {}, sessionWhen(row.observed_at) || t("obs_unknown"),
           row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
@@ -1564,6 +1676,7 @@ async function viewSession(main, host, sid, context = null) {
     if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
     if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
     const managed = row.api_access === "managed";
+    // "You" only for turns sent through Connector; a person's own BAT session shows their turns as a person's.
     conversation.setUserLabel(managed && row.provenance === "connector_managed" ? t("message_you") : t("message_person"));
     artifactSlot.replaceChildren();
     if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file)
@@ -1594,40 +1707,119 @@ async function viewSession(main, host, sid, context = null) {
     renderPending(); updateControls();
   };
   const loadObservation = async () => {
-    const data = await api("GET", path); assertView(connection); applyObservation(data);
+    const request = ++observationRequest;
+    const current = () => {assertView(connection); return !disposed && request === observationRequest;};
+    let data;
+    try { data = await api("GET", path); }
+    catch (error) {
+      if ([403, 404, 410].includes(error?.status) && current()) {
+        error.sessionWithdrawn = error.status === 403 ? "forbidden" : "gone";
+        withdraw(error.sessionWithdrawn);
+      }
+      throw error;
+    }
+    if (!current()) return;
+    applyObservation(data);
     let work = [], repositories = [];
     if (context?.project) {
       const project = await api("GET", `/projects/${encodeURIComponent(context.project.project_id)}`); assertView(connection);
+      if (!current()) return;
       work = (project.work || []).filter(item => item.host === host && item.session_id === sid);
       repositories = project.project?.repositories || [];
     } else if (row.worktree_id && state.caps?.features?.execution_delivery?.version === 1) {
       const detail = await api("GET", `/worktrees/${encodeURIComponent(row.worktree_id)}`); assertView(connection);
+      if (!current()) return;
       work = (detail.worktree?.work || []).filter(item => item.host === host && item.session_id === sid);
     }
-    fill(result, deliveryPills,
+    if (!current()) return;
+    const content = h("div", {},
       ...work.map(item => deliveryWork(item, repositories, true)),
       data.work_items?.length ? sessionWorkLine(data.work_items) : null,
       !work.some(item => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+    if (!deliveryPills.isConnected) result.append(deliveryPills);
+    const old = result.querySelector("[data-session-work]");
+    content.dataset.sessionWork = "";
+    if (!old) result.append(content);
+    else if (!old.isEqualNode(content)) old.replaceWith(content);
     await loadDelivery(data.work_items);
+    if (!current()) return;
+    result.querySelector("[data-session-result-empty]")?.remove();
     if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length)
-      result.append(h("p", {class: "muted"}, t("workspace_result_empty")));
+      result.append(h("p", {class: "muted", "data-session-result-empty": ""}, t("workspace_result_empty")));
   };
   const loadMessages = async (offset = messageOffset, latest = false) => {
     if (offset == null) return;
     const request = ++messageRequest;
-    const get = offset => api("GET", `${path}/messages?last_n=30&include_tools=true&offset=${offset}${readingSupported ? "&max_chars=60000&max_message_chars=60000" : ""}`);
-    let read = await get(offset); assertView(connection);
-    if (request !== messageRequest) return;
-    const restore = firstMessages && readingSupported ? read.reading?.position : null;
-    if (restore && Number.isInteger(restore.page_offset) && restore.page_offset >= 0) {
-      const savedOffset = Math.max(0, restore.page_offset - 15);
-      if (savedOffset !== offset) {offset = savedOffset; read = await get(offset); assertView(connection);}
+    const get = (offset, size = messageWindow) => api("GET", `${path}/messages?last_n=${size}&include_tools=true&offset=${offset}${readingSupported ? "&max_chars=60000&max_message_chars=60000" : ""}`);
+    let read;
+    try {
+      try { read = await get(offset); }
+      catch (error) {
+        // Too large for the response limit: try once with a smaller window before giving up.
+        if (error?.status !== 413 || messageWindow <= 10) throw error;
+        assertView(connection);
+        if (request !== messageRequest) return;
+        read = await get(offset, 10); messageWindow = 10;
+      }
+      assertView(connection);
       if (request !== messageRequest) return;
+      const restore = firstMessages && readingSupported ? read.reading?.position : null;
+      if (restore && Number.isInteger(restore.page_offset) && restore.page_offset >= 0) {
+        const savedOffset = Math.max(0, restore.page_offset - Math.floor(messageWindow / 2));
+        if (savedOffset !== offset) {offset = savedOffset; read = await get(offset); assertView(connection);}
+        if (request !== messageRequest) return;
+      }
+      messageOffset = offset; nextMessageOffset = read.next_offset; firstMessages = false;
+      conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : {next_offset: read.next_offset});
+    } catch (error) {
+      if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
+      conversation.fail({title: error?.status === 413 ? t("session_err_too_large") : t("message_window_failed"),
+        retry: () => refresh().catch(() => {})});
+      throw error;
     }
-    messageOffset = offset; nextMessageOffset = read.next_offset; firstMessages = false;
-    conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : {next_offset: read.next_offset});
+  };
+  const scheduleRetry = () => {
+    if (retryTimer || withdrawn || disposed) return;
+    const delay = retryDelay; retryDelay = Math.min(retryDelay * 2, 30_000);
+    retryAt = Date.now() + delay;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (!readReady && !refreshInFlight && !withdrawn && !disposed) refresh().catch(() => {});
+    }, delay);
+  };
+  const backLink = () => {
+    const origin = originHref();
+    return origin ? h("a", {href: origin.href, class: "ui-button secondary"}, t("session_back", {view: t("ui_" + origin.view)}))
+      : h("a", {href: "#/sessions", class: "ui-button secondary"}, t("session_back_sessions"));
+  };
+  const withdraw = kind => {
+    const first = !withdrawn;
+    withdrawn = kind;
+    clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000;
+    // Late reads for the withdrawn session must not paint again.
+    ++observationRequest; ++deliveryTicket; ++messageRequest; cps.clear(); deliveryKnown.clear();
+    state.observations?.delete(`session:${host}/${sid}`);
+    if (first && !results.hidden && !wide.matches) results.close();
+    conversation.clear(); pending.replaceChildren(); pendingIdentity = undefined; status.replaceChildren(); readError = null;
+    deliveryPills.replaceChildren(); result.replaceChildren(); metadata.replaceChildren();
+    sourcesPanel?.dispose(); sourcesPanel = null; sourcesBody.replaceChildren(sourcesEmpty());
+    titleNode.textContent = t("session_heading"); markSlot.replaceChildren(); pillSlot.replaceChildren(); meta.replaceChildren();
+    overflow.hidden = true; row = null; readReady = false; updateControls(); syncWide();
+    if (first) {workspaceNode.remove(); if (context?.picker) context.picker.hidden = true; head.after(withdrawnSlot);}
+    withdrawnSlot.replaceChildren(h("div", {"data-session-withdrawn": kind},
+      emptyState({icon: "circle-alert", title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"), action: backLink()})));
+  };
+  const reinstate = () => {
+    withdrawn = "";
+    withdrawnSlot.remove(); if (context?.picker) context.picker.hidden = false; head.after(workspaceNode);
+    overflow.hidden = false; syncWide();
+    void settleRefreshes([cps.load(), labels.refresh()]).catch(() => {});
   };
   const refresh = async (fromEvent = false) => {
+    assertView(connection);
+    if (disposed) return;
+    // Replayed, unacknowledged events obey the same backoff as timer retries.
+    if (fromEvent && retryTimer && Date.now() < retryAt && readError) throw readError.error;
     if (refreshInFlight) {
       await refreshInFlight;
       if (fromEvent) return refresh(true);
@@ -1636,30 +1828,44 @@ async function viewSession(main, host, sid, context = null) {
     refreshInFlight = (async () => {
       try {
         await settleRefreshes([loadObservation(), loadMessages()]);
+        if (withdrawn) reinstate();
         await permissions?.refresh(fromEvent);
-        readReady = true; updateControls(); readError?.remove(); readError = null;
+        readReady = true; retryDelay = 1000; clearTimeout(retryTimer); retryTimer = null;
+        updateControls(); readError?.remove(); readError = null;
       } catch (error) {
-        readReady = false; updateControls(); readError = errorBox(error); status.replaceChildren(readError); throw error;
+        // Withdrawal is the settled, displayed state: it does not keep the event batch failing.
+        if (error?.sessionWithdrawn) {withdraw(error.sessionWithdrawn); return;}
+        readReady = false; updateControls();
+        readError = sessionErrorBox(error, {label: t("ui_retry"), run: () => refresh().catch(() => {})});
+        readError.error = error;
+        if (!withdrawn) status.replaceChildren(readError);
+        scheduleRetry(); throw error;
       }
     })();
     try { await refreshInFlight; } finally { refreshInFlight = null; }
   };
   // Keep the subscription after a partial initial failure. The view already contains controls;
   // returning here would let later journal pages be acknowledged without refreshing them.
-  try { await settleRefreshes([refresh(), cps.load(), labels.refresh()]); } catch { /* retain the failure and drafts */ }
-  const retry = setInterval(() => {
-    if (!readReady && !refreshInFlight) refresh().catch(() => {});
-  }, 1000);
+  try { await refresh(); if (!withdrawn) await settleRefreshes([cps.load(), labels.refresh()]); } catch { /* retain the failure and drafts */ }
   const reload = debounceRefresh(() => refresh(true), 500), reloadCps = debounceRefresh(cps.load, 500);
-  const off = onEvents(ev => { observations.changed(ev); return settleRefreshes([
-    (observationAffected("session", `${host}/${sid}`, ev) || ["work_item", "integration", "worktree"].includes(ev.resource_type)
-      || context?.project && ["project", "operation", "task", "execution"].includes(ev.resource_type)) ? reload() : Promise.resolve(),
-    ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
-    ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
-    (observationAffected("session", `${host}/${sid}`, ev) || ev.resource_type === "operation") ? labels.refresh(true) : Promise.resolve(),
-    instructions?.box.open && (observationAffected("session", `${host}/${sid}`, ev) || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
-  ]); });
-  return () => {clearInterval(retry); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
+  const off = onEvents(ev => {
+    observations.changed(ev);
+    const own = observationAffected("session", `${host}/${sid}`, ev);
+    // While withdrawn, only this session's own events may bring it back; nothing else repaints.
+    if (withdrawn) return own ? reload() : Promise.resolve();
+    const affected = own || ["work_item", "integration", "worktree"].includes(ev.resource_type)
+      || context?.project && ["project", "operation", "task", "execution"].includes(ev.resource_type);
+    return (affected ? reload() : Promise.resolve()).then(() => {
+      if (withdrawn || disposed) return;
+      return settleRefreshes([
+        ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
+        ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
+        (own || ev.resource_type === "operation") ? labels.refresh(true) : Promise.resolve(),
+        instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
+      ]);
+    });
+  });
+  return () => {disposed = true; clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 
@@ -1672,6 +1878,7 @@ function checkpointPanel(host, sid) {
   const status = h("div", { class: "muted" });
   // A checkpoint never changes, so its row is built once: a reload on a new event keeps an open form and its draft.
   const rows = new Map();
+  let ticket = 0;
   let preview = null; // what the source looks like now (read-only): the commit picker and "source moved on"
   const row = cp => rows.get(cp.checkpoint_id) || rows.set(cp.checkpoint_id, buildRow(cp)).get(cp.checkpoint_id);
   const buildRow = cp => {
@@ -1712,22 +1919,24 @@ function checkpointPanel(host, sid) {
             if (!expectedHead) fill(out, h("p", { class: "error" }, t("source_unavailable"))); } catch (e) { fill(out, errorBox(e)); } }
         } }, t("continue_from_checkpoint")));
   };
-  const load = async () => {
+  const load = async (mine = ticket) => {
     try {
       const p = new URLSearchParams({ host, session_id: sid, limit: "10" });
       const page = await api("GET", `/checkpoints?${p}`);
+      if (mine !== ticket) return;
       list.replaceChildren(...(page.checkpoints.length ? page.checkpoints.map(row)
         : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []));
-    } catch (e) { list.replaceChildren(errorBox(e)); }
+    } catch (e) { if (mine === ticket) list.replaceChildren(errorBox(e)); }
   };
   const pick = h("select", { "aria-label": t("commit"), hidden: true });
   const note = h("textarea", { placeholder: t("checkpoint_note_placeholder"), hidden: true });
   let previewFailed = false;
-  const loadPreview = async () => {
+  const loadPreview = async (mine = ticket) => {
     if (!can) return;
     try {
       const selectedCommit = pick.value;
       const current = (await api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}/checkpoint-preview`)).preview;
+      if (mine !== ticket) return;
       if (!Array.isArray(current?.commits)) throw new Error("Invalid checkpoint preview");
       preview = current;
       pick.replaceChildren(...preview.commits.map(c => h("option", { value: c.hash }, `${c.hash.slice(0, 10)} · ${c.message}`)));
@@ -1739,6 +1948,7 @@ function checkpointPanel(host, sid) {
       if (preview.dirty) status.replaceChildren(h("span", { class: "error" }, t("dirty_warning", { n: preview.dirty })));
     } catch (error) {
       // A stale picker must never silently become a request to checkpoint HEAD.
+      if (mine !== ticket) return;
       previewFailed = true; create.disabled = true; status.replaceChildren(errorBox(error));
     }
   };
@@ -1761,7 +1971,8 @@ function checkpointPanel(host, sid) {
   const box = h("div", {class: "session-checkpoints"},
     can ? null : h("p", {class: "muted session-checkpoint-state"}, t("session_checkpoint_unavailable")),
     note, can ? h("div", {class: "actions"}, pick, create) : null, status, list, checkpointWhy);
-  return { box, load: async () => { await loadPreview(); await load(); } };
+  return {box, clear: () => {ticket++; rows.clear(); list.replaceChildren(); status.replaceChildren();},
+    load: async () => {const mine = ticket; await loadPreview(mine); if (mine === ticket) await load(mine);}};
 }
 
 async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceRepository) {

@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Withdraw unavailable Sessions as one inline state, retain drafts and original retry
+  keys, back off failed reads, and render message failures inside the transcript.
+  Validate and group Session Delivery receipts without clearing them during refresh;
+  distinguish transient failures, withdrawn sources and partial pages.
+
 - Keep Session approval and question actions visible without keyboard scrolling; cap
   prompt content, preserve transcript space and use the shared Results drawer widths.
   Simplify manual-session copy and distinguish unknown titles, agents and disclosures.
