@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
+import {periodWindow} from '../src/pm-agents-trend.js';
 import {workbenchFixture,route,workspaceId} from './pm-workbench-fixture.ts';
 
 function fixture(){
@@ -29,25 +30,36 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
   test('lazy resource read, distinct model evidence, missing counters and quota',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await expect(page.locator('[data-pm-charter]')).toBeVisible();expect(f.state.reads).toHaveLength(0);
     await page.locator('[data-pm-view="agents"]').click();await expect(resources(page)).toContainText('1,000');
-    await resources(page).getByRole('button',{name:'Implementation',exact:true}).click();const detail=resources(page).locator('[data-resource-detail]');
+    await resources(page).locator('[data-resource-row="Implementation"]').click();const detail=resources(page).locator('[data-resource-detail]');
     await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Not provided');
-    await expect(resources(page).locator('[data-resource-quota]')).toContainText('75%');
-    await resources(page).getByRole('searchbox').fill('reviewer');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(1);
-    await expect(resources(page).locator('[data-resource-quota]')).not.toContainText('75%');
-    await resources(page).getByLabel('Observation window').selectOption('30');await expect.poll(()=>f.state.reads.at(-1)).toContain('since=');
+    await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
+    await expect(resources(page).locator('[data-resource-chart]')).toHaveCount(0);
+    expect(f.state.reads[0]).not.toContain('buckets='); expect(f.state.reads[0]).not.toContain('tz=');
+    await resources(page).locator('[data-resource-filter]').selectOption({label:'Role · reviewer'});
+    await expect(resources(page).locator('[data-resource-row]')).toHaveCount(1);
+    await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
+    await expect(resources(page).locator('[data-resource-metrics]')).toContainText('1,650');
+    const before=f.state.reads.length;
+    await resources(page).getByRole('radio',{name:'30d',exact:true}).click();
+    await expect.poll(()=>f.state.reads.length).toBe(before+1);
+    expect(f.state.reads.at(-1)).toContain('since=');
+    expect(f.state.reads.at(-1)).not.toContain('buckets='); expect(f.state.reads.at(-1)).not.toContain('tz=');
+    const last=new URL(f.state.reads.at(-1)||'','http://fixture');
+    const zone=await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(last.searchParams.get('since')).toBe(periodWindow(new Date(last.searchParams.get('until')||''),30,zone).since);
   });
   test('source withdrawal removes details, quota and counts',async({page})=>{
-    const f=fixture();await open(page,native,f);await resources(page).getByRole('button',{name:'Implementation',exact:true}).click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
-    f.state.deny=true;await resources(page).getByRole('button',{name:'Update records',exact:true}).click();
+    const f=fixture();await open(page,native,f);await resources(page).locator('[data-resource-row="Implementation"]').click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
+    f.state.deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(resources(page)).toContainText('Your token lacks this scope');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(0);
-    await expect(resources(page).locator('[data-resource-detail]')).toBeHidden();await expect(resources(page)).not.toContainText('75%');await expect(resources(page)).not.toContainText('1,000');
+    await expect(resources(page).locator('[data-resource-detail]')).toBeHidden();await expect(resources(page)).not.toContainText('25%');await expect(resources(page)).not.toContainText('1,000');
   });
   test('unchanged refresh preserves details disclosure and keyboard focus',async({page})=>{
-    const f=fixture();await open(page,native,f);const select=resources(page).getByRole('button',{name:'Implementation',exact:true});await select.click();
+    const f=fixture();await open(page,native,f);const select=resources(page).locator('[data-resource-row="Implementation"]');await select.click();
     const disclosure=resources(page).locator('[data-resource-detail] details');await disclosure.locator('summary').click();
     await select.focus();await page.clock.install();await page.clock.fastForward(61000);
     await expect(select).toBeFocused();await expect(disclosure).toHaveAttribute('open','');
-    await resources(page).getByRole('button',{name:'Close details',exact:true}).click();await expect(select).toBeFocused();
+    await resources(page).getByRole('button',{name:'Close',exact:true}).click();await expect(select).toBeFocused();
   });
   test('pause and view exit stop polling and late reads cannot restore a departed view',async({page})=>{
     const f=fixture();await page.clock.install();await open(page,native,f);await resources(page).getByRole('button',{name:'Pause updates',exact:true}).click();
@@ -58,7 +70,7 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
   test('empty sources remain unknown and model text is inert',async({page})=>{
     const f=fixture();f.state.data.rows[0].configurations[0].requested_model='<img src=x onerror=alert(1)>';
     await open(page,native,f);await expect(resources(page)).toContainText('<img src=x');await expect(resources(page).locator('img')).toHaveCount(0);
-    f.state.data.rows=[];f.state.data.quota_pools=[];await resources(page).getByRole('button',{name:'Update records',exact:true}).click();
+    f.state.data.rows=[];f.state.data.quota_pools=[];await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(resources(page)).toContainText('No usage sources are connected');await expect(resources(page)).toContainText('No current quota balance');
   });
 });

@@ -7,6 +7,7 @@
   --ok: #167a4a; --ok-soft: #e7f5ee; --warn: #9a5b00; --warn-soft: #fdf3e1;
   --bad: #c0362c; --bad-soft: #fdecea; --info: #2f5bd3; --info-soft: #edf1fd;
   --review: #6a4bc4; --review-soft: #f1edfc; --neutral: #5b6577; --neutral-soft: #eef1f5;
+  --usage-claude: #3c1f86;
   --font-ui: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
   --fs-caption: 12px; --fs-small: 13px; --fs-body: 14px; --fs-read: 15px;
@@ -28,6 +29,7 @@
   --line: #272e3a; --line-strong: #364052; --text: #e7eaf0; --text-2: #a9b1c0; --text-3: #8a93a4;
   --accent: #7a9bff; --accent-hover: #93afff; --accent-soft: #1e2740; --accent-text: #0b0e14;
   --ok: #4fc386; --warn: #e3a64d; --bad: #ff7a6e; --info: #7a9bff; --review: #b39cff; --neutral: #9aa3b2;
+  --usage-claude: #ece3ff;
   --ok-soft: color-mix(in srgb, var(--ok) 14%, var(--surface));
   --warn-soft: color-mix(in srgb, var(--warn) 14%, var(--surface));
   --bad-soft: color-mix(in srgb, var(--bad) 14%, var(--surface));
@@ -42,6 +44,7 @@
   --line: #272e3a; --line-strong: #364052; --text: #e7eaf0; --text-2: #a9b1c0; --text-3: #8a93a4;
   --accent: #7a9bff; --accent-hover: #93afff; --accent-soft: #1e2740; --accent-text: #0b0e14;
   --ok: #4fc386; --warn: #e3a64d; --bad: #ff7a6e; --info: #7a9bff; --review: #b39cff; --neutral: #9aa3b2;
+  --usage-claude: #ece3ff;
   --ok-soft: color-mix(in srgb, var(--ok) 14%, var(--surface));
   --warn-soft: color-mix(in srgb, var(--warn) 14%, var(--surface));
   --bad-soft: color-mix(in srgb, var(--bad) 14%, var(--surface));

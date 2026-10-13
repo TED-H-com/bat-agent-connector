@@ -434,10 +434,36 @@ belong to their active view; an empty overflow is hidden.
 
 Agent resources uses the same compact navigation, table and inspector. Separate
 source-reported models from requested model context, and observed tokens from current
-quota windows. Missing counters stay unknown. Source failures withdraw numbers and
-model details together. Filters and a selected inspector keep their place during
-background reads; the toolbar can pause view updates without stopping collection.
-When the resources projection includes `buckets`, the usage trend is one stacked bar
-per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
-The resources read includes `buckets` only when the request sets `buckets=day`.
-Omit the chart when the projection has no buckets.
+quota windows. Missing counters stay unknown. Source failures withdraw numbers, chart
+contributions and model details together. The source filter sits with the list and
+narrows that list only; metrics, the chart and quota keep describing every row.
+Below 800px each source is a tabbable button in a list, marked with `aria-current`.
+The toolbar can pause view updates without stopping collection. While paused the meta
+line shows the absolute collection time ("Paused · data from 5:00 PM") and the button
+label changes between "Pause updates" and "Resume updates", with no pressed state.
+Events do not refresh or repaint a paused view.
+
+The chart is drawn only when `features.pm_resources.buckets.granularity` is `day`.
+Otherwise the read sends neither `buckets` nor `tz`. A supported read uses one window
+for every period: `since` is local midnight of today − N + 1 in the request zone, and
+`until` is now, so "1d" is today only. A rejected zone is retried once as UTC. If both
+attempts are rejected, later reads omit buckets until the view is opened again. The
+plot is a summary image. Exact values is the keyboard path to each day's numbers; the
+bars themselves are not focused. Date labels use the same local day format as the meta
+line in that table, and a short month/day form on the axis. The y-axis is one step
+above the peak (1, 2, 2.5 or 5 × 10ⁿ) in compact numerals. Open days keep full colour,
+with a hatch and the in-progress or settling marker. A day that starts before the
+window is "Partial day", never Settling. A null total is a dashed stub in that CLI's
+stack position. A covered zero is a baseline tick.
+
+A tick asks for buckets again only when the capability is on and the trend is missing,
+the readable sources changed, the local date moved past the trend, or the trend is
+older than 15 minutes. Until that read returns, the chart draws only series that are
+still readable. A tick waits out a user-initiated read. The Partial pill follows
+unreadable, pending, catching-up, stale or binding-changed rows, and totals that are
+null or observed-only. Today's open bar does not turn the pill on by itself. Quota is
+one block per pool and window, titled by the CLI or source and the window length, as
+used percent, and is never added across pools. A whole number of days reads as an
+n-day window. The pool id stays in that pool's details. An unconfirmed pool has no
+percent. The page-header refresh is the only reload control. A 403 or 404 withdraws
+rows, counts, the chart and the inspector together.
