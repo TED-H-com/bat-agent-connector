@@ -574,13 +574,3 @@ test('UTC calendar days render identical ticks, bars, and meta in Pacific/Honolu
   expect(snapshots['Pacific/Honolulu'].ticks).toEqual(snapshots['Asia/Taipei'].ticks);
   expect(snapshots['Pacific/Honolulu'].bars).toEqual(snapshots['Asia/Taipei'].bars);
 });
-
-
-
-
-
-
-
-
-
-
