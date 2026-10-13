@@ -340,7 +340,7 @@ for (const {locale, width} of cases) {
     await page.goto(demoRoute('manual'));
     await expect(page.locator('h1')).toContainText(copy.manualTitle);
     await expectProjectName(page, width, copy.name);
-    await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '這個工作階段由人在 BAT 建立' : 'A person created this session in BAT');
+    await expect(page.locator('[data-session-readonly]')).toContainText(locale === 'zh-TW' ? '這是有人在 BAT 開啟的工作階段' : 'Started in BAT by a person');
     await expect(page.locator('#main')).toContainText(copy.manualNote);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
     if (width < 1200) await page.getByRole('button', {name: locale === 'zh-TW' ? '成果' : 'Results', exact: true}).click();

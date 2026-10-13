@@ -97,7 +97,11 @@ for (const native of [false, true]) {
     await page.getByPlaceholder("What should the agent do next…").fill("Use the original attached input");
     await page.getByRole("combobox", {name: "Agent"}).selectOption("codex");
     await page.getByRole("button", {name: "Start agent work", exact: true}).click();
-    await expect(page.getByText("LOST Lost apply reply")).toBeVisible();
+    const error = page.locator('[data-session-error=LOST]');
+    await expect(error).toContainText('Unable to complete this request');
+    await error.getByText('Error details', {exact: true}).click();
+    await expect(error.locator('details')).toContainText('LOST');
+    await expect(error.locator('details')).toContainText('Lost apply reply');
     state.source = "2".repeat(40);
     await page.reload();
     await page.getByRole("button", {name: "Start from here", exact: true}).click();

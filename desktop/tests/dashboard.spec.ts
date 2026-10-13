@@ -99,7 +99,10 @@ test("lost operation reply preserves draft and idempotency key across reopening"
   const draft = page.locator("textarea").first();
   await draft.fill("Fixture task instructions");
   await page.getByRole("button", {name: "Send", exact: true}).click();
-  await expect(page.locator(".error")).toContainText("Failed to fetch");
+  const error = page.locator('.session-error');
+  await expect(error).toBeVisible();
+  await error.getByText('Error details', {exact: true}).click();
+  await expect(error.locator('details')).toContainText('Failed to fetch');
   await page.reload();
   await expect(draft).toHaveValue("Fixture task instructions");
   await page.getByRole("button", {name: "Send", exact: true}).click();
