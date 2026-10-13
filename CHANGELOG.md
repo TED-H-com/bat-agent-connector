@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Refresh the English and Traditional Chinese README, PM first-use navigation and public
+  website around the project-to-decision journey. Replace the gallery with eight bilingual
+  scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
+  Record #132 / #134 / #133 as unmerged and separate branch, installation and live evidence
+  in the [October 14 progress draft](docs/product/progress-2026-10-14.md).
+
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
   with scripted native analysis, temporary Git, original-key adoption recovery
   and step screenshots. It currently exposes two Overview contract gaps;
