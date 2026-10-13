@@ -909,7 +909,9 @@ def _issues(ops, principal, workspace_id, milestones, notes, coverage):
         return []
     from . import pm_issue_mappings
     emitted, after, scanned, truncated = [], 0, 0, False
-    while scanned < _ISSUE_SCAN and len(emitted) < MAX_ISSUES:
+    # The emitted cap is enforced in-page: stopping the loop when it is reached would end on a page
+    # boundary without noticing that a further visible row exists, and would report partial as total.
+    while scanned < _ISSUE_SCAN:
         limit = min(50, _ISSUE_SCAN - scanned)
         page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=limit)
         if page["coverage"]["visibility_filtered"]:
