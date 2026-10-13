@@ -239,16 +239,92 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
   let draftSourceUnavailable = false;
-  async function draftSourceRefs() {
-    return Promise.all(launch.refs.map(async (ref, position) => {
-      if (ref.kind !== 'governance') return ref;
+  async function draftSourceRefs(refs = launch.refs, reads = new Map()) {
+    const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+    const read = path => {
+      if (!reads.has(path)) reads.set(path, api('GET', endpoint + path));
+      return reads.get(path);
+    };
+    const unavailable = () => {throw Error(t('pd_unavailable'));};
+    const scoped = (value, id, key) => {
+      if (!value || value.workspace_id !== workspaceId || key && value[key] !== id) unavailable();
+      return value;
+    };
+    const text = value => typeof value === 'string' && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : '';
+    return Promise.all(refs.map(async (ref, position) => {
+      if (ref.available === false) return {kind: ref.kind, position, available: false};
+      if (ref.available === true && !['governance','plan_revision'].includes(ref.kind) && text(ref.label))
+        return {...ref, label:text(ref.label), bound_label:text(ref.bound_label)};
       try {
-        const value = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/governance/${encodeURIComponent(ref.id)}`);
-        if (value.workspace_id !== workspaceId || value.record?.record_id !== ref.id
-          || typeof value.revision?.document?.title !== 'string') throw Error(t('pm_scope_mismatch'));
-        return {...ref, label: value.revision.document.title};
+        let label = '', recordType = null;
+        if (ref.kind === 'governance') {
+          const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
+          scoped(value, workspaceId, 'workspace_id');
+          if (value.record?.record_id !== ref.id) unavailable();
+          label = text(value.revision?.document?.title);
+          recordType = value.record.kind;
+        } else if (ref.kind === 'plan_revision' || ref.kind === 'requirement') {
+          const id = ref.kind === 'plan_revision' ? ref.id : ref.revision_id;
+          const plan = scoped((await read(`/plans/${encodeURIComponent(id)}`)).plan, id, 'revision_id');
+          if (ref.kind === 'requirement') {
+            const requirement = plan.document?.requirements?.find(item => item.id === ref.id);
+            if (!requirement) unavailable();
+            label = text(requirement.text);
+          } else label = [text(plan.document?.title), Number.isSafeInteger(plan.sequence) ? t('pm_revision_number', {number: plan.sequence}) : ''].filter(Boolean).join(' · ');
+        } else if (ref.kind === 'work_item') {
+          const value = await read(`/kanban/${encodeURIComponent(ref.id)}`);
+          scoped(value, workspaceId, 'workspace_id');
+          const card = value.card;
+          if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
+          label = text(card.work.title);
+        } else if (ref.kind === 'snapshot') {
+          const snapshot = scoped((await read(`/snapshots/${encodeURIComponent(ref.id)}`)).snapshot, ref.id, 'snapshot_id');
+          label = text(snapshot.title);
+        } else if (ref.kind === 'milestone') {
+          const revision = scoped((await read(`/roadmap/revisions/${encodeURIComponent(ref.revision_id)}`)).revision, ref.revision_id, 'revision_id');
+          const milestone = revision.document?.milestones?.find(item => item.milestone_id === ref.id);
+          if (!milestone) unavailable();
+          label = text(milestone.title);
+        } else if (ref.kind === 'finding') {
+          const value = scoped(await read('/maintenance-findings/current'), workspaceId, 'workspace_id');
+          if (value.visibility_filtered || value.observation_ref?.observation_id !== ref.observation_id || value.observation_ref?.document_digest !== ref.document_digest) unavailable();
+          const finding = Object.values(value.sources || {}).flatMap(source => source.findings || []).find(item => item.finding_id === ref.id);
+          if (!finding) unavailable();
+          label = text(finding.title) || text(finding.statement) || text(finding.facts?.statement) || text(finding.native?.title);
+          if (!label && Number.isSafeInteger(finding.native?.number)) label = `#${finding.native.number}`;
+        } else if (ref.kind === 'repair') {
+          const value = scoped(await read(`/maintenance-repairs/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
+          const repair = value.repair;
+          if (repair?.repair_id !== ref.id) unavailable();
+          const work = await draftSourceRefs([{kind:'work_item', id:repair.work_item_id}], reads);
+          if (work[0].available === false) unavailable();
+          label = work[0].label;
+        } else if (ref.kind === 'follow_up') {
+          const value = scoped(await read(`/follow-ups/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
+          if (value.intake?.intake_id !== ref.id) unavailable();
+          label = text(value.intake.document?.title) || text(value.intake.document?.statement);
+        } else if (ref.kind === 'proposal') {
+          const value = scoped(await read(`/conversation-proposals/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
+          if (value.proposal?.proposal_id !== ref.id) unavailable();
+          label = text(value.proposal.document?.title);
+        } else if (ref.kind === 'issue_mapping') {
+          const value = scoped(await read(`/issue-mappings/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
+          if (value.current?.mapping_id !== ref.id) unavailable();
+          const work = await draftSourceRefs([{kind:'work_item', id:value.current.work_item_id}], reads);
+          if (work[0].available === false) unavailable();
+          label = text(value.current.document?.public_title) || work[0].label;
+        } else if (ref.kind === 'meeting') {
+          const value = scoped(await read(`/meetings/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
+          if (value.meeting?.meeting_id !== ref.id) unavailable();
+          label = text(value.meeting.title);
+        } else if (ref.kind === 'lifecycle_transition') {
+          const value = scoped(await read(`/lifecycle/transitions/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
+          if (value.transition?.transition_id !== ref.id) unavailable();
+          label = text(value.transition.reason);
+        } else unavailable();
+        return {...ref, available:true, label: label || t('ui_reason_not_recorded'), record_type: recordType, bound_label: text(ref.bound_label)};
       } catch (error) {
-        if (![403, 404].includes(error.status)) throw error;
+        // Display metadata never authorizes Send, and failed reads never consult a URL or old label.
         return {kind: ref.kind, position, available: false};
       }
     }));
@@ -1021,6 +1097,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           threadList = {...next, threads: [...threadList.threads, ...next.threads]};
         }
       }
+      const contextReads = new Map();
+      if (data?.thread?.context) data = {...data, thread:{...data.thread, context:await draftSourceRefs(data.thread.context, contextReads)}};
+      if (threadList?.threads) threadList = {...threadList, threads:await Promise.all(threadList.threads.map(async thread => ({...thread, context:await draftSourceRefs(thread.context || [], contextReads)})))};
+      alive();
       if (ticket !== sequence) return;
       if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t('pm_scope_mismatch'));
       workspace = detail?.workspace || null; pmCapabilities = workspaceCaps; loaded = true; status.replaceChildren();

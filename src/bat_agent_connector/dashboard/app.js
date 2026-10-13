@@ -3389,7 +3389,7 @@ var discussionStrings = {
 		pd_kind_requirement: "Requirement",
 		pd_kind_milestone: "Milestone",
 		pd_kind_work_item: "Work",
-		pd_kind_governance: "Decision",
+		pd_kind_governance: "Governance record",
 		pd_kind_finding: "Finding",
 		pd_kind_repair: "Repair",
 		pd_kind_follow_up: "Follow-up",
@@ -3460,7 +3460,7 @@ var discussionStrings = {
 		pd_kind_requirement: "需求",
 		pd_kind_milestone: "里程碑",
 		pd_kind_work_item: "工作",
-		pd_kind_governance: "決策",
+		pd_kind_governance: "治理紀錄",
 		pd_kind_finding: "發現",
 		pd_kind_repair: "修復",
 		pd_kind_follow_up: "追蹤",
@@ -4554,7 +4554,7 @@ var pmRegisterStrings = {
 		reg_type_issue: "問題",
 		reg_type_action: "行動",
 		reg_type_change: "變更",
-		reg_type_decision: "決定",
+		reg_type_decision: "決策",
 		reg_filter_status: "狀態",
 		reg_any_status: "任何狀態",
 		reg_filter_owner: "負責人",
@@ -4609,7 +4609,7 @@ var pmRegisterStrings = {
 		reg_step_evidence: "證據",
 		reg_step_review: "審查",
 		reg_step_proposal: "提案",
-		reg_step_decision: "決定",
+		reg_step_decision: "決策",
 		reg_step_revision: "修訂",
 		reg_kind_governance: "治理",
 		reg_kind_finding: "發現",
@@ -4640,14 +4640,14 @@ var pmRegisterStrings = {
 		reg_status_waiting_external: "等待外部",
 		reg_status_accepted: "已受理",
 		reg_status_format_valid: "格式有效",
-		reg_status_recorded_discussion_decision: "已記錄的決定",
+		reg_status_recorded_discussion_decision: "已記錄的決策",
 		reg_status_continue_maintenance: "繼續維護",
 		reg_status_bounded_repair_proposal: "有界限的修復提案",
 		reg_status_adopted_direction: "已採用方向",
 		reg_action_repair: "轉成工作",
 		reg_action_evidence: "記錄證據",
 		reg_action_revise: "修訂紀錄",
-		reg_action_decide: "記錄決定",
+		reg_action_decide: "記錄決策",
 		reg_action_link: "連結採用",
 		reg_action_publish: "發布議題",
 		reg_action_cancel: "停止追蹤",
@@ -8153,6 +8153,7 @@ var STRINGS = {
 		session_details: "詳細資料",
 		session_discuss: "與 PM 討論",
 		session_checkpoint_unavailable: "此主機無法建立檢查點",
+		session_sent: "已送出",
 		session_sent_now: "已送出 · 剛剛",
 		session_send_queued: "已排隊",
 		session_send_failed: "失敗",
@@ -9703,6 +9704,7 @@ var STRINGS = {
 		session_details: "Details",
 		session_discuss: "Discuss with PM",
 		session_checkpoint_unavailable: "Not available on this host",
+		session_sent: "Sent",
 		session_sent_now: "Sent · just now",
 		session_send_queued: "Queued",
 		session_send_failed: "Failed",
@@ -10522,8 +10524,8 @@ function metric({ label, value, context, bar, pill } = {}) {
 	})) : null;
 	return h$1("div", { class: "ui-metric" }, h$1("div", { class: "ui-meta" }, label), h$1("div", { class: "ui-metric-value" }, unknown ? "—" : value, unknown ? statusPill("unknown") : pill || null), context ? h$1("div", { class: "ui-metric-context" }, context) : null, track);
 }
-function emptyState({ icon = "inbox", title, text, action }) {
-	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
+function emptyState({ icon = "inbox", title, text, action, heading = "h2" }) {
+	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1(heading === "h3" ? "h3" : "h2", {}, title), text ? h$1("p", {}, text) : null, action);
 }
 function skeleton(rows = 3, { label = t("ui_loading") } = {}) {
 	return h$1("div", {
@@ -12633,10 +12635,15 @@ function discussionLabel(t, prefix, value) {
 	const key = prefix + value, label = t(key);
 	return label === key ? t("ui_status_unknown") : label;
 }
-function discussionContext(t, refs = [], { limit = refs.length, onMore, title = "" } = {}) {
+function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
 	const chips = refs.slice(0, limit).map((ref) => {
-		const kind = discussionLabel(t, "pd_kind_", ref.kind);
-		const text = ref.available === false ? `${kind} · ${t("pd_unavailable")}` : [kind, ref.label || ref.bound_label || ref.title || (refs.length === 1 ? title : "")].filter(Boolean).join(" · ");
+		const text = `${[
+			"risk",
+			"issue",
+			"action",
+			"change",
+			"decision"
+		].includes(ref.record_type) ? t("reg_type_" + ref.record_type) : discussionLabel(t, "pd_kind_", ref.kind)} · ${ref.available === false ? t("pd_unavailable") : ref.label || t("pd_unavailable")}`;
 		const chip = contextChip({ text });
 		chip.dataset.discussionContext = ref.kind;
 		chip.title = text;
@@ -22697,9 +22704,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		summaryHost.append(ageSection, weekSection, reasonSection);
 	}
 	function displayTitle(row) {
-		const title = labelSegment(row?.title);
+		const title = labelSegment(row?.title) || labelSegment(row?.statement);
 		if (title) return title;
-		if (!(row?.source?.kind === "finding" || String(row?.row_id || "").startsWith("finding."))) return [t("reg_type_" + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || labelSegment(row?.source?.id)].filter(Boolean).join(" · ");
+		if (!(row?.source?.kind === "finding" || String(row?.row_id || "").startsWith("finding."))) return [t("reg_type_" + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || t("ui_reason_not_recorded")].filter(Boolean).join(" · ");
 		const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
 		const kind = t("reg_kind_finding");
 		return qualifier ? `${kind} · ${qualifier}` : kind;
@@ -35628,18 +35635,110 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	} catch {}
 	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
 	let draftSourceUnavailable = false;
-	async function draftSourceRefs() {
-		return Promise.all(launch.refs.map(async (ref, position) => {
-			if (ref.kind !== "governance") return ref;
+	async function draftSourceRefs(refs = launch.refs, reads = new Map()) {
+		const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+		const read = (path) => {
+			if (!reads.has(path)) reads.set(path, api("GET", endpoint + path));
+			return reads.get(path);
+		};
+		const unavailable = () => {
+			throw Error(t("pd_unavailable"));
+		};
+		const scoped = (value, id, key) => {
+			if (!value || value.workspace_id !== workspaceId || key && value[key] !== id) unavailable();
+			return value;
+		};
+		const text = (value) => typeof value === "string" && value.trim() && !/(?:pm[a-z]*|wi|op)_[0-9a-f]{20,64}/.test(value.trim()) ? value.trim() : "";
+		return Promise.all(refs.map(async (ref, position) => {
+			if (ref.available === false) return {
+				kind: ref.kind,
+				position,
+				available: false
+			};
+			if (ref.available === true && !["governance", "plan_revision"].includes(ref.kind) && text(ref.label)) return {
+				...ref,
+				label: text(ref.label),
+				bound_label: text(ref.bound_label)
+			};
 			try {
-				const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/governance/${encodeURIComponent(ref.id)}`);
-				if (value.workspace_id !== workspaceId || value.record?.record_id !== ref.id || typeof value.revision?.document?.title !== "string") throw Error(t("pm_scope_mismatch"));
+				let label = "", recordType = null;
+				if (ref.kind === "governance") {
+					const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
+					scoped(value, workspaceId, "workspace_id");
+					if (value.record?.record_id !== ref.id) unavailable();
+					label = text(value.revision?.document?.title);
+					recordType = value.record.kind;
+				} else if (ref.kind === "plan_revision" || ref.kind === "requirement") {
+					const id = ref.kind === "plan_revision" ? ref.id : ref.revision_id;
+					const plan = scoped((await read(`/plans/${encodeURIComponent(id)}`)).plan, id, "revision_id");
+					if (ref.kind === "requirement") {
+						const requirement = plan.document?.requirements?.find((item) => item.id === ref.id);
+						if (!requirement) unavailable();
+						label = text(requirement.text);
+					} else label = [text(plan.document?.title), Number.isSafeInteger(plan.sequence) ? t("pm_revision_number", { number: plan.sequence }) : ""].filter(Boolean).join(" · ");
+				} else if (ref.kind === "work_item") {
+					const value = await read(`/kanban/${encodeURIComponent(ref.id)}`);
+					scoped(value, workspaceId, "workspace_id");
+					const card = value.card;
+					if (card?.work_item_id !== ref.id || card.work?.work_item_id !== ref.id || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== ref.id) unavailable();
+					label = text(card.work.title);
+				} else if (ref.kind === "snapshot") {
+					const snapshot = scoped((await read(`/snapshots/${encodeURIComponent(ref.id)}`)).snapshot, ref.id, "snapshot_id");
+					label = text(snapshot.title);
+				} else if (ref.kind === "milestone") {
+					const milestone = scoped((await read(`/roadmap/revisions/${encodeURIComponent(ref.revision_id)}`)).revision, ref.revision_id, "revision_id").document?.milestones?.find((item) => item.milestone_id === ref.id);
+					if (!milestone) unavailable();
+					label = text(milestone.title);
+				} else if (ref.kind === "finding") {
+					const value = scoped(await read("/maintenance-findings/current"), workspaceId, "workspace_id");
+					if (value.visibility_filtered || value.observation_ref?.observation_id !== ref.observation_id || value.observation_ref?.document_digest !== ref.document_digest) unavailable();
+					const finding = Object.values(value.sources || {}).flatMap((source) => source.findings || []).find((item) => item.finding_id === ref.id);
+					if (!finding) unavailable();
+					label = text(finding.title) || text(finding.statement) || text(finding.facts?.statement) || text(finding.native?.title);
+					if (!label && Number.isSafeInteger(finding.native?.number)) label = `#${finding.native.number}`;
+				} else if (ref.kind === "repair") {
+					const repair = scoped(await read(`/maintenance-repairs/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id").repair;
+					if (repair?.repair_id !== ref.id) unavailable();
+					const work = await draftSourceRefs([{
+						kind: "work_item",
+						id: repair.work_item_id
+					}], reads);
+					if (work[0].available === false) unavailable();
+					label = work[0].label;
+				} else if (ref.kind === "follow_up") {
+					const value = scoped(await read(`/follow-ups/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
+					if (value.intake?.intake_id !== ref.id) unavailable();
+					label = text(value.intake.document?.title) || text(value.intake.document?.statement);
+				} else if (ref.kind === "proposal") {
+					const value = scoped(await read(`/conversation-proposals/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
+					if (value.proposal?.proposal_id !== ref.id) unavailable();
+					label = text(value.proposal.document?.title);
+				} else if (ref.kind === "issue_mapping") {
+					const value = scoped(await read(`/issue-mappings/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
+					if (value.current?.mapping_id !== ref.id) unavailable();
+					const work = await draftSourceRefs([{
+						kind: "work_item",
+						id: value.current.work_item_id
+					}], reads);
+					if (work[0].available === false) unavailable();
+					label = text(value.current.document?.public_title) || work[0].label;
+				} else if (ref.kind === "meeting") {
+					const value = scoped(await read(`/meetings/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
+					if (value.meeting?.meeting_id !== ref.id) unavailable();
+					label = text(value.meeting.title);
+				} else if (ref.kind === "lifecycle_transition") {
+					const value = scoped(await read(`/lifecycle/transitions/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id");
+					if (value.transition?.transition_id !== ref.id) unavailable();
+					label = text(value.transition.reason);
+				} else unavailable();
 				return {
 					...ref,
-					label: value.revision.document.title
+					available: true,
+					label: label || t("ui_reason_not_recorded"),
+					record_type: recordType,
+					bound_label: text(ref.bound_label)
 				};
 			} catch (error) {
-				if (![403, 404].includes(error.status)) throw error;
 				return {
 					kind: ref.kind,
 					position,
@@ -37451,6 +37550,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					};
 				}
 			}
+			const contextReads = new Map();
+			if (data?.thread?.context) data = {
+				...data,
+				thread: {
+					...data.thread,
+					context: await draftSourceRefs(data.thread.context, contextReads)
+				}
+			};
+			if (threadList?.threads) threadList = {
+				...threadList,
+				threads: await Promise.all(threadList.threads.map(async (thread) => ({
+					...thread,
+					context: await draftSourceRefs(thread.context || [], contextReads)
+				})))
+			};
+			alive();
 			if (ticket !== sequence) return;
 			if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t("pm_scope_mismatch"));
 			workspace = detail?.workspace || null;
@@ -49514,8 +49629,11 @@ async function viewSession(main, host, sid, context = null) {
 			class: "muted session-send-line",
 			title: id || null
 		});
-		if (op.status === "succeeded") line.textContent = t("session_sent_now");
-		else if (queued) line.textContent = t("session_send_queued");
+		if (op.status === "succeeded") {
+			line.append(t("session_sent"));
+			const stamp = timeStamp(op.updated_at);
+			if (stamp instanceof Node) line.append(" · ", stamp);
+		} else if (queued) line.textContent = t("session_send_queued");
 		else if (failed) line.append(t("session_send_failed"), " · ", h("button", {
 			type: "button",
 			class: "session-retry",
@@ -49591,7 +49709,10 @@ async function viewSession(main, host, sid, context = null) {
 		if (instructions.box.open) instructions.refresh();
 	});
 	const deliveryPills = h("div", { class: "session-delivery-pills" });
-	const sourcesEmpty = () => emptyState({ title: t("session_sources_empty") });
+	const sourcesEmpty = () => emptyState({
+		title: t("session_sources_empty"),
+		heading: "h3"
+	});
 	const sourcesBody = h("div", { "data-session-sources": "" }, sourcesEmpty());
 	const details = disclosure({
 		label: t("session_details_session"),

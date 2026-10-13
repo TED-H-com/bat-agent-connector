@@ -102,9 +102,7 @@ ancestors, falling back to the creation-time opener under the same checks.
 
 Context chips keep a 24px visual height, one ellipsized line, a full tooltip and
 accessible label. Interactive chips use an invisible 44px touch area without moving
-neighbours. Discussion chips use authorized record labels; a single launch context
-can use its supplied record title until central returns its label. Withdrawn context
-never uses that fallback.
+neighbours. Discussion chips resolve every launch kind through central reads. Saved context uses the same display resolver and its authorized labels. URLs retain only context identities; their title never labels a chip. Missing sources show Kind · Unavailable and block a draft Send. Governance records use their own type, and plans include the title and revision number; IDs remain in Details.
 
 All `details > summary` elements, including retained legacy forms, share the same
 chevron, 13px/500 label and 90-degree open rotation through `ui/components.css`.
@@ -741,3 +739,5 @@ The session-local navigation helper performs no writes or authority inference.
 Inspector Escape ignores editable fields outside the inspector. Table expanders stay outside the Tab order; rows expand with Left/Right. Mobile Session controls use distinct Info and Compose icons. The unsized rail adapts to 232px at 1000–1199px; a saved user resize remains explicit. Deep links derive their initial breadcrumb from the route.
 
 Requirements uses its own table width: below 1100px it hides Milestone and Next blocker; below 720px it uses the same compact row interaction as mobile. The title track has a 14rem minimum whenever columns are visible.
+
+A successful Session send uses the central operation updated_at in the shared time ticker. A receipt without that timestamp says Sent without fabricating an instant.

@@ -172,10 +172,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     summaryHost.append(ageSection, weekSection, reasonSection);
   }
   function displayTitle(row) {
-    const title = labelSegment(row?.title);
+    const title = labelSegment(row?.title) || labelSegment(row?.statement);
     if (title) return title;
     const finding = row?.source?.kind === 'finding' || String(row?.row_id || '').startsWith('finding.');
-    if (!finding) return [t('reg_type_' + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || labelSegment(row?.source?.id)].filter(Boolean).join(' · ');
+    if (!finding) return [t('reg_type_' + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || t('ui_reason_not_recorded')].filter(Boolean).join(' · ');
     const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
     const kind = t('reg_kind_finding');
     return qualifier ? `${kind} · ${qualifier}` : kind;

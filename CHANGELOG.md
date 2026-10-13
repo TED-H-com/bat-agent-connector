@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Resolve discussion source names centrally in every context kind, retain identity-only request params, and use 決策 consistently for decision records.
+- Keep headers and Requirements titles readable in narrow columns; retain inspector search focus and row expansion keys.
+- Age Session send receipts from central completion times and preserve the shared inspector width and heading hierarchy.
+
 - Preserve the full-width session caption above its action row on narrow screens.
 
 - Normalize empty/loading states and refresh icons, localize operation step status, distinguish complete schedule, session and navigation counts, and polish zoom, missing record titles and token totals.

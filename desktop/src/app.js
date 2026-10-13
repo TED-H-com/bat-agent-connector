@@ -1400,7 +1400,11 @@ async function viewSession(main, host, sid, context = null) {
     const queued = ["queued", "accepted", "pending", "running"].includes(op.status);
     const failed = op.status === "failed" || op.status === "cancelled";
     const line = h("p", {class: "muted session-send-line", title: id || null});
-    if (op.status === "succeeded") line.textContent = t("session_sent_now");
+    if (op.status === "succeeded") {
+      line.append(t("session_sent"));
+      const stamp = timeStamp(op.updated_at);
+      if (stamp instanceof Node) line.append(" · ", stamp);
+    }
     else if (queued) line.textContent = t("session_send_queued");
     else if (failed) line.append(t("session_send_failed"), " · ", h("button", {type: "button", class: "session-retry", onclick: () => send.click()}, t("session_send_retry")));
     else line.textContent = t("op_" + op.status);
@@ -1427,7 +1431,7 @@ async function viewSession(main, host, sid, context = null) {
     guard: () => assertView(connection), host, sessionId: sid, errorBox}) : null;
   instructions?.box.addEventListener("toggle", () => {if (instructions.box.open) instructions.refresh();});
   const deliveryPills = h("div", {class: "session-delivery-pills"});
-  const sourcesEmpty = () => emptyState({title:t('session_sources_empty')});
+  const sourcesEmpty = () => emptyState({title:t('session_sources_empty'), heading:'h3'});
   const sourcesBody = h("div", {"data-session-sources": ""}, sourcesEmpty());
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");

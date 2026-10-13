@@ -53,7 +53,7 @@
 .ui-empty { display: grid; justify-items: center; text-align: center; gap: var(--space-3); padding: var(--space-8); }
 .ui-empty > .ui-icon { width: 24px; height: 24px; color: var(--text-3); }
 .ui-empty h2, .ui-empty p { margin: 0; }
-.ui-empty h2 { font-size: var(--fs-body); font-weight: 600; }
+.ui-empty :is(h2, h3) { font-size: var(--fs-body); font-weight: 600; }
 .ui-skeleton { display: grid; gap: var(--space-3); }
 .ui-skeleton > div { height: 32px; background: var(--surface-2); border-radius: var(--r-xs); }
 .ui-disclosure > summary { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--fs-small); font-weight: 500; color: var(--text-2); min-height: 32px; list-style: none; }
