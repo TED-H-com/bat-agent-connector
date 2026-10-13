@@ -322,6 +322,25 @@ def test_explicit_namespaces_do_not_collide(db):
         assert pm_read_cache.remember('one', 'id', lambda: 3) == 1
 
 
+def test_decorator_preserves_keyword_calls_and_argument_errors(db):
+    calls = []
+
+    @pm_read_cache.memoized
+    def read(connection, *, principal):
+        calls.append(principal)
+        return principal.actor
+
+    with _snapshot(db), pm_read_cache.scope(db):
+        assert read(connection=db, principal=OWNER) == OWNER.actor
+        assert read(db, principal=OWNER) == OWNER.actor
+        assert len(calls) == 1
+        with pytest.raises(TypeError):
+            read(db, connection=db, principal=OWNER)
+        with pytest.raises(TypeError):
+            read(principal=OWNER)
+        assert len(calls) == 1
+
+
 def test_scope_exception_clears_values_and_rolls_back_snapshot(db):
     with pytest.raises(ValueError), _snapshot(db), pm_read_cache.scope(db):
         pm_read_cache.remember('one', 'id', lambda: 1)

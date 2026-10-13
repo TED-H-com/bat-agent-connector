@@ -6,6 +6,7 @@ from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import wraps
+from inspect import signature
 
 from .api_auth import Principal
 
@@ -119,11 +120,16 @@ def remember(kind, key, load):
 
 
 def memoized(fn):
+    first_name = next(iter(signature(fn).parameters))
+
     @wraps(fn)
-    def read(first, *args, **kwargs):
+    def read(*args, **kwargs):
+        first = args[0] if args else kwargs.get(first_name)
         current = _CURRENT.get()
         db = getattr(first, 'db', first)
         if current is None or current.db is not db:
-            return fn(first, *args, **kwargs)
-        return remember(fn, (args, sorted(kwargs.items())), lambda: fn(first, *args, **kwargs))
+            return fn(*args, **kwargs)
+        key = (args[1:], sorted(kwargs.items())) if args else (
+            (), sorted((name, value) for name, value in kwargs.items() if name != first_name))
+        return remember(fn, key, lambda: fn(*args, **kwargs))
     return read
