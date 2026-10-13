@@ -249,7 +249,10 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     if (ref.kind === 'work_item') {
       for (const card of cards.filter(row => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
       renderTable(); await select(ref.id, true);
-      if (!detail.hidden && matchMedia('(max-width: 1100px)').matches) detail.scrollIntoView({block: 'start'});
+      if (!detail.hidden && matchMedia('(max-width: 1100px)').matches) {
+        detail.scrollIntoView({block: 'start'});
+        window.scrollBy(0, -Math.max(0, document.querySelector('.top')?.getBoundingClientRect().bottom || 0));
+      }
       return;
     }
     if (ref.kind !== 'requirement' || ref.revision_id !== plan?.revision_id) return;

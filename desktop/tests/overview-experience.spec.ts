@@ -413,6 +413,8 @@ test('390px navigation selects visible requirement and work after an earlier vis
   await expect(row.locator('button')).toBeFocused();
   await openPmSection(page, 'overview'); await root(page).locator('[data-overview-delivery] button').first().click();
   await expect(page.locator('[data-rtm-detail] h3')).toBeFocused(); await expect(page.locator('[data-rtm-detail] h3')).toBeInViewport({ratio: 1});
+  const heading = (await page.locator('[data-rtm-detail] h3').boundingBox())!, topbar = (await page.locator('.top').boundingBox())!;
+  expect(heading.y).toBeGreaterThanOrEqual(topbar.y + topbar.height);
   expect(f.state.writes).toEqual([]);
 });
 
