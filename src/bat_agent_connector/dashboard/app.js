@@ -23596,10 +23596,32 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			}));
 		}
 	}
+	async function openRef(ref) {
+		if (!data) await refresh();
+		if (!active || !data) return;
+		const row = data.rows.find((row) => {
+			const identity = scheduleRef(row, data);
+			return identity?.kind === ref.kind && identity.id === ref.id && identity.revision_id === ref.revision_id;
+		});
+		if (!row) return;
+		let parent = row.parent_id;
+		const visited = new Set();
+		while (parent && !visited.has(parent)) {
+			visited.add(parent);
+			collapsed.delete(parent);
+			parent = data.rows.find((row) => row.id === parent)?.parent_id;
+		}
+		draw();
+		focusRow(row.id);
+		const opener = element.querySelector(`[data-schedule-select="${CSS.escape(row.id)}"]`);
+		opener?.scrollIntoView({ block: "nearest" });
+		select(row.id, opener);
+	}
 	return {
 		element,
 		refresh,
 		withdraw,
+		openRef,
 		setActive(value) {
 			active = value;
 			if (!value) {
@@ -29353,6 +29375,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			workbench?.select(destination);
 			if (destination === "requirements") await traceability?.openRef?.(ref);
 			else if (ref.kind === "governance") await governance?.openRef?.(ref);
+			else if (ref.kind === "milestone" && destination === "schedule" && schedule) await schedule.openRef(ref);
 			else if (ref.kind === "milestone" && destination === "schedule") {
 				const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
 				if (node) {

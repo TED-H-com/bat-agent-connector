@@ -221,7 +221,8 @@ Overview records its scroll position before a view switch hides it. Repeated sel
 of the active view does not scroll. Related inspectors return focus to the destination
 heading; requirement and work links reveal their selection on narrow screens. Requirements and
 work open the existing requirements selection; governance opens its existing Issues
-selection. Attention without a governance record opens its exact central context
+selection. Milestone links select the Schedule projection row only when its milestone and baseline
+revision match. Attention without a governance record opens its exact central context
 in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,
 with three bullets before expansion and a labeled Sources disclosure on each card.
 Report controls use the same report terminology and shared disclosure chevrons;

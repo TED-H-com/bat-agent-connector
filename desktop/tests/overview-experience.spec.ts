@@ -450,3 +450,15 @@ test('requirement, finding, unbound and strip discussion links keep exact contex
   await expect(page.locator('[data-overview-discuss]')).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/discussions/new?from=overview`);
   expect(f.state.writes).toEqual([]);
 });
+
+
+for (const width of [390, 1440]) test(`sidebar milestone opens the matching Schedule inspector ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900}); const f = fixture(); await boot(page, f);
+  const milestone = f.state.data.milestones.at(-1);
+  await root(page).locator(`[data-overview-milestone="${milestone.milestone_id}"] button`).click();
+  await expect(page.locator('[data-pm-view=schedule]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('[data-schedule-inspector]')).toContainText(milestone.title);
+  const selected = page.locator('[data-schedule-select][aria-selected=true]'); await expect(selected).toHaveAttribute('aria-label', milestone.title);
+  const id = await selected.getAttribute('data-schedule-select'); await page.keyboard.press('Escape');
+  const row = page.locator(`[data-schedule-select="${id}"]`); await expect(row).toBeFocused(); await expect(row).toBeInViewport(); expect(f.state.writes).toEqual([]);
+});

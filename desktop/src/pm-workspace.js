@@ -288,6 +288,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
         else if (ref.kind === 'governance') await governance?.openRef?.(ref);
+        else if (ref.kind === 'milestone' && destination === 'schedule' && schedule) await schedule.openRef(ref);
         else if (ref.kind === 'milestone' && destination === 'schedule') {
           const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
