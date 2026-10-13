@@ -3,12 +3,13 @@ import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
+import {fromRequirements, openSession, type Override} from './session-fixture.ts';
 
 const shotDir = `${process.env.TMPDIR || '/tmp'}/session-shots`;
 
 async function shot(page: Page, name: string) {
   mkdirSync(shotDir, {recursive: true});
-  await page.screenshot({path: `${shotDir}/${name}.png`});
+  await page.screenshot({path: `${shotDir}/${name}.png`, animations: 'disabled'});
 }
 
 // Hash assignment stays in the same document, so the session can remember the PM view.
@@ -42,7 +43,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const allow = zh ? '允許' : 'Allow';
     const newest = zh ? '新訊息' : 'New messages';
     const more = zh ? '更多操作' : 'More actions';
-    const discuss = zh ? '與專案討論' : 'Discuss with PM';
+    const discuss = zh ? '與 PM 討論' : 'Discuss with PM';
     const results = zh ? '成果' : 'Results';
     const back = zh ? '返回需求' : 'Back to Requirements';
     await page.setViewportSize({width: 1440, height: 900});
@@ -77,7 +78,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const parsed = parseDiscussRefs(String(href).slice(String(href).indexOf('?') + 1));
     expect(parsed.refs).toEqual([{kind: 'work_item', id: ids.work.email}]);
     expect(parsed.title).toBe(copy.sessionImplement);
-    expect(parsed.from).toBe('requirements');
+    expect(parsed.from).toBe(`#/session/${ids.host}/${ids.sessions.implement}?from=requirements`);
     await page.keyboard.press('Escape');
     const scroller = page.locator('.conversation-scroll');
     await expect(scroller.locator('.msg').first()).toBeVisible();
@@ -148,7 +149,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await go(page, `#/session/${ids.host}/${ids.sessions.manual}`);
     await expect(page.locator('.session-pill')).toContainText(zh ? '唯讀' : 'Read-only');
     await expect(page.locator('#workspace-message-input')).toBeHidden();
-    await expect(page.locator('.workspace-composer')).toContainText(zh ? 'API 唯讀' : 'API never writes to it');
+    await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '這裡只能檢視' : 'read-only here');
     await expect(page.getByRole('button', {name: send, exact: true})).toHaveCount(0);
     await expect(page.getByRole('button', {name: zh ? '中斷這一輪' : 'Interrupt turn', exact: true})).toHaveCount(0);
     const text = await page.locator('#main, .workspace-nav').evaluateAll(nodes => nodes.map(node => (node as HTMLElement).innerText).join('\n'));
@@ -183,4 +184,244 @@ test('session workspace dark at 1440', async ({page}) => {
   await go(page, `#/session/${fixture.ids.host}/${fixture.ids.sessions.implement}`);
   await expect(page.locator('h1')).toContainText(fixture.copy.sessionImplement);
   await shot(page, 'session-en-1440-dark');
+});
+
+const askUser = {kind: 'ask_user', toolUseId: 'toolu_layout_q', questions: [
+  {header: 'Threshold', question: 'How many failed attempts before lockout?', options: ['3', '5', '10']},
+  {header: 'Copy', question: 'Which lockout message should members see?', options: ['Short', 'Detailed']},
+  {header: 'Unlock', question: 'Should support be able to unlock accounts?', options: ['Yes', 'No']}]};
+const permission = {kind: 'permission', toolUseId: 'toolu_layout_p', toolName: 'Bash',
+  input_preview: 'Run the rate-limit tests with npm run test -- --grep "lockout"'};
+const withPending = (s: Awaited<ReturnType<typeof openSession>>, pending: unknown): Override => async (input, url) => {
+  if (url.pathname !== `/sessions/${s.ids.host}/${s.ids.sessions.review}`) return undefined;
+  const base = await s.fixture.dispatch({method: 'GET', path: url.pathname});
+  base.data.session.pending = pending; return base;
+};
+
+for (const [width, height] of [[1440, 900], [390, 844]] as const) {
+  test(`approval and question prompts stay reachable at ${width}`, async ({browser}) => {
+    for (const [name, pending] of [['ask_user', askUser], ['permission', permission]] as const) {
+      const s = await openSession(browser, {width, height});
+      s.overrides.push(withPending(s, pending));
+      await fromRequirements(s.page, s.ids, 'review');
+      const {page} = s;
+      await expect(page.locator('.session-asking')).toBeVisible();
+      const send = page.getByRole('button', {name: 'Send', exact: true});
+      // No programmatic focus: a pointer user must see every answer control and Send at rest.
+      const controls = name === 'ask_user' ? [page.getByRole('button', {name: 'Answer', exact: true})]
+        : [page.getByRole('button', {name: 'Allow', exact: true}), page.getByRole('button', {name: 'Deny', exact: true})];
+      for (const control of [...controls, send]) await expect(control).toBeInViewport({ratio: 1});
+      const geometry = await page.evaluate(() => {
+        const scroller = document.querySelector('.conversation-scroll')!.getBoundingClientRect();
+        const composer = document.querySelector('.workspace-composer')!.getBoundingClientRect();
+        const preview = document.querySelector('.session-asking-preview') as HTMLElement | null;
+        return {gap: composer.top - scroller.bottom, scrollerH: scroller.height, mainOverflow: getComputedStyle(document.querySelector('main')!).overflowY,
+          preview: preview ? {display: getComputedStyle(preview).display, width: preview.getBoundingClientRect().width} : null,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
+      });
+      expect(geometry.gap).toBeGreaterThanOrEqual(-1);
+      expect(geometry.scrollerH).toBeGreaterThanOrEqual(100);
+      expect(geometry.mainOverflow).toBe('auto');
+      expect(geometry.overflow).toBeLessThanOrEqual(1);
+      if (name === 'permission') {
+        expect(geometry.preview?.display).toBe('block');
+        expect(geometry.preview!.width).toBeGreaterThan(200);
+        await expect(page.locator('.session-asking-preview')).toHaveText(permission.input_preview);
+      } else {
+        // A pointer can scroll to the last question and use the whole answer field.
+        await page.locator('.session-asking-content').hover();
+        await page.mouse.wheel(0, 1200);
+        await expect(page.locator('.session-question input').last()).toBeInViewport({ratio: 1});
+        await expect(send).toBeInViewport({ratio: 1});
+      }
+      await s.context.close();
+    }
+  });
+}
+
+test('Results drawer is 400px at 1000 and the sheet fills the window at 390', async ({browser}) => {
+  for (const locale of ['en', 'zh-TW'] as const) {
+    const s = await openSession(browser, {locale, width: 1000, height: 900});
+    await fromRequirements(s.page, s.ids, 'implement');
+    const {page} = s;
+    const results = page.getByRole('button', {name: locale === 'zh-TW' ? '成果' : 'Results', exact: true});
+    await results.click();
+    await expect(page.locator('.ui-inspector')).toBeVisible();
+    expect(Math.round((await page.locator('.ui-inspector').boundingBox())!.width)).toBe(400);
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({width: 390, height: 844});
+    await results.click();
+    expect(Math.round((await page.locator('.ui-inspector').boundingBox())!.width)).toBe(390);
+    await s.context.close();
+  }
+});
+
+test('the reader stays pinned after their own send and after resizing', async ({browser}) => {
+  const s = await openSession(browser);
+  await fromRequirements(s.page, s.ids, 'implement');
+  const {page} = s;
+  const scroller = page.locator('.conversation-scroll');
+  const distance = () => scroller.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight);
+  await expect(scroller.locator('.msg').first()).toBeVisible();
+  await expect.poll(distance).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeInViewport({ratio: 1});
+  await page.locator('#workspace-message-input textarea').fill('Please also cover the lockout copy.');
+  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect(scroller).toContainText('Please also cover the lockout copy.');
+  await expect(page.locator('.session-send-line')).toBeVisible();
+  await expect.poll(distance).toBeLessThanOrEqual(1);
+  await expect(page.locator('.conversation-jump')).toBeHidden();
+  for (const [width, height] of [[768, 900], [390, 844]]) {
+    await page.setViewportSize({width, height});
+    await expect.poll(distance).toBeLessThanOrEqual(1);
+    await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeInViewport({ratio: 1});
+  }
+  await s.context.close();
+});
+
+test('the jump control names what it does and returns focus to the transcript', async ({browser}) => {
+  const s = await openSession(browser);
+  await fromRequirements(s.page, s.ids, 'implement');
+  const {page} = s;
+  const scroller = page.locator('.conversation-scroll');
+  await expect(scroller.locator('.msg').first()).toBeVisible();
+  await scroller.evaluate(el => {el.scrollTop = 0;});
+  const jump = page.locator('.conversation-jump');
+  await expect(jump).toHaveText('Back to latest');
+  await jump.click();
+  await expect(scroller).toBeFocused();
+  await expect(jump).toBeHidden();
+  await scroller.evaluate(el => {el.scrollTop = 0;});
+  s.fixture.appendSession(s.ids.sessions.implement, 'A note that arrived while you were reading.');
+  s.sessionEvent('implement');
+  await expect(scroller).toContainText('A note that arrived while you were reading.');
+  await expect(jump).toHaveText('New messages');
+  await scroller.evaluate(el => {el.scrollTop = el.scrollHeight;});
+  await expect(jump).toBeHidden();
+  await s.context.close();
+});
+
+const at = (minutes: number) => new Date(Date.parse('2026-10-13T09:00:00.000Z') - minutes * 60_000).toISOString();
+const crafted = [
+  {id: 'm-user', role: 'user', ts: at(90), text: 'Please implement the sign-in handler.'},
+  {id: 'm-codex', role: 'assistant', agent: 'codex', model: 'example-codex', ts: at(80), text: 'I will start with the handler.'},
+  {id: 'm-tool-ok', role: 'tool', tool: 'Bash', status: 'completed', ts: at(60), text: 'npm test\n' + 'ok - case passes\n'.repeat(400)},
+  {id: 'm-tool-fail', role: 'tool', tool: 'Bash', status: 'failed', ts: at(50), text: 'npm run lint\nError: 3 problems\n  src/login.ts:12:5  error  Unexpected any'},
+  {id: 'm-tool-run', role: 'tool', tool: 'Bash', status: 'running', ts: at(40), text: 'npm run e2e -- --project=chromium'},
+  {id: 'm-system', role: 'system', ts: at(20), text: 'Context compacted\nThe earlier conversation was summarised.'},
+  {id: 'm-noagent', role: 'assistant', ts: at(10), text: 'An assistant row without an agent name.', duration_ms: 4200},
+  {id: 'm-slow', role: 'assistant', agent: 'claude', model: 'example-claude', ts: at(2), text: 'Last message.\n'.repeat(20), duration_ms: 65_000},
+];
+
+test('transcript rows: marks, tool labels, durations and collapsed rows that stay collapsed', async ({browser}) => {
+  const s = await openSession(browser, {overrides: [(input, url) => url.pathname === '/sessions/demo-host/signin-implement/messages'
+    ? {status: 200, data: {messages: structuredClone(crafted), next_offset: null}} : undefined]});
+  await fromRequirements(s.page, s.ids, 'implement');
+  const {page} = s;
+  const row = (id: string) => page.locator(`[data-message-id="${id}"]`);
+  await expect(row('m-slow')).toBeVisible();
+  // One mark vocabulary: the header and the transcript agree; tool and system rows carry an icon.
+  await expect(row('m-codex').locator(':scope > .ui-agent-mark')).toHaveText('CX');
+  await expect(row('m-slow').locator(':scope > .ui-agent-mark')).toHaveText('CL');
+  await expect(row('m-noagent').locator(':scope > .ui-agent-mark')).toHaveText('?');
+  for (const id of ['m-tool-ok', 'm-system']) {
+    await expect(row(id).locator(':scope > .ui-agent-mark svg')).toHaveCount(1);
+    await expect(row(id).locator(':scope > .ui-agent-mark')).toHaveText('');
+  }
+  await expect(row('m-codex').locator('.message-chip')).toHaveText('example-codex');
+  await expect(row('m-noagent')).toContainText('4.2 s');
+  await expect(row('m-noagent').locator('.message-extra')).not.toContainText('ms');
+  await expect(row('m-slow')).toContainText('1 min 5 s');
+  // Tool labels: the first line of any command, and a short title.
+  await expect(row('m-tool-run').locator('.message-tool-label')).toHaveText('npm run e2e -- --project=chromium');
+  await expect(row('m-tool-ok').locator('.message-tool-label')).toHaveText('npm test');
+  const title = await row('m-tool-ok').locator('summary').getAttribute('title');
+  expect((title || '').length).toBeLessThanOrEqual(200);
+  // Collapse the failed and running rows; a live event must not re-open them or move rows.
+  await row('m-tool-fail').locator('summary').click();
+  await row('m-tool-run').locator('summary').click();
+  await expect(row('m-tool-fail').locator('details')).not.toHaveAttribute('open');
+  const scroller = page.locator('.conversation-scroll');
+  await scroller.evaluate(el => {const r = el.querySelector('[data-message-id="m-tool-fail"]')!;
+    el.scrollTop += r.getBoundingClientRect().top - el.getBoundingClientRect().top - 10;});
+  await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeGreaterThan(48);
+  const before = await row('m-system').evaluate(el => Math.round(el.getBoundingClientRect().top));
+  const reads = s.reads('/sessions/demo-host/signin-implement/messages');
+  s.sessionEvent('implement');
+  await expect.poll(() => s.reads('/sessions/demo-host/signin-implement/messages')).toBeGreaterThan(reads);
+  await page.waitForTimeout(300);
+  await expect(row('m-tool-fail').locator('details')).not.toHaveAttribute('open');
+  await expect(row('m-tool-run').locator('details')).not.toHaveAttribute('open');
+  expect(await row('m-system').evaluate(el => Math.round(el.getBoundingClientRect().top))).toBe(before);
+  await s.context.close();
+});
+
+test('headings, landmarks and disclosure names are distinct', async ({browser}) => {
+  const s = await openSession(browser);
+  await fromRequirements(s.page, s.ids, 'implement');
+  const {page} = s;
+  await expect(page.locator('.conversation-scroll .msg').first()).toBeVisible();
+  await expect(page.locator('.ui-inspector-body .session-section-title:visible').first()).toBeVisible();
+  expect(await page.locator('.ui-inspector-body h2').count()).toBe(0);
+  expect(await page.locator('.ui-inspector-body h3.session-section-title').count()).toBeGreaterThanOrEqual(3);
+  await expect(page.getByRole('region', {name: 'Messages', exact: true})).toHaveCount(1);
+  const names = await page.locator('.ui-inspector-body summary').evaluateAll(nodes => nodes
+    .filter(node => (node as HTMLElement).checkVisibility()).map(node => (node as HTMLElement).innerText.trim()));
+  expect(names).not.toContain('Details');
+  expect(new Set(names).size).toBe(names.length);
+  expect(names).toEqual(expect.arrayContaining(['Checkpoint notes', 'Session details']));
+  await s.context.close();
+});
+
+test('window caption counts what was received; an empty transcript uses the empty state', async ({browser}) => {
+  for (const locale of ['en', 'zh-TW'] as const) {
+    const zh = locale === 'zh-TW';
+    const s = await openSession(browser, {locale, overrides: [(input, url) => url.pathname === '/sessions/demo-host/ratelimit-review/messages'
+      ? {status: 200, data: {messages: [], next_offset: null}} : undefined]});
+    await fromRequirements(s.page, s.ids, 'manual');
+    const {page} = s;
+    await expect(page.locator('.conversation-window')).toHaveText(zh ? '1 則訊息' : '1 message');
+    await go(page, `#/session/${s.ids.host}/${s.ids.sessions.implement}`);
+    await expect(page.locator('.conversation-window')).toHaveText(zh ? '18 則訊息' : '18 messages');
+    await go(page, `#/session/${s.ids.host}/${s.ids.sessions.review}`);
+    await expect(page.locator('.conversation-scroll .ui-empty')).toContainText(zh ? '還沒有訊息' : 'No messages yet');
+    await expect(page.locator('.conversation-window')).toHaveText(zh ? '0 則訊息' : '0 messages');
+    // The empty toolbar takes no room between the transcript and the composer.
+    expect(await page.locator('.conversation-toolbar').evaluate(el => el.getBoundingClientRect().height)).toBe(0);
+    await s.context.close();
+  }
+});
+
+test('the way back survives a reload', async ({browser}) => {
+  const s = await openSession(browser);
+  await fromRequirements(s.page, s.ids, 'implement');
+  const {page} = s;
+  await expect(page.locator('[data-session-back=requirements]')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.workspace-session-heading h1')).toContainText(s.copy.sessionImplement);
+  await expect(page.locator('[data-session-back=requirements]')).toHaveText('Back to Requirements');
+  await s.context.close();
+});
+
+test('Requirements links keep their return query; Discuss returns to the exact Session after reload', async ({browser}) => {
+  const s = await openSession(browser);
+  const {page, ids} = s;
+  await page.goto(`/dashboard/#/pm/${ids.workspaceId}/requirements`);
+  await page.locator('[data-rtm-toggle]').first().click();
+  await page.locator(`[data-rtm-select="${ids.work.email}"]`).first().click();
+  const href = `#/session/${ids.host}/${ids.sessions.implement}?from=requirements`;
+  const session = page.locator('[data-work-inspector]').getByRole('link').filter({hasText: s.copy.sessionImplement});
+  await expect(session).toHaveAttribute('href', href);
+  await session.click();
+  await expect(page.locator('.workspace-session-heading h1')).toContainText(s.copy.sessionImplement);
+  await page.getByRole('button', {name: 'More actions', exact: true}).click();
+  await page.getByRole('menuitem', {name: 'Discuss with PM', exact: true}).click();
+  const back = page.locator('[data-discussion-back]');
+  await expect(back).toHaveAttribute('href', href);
+  await expect(back).toHaveText('Back to Session');
+  await page.reload();
+  await expect(back).toHaveAttribute('href', href);
+  await back.click();
+  await expect(page.locator('[data-session-back=requirements]')).toBeVisible();
+  await s.context.close();
 });

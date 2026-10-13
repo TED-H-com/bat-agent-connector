@@ -58,7 +58,7 @@ for (const language of ["en", "zh-TW"]) {
         const codex = t("confinement_codex_note");
         if (agent === "codex") {
           assert.equal(note.textContent, effect === "refused" ? blocked + " " + codex : codex);
-          assert.ok(!note.textContent.includes("acceptEdits"));
+          assert.ok(!note.textContent.includes(language === "en" ? "acceptEdits" : "自動接受編輯"));
         } else {
           const expected = {
             verified: t("confinement_account_note"),
@@ -68,14 +68,15 @@ for (const language of ["en", "zh-TW"]) {
           };
           assert.equal(note.textContent, expected[effect]);
           if (effect === "recheck") {
-            assert.ok(note.textContent.includes("acceptEdits") && note.textContent.includes("default"));
+            assert.ok(note.textContent.includes(language === "en" ? "acceptEdits" : "自動接受編輯")
+              && note.textContent.includes(language === "en" ? "default" : "一般權限模式"));
             assert.ok(note.textContent.includes(language === "en" ? "checked again" : "重新查核"));
             assert.ok(note.textContent.includes(language === "en" ? "refuse the start" : "拒絕啟動"));
           }
           if (effect === "fallback_default") {
             assert.ok(note.textContent.includes(reason));
-            assert.ok(note.textContent.includes(language === "en" ? "without acceptEdits" : "不啟用 acceptEdits"));
-            assert.ok(note.textContent.includes(language === "en" ? "no OS write isolation" : "沒有 OS 寫入隔離"));
+            assert.ok(note.textContent.includes(language === "en" ? "without acceptEdits" : "不啟用自動接受編輯"));
+            assert.ok(note.textContent.includes(language === "en" ? "no OS write isolation" : "沒有作業系統的寫入隔離"));
           }
         }
         assert.ok(!/null|undefined|\[object/.test(note.textContent));

@@ -263,6 +263,7 @@ test('native account replacement preserves the actual lost-reply session key wit
   const draft = page.locator('textarea').first();
   await draft.fill('Keep the original instructions');
   await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.locator('.session-error').getByText('Error details', {exact: true}).click();
   await expect(page.getByText('Fixture lost operation reply', {exact: false})).toBeVisible();
   const original = await page.evaluate(() => (window as any).__credentialFixture.calls.find((c: any) => c.command === 'connector_request' && c.args.input.method === 'POST').args.input);
   await page.locator('#live').click();

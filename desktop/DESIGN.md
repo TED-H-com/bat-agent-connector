@@ -559,16 +559,29 @@ mark, one status pill, and one quiet meta line: project, host, and a compact obs
 time (relative within a day, otherwise a short local time with no seconds). Send stays
 the only primary action, on the composer's queue row. Interrupt is a danger button.
 Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
-menu. A manual or unconfirmed session shows Read-only and has no send, answer, or
+menu. An absent title says Untitled session, and an unreported agent uses Unknown.
+A manual or unconfirmed session shows Read-only and has no send, answer, or
 interrupt control.
 
 The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
-body column for the name, compact time, chip, text, and disclosure. Agent and model
-share one inline chip that stays on the name row when it fits. Copy original is an
-icon at the row's right edge. The window caption is quiet. A tool event is one row
+body column for the name, compact time, chip, text, and disclosure. Agent marks use the same vocabulary as the header; tools and system rows use icons.
+The model chip adds only the model when the name already identifies the agent.
+Manual-session user turns say Person. Durations use seconds or minutes. Copy original is an
+icon at the row's right edge. The window caption counts received messages and says Latest only for a partial window.
+An empty transcript uses the shared empty state; an empty toolbar takes no space. A tool event is one row
 (name, compact time, status pill) and its command is a disclosure. New messages
-while the reader is scrolled up show a jump control and do not move the visible row.
-Approval prompts sit above the composer and keep their original operation keys. The
+while the reader is scrolled up show New messages and do not move the visible row.
+Scrolling up without new content shows Back to latest. Activating either restores
+transcript focus. A pinned reader follows layout changes and a successful own send.
+Tool disclosures preserve the reader's toggle until the tool changes state.
+Approval prompts sit above the composer and keep their original operation keys.
+Their preview is a wrapping block, separate from transcript rows. The composer
+occupies at most half the viewport; questions scroll inside it while Answer and
+Send remain reachable. On mobile, a pending prompt uses a compact reply field so
+the question scroller can show a whole answer input. Without a pending prompt, the
+reply composer keeps its natural height so Send stays visible before input focus.
+The transcript has a 160px minimum and the main Session region scrolls as a safety
+net. A manual session has one plain read-only line. The
 last send is one short line; the operation id stays in Details. On a narrow window
 the info and composer collapse icons sit on the caption row and the queue row.
 
@@ -583,3 +596,38 @@ receipts, and pull-request links use the normal link. Identifiers and raw timest
 stay in Details. From a project view, the shell breadcrumb is Workspace / Work /
 Session and the page offers Back to that view. Discuss uses the shared discussion
 link, binding only exact work item refs.
+
+Session inspector subsections use level-three headings under Results; there is
+one Messages landmark. Label details, Send record and Session details have distinct
+disclosure names. Session drawers inherit the shared 400px width, and mobile sheets
+fill the viewport.
+
+A session GET returning 403, 404 or 410 withdraws the whole Session workspace:
+clear transcript, title facts, Delivery and inspector, hide the composer, preserve
+the stored draft, and show one inline state with Back. Pending reads cannot repaint.
+Withdrawal stops timers; an explicit later session event may establish new evidence.
+Transient read failures use exponential retries from 1 to 30 seconds; replayed events
+obey the same delay. Message failures show a transcript state and Retry; oversized
+windows retry once with ten messages. Known error codes have localized recovery
+actions, with the code retained only in Error details.
+
+Session Delivery reuses the work inspector's contract validation and PR grouping.
+Keep validated rows during reads, replace only changed content, show Unknown on
+a first transient failure and Not updated with Retry on a later one. A source
+withdrawal removes cached receipts and their derived counts. A partial window states
+the number shown and more; filtered sources stay Partial. Provider origins determine
+PR links; merging, verified current deployment and acceptance remain separate.
+
+Checkpoints keep the commit picker closed until Record this version is requested.
+Start from here precedes its form; the confinement caveat is in Execution limits.
+Checkpoint notes report missing host capability only when absent, and exact config
+keys remain in Details. Continue shows the central operation state and, when the
+result identifies a new session, Open the new session. The operation ID is in
+Operation details. Checkpoint disclosure state includes the central namespace.
+
+Session return navigation is cosmetic and includes a validated from query. The
+history entry retains the workspace ID only within the exact central namespace
+and session identity, so a reload can return without treating a name or path as a
+binding. Discuss accepts a bounded Session hash as a return origin and returns to
+that session; Requirements/Board and Schedule session links carry their origin.
+The session-local navigation helper performs no writes or authority inference.

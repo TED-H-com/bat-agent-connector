@@ -7010,6 +7010,15 @@ var STRINGS = {
 		message_latest: "回到最新訊息",
 		message_new: "新訊息",
 		message_you: "你",
+		message_person: "使用者",
+		message_seconds: "{s} 秒",
+		message_minutes: "{m} 分 {s} 秒",
+		message_minutes_even: "{m} 分",
+		message_window_one: "1 則訊息",
+		message_window_count: "{count} 則訊息",
+		message_window_latest: "最近 {count} 則訊息",
+		message_window_failed: "無法載入訊息",
+		message_window_stale: "訊息尚未更新",
 		message_system: "系統",
 		message_window: "最近 30 則訊息",
 		message_window_showing: "顯示最近 30 則",
@@ -8131,13 +8140,45 @@ var STRINGS = {
 		only_managed: "只看受管理",
 		only_read_only: "只看唯讀",
 		load_more: "載入更多",
+		session_untitled: "未命名工作階段",
+		session_details_session: "工作階段詳細資料",
+		session_send_details: "傳送紀錄",
+		session_label_details: "標籤詳細資料",
+		session_readonly_manual: "這是有人在 BAT 開啟的工作階段，這裡只能檢視。",
+		session_readonly_unknown: "尚未確認控制權，這裡只能檢視。",
+		session_heading: "工作階段",
+		session_withdrawn_gone: "這個工作階段已無法使用",
+		session_withdrawn_forbidden: "已移除存取權限",
+		session_back_sessions: "返回工作階段",
+		session_error_details: "錯誤詳細資料",
+		session_err_busy: "正在處理另一輪",
+		session_err_changed: "問題已更新",
+		session_err_gone: "這個工作階段已無法使用",
+		session_err_too_large: "訊息量過大，無法載入",
+		session_err_server: "伺服器發生錯誤",
+		session_err_forbidden: "已移除存取權限",
+		session_err_unknown: "無法完成這個請求",
+		session_err_queue: "排在後面",
+		session_err_review: "重新查看",
+		session_delivery_stale: "尚未更新",
+		session_delivery_more: "已顯示 {count} 筆 · 還有更多",
+		session_delivery_removed: "交付紀錄無法使用",
+		session_delivery_none: "尚無交付紀錄",
+		checkpoint_record: "記下",
+		checkpoint_agent: "代理",
+		checkpoint_notes: "檢查點說明",
+		checkpoint_limits: "執行限制",
+		checkpoint_op_details: "操作詳細資料",
+		checkpoint_manual_hint: "若要接續這項工作，請從記錄的提交另開工作階段。",
+		checkpoint_unavailable_keys: "managed_roots · SSH alias · write / orchestrate",
+		needs_start_scope_key: "--scope start",
 		session_results: "成果",
 		session_changes: "變更",
 		session_delivery: "交付",
 		session_sources: "成果來源",
 		session_sources_empty: "尚無成果來源",
 		session_details: "詳細資料",
-		session_discuss: "與專案討論",
+		session_discuss: "與 PM 討論",
 		session_checkpoint_unavailable: "此主機無法建立檢查點",
 		session_sent_now: "已送出 · 剛剛",
 		session_send_queued: "已排隊",
@@ -8158,28 +8199,28 @@ var STRINGS = {
 		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
 		continue_from_checkpoint: "從這裡接續",
 		checkpoints: "檢查點",
-		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的 clone 裡用新的 branch 與工作階段進行。",
-		create_checkpoint: "記下這個檢查點",
+		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的儲存庫複本裡，以新的分支與工作階段進行。",
+		create_checkpoint: "記下這個版本",
 		no_checkpoints: "還沒有記下的檢查點。",
 		excerpt_count: "{n} 則對話",
 		commit: "提交",
 		checkpoint_note_placeholder: "接下來要做什麼（原文，會一併記下，選填）…",
-		dirty_unknown: "未提交的修改：未觀測（這台主機沒有 SSH alias）；不會帶入新工作。",
+		dirty_unknown: "未提交修改尚未觀測，不會帶入新工作。",
 		source_advanced: "來源已有更新的提交；這個檢查點仍固定在原提交。要帶入新版本請再記一次。",
 		started_from: "這個工作階段從提交 {commit} 開出：",
 		source_session: "來源工作階段",
 		dirty_warning: "記錄時有 {n} 個未提交的修改，不會帶入新工作。",
-		continue_placeholder: "要 agent 接著做什麼…",
+		continue_placeholder: "要代理接著做什麼…",
 		start_agent_work: "開始代理工作",
 		open_new_session: "開啟新工作階段",
-		checkpoint_unavailable: "這台主機尚未設定 managed_roots、SSH alias 或 write／orchestrate 權限，不能從檢查點開工。",
-		needs_start_scope: "你的 token 沒有 start 權限，不能開新的 agent 工作；用 --scope start 重新發 token。",
+		checkpoint_unavailable: "此主機缺少受管理目錄、SSH 連線別名或寫入與協調權限，無法從檢查點開工。",
+		needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
 		confinement_prompt_gated: "權限詢問控管",
 		confinement_host_account: "帳號限制",
-		confinement_os_sandbox: "OS sandbox",
-		confinement_os_pending: "OS sandbox（尚未實機驗證）",
+		confinement_os_sandbox: "作業系統沙箱",
+		confinement_os_pending: "作業系統沙箱（尚未實機驗證）",
 		confinement_evidence: "限制證據",
 		confinement_creation: "建立時限制",
 		confinement_current: "目前核對",
@@ -8193,16 +8234,16 @@ var STRINGS = {
 		confinement_status_mismatch: "與紀錄不符",
 		confinement_status_pending: "等待核對",
 		confinement_gap_sandbox_enforcement_unverified: "尚未由 W12 實機驗證阻擋效果",
-		confinement_gap_prompt_rules_are_not_os_isolation: "既有批准規則及 shell 可能允許外部寫入",
+		confinement_gap_prompt_rules_are_not_os_isolation: "既有批准規則及命令介面可能允許外部寫入",
 		confinement_gap_task_recipe_compatibility: "保留 Task Service 測試行為；未新增執行限制",
 		confinement_gap_execution_restriction_unverified: "尚無執行限制證據",
-		confinement_gap_legacy_evidence_missing: "舊 session 缺建立時證據；不自動升級",
-		confinement_claude_note: "Claude 使用 default：未預先授權的編輯及 Bash 會詢問。既有批准規則仍適用，沒有 OS 寫入隔離。建議使用 Codex；個別批准可能允許外部寫入。",
-		confinement_codex_note: "Codex 使用 workspace-write／on-request。未完成實機阻擋驗證；網路及可寫 roots 無法由 BAT 設定，安裝與 localhost 測試可能受限。個別批准可能越過限制。",
-		confinement_account_note: "已查核 BAT 帳號不能寫宣告的私人 roots。Claude 可使用 acceptEdits；限制只涵蓋已查核的 roots，啟動前會重新核對。",
-		confinement_account_blocked: "已宣告帳號限制，但查核尚未通過；新 session 會被拒絕。請修正主機配置。原因：{reason}。",
-		confinement_account_recheck: "啟動 session 時會重新查核帳號限制。通過後，Claude 可使用 acceptEdits；若僅缺少可降級處理的環境加固條件，Claude 仍可用 default 啟動。其他查核失敗會拒絕啟動。",
-		confinement_account_fallback: "帳號查核回報 {reason}。Claude 會使用 default，不啟用 acceptEdits。",
+		confinement_gap_legacy_evidence_missing: "舊工作階段缺少建立時證據；不自動升級",
+		confinement_claude_note: "Claude 使用一般權限模式：未預先授權的編輯及 Bash 會詢問。既有批准規則仍適用，沒有作業系統的寫入隔離。建議使用 Codex；個別批准可能允許外部寫入。",
+		confinement_codex_note: "Codex 採用工作區寫入與要求批准的模式。未完成實機阻擋驗證；網路及可寫目錄無法由 BAT 設定，安裝與本機測試可能受限。個別批准可能越過限制。",
+		confinement_account_note: "已查核 BAT 帳號不能寫宣告的私人目錄。Claude 可自動接受編輯；限制只涵蓋已查核的目錄，啟動前會重新核對。",
+		confinement_account_blocked: "已宣告帳號限制，但查核尚未通過；新工作階段會被拒絕。請修正主機配置。原因：{reason}。",
+		confinement_account_recheck: "啟動工作階段時會重新查核帳號限制。通過後，Claude 可自動接受編輯；若僅缺少可降級處理的環境加固條件，Claude 仍可用一般權限模式啟動。其他查核失敗會拒絕啟動。",
+		confinement_account_fallback: "帳號查核回報 {reason}。Claude 會使用一般權限模式，不啟用自動接受編輯。",
 		repository: "Repository",
 		pull_number: "PR 編號",
 		load_pr: "讀取 PR",
@@ -8513,6 +8554,15 @@ var STRINGS = {
 		message_latest: "Back to latest",
 		message_new: "New messages",
 		message_you: "You",
+		message_person: "Person",
+		message_seconds: "{s} s",
+		message_minutes: "{m} min {s} s",
+		message_minutes_even: "{m} min",
+		message_window_one: "1 message",
+		message_window_count: "{count} messages",
+		message_window_latest: "Latest {count} messages",
+		message_window_failed: "Messages unavailable",
+		message_window_stale: "Messages not updated",
 		message_system: "System",
 		message_window: "Latest 30 messages",
 		message_window_showing: "Showing latest 30",
@@ -9634,6 +9684,38 @@ var STRINGS = {
 		only_managed: "Connector-managed only",
 		only_read_only: "Read-only only",
 		load_more: "Load more",
+		session_untitled: "Untitled session",
+		session_details_session: "Session details",
+		session_send_details: "Send record",
+		session_label_details: "Label details",
+		session_readonly_manual: "Started in BAT by a person, so it's read-only here.",
+		session_readonly_unknown: "Control is unconfirmed, so it is read-only here.",
+		session_heading: "Session",
+		session_withdrawn_gone: "This session is no longer available",
+		session_withdrawn_forbidden: "Access removed",
+		session_back_sessions: "Back to sessions",
+		session_error_details: "Error details",
+		session_err_busy: "Busy with another turn",
+		session_err_changed: "The question changed",
+		session_err_gone: "This session is no longer available",
+		session_err_too_large: "Too many messages to load",
+		session_err_server: "Server error",
+		session_err_forbidden: "Access removed",
+		session_err_unknown: "Unable to complete this request",
+		session_err_queue: "Queue it",
+		session_err_review: "Review it",
+		session_delivery_stale: "Not updated",
+		session_delivery_more: "{count} shown · more",
+		session_delivery_removed: "Delivery unavailable",
+		session_delivery_none: "No recorded deliveries",
+		checkpoint_record: "Record",
+		checkpoint_agent: "Agent",
+		checkpoint_notes: "Checkpoint notes",
+		checkpoint_limits: "Execution limits",
+		checkpoint_op_details: "Operation details",
+		checkpoint_manual_hint: "To continue this work, start a new session from its recorded commit.",
+		checkpoint_unavailable_keys: "managed_roots · SSH alias · write / orchestrate",
+		needs_start_scope_key: "--scope start",
 		session_results: "Results",
 		session_changes: "Changes",
 		session_delivery: "Delivery",
@@ -10702,7 +10784,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
+function projectViews$2({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -11574,6 +11656,42 @@ function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSel
 		reapply
 	};
 }
+//#endregion
+//#region src/session-navigation.js
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function sessionHref({ host, sessionId, from = "" }) {
+	const query = projectViews$1.has(from) ? "?" + new URLSearchParams({ from }) : "";
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$1.has(from)) return "";
+		return sessionHref({
+			host,
+			sessionId,
+			from
+		});
+	} catch {
+		return "";
+	}
+}
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
 	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
@@ -11635,7 +11753,7 @@ function normalizeRefs(refs) {
 function normalizeDetails(title, from, report) {
 	return {
 		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews.has(from) ? from : "",
+		from: projectViews.has(from) ? from : sessionOrigin(from),
 		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
 	};
 }
@@ -11657,6 +11775,345 @@ function parseDiscussRefs(query) {
 			}
 		})),
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/pm-quality-projections.js
+function qualityFact({ h, t, fact, current = false }) {
+	if (!fact) return "";
+	const label = (value) => t("pq_" + ([
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	].includes(value) ? value : "unassessed"));
+	const reference = fact.reference || fact.selected_assessment?.reference;
+	return h("div", {
+		"data-pm-quality-fact": "",
+		class: "pm-note-text"
+	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
+}
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
+	let editor = null, pending = false;
+	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
+	const read = () => {
+		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
+		return multiple ? value[workItemId] : value;
+	};
+	function write(value) {
+		if (!editor || editor.locked()) return;
+		const values = multiple ? JSON.parse(field.value || "{}") : null;
+		if (multiple) {
+			if (value) values[workItemId] = value;
+			else delete values[workItemId];
+		}
+		field.value = JSON.stringify(multiple ? values : value);
+		editor.changed();
+		update();
+	}
+	const use = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: async () => {
+			if (!editor || editor.locked() || pending) return;
+			const selected = readSelection(workItemId);
+			if (!selected) {
+				status.replaceChildren(h("p", {}, t("pq_choose_help")));
+				return;
+			}
+			pending = true;
+			update();
+			status.replaceChildren();
+			try {
+				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
+				alive();
+				if (!element.isConnected || editor.locked()) return;
+				const row = data.review, context = row?.context, assessment = row?.assessment;
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+					"operation_id",
+					"version",
+					"document_digest"
+				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
+				write(selected);
+			} catch (error) {
+				if (element.isConnected) status.replaceChildren(errorBox(error));
+			} finally {
+				pending = false;
+				update();
+			}
+		}
+	}, t("pq_include"));
+	const clear = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => write(null)
+	}, t("pq_clear"));
+	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
+	function update() {
+		const reference = read();
+		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
+		use.disabled = !editor || editor.locked() || pending;
+		clear.disabled = !editor || editor.locked() || pending || !reference;
+	}
+	update();
+	return {
+		element,
+		update,
+		attach: (value) => {
+			editor = value;
+			update();
+		}
+	};
+}
+//#endregion
+//#region src/pm-work-inspector.js
+var workStatus = (card) => ({
+	backlog: "not_started",
+	in_progress: "in_progress",
+	waiting: "waiting",
+	review: "in_review",
+	accepted: "done",
+	archived: "historical"
+})[typeof card?.column === "string" ? card.column : ""] || "unknown";
+var blockedWork = (card) => card?.flow?.blocked === true || card?.execution?.tasks?.some((task) => task.state === "blocked") === true;
+var blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason) : blockedWork(card) ? t("wv_task_blocked") : t("wv_blocker_unknown");
+var workAgents = (source) => [...new Set((source?.sessions || []).map((row) => labelSegment(row.agent_kind)).filter(Boolean))];
+function prGroups(deliveries = []) {
+	const groups = new Map();
+	for (const row of deliveries) {
+		const target = row.target;
+		if (!target?.provider_origin || !Number.isSafeInteger(target.repository_id) || !Number.isSafeInteger(target.pull_number)) continue;
+		const key = JSON.stringify([
+			target.provider_origin,
+			target.repository_id,
+			target.pull_number
+		]);
+		if (!groups.has(key)) groups.set(key, {
+			target,
+			rows: []
+		});
+		groups.get(key).rows.push(row);
+	}
+	return [...groups.values()];
+}
+function prPills(source) {
+	return prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
+		class: "pm-work-pr",
+		title: labelSegment(target.repository)
+	}, contextChip({ text: `PR #${target.pull_number}` }), rows.some((row) => row.merge?.merged === true) ? statusPill("merged") : statusPill("unknown")));
+}
+function checkDelivery(data, workspaceId, id, after, t) {
+	if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
+	for (const row of data.deliveries) if (!/^op_[0-9a-f]{32}$/.test(row.operation_id || "") || row.requirement_acceptance !== "not_evaluated_by_delivery") throw Error(t("pm_scope_mismatch"));
+	return data;
+}
+async function readWorkSources({ api, workspaceId, cards, caps, valid, t, deliveryPages = 1 }) {
+	const result = new Map(), sessions = new Map();
+	async function read(card) {
+		const id = card.work_item_id, source = {
+			deliveries: [],
+			next: null,
+			filtered: false,
+			sessions: []
+		};
+		if (caps?.features?.pm_workspaces?.engineering_delivery) {
+			let after = 0;
+			for (let index = 0; index < deliveryPages; index++) {
+				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/deliveries?after=${after}&limit=20`), workspaceId, id, after, t);
+				if (!valid()) return;
+				source.deliveries.push(...data.deliveries);
+				source.filtered ||= Boolean(data.source_visibility_filtered);
+				source.next = data.next_after ?? null;
+				if (source.next === null) break;
+				after = source.next;
+			}
+		}
+		if (caps) for (const ref of card.execution?.sessions || []) {
+			const resource = labelSegment(ref.resource_id), slash = resource.indexOf("/");
+			if (slash < 1 || !resource.slice(slash + 1)) continue;
+			const host = resource.slice(0, slash), id = resource.slice(slash + 1);
+			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(id)}`).then((data) => {
+				if (data.session?.host !== host || data.session.session_id !== id) throw Error(t("pm_scope_mismatch"));
+				return data.session;
+			}));
+			const session = await sessions.get(resource);
+			if (!valid()) return;
+			source.sessions.push(session);
+		}
+		result.set(id, source);
+	}
+	const queue = [...cards];
+	await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+		while (queue.length && valid()) await read(queue.shift());
+	}));
+	return result;
+}
+function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [] }) {
+	let panel = null, actions = null, signature = "", selection = null;
+	const unknown = () => statusPill("unknown");
+	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
+	const stamp = (value) => {
+		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
+		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
+	};
+	function close() {
+		panel?.close();
+	}
+	function show(data) {
+		selection = data;
+		if (!panel) {
+			panel = inspector({
+				title: data.title || t("ui_work_item"),
+				onClose: () => {
+					actions?.dispose();
+					actions = null;
+					panel = null;
+					selection = null;
+					signature = "";
+					onClose();
+				}
+			});
+			panel.classList.add("pm-work-inspector");
+			panel.dataset.workInspector = "";
+			panel.dataset.rtmDetail = "";
+			mount.append(panel);
+		}
+		const next = JSON.stringify(data);
+		if (signature === next) return;
+		signature = next;
+		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
+		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
+		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
+		const href = discussHref({
+			workspaceId,
+			refs: card ? [{
+				kind: "work_item",
+				id: card.work_item_id
+			}] : requirement && plan ? [{
+				kind: "requirement",
+				id: requirement.id,
+				revision_id: plan.revision_id
+			}] : [],
+			title: data.title,
+			from
+		});
+		actions?.dispose();
+		panel.querySelector("[data-work-actions]")?.remove();
+		actions = menu({
+			button: iconButton({
+				icon: "more-horizontal",
+				label: t("ui_more")
+			}),
+			items: tools()
+		});
+		const actionRow = h$1("div", {
+			class: "pm-work-inspector-actions",
+			"data-work-actions": ""
+		}, h$1("a", {
+			href,
+			class: "ui-button primary",
+			"data-work-discuss": ""
+		}, t("wv_discuss")), tools().length ? actions : null);
+		panel.querySelector(":scope > header").append(actionRow);
+		const sections = [
+			["requirements", "wv_served"],
+			["status", "wv_status_owner"],
+			["result", "wv_result"],
+			["blocker", "wv_blocker"],
+			["delivery", "wv_delivery"]
+		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
+		const [served, state, result, blocker, delivery] = sections;
+		const requirementRows = requirement ? [requirement] : requirements;
+		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
+		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
+		if (card) {
+			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
+			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref({
+				host: session.host,
+				sessionId: session.session_id,
+				from
+			}) }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
+			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
+			if (card.quality?.selected_assessment) result.append(qualityFact({
+				h: h$1,
+				t,
+				fact: card.quality,
+				current: true
+			}));
+			else result.append(paragraph(t("pm_kanban_quality_unknown")));
+			const capture = card.latest_capture;
+			if (capture) {
+				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
+				if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t("pm_kanban_capture_different")));
+				result.append(...(capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
+					const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
+					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
+				}))));
+			} else result.append(paragraph(t("wv_no_result")));
+			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
+			const groups = prGroups(source.deliveries);
+			for (const { target, rows } of groups) delivery.append(h$1("div", {
+				class: "pm-work-delivery",
+				"data-rtm-pr": target.pull_number
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
+			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
+			if (!(source.deliveries || []).length) delivery.append(paragraph(t("wv_no_delivery")));
+			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
+			if (source.next != null && data.onMore) delivery.append(button({
+				label: t("wb_receipts_more"),
+				onClick: data.onMore
+			}));
+			delivery.append(h$1("h4", {}, t("wb_attempts")), paragraph(t("wv_start_end")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
+				class: "pm-work-attempt",
+				"data-work-attempt": row.attempt_id
+			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))), paragraph(h$1("span", { title: t("wv_unknown_times") }, "— – —")))));
+		} else {
+			state.append(statusPill(data.accepted ? "accepted" : "not_assessed"));
+			result.append(paragraph(t("wv_no_result")));
+			blocker.append(data.blocker ? paragraph(statusPill("blocked"), " ", data.blocker) : unknown());
+			delivery.append(paragraph(t("wb_acceptance_separate")));
+		}
+		const details = disclosure({
+			label: t("wv_details"),
+			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", typeof card.flow?.age_seconds === "number" ? String(card.flow.age_seconds) : t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
+				"tasks",
+				"operations",
+				"sessions",
+				"attempts"
+			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), h$1("pre", { class: "mono" }, JSON.stringify({
+				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
+				binding: card?.binding,
+				work: card?.work,
+				execution: card?.execution,
+				flow: card?.flow,
+				capture: card?.latest_capture,
+				issues,
+				deliveries: source.deliveries,
+				quality: card?.quality
+			}, (key, value) => value === null ? "—" : value, 2))),
+			open: panel.body.querySelector("[data-work-section=\"details\"]")?.open || false
+		});
+		details.dataset.workSection = "details";
+		for (const node of [...sections, details]) {
+			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
+			if (!previous) panel.body.append(node);
+			else if (!previous.isEqualNode(node)) {
+				if (node.dataset.workSection === "details") previous.querySelector("div").replaceWith(node.querySelector("div"));
+				else previous.replaceChildren(...node.childNodes);
+			}
+		}
+	}
+	return {
+		show,
+		close,
+		dispose: close,
+		get element() {
+			return panel;
+		},
+		get selection() {
+			return selection;
+		}
 	};
 }
 //#endregion
@@ -17369,341 +17826,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			impactTicket++;
 			closeInspector();
 			syncChrome();
-		}
-	};
-}
-//#endregion
-//#region src/pm-quality-projections.js
-function qualityFact({ h, t, fact, current = false }) {
-	if (!fact) return "";
-	const label = (value) => t("pq_" + ([
-		"accepted",
-		"rejected",
-		"unassessed",
-		"not_defined"
-	].includes(value) ? value : "unassessed"));
-	const reference = fact.reference || fact.selected_assessment?.reference;
-	return h("div", {
-		"data-pm-quality-fact": "",
-		class: "pm-note-text"
-	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
-}
-function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
-	let editor = null, pending = false;
-	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
-	const read = () => {
-		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
-		return multiple ? value[workItemId] : value;
-	};
-	function write(value) {
-		if (!editor || editor.locked()) return;
-		const values = multiple ? JSON.parse(field.value || "{}") : null;
-		if (multiple) {
-			if (value) values[workItemId] = value;
-			else delete values[workItemId];
-		}
-		field.value = JSON.stringify(multiple ? values : value);
-		editor.changed();
-		update();
-	}
-	const use = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: async () => {
-			if (!editor || editor.locked() || pending) return;
-			const selected = readSelection(workItemId);
-			if (!selected) {
-				status.replaceChildren(h("p", {}, t("pq_choose_help")));
-				return;
-			}
-			pending = true;
-			update();
-			status.replaceChildren();
-			try {
-				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
-				alive();
-				if (!element.isConnected || editor.locked()) return;
-				const row = data.review, context = row?.context, assessment = row?.assessment;
-				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
-					"operation_id",
-					"version",
-					"document_digest"
-				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
-				write(selected);
-			} catch (error) {
-				if (element.isConnected) status.replaceChildren(errorBox(error));
-			} finally {
-				pending = false;
-				update();
-			}
-		}
-	}, t("pq_include"));
-	const clear = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => write(null)
-	}, t("pq_clear"));
-	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
-	function update() {
-		const reference = read();
-		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
-		use.disabled = !editor || editor.locked() || pending;
-		clear.disabled = !editor || editor.locked() || pending || !reference;
-	}
-	update();
-	return {
-		element,
-		update,
-		attach: (value) => {
-			editor = value;
-			update();
-		}
-	};
-}
-//#endregion
-//#region src/pm-work-inspector.js
-var workStatus = (card) => ({
-	backlog: "not_started",
-	in_progress: "in_progress",
-	waiting: "waiting",
-	review: "in_review",
-	accepted: "done",
-	archived: "historical"
-})[typeof card?.column === "string" ? card.column : ""] || "unknown";
-var blockedWork = (card) => card?.flow?.blocked === true || card?.execution?.tasks?.some((task) => task.state === "blocked") === true;
-var blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason) : blockedWork(card) ? t("wv_task_blocked") : t("wv_blocker_unknown");
-var workAgents = (source) => [...new Set((source?.sessions || []).map((row) => labelSegment(row.agent_kind)).filter(Boolean))];
-function prGroups(deliveries = []) {
-	const groups = new Map();
-	for (const row of deliveries) {
-		const target = row.target;
-		if (!target?.provider_origin || !Number.isSafeInteger(target.repository_id) || !Number.isSafeInteger(target.pull_number)) continue;
-		const key = JSON.stringify([
-			target.provider_origin,
-			target.repository_id,
-			target.pull_number
-		]);
-		if (!groups.has(key)) groups.set(key, {
-			target,
-			rows: []
-		});
-		groups.get(key).rows.push(row);
-	}
-	return [...groups.values()];
-}
-function prPills(source) {
-	return prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
-		class: "pm-work-pr",
-		title: labelSegment(target.repository)
-	}, contextChip({ text: `PR #${target.pull_number}` }), rows.some((row) => row.merge?.merged === true) ? statusPill("merged") : statusPill("unknown")));
-}
-function checkDelivery(data, workspaceId, id, after, t) {
-	if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
-	for (const row of data.deliveries) if (!/^op_[0-9a-f]{32}$/.test(row.operation_id || "") || row.requirement_acceptance !== "not_evaluated_by_delivery") throw Error(t("pm_scope_mismatch"));
-	return data;
-}
-async function readWorkSources({ api, workspaceId, cards, caps, valid, t, deliveryPages = 1 }) {
-	const result = new Map(), sessions = new Map();
-	async function read(card) {
-		const id = card.work_item_id, source = {
-			deliveries: [],
-			next: null,
-			filtered: false,
-			sessions: []
-		};
-		if (caps?.features?.pm_workspaces?.engineering_delivery) {
-			let after = 0;
-			for (let index = 0; index < deliveryPages; index++) {
-				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/deliveries?after=${after}&limit=20`), workspaceId, id, after, t);
-				if (!valid()) return;
-				source.deliveries.push(...data.deliveries);
-				source.filtered ||= Boolean(data.source_visibility_filtered);
-				source.next = data.next_after ?? null;
-				if (source.next === null) break;
-				after = source.next;
-			}
-		}
-		if (caps) for (const ref of card.execution?.sessions || []) {
-			const resource = labelSegment(ref.resource_id), slash = resource.indexOf("/");
-			if (slash < 1 || !resource.slice(slash + 1)) continue;
-			const host = resource.slice(0, slash), id = resource.slice(slash + 1);
-			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(id)}`).then((data) => {
-				if (data.session?.host !== host || data.session.session_id !== id) throw Error(t("pm_scope_mismatch"));
-				return data.session;
-			}));
-			const session = await sessions.get(resource);
-			if (!valid()) return;
-			source.sessions.push(session);
-		}
-		result.set(id, source);
-	}
-	const queue = [...cards];
-	await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
-		while (queue.length && valid()) await read(queue.shift());
-	}));
-	return result;
-}
-function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [] }) {
-	let panel = null, actions = null, signature = "", selection = null;
-	const unknown = () => statusPill("unknown");
-	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
-	const stamp = (value) => {
-		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
-		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
-	};
-	function close() {
-		panel?.close();
-	}
-	function show(data) {
-		selection = data;
-		if (!panel) {
-			panel = inspector({
-				title: data.title || t("ui_work_item"),
-				onClose: () => {
-					actions?.dispose();
-					actions = null;
-					panel = null;
-					selection = null;
-					signature = "";
-					onClose();
-				}
-			});
-			panel.classList.add("pm-work-inspector");
-			panel.dataset.workInspector = "";
-			panel.dataset.rtmDetail = "";
-			mount.append(panel);
-		}
-		const next = JSON.stringify(data);
-		if (signature === next) return;
-		signature = next;
-		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
-		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
-		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
-		const href = discussHref({
-			workspaceId,
-			refs: card ? [{
-				kind: "work_item",
-				id: card.work_item_id
-			}] : requirement && plan ? [{
-				kind: "requirement",
-				id: requirement.id,
-				revision_id: plan.revision_id
-			}] : [],
-			title: data.title,
-			from
-		});
-		actions?.dispose();
-		panel.querySelector("[data-work-actions]")?.remove();
-		actions = menu({
-			button: iconButton({
-				icon: "more-horizontal",
-				label: t("ui_more")
-			}),
-			items: tools()
-		});
-		const actionRow = h$1("div", {
-			class: "pm-work-inspector-actions",
-			"data-work-actions": ""
-		}, h$1("a", {
-			href,
-			class: "ui-button primary",
-			"data-work-discuss": ""
-		}, t("wv_discuss")), tools().length ? actions : null);
-		panel.querySelector(":scope > header").append(actionRow);
-		const sections = [
-			["requirements", "wv_served"],
-			["status", "wv_status_owner"],
-			["result", "wv_result"],
-			["blocker", "wv_blocker"],
-			["delivery", "wv_delivery"]
-		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
-		const [served, state, result, blocker, delivery] = sections;
-		const requirementRows = requirement ? [requirement] : requirements;
-		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
-		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
-		if (card) {
-			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
-			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
-			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
-			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
-			if (card.quality?.selected_assessment) result.append(qualityFact({
-				h: h$1,
-				t,
-				fact: card.quality,
-				current: true
-			}));
-			else result.append(paragraph(t("pm_kanban_quality_unknown")));
-			const capture = card.latest_capture;
-			if (capture) {
-				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
-				if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t("pm_kanban_capture_different")));
-				result.append(...(capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
-					const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
-					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
-				}))));
-			} else result.append(paragraph(t("wv_no_result")));
-			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
-			const groups = prGroups(source.deliveries);
-			for (const { target, rows } of groups) delivery.append(h$1("div", {
-				class: "pm-work-delivery",
-				"data-rtm-pr": target.pull_number
-			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
-			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
-			if (!(source.deliveries || []).length) delivery.append(paragraph(t("wv_no_delivery")));
-			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
-			if (source.next != null && data.onMore) delivery.append(button({
-				label: t("wb_receipts_more"),
-				onClick: data.onMore
-			}));
-			delivery.append(h$1("h4", {}, t("wb_attempts")), paragraph(t("wv_start_end")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
-				class: "pm-work-attempt",
-				"data-work-attempt": row.attempt_id
-			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))), paragraph(h$1("span", { title: t("wv_unknown_times") }, "— – —")))));
-		} else {
-			state.append(statusPill(data.accepted ? "accepted" : "not_assessed"));
-			result.append(paragraph(t("wv_no_result")));
-			blocker.append(data.blocker ? paragraph(statusPill("blocked"), " ", data.blocker) : unknown());
-			delivery.append(paragraph(t("wb_acceptance_separate")));
-		}
-		const details = disclosure({
-			label: t("wv_details"),
-			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", typeof card.flow?.age_seconds === "number" ? String(card.flow.age_seconds) : t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
-				"tasks",
-				"operations",
-				"sessions",
-				"attempts"
-			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), h$1("pre", { class: "mono" }, JSON.stringify({
-				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
-				binding: card?.binding,
-				work: card?.work,
-				execution: card?.execution,
-				flow: card?.flow,
-				capture: card?.latest_capture,
-				issues,
-				deliveries: source.deliveries,
-				quality: card?.quality
-			}, (key, value) => value === null ? "—" : value, 2))),
-			open: panel.body.querySelector("[data-work-section=\"details\"]")?.open || false
-		});
-		details.dataset.workSection = "details";
-		for (const node of [...sections, details]) {
-			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
-			if (!previous) panel.body.append(node);
-			else if (!previous.isEqualNode(node)) {
-				if (node.dataset.workSection === "details") previous.querySelector("div").replaceWith(node.querySelector("div"));
-				else previous.replaceChildren(...node.childNodes);
-			}
-		}
-	}
-	return {
-		show,
-		close,
-		dispose: close,
-		get element() {
-			return panel;
-		},
-		get selection() {
-			return selection;
 		}
 	};
 }
@@ -28478,7 +28600,11 @@ function render(row, { workspaceId, data }) {
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
 		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
-		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref({
+			host: session.host,
+			sessionId: session.session_id,
+			from: "schedule"
+		}) }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
 	}
 	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", {}, attempt.title), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
 	if (attempts.length) status.append(disclosure({
@@ -34702,9 +34828,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			report: launch.report || savedOrigin.report || ""
 		}));
 		const origin = source.from || "discussions";
+		const session = sessionOrigin(origin);
 		return h("a", {
 			class: "pd-back",
-			href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
+			href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
 			"data-discussion-back": "",
 			onclick: () => {
 				if (origin === "overview" && source.report) Object.assign(viewState(namespace, workspaceId, "overview"), {
@@ -34712,7 +34839,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					mode: "saved"
 				});
 			}
-		}, icon("chevron-left"), t("pd_back", { view: t("ui_" + origin) }));
+		}, icon("chevron-left"), t("pd_back", { view: t(session ? "ui_session" : "ui_" + origin) }));
 	};
 	if (threadId) h = discussionDom(h, JSON.stringify([
 		namespace,
@@ -35713,7 +35840,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 		}
 		let shownView = null;
-		workbench = projectViews$1({
+		workbench = projectViews$2({
 			h,
 			t,
 			namespace,
@@ -38644,7 +38771,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		tags.hidden = !chips.length;
 		stateLine.hidden = Boolean(chips.length);
 		stateLine.textContent = t(readable ? "labels_empty" : "labels_unavailable");
-		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_details");
+		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_label_details");
 		const why = !readable ? t("labels_unreadable") : !permitted() ? t("labels_scope") : "";
 		reason.hidden = showEdit || !why;
 		reason.textContent = why;
@@ -38758,6 +38885,15 @@ async function readArtifactContent(reference, size, token, signal) {
 }
 //#endregion
 //#region src/conversation.js
+function messageDuration(t, ms) {
+	if (!(typeof ms === "number" && Number.isFinite(ms) && ms >= 0)) return "";
+	if (ms < 6e4) return t("message_seconds", { s: String(Number((ms / 1e3).toFixed(1))) });
+	const total = Math.round(ms / 1e3), m = Math.floor(total / 60), s = total % 60;
+	return s ? t("message_minutes", {
+		m,
+		s
+	}) : t("message_minutes_even", { m });
+}
 function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
@@ -38783,9 +38919,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				run(() => readingActions.latest());
 				return;
 			}
-			viewport.scrollTop = viewport.scrollHeight;
+			follow();
 			notice.hidden = true;
-			indicator();
+			viewport.focus({ preventScroll: true });
 		}
 	}, t("message_latest"));
 	const progress = h("span", {
@@ -38822,11 +38958,12 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		hidden: true,
 		onclick: () => run(() => readingActions.older())
 	}, t("message_load_earlier"));
-	const caption = h("p", { class: "muted conversation-window" }, t("message_window"));
+	const caption = h("p", { class: "muted conversation-window" });
 	const captionRow = h("div", { class: "conversation-caption" }, caption);
 	const readingBar = readingActions ? h("div", { class: "actions" }, progress, mark, remember) : null;
 	const box = h("section", { class: "panel conversation" }, captionRow, notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingBar, fallback);
 	let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
+	let pinned = true, unseen = 0, userLabel = null, last = null, resizing = false;
 	const alive = () => {
 		if (disposed) return false;
 		try {
@@ -38846,13 +38983,20 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		});
 	};
 	const indicator = () => {
-		latest.textContent = olderWindow ? t("message_latest") : t("message_new");
-		latest.hidden = !olderWindow && atBottom();
+		if (pinned) unseen = 0;
+		latest.textContent = !olderWindow && unseen ? t("message_new") : t("message_latest");
+		latest.hidden = !olderWindow && (pinned || !rows.size);
 		if (memory && initialized) memory.scrollTop = viewport.scrollTop;
 		if (!readingActions) return;
 		mark.disabled = busy || !visible().some((row) => row.reading?.can_mark && row.reading?.unread);
 		remember.disabled = busy || !visible().some((row) => row.reading);
 		older.disabled = busy;
+	};
+	const follow = () => {
+		pinned = true;
+		unseen = 0;
+		viewport.scrollTop = viewport.scrollHeight;
+		indicator();
 	};
 	const run = async (action) => {
 		if (!alive() || busy) return;
@@ -38868,9 +39012,29 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			if (alive()) indicator();
 		}
 	};
-	viewport.addEventListener("scroll", indicator, { passive: true });
+	const onScroll = () => {
+		if (initialized && !resizing) pinned = atBottom();
+		indicator();
+	};
+	viewport.addEventListener("scroll", onScroll, { passive: true });
+	viewport.addEventListener("focusin", () => requestAnimationFrame(onScroll));
 	window.addEventListener("scroll", indicator, { passive: true });
-	window.addEventListener("resize", indicator);
+	const onResize = () => {
+		resizing = true;
+		requestAnimationFrame(() => {
+			if (!alive()) return;
+			if (pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+			requestAnimationFrame(() => {
+				resizing = false;
+				indicator();
+			});
+		});
+	};
+	window.addEventListener("resize", onResize);
+	const resized = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+		if (alive() && pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+	}) : null;
+	resized?.observe(viewport);
 	const copy = async (text) => {
 		if (!alive()) return;
 		const attempt = ++copyAttempt;
@@ -38900,16 +39064,22 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			input.select();
 		}
 	};
+	const countCaption = (count, more) => count === 1 && !more ? t("message_window_one") : more ? t("message_window_latest", { count }) : t("message_window_count", { count });
 	const update = (messages, state = null) => {
 		if (!alive()) return;
+		last = {
+			messages,
+			state
+		};
 		const top = viewport.getBoundingClientRect().top;
 		const anchor = [...rows.entries()].find(([, row]) => row.node.getBoundingClientRect().bottom > top);
 		const selection = window.getSelection();
 		const readingSelection = selection && !selection.isCollapsed && viewport.contains(selection.anchorNode);
 		const savedScroll = !initialized && memory && Number.isFinite(memory.scrollTop) && !state?.restore && !state?.latest;
-		const follow = !savedScroll && (!initialized || !state?.preserve && atBottom() && !readingSelection);
+		const followNow = !savedScroll && (!initialized || !state?.preserve && pinned && !readingSelection);
 		const offset = anchor ? anchor[1].node.getBoundingClientRect().top - top : 0, scrollTop = viewport.scrollTop;
 		const next = new Map(), occurrences = new Map();
+		let added = 0;
 		for (const message of messages) {
 			const text = typeof message.text === "string" ? message.text : "";
 			const identity = JSON.stringify(message.id != null ? ["id", message.id] : [
@@ -38923,6 +39093,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			const key = JSON.stringify([identity, occurrence]);
 			let row = rows.get(key);
 			if (!row) {
+				added += 1;
 				row = {
 					text: null,
 					meta: null,
@@ -38953,22 +39124,28 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			}
 			const extras = [];
 			const pillKey = message.role !== "tool" && typeof message.status !== "string" ? "" : message.denied ? "blocked" : message.deferred ? "waiting" : message.status === "completed" ? "done" : message.status === "failed" || message.status === "error" ? "failed" : message.status === "running" ? "running" : "unknown";
+			const agent = typeof message.agent === "string" && message.agent ? message.agent : "";
+			const whoName = message.role === "user" ? userLabel || t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : agent || t("agent");
 			const chip = [];
-			if (typeof message.agent === "string") chip.push(message.agent);
-			if (typeof message.model === "string") chip.push(message.model);
-			if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0) extras.push(t("message_duration", { ms: message.duration_ms }));
-			const whoName = message.role === "user" ? t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : message.agent || t("agent");
+			if (agent && whoName !== agent) chip.push(agent);
+			if (typeof message.model === "string" && message.model) chip.push(message.model);
+			const duration = messageDuration(t, message.duration_ms);
+			if (duration) extras.push(duration);
 			const stamp = when(message.ts);
 			const meta = JSON.stringify([
+				message.role,
 				whoName,
+				agent,
 				stamp,
 				chip,
 				extras,
 				pillKey
 			]);
 			if (row.meta !== meta) {
-				const glyphs = Array.from(whoName);
-				row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
+				if (message.role === "tool") row.mark.replaceChildren(icon("wrench"));
+				else if (message.role === "system") row.mark.replaceChildren(icon("settings"));
+				else if (message.role === "user") row.mark.textContent = Array.from(whoName)[0]?.toUpperCase() || "";
+				else row.mark.textContent = agentMark(agent).textContent;
 				row.name.textContent = whoName;
 				row.time.textContent = stamp;
 				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
@@ -38993,6 +39170,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.text = null;
 				row.tool = folded;
 				row.toolDetails = null;
+				row.pill = void 0;
 			}
 			if (folded && !row.toolDetails) {
 				row.toolContent = h("div", {});
@@ -39005,16 +39183,16 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.toolDetails.classList.add("message-tool");
 				row.toolDetails.addEventListener("toggle", indicator);
 				row.body.append(row.toolDetails);
-			}
-			if (tool && !completed) row.toolDetails.open = true;
+			} else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
+			row.pill = pillKey;
 			if (row.text !== text) {
+				if (row.text !== null) added += 1;
 				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
 				if (folded && row.toolDetails) {
-					const summary = row.toolDetails.querySelector("summary");
-					const label = (text.includes("\n") ? text.split("\n").find((item) => item.trim()) : "") || t(tool ? "message_tool_details" : "message_system");
+					const label = text.split("\n").find((item) => item.trim())?.trim() || t(tool ? "message_tool_details" : "message_system");
 					row.toolLabel.textContent = label;
-					summary.title = text || label;
+					row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
 				}
 			}
 			next.set(key, row);
@@ -39029,9 +39207,15 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			position = old.nextSibling;
 			old.remove();
 		}
-		if (!next.size) viewport.replaceChildren(h("p", { class: "muted" }, t("no_messages")));
-		if (follow) {
+		if (!next.size) viewport.replaceChildren(emptyState({
+			icon: "message-square",
+			title: t("no_messages")
+		}));
+		if (initialized && !followNow && added) unseen += added;
+		if (followNow) {
 			viewport.scrollTop = viewport.scrollHeight;
+			pinned = true;
+			unseen = 0;
 			notice.hidden = true;
 		} else if (savedScroll) {
 			viewport.scrollTop = memory.scrollTop;
@@ -39056,33 +39240,82 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		if (state?.latest) {
 			viewport.scrollTop = viewport.scrollHeight;
 			notice.hidden = true;
+			viewport.focus({ preventScroll: true });
 		}
+		const more = state?.next_offset != null;
 		if (readingActions && state) {
 			reading = state.reading;
 			olderWindow = Boolean(state.olderWindow);
-			const canOlder = state.next_offset != null;
-			older.hidden = !canOlder;
+			older.hidden = !more;
 			older.textContent = t("message_load_earlier");
-			if (canOlder) caption.replaceChildren(t("message_window_showing") + "\xA0· ", older);
+			if (more) caption.replaceChildren(t("message_window_latest", { count: next.size }) + "\xA0· ", older);
 			else {
 				if (older.parentElement === caption) readingBar?.append(older);
-				caption.textContent = t("message_window");
+				caption.textContent = countCaption(next.size, false);
 			}
 			progress.textContent = reading?.unread_count == null ? t("conversation_unknown") : t(reading.complete ? "conversation_unread" : "conversation_partial", { count: reading.unread_count });
 			progress.title = t("conversation_count_note");
-		}
+		} else caption.textContent = countCaption(next.size, more);
+		if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
 		initialized = true;
 		indicator();
+	};
+	const fail = ({ title, retry }) => {
+		if (!alive()) return;
+		const action = retry ? h("button", {
+			class: "ui-button secondary ui-sm",
+			type: "button",
+			onclick: retry
+		}, t("ui_retry")) : null;
+		if (!rows.size) {
+			viewport.replaceChildren(h("div", {
+				class: "conversation-state",
+				"data-conversation-state": "error"
+			}, emptyState({
+				icon: "circle-alert",
+				title,
+				action
+			})));
+			caption.textContent = t("message_window_failed");
+		} else caption.replaceChildren(t("message_window_stale"), action ? "\xA0· " : "", action || "");
+		indicator();
+	};
+	const clear = () => {
+		copyAttempt += 1;
+		rows = new Map();
+		initialized = false;
+		viewport.replaceChildren();
+		caption.textContent = "";
+		notice.hidden = true;
+		status.textContent = "";
+		fallback.replaceChildren();
+		last = null;
+		unseen = 0;
+		indicator();
+	};
+	const setUserLabel = (label) => {
+		if (label === userLabel) return;
+		userLabel = label;
+		if (last && initialized) update(last.messages, last.state ? {
+			...last.state,
+			restore: null,
+			latest: false
+		} : null);
 	};
 	return {
 		box,
 		update,
+		fail,
+		clear,
+		follow,
+		setUserLabel,
 		dispose() {
 			disposed = true;
 			if (memory) memory.scrollTop = viewport.scrollTop;
-			viewport.removeEventListener("scroll", indicator);
+			resized?.disconnect();
+			viewport.removeEventListener("scroll", onScroll);
 			window.removeEventListener("scroll", indicator);
-			window.removeEventListener("resize", indicator);
+			window.removeEventListener("resize", onResize);
 		}
 	};
 }
@@ -47996,13 +48229,60 @@ async function viewHostDiscovery(main, host) {
 		repair?.dispose();
 	};
 }
-async function viewSession(main, host, sid, context = null) {
-	const queryAt = String(sid).indexOf("?");
-	let fromQuery = "";
-	if (queryAt >= 0) {
-		fromQuery = new URLSearchParams(String(sid).slice(queryAt + 1)).get("from") || "";
-		sid = String(sid).slice(0, queryAt);
+var SESSION_ERROR_LINES = {
+	SESSION_BUSY: "session_err_busy",
+	PENDING_CHANGED: "session_err_changed",
+	NOT_FOUND: "session_err_gone",
+	PAYLOAD_TOO_LARGE: "session_err_too_large",
+	INTERNAL: "session_err_server",
+	FORBIDDEN: "session_err_forbidden"
+};
+function sessionErrorLine(e) {
+	const code = typeof e?.code === "string" ? e.code : "";
+	if (Object.hasOwn(SESSION_ERROR_LINES, code)) return t(SESSION_ERROR_LINES[code]);
+	if (e?.status === 403) return t("session_err_forbidden");
+	if (e?.status === 404 || e?.status === 410) return t("session_err_gone");
+	if (e?.status === 413) return t("session_err_too_large");
+	if (e?.status >= 500) return t("session_err_server");
+	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
+	return t("session_err_unknown");
+}
+function sessionErrorDetails(e) {
+	const code = typeof e?.code === "string" ? e.code : "";
+	const detail = [
+		code,
+		e?.status ? `HTTP ${e.status}` : "",
+		e?.message && e.message !== code ? e.message : ""
+	].filter(Boolean).join(" · ");
+	return detail ? disclosure({
+		label: t("session_error_details"),
+		body: h("p", { class: "muted" }, h("code", {}, detail))
+	}) : null;
+}
+function sessionErrorBox(e, action = null) {
+	if (state.refreshCycle) state.refreshCycle.error ||= e;
+	return h("div", {
+		class: "session-error",
+		role: "alert",
+		"data-session-error": typeof e?.code === "string" ? e.code : ""
+	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, sessionErrorLine(e)), action ? h("button", {
+		type: "button",
+		class: "session-error-action",
+		onclick: action.run
+	}, action.label) : null), sessionErrorDetails(e));
+}
+function sessionPullHref(target) {
+	try {
+		const origin = new URL(target?.provider_origin);
+		if (origin.protocol !== "https:" || !/^[\w.-]+\/[\w.-]+$/.test(target.repository || "")) return null;
+		return `${origin.hostname === "api.github.com" ? "https://github.com" : origin.origin}/${target.repository}/pull/${target.pull_number}`;
+	} catch {
+		return null;
 	}
+}
+async function viewSession(main, host, sid, context = null) {
+	const params = new URLSearchParams(location.hash.split("?")[1] || "");
+	let fromQuery = params.get("from") || "";
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -48019,7 +48299,27 @@ async function viewSession(main, host, sid, context = null) {
 		"agents",
 		"board"
 	]);
-	const originView = () => projectViews.has(fromQuery) ? fromQuery : projectViews.has(sessionFromMemory) ? sessionFromMemory : "";
+	const storedOrigin = history.state?.batcSessionOrigin;
+	const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
+	if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
+		fromQuery = sessionFromMemory;
+		params.set("from", fromQuery);
+		try {
+			history.replaceState(history.state, "", location.hash.split("?")[0] + "?" + params);
+		} catch {}
+	}
+	if (sessionWorkspace) try {
+		history.replaceState({
+			...history.state,
+			batcSessionOrigin: {
+				namespace: connection.namespace,
+				host,
+				sessionId: sid,
+				workspaceId: sessionWorkspace
+			}
+		}, "");
+	} catch {}
+	const originView = () => projectViews.has(fromQuery) ? fromQuery : "";
 	const head = h("div", { class: "workspace-session-heading" });
 	const titleNode = h("span");
 	const markSlot = h("span", { class: "session-mark" });
@@ -48034,7 +48334,7 @@ async function viewSession(main, host, sid, context = null) {
 		class: "workspace-result",
 		"data-workspace-result": ""
 	});
-	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0;
+	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30;
 	const readingSupported = state.caps?.features?.session_reading?.version === 1;
 	const saveReading = async (action, params, preconditions = {}) => {
 		const op = await submit(action, {
@@ -48050,7 +48350,7 @@ async function viewSession(main, host, sid, context = null) {
 		t,
 		when: sessionWhen,
 		guard: () => assertView(connection),
-		memory: viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`),
+		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
 		readingActions: readingSupported ? {
 			mark: (messages) => saveReading("session.read", { messages }),
 			remember: (position, version) => saveReading("session.position", position, { expected_version: version }),
@@ -48058,7 +48358,11 @@ async function viewSession(main, host, sid, context = null) {
 			latest: () => loadMessages(0, true)
 		} : null
 	});
-	const pending = h("div", { "data-pending-controls": "" }), status = h("div", { class: "muted" });
+	const pending = h("div", {
+		class: "session-asking-region",
+		"data-pending-controls": ""
+	});
+	const status = h("div", { class: "muted session-status" });
 	const scope = `send.${host}.${sid}`, draftKey = `batc.draft.${connection.namespace}.${scope}`;
 	const box = h("textarea", { placeholder: t("send_placeholder") });
 	try {
@@ -48070,8 +48374,9 @@ async function viewSession(main, host, sid, context = null) {
 		} catch {}
 	};
 	const queue = h("input", { type: "checkbox" });
-	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null;
-	const allowed = (action) => readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
+	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
+	let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
+	const allowed = (action) => !withdrawn && readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
 	const identity = (pend) => pend ? JSON.stringify({
 		kind: pend.kind,
 		toolUseId: pend.toolUseId,
@@ -48079,16 +48384,51 @@ async function viewSession(main, host, sid, context = null) {
 		input_preview: pend.input_preview,
 		questions: pend.questions
 	}) : "";
+	try {
+		const savedQueue = localStorage.getItem(draftKey + ".queue");
+		if (savedQueue === "true" || savedQueue === "false") {
+			queue.checked = savedQueue === "true";
+			queueKnown = true;
+		}
+	} catch {}
+	queue.onchange = () => {
+		try {
+			localStorage.setItem(draftKey + ".queue", String(queue.checked));
+		} catch {}
+	};
+	const accessRecovery = () => ({
+		label: t("obs_axis_connection"),
+		run: () => {
+			location.hash = "#/settings";
+		}
+	});
+	const goneRecovery = () => ({
+		label: t("ui_back"),
+		run: () => {
+			location.hash = originHref()?.href || "#/sessions";
+		}
+	});
+	const sendRecovery = (e) => e?.code === "SESSION_BUSY" && !queue.checked ? {
+		label: t("session_err_queue"),
+		run: () => {
+			queue.checked = true;
+			send.click();
+		}
+	} : e?.status === 403 || e?.code === "FORBIDDEN" ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
+		label: t("ui_retry"),
+		run: () => send.click()
+	};
 	const send = h("button", {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (!box.value.trim()) return;
+			if (!box.value.trim() || send.disabled) return;
 			const submitted = box.value;
 			sending = true;
 			send.disabled = true;
 			try {
 				assertView(connection);
+				queue.onchange();
 				const op = await submit("session.send", {
 					host,
 					session_id: sid
@@ -48098,15 +48438,17 @@ async function viewSession(main, host, sid, context = null) {
 				}, {}, scope);
 				assertView(connection);
 				paintSend(op);
+				if (op.status === "succeeded") conversation.follow();
 				if (op.status === "succeeded" && box.value === submitted) {
 					box.value = "";
 					try {
 						localStorage.removeItem(draftKey);
+						localStorage.removeItem(draftKey + ".queue");
 					} catch {}
 					mobileLayout?.updateDraft();
 				}
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, sendRecovery(e)));
 			} finally {
 				sending = false;
 				send.disabled = !allowed("session.send");
@@ -48129,7 +48471,10 @@ async function viewSession(main, host, sid, context = null) {
 				assertView(connection);
 				status.replaceChildren(opStatus(op));
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
+					label: t("ui_retry"),
+					run: () => stop.click()
+				}));
 			}
 		}
 	});
@@ -48155,12 +48500,12 @@ async function viewSession(main, host, sid, context = null) {
 		}, t("session_send_retry")));
 		else line.textContent = t("op_" + op.status);
 		const record = id ? disclosure({
-			label: t("session_details"),
+			label: t("session_send_details"),
 			body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(id)}` }, id)),
 			key: `session-send:${connection.namespace}:${host}:${sid}`
 		}) : null;
 		if (record) record.classList.add("session-send-record");
-		status.replaceChildren(line, record);
+		status.replaceChildren(...[line, record].filter(Boolean));
 	};
 	const shortcut = composerShortcut({
 		h,
@@ -48179,10 +48524,17 @@ async function viewSession(main, host, sid, context = null) {
 		hidden: true,
 		id: "workspace-message-input"
 	}, box, composerRow);
-	const readonly = h("p", { class: "note" }, t("session_access_unknown"));
+	const readonly = h("p", {
+		class: "muted session-readonly",
+		"data-session-readonly": "",
+		hidden: true
+	});
 	let capture, permissions, batHandoff, sourcesPanel;
 	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
-	const controls = h("div", { class: "panel workspace-composer" }, pending, readonly, sendReason, composer, status);
+	const controls = h("div", {
+		class: "panel workspace-composer",
+		hidden: true
+	}, pending, sendReason, composer);
 	const labels = sessionLabelsPanel({
 		h,
 		t,
@@ -48197,7 +48549,10 @@ async function viewSession(main, host, sid, context = null) {
 		errorBox,
 		opStatus
 	});
-	const cps = checkpointPanel(host, sid);
+	const cps = checkpointPanel(host, sid, {
+		namespace: connection.namespace,
+		manual: () => row?.provenance === "manual"
+	});
 	const observations = observationPanels("session", `${host}/${sid}`, path);
 	const instructions = state.caps?.features?.session_instructions?.version === 1 ? instructionReceiptPanel({
 		h,
@@ -48213,9 +48568,10 @@ async function viewSession(main, host, sid, context = null) {
 		if (instructions.box.open) instructions.refresh();
 	});
 	const deliveryPills = h("div", { class: "session-delivery-pills" });
-	const sourcesBody = h("div", { "data-session-sources": "" }, h("p", { class: "muted session-quiet" }, t("session_sources_empty")));
+	const sourcesEmpty = () => h("p", { class: "muted session-quiet" }, t("session_sources_empty"));
+	const sourcesBody = h("div", { "data-session-sources": "" }, sourcesEmpty());
 	const details = disclosure({
-		label: t("session_details"),
+		label: t("session_details_session"),
 		body: metadata,
 		key: `session-details:${connection.namespace}:${host}:${sid}`
 	});
@@ -48233,11 +48589,11 @@ async function viewSession(main, host, sid, context = null) {
 	});
 	const wide = matchMedia("(min-width: 1200px)");
 	const syncWide = () => {
-		openResults.hidden = wide.matches;
+		openResults.hidden = wide.matches || Boolean(withdrawn);
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
-	const sessionSection = (name, title, body) => h("section", { class: "session-section" }, h("h2", { class: "session-section-title" }, icon(name, { size: 16 }), title), body);
+	const sessionSection = (name, title, body, action = null) => h("section", { class: "session-section" }, h("div", { class: "session-section-head" }, h("h3", { class: "session-section-title" }, icon(name, { size: 16 }), title), action), body);
 	const changesSection = sessionSection("folder", t("session_changes"), h("div", { class: "session-changes" }, captureSlot, artifactSlot));
 	const slotVisible = (slot) => [...slot.children].some((child) => !child.hidden);
 	const syncChanges = () => {
@@ -48297,7 +48653,7 @@ async function viewSession(main, host, sid, context = null) {
 	results.body.append(...[
 		context?.itemBox,
 		changesSection,
-		sessionSection("list-checks", t("checkpoints"), cps.box),
+		sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
 		sessionSection("check", t("session_delivery"), result),
 		sessionSection("inbox", t("session_sources"), sourcesBody),
 		batSlot,
@@ -48307,10 +48663,7 @@ async function viewSession(main, host, sid, context = null) {
 		observations.box,
 		details
 	].filter(Boolean));
-	const lane = h("section", {
-		class: "workspace-conversation",
-		"aria-label": t("messages")
-	}, conversation.box, controls);
+	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
 	const mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
@@ -48321,26 +48674,35 @@ async function viewSession(main, host, sid, context = null) {
 		composerRow
 	});
 	if (context?.picker) main.append(context.picker);
-	main.append(head, h("div", {
+	const workspaceNode = h("div", {
 		class: "workspace-session session-workspace",
 		"data-session-view": ""
-	}, lane, results));
+	}, lane, results);
+	const withdrawnSlot = h("div", { class: "session-withdrawn" });
+	main.append(head, workspaceNode);
+	const originHref = () => {
+		const view = originView(), workspaceId = sessionWorkspace;
+		return view && workspaceId ? {
+			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
+			view
+		} : null;
+	};
 	const paintOrigin = () => {
-		const view = originView(), workspaceId = lastWorkspace(connection.namespace);
+		const origin = originHref();
 		backSlot.replaceChildren();
-		if (!view || !workspaceId) {
+		if (!origin) {
 			backSlot.hidden = true;
 			return;
 		}
 		backSlot.hidden = false;
 		backSlot.append(h("a", {
-			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
-			"data-session-back": view
-		}, t("session_back", { view: t("ui_" + view) })));
+			href: origin.href,
+			"data-session-back": origin.view
+		}, t("session_back", { view: t("ui_" + origin.view) })));
 	};
 	const paintDiscuss = (items) => {
 		const link = overflow.querySelector("[data-menu-key=discuss]");
-		const workspaceId = lastWorkspace(connection.namespace);
+		const workspaceId = sessionWorkspace;
 		if (!link) return;
 		if (!workspaceId) {
 			link.hidden = true;
@@ -48356,52 +48718,132 @@ async function viewSession(main, host, sid, context = null) {
 		link.setAttribute("href", discussHref({
 			workspaceId,
 			refs,
-			title: row?.title || sid,
-			from: originView()
+			title: row?.title || "",
+			from: sessionHref({
+				host,
+				sessionId: sid,
+				from: originView()
+			})
 		}));
 	};
-	let deliveryTicket = 0;
+	let deliveryTicket = 0, deliveryItems = [], sourceItemId = "";
+	const deliveryKnown = new Map();
 	const loadDelivery = async (items) => {
 		const ticket = ++deliveryTicket;
-		deliveryPills.replaceChildren();
-		const workspaceId = lastWorkspace(connection.namespace);
-		const linked = (items || []).filter((item) => isContextRef({
+		deliveryItems = items || [];
+		const workspaceId = sessionWorkspace;
+		const linked = [...new Map(deliveryItems.filter((item) => isContextRef({
 			kind: "work_item",
 			id: item.work_item_id
-		}));
-		if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && linked[0]) {
+		})).map((item) => [item.work_item_id, item])).values()];
+		const current = () => {
+			assertView(connection);
+			return !disposed && ticket === deliveryTicket;
+		};
+		const sourceId = linked[0]?.work_item_id || "";
+		if (sourceItemId !== sourceId) {
+			sourcesPanel?.dispose();
+			sourcesPanel = null;
+			sourceItemId = sourceId;
+			sourcesBody.replaceChildren(sourcesEmpty());
+		}
+		if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && sourceId) {
 			sourcesPanel = resultSourcesPanel({
 				h,
 				t,
 				api,
-				guard: () => assertView(connection),
-				workItemId: linked[0].work_item_id,
+				guard: () => {
+					assertView(connection);
+					if (withdrawn || disposed) throw Error(t("session_err_gone"));
+				},
+				workItemId: sourceId,
 				linkTarget,
 				onEvents,
 				errorBox
 			});
 			sourcesBody.replaceChildren(sourcesPanel.box);
 		}
-		if (!workspaceId || !linked.length) return;
-		for (const item of linked) try {
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(item.work_item_id)}/deliveries?limit=20`);
-			assertView(connection);
-			if (ticket !== deliveryTicket) return;
-			for (const receipt of data.deliveries || []) {
-				const pull = receipt.target?.pull_number;
-				const bits = [];
-				if (pull && receipt.target?.repository) bits.push(h("a", {
-					href: `https://github.com/${receipt.target.repository}/pull/${pull}`,
-					target: "_blank",
-					rel: "noopener"
-				}, `PR #${pull}`));
-				if (receipt.merge?.merged === true) bits.push(statusPill("merged"));
-				if (receipt.deployment?.verified === true && receipt.deployment?.is_current === true) bits.push(statusPill("deployed"));
-				if (bits.length) deliveryPills.append(h("div", { class: "session-delivery-row" }, ...bits));
-			}
-		} catch {
-			if (ticket !== deliveryTicket) return;
+		const ids = new Set(linked.map((item) => item.work_item_id));
+		for (const id of deliveryKnown.keys()) if (!ids.has(id)) deliveryKnown.delete(id);
+		if (!workspaceId || !linked.length || !state.caps?.features?.pm_workspaces?.engineering_delivery) {
+			deliveryKnown.clear();
+			deliveryPills.replaceChildren();
+			return;
 		}
+		const nextKnown = new Map(deliveryKnown), failed = new Set(), removed = new Set();
+		for (const item of linked) {
+			const id = item.work_item_id;
+			try {
+				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(id)}/deliveries?after=0&limit=20`), workspaceId, id, 0, t);
+				if (!current()) return;
+				nextKnown.set(id, {
+					deliveries: data.deliveries,
+					next: data.next_after ?? null,
+					filtered: data.source_visibility_filtered === true
+				});
+			} catch (error) {
+				if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) && current()) {
+					if ([
+						403,
+						404,
+						410
+					].includes(error?.status)) {
+						nextKnown.delete(id);
+						removed.add(id);
+						if (sourceItemId === id) {
+							sourcesPanel?.dispose();
+							sourcesPanel = null;
+							sourcesBody.replaceChildren(sourcesEmpty());
+						}
+					} else failed.add(id);
+				} else throw error;
+			}
+		}
+		if (!current()) return;
+		deliveryKnown.clear();
+		for (const [id, known] of nextKnown) deliveryKnown.set(id, known);
+		const retry = () => button({
+			variant: "ghost",
+			size: "sm",
+			label: t("ui_retry"),
+			onClick: () => loadDelivery(deliveryItems).catch(() => {})
+		});
+		const receipts = linked.flatMap((item) => deliveryKnown.get(item.work_item_id)?.deliveries || []);
+		const groups = prGroups(receipts), pills = prPills({ deliveries: receipts });
+		const nodes = groups.map(({ target, rows }, index) => {
+			const href = sessionPullHref(target);
+			const deployed = rows.some((receipt) => receipt.deployment?.verified === true && receipt.deployment?.is_current === true);
+			return h("div", {
+				class: "session-delivery-row",
+				"data-session-pr": String(target.pull_number)
+			}, href ? h("a", {
+				href,
+				target: "_blank",
+				rel: "noopener",
+				class: "session-delivery-link"
+			}, pills[index]) : pills[index], deployed ? statusPill("deployed") : null);
+		});
+		for (const receipt of receipts.filter((receipt) => !receipt.target?.pull_number && receipt.deployment)) nodes.push(h("div", { class: "session-delivery-row" }, statusPill(receipt.deployment.verified === true && receipt.deployment.is_current === true ? "deployed" : "unknown")));
+		if (removed.size) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "removed"
+		}, t("session_delivery_removed")));
+		if (linked.some((item) => !deliveryKnown.has(item.work_item_id) && !removed.has(item.work_item_id))) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "unknown"
+		}, statusPill("unknown"), retry()));
+		if (linked.some((item) => failed.has(item.work_item_id) && deliveryKnown.has(item.work_item_id))) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "stale"
+		}, t("session_delivery_stale"), " · ", retry()));
+		if (linked.some((item) => deliveryKnown.get(item.work_item_id)?.next != null)) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "partial"
+		}, t("session_delivery_more", { count: groups.length })));
+		else if (linked.some((item) => deliveryKnown.get(item.work_item_id)?.filtered)) nodes.push(statusPill("partial"));
+		if (!nodes.length) nodes.push(h("p", { class: "muted" }, t("session_delivery_none")));
+		const content = h("div", { class: "session-delivery-pills" }, ...nodes);
+		if (!deliveryPills.isEqualNode(content)) deliveryPills.replaceChildren(...content.childNodes);
 	};
 	const renderPending = () => {
 		const pend = row.api_access === "managed" ? row.pending : null;
@@ -48419,8 +48861,25 @@ async function viewSession(main, host, sid, context = null) {
 		const answer = async (params) => {
 			try {
 				assertView(connection);
-				const latest = await api("GET", path);
+				const sourceVersion = withdrawalVersion;
+				let latest;
+				try {
+					latest = await api("GET", path);
+				} catch (error) {
+					assertView(connection);
+					if (disposed || sourceVersion !== withdrawalVersion) return;
+					if ([
+						403,
+						404,
+						410
+					].includes(error?.status)) {
+						withdraw(error.status === 403 ? "forbidden" : "gone", error);
+						return;
+					}
+					throw error;
+				}
 				assertView(connection);
+				if (disposed || withdrawn || sourceVersion !== withdrawalVersion) return;
 				applyObservation(latest);
 				if (latest.session.api_access !== "managed" || identity(latest.session.pending) !== current || !pend.toolUseId) throw new ApiError(409, "PENDING_CHANGED", t("pending_changed"));
 				const op = await submit("session.answer", {
@@ -48434,22 +48893,39 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(opStatus(op));
 				if (op.status === "succeeded") await loadObservation();
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, e?.code === "PENDING_CHANGED" ? {
+					label: t("session_err_review"),
+					run: async () => {
+						await refresh().catch(() => {});
+						pending.querySelector("button:not(:disabled), input")?.focus();
+					}
+				} : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
+					label: t("ui_retry"),
+					run: () => answer(params)
+				}));
 			}
 		};
-		const card = h("div", { class: "panel session-asking" }, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
-		if (pend.kind === "permission") card.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "msg" }, pend.input_preview || ""), h("div", { class: "actions" }, h("button", {
-			class: "primary",
-			"data-answer-action": "",
-			disabled: !pend.toolUseId || !allowed("session.answer"),
-			onclick: () => answer({ permission: "allow" })
-		}, t("allow")), h("button", {
-			class: "danger",
-			"data-answer-action": "",
-			disabled: !pend.toolUseId || !allowed("session.answer"),
-			onclick: () => answer({ permission: "deny" })
-		}, t("deny"))));
-		else if (pend.kind === "ask_user") {
+		const actions = h("div", { class: "actions session-asking-actions" });
+		const card = h("div", {
+			class: "session-asking",
+			role: "group",
+			"aria-label": t("pending_" + pend.kind)
+		}, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
+		const content = h("div", { class: "session-asking-content" });
+		if (pend.kind === "permission") {
+			content.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "session-asking-preview" }, pend.input_preview || ""));
+			actions.append(h("button", {
+				class: "primary",
+				"data-answer-action": "",
+				disabled: !pend.toolUseId || !allowed("session.answer"),
+				onclick: () => answer({ permission: "allow" })
+			}, t("allow")), h("button", {
+				class: "danger",
+				"data-answer-action": "",
+				disabled: !pend.toolUseId || !allowed("session.answer"),
+				onclick: () => answer({ permission: "deny" })
+			}, t("deny")));
+		} else if (pend.kind === "ask_user") {
 			const fields = [];
 			const save = () => {
 				try {
@@ -48474,22 +48950,23 @@ async function viewSession(main, host, sid, context = null) {
 						save();
 					}
 				}, o));
-				card.append(h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question), picks.length ? h("div", { class: "actions" }, ...picks) : null, h("div", { class: "actions" }, input));
+				content.append(h("div", { class: "session-question" }, h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question), picks.length ? h("div", { class: "actions" }, ...picks) : null, input));
 			}
-			card.append(h("div", { class: "actions" }, h("button", {
+			actions.append(h("button", {
 				class: "primary",
 				"data-answer-action": "",
 				disabled: !pend.toolUseId || !allowed("session.answer"),
 				onclick: () => answer({ answers: fields.map((f) => f.value) })
-			}, t("answer"))));
+			}, t("answer")));
 		}
+		card.append(content, actions);
 		pending.append(card);
 	};
 	const updateControls = () => {
 		permissions?.update();
 		send.disabled = !allowed("session.send") || sending;
 		stop.disabled = !allowed("session.interrupt");
-		stop.hidden = row?.api_access !== "managed";
+		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
 		if (row?.api_access === "managed" && send.disabled && !sending) {
 			if (!readReady) reason = t("session_send_waiting");
@@ -48502,7 +48979,6 @@ async function viewSession(main, host, sid, context = null) {
 		for (const control of pending.querySelectorAll("[data-answer-action]")) control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
 	};
 	const applyObservation = (data) => {
-		const first = !row;
 		row = data.session || (data.cleanup?.length ? {
 			host,
 			session_id: sid,
@@ -48516,9 +48992,12 @@ async function viewSession(main, host, sid, context = null) {
 			...(data.relations_summary || []).flatMap((relation) => [`execution:${relation.execution_id}`, `task:${relation.execution_id}`]),
 			...data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : []
 		]);
-		if (first) queue.checked = Boolean(row.streaming);
-		titleNode.textContent = row.title || sid;
-		markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
+		if (!queueKnown) {
+			queue.checked = Boolean(row.streaming);
+			queueKnown = true;
+		}
+		titleNode.textContent = row.title || t("session_untitled");
+		markSlot.replaceChildren(agentMark(row.agent_kind));
 		pillSlot.replaceChildren(statusPill(sessionStatus(row)));
 		const metaBits = [];
 		if (context?.project?.name) metaBits.push({
@@ -48553,7 +49032,7 @@ async function viewSession(main, host, sid, context = null) {
 		}));
 		paintOrigin();
 		mobileLayout?.updateInfo();
-		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
+		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"
@@ -48574,6 +49053,7 @@ async function viewSession(main, host, sid, context = null) {
 		if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
 		if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
 		const managed = row.api_access === "managed";
+		conversation.setUserLabel(managed && row.provenance === "connector_managed" ? t("message_you") : t("message_person"));
 		artifactSlot.replaceChildren();
 		if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) artifactSlot.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
 		paintDiscuss(data.work_items);
@@ -48613,58 +49093,185 @@ async function viewSession(main, host, sid, context = null) {
 		if (capture) capture.hidden = !manualSource;
 		syncChanges();
 		composer.hidden = !managed;
+		controls.hidden = !managed;
 		readonly.hidden = managed;
-		readonly.textContent = t(row.provenance === "manual" ? "read_only_note" : "session_access_unknown");
+		readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
 		renderPending();
 		updateControls();
 	};
 	const loadObservation = async () => {
-		const data = await api("GET", path);
-		assertView(connection);
+		const request = ++observationRequest;
+		const current = () => {
+			assertView(connection);
+			return !disposed && request === observationRequest;
+		};
+		let data;
+		try {
+			data = await api("GET", path);
+		} catch (error) {
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status) && current()) {
+				error.sessionWithdrawn = error.status === 403 ? "forbidden" : "gone";
+				withdraw(error.sessionWithdrawn, error);
+			}
+			throw error;
+		}
+		if (!current()) return;
 		applyObservation(data);
 		let work = [], repositories = [];
 		if (context?.project) {
 			const project = await api("GET", `/projects/${encodeURIComponent(context.project.project_id)}`);
 			assertView(connection);
+			if (!current()) return;
 			work = (project.work || []).filter((item) => item.host === host && item.session_id === sid);
 			repositories = project.project?.repositories || [];
 		} else if (row.worktree_id && state.caps?.features?.execution_delivery?.version === 1) {
 			const detail = await api("GET", `/worktrees/${encodeURIComponent(row.worktree_id)}`);
 			assertView(connection);
+			if (!current()) return;
 			work = (detail.worktree?.work || []).filter((item) => item.host === host && item.session_id === sid);
 		}
-		fill(result, deliveryPills, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? sessionWorkLine(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		if (!current()) return;
+		const content = h("div", {}, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? sessionWorkLine(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		if (!deliveryPills.isConnected) result.append(deliveryPills);
+		const old = result.querySelector("[data-session-work]");
+		content.dataset.sessionWork = "";
+		if (!old) result.append(content);
+		else if (!old.isEqualNode(content)) old.replaceWith(content);
 		await loadDelivery(data.work_items);
-		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", { class: "muted" }, t("workspace_result_empty")));
+		if (!current()) return;
+		result.querySelector("[data-session-result-empty]")?.remove();
+		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", {
+			class: "muted",
+			"data-session-result-empty": ""
+		}, t("workspace_result_empty")));
 	};
 	const loadMessages = async (offset = messageOffset, latest = false) => {
 		if (offset == null) return;
 		const request = ++messageRequest;
-		const get = (offset) => api("GET", `${path}/messages?last_n=30&include_tools=true&offset=${offset}${readingSupported ? "&max_chars=60000&max_message_chars=60000" : ""}`);
-		let read = await get(offset);
-		assertView(connection);
-		if (request !== messageRequest) return;
-		const restore = firstMessages && readingSupported ? read.reading?.position : null;
-		if (restore && Number.isInteger(restore.page_offset) && restore.page_offset >= 0) {
-			const savedOffset = Math.max(0, restore.page_offset - 15);
-			if (savedOffset !== offset) {
-				offset = savedOffset;
+		const get = (offset, size = messageWindow) => api("GET", `${path}/messages?last_n=${size}&include_tools=true&offset=${offset}${readingSupported ? "&max_chars=60000&max_message_chars=60000" : ""}`);
+		let read;
+		try {
+			try {
 				read = await get(offset);
+			} catch (error) {
+				if (error?.status !== 413 || messageWindow <= 10) throw error;
 				assertView(connection);
+				if (request !== messageRequest) return;
+				read = await get(offset, 10);
+				messageWindow = 10;
 			}
+			assertView(connection);
 			if (request !== messageRequest) return;
+			const restore = firstMessages && readingSupported ? read.reading?.position : null;
+			if (restore && Number.isInteger(restore.page_offset) && restore.page_offset >= 0) {
+				const savedOffset = Math.max(0, restore.page_offset - Math.floor(messageWindow / 2));
+				if (savedOffset !== offset) {
+					offset = savedOffset;
+					read = await get(offset);
+					assertView(connection);
+				}
+				if (request !== messageRequest) return;
+			}
+			messageOffset = offset;
+			nextMessageOffset = read.next_offset;
+			firstMessages = false;
+			conversation.update(read.messages, readingSupported ? {
+				...read,
+				restore,
+				latest,
+				olderWindow: offset > 0
+			} : { next_offset: read.next_offset });
+		} catch (error) {
+			if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
+			conversation.fail({
+				title: error?.status === 413 ? t("session_err_too_large") : t("message_window_failed"),
+				retry: () => refresh().catch(() => {})
+			});
+			throw error;
 		}
-		messageOffset = offset;
-		nextMessageOffset = read.next_offset;
-		firstMessages = false;
-		conversation.update(read.messages, readingSupported ? {
-			...read,
-			restore,
-			latest,
-			olderWindow: offset > 0
-		} : null);
+	};
+	const scheduleRetry = () => {
+		if (retryTimer || withdrawn || disposed) return;
+		const delay = retryDelay;
+		retryDelay = Math.min(retryDelay * 2, 3e4);
+		retryAt = Date.now() + delay;
+		retryTimer = setTimeout(() => {
+			retryTimer = null;
+			if (!readReady && !refreshInFlight && !withdrawn && !disposed) refresh().catch(() => {});
+		}, delay);
+	};
+	const backLink = () => {
+		const origin = originHref();
+		return origin ? h("a", {
+			href: origin.href,
+			class: "ui-button secondary"
+		}, t("session_back", { view: t("ui_" + origin.view) })) : h("a", {
+			href: "#/sessions",
+			class: "ui-button secondary"
+		}, t("session_back_sessions"));
+	};
+	const withdraw = (kind, error = null) => {
+		const first = !withdrawn;
+		withdrawn = kind;
+		withdrawalVersion += 1;
+		clearTimeout(retryTimer);
+		retryTimer = null;
+		retryDelay = 1e3;
+		++observationRequest;
+		++deliveryTicket;
+		++messageRequest;
+		cps.clear();
+		deliveryKnown.clear();
+		state.observations?.delete(`session:${host}/${sid}`);
+		if (first && !results.hidden && !wide.matches) results.close();
+		conversation.clear();
+		pending.replaceChildren();
+		pendingIdentity = void 0;
+		status.replaceChildren();
+		readError = null;
+		deliveryPills.replaceChildren();
+		result.replaceChildren();
+		metadata.replaceChildren();
+		sourcesPanel?.dispose();
+		sourcesPanel = null;
+		sourcesBody.replaceChildren(sourcesEmpty());
+		titleNode.textContent = t("session_heading");
+		markSlot.replaceChildren();
+		pillSlot.replaceChildren();
+		meta.replaceChildren();
+		overflow.hidden = true;
+		row = null;
+		readReady = false;
+		updateControls();
+		syncWide();
+		if (first) {
+			workspaceNode.remove();
+			if (context?.picker) context.picker.hidden = true;
+			head.after(withdrawnSlot);
+		}
+		withdrawnSlot.replaceChildren(h("div", { "data-session-withdrawn": kind }, emptyState({
+			icon: "circle-alert",
+			title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
+			action: h("div", {}, backLink(), sessionErrorDetails(error))
+		})));
+	};
+	const reinstate = () => {
+		withdrawn = "";
+		withdrawnSlot.remove();
+		if (context?.picker) context.picker.hidden = false;
+		head.after(workspaceNode);
+		overflow.hidden = false;
+		syncWide();
+		settleRefreshes([cps.load(), labels.refresh()]).catch(() => {});
 	};
 	const refresh = async (fromEvent = false) => {
+		assertView(connection);
+		if (disposed) return;
+		if (fromEvent && retryTimer && Date.now() < retryAt && readError) throw readError.error;
 		if (refreshInFlight) {
 			await refreshInFlight;
 			if (fromEvent) return refresh(true);
@@ -48673,16 +49280,29 @@ async function viewSession(main, host, sid, context = null) {
 		refreshInFlight = (async () => {
 			try {
 				await settleRefreshes([loadObservation(), loadMessages()]);
+				if (withdrawn) reinstate();
 				await permissions?.refresh(fromEvent);
 				readReady = true;
+				retryDelay = 1e3;
+				clearTimeout(retryTimer);
+				retryTimer = null;
 				updateControls();
 				readError?.remove();
 				readError = null;
 			} catch (error) {
+				if (error?.sessionWithdrawn) {
+					withdraw(error.sessionWithdrawn, error);
+					return;
+				}
 				readReady = false;
 				updateControls();
-				readError = errorBox(error);
-				status.replaceChildren(readError);
+				readError = sessionErrorBox(error, {
+					label: t("ui_retry"),
+					run: () => refresh().catch(() => {})
+				});
+				readError.error = error;
+				if (!withdrawn) status.replaceChildren(readError);
+				scheduleRetry();
 				throw error;
 			}
 		})();
@@ -48693,61 +49313,62 @@ async function viewSession(main, host, sid, context = null) {
 		}
 	};
 	try {
-		await settleRefreshes([
-			refresh(),
-			cps.load(),
-			labels.refresh()
-		]);
+		await refresh();
+		if (!withdrawn) await settleRefreshes([cps.load(), labels.refresh()]);
 	} catch {}
-	const retry = setInterval(() => {
-		if (!readReady && !refreshInFlight) refresh().catch(() => {});
-	}, 1e3);
 	const reload = debounceRefresh(() => refresh(true), 500), reloadCps = debounceRefresh(cps.load, 500);
 	const off = onEvents((ev) => {
 		observations.changed(ev);
-		return settleRefreshes([
-			observationAffected("session", `${host}/${sid}`, ev) || [
-				"work_item",
-				"integration",
-				"worktree"
-			].includes(ev.resource_type) || context?.project && [
-				"project",
-				"operation",
-				"task",
-				"execution"
-			].includes(ev.resource_type) ? reload() : Promise.resolve(),
-			ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
-			ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
-			observationAffected("session", `${host}/${sid}`, ev) || ev.resource_type === "operation" ? labels.refresh(true) : Promise.resolve(),
-			instructions?.box.open && (observationAffected("session", `${host}/${sid}`, ev) || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
-		]);
+		const own = observationAffected("session", `${host}/${sid}`, ev);
+		if (withdrawn) return own ? reload() : Promise.resolve();
+		return (own || [
+			"work_item",
+			"integration",
+			"worktree"
+		].includes(ev.resource_type) || context?.project && [
+			"project",
+			"operation",
+			"task",
+			"execution"
+		].includes(ev.resource_type) ? reload() : Promise.resolve()).then(() => {
+			if (withdrawn || disposed) return;
+			return settleRefreshes([
+				ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
+				ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
+				own || ev.resource_type === "operation" ? labels.refresh(true) : Promise.resolve(),
+				instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
+			]);
+		});
 	});
 	return () => {
-		clearInterval(retry);
+		disposed = true;
+		clearTimeout(retryTimer);
 		off();
 		instructions?.dispose();
 		batHandoff?.dispose();
 		conversation.dispose();
 		mobileLayout?.dispose();
 		shortcut.dispose();
+		cps.clear();
 		results.dispose();
 		overflow.dispose();
 		sourcesPanel?.dispose();
 		wide.removeEventListener("change", syncWide);
 	};
 }
-function checkpointPanel(host, sid) {
+function checkpointPanel(host, sid, { namespace = state.namespace, manual = () => false } = {}) {
 	const can = (state.caps?.features?.checkpoints || []).includes(host);
 	const mayStart = (state.caps?.scopes || []).includes("start");
 	const list = h("div", {});
 	const status = h("div", { class: "muted" });
 	const rows = new Map();
 	let preview = null;
+	let ticket = 0;
 	const row = (cp) => rows.get(cp.checkpoint_id) || rows.set(cp.checkpoint_id, buildRow(cp)).get(cp.checkpoint_id);
 	const buildRow = (cp) => {
 		const instr = h("textarea", { placeholder: t("continue_placeholder") });
-		const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-		const out = h("div", { class: "muted" });
+		const agent = h("select", { "aria-label": t("checkpoint_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+		const out = h("div", { class: "muted session-checkpoint-result" });
 		const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
 		draft.bindFields({ agent });
 		let expectedHead = null;
@@ -48765,43 +49386,70 @@ function checkpointPanel(host, sid) {
 						agent: agent.value,
 						...state.caps?.artifacts ? { artifacts: draft.refs() } : {}
 					}, state.caps?.artifacts ? { expected_source_head_sha: expectedHead } : {}, `continue.${cp.checkpoint_id}`);
-					out.replaceChildren(opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+					const resultHost = op.result?.host || cp.host;
+					const opened = op.result?.session_id && resultHost ? h("a", { href: `#/session/${encodeURIComponent(resultHost)}/${encodeURIComponent(op.result.session_id)}` }, t("open_new_session")) : null;
+					out.replaceChildren(h("p", { class: "session-checkpoint-op" }, statusPill(operationStatusKey(op.status)), opened ? " " : "", opened || ""), disclosure({
+						label: t("checkpoint_op_details"),
+						body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(op.operation_id)}` }, op.operation_id))
+					}));
 				} catch (e) {
-					out.replaceChildren(errorBox(e));
+					out.replaceChildren(sessionErrorBox(e, {
+						label: t("ui_retry"),
+						run: () => go.click()
+					}));
 				}
 				go.disabled = false;
 			}
 		}, t("start_agent_work"));
-		const form = h("div", { hidden: true }, confinementNote(host, agent), instr, draft.box, h("div", { class: "actions" }, agent, go), out);
-		return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
-			sessionWhen(cp.captured_at),
-			cp.actor,
-			t("excerpt_count", { n: cp.excerpt_messages })
-		].join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form), h("button", {
+		const limits = disclosure({
+			label: t("checkpoint_limits"),
+			body: confinementNote(host, agent)
+		});
+		const form = h("div", {
+			class: "session-checkpoint-form",
+			"data-checkpoint-form": "",
+			hidden: true
+		}, instr, draft.box, h("div", { class: "actions" }, agent, go), out, limits);
+		const start = h("button", {
 			class: "secondary",
+			type: "button",
 			disabled: !can || !mayStart,
-			title: !can ? t("checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
+			"aria-expanded": "false",
+			title: !can ? t("session_checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
 			onclick: async () => {
 				form.hidden = !form.hidden;
+				start.setAttribute("aria-expanded", String(!form.hidden));
 				if (state.caps?.artifacts && !form.hidden && !expectedHead) try {
 					expectedHead = (await api("GET", `/checkpoints/${cp.checkpoint_id}?live=true`)).source.head;
 					if (!expectedHead) fill(out, h("p", { class: "error" }, t("source_unavailable")));
 				} catch (e) {
-					fill(out, errorBox(e));
+					fill(out, sessionErrorBox(e, {
+						label: t("ui_retry"),
+						run: () => load().catch(() => {})
+					}));
 				}
 			}
-		}, t("continue_from_checkpoint")));
+		}, t("continue_from_checkpoint"));
+		return h("div", { class: "row session-checkpoint-row" }, h("div", { class: "session-checkpoint-head" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
+			sessionWhen(cp.captured_at),
+			cp.actor,
+			t("excerpt_count", { n: cp.excerpt_messages })
+		].filter(Boolean).join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null), start), form);
 	};
-	const load = async () => {
+	const load = async (mine = ticket) => {
 		try {
 			const page = await api("GET", `/checkpoints?${new URLSearchParams({
 				host,
 				session_id: sid,
 				limit: "10"
 			})}`);
+			if (mine !== ticket) return;
 			list.replaceChildren(...page.checkpoints.length ? page.checkpoints.map(row) : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []);
 		} catch (e) {
-			list.replaceChildren(errorBox(e));
+			if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {
+				label: t("ui_retry"),
+				run: () => load().catch(() => {})
+			}));
 		}
 	};
 	const pick = h("select", {
@@ -48813,11 +49461,12 @@ function checkpointPanel(host, sid) {
 		hidden: true
 	});
 	let previewFailed = false;
-	const loadPreview = async () => {
+	const loadPreview = async (mine = ticket) => {
 		if (!can) return;
 		try {
 			const selectedCommit = pick.value;
 			const current = (await api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}/checkpoint-preview`)).preview;
+			if (mine !== ticket) return;
 			if (!Array.isArray(current?.commits)) throw new Error("Invalid checkpoint preview");
 			preview = current;
 			pick.replaceChildren(...preview.commits.map((c) => h("option", { value: c.hash }, `${c.hash.slice(0, 10)} · ${c.message}`)));
@@ -48828,9 +49477,13 @@ function checkpointPanel(host, sid) {
 			previewFailed = false;
 			if (preview.dirty) status.replaceChildren(h("span", { class: "error" }, t("dirty_warning", { n: preview.dirty })));
 		} catch (error) {
+			if (mine !== ticket) return;
 			previewFailed = true;
 			create.disabled = true;
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(sessionErrorBox(error, {
+				label: t("ui_retry"),
+				run: () => loadPreview().catch(() => {})
+			}));
 		}
 	};
 	const create = h("button", {
@@ -48850,28 +49503,69 @@ function checkpointPanel(host, sid) {
 					session_id: sid
 				}, params, {}, `checkpoint.${host}.${sid}`);
 				if (op.status === "succeeded") note.value = "";
-				status.replaceChildren(...[
-					opStatus(op),
-					op.error_code ? chip(op.error_code, "bad") : null,
-					op.status_reason
-				].filter(Boolean).flatMap((x) => [x, " "]));
+				status.replaceChildren(...[opStatus(op), op.error_code || op.status_reason ? disclosure({
+					label: t("checkpoint_op_details"),
+					body: h("p", {}, h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))
+				}) : null].filter(Boolean));
 				await load();
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, {
+					label: t("ui_retry"),
+					run: () => load().catch(() => {})
+				}));
 			}
 			create.disabled = !can || previewFailed;
 		}
-	}, t("create_checkpoint"));
+	}, t("checkpoint_record"));
+	const recordForm = h("div", {
+		class: "session-checkpoint-record",
+		hidden: true
+	}, h("div", { class: "actions" }, pick), note, h("div", { class: "actions" }, create));
+	const action = can ? button({
+		variant: "ghost",
+		size: "sm",
+		label: t("create_checkpoint"),
+		"aria-expanded": "false",
+		onClick: () => {
+			recordForm.hidden = !recordForm.hidden;
+			action.setAttribute("aria-expanded", String(!recordForm.hidden));
+			if (!recordForm.hidden) pick.focus();
+		}
+	}) : null;
+	const notes = h("div", {});
+	const paintNotes = () => notes.replaceChildren(...[
+		h("p", { class: "muted" }, t("checkpoint_help")),
+		manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null,
+		can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")),
+		can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))),
+		mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")),
+		mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key")))
+	].filter(Boolean));
+	paintNotes();
 	const checkpointWhy = disclosure({
-		label: t("session_details"),
-		key: `session-checkpoint:${host}:${sid}`,
-		body: h("div", {}, h("p", { class: "muted" }, t("checkpoint_help")), h("p", { class: "muted" }, t("checkpoint_unavailable")), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")))
+		label: t("checkpoint_notes"),
+		key: `session-checkpoint:${namespace}:${host}:${sid}`,
+		body: notes
 	});
+	checkpointWhy.addEventListener("toggle", () => {
+		if (checkpointWhy.open) paintNotes();
+	});
+	const box = h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), recordForm, status, list, checkpointWhy);
+	const clear = () => {
+		ticket += 1;
+		rows.clear();
+		list.replaceChildren();
+		status.replaceChildren();
+		preview = null;
+	};
 	return {
-		box: h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), note, can ? h("div", { class: "actions" }, pick, create) : null, status, list, checkpointWhy),
+		box,
+		action,
+		clear,
 		load: async () => {
-			await loadPreview();
-			await load();
+			const mine = ticket;
+			await loadPreview(mine);
+			if (mine === ticket) await load(mine);
 		}
 	};
 }

@@ -4,6 +4,7 @@ import {t} from './i18n.js';
 import {agentMark, disclosure, statusPill} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
+import {sessionHref} from './session-navigation.js';
 import {scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
 
 export function rowStatus(row, data) {
@@ -31,7 +32,7 @@ export function render(row, {workspaceId, data}) {
     const agent = attempt.refs?.agent, session = attempt.refs?.session;
     if (agent) status.append(h('div', {class: 'schedule-agent'}, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
     if (session) status.append(h('div', {class: 'schedule-session'},
-      h('a', {href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`}, t('sched_session')),
+      h('a', {href: sessionHref({host: session.host, sessionId: session.session_id, from: 'schedule'})}, t('sched_session')),
       session.read_only ? statusPill('read_only') : null));
   }
   const attemptList = h('ul', {class: 'schedule-attempts'}, ...attempts.map(attempt => h('li', {'data-schedule-attempt': attempt.id},

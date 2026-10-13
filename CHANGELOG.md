@@ -103,7 +103,22 @@
   action has an English and Traditional Chinese label. A failed Pending refresh shows no count, with
   one Retry when every group fails; operation durations use a compact day and hour form.
 - Lay out the session transcript on one message grid with an inline agent chip. Tool events, labels
-  and checkpoints share the inspector's disclosures, and a linked work item reads Work · title.
+  and checkpoints share the inspector's disclosures, and a linked work item reads Work · title. Keep
+  Session reply controls visible before focusing the input and after resizing. Complete the
+  Traditional Chinese execution-limit explanations. Preserve Session return locations through reload
+  and discussion drafts. Project inspector links carry their view, and Discuss returns to the exact
+  session. Make Session checkpoints quiet at rest, distinguish capable hosts and preserve disclosure
+  choices per connection. Continue forms expand below their actions and link to the new session only
+  when the central result identifies it. Withdraw unavailable Sessions as one inline state, retain
+  drafts and original retry keys, back off failed reads, and render message failures inside the
+  transcript. Validate and group Session Delivery receipts without clearing them during refresh;
+  distinguish transient failures, withdrawn sources and partial pages. Keep Session approval and
+  question actions visible without keyboard scrolling; cap prompt content, preserve transcript space
+  and use the shared Results drawer widths. Simplify manual-session copy and distinguish unknown
+  titles, agents and disclosures. Keep Session transcript position and tool disclosures stable
+  during live updates and resizing; restore focus on Back to latest and follow successful replies.
+  Show received message counts, consistent agent marks, compact durations and Person on manual
+  turns.
 
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
