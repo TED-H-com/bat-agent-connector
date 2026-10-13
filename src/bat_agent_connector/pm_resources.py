@@ -1,18 +1,24 @@
 """Current-authority resource projection over explicit local usage bindings."""
 from __future__ import annotations
 
+import bisect
 import json
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from functools import lru_cache
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 from .operations import OperationError
 from .pm_workspace import require_member, server_id
 from .usage_adapters import MAX_COUNT, METRICS, UsageInvalid, timestamp
 from .usage_config import ADAPTERS
 
-# Adding `buckets` does not change the meaning of existing fields.
-_MAX_DAYS = 366
-_TZ_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_/+-")
+# Opt-in chart rows. Every read, with or without buckets, still rejects a span over 366 days.
+_BUCKET_DAYS = 92
+_SETTLE_FLOOR = timedelta(minutes=15)
+# TZif files ZoneInfo will open that are not calendar zones a client can name.
+_NOT_IANA = frozenset({"localtime", "posixrules", "Factory"})
+# Stored observed_at values are millisecond UTC strings, so this sorts after every one of them.
+_AFTER_LAST_TIMESTAMP = "9999-12-31T99"
 
 
 def capabilities():
@@ -21,40 +27,84 @@ def capabilities():
             "buckets": {"granularity": "day"}}
 
 
+@lru_cache(maxsize=1)
+def _iana_names():
+    return frozenset(available_timezones()) - _NOT_IANA
+
+
 def _zone(name):
     if name is None:
         name = "UTC"
-    if (type(name) is not str or not 1 <= len(name) <= 64 or any(char not in _TZ_CHARS for char in name)
-            or name.startswith("/") or name.endswith("/") or "//" in name or ".." in name):
+    if type(name) is not str or name not in _iana_names():
         raise UsageInvalid("invalid_timezone")
     try:
-        return ZoneInfo(name)
+        return name, ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError, OSError):
         raise UsageInvalid("invalid_timezone") from None
 
 
+def _opt_in(buckets):
+    if buckets is None:
+        return False
+    if buckets != "day":
+        raise UsageInvalid("invalid_buckets")
+    return True
+
+
+def _settle(interval_s):
+    interval = interval_s if isinstance(interval_s, (int, float)) and interval_s > 0 else 0
+    return max(_SETTLE_FLOOR, timedelta(seconds=interval * 3))
+
+
 def _local_midnight(day, zone):
+    """UTC instant of local midnight. An ambiguous midnight uses the earlier fold."""
     try:
-        return datetime(day.year, day.month, day.day, tzinfo=zone)
-    except (OverflowError, ValueError):
+        # fold=0 is the first occurrence, so the local date starts at its earlier instant.
+        return datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(timezone.utc)
+    except (OverflowError, ValueError, OSError):
         raise UsageInvalid("invalid_window") from None
 
 
 def _local_days(start, end, zone):
-    """Local dates that overlap [start, end). The end instant is exclusive."""
-    start_dt = datetime.fromisoformat(start).astimezone(zone)
-    end_dt = datetime.fromisoformat(end).astimezone(zone)
-    first = start_dt.date()
-    last = end_dt.date() - timedelta(days=1) if end_dt == _local_midnight(end_dt.date(), zone) else end_dt.date()
+    """Local dates overlapping [start, end). The end instant is exclusive.
+
+    The last date is the zone's date of the instant 1µs before `end`, so a repeated
+    or missing local midnight follows that instant instead of a wall-clock compare.
+    """
+    try:
+        first = datetime.fromisoformat(start).astimezone(zone).date()
+        last = (datetime.fromisoformat(end) - timedelta(microseconds=1)).astimezone(zone).date()
+    except (OverflowError, OSError, ValueError):
+        raise UsageInvalid("invalid_window") from None
     if last < first:
         raise UsageInvalid("invalid_window")
+    # A calendar label still needs a representable local midnight before it can be a bucket.
+    _local_midnight(first, zone)
     days, day = [], first
     while day <= last:
+        if len(days) >= _BUCKET_DAYS:
+            raise UsageInvalid("bucket_window")
         days.append(day)
-        if len(days) > _MAX_DAYS:
-            raise UsageInvalid("invalid_window")
-        day += timedelta(days=1)
+        try:
+            day += timedelta(days=1)
+        except OverflowError:
+            break
     return days
+
+
+def _refuse(exc):
+    reason = str(exc)
+    if reason == "invalid_timezone":
+        message = "tz must be an IANA time zone name"
+    elif reason == "invalid_buckets":
+        message = "buckets must be day"
+    elif reason == "tz_without_buckets":
+        message = "tz requires buckets=day"
+    elif reason == "bucket_window":
+        message = "Daily buckets cover at most 92 local dates"
+    else:
+        message = "Select an aware time window of at most 366 days"
+    raise OperationError("INVALID_PARAMS", message, 422) from None
 
 
 def _whole(value):
@@ -65,18 +115,22 @@ def _whole(value):
     return None
 
 
-def _complete(day_start, day_end, window_start, window_end, stored_status, successful_at):
+def _complete(day_start, day_end, window_start, window_end, stored_status, coverage_at, settle):
     # `current` is committed only when that cycle's cursor reached EOF.
-    # A later unread suffix can still hold this day's events, so catching up is not proof.
-    if stored_status != "current" or not isinstance(successful_at, str):
+    # Coverage is the read's start, and the day must have settled after it ended.
+    if stored_status != "current" or not isinstance(coverage_at, str):
         return False
     try:
-        covered_until = datetime.fromisoformat(successful_at)
+        covered = datetime.fromisoformat(coverage_at)
     except ValueError:
         return False
-    if covered_until.tzinfo is None:
+    if covered.tzinfo is None:
         return False
-    return window_start <= day_start and day_end <= window_end and covered_until >= day_end
+    try:
+        settled = day_end + settle
+    except OverflowError:
+        return False
+    return window_start <= day_start and day_end <= window_end and covered >= settled
 
 
 def _tokens(item, complete):
@@ -87,20 +141,55 @@ def _tokens(item, complete):
                   else None) for key in METRICS}
 
 
-def _series(db, source, start, end, zone, days, stored_status, successful_at):
+def _coverage_at(stored, same):
+    if not stored or not same:
+        return None
+    try:
+        cursor = json.loads(stored["cursor"])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(cursor, dict):
+        return None
+    value = cursor.get("coverage_at")
+    return value if isinstance(value, str) else None
+
+
+def _day_end(day, zone):
+    """UTC start of the next local date, or None when that instant cannot be represented."""
+    try:
+        following = day + timedelta(days=1)
+    except OverflowError:
+        return None
+    return _local_midnight(following, zone)
+
+
+def _bounds(days, zone):
+    # Day edges use the same millisecond UTC form as stored observed_at, compared as strings.
+    edges = [_local_midnight(day, zone).isoformat(timespec="milliseconds") for day in days]
+    end = _day_end(days[-1], zone)
+    edges.append(end.isoformat(timespec="milliseconds") if end is not None else _AFTER_LAST_TIMESTAMP)
+    return edges
+
+
+def _series(db, source, start, end, zone, days, stored_status, coverage_at, settle):
     slots = {day.isoformat(): {"samples": 0, "values": dict.fromkeys(METRICS, 0), "covered": dict.fromkeys(METRICS, 0)}
              for day in days}
+    edges = _bounds(days, zone)
     columns = ",".join("json_extract(value,'$.metrics." + key + "')" for key in METRICS)
     # Indexed (source_id, observed_at) range only; the log file is not opened.
     rows = db.execute("SELECT observed_at," + columns + " FROM resource_usage_samples "  # noqa: S608 - fixed METRICS constants only
                       "WHERE source_id=? AND observed_at>=? AND observed_at<?", (source.source_id, start, end))
     for row in rows:
-        item = slots.get(datetime.fromisoformat(row[0]).astimezone(zone).date().isoformat())
-        if item is None:
+        observed = row[0]
+        if type(observed) is not str:
             continue
+        index = bisect.bisect_right(edges, observed) - 1
+        if not 0 <= index < len(days):
+            continue
+        item = slots[days[index].isoformat()]
         item["samples"] += 1
-        for index, key in enumerate(METRICS):
-            number = _whole(row[index + 1])
+        for offset, key in enumerate(METRICS):
+            number = _whole(row[offset + 1])
             if number is None:
                 continue
             item["values"][key] += number
@@ -108,10 +197,11 @@ def _series(db, source, start, end, zone, days, stored_status, successful_at):
     window_start, window_end = datetime.fromisoformat(start), datetime.fromisoformat(end)
     day_rows = []
     for day in days:
-        nxt = day + timedelta(days=1)
-        day_start = _local_midnight(day, zone).astimezone(timezone.utc)
-        day_end = _local_midnight(nxt, zone).astimezone(timezone.utc)
-        complete = _complete(day_start, day_end, window_start, window_end, stored_status, successful_at)
+        day_start = _local_midnight(day, zone)
+        day_end = _day_end(day, zone)
+        # A day whose exclusive end is not representable cannot be shown as settled.
+        complete = False if day_end is None else _complete(
+            day_start, day_end, window_start, window_end, stored_status, coverage_at, settle)
         day_rows.append({"date": day.isoformat(), "tokens": _tokens(slots[day.isoformat()], complete),
                          "complete": complete})
     return {"source_id": source.source_id, "adapter": source.adapter, "cli": source.adapter.split("-", 1)[0],
@@ -142,21 +232,25 @@ def _metrics(db, source_id, start, end):
             "configurations": [dict(r) for r in models[:20]], "configurations_partial": len(models) > 20}
 
 
-def read(ops, principal, workspace_id, *, since=None, until=None, tz=None):
+def read(ops, principal, workspace_id, *, since=None, until=None, tz=None, buckets=None):
     require_member(ops.db, principal, workspace_id)
     collector = ops.context["usage_collector"]
     at = datetime.now(timezone.utc)
     try:
-        zone = _zone(tz)
+        want = _opt_in(buckets)
+        if tz is not None and not want:
+            raise UsageInvalid("tz_without_buckets")
+        zone_name, zone = _zone(tz) if want else (None, None)
         start = timestamp(since) if since is not None else (at - timedelta(days=7)).isoformat(timespec="milliseconds")
         end = timestamp(until) if until is not None else at.isoformat(timespec="milliseconds")
         if not start < end or datetime.fromisoformat(end) - datetime.fromisoformat(start) > timedelta(days=366):
             raise UsageInvalid("invalid_window")
-        days = _local_days(start, end, zone)
+        days = _local_days(start, end, zone) if want else None
+        settle = _settle(collector.config.interval_s) if want else None
+    except OverflowError:
+        _refuse(UsageInvalid("invalid_window"))
     except UsageInvalid as exc:
-        if str(exc) == "invalid_timezone":
-            raise OperationError("INVALID_PARAMS", "tz must be an IANA time zone name", 422) from None
-        raise OperationError("INVALID_PARAMS", "Select an aware time window of at most 366 days", 422) from None
+        _refuse(exc)
     rows, pools, series = [], {}, []
     for source in collector.config.sources:
         if source.workspace_id != workspace_id:
@@ -181,8 +275,13 @@ def read(ops, principal, workspace_id, *, since=None, until=None, tz=None):
             row.update(_metrics(ops.db, source.source_id, start, end))
             if source.adapter == ADAPTERS[1]:
                 row["calls"] = row["observations"]
-            # Same visibility rule as totals: withdrawn and binding-changed sources contribute no days.
-            series.append(_series(ops.db, source, start, end, zone, days, stored_status if same else None, last_poll))
+            if want:
+                # Same visibility rule as totals: withdrawn and binding-changed sources contribute no days.
+                try:
+                    series.append(_series(ops.db, source, start, end, zone, days, stored_status if same else None,
+                                          _coverage_at(stored, same), settle))
+                except UsageInvalid as exc:
+                    _refuse(exc)
         rows.append(row)
         if source.quota_pool:
             rate = json.loads(stored["quota"]) if usable and stored["quota"] else None
@@ -202,8 +301,10 @@ def read(ops, principal, workspace_id, *, since=None, until=None, tz=None):
     for pool in pools.values():
         if pool["status"] == "conflicting":
             pool["snapshot"] = None
-    return {"workspace_id": workspace_id, "as_of": at.isoformat(timespec="milliseconds"),
-            "window": {"since": start, "until": end}, "interval_s": collector.config.interval_s,
-            "rows": rows, "buckets": {"granularity": "day", "tz": zone.key, "series": series},
-            "quota_pools": list(pools.values()), "capabilities": capabilities(),
-            "coverage": "configured_local_files_only", "forecast": {"status": "insufficient_evidence"}}
+    payload = {"workspace_id": workspace_id, "as_of": at.isoformat(timespec="milliseconds"),
+               "window": {"since": start, "until": end}, "interval_s": collector.config.interval_s,
+               "rows": rows, "quota_pools": list(pools.values()), "capabilities": capabilities(),
+               "coverage": "configured_local_files_only", "forecast": {"status": "insufficient_evidence"}}
+    if want:
+        payload["buckets"] = {"granularity": "day", "tz": zone_name, "series": series}
+    return payload
