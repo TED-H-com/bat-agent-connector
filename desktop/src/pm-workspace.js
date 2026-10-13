@@ -344,8 +344,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
         else if (ref.kind === 'governance') {
-          if (register) openIssueTool('ui_governance');
-          await governance?.openRef?.(ref);
+          if (register) await register.openRef(ref);
+          else await governance?.openRef?.(ref);
         }
         else if (ref.kind === 'milestone' && destination === 'schedule' && schedule) await schedule.openRef(ref);
         else if (ref.kind === 'milestone' && destination === 'schedule') {

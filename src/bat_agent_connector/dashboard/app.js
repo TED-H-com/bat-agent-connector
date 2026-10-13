@@ -22600,6 +22600,23 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		rememberScroll();
 		closeSheet(false);
 	}
+	async function openRef(ref) {
+		if (!isContextRef(ref)) return;
+		const rowId = `${ref.kind}.${ref.id}`;
+		if (!ROW_ID.test(rowId) || !active) return;
+		await refresh();
+		try {
+			alive();
+		} catch {
+			return;
+		}
+		if (!active || unavailable || failed) return;
+		selected = rowId;
+		preference.selected = rowId;
+		preference.inspector = true;
+		render();
+		await loadDetail(rowId);
+	}
 	render();
 	return {
 		element,
@@ -22609,7 +22626,8 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		restoreScroll,
 		setActive,
 		dispose,
-		closeSheet
+		closeSheet,
+		openRef
 	};
 }
 //#endregion
@@ -34899,8 +34917,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			workbench?.select(destination);
 			if (destination === "requirements") await traceability?.openRef?.(ref);
 			else if (ref.kind === "governance") {
-				if (register) openIssueTool("ui_governance");
-				await governance?.openRef?.(ref);
+				if (register) await register.openRef(ref);
+				else await governance?.openRef?.(ref);
 			} else if (ref.kind === "milestone" && destination === "schedule" && schedule) await schedule.openRef(ref);
 			else if (ref.kind === "milestone" && destination === "schedule") {
 				const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);

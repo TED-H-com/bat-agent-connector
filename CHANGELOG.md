@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Open Overview issue and risk attention items in the Issues & changes inspector,
+  retaining the exact source and a meaningful title for Discuss with PM.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,

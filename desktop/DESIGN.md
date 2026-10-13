@@ -220,6 +220,11 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+Selecting a governance attention item opens its exact Issues & changes inspector,
+where Discuss retains the record identity and title. Without the register capability,
+the existing governance tool remains the destination. The destination list settles
+before selection; withdrawn or late record reads cannot reopen an inspector.
+
 Attention retains the central severity/age ordering, with exact context identities
 passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
 by identity within their own part. Cached ages advance with the projection timestamp.

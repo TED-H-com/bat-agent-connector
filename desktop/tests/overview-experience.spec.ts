@@ -134,11 +134,18 @@ for (const native of [false, true]) test(`discussion links bind exact identities
 });
 
 test('attention opens exact governance, requirement and work selection; Full plan returns focus', async ({page}) => {
-  const f = fixture(); await boot(page, f);
+  const f = fixture(), dispatch = f.dispatch;
+  f.dispatch = async input => {
+    const result = await dispatch(input);
+    if (input.path.endsWith('/register/governance.' + f.state.data.attention[0].ref.id)) result.data.row.title = f.state.data.attention[0].title;
+    return result;
+  };
+  await boot(page, f);
   const row = f.state.data.attention[0]; await root(page).locator(`[data-overview-open="${row.key}"]`).click();
   await expect(page.locator('[data-pm-view="issues"]')).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator(`[data-pm-governance-row="${row.ref.id}"] button`)).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator(`[data-pm-governance-detail="${row.ref.id}"]`)).toContainText(row.title);
+  const inspector = page.locator(`[data-reg-inspector][data-reg-row="governance.${row.ref.id}"]`);
+  await expect(inspector.locator('h2')).toHaveText(row.title);
+  await expect(inspector.locator('[data-reg-discuss]')).toBeVisible();
   await openPmSection(page, 'overview');
   f.state.data.attention = [{...row, key: 'quality-revoked', kind: 'deviation', title: f.copy.requirements[0].text, ref: {kind: 'requirement', id: f.ids.requirements.email, revision_id: f.ids.planV3}}];
   await refresh(page); await root(page).locator('[data-overview-open="quality-revoked"]').click();

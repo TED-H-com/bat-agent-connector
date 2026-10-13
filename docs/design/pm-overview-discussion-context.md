@@ -169,6 +169,10 @@ journal sequence 顯示版本。未知值保留破折號；來源掃描不完整
 回復與匯出流程仍由原本的 charter／brief export 模組負責。
 ## 共用前端討論入口
 
+總覽的治理關注項目在中央支援登記讀取時，開啟「問題與變更」的原紀錄詳情，
+由詳情的討論入口帶入同一紀錄與標題。沒有登記能力才使用原治理工具。
+先完成目的頁的清單讀取，再選取固定來源；撤回與晚到回覆沿用原序號檢查。
+
 `desktop/src/pm-discuss-link.js` 解析 new 討論 URL；開啟時只建立本機草稿，第一次
 傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。建立回執後保存 thread
 ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key，只有已知 operation ID
