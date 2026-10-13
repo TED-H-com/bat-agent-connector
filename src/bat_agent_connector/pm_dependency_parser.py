@@ -250,7 +250,9 @@ class Inventory:
                     "ecosystem": ecosystem, "manifest_path": path, "repository": self.repository, "commit_sha": self.commit,
                     "published_name": None if value.get("private") is True or package.get("publish") is False or package.get("publish") == [] else declared,
                     "version": package.get("version") if isinstance(package.get("version"), str) else None,
-                    "evidence_refs": [self.ref(path)], "maintenance_owner": None, "verification_hints": []}
+                    "version_reason": None if isinstance(package.get("version"), str) else "not_declared",
+                    "evidence_refs": [self.ref(path)], "maintenance_owner": None,
+                    "maintenance_owner_reason": "not_named_in_visible_policy", "verification_hints": []}
                 self.components.append(component)
                 self.component(component, value)
             except (ValueError, TypeError, KeyError, AttributeError):
@@ -278,7 +280,7 @@ class Inventory:
         invalid_files = {r["path"] for r in self.files if r["status"] != "read"}
         for edge in self.edges:
             if any(ref["path"] in invalid_files for ref in edge["evidence_refs"]):
-                edge.update(resolved=None, evidence_level="declared")
+                edge.update(resolved=None, evidence_level="declared", resolution_reason="lockfile_unparsable")
         used = {e["dependency_key"] for e in self.edges}
         for key in used:
             self.dependencies[key]["kinds"] = sorted({e["kind"] for e in self.edges if e["dependency_key"] == key})
@@ -321,7 +323,9 @@ class Inventory:
             return None, None, []
 
     def add(self, component, name, version, relation, *, basis, refs=None, kind=None, ecosystem=None, resolved=True):
-        name, version = text(name), text(version)
+        name = text(name)
+        if version is not None:
+            version = text(version)
         if len(self.edges) >= MAX_EDGES:
             self.reasons.add("edge_limit")
             return
@@ -338,6 +342,8 @@ class Inventory:
         self.edges.append({"edge_id": stable("pmde_", component["component_id"], key, relation, basis, refs),
             "component_id": component["component_id"], "dependency_key": key, "direction": "component_to_dependency",
             "relation": relation, "kind": kind, "version": version, "resolved": version_resolved,
+            "version_reason": "not_declared" if version is None else None,
+            "resolution_reason": None if lock_ref else "no_unique_lock_resolution" if resolved else "go_sum_not_lockfile" if eco == "go" else "not_lockfile_dependency",
             "evidence_level": "verified" if lock_ref else "declared", "basis": basis, "evidence_refs": refs})
 
     def dev(self, component, name, version, basis, scripts=None):
@@ -472,7 +478,7 @@ class Inventory:
                 c["verification_hints"].append(hint)
                 self.hints.append(hint)
                 for tool in sorted({words[0] for words in calls}):
-                    self.add(c, tool, "unspecified", relation, basis="workflow_step", refs=[ref], ecosystem="toolchain", resolved=False)
+                    self.add(c, tool, None, relation, basis="workflow_step", refs=[ref], ecosystem="toolchain", resolved=False)
                 steps = self.parsed[path]
                 for action in (s for s in steps if s["job_id"] == step["job_id"] and s["uses"]):
                     name, sep, version = action["uses"].rpartition("@")

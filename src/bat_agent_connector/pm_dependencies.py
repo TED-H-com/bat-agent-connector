@@ -277,6 +277,7 @@ async def _run(ctx):
             doc = {"declaration_id": did, "component_id": params["component_id"], "dependency": dep,
                 "dependency_key": dep["key"], "relation": params["relation"], "direction": "component_to_dependency",
                 "version": dep["version"], "resolved": None, "evidence_level": params["evidence_level"],
+                "version_reason": "not_declared" if dep["version"] is None else None, "resolution_reason": "owner_declaration",
                 "source_ref": intent["source_ref"], "evidence_refs": [intent["source_ref"]], "note": params.get("note"),
                 "actor": ctx.actor, "created_at": now, "capture_revision_id": revision_id}
             ops.db.execute("""INSERT INTO pm_dependency_declarations(declaration_id,workspace_id,source_key,document,operation_id)

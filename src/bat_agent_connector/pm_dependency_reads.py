@@ -30,7 +30,7 @@ def _empty(wid):
             "capture": {"revision_id": None, "commit_sha": None, "captured_at": None, "status": "unknown"},
             "stale": None, "partial": True, "reason": "source_unavailable", "components": [],
             "dependencies": {kind: [] for kind in KINDS}, "edges": [], "declared": [], "files": [],
-            "verification_hints": [], "counts": None, "maintenance_owner": None,
+            "verification_hints": [], "counts": None, "maintenance_owner": None, "maintenance_owner_reason": "not_available",
             "cross_repository": {"status": "bounded", "complete": False}, "cross_repository_edges": [], "external_components": []}
 
 
@@ -156,7 +156,8 @@ def get(ops, principal, workspace_id):
             grouped[kind].append(dependency)
     result.update({key: value for key, value in doc.items() if key not in {"dependencies", "peer_revisions"}})
     result.update(dependencies=grouped, declared=declarations, stale=doc["commit_sha"] != binding["source_sha"],
-        reason=None, maintenance_owner=owner, components=[{**c, "maintenance_owner": owner} for c in doc["components"]],
+        reason=None, maintenance_owner=owner, maintenance_owner_reason=None if owner else "not_named_in_visible_policy",
+        components=[{**c, "maintenance_owner": owner, "maintenance_owner_reason": None if owner else "not_named_in_visible_policy"} for c in doc["components"]],
         cross_repository_edges=_links([doc, *peers]),
         external_components=[{**c, "stale": peer["stale"], "capture_revision_id": peer["capture"]["revision_id"]} for peer in peers for c in peer["components"]])
     result["counts"] = {"components": len(doc["components"]), "dependencies": len(doc["dependencies"]),

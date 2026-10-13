@@ -117,3 +117,11 @@ def test_repeated_build_evidence_is_one_relation_with_both_script_references():
         "scripts": {"build": "vite build", "build:browser": "vite build --mode browser"}})})
     assert len(result["edges"]) == 1
     assert {r["script"] for r in result["edges"][0]["evidence_refs"] if "script" in r} == {"build", "build:browser"}
+
+
+def test_unversioned_workflow_tool_is_null_with_a_reason():
+    result = inventory({"pyproject.toml": '[project]\nname="sample"\n',
+        ".github/workflows/test.yml": 'jobs:\n  checks:\n    steps:\n      - run: uv run pytest -q\n'})
+    edge = next(e for e in result["edges"] if e["basis"] == "workflow_step")
+    assert edge["version"] is None and edge["version_reason"] == "not_declared"
+    assert edge["resolved"] is None and edge["resolution_reason"] == "not_lockfile_dependency"

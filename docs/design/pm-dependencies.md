@@ -72,7 +72,8 @@ Workflow 為保守的逐行 reader，只處理 jobs、steps、literal run/uses�
 不解析 YAML anchors、任意 expression／matrix 或執行 shell。無法確認 component 工作目錄時不建立關聯。
 CI hints 帶 workflow path、job id、原始 1-based line、command、commit 和 blob；不代表 CI 已成功。
 
-`version` 保存 manifest requirement；`resolved` 只在對應 lockfile 有不歧義的版本時填值，
+`version` 保存 manifest requirement；未宣告的 workflow tool 版本為 null，搭配 `version_reason`。
+`resolved` 未提供時附 `resolution_reason`，維護負責人未提供時附 `maintenance_owner_reason`。`resolved` 只在對應 lockfile 有不歧義的版本時填值，
 `evidence_level=verified` 表示該 commit 的 lockfile 解出版本，不表示相容性、測試或安全驗證。
 多版本無法唯一對應時保留 null／declared。`go.sum` 是 checksum catalog，**不是 lockfile**，
 因此 Go requirement 不因出現在 go.sum 就升為 verified。Requirement include/hash directives、
