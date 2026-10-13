@@ -2,11 +2,15 @@
 
 ## Next release (unreleased)
 
-- Add daily usage buckets to the existing PM resources read. `pm_resources_get` accepts
-  an optional IANA `tz` (default UTC) and returns per-source local days for the selected
-  window. A day is complete only when the stored cursor had reached EOF at or after that
-  day; missing counters and uncovered days stay null, and withdrawn sources omit buckets
-  together with their totals.
+- Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
+  returns per-source local days only when `buckets=day` is set; `tz` is then an exact IANA
+  name and defaults to UTC. The window is still at most 366 days. Daily buckets additionally
+  cover at most 92 local dates. A day is complete only when the collector's read started at
+  or after that local day's end plus a settle margin (`max(15 minutes, 3 × interval)`), the
+  stored cursor had reached EOF, and the window contains the whole day. A later Claude
+  refinement can still land on its first-fragment day, so `complete` is settled coverage
+  rather than a frozen total. Missing counters and uncovered days stay null, and withdrawn
+  sources omit buckets together with their totals.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,

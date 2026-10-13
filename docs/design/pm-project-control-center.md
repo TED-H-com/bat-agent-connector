@@ -262,5 +262,5 @@ action、schema、外部同步、派工政策或 native 權限。
 本機 Codex／Claude 用量檔的中央定期收集、原 cursor／去重、有限來源配額窗與共用資源頁
 已隨 #122 進主線（開發分支 `feat/pm-v12-resource-observation-20261012`）。
 精確範圍、來源格式、權限及剩餘工作見 [Agent resource observations](agent-resource-observation.md)。
-同一投影現在附帶每日本地用量桶，供之後的趨勢圖使用；這還不是圖表 UI。
+同一投影只在呼叫端帶 `buckets=day` 時才附每日本地用量桶（最多 92 個本地日；`tz` 只能和這個參數一起出現，預設 UTC），供之後的趨勢圖使用。整日 `complete` 表示收集讀取的起始時間已過該本地日結束再加上 settle（至少 15 分鐘，或收集間隔的 3 倍），而且視窗含整天。這不是凍結保證：較晚到達的 Claude 修正仍記在第一個片段那天。未帶 `buckets` 時回應沒有 `buckets`，也不做分日計算。這還不是圖表 UI。
 這不是完整第 3 節：遠端主機、完整配額、合格交付／返工歸因、容量、區間預測和策略安排仍待做。
