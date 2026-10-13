@@ -223,6 +223,9 @@ with three bullets before expansion and an icon disclosure for each source list.
 Full plan uses the shared inspector and restores focus on Escape. At 768px the
 charter has two columns; at 390px all regions stack in reading order.
 
+Print includes the status strip and full charter; the saved-charter fallback prints
+inside its Overview region as well. Interactive controls and live attention are omitted.
+
 Report tools retain the existing durable snapshot operation, original-key recovery,
 authorized comparison, history pagination, print and export. Report history loads on
 demand and rereads every loaded page after a refresh. Selecting a report

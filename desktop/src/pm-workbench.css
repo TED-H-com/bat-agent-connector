@@ -56,13 +56,14 @@
   .pm-rtm-table { max-width: 100%; }
 }
 @media print {
-  body:has([data-pm-charter]:not([hidden])) .top,
-  body:has([data-pm-charter]:not([hidden])) .pm-shell > aside,
-  body:has([data-pm-charter]:not([hidden])) .pm-main > :not([data-pm-charter]),
-  [data-pm-charter] > :not(.pm-charter-report), .pm-charter-source,
+  body:has(.pm-charter-report) .top,
+  body:has(.pm-charter-report) .pm-shell > aside,
+  body:has(.pm-charter-report) .pm-main > :not([data-pm-region="overview"]),
+  body:has(.pm-charter-report) [data-pm-region="overview"] > :not(.pm-charter),
+  .pm-charter > :not(.pm-charter-report):not([role="status"]), .pm-charter-source,
   .pm-charter-report > details { display: none !important; }
-  body:has([data-pm-charter]:not([hidden])) { background: white; color: black; }
-  body:has([data-pm-charter]:not([hidden])) .pm-shell { display: block; }
+  body:has(.pm-charter-report) { background: white; color: black; }
+  body:has(.pm-charter-report) .pm-shell { display: block; }
   .pm-charter-report { border: 0; padding: 0; color: black; background: white; }
   .pm-charter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pm-charter-grid > section { break-inside: avoid; }

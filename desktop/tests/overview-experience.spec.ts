@@ -11,7 +11,7 @@ const root = (page: Page) => page.locator('[data-pm-overview]');
 const metric = (page: Page, key: string) => root(page).locator(`[data-overview-metric="${key}"]`);
 function fixture(locale = 'en') {
   const base = demoFixture({locale}), data: any = overview(demoProject(locale));
-  const state = {data, cursor: 0, events: [] as any[], reportPatch: null as null | ((snapshot: any) => void), heldReport: null as Promise<void> | null, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
+  const state = {data, overviewCap: true, cursor: 0, events: [] as any[], reportPatch: null as null | ((snapshot: any) => void), heldReport: null as Promise<void> | null, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
   return {...base, state, dispatch: async (input: any) => {
     state.reads.push(input.path); if (input.method !== 'GET') state.writes.push(input);
     const url = new URL(input.path, 'http://fixture');
@@ -32,6 +32,7 @@ function fixture(locale = 'en') {
       const rows = response.data.plan.document.sections.governance.statements;
       rows.push({...rows[0], value: 'A fourth explicit purpose statement', input_id: 'extra-purpose'});
     }
+    if (!state.overviewCap && ['/bootstrap', '/capabilities'].includes(url.pathname)) delete (url.pathname === '/bootstrap' ? response.data.capabilities : response.data).features.pm_overview;
     if (response.data?.snapshot && state.reportPatch) state.reportPatch(response.data.snapshot);
     return response;
   }};
@@ -341,4 +342,18 @@ test('saved goal reasons match confirmed and unconfirmed plan inputs', async ({p
   f.state.reportPatch = saved => {saved.baseline.document.selected_inputs[0].status = 'unresolved';};
   await refresh(page); await expect(metric(page, 'goal').locator('[data-status=unconfirmed]')).toBeVisible();
   expect(f.state.writes).toEqual([]);
+});
+
+
+for (const mode of ['live', 'saved', 'fallback']) test(`print includes the fixed or live charter ${mode}`, async ({page}) => {
+  const f = fixture(); f.state.overviewCap = mode !== 'fallback';
+  await mountConversation(page, false, f.dispatch); await page.goto(demoRoute());
+  await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
+  if (mode === 'saved') await report(page, f.ids.snap2);
+  await page.emulateMedia({media: 'print'});
+  await expect(page.locator('[data-pm-region=overview]')).toBeVisible();
+  if (mode !== 'fallback') {await expect(root(page).locator('[data-overview-status]')).toBeVisible(); await expect(root(page).locator('.pm-overview-charter-grid')).toBeVisible();}
+  else await expect(page.locator('.pm-charter-report')).toBeVisible();
+  await expect(page.locator('[data-charter-section=definition]')).toContainText(f.copy.goal);
+  await expect(page.locator('[data-charter-section=scope]')).toBeVisible(); expect(f.state.writes).toEqual([]);
 });

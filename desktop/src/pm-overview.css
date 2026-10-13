@@ -60,7 +60,9 @@
 @media print {
   body:has(.pm-overview) .pm-main > [data-pm-region="overview"], .pm-overview, .pm-overview-charter, .pm-overview-charter-grid { display: block !important; }
   body:has(.pm-overview) .pm-main > :not([data-pm-region="overview"]), body:has(.pm-overview) .workspace-nav, body:has(.pm-overview) .top,
-  .pm-overview button, .pm-overview a, .pm-overview-saved, .pm-overview .ui-disclosure { display: none !important; }
+  .pm-overview button, .pm-overview a, .pm-overview-saved, .pm-overview .ui-disclosure, .pm-overview-columns { display: none !important; }
+  .pm-overview-status .pm-overview-link { display: inline !important; }
+  .pm-overview-bullets li[hidden] { display: list-item !important; }
   .pm-overview-charter-grid > section { break-inside: avoid; margin-top: var(--space-3); }
 }
 
