@@ -44,6 +44,7 @@ _ID = re.compile(r"[A-Za-z0-9._-]{1,180}$")
 _CURSOR = re.compile(r"[A-Za-z0-9_-]{1,400}$")
 _MEETING_ITEM = re.compile(r"^(pmmeet_[0-9a-f]{32})\.(follow_up|decision)\.([a-z][a-z0-9_.-]{0,79})$")
 _REVIEW_FOLLOW = re.compile(r"^(pmrevw_[0-9a-f]{32})\.follow_up\.([A-Za-z0-9_-]{1,80})$")
+_LINK_KINDS = frozenset({"governance", "finding", "repair", "follow_up", "proposal", "issue_mapping", "meeting", "plan_revision"})
 
 
 class _Scan(list):
@@ -1001,16 +1002,8 @@ def _collect_plans(ops, principal, workspace_id):
         requirements = [entry["id"] for entry in document.get("requirements") or [] if isinstance(entry, dict) and isinstance(entry.get("id"), str)]
         created = _iso(adoptions[0]["created_at"]) if adoptions else None
         updated = _iso(adoptions[-1]["created_at"]) if adoptions else created
+        # The list never shows a timeline, so it does not read proposal ids.
         refs = set()
-        for adoption in adoptions:
-            try:
-                saved = json.loads(adoption["result"])
-            except (TypeError, ValueError):
-                saved = None
-            proposal_id, proposal_bad = _visible_proposal(ops, principal, workspace_id, adoption["operation_id"], saved)
-            bad = bad or proposal_bad
-            if proposal_id:
-                refs.add(("proposal", proposal_id))
         actor = adoptions[-1]["adopted_by"] if adoptions else None
         steps = [{"step": "decision", "at": updated, "actor": actor, "title": title,
                   "ref": {"kind": "plan_revision", "id": item["revision_id"]}, "status": "adopted"}]
@@ -1292,9 +1285,166 @@ def _plan_resolves(ops, principal, workspace_id, revision_id):
     return True
 
 
+def _link_source(kind, ident):
+    """Collector name for a neighbour that cannot be read."""
+    if kind == "meeting" and isinstance(ident, str) and ident.startswith("pmrevw_"):
+        return "review"
+    if kind == "follow_up" and isinstance(ident, str) and _REVIEW_FOLLOW.fullmatch(ident):
+        return "review"
+    if kind == "proposal" and isinstance(ident, str) and ident.startswith("pmrve_"):
+        return "review"
+    return kind
+
+
+def _link_neighbor(ops, principal, workspace_id, row, steps, seen, kind, ident, notes):
+    """Add one neighbour's own step. Hidden targets are omitted; a conflict marks that source."""
+    if kind not in _LINK_KINDS or not isinstance(ident, str):
+        return
+    row_id = kind + "." + ident
+    if row_id == row["row_id"] or not _ROW_ID.fullmatch(row_id):
+        return
+    try:
+        loaded = _load_shallow(ops, principal, workspace_id, row_id)
+    except OperationError as exc:
+        if _hidden(exc):
+            return
+        if _conflict(exc):
+            notes.mark(_link_source(kind, ident), bad=True)
+            return
+        raise
+    except sqlite3.OperationalError as exc:
+        if _missing(exc):
+            return
+        raise
+    if loaded is not None:
+        _add_step(steps, seen, _self_step(loaded))
+
+
+def _matching_documents(ops, sql, params, predicate):
+    try:
+        rows = ops.db.execute(sql, params).fetchall()
+    except sqlite3.OperationalError as exc:
+        if _missing(exc):
+            return []
+        raise
+    found = []
+    for row in rows:
+        try:
+            document = json.loads(row["document"])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(document, dict) and predicate(document):
+            found.append(row)
+    return found
+
+
+def _intakes_selecting(ops, workspace_id, predicate):
+    if not _table(ops.db, "pm_follow_up_intakes"):
+        return []
+    return [row["intake_id"] for row in _matching_documents(
+        ops, "SELECT intake_id, document FROM pm_follow_up_intakes WHERE workspace_id=?", (workspace_id,), predicate)]
+
+
+def _records_disambiguating(ops, workspace_id, record_id):
+    if not _table(ops.db, "pm_governance_heads"):
+        return []
+    sql = ("SELECT r.record_id, v.document FROM pm_governance_records r "
+           "JOIN pm_governance_heads h ON h.record_id=r.record_id "
+           "JOIN pm_governance_revisions v ON v.revision_id=h.revision_id "
+           "WHERE r.workspace_id=? AND r.record_id!=?")
+
+    def lists_this(document):
+        ids = (document.get("disambiguation") or {}).get("record_ids") or []
+        return record_id in ids
+
+    return [row["record_id"] for row in _matching_documents(ops, sql, (workspace_id, record_id), lists_this)]
+
+
+def _plans_for_proposal(ops, workspace_id, proposal_id):
+    if not _table(ops.db, "pm_plan_adoptions"):
+        return []
+    found = []
+    for row in _matching_documents(ops, "SELECT revision_id, result AS document FROM pm_plan_adoptions WHERE workspace_id=?",
+                                   (workspace_id,), lambda document: document.get("proposal_id") == proposal_id):
+        if row["revision_id"] not in found:
+            found.append(row["revision_id"])
+    if _table(ops.db, "pm_source_lineage") and _table(ops.db, "pm_conversation_proposals"):
+        try:
+            rows = ops.db.execute(
+                "SELECT DISTINCT a.revision_id FROM pm_plan_adoptions a "
+                "JOIN pm_source_lineage l ON l.resource_type='operation' AND l.resource_id=a.operation_id "
+                "JOIN pm_conversation_proposals p ON p.workspace_id=a.workspace_id AND p.operation_id=l.original_operation_id "
+                "WHERE a.workspace_id=? AND p.proposal_id=?", (workspace_id, proposal_id)).fetchall()
+        except sqlite3.OperationalError as exc:
+            if _missing(exc):
+                return found
+            raise
+        for row in rows:
+            if row["revision_id"] not in found:
+                found.append(row["revision_id"])
+    return found
+
+
+def _review_siblings(ops, principal, workspace_id, review_id, notes):
+    """Follow-ups and candidates stored on this review. A bad event keeps the readable siblings."""
+    from .pm_maintenance_review import get_review
+    try:
+        events, _, event_bad = _review_events(ops, principal, workspace_id, review_id)
+        if event_bad:
+            notes.mark("review", bad=True)
+        detail = get_review(ops, principal, workspace_id, review_id, history_limit=1)
+    except OperationError as exc:
+        if _hidden(exc):
+            return []
+        if _conflict(exc):
+            notes.mark("review", bad=True)
+            return []
+        raise
+    except sqlite3.OperationalError as exc:
+        if _missing(exc):
+            return []
+        raise
+    rows, _ = _review_rows(ops, workspace_id, detail["review"], {**detail, "events": events, "next_cursor": None})
+    return [(row["source"]["kind"], row["source"]["id"]) for row in rows if row["source"]["id"] != review_id]
+
+
+def _reverse_links(ops, principal, workspace_id, row, notes):
+    """Rows whose stored foreign key names this one. One hop, then the caller loads each target."""
+    kind, ident = row["source"]["kind"], row["source"]["id"]
+    found = []
+    if kind == "finding" and _table(ops.db, "pm_maintenance_repairs"):
+        try:
+            repairs = ops.db.execute("SELECT repair_id FROM pm_maintenance_repairs WHERE workspace_id=? AND finding_id=?",
+                                     (workspace_id, ident)).fetchall()
+        except sqlite3.OperationalError as exc:
+            if not _missing(exc):
+                raise
+            repairs = []
+        found.extend(("repair", item["repair_id"]) for item in repairs)
+    if kind == "governance":
+        found.extend(("follow_up", intake_id) for intake_id in _intakes_selecting(
+            ops, workspace_id, lambda document: any(isinstance(item, dict) and item.get("record_id") == ident
+                                                    for item in document.get("selected_governance_refs") or [])))
+        found.extend(("governance", other) for other in _records_disambiguating(ops, workspace_id, ident))
+    matched = _MEETING_ITEM.fullmatch(ident) if kind == "meeting" else None
+    if matched and matched.group(2) == "follow_up":
+        meeting_id, follow_up_id = matched.group(1), matched.group(3)
+        found.extend(("follow_up", intake_id) for intake_id in _intakes_selecting(
+            ops, workspace_id, lambda document: any(
+                isinstance(item, dict) and item.get("meeting_id") == meeting_id and item.get("follow_up_id") == follow_up_id
+                for item in document.get("selected_meeting_follow_up_refs") or [])))
+    if kind == "meeting" and ident.startswith("pmrevw_"):
+        found.extend(_review_siblings(ops, principal, workspace_id, ident, notes))
+    if kind == "proposal" and ident.startswith("pmcp_"):
+        found.extend(("plan_revision", revision_id) for revision_id in _plans_for_proposal(ops, workspace_id, ident))
+    return found
+
+
 def _timeline(ops, principal, workspace_id, row, notes):
     steps, seen = [], set()
     _add_step(steps, seen, _self_step(row))
+    if row.get("_proposal_bad"):
+        notes.mark("proposal", bad=True)
     if row["source"]["kind"] == "governance":
         for step in row["_steps"]:
             if step["step"] == "evidence":
@@ -1322,28 +1472,13 @@ def _timeline(ops, principal, workspace_id, row, notes):
                 if not visible:
                     continue
             _add_step(steps, seen, step)
-        from .pm_governance import get_record
-        for kind, ident in list(row["_refs"]):
-            if kind != "governance":
-                continue
-            try:
-                neighbour = _governance_row(ops, workspace_id, get_record(ops, principal, workspace_id, ident))
-            except OperationError as exc:
-                if _hidden(exc):
-                    continue
-                if _conflict(exc):
-                    notes.mark("governance", bad=True)
-                    continue
-                raise
-            except sqlite3.OperationalError as exc:
-                if _missing(exc):
-                    continue
-                raise
-            if neighbour is not None:
-                _add_step(steps, seen, _self_step(neighbour))
     else:
         for step in row["_steps"]:
             _add_step(steps, seen, step)
+    for kind, ident in row["_refs"]:
+        _link_neighbor(ops, principal, workspace_id, row, steps, seen, kind, ident, notes)
+    for kind, ident in _reverse_links(ops, principal, workspace_id, row, notes):
+        _link_neighbor(ops, principal, workspace_id, row, steps, seen, kind, ident, notes)
     steps.sort(key=lambda item: (item["at"] or "", STEP_ORDER.get(item["step"], 99), item["title"] or ""))
     return steps
 
@@ -1500,23 +1635,27 @@ def _plan_by_id(ops, principal, workspace_id, revision_id):
     created = _iso(adoptions[0]["created_at"]) if adoptions else None
     updated = _iso(adoptions[-1]["created_at"]) if adoptions else created
     actor = adoptions[-1]["adopted_by"] if adoptions else None
-    refs = set()
+    refs, proposal_bad = set(), False
     for adoption in adoptions:
         try:
             saved = json.loads(adoption["result"])
         except (TypeError, ValueError):
             saved = None
-        proposal_id, _bad_proposal = _visible_proposal(ops, principal, workspace_id, adoption["operation_id"], saved)
+        proposal_id, bad_proposal = _visible_proposal(ops, principal, workspace_id, adoption["operation_id"], saved)
+        proposal_bad = proposal_bad or bad_proposal
         if proposal_id:
             refs.add(("proposal", proposal_id))
     steps = [{"step": "decision", "at": updated, "actor": actor, "title": title,
               "ref": {"kind": "plan_revision", "id": revision_id}, "status": "adopted"}]
-    return _base(kind="plan_revision", ident=revision_id, row_type="decision", basis="explicit", title=title,
-                 title_reason="not_recorded", status="adopted", status_reason=None, owner=actor, owner_reason="not_recorded",
-                 due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
-                 priority_reason="not_recorded", next_step=None, next_reason="not_recorded", created=created, updated=updated,
-                 requirements=requirements, work_items=[], prs=[], actions=[], steps=steps, refs=refs, resolved_at=created,
-                 blocking=None, sequence=item["sequence"])
+    row = _base(kind="plan_revision", ident=revision_id, row_type="decision", basis="explicit", title=title,
+                title_reason="not_recorded", status="adopted", status_reason=None, owner=actor, owner_reason="not_recorded",
+                due=None, due_reason="not_recorded", impact=None, impact_reason="not_recorded", priority=None,
+                priority_reason="not_recorded", next_step=None, next_reason="not_recorded", created=created, updated=updated,
+                requirements=requirements, work_items=[], prs=[], actions=[], steps=steps, refs=refs, resolved_at=created,
+                blocking=None, sequence=item["sequence"])
+    if row is not None and proposal_bad:
+        row["_proposal_bad"] = True
+    return row
 
 
 def _direct(ops, principal, workspace_id, row_id, rows):

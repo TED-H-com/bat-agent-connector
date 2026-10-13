@@ -69,6 +69,22 @@ ROW_KEYS = {"row_id", "type", "title", "source", "impact", "priority", "owner", 
             "created_at", "updated_at", "related", "available_actions"}
 
 
+def _shows(detail, kind, ident):
+    return any(step.get("ref") == {"kind": kind, "id": ident} for step in detail["timeline"])
+
+
+def _install_follow_up(ops, monkeypatch):
+    from bat_agent_connector import pm_follow_up, pm_sprints
+    from tests.test_pm_sprints import NOW
+    version = ops.db.execute("PRAGMA user_version").fetchone()[0]
+    pm_sprints.install(ops)
+    pm_meetings.install(ops)
+    pm_follow_up.install(ops)
+    pm_follow_up.install(ops)
+    monkeypatch.setattr(pm_sprints, "time", SimpleNamespace(time=lambda: NOW))
+    assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
+
+
 def _walk(value):
     if isinstance(value, dict):
         assert all(not key.startswith("_") for key in value)
@@ -739,10 +755,10 @@ async def test_change_timeline_keeps_one_adoption_and_only_resolvable_refs(ops, 
     monkeypatch.setattr(pm_plans, "get_plan", counting)
     detail = pm_register.get_register(ops, OWNER, data["wid"], "governance." + first["record_id"])
     decisions = [step for step in detail["timeline"] if step["step"] == "decision" and step["status"] == "adopted_direction"]
-    adopted = [step for step in detail["timeline"] if step["ref"]["id"] == candidate["revision_id"]]
+    adopted = [step for step in detail["timeline"] if step["ref"]["id"] == candidate["revision_id"] and step["step"] == "revision"]
     assert len(decisions) == 1
     assert decisions[0]["ref"] == {"kind": "governance", "id": first["record_id"]}
-    assert len(adopted) == 1 and adopted[0]["step"] == "revision" and adopted[0]["status"] == "adopted"
+    assert len(adopted) == 1 and adopted[0]["status"] == "adopted"
     assert data["plan"]["revision_id"] not in {step["ref"]["id"] for step in detail["timeline"]}
     assert all(not str(step["ref"]["id"]).startswith("pmgrev_") for step in detail["timeline"])
     assert set(calls) == {candidate["revision_id"]}
@@ -1159,3 +1175,184 @@ async def test_dotted_meeting_item_ids_open_on_http_rpc_and_mcp(served, monkeypa
         assert not write_frames(mock)
     finally:
         await fleet.close()
+
+
+async def test_repair_timeline_links_the_finding_both_ways(ops, monkeypatch):
+    data = await prepared(ops)
+    pm_maintenance_repairs.schema(ops.journal)
+    finding_id, repair_id = "pmfn_" + "b" * 32, "pmrp_" + "a" * 32
+    work_item = "wi_" + "1" * 20
+    context = {"visible": True}
+    ops.db.execute("""INSERT INTO pm_maintenance_repairs(
+        repair_id,operation_id,workspace_id,policy_id,finding_id,work_item_id,context,context_digest,
+        created_at,deadline_at,budget_period) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        (repair_id, "op_" + "a" * 32, data["wid"], "pmmp_" + "a" * 32, finding_id, work_item,
+         json.dumps(context), pm_maintenance_checks._digest(context), 1_760_000_000.0, 1_760_003_600.0, 0))
+    repair = {"repair_id": repair_id, "operation_status": "running", "finding_id": finding_id,
+              "work_item_id": work_item, "created_at": 1_760_000_000.0, "finished_at": None,
+              "deadline_at": 1_760_003_600.0, "sequence": 4}
+    monkeypatch.setattr(pm_maintenance_repairs, "get_repair", lambda *args, **kwargs: {"repair": repair})
+
+    def readable_finding(service, principal, workspace_id, ident):
+        assert ident == finding_id
+        return pm_register._finding_row(service, workspace_id, {"finding_id": finding_id, "state": "observed_open",
+                                                                "facts": {}, "native": {}}, "issues", None, None, None, set())
+
+    monkeypatch.setattr(pm_register, "_finding_by_id", readable_finding)
+    repair_detail = pm_register.get_register(ops, OWNER, data["wid"], "repair." + repair_id)
+    finding_detail = pm_register.get_register(ops, OWNER, data["wid"], "finding." + finding_id)
+    assert _shows(repair_detail, "finding", finding_id)
+    assert any(step["step"] == "work" and step["ref"]["id"] == work_item for step in repair_detail["timeline"])
+    assert _shows(finding_detail, "repair", repair_id)
+    assert repair_detail["timeline_coverage"]["complete"] is True
+    assert finding_detail["timeline_coverage"]["complete"] is True
+
+    def broken_finding(*args, **kwargs):
+        raise OperationError("PM_FINDINGS_TOO_LARGE", "One finding exceeds the read bound", 413)
+
+    monkeypatch.setattr(pm_register, "_finding_by_id", broken_finding)
+    partial = pm_register.get_register(ops, OWNER, data["wid"], "repair." + repair_id)
+    assert any(step["step"] == "work" and step["ref"]["id"] == work_item for step in partial["timeline"])
+    assert not _shows(partial, "finding", finding_id)
+    assert partial["timeline_coverage"]["partial_reason"] == "source_incomplete"
+    assert "finding" in partial["timeline_coverage"]["sources"]
+
+    monkeypatch.setattr(pm_register, "_finding_by_id", readable_finding)
+
+    def broken_repair(*args, **kwargs):
+        raise OperationError("PM_REPAIR_READ_TOO_LARGE", "One repair exceeds the read bound", 413)
+
+    monkeypatch.setattr(pm_maintenance_repairs, "get_repair", broken_repair)
+    hidden_repair = pm_register.get_register(ops, OWNER, data["wid"], "finding." + finding_id)
+    assert not _shows(hidden_repair, "repair", repair_id)
+    assert hidden_repair["timeline_coverage"]["partial_reason"] == "source_incomplete"
+    assert "repair" in hidden_repair["timeline_coverage"]["sources"]
+
+
+async def test_intake_timeline_links_selected_governance_both_ways(ops, monkeypatch):
+    from tests.test_pm_follow_up import prepare
+    from tests.test_pm_follow_up import prepared as follow_prepared
+    _install_follow_up(ops, monkeypatch)
+    data = await follow_prepared(ops)
+    original = await record(ops, data, kind="risk", root_cause_key="linked-cause", title="Linked risk")
+    intake = await prepare(ops, data, governance_revision_ids=[original["revision_id"]])
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "follow_up." + intake["intake_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "governance." + original["record_id"])
+    assert _shows(detail, "governance", original["record_id"])
+    assert _shows(reverse, "follow_up", intake["intake_id"])
+    assert detail["timeline_coverage"]["complete"] is True
+    assert reverse["timeline_coverage"]["complete"] is True
+
+
+async def test_intake_timeline_links_selected_meeting_follow_up_both_ways(ops, monkeypatch):
+    from tests.test_pm_follow_up import completed_meeting, prepare
+    _install_follow_up(ops, monkeypatch)
+    data, target, completion_id = await completed_meeting(ops)
+    recorded = await apply(ops, target, "follow_up.record", follow_up_id="check_quality", status="reported_done",
+                           result="The reviewer says it is all fixed")
+    intake = await prepare(ops, data, meeting_follow_up_refs=[{
+        "completion_id": completion_id, "follow_up_id": "check_quality", "result_event_id": recorded["event_id"]}])
+    follow_ident = target["meeting_id"] + ".follow_up.check_quality"
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "follow_up." + intake["intake_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "meeting." + follow_ident)
+    assert _shows(detail, "meeting", follow_ident)
+    assert _shows(reverse, "follow_up", intake["intake_id"])
+
+
+async def test_disambiguation_links_both_governance_records(ops):
+    data = await prepared(ops)
+    first = await record(ops, data, title="First risk", root_cause_key="first-cause")
+    second = await record(ops, data, title="Second risk", root_cause_key="second-cause",
+                          source_refs=[{"kind": "plan_input", "id": data["assumption"]}],
+                          disambiguation={"record_ids": [first["record_id"]], "rationale": "Same source, separate record"})
+    forward = pm_register.get_register(ops, OWNER, data["wid"], "governance." + second["record_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "governance." + first["record_id"])
+    assert _shows(forward, "governance", first["record_id"])
+    assert _shows(reverse, "governance", second["record_id"])
+    assert forward["timeline_coverage"]["complete"] is True
+    assert reverse["timeline_coverage"]["complete"] is True
+
+
+def _review_detail(review_id, *, follow_ups=None, events=None):
+    review = {"review_id": review_id, "sequence": 4, "status": "completed", "title": "Review the gap",
+              "created_at": 1_760_000_000.0}
+    completion = {"actor": OWNER.actor, "created_at": 1_760_000_100.0, "document": {
+        "direction": "accepted", "follow_ups": follow_ups or []}}
+    return review, completion, events or []
+
+
+async def test_review_follow_up_timeline_links_the_review_both_ways(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    data = await prepared(ops)
+    review_id = "pmrevw_" + "a" * 32
+    review, completion, events = _review_detail(review_id, follow_ups=[{
+        "id": "coverage", "text": "Inspect the gap", "status": "open", "owner_actor": OWNER.actor}])
+    monkeypatch.setattr(pm_maintenance_review, "get_review", lambda *args, **kwargs: {
+        "review": review, "completion": completion, "events": []})
+    monkeypatch.setattr(pm_maintenance_review, "list_events", lambda *args, **kwargs: {"events": events, "next_cursor": None})
+    follow_ident = review_id + ".follow_up.coverage"
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "follow_up." + follow_ident)
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "meeting." + review_id)
+    assert _shows(detail, "meeting", review_id)
+    assert _shows(reverse, "follow_up", follow_ident)
+    assert detail["timeline_coverage"]["complete"] is True
+    assert reverse["timeline_coverage"]["complete"] is True
+
+
+async def test_review_candidate_timeline_links_the_review_both_ways(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    data = await prepared(ops)
+    pm_maintenance_review.schema(ops.journal)
+    review_id, event_id = "pmrevw_" + "c" * 32, "pmrve_" + "d" * 32
+    ops.db.execute("""INSERT INTO pm_maintenance_review_events(
+        event_id,review_id,workspace_id,kind,document,document_digest,source_binding,actor,created_at,operation_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (event_id, review_id, data["wid"], "candidate.record", "{}", "digest", "{}", OWNER.actor, 1.0, "op_" + "e" * 32))
+    event = {"event_id": event_id, "kind": "candidate.record", "sequence": 1, "created_at": 1_760_000_050.0,
+             "document": {"disposition": "proposal", "title": "Narrow a verification gap"}}
+    review, completion, events = _review_detail(review_id, events=[event])
+    monkeypatch.setattr(pm_maintenance_review, "get_review", lambda *args, **kwargs: {
+        "review": review, "completion": completion, "events": []})
+    monkeypatch.setattr(pm_maintenance_review, "list_events", lambda *args, **kwargs: {"events": events, "next_cursor": None})
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "proposal." + event_id)
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "meeting." + review_id)
+    assert _shows(detail, "meeting", review_id)
+    assert _shows(reverse, "proposal", event_id)
+
+
+async def test_plan_timeline_links_the_visible_proposal_both_ways(ops, monkeypatch):
+    from bat_agent_connector import pm_conversation_proposals
+    data = await prepared(ops)
+    candidate = await plan_draft(ops, data["target"], title="Fixed next plan")
+    ctx = adoption(ops, data["target"], candidate["revision_id"], previous=data["plan"]["revision_id"])
+    adopt(ctx)
+    await settle(ops, ctx.op)
+    proposal_id, proposal_op = "pmcp_" + "ab" * 16, "op_reg" + "c" * 32
+    ops.db.execute("""CREATE TABLE pm_conversation_proposals (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, proposal_id TEXT NOT NULL UNIQUE,
+        workspace_id TEXT NOT NULL, thread_id TEXT NOT NULL, operation_id TEXT NOT NULL UNIQUE)""")
+    ops.db.execute("INSERT INTO pm_conversation_proposals(proposal_id,workspace_id,thread_id,operation_id) VALUES(?,?,?,?)",
+                   (proposal_id, data["wid"], "thread", proposal_op))
+    # The adoption's own sources stay readable; this root only names the proposal operation.
+    _visible_synthetic(monkeypatch)
+    _ensure_lineage(ops)
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)", ("operation", ctx.operation_id, proposal_op, ctx.operation_id))
+    calls = []
+
+    def get_proposal(service, principal, workspace_id, ident):
+        calls.append(ident)
+        return {"proposal": {"proposal_id": proposal_id, "sequence": 1, "created_at": 1_760_000_000.0,
+                             "document": {"title": "Narrow the gap", "requirements": [{"id": "login"}]},
+                             "validation": {"status": "valid"}}}
+
+    monkeypatch.setattr(pm_conversation_proposals, "get_proposal", get_proposal)
+    listed = pm_register.list_register(ops, OWNER, data["wid"])
+    assert calls == []
+    assert proposal_id not in {row["source"]["id"] for row in listed["rows"]}
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "plan_revision." + candidate["revision_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "proposal." + proposal_id)
+    baseline = pm_register.get_register(ops, OWNER, data["wid"], "plan_revision." + data["plan"]["revision_id"])
+    assert _shows(detail, "proposal", proposal_id)
+    assert _shows(reverse, "plan_revision", candidate["revision_id"])
+    assert not _shows(baseline, "proposal", proposal_id)
+    assert calls and set(calls) == {proposal_id}

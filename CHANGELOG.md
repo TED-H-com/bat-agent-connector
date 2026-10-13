@@ -7,7 +7,10 @@
   last 12 weeks and blocking reasons are included only when every source that matches the active
   type filter was read completely. One skipped 409 or 413 record stays out of that source and
   marks it partial, so the totals and the summary are null; the other readable records stay
-  listed. A withdrawn source leaves the remaining rows and the counts together. A hidden row is
+  listed. A withdrawn source leaves the remaining rows and the counts together. Detail
+  timelines follow each stored foreign key one hop in both directions. A hidden target is
+  skipped. A target that returns 409 or 413 stays off the timeline and marks that source
+  partial. A hidden row is
   omitted from rows, counts and summary together and does not fail the page. Row ids are
   path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
   no write actions.

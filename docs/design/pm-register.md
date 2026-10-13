@@ -74,6 +74,10 @@ disposition 已明確是 `proposal`，所以類型是 `change`。
 - 計畫採用結果或 source lineage 能對上、且目前看得到的 `proposal_id`。看不到的提案 id 不出現。
 - 治理 `disambiguation.record_ids`。
 
+這些外鍵從兩邊讀。選到的列載入它存下的對方；對方那一列也載入指回這裡的紀錄。
+只加對方自己的一步，不跟著對方的外鍵再走。隱藏的對方略過。對方 409／413 時不放進時間線，
+並把該來源標成 `source_incomplete`。清單不為計畫列讀提案；提案 id 只在這筆計畫的明細上解析。
+
 不從標題、路徑、時間接近或相似名稱推論。需求 id 放在 `related.requirement_ids`，不是時間線步驟。
 證據步驟只在紀錄明確存了 evidence id 時出現。
 
