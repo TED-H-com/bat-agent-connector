@@ -27,9 +27,19 @@
 - Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
   Each row keeps its source record's identity and canonical status. Totals, open-item age, the
   last 12 weeks and blocking reasons are included only when every source that matches the active
-  type filter was read completely. A hidden or oversized record is left out of that page; it does
-  not fail the register or change the counts. Row ids are path-safe (`governance.pmgov_…`) and
-  cursors are opaque sequence tokens. The projection adds no write actions.
+  type filter was read completely. One skipped 409 or 413 record stays out of that source and
+  marks it partial, so the totals and the summary are null; the other readable records stay
+  listed. A withdrawn source leaves the remaining rows and the counts together. Detail
+  timelines follow each stored foreign key one hop in both directions. A hidden target is
+  skipped. A target that returns 409 or 413 stays off the timeline and marks that source
+  partial. A lineage-hidden repair does not remove a visible finding's repair action.
+  A meeting read that starts after a follow-up sequence reports that cutoff in
+  `coverage.histories.follow_ups.after`. Adopted plan rows are ordered by the
+  immutable plan revision sequence.
+  A hidden row is
+  omitted from rows, counts and summary together and does not fail the page. Row ids are
+  path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
+  no write actions.
 
 - Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
   `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
