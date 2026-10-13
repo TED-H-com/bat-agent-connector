@@ -181,7 +181,9 @@ for (const {locale, width} of cases) {
     const unavailable = agents.locator('[data-resource-row="security-notes"]');
     await expect(unavailable).toContainText(locale === 'zh-TW' ? '來源無法讀取' : 'Source unavailable');
     await expect(unavailable).not.toContainText('100%');
-    await expect(agents.locator('[data-resource-quota]')).toContainText('60%');
+    await expect(unavailable).not.toContainText('Codex');
+    await expect(agents.locator('[data-resource-chart]')).toBeVisible();
+    await expect(agents.locator('[data-resource-quota]')).toContainText('40%');
     await expectNoJunk(page);
     await shot(page, `agents-${locale}-${width}`);
 
