@@ -16,6 +16,9 @@ Never substitute zero for missing data or count a loaded page as a complete inve
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
+Work, session and delivery events refresh the live projections together without
+locking the workspace Refresh control; a held projection read can still be superseded
+by a newer withdrawal read. PM record events retain the complete workspace refresh.
 
 ## Tokens and type
 
@@ -166,6 +169,8 @@ content has a 760px measure; forms 640px; tables and boards fill up to 1600px.
 English uses sentence case. Every new string has natural Traditional Chinese in
 `ui/ui-strings.js`, merged into the existing i18n mechanism. No raw keys, undefined,
 null, emoji icons or unexplained disabled navigation.
+Projection reasons share one frozen map and `reasonLabel(t, reason)` using the app
+translator. Unknown codes say Not available / 無法取得; raw codes stay in Details.
 Composed labels use `label-text.js` to omit missing segments. A Brief section without
 a recorded status says Unknown / 未知. Issue labels prefer the repository name stored
 on the mapping, then the published issue name, and otherwise show only the number.
@@ -233,3 +238,29 @@ projection. Source withdrawal invalidates the affected facts and closes their re
 late responses cannot restore a prior generation. Preferences store only UI state,
 scoped to connection/principal and workspace. Older servers retain the saved-charter
 view when `pm_overview` is absent.
+
+## Schedule
+
+Schedule uses the central `pm_schedule` projection. Day / Week / Month zoom, Today,
+and a shared legend sit above a sticky tree and time axis. The tree follows explicit
+`parent_id` relationships; there are no phase rows. Undated ancestors retain the tree
+structure, and the Unscheduled disclosure includes every loaded undated item.
+Baseline is dashed, forecast outlined with a solid stroke, and actual filled. An actual
+without end evidence has a short fading marker labelled Open, never a finish at today.
+Only a `blocked` status produces hatching. Milestone delta compares recorded dates.
+
+Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
+range uses all loaded rows; any partial/truncated page keeps a Partial pill and a
+reason in Details. Unknown reasons use the shared reason vocabulary with a neutral
+fallback. Counts describe loaded items only. Source withdrawal clears the chart,
+counts and inspector together and invalidates pending reads.
+
+The inspector keeps the Requirements section order and a narrow
+`pm-schedule-inspector.render(row, context)` interface for shared-inspector integration.
+Session attempts have no dates or bars; their read-only session links and attempts
+remain available in the inspector and Unscheduled. Propose change uses `discussHref`
+with the exact context identity. Missing result and delivery evidence stays unavailable.
+Roadmap and Sprints keep their original durable forms in the header overflow drawer.
+Zoom, selection, expansion and scroll preferences are bounded and connection/workspace
+keyed. Below 800px, rows become a list with date ranges and independently scrolling
+mini timelines; the document never scrolls horizontally.

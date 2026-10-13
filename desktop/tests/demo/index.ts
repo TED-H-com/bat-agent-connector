@@ -7,6 +7,7 @@ import {pageSnapshots, snapshots} from './snapshots.ts';
 import {kanbanCard, kanbanPage} from './kanban.ts';
 import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
+import {schedulePage} from './schedule.ts';
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
 import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
@@ -86,6 +87,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const found = roadmap(project).revisions.find(row => row.revision_id === segment(revision[1]));
     return found ? ok({version: 1, workspace_id: project.ids.workspaceId, revision: found}) : notFound();
   }
+  if (rest === '/schedule') return ok(schedulePage(project, url));
   if (rest === '/roadmap') return ok(roadmapView(project));
   if (rest === '/work') return ok(workBindings(project, url));
   if (rest === '/resources') return ok(resources(project, url));

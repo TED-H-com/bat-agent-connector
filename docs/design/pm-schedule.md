@@ -95,3 +95,18 @@ Operation 或 task 的連結還在、但那一列不存在時，不回傳該 id�
 ## 這一版不做
 
 不新增階段資料、不計算預測或 critical path、不歸因 token、不接受拖曳改期，也不把維護排程混進這條路由。
+
+## 共用前端
+
+`desktop/src/pm-schedule.js` 在 Schedule 檢視呈現此投影；每次依序讀取最多十頁，
+原樣傳回游標，並以所有已載入列計算圖表日期範圍。任何一頁標示 partial／truncated
+都保留「部分」狀態，原因收在詳細資訊；不聲稱隱藏筆數或完整總數。
+
+圖表不提供拖曳或推算預測。無結束證據只畫短的「未結束」標記，不延伸到今天。
+Session attempts 維持未排期；人工工作階段只連到既有唯讀介面。側欄的「提議變更」
+使用共用討論連結；里程碑綁定 baseline revision，需求綁定 plan revision。
+路線圖與 Sprint 的原有表單移至頁首更多操作的抽屜，固定 key 與操作查回邏輯不變。
+
+`session_not_observed` 目前是整頁的 unknown 原因，沒有 row id。完整投影只有一個
+符合未觀察形狀的候選時，前端才可標為「尚未觀察到」；多個候選或部分資料維持
+「未知」，不把其他已觀察但沒有 runtime/model 的 session 誤標為未觀察。

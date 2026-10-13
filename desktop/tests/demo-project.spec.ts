@@ -193,6 +193,8 @@ for (const {locale, width} of cases) {
 
     await openView(page, 'schedule');
     await expectView(page, locale, width, 'schedule', copy.name);
+    await page.locator('[data-schedule-tools]').click();
+    await page.getByRole('menuitem', {name: locale === 'zh-TW' ? '路線圖' : 'Roadmap', exact: true}).click();
     const recovery = page.locator('[data-pm-milestone="recovery_review"]');
     await expect(recovery).toContainText(locale === 'zh-TW' ? '復原審查' : 'Recovery review');
     await expect(recovery).toContainText(dates.recoveryBaseline);
@@ -202,6 +204,7 @@ for (const {locale, width} of cases) {
     await expect(page.locator('[data-pm-milestone="launch"]')).toContainText(dates.launchDate);
     await expectNoJunk(page);
     await shot(page, `roadmap-${locale}-${width}`);
+    await page.keyboard.press('Escape');
 
     await showThreads(page);
     await expectView(page, locale, width, 'discussions', copy.name);

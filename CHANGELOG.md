@@ -909,6 +909,11 @@
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
 
+- Overview now shows live project status and attention first, with compact charter cards and saved reports
+  on demand. Unknown values remain explicit, and saved reports never mix in live data.
+- Added a bilingual Schedule timeline with recorded baseline, forecast and actual evidence, accessible
+  inspection, bounded paging, and preserved roadmap and sprint actions.
+
 ## 0.2.4 (unreleased)
 
 - Turn markers: `session_send` and `session_relay` return `turn_marker` / `after_ms` (the host-side id and
