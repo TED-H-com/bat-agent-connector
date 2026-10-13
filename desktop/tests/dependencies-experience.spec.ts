@@ -87,7 +87,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
 
   await openView(page, 'dependencies');
   await expect(page.getByRole('heading', {level: 1})).toHaveText('Dependencies');
-  await expect(page.locator('[data-dependencies-meta]')).toHaveText('Captured at c0ffee1 · Oct 13');
+  await expect(page.locator('[data-dependencies-meta]')).toHaveText('Captured at c0ffee1 · 9h ago');
   await expect(page.locator('.ui-page-header [data-status=partial]')).toBeVisible();
   await expect(page.locator('[data-status=stale]')).toHaveCount(0);
   await expect(page.locator('[data-dependencies-meta]')).not.toContainText(/fresh/i);
@@ -272,7 +272,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
       await openView(page, 'dependencies');
       const zh = locale === 'zh-TW';
       await expect(page.getByRole('heading', {level: 1})).toHaveText(zh ? '技術相依' : 'Dependencies');
-      await expect(page.locator('[data-dependencies-meta]')).toContainText(zh ? '擷取於 c0ffee1 · 10月13日' : 'Captured at c0ffee1 · Oct 13');
+      await expect(page.locator('[data-dependencies-meta]')).toContainText(zh ? '擷取於 c0ffee1 · 9 小時前' : 'Captured at c0ffee1 · 9h ago');
       await expect(page.locator('[data-dep-capture]')).toHaveText(zh ? '再次擷取' : 'Capture again');
       const searchBox = await page.locator('.dep-search').boundingBox();
       const searchIcon = await page.locator('.dep-search .ui-icon').boundingBox();

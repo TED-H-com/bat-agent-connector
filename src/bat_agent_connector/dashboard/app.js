@@ -518,6 +518,7 @@ var statusVocabulary = Object.freeze({
 });
 var uiStrings = {
 	en: {
+		ui_discuss: "Discuss",
 		ui_reason_detail: "{label} ({code})",
 		ui_search_work: "Search work",
 		ui_report_versions: "Versions",
@@ -592,6 +593,7 @@ var uiStrings = {
 		ui_governance: "Governance"
 	},
 	"zh-TW": {
+		ui_discuss: "討論",
 		ui_reason_detail: "{label}（{code}）",
 		ui_search_work: "搜尋工作",
 		ui_report_versions: "版本",
@@ -9823,6 +9825,91 @@ var locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("
 function t(key, vars = {}) {
 	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : "",
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
 //#endregion
 //#region src/ui/icons.js
 /*!
@@ -10135,6 +10222,13 @@ function button({ variant = "secondary", size = "md", icon, iconPosition = "star
 		...attrs
 	}, iconPosition === "end" ? null : nodeIcon(icon), label, iconPosition === "end" ? nodeIcon(icon) : null);
 }
+function discussLink(context, attrs = {}) {
+	return h$1("a", {
+		class: "ui-button secondary ui-sm",
+		href: discussHref(context),
+		...attrs
+	}, icon("message-square"), t("ui_discuss"));
+}
 function iconButton({ icon, label, ...attrs }) {
 	return button({
 		variant: "ghost",
@@ -10224,7 +10318,15 @@ function statusPill(status) {
 	}, t("ui_status_" + key));
 }
 function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
-	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, h$1("h1", {}, title), pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
+	const actionRow = h$1("div", { class: "ui-header-actions" }, ...actions, overflow);
+	actionRow.addEventListener("focusin", (event) => {
+		const target = event.target.closest("button, a, select");
+		if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
+		const box = target.getBoundingClientRect(), row = actionRow.getBoundingClientRect();
+		if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
+		if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
+	});
+	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, h$1("h1", {}, title), pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), actionRow);
 }
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
@@ -10711,7 +10813,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
+function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -11704,91 +11806,6 @@ function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSel
 		show,
 		hide,
 		reapply
-	};
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews.has(from) ? from : "",
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
 	};
 }
 //#endregion
@@ -13424,15 +13441,12 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function fillInspector(row) {
 		if (!inspectorPanel || !row) return;
-		const nodes = [h("div", {}, statusNode(row)), h("p", {}, h("a", {
-			href: discussHref({
-				workspaceId,
-				refs: [],
-				title: row.source_id,
-				from: "agents"
-			}),
-			"data-resource-discuss": ""
-		}, t("res_discuss")))];
+		const nodes = [h("div", {}, statusNode(row)), h("p", {}, discussLink({
+			workspaceId,
+			refs: [],
+			title: row.source_id,
+			from: "agents"
+		}, { "data-resource-discuss": "" }))];
 		if (isReadable(row)) {
 			const models = row.configurations || [];
 			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_model_col")));
@@ -14933,14 +14947,14 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		class: "secondary",
 		onclick: () => window.print()
 	}, t("wb_print"));
+	const primary = discussLink({
+		workspaceId,
+		from: "overview"
+	}, { "data-charter-discuss": "" });
 	const box = h("section", {
 		class: "pm-charter",
 		"data-pm-charter": ""
-	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), h("button", {
-		type: "button",
-		class: "primary",
-		onclick: () => onDiscuss(snapshot)
-	}, t("wb_discuss"))), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print), status, report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), primary), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print), status, report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
 	const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({
 		h,
 		t,
@@ -14992,6 +15006,16 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		if (snapshot && !history.some((row) => row.snapshot_id === selectedId)) picker.append(h("option", { value: selectedId }, t("wb_snapshot", { number: snapshot.sequence })));
 		picker.value = selectedId || "";
 		controls();
+		const discuss = primary;
+		if (discuss) discuss.href = discussHref({
+			workspaceId,
+			from: "overview",
+			report: snapshot?.snapshot_id,
+			refs: snapshot ? [{
+				kind: "snapshot",
+				id: snapshot.snapshot_id
+			}] : []
+		});
 	}
 	function renderItems(rows, empty = "wb_unknown") {
 		if (!rows.length) return h("p", { class: "muted" }, t(empty));
@@ -15224,6 +15248,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	controls();
 	return {
 		box,
+		primary,
 		refresh,
 		withdraw,
 		select,
@@ -15285,10 +15310,7 @@ function workspaceOverview(options) {
 	const parts = new Map(), attentionNodes = new Map();
 	let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
 	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false, reportLoading = false;
-	const primary = h("a", {
-		class: "ui-button primary",
-		"data-overview-discuss": ""
-	}, t("wb_discuss"));
+	const primary = discussLink({ workspaceId }, { "data-overview-discuss": "" });
 	const meta = h("span", { "data-overview-meta": "" });
 	const content = h("div"), status = h("div", { role: "status" }), savedBar = h("div", {
 		class: "pm-overview-saved",
@@ -15410,17 +15432,15 @@ function workspaceOverview(options) {
 		if (mode === "saved") render();
 	}
 	function discuss(row, part = "attention") {
-		return h("a", {
-			class: "ui-button ghost ui-sm",
+		return discussLink({
+			workspaceId,
+			refs: row.ref ? [row.ref] : [],
+			title: row.title,
+			from: "overview"
+		}, {
 			"data-overview-row-discuss": row.key || row.milestone_id,
-			"data-overview-link": `${part}:${row.key || row.milestone_id}:discuss`,
-			href: discussHref({
-				workspaceId,
-				refs: row.ref ? [row.ref] : [],
-				title: row.title,
-				from: "overview"
-			})
-		}, t("ov_discuss"));
+			"data-overview-link": `${part}:${row.key || row.milestone_id}:discuss`
+		});
 	}
 	function open(row) {
 		onOpen(row.ref, row);
@@ -15546,7 +15566,7 @@ function workspaceOverview(options) {
 			}, link, h("div", { class: "pm-overview-attention-meta" }, h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · ")), h("span", { class: "pm-overview-attention-actions" }, elapsed === null ? null : h("span", {
 				class: "ui-meta",
 				"data-overview-age": ""
-			}, elapsed), elapsed === null ? null : h("span", { "aria-hidden": "true" }, "·"), discuss(row))));
+			}, elapsed), discuss(row))));
 			cached?.node.remove();
 			attentionNodes.set(row.key, {
 				signature: rowSignature,
@@ -16981,16 +17001,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			row?.revision_id,
 			row?.id
 		]) || t("dep_dash"))) : [h("p", {}, t("dep_dash"))]) : "";
-		const discuss = selectedKey() ? h("a", {
-			class: "ui-button secondary ui-md",
-			"data-dep-discuss": "",
-			href: discussHref({
-				workspaceId,
-				refs: [],
-				title: inspectorTitle(),
-				from: "dependencies"
-			})
-		}, t("dep_check_impact")) : "";
+		const discuss = selectedKey() ? discussLink({
+			workspaceId,
+			refs: [],
+			title: inspectorTitle(),
+			from: "dependencies"
+		}, { "data-dep-discuss": "" }) : "";
 		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss), record);
 	}
 	function drawGraph(edges) {
@@ -17624,16 +17640,17 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
 		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
 		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
-		const href = discussHref({
+		const refs = card ? [{
+			kind: "work_item",
+			id: card.work_item_id
+		}] : requirement && plan ? [{
+			kind: "requirement",
+			id: requirement.id,
+			revision_id: plan.revision_id
+		}] : [];
+		discussHref({
 			workspaceId,
-			refs: card ? [{
-				kind: "work_item",
-				id: card.work_item_id
-			}] : requirement && plan ? [{
-				kind: "requirement",
-				id: requirement.id,
-				revision_id: plan.revision_id
-			}] : [],
+			refs,
 			title: data.title,
 			from
 		});
@@ -17649,11 +17666,12 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		const actionRow = h$1("div", {
 			class: "pm-work-inspector-actions",
 			"data-work-actions": ""
-		}, h$1("a", {
-			href,
-			class: "ui-button primary",
-			"data-work-discuss": ""
-		}, t("wv_discuss")), tools().length ? actions : null);
+		}, discussLink({
+			workspaceId,
+			refs,
+			title: data.title,
+			from
+		}, { "data-work-discuss": "" }), tools().length ? actions : null);
 		panel.querySelector(":scope > header").append(actionRow);
 		const sections = [
 			["requirements", "wv_served"],
@@ -17687,7 +17705,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
 				}))));
 			} else result.append(paragraph(t("wv_no_result")));
-			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
+			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", t("ui_discuss")));
 			const groups = prGroups(source.deliveries);
 			for (const { target, rows } of groups) delivery.append(h$1("div", {
 				class: "pm-work-delivery",
@@ -22064,10 +22082,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		if (labelSegment(row.priority)) parts.push(h("span", { class: "reg-list-priority" }, row.priority));
 		const who = labelSegment(row.owner) ? row.owner : day(row.due);
 		if (who) parts.push(h("span", { class: "reg-list-who" }, who));
-		return h("div", { class: "reg-list-meta" }, ...parts.flatMap((part, index) => index ? [h("span", {
-			class: "reg-sep",
-			"aria-hidden": "true"
-		}, "·"), part] : [part]));
+		return h("div", { class: "reg-list-meta" }, ...parts);
 	}
 	function paintList(focusKey) {
 		const controls = [];
@@ -22295,16 +22310,12 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const labels = offered.map((action) => t(ACTION_KEYS[action.action] || "reg_action_open"));
 		const stepText = labelSegment(row.next_step);
 		const primary = stepText && labels.filter((label) => label === stepText).length === 1 ? stepText : "";
-		const links = h("div", { class: "reg-actions" }, h("a", {
-			class: "ui-button secondary ui-sm",
-			"data-reg-discuss": "",
-			href: discussHref({
-				workspaceId,
-				refs,
-				title,
-				from: "issues"
-			})
-		}, t("reg_discuss")), ...offered.map((action, index) => {
+		const links = h("div", { class: "reg-actions" }, discussLink({
+			workspaceId,
+			refs,
+			title,
+			from: "issues"
+		}, { "data-reg-discuss": "" }), ...offered.map((action, index) => {
 			if (!ACTION_KEYS[action.action]) unknownCodes.push(action.action);
 			return h("button", {
 				type: "button",
@@ -28542,7 +28553,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		"aria-live": "polite"
 	});
 	const unscheduled = h$1("div", { class: "schedule-unscheduled" }), error = h$1("div");
-	const main = h$1("div", { class: "schedule-main" }, meta, error, viewport, unscheduled);
+	const main = h$1("div", { class: "schedule-main" }, error, viewport, unscheduled);
 	viewport.append(chart);
 	const legend = h$1("div", {
 		class: "schedule-legend",
@@ -28994,6 +29005,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	return {
 		element,
+		meta,
 		refresh,
 		withdraw,
 		openRef,
@@ -35594,7 +35606,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	function updateWorkView(id) {
 		traceability?.setActive(id === "requirements");
 		kanban?.setActive(id === "board");
-		const meta = id === "requirements" ? traceability?.meta : id === "board" ? kanban?.meta : null;
+		const meta = id === "requirements" ? traceability?.meta : id === "board" ? kanban?.meta : id === "schedule" ? schedule?.meta : null;
 		viewMeta.replaceChildren(...meta ? [meta] : []);
 		viewMeta.hidden = !meta;
 		for (const [viewId, control] of viewToolMenus) {
@@ -35689,7 +35701,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 		}
 		let shownView = null;
-		workbench = projectViews$1({
+		workbench = projectViews({
 			h,
 			t,
 			namespace,
@@ -48249,7 +48261,7 @@ async function viewSession(main, host, sid, context = null) {
 		backSlot.append(h("a", {
 			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
 			"data-session-back": view
-		}, t("session_back", { view: t("ui_" + view) })));
+		}, icon("chevron-left"), t("session_back", { view: t("ui_" + view) })));
 	};
 	const paintDiscuss = (items) => {
 		const link = overflow.querySelector("[data-menu-key=discuss]");

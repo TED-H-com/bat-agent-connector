@@ -1,5 +1,6 @@
+import {discussHref} from './pm-discuss-link.js';
 import {timeStamp, timeText, timeLabel} from './ui/stamps.js';
-import {disclosure, iconButton} from './ui/components.js';
+import {discussLink, disclosure, iconButton} from './ui/components.js';
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
 import {viewState} from './ui/view-state.js';
@@ -37,9 +38,10 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   const compare = h('button', {'data-report-compare': '', type: 'button', class: 'secondary', onclick: () => void comparePrevious()}, t('wb_compare'));
   const more = h('button', {type: 'button', class: 'secondary', onclick: () => void loadMore()}, t('wb_history_more'));
   const print = h('button', {'data-report-print': '', type: 'button', class: 'secondary', onclick: () => window.print()}, t('wb_print'));
+  const primary = discussLink({workspaceId, from:'overview'}, {'data-charter-discuss':''});
   const box = h('section', {class: 'pm-charter', 'data-pm-charter': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('wb_charter')),
-      h('button', {type: 'button', class: 'primary', onclick: () => onDiscuss(snapshot)}, t('wb_discuss'))),
+      primary),
     h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print), status, report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
@@ -65,6 +67,8 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${timeText(row.as_of)}`)));
     if (snapshot && !history.some(row => row.snapshot_id === selectedId)) picker.append(h('option', {value: selectedId}, t('wb_snapshot', {number: snapshot.sequence})));
     picker.value = selectedId || ''; controls();
+    const discuss = primary;
+    if (discuss) discuss.href = discussHref({workspaceId, from:'overview', report:snapshot?.snapshot_id, refs:snapshot ? [{kind:'snapshot', id:snapshot.snapshot_id}] : []});
   }
   function renderItems(rows, empty = 'wb_unknown') {
     if (!rows.length) return h('p', {class: 'muted'}, t(empty));
@@ -182,7 +186,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
             h('div', {}, h('strong', {}, t('wb_after')), renderItems(right[key])))))) : h('p', {}, t('wb_unchanged')));
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
-  controls(); return {box, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
+  controls(); return {box, primary, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
     current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null}),
     comparePrevious, history: () => history};
 }

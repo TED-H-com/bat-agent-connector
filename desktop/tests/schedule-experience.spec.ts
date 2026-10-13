@@ -36,7 +36,7 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     return result;
   });
   await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/schedule`);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
+  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
   await expect(page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
   return {...fixture, state, calls, writes};
 }
@@ -112,8 +112,8 @@ test('all short pages load sequentially; any partial source stays labelled', asy
   const f = await start(page, 'en', {pageSize: 4});
   expect(f.calls).toHaveLength(7);
   for (const call of f.calls.slice(1)) expect(new URL(call, 'http://fixture').searchParams.get('after')).toMatch(/^[A-Za-z0-9_-]+$/);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta [data-status=partial]')).toBeVisible();
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
+  await expect(page.locator('.ui-page-header .schedule-meta [data-status=partial]')).toBeVisible();
+  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText('27 loaded');
   await expect(page.locator('[data-schedule-row="milestone:launch"]')).toContainText('Launch');
   await expect(page.locator('[data-schedule-track="milestone:design_review"] [data-schedule-bar=baseline]')).toBeAttached();
 });
@@ -143,7 +143,7 @@ for (const native of [false, true]) test(`withdrawal clears rows, counts and ins
   f.state.deny = true; await page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/}).click();
   await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
   await expect(page.locator('[data-pm-schedule] [data-schedule-row]')).toHaveCount(0);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toBeEmpty();
+  await expect(page.locator('.ui-page-header .schedule-meta')).toBeEmpty();
   await expect(page.locator('[data-pm-schedule] .schedule-unscheduled')).toBeEmpty();
   await expect(page.locator('[data-pm-schedule] [role=alert]')).toContainText('Schedule unavailable');
   expect(f.writes).toEqual([]);
@@ -162,7 +162,7 @@ test('late schedule response cannot revive data after workspace withdrawal', asy
   const completed = f.state.completed; f.state.pending!();
   await expect.poll(() => f.state.completed).toBe(completed + 1);
   await expect.poll(() => page.locator('[data-pm-schedule] [data-schedule-row]').count()).toBe(0);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toBeEmpty();
+  await expect(page.locator('.ui-page-header .schedule-meta')).toBeEmpty();
   expect(f.writes).toEqual([]);
 });
 
@@ -180,7 +180,7 @@ test('a late success cannot restore an endpoint withdrawn by a newer read', asyn
   await expect.poll(() => f.state.completed).toBe(completed + 1);
   await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
   await expect(page.locator('[data-pm-schedule] [data-schedule-row]')).toHaveCount(0);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toBeEmpty();
+  await expect(page.locator('.ui-page-header .schedule-meta')).toBeEmpty();
   await expect(page.locator('[data-pm-schedule] .schedule-unscheduled')).toBeEmpty(); expect(f.writes).toEqual([]);
 });
 
@@ -232,7 +232,7 @@ test('statuses stay distinct and only an explicit blocked status adds hatching',
 
 test('ten-page limit has a visible Partial state and a reason in Details', async ({page}) => {
   const f = await start(page, 'en', {pageSize: 1}); expect(f.calls).toHaveLength(10);
-  const meta = page.locator('[data-pm-schedule] .schedule-meta');
+  const meta = page.locator('.ui-page-header .schedule-meta');
   await expect(meta).toContainText('10 loaded'); await expect(meta.locator('[data-status=partial]')).toBeVisible();
   await meta.locator('summary').click(); await expect(meta).toContainText('Refresh page limit reached'); expect(f.writes).toEqual([]);
 });
@@ -244,6 +244,6 @@ test('schedule events still refresh without a mounted Overview', async ({page}) 
   const reads = f.calls.length;
   f.state.cursor++;
   await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
+  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText('27 loaded');
   expect(f.state.overviewReads).toBe(0); expect(f.writes).toEqual([]);
 });

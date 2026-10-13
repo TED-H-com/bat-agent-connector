@@ -582,7 +582,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   function updateWorkView(id) {
     traceability?.setActive(id === 'requirements'); kanban?.setActive(id === 'board');
-    const meta = id === 'requirements' ? traceability?.meta : id === 'board' ? kanban?.meta : null;
+    const meta = id === 'requirements' ? traceability?.meta : id === 'board' ? kanban?.meta : id === 'schedule' ? schedule?.meta : null;
     viewMeta.replaceChildren(...(meta ? [meta] : [])); viewMeta.hidden = !meta;
     for (const [viewId, control] of viewToolMenus) {control.hidden = viewId !== id; if (control.hidden) control.close(false);}
   }

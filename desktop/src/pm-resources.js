@@ -1,7 +1,7 @@
 import {locale} from './i18n.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {agentMark, button, dataTable, disclosure, emptyState, inspector, metric, sectionCard, segmented, skeleton, statusPill} from './ui/components.js';
+import {discussLink, agentMark, button, dataTable, disclosure, emptyState, inspector, metric, sectionCard, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -450,7 +450,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   function fillInspector(row) {
     if (!inspectorPanel || !row) return;
     const nodes = [h('div', {}, statusNode(row)),
-      h('p', {}, h('a', {href: discussHref({workspaceId, refs: [], title: row.source_id, from: 'agents'}), 'data-resource-discuss': ''}, t('res_discuss')))];
+      h('p', {}, discussLink({workspaceId, refs:[], title:row.source_id, from:'agents'}, {'data-resource-discuss':''}))];
     if (isReadable(row)) {
       const models = row.configurations || [];
       nodes.push(h('h3', {class: 'pm-agents-group'}, t('res_model_col')));

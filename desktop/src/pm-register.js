@@ -1,6 +1,6 @@
 import {timeStamp} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -233,7 +233,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (labelSegment(row.priority)) parts.push(h('span', {class: 'reg-list-priority'}, row.priority));
     const who = labelSegment(row.owner) ? row.owner : day(row.due);
     if (who) parts.push(h('span', {class: 'reg-list-who'}, who));
-    return h('div', {class: 'reg-list-meta'}, ...parts.flatMap((part, index) => index ? [h('span', {class: 'reg-sep', 'aria-hidden': 'true'}, '·'), part] : [part]));
+    return h('div', {class: 'reg-list-meta'}, ...parts);
   }
   function paintList(focusKey) {
     const controls = [];
@@ -348,7 +348,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const stepText = labelSegment(row.next_step);
     const primary = stepText && labels.filter(label => label === stepText).length === 1 ? stepText : '';
     const links = h('div', {class: 'reg-actions'},
-      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-discuss': '', href: discussHref({workspaceId, refs, title, from: 'issues'})}, t('reg_discuss')),
+      discussLink({workspaceId, refs, title, from:'issues'}, {'data-reg-discuss':''}),
       ...offered.map((action, index) => {
         const key = ACTION_KEYS[action.action];
         if (!key) unknownCodes.push(action.action);

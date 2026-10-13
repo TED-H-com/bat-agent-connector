@@ -1403,7 +1403,7 @@ async function viewSession(main, host, sid, context = null) {
     if (!view || !workspaceId) {backSlot.hidden = true; return;}
     backSlot.hidden = false;
     backSlot.append(h("a", {href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`, "data-session-back": view},
-      t("session_back", {view: t("ui_" + view)})));
+      icon('chevron-left'), t("session_back", {view: t("ui_" + view)})));
   };
   const paintDiscuss = items => {
     const link = overflow.querySelector("[data-menu-key=discuss]");

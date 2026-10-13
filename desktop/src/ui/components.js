@@ -1,4 +1,5 @@
 import {h} from './dom.js';
+import {discussHref} from '../pm-discuss-link.js';
 import {t} from '../i18n.js';
 import {icon as drawIcon} from './icons.js';
 import {statusVocabulary} from './ui-strings.js';
@@ -12,6 +13,9 @@ let choiceFocus = null;
 let choiceSerial = 0;
 export function button({variant = 'secondary', size = 'md', icon, iconPosition = 'start', label, onClick, ...attrs} = {}) {
   return h('button', {type: 'button', class: `ui-button ${variant} ui-${size}`, onclick: onClick, ...attrs}, iconPosition === 'end' ? null : nodeIcon(icon), label, iconPosition === 'end' ? nodeIcon(icon) : null);
+}
+export function discussLink(context, attrs = {}) {
+  return h('a', {class:'ui-button secondary ui-sm', href:discussHref(context), ...attrs}, drawIcon('message-square'), t('ui_discuss'));
 }
 export function iconButton({icon, label, ...attrs}) {
   return button({variant: 'ghost', icon, 'aria-label': label, title: label, ...attrs, class: 'ui-button ghost ui-icon-button'});
@@ -67,10 +71,18 @@ export function statusPill(status) {
   return h('span', {class: `ui-pill tone-${statusVocabulary[key].tone}`, 'data-status': key}, t('ui_status_' + key));
 }
 export function pageHeader({title, mark, pill, meta, actions = [], overflow} = {}) {
+  const actionRow = h('div', {class:'ui-header-actions'}, ...actions, overflow);
+  actionRow.addEventListener('focusin', event => {
+    const target = event.target.closest('button, a, select');
+    if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
+    const box = target.getBoundingClientRect(), row = actionRow.getBoundingClientRect();
+    if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
+    if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
+  });
   return h('header', {class: 'ui-page-header'}, h('div', {class: 'ui-page-heading'},
     h('div', {class: 'ui-title-row'}, mark, h('h1', {}, title), pill),
     meta ? (meta instanceof Node ? meta : h('p', {class: 'ui-meta'}, meta)) : null),
-  h('div', {class: 'ui-header-actions'}, ...actions, overflow));
+  actionRow);
 }
 export function sectionCard({title, actions = [], body} = {}) {
   return h('section', {class: 'ui-section-card'}, title ? h('header', {}, h('h2', {}, title), h('div', {class: 'ui-header-actions'}, ...actions)) : null, body);

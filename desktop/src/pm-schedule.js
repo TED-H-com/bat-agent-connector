@@ -16,7 +16,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   const viewport = h('div', {class: 'schedule-viewport', tabindex: 0, role: 'region', 'aria-label': t('sched_timeline')});
   const chart = h('div', {class: 'schedule-chart'}), meta = h('div', {class: 'schedule-meta', 'aria-live': 'polite'});
   const unscheduled = h('div', {class: 'schedule-unscheduled'}), error = h('div');
-  const main = h('div', {class: 'schedule-main'}, meta, error, viewport, unscheduled);
+  const main = h('div', {class: 'schedule-main'}, error, viewport, unscheduled);
   viewport.append(chart);
   const legend = h('div', {class: 'schedule-legend', 'aria-label': t('sched_legend')},
     ...['baseline', 'forecast', 'actual', 'milestone'].map(kind => h('span', {},
@@ -241,7 +241,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     const opener = element.querySelector(`[data-schedule-select="${CSS.escape(row.id)}"]`);
     opener?.scrollIntoView({block: 'nearest'}); select(row.id, opener);
   }
-  return {element, refresh, withdraw, openRef, setActive(value) {
+  return {element, meta, refresh, withdraw, openRef, setActive(value) {
     active = value;
     if (!value) {saveScroll(); closePanel(false);} else if (data) {restoreScroll(); showPanel();}
   }, dispose() {saveScroll(); remember(); active = false; serial++; closePanel(false); data = null;}};

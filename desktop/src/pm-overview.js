@@ -2,7 +2,7 @@ import {timeStamp, timeLabel} from './ui/stamps.js';
 import {workspaceCharter, charterSections} from './pm-charter.js';
 import {planDocument} from './pm-plans.js';
 import {discussHref} from './pm-discuss-link.js';
-import {button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
+import {discussLink, button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
@@ -21,7 +21,7 @@ export function workspaceOverview(options) {
   const parts = new Map(), attentionNodes = new Map();
   let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
   let mode = preference.mode === 'saved' ? 'saved' : 'live', signature = '', loading = false, reportLoading = false;
-  const primary = h('a', {class: 'ui-button primary', 'data-overview-discuss': ''}, t('wb_discuss'));
+  const primary = discussLink({workspaceId}, {'data-overview-discuss':''});
   const meta = h('span', {'data-overview-meta': ''});
   const content = h('div'), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
@@ -69,8 +69,7 @@ export function workspaceOverview(options) {
     if (mode === 'saved') render();
   }
   function discuss(row, part = 'attention') {
-    return h('a', {class: 'ui-button ghost ui-sm', 'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`,
-      href: discussHref({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from: 'overview'})}, t('ov_discuss'));
+    return discussLink({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from:'overview'}, {'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`});
   }
   function open(row) {onOpen(row.ref, row);}
   function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
@@ -137,7 +136,7 @@ export function workspaceOverview(options) {
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
         h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · ')),
           h('span', {class: 'pm-overview-attention-actions'}, elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
-            elapsed === null ? null : h('span', {'aria-hidden': 'true'}, '·'), discuss(row))));
+            discuss(row))));
       cached?.node.remove(); attentionNodes.set(row.key, {signature: rowSignature, node});
       rows.insertBefore(node, rows.children[position] || null); position++;
     }

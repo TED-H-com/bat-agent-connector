@@ -1,6 +1,6 @@
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {discussLink, button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {discussHref} from './pm-discuss-link.js';
 import {layoutGraph} from './pm-dependencies-layout.js';
@@ -476,7 +476,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     }
     const releases = impact && Object.hasOwn(impact, 'affected_releases') ? impact.affected_releases : Object.hasOwn(data, 'affected_releases') ? data.affected_releases : null;
     const releaseBlock = Array.isArray(releases) ? h('div', {'data-dep-releases': ''}, h('h3', {}, t('dep_releases')), ...(releases.length ? releases.map(row => h('p', {}, typeof row === 'string' ? row : joinLabel([row?.name, row?.version, row?.revision_id, row?.id]) || t('dep_dash'))) : [h('p', {}, t('dep_dash'))])) : '';
-    const discuss = selectedKey() ? h('a', {class: 'ui-button secondary ui-md', 'data-dep-discuss': '', href: discussHref({workspaceId, refs: [], title: inspectorTitle(), from: 'dependencies'})}, t('dep_check_impact')) : '';
+    const discuss = selectedKey() ? discussLink({workspaceId, refs:[], title:inspectorTitle(), from:'dependencies'}, {'data-dep-discuss':''}) : '';
     panel.body.replaceChildren(facts, tests, affected, releaseBlock, h('div', {class: 'dep-actions'}, discuss), record);
   }
   function drawGraph(edges) {

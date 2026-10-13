@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Align Discuss actions, link focus states and header metadata across project views.
+
 - Keep context chips on one line with complete labels and larger invisible touch targets.
 
 - Unify retained and new disclosure labels and chevrons.

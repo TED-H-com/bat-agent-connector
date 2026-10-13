@@ -144,3 +144,10 @@
     content: ''; position: absolute; inset: -10px 0; min-height: 44px;
   }
 }
+
+:root body a:any-link { text-decoration: none; }
+:root body a:any-link:hover, :root body a:any-link:focus-visible { text-decoration: underline; }
+.ui-page-heading > .ui-meta { grid-column: 1 / -1; min-width: 0; margin-top: var(--space-1); }
+.ui-page-heading > .ui-meta > .ui-meta { margin-top: 0; }
+.ui-page-heading > .ui-meta > :is(.schedule-meta, .ui-meta) { margin-bottom: 0; }
+:root body .ui-page-heading:has(> .ui-meta:not([hidden])) { row-gap: var(--space-1); }

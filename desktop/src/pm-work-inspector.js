@@ -1,6 +1,6 @@
 import {timeStamp} from './ui/stamps.js';
 import {h} from './ui/dom.js';
-import {inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
+import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -90,7 +90,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     const href = discussHref({workspaceId, refs, title: data.title, from});
     actions?.dispose(); panel.querySelector('[data-work-actions]')?.remove();
     actions = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more')}), items: tools()});
-    const actionRow = h('div', {class: 'pm-work-inspector-actions', 'data-work-actions': ''}, h('a', {href, class: 'ui-button primary', 'data-work-discuss': ''}, t('wv_discuss')),
+    const actionRow = h('div', {class: 'pm-work-inspector-actions', 'data-work-actions': ''}, discussLink({workspaceId, refs, title:data.title, from}, {'data-work-discuss':''}),
       tools().length ? actions : null);
     panel.querySelector(':scope > header').append(actionRow);
     const sections = [
@@ -123,7 +123,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
           }))));
       } else result.append(paragraph(t('wv_no_result')));
       blocker.append(paragraph(blockedWork(card) ? statusPill('blocked') : unknown(), blockedWork(card) ? ' ' + blockerText(t, card) : null),
-        paragraph(t('wv_next'), ' · ', h('a', {href}, t('wv_discuss'))));
+        paragraph(t('wv_next'), ' · ', t('ui_discuss')));
       const groups = prGroups(source.deliveries);
       for (const {target, rows} of groups) delivery.append(h('div', {class: 'pm-work-delivery', 'data-rtm-pr': target.pull_number},
         h('h4', {}, joinLabel([target.repository, `PR #${target.pull_number}`])),

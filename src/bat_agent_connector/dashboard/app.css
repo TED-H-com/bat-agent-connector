@@ -213,6 +213,13 @@ a { color: var(--accent); }
     content: ''; position: absolute; inset: -10px 0; min-height: 44px;
   }
 }
+
+:root body a:any-link { text-decoration: none; }
+:root body a:any-link:hover, :root body a:any-link:focus-visible { text-decoration: underline; }
+.ui-page-heading > .ui-meta { grid-column: 1 / -1; min-width: 0; margin-top: var(--space-1); }
+.ui-page-heading > .ui-meta > .ui-meta { margin-top: 0; }
+.ui-page-heading > .ui-meta > :is(.schedule-meta, .ui-meta) { margin-bottom: 0; }
+:root body .ui-page-heading:has(> .ui-meta:not([hidden])) { row-gap: var(--space-1); }
 .pm-project-views { gap: var(--space-1); border-bottom: 1px solid var(--line); padding-bottom: var(--space-3); margin-bottom: var(--space-4); }
 .pm-project-views button { background: transparent; border-color: transparent; }
 .pm-project-views button[aria-current="page"] { color: var(--accent); background: var(--panel); border-color: var(--line); font-weight: 650; }
@@ -1816,6 +1823,12 @@ body.pm-mode #main { padding: 0; }
 }
 
 .pm-overview-related .pm-brief-proof { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The row keeps its compact discussion affordance beside the title at every width. */
+.pm-overview-attention-row { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-2); }
+.pm-overview-attention-meta { display: contents; }
+.pm-overview-attention-main { grid-row: 1; grid-column: 1; align-self: center; }
+.pm-overview-attention-actions { grid-row: 1; grid-column: 2; margin-left: 0; }
+.pm-overview-context { grid-row: 2; grid-column: 1 / -1; margin-left: calc(20px + var(--space-3)); }
 /* Discussions owns this layout; shared controls retain the design-system tokens. */
 [data-discussions] { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; min-width: 0; height: calc(100dvh - 144px); min-height: 480px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
 [data-discussions] .pm-workspace-list { display: flex; flex-direction: column; gap: var(--space-2); overflow: auto; padding: var(--space-3); border-right: 1px solid var(--line); min-width: 0; }
@@ -2103,7 +2116,7 @@ body.pm-mode #main { padding: 0; }
   .pm-requirement-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; }
   .pm-requirement-facts { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); row-gap: var(--space-1); margin-top: var(--space-2); color: var(--text-2); font-size: var(--fs-caption); }
   .pm-requirement-facts > * { white-space: nowrap; max-width: 100%; }
-  .pm-requirement-facts > * + *::before { content: '·'; margin-right: var(--space-2); color: var(--text-3); }
+  .pm-requirement-facts > * { margin-right: var(--space-1); }
   .pm-requirement-blocker { display: flex; align-items: start; gap: var(--space-1); color: var(--bad); margin-top: var(--space-2); font-size: var(--fs-small); }
   .pm-requirement-blocker > .ui-icon { flex: none; margin-top: var(--space-1); }
 }

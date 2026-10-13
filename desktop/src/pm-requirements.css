@@ -44,7 +44,7 @@
   .pm-requirement-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; }
   .pm-requirement-facts { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); row-gap: var(--space-1); margin-top: var(--space-2); color: var(--text-2); font-size: var(--fs-caption); }
   .pm-requirement-facts > * { white-space: nowrap; max-width: 100%; }
-  .pm-requirement-facts > * + *::before { content: '·'; margin-right: var(--space-2); color: var(--text-3); }
+  .pm-requirement-facts > * { margin-right: var(--space-1); }
   .pm-requirement-blocker { display: flex; align-items: start; gap: var(--space-1); color: var(--bad); margin-top: var(--space-2); font-size: var(--fs-small); }
   .pm-requirement-blocker > .ui-icon { flex: none; margin-top: var(--space-1); }
 }

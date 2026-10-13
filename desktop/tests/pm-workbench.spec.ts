@@ -23,7 +23,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   test('partial and empty Charter remain usable without fabricated quota or adopted direction',async({page})=>{
     const f=workbenchFixture();f.state.snapshots=[];await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Incomplete information is welcome');
-    await page.getByRole('button',{name:'Discuss with PM',exact:true}).click();
+    await page.locator('[data-charter-discuss]').click();
     await expect(page.locator('[data-pm-action="pm.thread.create"]')).toBeVisible();
     expect(f.base.state.writes).toHaveLength(0);
   });
