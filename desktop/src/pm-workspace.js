@@ -116,7 +116,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     // admission keeps its exact key and the existing explicit recovery control.
     if (disposed || receiptTimer !== null || busy || damaged || !receiptPolling || receiptAttempt >= receiptDelays.length
       || !saved.intent?.operation_id || !form.isConnected || !allowed()) return;
-    if (operation && !['accepted', 'queued', 'pending', 'running'].includes(operation.status)) return;
+    if (operation && !['accepted', 'queued', 'pending', 'running', 'waiting_external', 'waiting_checks'].includes(operation.status)) return;
     try {guard();} catch {receiptPolling = false; return;}
     receiptTimer = setTimeout(() => {
       receiptTimer = null;

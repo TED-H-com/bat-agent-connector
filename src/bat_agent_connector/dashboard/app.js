@@ -34447,7 +34447,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			"accepted",
 			"queued",
 			"pending",
-			"running"
+			"running",
+			"waiting_external",
+			"waiting_checks"
 		].includes(operation.status)) return;
 		try {
 			guard();

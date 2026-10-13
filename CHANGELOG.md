@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Keep checking acknowledged PM operations while central waits for child operations
+  or checks, using the original receipt and bounded backoff.
+
 - Name governance context in unsent PM discussions using the current central record;
   retain local drafts and prevent sending when that source becomes unavailable.
 

@@ -146,6 +146,32 @@ test('a late draft context response cannot revive a withdrawn record', async ({p
   expect(f.discussion.writes).toHaveLength(0);
 });
 
+for (const status of ['waiting_external', 'waiting_checks']) test(`adoption checks the original ${status} receipt until it succeeds`, async ({page}) => {
+  const f = demoFixture({discussions: true}), reads: string[] = []; let adoption: any;
+  await mountConversation(page, false, async input => {
+    const result = await f.dispatch(input);
+    if (input.method === 'POST' && input.body?.action === 'pm.conversation.adopt') {
+      adoption = structuredClone(result.data.operation);
+      result.data.operation.status = status;
+    } else if (adoption && input.method === 'GET' && input.path.startsWith('/operations/')) {
+      reads.push(input.path);
+      result.data.operation.status = reads.length < 2 ? status : 'succeeded';
+    }
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.locator('[data-discussion-ask]').click();
+  await page.locator('[data-proposal-review]').click();
+  const form = page.locator('[data-pm-action="pm.conversation.adopt"]');
+  await form.getByLabel('Reason for adopting this update').fill('Adopt the reviewed update');
+  await form.getByRole('button', {name: 'Adopt this update', exact: true}).click();
+  await expect(page.locator('[data-proposal-adopted]')).toBeVisible();
+  expect(reads).toEqual([`/operations/${adoption.operation_id}`, `/operations/${adoption.operation_id}`]);
+  const writes = f.discussion.writes.filter((row: any) => row.body.action === 'pm.conversation.adopt');
+  expect(writes).toHaveLength(1);
+  expect(writes[0].idempotency_key).toBe(adoption.idempotency_key);
+});
+
 test('a new message makes the proposal out of date while preserving review choices', async ({page}) => {
   const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);

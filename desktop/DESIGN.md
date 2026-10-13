@@ -311,8 +311,10 @@ Ask PM again action. Raw reason codes stay in Details.
 The clock runs only during actual operation checks. Exhausted polling shows Status
 not checked; refresh and PM events re-read the known original operation ID and reset
 the backoff. Only label changes update the live region; elapsed time is hidden from
-announcements. Original-key recovery is retained. Saved proposals, runtime options,
-planning inputs, immutable revisions,
+announcements. Original-key recovery is retained.
+Receipt checks include the central `waiting_external` and `waiting_checks` states;
+these keep the bounded backoff and read only the acknowledged operation ID.
+Saved proposals, runtime options, planning inputs, immutable revisions,
 context packages, meetings, follow-ups and Brief remain in the thread panel.
 Each proposal refresh reads one list and its selected document; picker titles and
 status come directly from list rows. Proposal titles replace raw IDs in the picker;
