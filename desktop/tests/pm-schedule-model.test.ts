@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {chartRange, dayNumber, readSchedule, scheduleRef, scheduleTree, spans} from '../src/pm-schedule-model.js';
+import {chartRange, dayNumber, notObserved, readSchedule, scheduleRef, scheduleTree, spans} from '../src/pm-schedule-model.js';
 import {reasonLabel} from '../src/ui/ui-strings.js';
 const frame = (rows: any[], extra = {}) => ({workspace_id: 'w', rows, unscheduled: [], baseline: null, forecast: null,
   range: null, unknown: [], partial: false, truncated: false, next_cursor: null, ...extra});
@@ -48,4 +48,14 @@ test('discussion references contain exact backend identities only', () => {
 test('reason vocabulary has both locales and unknown codes stay out of body copy', () => {
   assert.equal(reasonLabel('future_private_code', 'en'), 'Not available'); assert.equal(reasonLabel('future_private_code', 'zh-TW'), '無法取得');
   assert.equal(reasonLabel('inconsistent_dates', 'zh-TW'), '結束早於開始，已省略結束日期');
+});
+
+
+test('page-wide unobserved note never labels an observed or ambiguous session', () => {
+  const missing = {id: 'attempt:session:w:h/new', kind: 'attempt', title: 'new', status: 'unknown', refs: {session: {session_id: 'new', read_only: true}}};
+  const observed = {...missing, id: 'attempt:session:w:h/old', title: 'Existing notes', refs: {session: {session_id: 'old', read_only: true}}};
+  const data = {rows: [missing, observed], unknown: [{reason: 'session_not_observed'}], partial: false};
+  assert.equal(notObserved(missing, data), true); assert.equal(notObserved(observed, data), false);
+  assert.equal(notObserved(missing, {...data, partial: true}), false);
+  assert.equal(notObserved(missing, {...data, rows: [missing, {...observed, title: 'old'}]}), false);
 });

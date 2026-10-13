@@ -32,10 +32,18 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     if (!domain || !viewport.clientWidth) return;
     preference.anchor = domain.start + viewport.scrollLeft / scale;
     preference.top = viewport.scrollTop;
+    const top = viewport.getBoundingClientRect().top + (matchMedia('(min-width: 800px)').matches ? 40 : 0);
+    const row = [...chart.querySelectorAll('[data-schedule-row]')].find(node => node.getBoundingClientRect().bottom > top);
+    if (row) preference.vertical = {id: row.dataset.scheduleRow, offset: row.getBoundingClientRect().top - top};
   }
   function restoreScroll() {
     viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
     viewport.scrollTop = preference.top || 0;
+    if (preference.vertical) {
+      const row = chart.querySelector(`[data-schedule-row="${CSS.escape(preference.vertical.id)}"]`);
+      const top = viewport.getBoundingClientRect().top + (matchMedia('(min-width: 800px)').matches ? 40 : 0);
+      if (row) viewport.scrollTop += row.getBoundingClientRect().top - top - preference.vertical.offset;
+    }
   }
   function today() {
     if (!domain) return;
@@ -52,7 +60,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   function showPanel() {
     const row = data?.rows.find(row => row.id === selected);
     if (!row || !active) {closePanel(!row); return;}
-    const next = JSON.stringify([row, data.rows.filter(value => value.parent_id === row.id || value.kind === 'requirement'), data.unknown, data.baseline, data.forecast]);
+    const next = JSON.stringify([row, data.rows.filter(value => value.parent_id === row.id || value.kind === 'requirement'), data.rows.find(value => value.id === row.parent_id), data.unknown, data.baseline, data.forecast]);
     if (panel && next === panelSignature) return;
     if (!panel) {
       panel = inspector({title: firstLine(row), onClose: () => {
@@ -62,11 +70,11 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     }
     panel.querySelector('h2').textContent = firstLine(row);
     const opened = [...panel.body.querySelectorAll('details')].map(node => node.open), scroll = panel.scrollTop;
-    const focus = panel.contains(document.activeElement) ? document.activeElement?.getAttribute('data-schedule-discuss') : null;
+    const focus = [...panel.body.querySelectorAll('a, summary')].indexOf(document.activeElement);
     panel.body.replaceChildren(renderInspector(row, {workspaceId, data})); panelSignature = next;
     [...panel.body.querySelectorAll('details')].forEach((node, i) => {if (opened[i] !== undefined) node.open = opened[i];});
     panel.scrollTop = scroll;
-    if (focus !== null) panel.querySelector('[data-schedule-discuss]')?.focus({preventScroll: true});
+    if (focus >= 0) panel.body.querySelectorAll('a, summary')[focus]?.focus({preventScroll: true});
   }
   function markSelection() {
     for (const node of element.querySelectorAll('[data-schedule-select]')) {
@@ -76,8 +84,8 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     }
   }
   function select(id, opener) {
-    opener?.focus({preventScroll: true});
     if (panel && id !== selected) closePanel();
+    opener?.focus({preventScroll: true});
     selected = id; focusId = id; remember(); markSelection(); showPanel();
   }
   const label = row => row.kind === 'group' ? t('sched_unassigned') : firstLine(row);
@@ -102,17 +110,22 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     const node = h('div', {class: 'schedule-track' + (axis ? ' schedule-axis' : ''), 'data-schedule-track': row?.id});
     node.style.width = `${(domain.end - domain.start + 1) * scale}px`;
     const todayDay = dayNumber(new Date().toISOString());
-    if (zoom === 'day') for (let date = domain.start; date <= domain.end; date++) {
-      if ([0, 6].includes(new Date(date * DAY).getUTCDay())) {
-        const weekend = h('span', {class: 'schedule-weekend', 'aria-hidden': 'true'}); weekend.style.left = `${(date - domain.start) * scale}px`; weekend.style.width = `${scale}px`; node.append(weekend);
-      }
+    if (zoom === 'day') {
+      const weekend = h('span', {class: 'schedule-weekend', 'aria-hidden': 'true'});
+      weekend.style.backgroundImage = `repeating-linear-gradient(90deg, transparent 0, transparent ${5 * scale}px, var(--surface-2) ${5 * scale}px, var(--surface-2) ${7 * scale}px)`;
+      weekend.style.backgroundPositionX = `${-((new Date(domain.start * DAY).getUTCDay() + 6) % 7) * scale}px`;
+      node.append(weekend);
     }
     if (axis) {
-      const step = zoom === 'day' ? 1 : zoom === 'week' ? 7 : 30;
-      const ticks = Math.max(step, Math.ceil((domain.end - domain.start) / 300));
-      for (let date = domain.start; date <= domain.end; date += ticks) {
-        const text = new Intl.DateTimeFormat(navigator.language, {month: 'short', day: zoom === 'month' ? undefined : 'numeric', timeZone: 'UTC'}).format(new Date(date * DAY));
+      const length = domain.end - domain.start + 1;
+      const step = zoom === 'day' ? Math.max(1, Math.ceil(length / 300)) : zoom === 'week' ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9000));
+      for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
+        const instant = new Date(date * DAY);
+        const text = new Intl.DateTimeFormat(navigator.language, {month: 'short', day: zoom === 'month' ? undefined : 'numeric', timeZone: 'UTC'}).format(instant);
         const tick = h('span', {class: 'schedule-tick'}, text); tick.style.left = `${(date - domain.start) * scale}px`; node.append(tick);
+        if (zoom === 'month') {instant.setUTCMonth(instant.getUTCMonth() + step, 1); date = instant.getTime() / DAY;}
+        else if (zoom === 'week' && count === 0) date += ((8 - instant.getUTCDay()) % 7 || 7);
+        else date += step;
       }
     } else if (row) {
       const rowSpans = spans(row);
@@ -160,7 +173,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
       const lane = h('div', {class: 'schedule-lane', tabindex: 0, role: 'region', 'aria-label': `${t('sched_timeline')} · ${label(row)}`}, track(row));
       lane.addEventListener('scroll', () => {if (lane.clientWidth) {preference.mini ||= {}; preference.mini[row.id] = domain.start + lane.scrollLeft / scale;}});
-      const line = h('div', {class: 'schedule-row', 'data-schedule-row': row.id}, cell, lane); tree.append(line);
+      const line = h('div', {class: 'schedule-row', 'data-schedule-row': row.id, 'data-has-dates': String(spans(row).length > 0)}, cell, lane); tree.append(line);
     });
     chart.replaceChildren(axis, tree);
     if (!visible.length) chart.replaceChildren(emptyState({title: t('sched_empty')}));
@@ -168,6 +181,10 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     for (const lane of chart.querySelectorAll('.schedule-lane')) {
       const id = lane.firstElementChild?.dataset.scheduleTrack;
       if (preference.mini?.[id] !== undefined) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
+      else if (matchMedia('(max-width: 799px)').matches) {
+        const row = data.rows.find(row => row.id === id), dates = row ? spans(row).map(span => span.start ?? span.end) : [];
+        if (dates.length) lane.scrollLeft = Math.max(0, (Math.min(...dates) - domain.start) * scale - 32);
+      }
     }
     if (focused) focusRow(focused);
   }
@@ -178,7 +195,11 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const details = disclosure({label: t('sched_details'), key: `${namespace}:${workspaceId}:schedule:details`, body: h('div', {},
         h('p', {}, t('sched_as_of', {date: data.as_of})),
         ...[...data.reasons.map(reason => ({reason})), ...data.unknown].map(note => h('p', {}, reasonLabel(note.reason), h('code', {}, note.reason))))});
-      meta.replaceChildren(h('span', {}, t('sched_loaded', {n: data.rows.length})), data.partial ? statusPill('partial') : h('span'), details);
+      const upcoming = data.rows.filter(row => row.kind === 'milestone' && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString()))
+        .sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
+      const delta = upcoming ? milestoneDelta(upcoming) : null;
+      meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, firstLine(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
+        h('span', {}, t('sched_loaded', {n: data.rows.length})), data.partial ? statusPill('partial') : h('span'), details);
       const list = h('ul', {}, ...data.unscheduled.map(row => h('li', {},
         button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}), rowStatus(row, data))));
       unscheduled.replaceChildren(disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list}));

@@ -292,7 +292,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   if(roadmap)body.insertBefore(roadmap.box,content);
   const schedule = workspaceId && !threadId && caps()?.features?.pm_schedule?.version === 1
-    ? workspaceSchedule({api, alive, namespace, workspaceId, canRead: () => loaded && Boolean(workspace)}) : null;
+    ? workspaceSchedule({api, alive, namespace, workspaceId, canRead: () => loaded && Boolean(workspace) && caps()?.features?.pm_schedule?.version === 1
+      && caps()?.scopes?.some(scope => scope === 'observe' || scope === 'admin')}) : null;
   if (schedule) body.insertBefore(schedule.element, content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
     ? workspaceKanban({h,t,api,alive,workspaceId,errorBox}) : null;
@@ -349,9 +350,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let detailPanel = null;
   function openPanel(label, node) {
     if (!node || !loaded) return;
-    detailPanel?.close();
+    detailPanel?.close(); schedule?.setActive(false);
     const home = node.parentNode, next = node.nextSibling;
-    detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null;}});
+    detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
   }
   if (lifecycle) drawersHome.append(lifecycle.element);

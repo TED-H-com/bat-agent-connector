@@ -20148,6 +20148,13 @@ function dayNumber(value) {
 }
 var firstLine = (row) => String(row.title || "").split(/\r?\n/)[0];
 var sessionAttempt = (row) => row.kind === "attempt" && row.id.startsWith("attempt:session:");
+function notObserved(row, data) {
+	if (!sessionAttempt(row) || row.status !== "unknown") return false;
+	if ((row.notes || []).some((note) => note.reason === "session_not_observed")) return true;
+	if (data.partial || !(data.unknown || []).some((note) => note.reason === "session_not_observed")) return false;
+	const candidates = data.rows.filter((value) => sessionAttempt(value) && value.status === "unknown" && value.title === value.refs?.session?.session_id && !value.refs?.recorded_state && !value.refs?.agent && !value.refs?.run_id);
+	return candidates.length === 1 && candidates[0].id === row.id;
+}
 function spans(row) {
 	if (sessionAttempt(row)) return [];
 	return [
@@ -20357,16 +20364,17 @@ function discussHref({ workspaceId, refs = [], title = "", from = "", report = "
 }
 //#endregion
 //#region src/pm-schedule-inspector.js
-function notObserved(row, data) {
-	return sessionAttempt(row) && row.status === "unknown" && !row.refs?.recorded_state && !row.refs?.agent && (data.unknown || []).some((note) => note.reason === "session_not_observed");
-}
 function rowStatus(row, data) {
 	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
 }
 function dateRange(span) {
 	if (!span) return t("sched_no_dates");
-	const start = span.start?.slice(0, 10), end = span.end?.slice(0, 10);
-	return [start || "—", end && (!start || end >= start) ? end : t("sched_open")].join(" → ");
+	const format = (value) => value?.includes("T") ? new Intl.DateTimeFormat(navigator.language, {
+		dateStyle: "medium",
+		timeStyle: "short",
+		timeZone: "UTC"
+	}).format(new Date(value)) + " UTC" : value;
+	return [format(span.start) || "—", span.end && (!span.start || span.end >= span.start) ? format(span.end) : t("sched_open")].join(" → ");
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
@@ -20377,6 +20385,7 @@ function render(row, { workspaceId, data }) {
 	const attempts = data.rows.filter((value) => value.kind === "attempt" && value.parent_id === (work?.id || row.id));
 	const sessions = row.kind === "attempt" ? [row] : attempts;
 	const status = section("status", rowStatus(row, data));
+	if (sessionAttempt(row)) status.append(h$1("p", { class: "ui-meta" }, row.status === "in_progress" ? t("sched_open") + " · " + t("sched_no_dates") : t("sched_no_dates")));
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
 		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
@@ -20406,13 +20415,11 @@ function render(row, { workspaceId, data }) {
 			"baseline",
 			"forecast",
 			"actual"
-		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(note.reason), h$1("code", {}, note.reason))), h$1("pre", { class: "pm-brief-proof" }, JSON.stringify({
-			id: row.id,
-			refs,
-			baseline: data.baseline,
-			forecast: data.forecast,
-			as_of: data.as_of
-		}, null, 2)))
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
+			data.baseline?.revision_id,
+			data.forecast?.revision_id,
+			data.as_of
+		].filter(Boolean).map((value) => h$1("code", {}, value)))
 	});
 	details.dataset.scheduleSection = "details";
 	return h$1("div", { class: "schedule-inspector-content" }, section("requirement", ...requirements.length ? requirements.map((value) => h$1("p", { class: "schedule-full-title" }, value.title)) : [unknown()]), status, section("result", unknown()), section("blocker", ["blocked", "waiting"].includes(row.status) ? statusPill(row.status) : unknown(), links), section("delivery", [
@@ -20489,10 +20496,21 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!domain || !viewport.clientWidth) return;
 		preference.anchor = domain.start + viewport.scrollLeft / scale;
 		preference.top = viewport.scrollTop;
+		const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
+		const row = [...chart.querySelectorAll("[data-schedule-row]")].find((node) => node.getBoundingClientRect().bottom > top);
+		if (row) preference.vertical = {
+			id: row.dataset.scheduleRow,
+			offset: row.getBoundingClientRect().top - top
+		};
 	}
 	function restoreScroll() {
 		viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
 		viewport.scrollTop = preference.top || 0;
+		if (preference.vertical) {
+			const row = chart.querySelector(`[data-schedule-row="${CSS.escape(preference.vertical.id)}"]`);
+			const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
+			if (row) viewport.scrollTop += row.getBoundingClientRect().top - top - preference.vertical.offset;
+		}
 	}
 	function today() {
 		if (!domain) return;
@@ -20521,6 +20539,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		const next = JSON.stringify([
 			row,
 			data.rows.filter((value) => value.parent_id === row.id || value.kind === "requirement"),
+			data.rows.find((value) => value.id === row.parent_id),
 			data.unknown,
 			data.baseline,
 			data.forecast
@@ -20544,7 +20563,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		panel.querySelector("h2").textContent = firstLine(row);
 		const opened = [...panel.body.querySelectorAll("details")].map((node) => node.open), scroll = panel.scrollTop;
-		const focus = panel.contains(document.activeElement) ? document.activeElement?.getAttribute("data-schedule-discuss") : null;
+		const focus = [...panel.body.querySelectorAll("a, summary")].indexOf(document.activeElement);
 		panel.body.replaceChildren(render(row, {
 			workspaceId,
 			data
@@ -20554,7 +20573,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			if (opened[i] !== void 0) node.open = opened[i];
 		});
 		panel.scrollTop = scroll;
-		if (focus !== null) panel.querySelector("[data-schedule-discuss]")?.focus({ preventScroll: true });
+		if (focus >= 0) panel.body.querySelectorAll("a, summary")[focus]?.focus({ preventScroll: true });
 	}
 	function markSelection() {
 		for (const node of element.querySelectorAll("[data-schedule-select]")) {
@@ -20564,8 +20583,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 	}
 	function select(id, opener) {
-		opener?.focus({ preventScroll: true });
 		if (panel && id !== selected) closePanel();
+		opener?.focus({ preventScroll: true });
 		selected = id;
 		focusId = id;
 		remember();
@@ -20627,26 +20646,31 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		node.style.width = `${(domain.end - domain.start + 1) * scale}px`;
 		const todayDay = dayNumber(new Date().toISOString());
 		if (zoom === "day") {
-			for (let date = domain.start; date <= domain.end; date++) if ([0, 6].includes(new Date(date * 864e5).getUTCDay())) {
-				const weekend = h$1("span", {
-					class: "schedule-weekend",
-					"aria-hidden": "true"
-				});
-				weekend.style.left = `${(date - domain.start) * scale}px`;
-				weekend.style.width = `${scale}px`;
-				node.append(weekend);
-			}
+			const weekend = h$1("span", {
+				class: "schedule-weekend",
+				"aria-hidden": "true"
+			});
+			weekend.style.backgroundImage = `repeating-linear-gradient(90deg, transparent 0, transparent ${5 * scale}px, var(--surface-2) ${5 * scale}px, var(--surface-2) ${7 * scale}px)`;
+			weekend.style.backgroundPositionX = `${-((new Date(domain.start * DAY).getUTCDay() + 6) % 7) * scale}px`;
+			node.append(weekend);
 		}
 		if (axis) {
-			const ticks = Math.max(zoom === "day" ? 1 : zoom === "week" ? 7 : 30, Math.ceil((domain.end - domain.start) / 300));
-			for (let date = domain.start; date <= domain.end; date += ticks) {
+			const length = domain.end - domain.start + 1;
+			const step = zoom === "day" ? Math.max(1, Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
+			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
+				const instant = new Date(date * DAY);
 				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
 					month: "short",
 					day: zoom === "month" ? void 0 : "numeric",
 					timeZone: "UTC"
-				}).format(new Date(date * DAY)));
+				}).format(instant));
 				tick.style.left = `${(date - domain.start) * scale}px`;
 				node.append(tick);
+				if (zoom === "month") {
+					instant.setUTCMonth(instant.getUTCMonth() + step, 1);
+					date = instant.getTime() / DAY;
+				} else if (zoom === "week" && count === 0) date += (8 - instant.getUTCDay()) % 7 || 7;
+				else date += step;
 			}
 		} else if (row) {
 			const rowSpans = spans(row);
@@ -20749,7 +20773,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			});
 			const line = h$1("div", {
 				class: "schedule-row",
-				"data-schedule-row": row.id
+				"data-schedule-row": row.id,
+				"data-has-dates": String(spans(row).length > 0)
 			}, cell, lane);
 			tree.append(line);
 		});
@@ -20760,6 +20785,10 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		for (const lane of chart.querySelectorAll(".schedule-lane")) {
 			const id = lane.firstElementChild?.dataset.scheduleTrack;
 			if (preference.mini?.[id] !== void 0) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
+			else if (matchMedia("(max-width: 799px)").matches) {
+				const row = data.rows.find((row) => row.id === id), dates = row ? spans(row).map((span) => span.start ?? span.end) : [];
+				if (dates.length) lane.scrollLeft = Math.max(0, (Math.min(...dates) - domain.start) * scale - 32);
+			}
 		}
 		if (focused) focusRow(focused);
 	}
@@ -20779,7 +20808,9 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				key: `${namespace}:${workspaceId}:schedule:details`,
 				body: h$1("div", {}, h$1("p", {}, t("sched_as_of", { date: data.as_of })), ...[...data.reasons.map((reason) => ({ reason })), ...data.unknown].map((note) => h$1("p", {}, reasonLabel(note.reason), h$1("code", {}, note.reason))))
 			});
-			meta.replaceChildren(h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
+			const delta = upcoming ? milestoneDelta(upcoming) : null;
+			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
 			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
 				variant: "ghost",
 				label: firstLine(row),
@@ -26686,7 +26717,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		alive,
 		namespace,
 		workspaceId,
-		canRead: () => loaded && Boolean(workspace)
+		canRead: () => loaded && Boolean(workspace) && caps()?.features?.pm_schedule?.version === 1 && caps()?.scopes?.some((scope) => scope === "observe" || scope === "admin")
 	}) : null;
 	if (schedule) body.insertBefore(schedule.element, content);
 	const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban ? workspaceKanban({
@@ -26919,12 +26950,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	function openPanel(label, node) {
 		if (!node || !loaded) return;
 		detailPanel?.close();
+		schedule?.setActive(false);
 		const home = node.parentNode, next = node.nextSibling;
 		detailPanel = inspector({
 			title: label,
 			onClose: () => {
 				home.insertBefore(node, next?.parentNode === home ? next : null);
 				detailPanel = null;
+				schedule?.setActive(workbench?.selected() === "schedule");
 			}
 		});
 		node.hidden = false;

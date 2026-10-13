@@ -4,11 +4,12 @@ import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {demoProject, DEMO_NOW} from './demo/project.ts';
 import {schedulePage} from './demo/schedule.ts';
+import {fixture as roadmapFixture, path as roadmapPath} from './pm-roadmap-fixture.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 async function start(page: Page, locale = 'en', options: {native?: boolean; pageSize?: number; mutate?: (data: any) => void} = {}) {
   const fixture = demoFixture({locale}), project = demoProject(locale);
-  const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0};
+  const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, completed: 0};
   await page.clock.setFixedTime(DEMO_NOW);
   await mountConversation(page, options.native || false, async input => {
     if (input.method !== 'GET') writes.push(input);
@@ -16,9 +17,11 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; page
     if (url.pathname.endsWith('/schedule')) {
       calls.push(input.path);
       const data = schedulePage(project, url, options.pageSize); options.mutate?.(data);
+      const denied = state.deny;
       if (state.defer) {state.defer = false; await new Promise<void>(resolve => {state.pending = resolve;});}
       // Snapshot the response before a later read revokes the source.
-      return state.deny ? {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}} : {status: 200, data};
+      state.completed++;
+      return denied ? {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}} : {status: 200, data};
     }
     if (url.pathname === `/pm/workspaces/${fixture.ids.workspaceId}` && state.workspaceDeny) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
     if (url.pathname === '/events' && state.cursor) return {status: 200, data: {events: Number(url.searchParams.get('after')) < state.cursor
@@ -111,13 +114,13 @@ test('all short pages load sequentially; any partial source stays labelled', asy
 
 test('unobserved sessions and inconsistent dates stay honest; full multiline text is readable', async ({page}) => {
   const f = await start(page, 'en', {mutate: data => {
-    const session = data.unscheduled.find(row => row.id.includes('manual-reset-notes')); session.refs = {session: session.refs.session};
+    const session = data.unscheduled.find(row => row.id.includes('manual-reset-notes')); session.refs = {session: session.refs.session}; session.title = session.refs.session.session_id;
     data.unknown.push({field: 'attempt.session', reason: 'session_not_observed'}, {field: 'work.actual', reason: 'inconsistent_dates'}, {field: 'future', reason: 'future_internal_code'});
     const work = data.rows.find(row => row.kind === 'work'); work.actual.end = '2025-01-01T00:00:00Z';
     const req = data.unscheduled.find(row => row.refs?.requirement_id === 'membership.email_sign_in'); req.title = 'First requirement line\nFull second line <script>safe text</script>';
   }});
   const region = page.locator('[data-pm-schedule]'); await region.locator('.schedule-unscheduled summary').click();
-  const unobserved = region.locator('.schedule-unscheduled li').filter({hasText: f.copy.manualTitle});
+  const unobserved = region.locator('.schedule-unscheduled li').filter({hasText: f.ids.sessions.manual});
   await expect(unobserved).toContainText('Not observed yet');
   await region.getByRole('treeitem', {name: 'First requirement line', exact: true}).click();
   await expect(page.locator('[data-schedule-inspector]')).toContainText('Full second line <script>safe text</script>');
@@ -147,8 +150,77 @@ test('late schedule response cannot revive data after workspace withdrawal', asy
   f.state.workspaceDeny = true;
   await page.locator('.pm-main > header button[aria-label]').first().click();
   await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
-  f.state.pending!();
+  const completed = f.state.completed; f.state.pending!();
+  await expect.poll(() => f.state.completed).toBe(completed + 1);
   await expect.poll(() => page.locator('[data-pm-schedule] [data-schedule-row]').count()).toBe(0);
   await expect(page.locator('[data-pm-schedule] .schedule-meta')).toBeEmpty();
   expect(f.writes).toEqual([]);
+});
+
+
+test('a late success cannot restore an endpoint withdrawn by a newer read', async ({page}) => {
+  const f = await start(page); await item(page, `work:${f.ids.work.resetEmail}`).click();
+  f.state.defer = true; f.state.cursor++;
+  await expect.poll(() => Boolean(f.state.pending)).toBe(true);
+  f.state.deny = true; await page.locator('.pm-main > header button[aria-label]').first().click();
+  await expect(page.locator('[data-pm-schedule] [role=alert]')).toContainText('Schedule unavailable');
+  const completed = f.state.completed; f.state.pending!();
+  await expect.poll(() => f.state.completed).toBe(completed + 1);
+  await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-schedule] [data-schedule-row]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toBeEmpty();
+  await expect(page.locator('[data-pm-schedule] .schedule-unscheduled')).toBeEmpty(); expect(f.writes).toEqual([]);
+});
+
+for (const native of [false, true]) test(`roadmap drawer retains drafts and original-key recovery ${native ? 'IPC' : 'Web'}`, async ({page}) => {
+  const f = roadmapFixture();
+  await mountConversation(page, native, async input => {
+    const path = new URL(input.path, 'http://fixture').pathname;
+    if (path.endsWith('/schedule')) return {status: 200, data: {workspace_id: path.split('/')[3], version: 1, as_of: '2026-10-13T12:00:00Z',
+      rows: [], unscheduled: [], baseline: null, forecast: null, range: null, partial: false, truncated: false, next_cursor: null, unknown: [], coverage: {}}};
+    const result = await f.dispatch(input);
+    if (['/bootstrap','/capabilities'].includes(path)) (path === '/bootstrap' ? result.data.capabilities : result.data).features.pm_schedule = {version: 1};
+    return result;
+  });
+  await page.goto(roadmapPath + '/schedule');
+  const open = async () => {await page.locator('[data-schedule-tools]').click(); await page.getByRole('menuitem', {name: 'Roadmap', exact: true}).click();};
+  await open(); await page.getByText('Update a forecast', {exact: true}).click();
+  const form = page.locator('[data-pm-action="pm.roadmap.forecast.set"]');
+  await form.getByLabel('Milestone', {exact: true}).selectOption('first_release');
+  await form.getByLabel('Reason for this change', {exact: true}).fill('Keep the draft and the exact operation');
+  await page.keyboard.press('Escape'); await open();
+  await expect(form.getByLabel('Reason for this change', {exact: true})).toHaveValue('Keep the draft and the exact operation');
+  f.state.lost = true; await form.getByRole('button', {name: 'Save forecast', exact: true}).click();
+  await expect(form).toContainText('Reply unavailable');
+  await page.reload(); await open(); await page.getByText('Update a forecast', {exact: true}).click();
+  await form.getByRole('button', {name: 'Check original request', exact: true}).click();
+  expect(f.state.writes).toHaveLength(2); expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
+  expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key); expect(f.base.state.writes).toHaveLength(0);
+});
+
+test('statuses stay distinct and only an explicit blocked status adds hatching', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    for (const [key, status] of Object.entries({email: 'accepted', rate: 'merged', resetEmail: 'deployed', resetToken: 'blocked'})) {
+      data.rows.find(row => row.id === `work:${project.ids.work[key]}`).status = status;
+    }
+    data.rows.find(row => row.id === `work:${project.ids.work.resetToken}`).parent_id = null;
+  }});
+  for (const [key, status] of Object.entries({email: 'accepted', rate: 'merged', resetEmail: 'deployed', resetToken: 'blocked', audit: 'waiting'})) {
+    await expect(item(page, `work:${f.ids.work[key]}`).locator(`[data-status=${status}]`)).toHaveCount(1);
+  }
+  await expect(page.getByRole('treeitem', {name: 'Not under a milestone', exact: true})).toBeAttached();
+  await expect(page.locator('.schedule-bar.blocked')).toHaveCount(1);
+  await expect(page.locator(`[data-schedule-track="work:${f.ids.work.resetToken}"] .schedule-bar.blocked`)).toHaveCount(1);
+  await item(page, `work:${f.ids.work.rate}`).click();
+  await expect(page.locator('[data-schedule-section=delivery] [data-status=merged]')).toBeVisible();
+  await item(page, `work:${f.ids.work.resetEmail}`).click(); await page.keyboard.press('Escape');
+  await expect(item(page, `work:${f.ids.work.resetEmail}`)).toBeFocused(); expect(f.writes).toEqual([]);
+});
+
+test('ten-page limit has a visible Partial state and a reason in Details', async ({page}) => {
+  const f = await start(page, 'en', {pageSize: 1}); expect(f.calls).toHaveLength(10);
+  const meta = page.locator('[data-pm-schedule] .schedule-meta');
+  await expect(meta).toContainText('10 loaded'); await expect(meta.locator('[data-status=partial]')).toBeVisible();
+  await meta.locator('summary').click(); await expect(meta).toContainText('Refresh page limit reached'); expect(f.writes).toEqual([]);
 });

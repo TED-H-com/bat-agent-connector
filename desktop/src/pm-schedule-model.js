@@ -8,6 +8,16 @@ export function dayNumber(value) {
 }
 export const firstLine = row => String(row.title || '').split(/\r?\n/)[0];
 export const sessionAttempt = row => row.kind === 'attempt' && row.id.startsWith('attempt:session:');
+// The backend's session_not_observed note is page-wide, not attached to an id.
+// With complete data a single candidate is identifiable; otherwise keep Unknown.
+export function notObserved(row, data) {
+  if (!sessionAttempt(row) || row.status !== 'unknown') return false;
+  if ((row.notes || []).some(note => note.reason === 'session_not_observed')) return true;
+  if (data.partial || !(data.unknown || []).some(note => note.reason === 'session_not_observed')) return false;
+  const candidates = data.rows.filter(value => sessionAttempt(value) && value.status === 'unknown'
+    && value.title === value.refs?.session?.session_id && !value.refs?.recorded_state && !value.refs?.agent && !value.refs?.run_id);
+  return candidates.length === 1 && candidates[0].id === row.id;
+}
 export function spans(row) {
   if (sessionAttempt(row)) return [];
   return ['baseline', 'forecast', 'actual'].flatMap(kind => {
