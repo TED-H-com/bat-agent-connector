@@ -150,6 +150,14 @@ the remembered workspace so the PM entry does not reopen withdrawn authority.
 Opening a thread immediately remembers Discussions. Returning from Settings rereads
 selected report, requirement and resource records before presenting their facts.
 
+`src/pm-discuss-link.js` shares the Discuss with PM URL contract:
+`#/pm/<encoded-workspace>/discussions/new?ref=…&ref=…&title=…&from=…&report=…`.
+Each `ref` is a JSON context object encoded by `URLSearchParams`; the receiving
+`parseDiscussRefs()` keeps up to eight distinct, backend-valid identities in order.
+Optional title (trimmed to 160 code points), project-view origin and snapshot report
+use the same validation in both directions; empty values are omitted and refs with
+extra fields (including display metadata) are rejected.
+
 ## Headers, copy and acceptance
 
 One page title; do not repeat the workspace name above it or repeat the view name
