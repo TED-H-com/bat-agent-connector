@@ -14,4 +14,6 @@ import "./pm-follow-up.css";
 import "./pm-lifecycle.css";
 import "./pm-issues.css";
 import "./shell.css";
+import "./pm-requirements.css";
+import "./pm-work-inspector.css";
 import "./app.js";

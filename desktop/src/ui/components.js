@@ -153,7 +153,7 @@ export function inspector({title, onClose = () => {}}) {
     document.addEventListener('keydown', keys); media.addEventListener('change', resize);});
   return Object.assign(root, {body, close, dispose: close});
 }
-export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable}) {
+export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}}) {
   const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-label': t('ui_more')}) : null,
     ...columns.map(column => h('th', {scope: 'col', class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
   const root = h('div', {class: 'ui-data-table', tabindex: 0}, table), controls = [];
@@ -163,10 +163,11 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
       'aria-selected': String(active), onclick: event => {if (!event.target.closest('button, a, input, select')) select();}});
     function select() {controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1; node.setAttribute('aria-selected', String(node === tr));}); onSelect(key, row);}
     if (expandable) {
-      const detail = h('tr', {hidden: true}, h('td', {colspan: columns.length + 1}, typeof expandable === 'function' ? expandable(row) : ''));
-      const toggle = iconButton({icon: 'chevron-right', label: t('ui_expand', {title: row.title || key}), 'aria-expanded': 'false', onClick: () => {
+      const open = expanded.has(key);
+      const detail = h('tr', {hidden: !open}, h('td', {colspan: columns.length + 1}, typeof expandable === 'function' ? expandable(row) : ''));
+      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), onClick: () => {
         detail.hidden = !detail.hidden; toggle.setAttribute('aria-expanded', String(!detail.hidden));
-        toggle.setAttribute('aria-label', t(detail.hidden ? 'ui_expand' : 'ui_collapse', {title: row.title || key}));}});
+        toggle.setAttribute('aria-label', t(detail.hidden ? 'ui_expand' : 'ui_collapse', {title: row.title || key})); onToggle(key, !detail.hidden);}});
       tr.append(h('td', {}, toggle)); tbody.append(tr, detail);
     } else tbody.append(tr);
     tr.append(...columns.map(column => h('td', {class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));

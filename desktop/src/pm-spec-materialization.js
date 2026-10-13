@@ -1,3 +1,4 @@
+import {joinLabel} from './label-text.js';
 const id=/^pmsp_[0-9a-f]{32}$/,digest=/^[0-9a-f]{64}$/,sha=/^[0-9a-f]{40}$/;
 const artifactRef=row=>Object.fromEntries(['artifact_id','revision','digest'].map(key=>[key,row.artifact_ref[key]]));
 
@@ -64,7 +65,7 @@ export function workspaceSpecMaterialization({h,t,api,alive,workspaceId,workspac
   const detail=(key,...nodes)=>h('details',{},h('summary',{},t(key)),...nodes);
   const op=value=>h('a',{href:`#/op/${encodeURIComponent(value)}`},t('pm_operation'));
   function update(){
-    refreshButton.disabled=!selected;summary.textContent=selected?`${selected.document.title} · ${t('ph_preparation')} ${selected.sequence}`:t('psm_select');
+    refreshButton.disabled=!selected;summary.textContent=selected?joinLabel([selected.document.title, joinLabel([t('ph_preparation'), selected.sequence], ' ')]):t('psm_select');
     for(const value of editors.values())value.update();
   }
   function clear(){ready=false;eligible=false;record=null;facts.replaceChildren();status.replaceChildren();editorView.hidden=true;update();}

@@ -3598,7 +3598,8 @@ function mountWorkspace(name) {
 let teardown = null;
 let generation = 0;
 async function route() {
-  let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
+  const routeHash = location.hash.startsWith('#/pm/') ? location.hash.split('?')[0] : location.hash;
+  let [nextName, nextWorkspace, nextView, nextThread] = (routeHash.replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
   if (nextName === 'pm') {
     if (nextView?.startsWith('pmt_')) {nextThread = nextView; nextView = 'discussions';
       history.replaceState(null, '', `#/pm/${encodeURIComponent(nextWorkspace)}/discussions/${encodeURIComponent(nextThread)}`);}
@@ -3610,7 +3611,7 @@ async function route() {
   state.viewReady = false;
   if (teardown) { teardown(); teardown = null; }
   freshPage();
-  let [name, ...rest] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
+  let [name, ...rest] = (routeHash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
   if (name === "home" && state.token && state.caps?.managed_installation && !state.caps.hosts?.length) name = "settings";
   mountWorkspace(name);
   // The event loop starts after the initial view read. Name that waiting state

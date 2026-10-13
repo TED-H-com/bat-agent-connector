@@ -78,3 +78,17 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
   expect(errors).toEqual([]);
   await context.close();
 });
+
+for (const locale of ['en-US', 'zh-TW']) test(`Requirements search and Board reject missing label fragments (${locale})`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale}); const page = await context.newPage();
+  const fixture = workbenchFixture(); fixture.board.state.cards[0].column = {unexpected: 'state'};
+  fixture.state.issues[0].document.selected.public_title = undefined as any;
+  await mountConversation(page, false, fixture.dispatch); await page.goto(route);
+  await openPmSection(page, 'requirements');
+  const search = page.locator('[data-pm-rtm] input[type=search]'); await search.fill('undefined');
+  await expect(page.locator('[data-rtm-requirement]')).toHaveCount(0);
+  await search.fill('null'); await expect(page.locator('[data-rtm-requirement]')).toHaveCount(0);
+  await search.fill(''); await assertNoMissingLabels(page);
+  await openPmSection(page, 'board'); await expect(page.locator('[data-pm-kanban-column=unknown] [data-pm-kanban-work]')).toHaveCount(1);
+  await assertNoMissingLabels(page); await context.close();
+});

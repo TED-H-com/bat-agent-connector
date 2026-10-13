@@ -229,9 +229,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     extra: h('div', {class: 'pm-fields'}, labelled('pm_workspace_name', name),
       h('details', {}, h('summary', {}, t('pm_repositories_optional')), labelled('pm_repositories', repositories), h('p', {class: 'muted'}, t('pm_repository_help'))))});
   const title = h('span', {}, t('pm_title'));
-  const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), onClick: () => void load()});
+  const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), 'data-pm-refresh': '', onClick: () => void load()});
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
-  const heading = pageHeader({title, pill: phasePill, actions: [refresh]});
+  const viewMeta = h('span');
+  const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [refresh]});
+  viewMeta.parentElement.hidden = true;
   const content = h('div', {class: 'pm-content'}), body = h('section', {class: 'pm-main'}, heading, status, content);
   const creationHome = h('div', {hidden: true}, workspaceForm.box);
   main.append(h('div', {class: 'pm-shell'}, body, creationHome));
@@ -291,7 +293,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) : null;
   if(roadmap)body.insertBefore(roadmap.box,content);
   const kanban = workspaceId && !threadId && caps()?.features?.pm_workspaces?.kanban
-    ? workspaceKanban({h,t,api,alive,workspaceId,errorBox}) : null;
+    ? workspaceKanban({h,t,api,alive,namespace,workspaceId,errorBox,caps,embedded:true}) : null;
   if(kanban)body.insertBefore(kanban.element,content);
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
@@ -345,7 +347,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let detailPanel = null;
   function openPanel(label, node) {
     if (!node || !loaded) return;
-    detailPanel?.close();
+    detailPanel?.close(); traceability?.hideInspector(); kanban?.hideInspector();
     const home = node.parentNode, next = node.nextSibling;
     detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null;}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
@@ -380,6 +382,29 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ...(evidence ? [{key: 'settings', label: t('ui_workspace_settings'), onSelect: () => openPanel(t('ui_workspace_settings'), evidence.box)}] : []),
   ]});
   if (lifecycle || evidence) headerActions.append(overflow);
+  const viewToolMenus = new Map();
+  const viewTools = {
+    requirements: [['ui_quality', qualityReviews?.element], ['ui_evidence', evidence?.box], ['ui_specs', specifications?.element],
+      ['ui_materialization', materialization?.element], ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]],
+    board: [['ui_batches', workBatches?.element]],
+  };
+  for (const [id, entries] of Object.entries(viewTools)) {
+    const available = entries.filter(([, node]) => node);
+    const items = available.map(([key, node]) => ({key, label: t(key), onSelect: () => openPanel(t(key), node)}));
+    for (const [key, node] of available) {node.dataset.pmTool = key; drawersHome.append(node);}
+    if (items.length) {
+      const control = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-view-tools': id}), items});
+      headerActions.append(control); viewToolMenus.set(id, control);
+    }
+    (id === 'requirements' ? traceability : kanban)?.setTools(() => items);
+  }
+  function updateWorkView(id) {
+    traceability?.setActive(id === 'requirements'); kanban?.setActive(id === 'board');
+    const meta = id === 'requirements' ? traceability?.meta : id === 'board' ? kanban?.meta : null;
+    viewMeta.replaceChildren(...(meta ? [meta] : [])); viewMeta.parentElement.hidden = !meta;
+    overflow.hidden = id === 'requirements' || id === 'board';
+    for (const [viewId, control] of viewToolMenus) {control.hidden = viewId !== id; if (control.hidden) control.close(false);}
+  }
   function secondary(label, node) {
     if (!node) return null;
     const card = sectionCard({body: disclosure({label: t(label), key: JSON.stringify([namespace, workspaceId, label]), body: node})});
@@ -390,14 +415,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const definitions = [
       ['overview', brief?.box || (lifecycle ? h('div') : null), []],
       ['discussions', content, [['ui_meetings', meetings?.element]]],
-      ['requirements', traceability?.element, [['ui_quality', qualityReviews?.element], ['ui_evidence', evidence?.box],
-        ['ui_specs', specifications?.element], ['ui_materialization', materialization?.element],
-        ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]]],
+      ['requirements', traceability?.element || (viewTools.requirements.some(([, node]) => node) ? h('div') : null), []],
       ['schedule', roadmap?.box, [['ui_sprints', sprints?.box]]],
       ['dependencies', null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
       ['issues', governance?.element, [['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
       ['agents', resources?.element, [['ui_observations', ahp?.element]]],
-      ['board', kanban?.element, [['ui_batches', workBatches?.element]]],
+      ['board', kanban?.element || (workBatches ? h('div') : null), []],
     ];
     for (const [id, primarySection, secondaries] of definitions) {
       const sections = [primarySection, ...secondaries.map(([label, node]) => secondary(label, node))].filter(Boolean);
@@ -412,12 +435,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents');
       window.scrollTo(0, 0);
-      if (id === 'requirements') void traceability?.activate();
+      updateWorkView(id);
       detailPanel?.close(); if (primary) primary.hidden = id !== 'overview';
       if (reportMenu) reportMenu.hidden = id !== 'overview';
       publishContext();
     }});
-    workbench.apply();
+    workbench.apply(); updateWorkView(workbench.selected());
     if (view && view !== workbench.selected()) history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
     if (primary) primary.hidden = workbench.selected() !== 'overview';
     if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
@@ -783,14 +806,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const stage = lifecycle?.phase?.(); phasePill.hidden = !stage;
       phasePill.textContent = stage && ['idea','planning','development','maintain','paused','closed'].includes(stage) ? t('ui_phase_' + stage) : '';
       publishContext();
-      if (workbench?.selected() === 'requirements') await traceability?.activate();
+      updateWorkView(workbench?.selected());
       resources?.setActive(workbench?.selected() === 'agents');
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
-        brief?.withdraw();traceability?.withdraw();resources?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
+        brief?.withdraw();traceability?.withdraw();kanban?.withdraw();resources?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         detailPanel?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
@@ -833,7 +856,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
-    traceability?.dispose();resources?.dispose();
+    traceability?.dispose();kanban?.dispose();resources?.dispose();
+    for (const control of viewToolMenus.values()) control.dispose();
     proposalReview?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };

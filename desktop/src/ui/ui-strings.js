@@ -53,3 +53,17 @@ export const uiStrings = {
     ui_batches: '工作批次', ui_observations: 'AHP 觀察'},
 };
 for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]['ui_status_' + key] = row[lang];
+
+// Shared coverage/reason wording. Unknown codes belong only in Details.
+export const reasonLabels = Object.freeze({
+  creator_is_not_assignee: {en: 'Owner not recorded', 'zh-TW': '尚未記錄負責人'},
+  no_work_dependency_contract: {en: 'Dependencies not recorded', 'zh-TW': '尚未記錄相依關係'},
+  no_explicit_phase_records: {en: 'Phase not recorded', 'zh-TW': '尚無階段紀錄'},
+  no_explicit_blocked_record: {en: 'Blocker not recorded', 'zh-TW': '尚無阻礙紀錄'},
+  source_unavailable: {en: 'Source unavailable', 'zh-TW': '來源無法取得'},
+});
+for (const lang of ['en', 'zh-TW']) {
+  uiStrings[lang].ui_reason_unavailable = lang === 'en' ? 'Not available' : '無法取得';
+  for (const [code, labels] of Object.entries(reasonLabels)) uiStrings[lang]['ui_reason_' + code] = labels[lang];
+}
+export const reasonLabel = (t, code) => t(Object.hasOwn(reasonLabels, code) ? 'ui_reason_' + code : 'ui_reason_unavailable');

@@ -147,7 +147,7 @@ for (const {locale, width} of cases) {
     await expectView(page, locale, width, 'requirements', copy.name);
     const rtm = page.locator('[data-pm-rtm]');
     for (const requirement of copy.requirements) await expect(rtm).toContainText(requirement.text);
-    await expect(rtm).toContainText(locale === 'zh-TW' ? '尚未評估' : 'Not assessed');
+    await expect(rtm).toContainText(locale === 'zh-TW' ? '未評估' : 'Not assessed');
     await rtm.locator(`[data-rtm-toggle="${ids.requirements.email}"]`).click();
     await expect(rtm).toContainText(copy.work.email);
     await expect(rtm).toContainText('example/membership · Issue #41');
@@ -158,6 +158,7 @@ for (const {locale, width} of cases) {
     await expectNoJunk(page);
     await shot(page, `rtm-${locale}-${width}`);
 
+    await page.keyboard.press('Escape');
     await openView(page, 'board');
     await expectView(page, locale, width, 'board', copy.name);
     const board = page.locator('[data-pm-kanban]');
@@ -168,11 +169,14 @@ for (const {locale, width} of cases) {
     await expect(board.locator('[data-pm-kanban-column="waiting"]')).toContainText(copy.work.audit);
     await expect(board.locator('[data-pm-kanban-column="backlog"]')).toContainText(copy.work.a11y);
     const email = board.locator(`[data-pm-kanban-work="${ids.work.email}"]`);
-    await email.locator('summary').click();
-    await expect.poll(async () => (await email.innerText()).split(accepted).length - 1).toBe(2);
+    await email.click();
+    const workInspector = page.locator('[data-work-inspector]');
+    await expect(workInspector.locator('[data-work-attempt]')).toHaveCount(3);
+    await expect.poll(async () => (await workInspector.innerText()).split(accepted).length - 1).toBe(2);
     await expectNoJunk(page);
     await shot(page, `board-${locale}-${width}`);
 
+    await page.keyboard.press('Escape');
     await openView(page, 'agents');
     await expectView(page, locale, width, 'agents', copy.name);
     const agents = page.locator('[data-pm-resources]');

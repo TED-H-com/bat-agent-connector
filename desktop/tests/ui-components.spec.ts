@@ -69,3 +69,16 @@ test('nested menu Escape closes only the menu and disabled links cannot activate
   await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector')).toBeVisible(); await expect(trigger).toBeFocused();
   await page.keyboard.press('Escape'); await expect(page.locator('.ui-inspector')).toHaveCount(0);
 });
+
+test('controlled table expansion restores the saved row without replacing its toggle', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {dataTable} = await import('/src/ui/components.js');
+    document.querySelector('.ui-data-table')!.replaceWith(dataTable({columns: [{key: 'title', label: 'Work'}],
+      rows: [{id: 'saved', title: 'Saved work'}], rowKey: 'id', expanded: new Set(['saved']), expandable: () => 'Saved criteria',
+      onToggle: (key, open) => {document.body.dataset.expansion = JSON.stringify([key, open]);}}));
+  });
+  const toggle = page.locator('[data-row-key=saved] button'); await expect(page.getByText('Saved criteria')).toBeVisible();
+  await toggle.focus(); await page.keyboard.press('Enter'); await expect(toggle).toBeFocused();
+  await expect(page.locator('body')).toHaveAttribute('data-expansion', '["saved",false]');
+});

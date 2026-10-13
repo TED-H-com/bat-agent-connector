@@ -200,3 +200,38 @@ background reads; the toolbar can pause view updates without stopping collection
 When the resources projection includes `buckets`, the usage trend is one stacked bar
 per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
 Omit the chart when the projection has no buckets.
+
+## Requirements and Board
+
+Requirements is a delivery truth table: Requirement, Milestone, Work, PR,
+Acceptance, Deploy and Next blocker. Its shared table chevrons reveal criteria,
+explicitly bound work, agent marks, PR receipts and visible attempt counts.
+Milestone/phase grouping does not infer missing associations. Unassigned work and
+issue mappings remain in a final disclosure. Search includes exact issue numbers
+and omits missing label fragments. Header totals require complete catalogues;
+partial reads say “loaded”. Content approval, merge, deployment and requirement
+acceptance are separate states. An unknown blocker is never counted as zero.
+
+Board uses neutral lanes and compact cards with explicit requirement/session
+associations. Search, requirement/agent filters, grouping and collapsed lanes are
+view preferences. Below 800px lanes stack; wider boards scroll horizontally inside
+the board. Arrow keys navigate cards and lanes; Enter opens the inspector. Live
+updates defer lane movement while that lane is hovered or focused, but withdrawal
+removes inaccessible facts immediately. Local transitions are 140ms and respect
+reduced motion.
+
+`pm-work-inspector.js` supplies both views (and the future Schedule caller) with
+six ordered sections: Requirements served; Status & ownership; Latest result;
+Blocker & next step; Delivery; Details. Discuss uses exact context objects through
+`discussHref`. Managed and manual session links use central session identity and
+access metadata; manual sessions carry Read-only. Missing attempt start/end times
+and CI results remain unknown; observation or send-acceptance time does not imply
+execution duration. Technical records and source times appear in Details.
+
+Existing quality, evidence, specs, package, handoff and publication controls move
+intact into drawers reached from the Requirements overflow and work inspector;
+Board's overflow opens Batches. Drafts, original request keys and recovery controls
+remain owned by their existing modules. The shell provides the single refresh.
+`requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
+selection. Preferences are bounded by connection/principal and workspace; fetched
+facts are reauthorized, never stored in the preference map.

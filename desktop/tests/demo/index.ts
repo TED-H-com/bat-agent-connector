@@ -3,7 +3,7 @@
 import {demoProject, type DemoProject} from './project.ts';
 import {pagePlans, plans} from './plans.ts';
 import {pageSnapshots, snapshots} from './snapshots.ts';
-import {kanbanCard, kanbanPage} from './kanban.ts';
+import {requirementsCard as kanbanCard, requirementsBoard as kanbanPage} from './requirements.ts';
 import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
 import {resources} from './resources.ts';
