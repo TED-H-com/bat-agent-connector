@@ -417,6 +417,8 @@ async def test_cross_repository_pinned_edges_withdraw_without_hidden_counts(pm, 
     assert len(result["cross_repository_edges"]) == 1
     link = result["cross_repository_edges"][0]
     assert {ref["repository"] for ref in link["evidence_refs"]} == {"o/r", "o/peer"}
+    assert any(ref["path"] == "desktop/package-lock.json" for ref in link["evidence_refs"])
+    assert link["resolved"] == "1.2.0" and link["evidence_level"] == "verified"
     assert {ref["commit_sha"] for ref in link["evidence_refs"]} == {pm["sha"], peer["sha"]}
     impact = pm_dependency_reads.impact(pm["d"].ops, OWNER, pm["workspace_id"], dependency=dependency_key("npm", "leaf-library"))
     assert [(c["name"], c["distance"]) for c in impact["components"]] == [("shared-widget", 1), ("sample-desktop", 2)]

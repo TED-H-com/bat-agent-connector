@@ -122,8 +122,10 @@ def _links(documents):
                     "component_id": source["component_id"], "target_component_id": target["component_id"],
                     "dependency_key": edge["dependency_key"], "edge_id": edge["edge_id"], "relation": edge["relation"],
                     "version": edge["version"], "resolved": edge["resolved"], "evidence_level": edge["evidence_level"],
+                    "version_reason": edge.get("version_reason"), "resolution_reason": edge.get("resolution_reason"),
                     "basis": "exact_published_package", "direction": "component_to_component",
-                    "evidence_refs": [*source["evidence_refs"], *target["evidence_refs"]]})
+                    "evidence_refs": [*source["evidence_refs"],
+                        *(ref for ref in edge["evidence_refs"] if ref not in source["evidence_refs"]), *target["evidence_refs"]]})
     return links
 
 
