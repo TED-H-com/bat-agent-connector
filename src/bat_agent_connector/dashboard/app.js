@@ -11859,6 +11859,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 	});
 	const edit = local ? h$1("form", { onsubmit: (event) => {
 		event.preventDefault();
+		if (field.disabled) return;
 		current = field.value.trim();
 		title.textContent = current;
 		title.title = current;
@@ -11883,7 +11884,13 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		edit.hidden = true;
 		display.hidden = false;
 	}
+	function updateState() {
+		pencil.disabled = field.disabled;
+		cancel.disabled = form.locked();
+		if (local) edit.querySelector("button[type=submit]").disabled = field.disabled;
+	}
 	finish();
+	updateState();
 	if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {
 		edit.hidden = false;
 		display.hidden = true;
@@ -11891,12 +11898,12 @@ function discussionTitle({ t, field, form, value, local = false }) {
 	return {
 		box: h$1("div", { class: "pd-title" }, display, edit),
 		finish,
+		updateState,
 		update(next) {
 			current = next;
 			title.textContent = next;
 			title.title = next;
-			pencil.disabled = field.disabled;
-			cancel.disabled = form.locked();
+			updateState();
 			if (restoreFocus && !pencil.disabled) {
 				if (document.activeElement === document.body || edit.contains(document.activeElement)) pencil.focus();
 				restoreFocus = false;
@@ -36486,6 +36493,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					});
 					text.placeholder = t("pd_message");
 					text.dataset.discussionComposer = "";
+					let titleDraft = null;
 					const create = form({
 						action: "pm.thread.create",
 						pruneEmpty: true,
@@ -36502,6 +36510,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						preconditions: () => ({ expected_version: workspace.version }),
 						permitted: () => permitted(false),
 						label: threadId === "new" ? "pd_send" : "pm_create_thread",
+						onStateChange: () => titleDraft?.updateState(),
 						onBeforeSaved: (result, values) => {
 							if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({
 								threadId: result.thread_id,
@@ -36518,7 +36527,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						},
 						extra: threadId === "new" ? text : h("div", {}, labelled("pd_title", name), text)
 					});
-					const titleDraft = threadId === "new" ? discussionTitle({
+					titleDraft = threadId === "new" ? discussionTitle({
 						t,
 						field: name,
 						form: create,

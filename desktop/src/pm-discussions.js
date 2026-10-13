@@ -45,16 +45,21 @@ export function discussionTitle({t, field, form, value, local = false}) {
     if (local) form.set('title', current); else {form.discard(); field.value = current;} finish(); pencil.focus();
   }});
   const edit = local ? h('form', {onsubmit: event => {
-    event.preventDefault(); current = field.value.trim(); title.textContent = current; title.title = current; finish(); pencil.focus();
+    event.preventDefault(); if (field.disabled) return;
+    current = field.value.trim(); title.textContent = current; title.title = current; finish(); pencil.focus();
   }}, field, h('div', {class: 'actions'}, button({type: 'submit', variant: 'primary', label: t('pd_save')}))) : form.box;
   edit.classList.add('pd-title-edit'); edit.querySelector('.actions').append(cancel);
   edit.addEventListener('keydown', event => {if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); cancel.click();}});
   function finish({focus = false} = {}) {restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body); edit.hidden = true; display.hidden = false;}
+  function updateState() {
+    pencil.disabled = field.disabled; cancel.disabled = form.locked();
+    if (local) edit.querySelector('button[type=submit]').disabled = field.disabled;
+  }
   finish();
+  updateState();
   if (!local && (form.locked() || form.hasDraft() && field.value !== current)) {edit.hidden = false; display.hidden = true;}
-  return {box: h('div', {class: 'pd-title'}, display, edit), finish, update(next) {
-    current = next; title.textContent = next; title.title = next; pencil.disabled = field.disabled;
-    cancel.disabled = form.locked();
+  return {box: h('div', {class: 'pd-title'}, display, edit), finish, updateState, update(next) {
+    current = next; title.textContent = next; title.title = next; updateState();
     if (restoreFocus && !pencil.disabled) {
       if (document.activeElement === document.body || edit.contains(document.activeElement)) pencil.focus();
       restoreFocus = false;

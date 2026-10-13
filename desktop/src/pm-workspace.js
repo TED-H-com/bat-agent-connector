@@ -1024,17 +1024,19 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         else {
           const name = input('pd_title', {max: 160, value: threadId === 'new' ? launch.title || t('pd_new') : ''});
           const text = input('pd_message', {multiline: true, max: 12000, required: threadId === 'new'}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
+          let titleDraft = null;
           const create = form({action: 'pm.thread.create', pruneEmpty: true, target: {workspace_id: workspaceId}, fields: {title: name, content: text},
             namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(launch) : namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
             permitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
+            onStateChange: () => titleDraft?.updateState(),
             onBeforeSaved: (result, values) => {
               if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
               rememberOrigin(result.thread_id, {from: launch.from || 'discussions', report: launch.report});
             },
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
-          const titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
+          titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
           const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, launch.refs));
           const draftPanel = discussionPanel({t, namespace, workspaceId, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;

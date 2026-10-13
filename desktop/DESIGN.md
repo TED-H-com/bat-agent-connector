@@ -277,6 +277,9 @@ and pending note explanations stay visible. Search shares the list header with a
 icon-only New discussion button. A list-opened thread returns to Discussions.
 
 The shared `/discussions/new` link opens an editable draft and focuses the composer.
+Its title can be renamed locally once the initial permission read completes; title
+controls follow the durable create form's gates and lock with its original intent.
+The draft title survives reload and becomes the central thread-create title.
 Its first Send creates the bound thread and then appends the note. Both operations
 retain their own original keys. The first thread mount transfers the note into the
 composer draft and intent, consumes the handoff, and submits it once. A non-empty
