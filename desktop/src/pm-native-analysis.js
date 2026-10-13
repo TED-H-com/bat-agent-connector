@@ -1,3 +1,4 @@
+import {discussionOperation} from './pm-discussions.js';
 import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
@@ -8,7 +9,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   ];
   const advertised = spec => caps()?.features?.pm_workspaces?.[spec.key] === true;
   const storage = typeof namespace === 'string' ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
-  let selected = specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
+  let selected = specs.find(spec => advertised(spec) && capability()?.[spec.key]?.eligible_for_preflight === true)?.key || specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
   try {
     const saved = storage && localStorage.getItem(storage);
     if (specs.some(spec => spec.key === saved)) {selected = saved; restored = true;}
@@ -21,6 +22,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   const authorized = () => permitted(false) && thread()?.capabilities?.write === true
     && caps()?.scopes?.includes('start');
   const requests = [];
+  let composerNode = null, ask = null, connection = null, working = null, clock = null;
   const otherLocked = spec => requests.some(row => row.spec !== spec && row.request.locked());
   for (const spec of specs) {
     const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
@@ -73,6 +75,12 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
     explanation.textContent = t(!authorized() || descriptor?.authorized === false ? 'pm_native_permissions'
       : eligible ? selected === 'bat_analysis' ? 'pm_analysis_bat_preflight' : 'pm_native_preflight_pending'
       : reason[descriptor?.reason] || (selected === 'bat_analysis' ? 'pm_analysis_bat_unavailable' : 'pm_native_unavailable'));
+    if (composerNode) {
+      const request = requests.find(row => row.spec === active)?.request;
+      ask.textContent = t(request?.locked() ? 'pm_check_original' : 'pd_ask');
+      ask.hidden = !eligible && !request?.locked(); ask.disabled = !request?.canSubmit();
+      connection.hidden = eligible; working.textContent = discussionOperation(t, request?.operation());
+    }
     const source = thread() && selected === 'bat_analysis' && advertised(active) ? descriptor?.selected_binding : null;
     if (!thread()) current.replaceChildren();
     binding.hidden = !source;
@@ -91,7 +99,20 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   }
   ready = true;
   update();
-  return {box, update};
+  return {box, update, composer(textarea) {
+    ask = h('button', {type: 'button', class: 'secondary', 'data-discussion-ask': '', onclick: () => {
+      const request = requests.find(row => row.spec.key === selected)?.request;
+      if (!request) return;
+      if (!request.locked()) request.set('purpose', textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t('pd_ask'));
+      void request.submit();
+    }}, t('pd_ask'));
+    connection = h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' · ', h('a', {href: '#/settings'}, t('pd_setup')));
+    working = h('p', {class: 'muted', role: 'status', 'data-discussion-working': ''});
+    composerNode = h('div', {class: 'pd-ask'}, ask, connection, working);
+    clock = setInterval(() => {const request = requests.find(row => row.spec.key === selected)?.request;
+      if (composerNode.isConnected) working.textContent = discussionOperation(t, request?.operation());}, 1000);
+    render(); return composerNode;
+  }, dispose() {clearInterval(clock);}};
 }
 
 export function nativeRunState(t, run) {

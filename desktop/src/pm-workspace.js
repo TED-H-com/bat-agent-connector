@@ -49,7 +49,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value)}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -71,7 +71,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
   const changed = () => {
     if (busy || saved.intent || damaged) return;
-    saved.values = capture();
+    const values = capture();
+    if (same(saved.values, values)) return;
+    saved.values = values;
     try {persist();} catch (error) {status.replaceChildren(errorBox(error));}
   };
   for (const [name, input] of Object.entries(fields)) {
@@ -169,13 +171,13 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (disposed || !allowed()) return;
       const op = data.operation;
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
-      receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', String(op.status));
+      receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', statusText(op.status));
       if (op.status === 'succeeded') {
         onBeforeSaved(op.result, saved.values);
         saved = {version: 1, values: {}}; persist();
         for (const input of Object.values(fields)) input.value = input.dataset.pmDefault || '';
         await onSaved(op.result); guard(); status.replaceChildren(h('span', {class: 'muted'}, t('pm_saved')));
-      } else status.replaceChildren(h('p', {class: 'muted'}, t(terminal() ? 'pm_terminal' : 'pm_pending')));
+      } else if (!onError(op.error || {})) status.replaceChildren(h('p', {class: 'muted'}, t(terminal() ? 'pm_terminal' : 'pm_pending')));
     } catch (error) {
       receiptPolling = false;
       // Reporting a read/write error also affects the current event checkpoint.
@@ -189,14 +191,15 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
           saved.intent.initialAdmissionRefused = true;
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
-        if (!onError(error)) status.replaceChildren(errorBox(error));
-        if (error.code === 'VERSION_CONFLICT' && !onError(error)) status.append(h('p', {class: 'muted'}, t('pm_stale')));
+        const handled = onError(error);
+        if (!handled) status.replaceChildren(errorBox(error));
+        if (error.code === 'VERSION_CONFLICT' && !handled) status.append(h('p', {class: 'muted'}, t('pm_stale')));
       }
     } finally {busy = false; update();}
   }
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   update();
-  return {box: form, fields, update, changed, submit: run, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
     dispose: () => {
       disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
       if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
@@ -217,7 +220,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let sendHandoff = null;
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   if (threadId === 'new' && /^pmt_[0-9a-f]{32}$/.test(sendHandoff?.threadId)) {threadId = sendHandoff.threadId; history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);}
-  let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null;
+  let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null;
+  const threadRows = h('div', {class: 'pd-thread-rows'});
+  const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
   const backLink = () => {
     let origin = launch.from;
     try {origin ||= JSON.parse(localStorage.getItem(originKey + threadId))?.from;} catch {}
@@ -234,7 +239,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   const labelled = (label, field) => h('label', {}, t(label), field);
   const form = options => {
-    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, ...options,
+    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)()}); forms.push(value); return value;
   };
@@ -314,7 +319,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
-  const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
+  const meetings = workspaceId && caps()?.features?.pm_workspaces?.meetings
     ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
@@ -326,7 +331,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (threadId) body.append(specifications.element);
     else body.insertBefore(specifications.element, content);
   }
-  const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare
+  const followUp = workspaceId && caps()?.features?.pm_workspaces?.follow_up_prepare
     ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace}) : null;
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
   const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping
@@ -487,6 +492,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (sendHandoff?.threadId === threadId && !noteForm.locked()) noteForm.set('content', sendHandoff.content);
       renameForm = form({action: 'pm.thread.rename', target, fields: {title: threadTitle}, params: values => ({title: values.title.trim()}),
         preconditions, permitted: write, label: 'pd_rename', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;}, onSaved: () => load(), extra: threadTitle});
+      renameForm.box.append(h('details', {class: 'pd-rename-receipt'}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('[role=status]'), renameForm.box.querySelector('.pm-receipt')));
       boundContext = h('div', {class: 'pd-context'}); panelContext = h('div', {class: 'pd-context-details'});
       discussionHint = h('p', {class: 'muted'});
       const column = h('section', {class: 'pm-discussion'},
@@ -498,7 +504,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
         proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
           thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink,
-          onFollowUp: () => text.focus(), onAnswer: value => {noteForm.set('content', value); text.focus();}});
+          onFollowUp: () => text.focus(), onAnswer: value => {if (!value || noteForm.locked()) return; noteForm.set('content', [text.value, value].filter(Boolean).join('\n\n')); void noteForm.submit();}});
         column.querySelector('.pd-transcript').append(proposalReview.box);
       }
       if (caps()?.features?.pm_workspaces?.plan_drafting) {
@@ -567,21 +573,25 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const information = h('details', {'data-pm-information': '', open: true}, h('summary', {}, t('pm_information')), permissions, facts,
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
       );
+      informationPanel = information;
       const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext);
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
+      if (meetings) contextPane.append(secondary('ui_meetings', meetings.element));
+      if (followUp) contextPane.append(secondary('ui_follow_up', followUp.element));
       if (specifications) contextPane.append(secondary('ui_specs', specifications.element));
       if (evidence) drawersHome.append(evidence.box);
       const planPane = h('section', {'data-discussion-tab': 'plan'}, draft,
         h('section', {'data-pm-plan': ''}, h('h2', {}, t('pm_direction')), planForm.box),
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '',
-        revisions?.box || '', brief ? secondary('pm_brief_title', brief.box) : '');
+        proposalReview?.tools || '', revisions?.box || '', brief ? secondary('pm_brief_title', brief.box) : '');
       discussionTools = discussionPanel({t, namespace, workspaceId, panes: {context: contextPane,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane}});
       column.querySelector('.pd-thread-meta').append(discussionTools.trigger);
       const composer = h('div', {class: 'pd-composer'}, noteForm.box);
       if (proposalReview) composer.append(proposalReview.composer(text));
-      else composer.append(h('p', {class: 'muted'}, t('pd_not_connected'), ' · ', h('a', {href: '#/settings'}, t('pd_setup'))));
+      else if (nativeAnalysis) composer.append(nativeAnalysis.composer(text));
+      else composer.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' · ', h('a', {href: '#/settings'}, t('pd_setup'))));
       column.append(composer);
       content.append(h('div', {class: 'pm-thread-layout'}, column, discussionTools.home));
       const disclosures = threadDisclosures.get(disclosureKey);
@@ -595,12 +605,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     boundContext.replaceChildren(...discussionContext(t, thread.context));
     panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [h('p', {class: 'muted'}, t('pd_no_context'))]));
     // A pending original request stays discoverable after a reload or mode change.
-    if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector('[data-pm-information]').open = true;
+    if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) informationPanel.open = true;
     discussionHint.textContent = '';
-    const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
+    const transcript = notes.closest('.pd-transcript');
+    const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
     notes.replaceChildren(...(data.messages || []).map(message => pmDiscussionMessage({h, t, message, time, timestamp})));
     if (!data.messages?.length) notes.append(h('p', {class: 'muted pm-empty'}, t('pm_no_notes')));
-    notes.scrollTop = bottom ? notes.scrollHeight : scroll;
+    transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
     earlier.hidden = !historyCursor; earlier.disabled = false;
     coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t('pm_partial') : '';
     permissions.textContent = !data.capabilities?.write ? t('pm_readonly') : !data.capabilities?.decide ? t('pm_owner_decides') : '';
@@ -739,7 +750,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
-        loaded = false; lastThreadList = null; workspace = null; publishContext(); detailPanel?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
+        loaded = false; lastThreadList = null; workspace = null; publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
       }
@@ -749,7 +760,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   async function load() {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
-    ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
+    ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
       let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
@@ -781,33 +792,35 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         threadSearch.addEventListener('input', () => {uiState.search = threadSearch.value; filterThreads();});
       }
       const scroll = workspaceList.scrollTop;
-      workspaceList.replaceChildren(threadSearch, h('a', {class: 'ui-button secondary', href: discussHref({workspaceId}), 'data-discussion-new': ''}, t('pd_new')),
-        ...(threadList?.threads || []).map(thread => h('a', {class: 'pm-thread-link',
+      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(threadSearch, h('a', {class: 'ui-button secondary', href: discussHref({workspaceId}), 'data-discussion-new': ''}, t('pd_new')), threadRows);
+      threadRows.replaceChildren(...(threadList?.threads || []).map(thread => h('a', {class: 'pm-thread-link',
           href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
           'aria-current': thread.thread_id === threadId ? 'page' : null}, h('strong', {}, thread.title),
           h('span', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, discussionLabel(t, 'pm_mode_', thread.mode)), h('time', {}, time(thread.updated_at))),
           ...discussionContext(t, thread.context?.slice(0, 1)))));
+      if (!workspaceId) workspaceList.replaceChildren(...lastList.map(row => h('a', {href: `#/pm/${row.workspace_id}`}, row.name)), h('button', {type: 'button', class: 'primary', onclick: showCreate}, t('ui_new_workspace')));
       filterThreads(); workspaceList.scrollTop = scroll;
-      if (threadList?.next_cursor) workspaceList.append(h('button', {type: 'button', class: 'secondary', onclick: () => {threadPages++; void load();}}, t('pm_more_threads')));
+      workspaceList.querySelector('[data-discussion-more]')?.remove();
+      if (threadList?.next_cursor) workspaceList.append(h('button', {type: 'button', class: 'secondary', 'data-discussion-more': '', onclick: () => {threadPages++; void load();}}, t('pm_more_threads')));
       if (data) renderThread(data);
       else if (!content.querySelector('.pm-thread-layout')) {
         if (!workspace) content.append(h('div', {class: 'pm-empty'}, h('h2', {}, t('pm_start_title')), h('p', {}, t('pm_start_help'))));
         else {
-          const name = input('pd_title', {max: 160, value: launch.title || t('pd_new')});
-          const text = input('pd_message', {multiline: true, max: 12000}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
+          const name = input('pd_title', {max: 160, value: threadId === 'new' ? launch.title || t('pd_new') : ''});
+          const text = input('pd_message', {multiline: true, max: 12000, required: threadId === 'new'}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
           const create = form({action: 'pm.thread.create', target: {workspace_id: workspaceId}, fields: {title: name, content: text},
-            namespace: namespace + '.discussion.' + JSON.stringify(launch),
-            params: values => ({title: values.title.trim(), context: launch.refs}), preconditions: () => ({expected_version: workspace.version}),
-            permitted: () => permitted(false), label: 'pd_send',
+            namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(launch) : namespace,
+            params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
+            permitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onBeforeSaved: (result, values) => {
-              localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
+              if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
               localStorage.setItem(originKey + result.thread_id, JSON.stringify({from: launch.from || 'overview', report: launch.report}));
             },
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
-            extra: text});
+            extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
           // The title remains an editable part of the same durable draft, without a title-first form.
           content.append(h('div', {class: 'pm-thread-layout pd-new-layout'}, h('section', {class: 'pm-discussion'},
-            h('header', {class: 'pd-thread-header'}, name, h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')), backLink()),
+            h('header', {class: 'pd-thread-header'}, threadId === 'new' ? name : h('h2', {}, t('pd_new')), h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')), backLink()),
               h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs))),
             h('div', {class: 'pd-transcript'}, h('p', {class: 'muted pd-start'}, t('pd_empty'))), h('div', {class: 'pd-composer'}, create.box))));
 
@@ -844,7 +857,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();resources?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
-        detailPanel?.close(); phasePill.hidden = true;
+        detailPanel?.close(); discussionTools?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -855,8 +868,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   // The router admits POSTs only after this complete initial snapshot returns.
   // Do not expose forms that would freeze an unsent intent while that gate is closed.
   initialReadComplete = true; updateForms();
+  workspaceList.scrollTop = uiState.listScroll || 0;
+  const initialTranscript = content.querySelector('.pd-transcript');
+  if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
   if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
-  if (sendHandoff?.threadId === threadId && noteForm) setTimeout(() => {if (!disposed) void noteForm.submit();}, 0);
+  if (sendHandoff?.threadId === threadId && noteForm && !noteForm.locked()) setTimeout(() => {if (!disposed) void noteForm.submit();}, 0);
   if (openCreate || !workspaceId && !lastList.length) showCreate();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
@@ -877,6 +893,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
   });
   const dispose = () => {
+    uiState.listScroll = workspaceList.scrollTop;
+    threadState.scroll = content.querySelector('.pd-transcript')?.scrollTop || 0;
     if (threadId && mountedThread === threadId) {
       const disclosures = new Map();
       for (const selector of threadDisclosureSelectors) {
@@ -888,7 +906,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     disposed = true; discussionTools?.dispose(); sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     traceability?.dispose();resources?.dispose();
-    proposalReview?.dispose();ahp?.dispose();
+    proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };
   dispose.navigate = (nextWorkspace, nextThread, nextView) => {

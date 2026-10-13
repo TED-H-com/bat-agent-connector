@@ -1,3 +1,4 @@
+import {discussionLabel} from './pm-discussions.js';
 import {planComparison} from './pm-plan-diff.js';
 import {messageBlocks} from './message-format.js';
 
@@ -62,9 +63,9 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
         if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t('pm_scope_mismatch'));
         const document = plan.document, source = h('div', {class: 'pm-plan-domains'});
         for (const [domain, section] of Object.entries(document.sections || {})) {
-          source.append(h('details', {}, h('summary', {}, t('pm_slot_' + domain)),
+          source.append(h('details', {}, h('summary', {}, discussionLabel(t, 'pm_slot_', domain)),
             ...(section.statements || []).map(statement => h('p', {},
-              h('span', {class: 'chip'}, t('pm_status_' + statement.status)), ' ', statement.value,
+              h('span', {class: 'chip'}, discussionLabel(t, 'pm_status_', statement.status)), ' ', statement.value,
               h('small', {class: 'muted pm-source'}, [statement.source_ref?.ref || statement.source_ref?.message_id,
                 statement.source_ref?.path, statement.source_ref?.revision].filter(Boolean).join(' · ')))),
             section.coverage === 'unresolved' ? h('p', {class: 'muted'}, t('pm_plan_domain_unknown')) : ''));
@@ -146,7 +147,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
       signature = nextSignature;
       current.replaceChildren(h('p', {}, h('strong', {}, accepted.plan ? accepted.plan.document.title : t('pm_plan_none_accepted'))));
       if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_revision_number', {number: accepted.plan.sequence}), ' · ', t('pm_plan_accepted')));
-      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: () => navigator.clipboard.writeText(accepted.plan.adoption.commit_sha)}, t('pd_copy'))));
+      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: async event => {const details = event.currentTarget.parentElement; try {await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);} catch (error) {if (details.isConnected) details.append(errorBox(error));}}}, t('pd_copy'))));
       renderRows(page);
     }
     editor.update();

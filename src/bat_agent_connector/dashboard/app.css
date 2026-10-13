@@ -1285,7 +1285,7 @@ body.pm-mode #main { padding: 0; }
 .pd-thread-meta a { font-size: var(--fs-small); margin-left: auto; }
 .pd-context .ui-context-chip, .pd-context-details .ui-context-chip { white-space: normal; height: auto; min-height: 24px; overflow-wrap: anywhere; }
 .pd-transcript { flex: 1; min-height: 0; overflow: auto; padding: var(--space-4); overflow-anchor: none; }
-[data-discussions] .pm-notes { max-height: none; overflow: visible; }
+[data-discussions] .pm-notes { max-height: none; overflow: visible; margin-block: 0; }
 [data-discussions] .pm-note { border: 0; background: none; padding: var(--space-3) 0; }
 [data-discussions] .pm-note[data-pm-role=assistant], [data-discussions] [data-pm-plan-proposals] { background: var(--accent-soft); border-radius: var(--r-md); padding: var(--space-4); }
 [data-discussions] .pm-note-stamp { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
@@ -1337,3 +1337,12 @@ body.pm-mode #main { padding: 0; }
   [data-discussions] .pd-thread-header input { font-size: 16px; }
   .pd-panel input, .pd-panel select, .pd-panel textarea { font-size: 16px; }
 }
+[data-discussions] a.ui-button.secondary { background: var(--surface); color: var(--text); }
+[data-discussions] .pd-rename-receipt { flex-basis: 100%; font-size: var(--fs-caption); }
+[data-discussions] .pd-rename-receipt:has(.pm-receipt:empty) { display: none; }
+.pd-panel .pm-brief .pm-heading { display: block; }
+.pd-panel .pm-brief > .pm-heading > p { display: none; }
+.pd-panel [data-pm-plan] { margin-bottom: var(--space-4); }
+.pd-panel [data-pm-plan] form > div > .muted { font-size: var(--fs-small); }
+
+.pd-thread-header form button.primary:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }

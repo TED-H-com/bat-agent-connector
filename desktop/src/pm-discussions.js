@@ -30,5 +30,14 @@ export function discussionPanel({t, namespace, workspaceId, panes}) {
     overlay = inspector({title: t('pd_panel'), onClose: () => {home.append(body); overlay = null;}});
     overlay.classList.add('pd-panel-overlay'); overlay.body.append(body); document.getElementById('main').append(overlay);
   }});
-  return {home, trigger, select(key) {select(key); controls.setValue(key);}, dispose() {overlay?.close();}};
+  return {home, trigger, select(key) {select(key); controls.setValue(key);}, close() {overlay?.close();}, dispose() {overlay?.close();}};
+}
+
+export function discussionOperation(t, operation) {
+  if (!operation) return '';
+  if (!['running', 'accepted', 'queued', 'pending'].includes(operation.status)) return discussionLabel(t, 'pd_op_', operation.status);
+  const at = operation.started_at || operation.created_at;
+  const start = typeof at === 'number' ? at : Date.parse(at) / 1000;
+  const seconds = Number.isFinite(start) ? Math.max(0, Math.floor(Date.now() / 1000 - start)) : null;
+  return t('pd_working') + (seconds === null ? '' : ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
 }

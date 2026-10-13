@@ -2192,6 +2192,23 @@ var discussionStrings = {
 		pd_kind_issue_mapping: "Issue",
 		pd_kind_meeting: "Meeting",
 		pd_kind_lifecycle_transition: "Phase",
+		pd_op_waiting_checks: "Waiting for checks",
+		pd_op_waiting_external: "Waiting for external result",
+		pd_op_succeeded: "Completed",
+		pd_op_failed: "Failed",
+		pd_op_cancelled: "Cancelled",
+		pd_op_needs_attention: "Needs attention",
+		pd_op_uncertain: "Uncertain",
+		pd_op_running: "Running",
+		pd_op_queued: "Queued",
+		pd_op_pending: "Pending",
+		pd_op_accepted: "Accepted",
+		pm_mode_refinement: "Refinement",
+		pm_mode_sprint_planning: "Sprint planning",
+		pm_mode_sprint_review: "Sprint review",
+		pm_mode_retrospective: "Retrospective",
+		pm_mode_maintenance_review: "Maintenance review",
+		pm_mode_closure_reopen: "Closure / reopen",
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
@@ -2239,6 +2256,23 @@ var discussionStrings = {
 		pd_kind_issue_mapping: "議題",
 		pd_kind_meeting: "會議",
 		pd_kind_lifecycle_transition: "階段",
+		pd_op_waiting_checks: "等待檢查",
+		pd_op_waiting_external: "等待外部結果",
+		pd_op_succeeded: "已完成",
+		pd_op_failed: "失敗",
+		pd_op_cancelled: "已取消",
+		pd_op_needs_attention: "待處理",
+		pd_op_uncertain: "結果不明",
+		pd_op_running: "執行中",
+		pd_op_queued: "排隊中",
+		pd_op_pending: "待處理",
+		pd_op_accepted: "已受理",
+		pm_mode_refinement: "需求釐清",
+		pm_mode_sprint_planning: "Sprint 規劃",
+		pm_mode_sprint_review: "Sprint 審查",
+		pm_mode_retrospective: "回顧改進",
+		pm_mode_maintenance_review: "維護審查",
+		pm_mode_closure_reopen: "結案／重啟",
 		pm_mode_follow_up: "追蹤討論"
 	}
 };
@@ -9506,10 +9540,26 @@ function discussionPanel({ t, namespace, workspaceId, panes }) {
 			select(key);
 			controls.setValue(key);
 		},
+		close() {
+			overlay?.close();
+		},
 		dispose() {
 			overlay?.close();
 		}
 	};
+}
+function discussionOperation(t, operation) {
+	if (!operation) return "";
+	if (![
+		"running",
+		"accepted",
+		"queued",
+		"pending"
+	].includes(operation.status)) return discussionLabel(t, "pd_op_", operation.status);
+	const at = operation.started_at || operation.created_at;
+	const start = typeof at === "number" ? at : Date.parse(at) / 1e3;
+	const seconds = Number.isFinite(start) ? Math.max(0, Math.floor(Date.now() / 1e3 - start)) : null;
+	return t("pd_working") + (seconds === null ? "" : ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`);
 }
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
@@ -10488,7 +10538,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				const plan = data.plan;
 				if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t("pm_scope_mismatch"));
 				const document = plan.document, source = h("div", { class: "pm-plan-domains" });
-				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, t("pm_slot_" + domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, t("pm_status_" + statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
+				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, discussionLabel(t, "pm_slot_", domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, discussionLabel(t, "pm_status_", statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
 					statement.source_ref?.ref || statement.source_ref?.message_id,
 					statement.source_ref?.path,
 					statement.source_ref?.revision
@@ -10617,7 +10667,14 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				if (accepted.plan?.adoption?.commit_sha) current.append(h("details", {}, h("summary", {}, t("pd_details")), h("code", {}, accepted.plan.adoption.commit_sha), h("button", {
 					type: "button",
 					class: "secondary",
-					onclick: () => navigator.clipboard.writeText(accepted.plan.adoption.commit_sha)
+					onclick: async (event) => {
+						const details = event.currentTarget.parentElement;
+						try {
+							await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);
+						} catch (error) {
+							if (details.isConnected) details.append(errorBox(error));
+						}
+					}
 				}, t("pd_copy"))));
 				renderRows(page);
 			}
@@ -12342,7 +12399,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		thread_id: threadId
 	};
 	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt;
-	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adopted = false;
+	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewShell = false, adapterInitialized = false;
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
 	const deciding = () => writing() && permitted(true) && thread()?.capabilities?.decide === true && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === ADOPT && row.allowed === true) && capability?.plan_adoption_available !== false;
@@ -12351,7 +12408,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		const current = thread(), context = active.context;
 		if (current.thread.version === context.thread_version) return true;
 		if (!Array.isArray(context.messages) || !Array.isArray(context.inputs)) return false;
-		return current.thread.draft_id === context.draft_id && same$8((current.messages || []).map((row) => row.message_id).sort(), context.messages.map((row) => row.message_id).sort()) && same$8([...new Set([...current.inputs || [], ...current.draft?.selected_inputs || []].map((row) => row.input_id))].sort(), context.inputs.map((row) => row.input_id).sort());
+		const messages = current.messages || [], fixed = context.messages;
+		const sameMessages = same$8(messages.map((row) => row.message_id).sort(), fixed.map((row) => row.message_id).sort());
+		const sameLatestPage = current.coverage?.messages_truncated === true && messages.length > 0 && messages.every((row) => fixed.some((source) => source.message_id === row.message_id && source.sequence === row.sequence)) && Math.max(...messages.map((row) => row.sequence)) === Math.max(...fixed.map((row) => row.sequence));
+		return current.thread.draft_id === context.draft_id && (sameMessages || sameLatestPage) && same$8([...new Set([...current.inputs || [], ...current.draft?.selected_inputs || []].map((row) => row.input_id))].sort(), context.inputs.map((row) => row.input_id).sort());
 	};
 	const fresh = () => !conflict && active && head && unchanged() && head.version === active.context.plan_head.version && head.accepted_revision_id === active.context.plan_head.accepted_revision_id;
 	const original = () => {
@@ -12388,7 +12448,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		action: PROPOSE,
 		capability: () => capability,
 		readable: () => visible,
-		authorized: () => writing() && caps()?.scopes?.includes("start") && !adopt?.locked(),
+		authorized: () => writing() && caps()?.scopes?.includes("start") && (!adopt?.locked() || adopt?.replaceable?.()),
 		legacyEligible: () => capability?.native_analysis?.authorized !== false && capability?.native_analysis?.eligible_for_preflight === true
 	});
 	prepare = form({
@@ -12409,7 +12469,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			expected_plan_version: head.version,
 			expected_accepted_revision_id: head.accepted_revision_id
 		}),
-		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && !adopt?.locked(),
+		permitted: () => writing() && head && caps()?.scopes?.includes("start") && runtime.eligible() && (!adopt?.locked() || adopt?.replaceable?.()),
 		recoverPermitted: () => writing() && caps()?.scopes?.includes("start"),
 		label: "pcp_prepare",
 		onSaved: async (result) => {
@@ -12419,7 +12479,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			await refresh(id);
 		},
 		onStateChange: () => {
-			if (ready) updateControls();
+			if (ready) {
+				adopt?.update();
+				updateControls();
+			}
 		},
 		extra: h("div", { class: "pm-fields" }, labelled("pcp_purpose", purpose), runtime.box, h("details", {}, h("summary", {}, t("pcp_model")), labelled("pcp_model", model)), note("pcp_prepare_help"))
 	});
@@ -12448,7 +12511,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (!saved?.preconditions) throw fail();
 			return saved.preconditions;
 		},
-		permitted: () => !adopted && deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked(),
+		permitted: () => active?.proposal_id !== adoptedId && deciding() && fresh() && active?.validation.status === "format_valid" && validReview(original()?.review) && !prepare.locked(),
 		recoverPermitted: () => writing() && permitted(true) && caps()?.scopes?.includes("start"),
 		label: "pcp_adopt",
 		onError: (error) => {
@@ -12458,7 +12521,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			return true;
 		},
 		onSaved: async () => {
-			adopted = true;
+			adoptedId = active?.proposal_id;
 			await refreshParent?.();
 			await refresh();
 			if (conversation) detail.replaceChildren(h("p", {
@@ -12490,10 +12553,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		class: "pm-plans",
 		"data-pm-plan-proposals": ""
 	}, h("h3", {}, t(conversation ? "pd_proposed" : "pcp_title")), conversation ? "" : note("pcp_help"), prepareBox, h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)), notice, detail);
+	const tools = h("div", { "data-discussion-proposal-tools": "" });
 	if (conversation) {
 		prepareBox.open = false;
+		picker.closest(".pm-fields").remove();
 		const history = h("details", { "data-proposal-history": "" }, h("summary", {}, t("pd_history")), picker.parentElement);
-		box.insertBefore(history, notice);
+		tools.append(prepareBox, history, reload, more);
 	}
 	picker.addEventListener("change", () => {
 		if (adopt.locked()) {
@@ -12564,22 +12629,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		more.disabled = loading;
 		runtime.update(prepare);
 		if (composerNode) {
-			ask.disabled = prepare.box.querySelector("button[type=submit]").disabled;
+			ask.disabled = !prepare.canSubmit();
 			ask.textContent = t(prepare.locked() ? "pm_check_original" : "pd_ask");
 			connection.hidden = runtime.eligible();
 			ask.hidden = !runtime.eligible() && !prepare.locked();
-			const op = prepare.operation?.();
-			if (op) {
-				const running = [
-					"running",
-					"accepted",
-					"queued",
-					"pending"
-				].includes(op.status), start = Number(op.started_at || op.created_at);
-				const seconds = Number.isFinite(start) ? Math.max(0, Math.floor(Date.now() / 1e3 - start)) : null;
-				const elapsed = seconds === null ? "" : ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-				working.textContent = running ? t("pd_working") + elapsed : t("status_" + op.status) === "status_" + op.status ? op.status : t("status_" + op.status);
-			} else working.textContent = "";
+			working.textContent = discussionOperation(t, prepare.operation?.());
 		}
 		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
 		if (active && active.validation.status === "format_valid") {
@@ -12589,7 +12643,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				reasons.textContent = reason ? t(reason) : "";
 				reasons.hidden = !reason;
 				const retry = content.querySelector("[data-proposal-again]");
-				if (retry) retry.hidden = fresh();
+				if (retry) {
+					retry.hidden = fresh();
+					retry.disabled = !prepare.canSubmit();
+				}
 			}
 		}
 	}
@@ -12652,12 +12709,14 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (saved?.proposal_id) drafts[saved.proposal_id] = {
 				review: saved.review,
 				preconditions: saved.preconditions,
-				rationale: adopt.values().rationale
+				rationale: adopt.values().rationale,
+				answers: saved.answers
 			};
 			const retained = drafts[p.proposal_id];
 			saved = {
 				proposal_id: p.proposal_id,
 				review: retained?.review || defaultsFor(p),
+				answers: retained?.answers || {},
 				drafts,
 				preconditions: retained?.preconditions || {
 					expected_version: p.context.thread_version,
@@ -12853,15 +12912,23 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			"data-proposal-again": "",
 			hidden: true,
 			onclick: () => {
-				onFollowUp();
+				ask?.click();
 			}
 		}, t("pd_again")));
 		content.append(h("p", {
 			class: "muted",
 			"data-proposal-reason": ""
 		}), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
+		if (conversation && adoptedId === p.proposal_id) {
+			detail.replaceChildren(h("p", {
+				"data-proposal-adopted": "",
+				role: "status"
+			}, t("pd_adopted"), " · ", backLink()));
+			return;
+		}
 		detail.append(adopt.box);
-		if (conversation) {
+		if (conversation && !reviewShell) {
+			reviewShell = true;
 			const reviewBody = adopt.box.firstElementChild;
 			const extra = [...reviewBody.children].filter((node) => node !== review && node !== content);
 			const reviewMore = h("details", {
@@ -12871,7 +12938,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			const actions = adopt.box.querySelector(":scope > .actions");
 			reviewMore.append(actions);
 			reviewBody.append(reviewMore);
-			const reviewButton = h("button", {
+			const choices = h("div", { class: "actions pd-review-actions" }, h("button", {
 				type: "button",
 				class: "primary",
 				"data-proposal-review": "",
@@ -12879,12 +12946,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					reviewMore.open = true;
 					rationale.focus();
 				}
-			}, t("pd_review"));
-			reviewBody.append(h("div", { class: "actions" }, reviewButton, h("button", {
+			}, t("pd_review")), h("button", {
 				type: "button",
 				class: "secondary",
 				onclick: onFollowUp
-			}, t("pd_follow_up"))));
+			}, t("pd_follow_up")));
+			reviewBody.insertBefore(choices, content);
 		}
 		adopt.update();
 	}
@@ -12903,8 +12970,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			alive();
 			if (own !== ticket) return;
 			if (result.proposal_id !== id) throw fail();
+			if (active?.proposal_id !== result.proposal_id) conflict = false;
 			active = result;
-			conflict = false;
 			renderReview();
 		} catch (error) {
 			if (own === ticket) {
@@ -12925,6 +12992,21 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		more.hidden = cursor === null;
 		notice.replaceChildren(...!rows.length ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
 	}
+	async function summaries(list) {
+		if (list?.workspace_id !== workspaceId || !Array.isArray(list.proposals) || list.proposals.some((row) => row.thread_id !== threadId || typeof row.proposal_id !== "string")) throw fail();
+		const proposals = await Promise.all(list.proposals.map(async (row) => {
+			const p = checked(await api("GET", endpoint + "/" + encodeURIComponent(row.proposal_id)));
+			if (p.proposal_id !== row.proposal_id) throw fail();
+			return {
+				...row,
+				title: p.document?.title || t("pcp_invalid")
+			};
+		}));
+		return {
+			...list,
+			proposals
+		};
+	}
 	async function refresh(preferred) {
 		if (!enabled()) {
 			withdraw();
@@ -12941,22 +13023,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (own !== ticket) return;
 			if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
 			head = plans.head;
-			const details = await Promise.all(list.proposals.map(async (row) => {
-				const p = checked(await api("GET", endpoint + "/" + encodeURIComponent(row.proposal_id)));
-				if (p.proposal_id !== row.proposal_id) throw fail();
-				return {
-					...row,
-					title: p.document?.title || t("pcp_invalid")
-				};
-			}));
+			const detailed = await summaries(list);
 			alive();
 			if (own !== ticket) return;
 			visible = true;
 			box.hidden = false;
-			page({
-				...list,
-				proposals: details
-			});
+			page(detailed);
 			const id = preferred || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? rows.at(-1)?.proposal_id : null);
 			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, t("pd_proposed")));
 			picker.value = id || "";
@@ -12965,8 +13037,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				alive();
 				if (own !== ticket) return;
 				if (result.proposal_id !== id) throw fail();
+				if (active?.proposal_id !== result.proposal_id) conflict = false;
 				active = result;
-				conflict = false;
 				renderReview();
 			}
 		} catch (error) {
@@ -12992,7 +13064,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			const result = await api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);
 			alive();
 			if (own !== ticket) return;
-			page(result, true);
+			const detailed = await summaries(result);
+			alive();
+			if (own !== ticket) return;
+			page(detailed, true);
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
@@ -13026,11 +13101,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			class: "secondary",
 			"data-discussion-ask": "",
 			onclick: () => {
+				if (adopt.replaceable()) adopt.edit();
 				if (!prepare.locked()) prepare.set("purpose", textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t("pd_ask"));
 				prepare.submit();
 			}
 		}, t("pd_ask"));
-		connection = h("p", { class: "muted" }, t("pd_not_connected"), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
+		connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
 		working = h("p", {
 			"data-discussion-working": "",
 			role: "status",
@@ -13038,7 +13114,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		});
 		composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
 		clock = setInterval(() => {
-			if (composerNode.isConnected) updateControls();
+			if (composerNode.isConnected && [
+				"running",
+				"accepted",
+				"queued",
+				"pending"
+			].includes(prepare.operation()?.status)) updateControls();
 		}, 1e3);
 		updateControls();
 		return composerNode;
@@ -13047,11 +13128,21 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	updateControls();
 	return {
 		box,
+		tools,
 		composer,
 		refresh,
 		withdraw,
 		update(value = {}) {
-			if (value.capabilities) capability = value.capabilities;
+			if (value.capabilities) {
+				capability = value.capabilities;
+				if (conversation && !adapterInitialized) {
+					adapterInitialized = true;
+					if (!prepare.locked() && !prepare.hasDraft?.()) {
+						const available = (capability.structured_analysis?.actions?.[PROPOSE]?.adapters || []).find((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true);
+						if (available && available.adapter !== runtime.field.value) prepare.set("adapter", available.adapter);
+					}
+				}
+			}
 			if (value.head) head = value.head;
 			if (value.page) {
 				visible = true;
@@ -25489,7 +25580,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	}];
 	const advertised = (spec) => caps()?.features?.pm_workspaces?.[spec.key] === true;
 	const storage = typeof namespace === "string" ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
-	let selected = specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
+	let selected = specs.find((spec) => advertised(spec) && capability()?.[spec.key]?.eligible_for_preflight === true)?.key || specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
 	try {
 		const saved = storage && localStorage.getItem(storage);
 		if (specs.some((spec) => spec.key === saved)) {
@@ -25518,6 +25609,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	const current = h("div", { "data-pm-native-runs": "" });
 	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
 	const requests = [];
+	let composerNode = null, ask = null, connection = null, working = null, clock = null;
 	const otherLocked = (spec) => requests.some((row) => row.spec !== spec && row.request.locked());
 	for (const spec of specs) {
 		const purpose = input("pm_native_purpose", {
@@ -25609,6 +25701,14 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
 		};
 		explanation.textContent = t(!authorized() || descriptor?.authorized === false ? "pm_native_permissions" : eligible ? selected === "bat_analysis" ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : reason[descriptor?.reason] || (selected === "bat_analysis" ? "pm_analysis_bat_unavailable" : "pm_native_unavailable"));
+		if (composerNode) {
+			const request = requests.find((row) => row.spec === active)?.request;
+			ask.textContent = t(request?.locked() ? "pm_check_original" : "pd_ask");
+			ask.hidden = !eligible && !request?.locked();
+			ask.disabled = !request?.canSubmit();
+			connection.hidden = eligible;
+			working.textContent = discussionOperation(t, request?.operation());
+		}
 		const source = thread() && selected === "bat_analysis" && advertised(active) ? descriptor?.selected_binding : null;
 		if (!thread()) current.replaceChildren();
 		binding.hidden = !source;
@@ -25629,7 +25729,36 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	update();
 	return {
 		box,
-		update
+		update,
+		composer(textarea) {
+			ask = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-discussion-ask": "",
+				onclick: () => {
+					const request = requests.find((row) => row.spec.key === selected)?.request;
+					if (!request) return;
+					if (!request.locked()) request.set("purpose", textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t("pd_ask"));
+					request.submit();
+				}
+			}, t("pd_ask"));
+			connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
+			working = h("p", {
+				class: "muted",
+				role: "status",
+				"data-discussion-working": ""
+			});
+			composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
+			clock = setInterval(() => {
+				const request = requests.find((row) => row.spec.key === selected)?.request;
+				if (composerNode.isConnected) working.textContent = discussionOperation(t, request?.operation());
+			}, 1e3);
+			render();
+			return composerNode;
+		},
+		dispose() {
+			clearInterval(clock);
+		}
 	};
 }
 function nativeRunState(t, run) {
@@ -25677,7 +25806,7 @@ var threadDisclosureSelectors = [
 	"[data-pm-revision-editor]"
 ];
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value) }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -25713,7 +25842,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
 	const changed = () => {
 		if (busy || saved.intent || damaged) return;
-		saved.values = capture();
+		const values = capture();
+		if (same$3(saved.values, values)) return;
+		saved.values = values;
 		try {
 			persist();
 		} catch (error) {
@@ -25863,7 +25994,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			saved.intent.operation_id = op.operation_id;
 			persist();
 			operation = op;
-			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", String(op.status));
+			receipt.replaceChildren(h("a", { href: `#/op/${op.operation_id}` }, t("pm_operation")), " · ", statusText(op.status));
 			if (op.status === "succeeded") {
 				onBeforeSaved(op.result, saved.values);
 				saved = {
@@ -25875,7 +26006,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				await onSaved(op.result);
 				guard();
 				status.replaceChildren(h("span", { class: "muted" }, t("pm_saved")));
-			} else status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
+			} else if (!onError(op.error || {})) status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
 			receiptPolling = false;
 			if (disposed) return;
@@ -25891,8 +26022,9 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				if (!onError(error)) status.replaceChildren(errorBox(error));
-				if (error.code === "VERSION_CONFLICT" && !onError(error)) status.append(h("p", { class: "muted" }, t("pm_stale")));
+				const handled = onError(error);
+				if (!handled) status.replaceChildren(errorBox(error));
+				if (error.code === "VERSION_CONFLICT" && !handled) status.append(h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
 			busy = false;
@@ -25906,7 +26038,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		fields,
 		update,
 		changed,
+		hasDraft: () => Object.keys(saved.values).length > 0,
 		submit: run,
+		edit: () => reset.click(),
+		replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused),
+		canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused,
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
 		dispose: () => {
@@ -25944,7 +26080,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		threadId = sendHandoff.threadId;
 		history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);
 	}
-	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null;
+	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null;
+	const threadRows = h("div", { class: "pd-thread-rows" });
+	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
 	const backLink = () => {
 		let origin = launch.from;
 		try {
@@ -25986,6 +26124,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			guard: alive,
 			namespace,
 			errorBox,
+			statusText: threadId ? (value) => discussionLabel(t, "pd_op_", value) : void 0,
 			...options,
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)()
@@ -26269,7 +26408,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		qualitySelection
 	}) : null;
 	if (sprints) body.insertBefore(sprints.box, content);
-	const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
+	const meetings = workspaceId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
 		h,
 		t,
 		api,
@@ -26313,7 +26452,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (threadId) body.append(specifications.element);
 		else body.insertBefore(specifications.element, content);
 	}
-	const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
+	const followUp = workspaceId && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
 		h,
 		t,
 		api,
@@ -26795,6 +26934,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				onSaved: () => load(),
 				extra: threadTitle
 			});
+			renameForm.box.append(h("details", { class: "pd-rename-receipt" }, h("summary", {}, t("pd_details")), renameForm.box.querySelector("[role=status]"), renameForm.box.querySelector(".pm-receipt")));
 			boundContext = h("div", { class: "pd-context" });
 			panelContext = h("div", { class: "pd-context-details" });
 			discussionHint = h("p", { class: "muted" });
@@ -26835,8 +26975,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					backLink,
 					onFollowUp: () => text.focus(),
 					onAnswer: (value) => {
-						noteForm.set("content", value);
-						text.focus();
+						if (!value || noteForm.locked()) return;
+						noteForm.set("content", [text.value, value].filter(Boolean).join("\n\n"));
+						noteForm.submit();
 					}
 				});
 				column.querySelector(".pd-transcript").append(proposalReview.box);
@@ -27029,12 +27170,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"data-pm-information": "",
 				open: true
 			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box));
+			informationPanel = information;
 			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext);
 			for (const node of [...column.querySelectorAll(":scope > .pm-package-preparation, :scope > .pm-packages")]) contextPane.append(node);
 			if (nativeAnalysis) contextPane.append(h("details", {}, h("summary", {}, t("pd_analysis")), nativeAnalysis.box));
+			if (meetings) contextPane.append(secondary("ui_meetings", meetings.element));
+			if (followUp) contextPane.append(secondary("ui_follow_up", followUp.element));
 			if (specifications) contextPane.append(secondary("ui_specs", specifications.element));
 			if (evidence) drawersHome.append(evidence.box);
-			const planPane = h("section", { "data-discussion-tab": "plan" }, draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "", revisions?.box || "", brief ? secondary("pm_brief_title", brief.box) : "");
+			const planPane = h("section", { "data-discussion-tab": "plan" }, draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "", proposalReview?.tools || "", revisions?.box || "", brief ? secondary("pm_brief_title", brief.box) : "");
 			discussionTools = discussionPanel({
 				t,
 				namespace,
@@ -27048,7 +27192,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			column.querySelector(".pd-thread-meta").append(discussionTools.trigger);
 			const composer = h("div", { class: "pd-composer" }, noteForm.box);
 			if (proposalReview) composer.append(proposalReview.composer(text));
-			else composer.append(h("p", { class: "muted" }, t("pd_not_connected"), " · ", h("a", { href: "#/settings" }, t("pd_setup"))));
+			else if (nativeAnalysis) composer.append(nativeAnalysis.composer(text));
+			else composer.append(h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup"))));
 			column.append(composer);
 			content.append(h("div", { class: "pm-thread-layout" }, column, discussionTools.home));
 			const disclosures = threadDisclosures.get(disclosureKey);
@@ -27061,9 +27206,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		mode.textContent = discussionLabel(t, "pm_mode_", thread.mode);
 		boundContext.replaceChildren(...discussionContext(t, thread.context));
 		panelContext.replaceChildren(...discussionContext(t, thread.context), ...thread.context?.length ? [] : [h("p", { class: "muted" }, t("pd_no_context"))]);
-		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector("[data-pm-information]").open = true;
+		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) informationPanel.open = true;
 		discussionHint.textContent = "";
-		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
+		const transcript = notes.closest(".pd-transcript");
+		const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
 		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
 			h,
 			t,
@@ -27072,7 +27218,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			timestamp
 		})));
 		if (!data.messages?.length) notes.append(h("p", { class: "muted pm-empty" }, t("pm_no_notes")));
-		notes.scrollTop = bottom ? notes.scrollHeight : scroll;
+		transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
 		earlier.disabled = false;
 		coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t("pm_partial") : "";
@@ -27265,6 +27411,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				workspace = null;
 				publishContext();
 				detailPanel?.close();
+				discussionTools?.close();
 				brief?.withdraw();
 				lifecycle?.withdraw();
 				proposalReview?.withdraw();
@@ -27299,7 +27446,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		maintenanceRepairs?.withdraw();
 		maintenanceReview?.withdraw();
 		qualityReviews?.withdraw();
-		proposalReview?.withdraw();
 		qualitySelections.clear();
 		try {
 			alive();
@@ -27346,20 +27492,28 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				});
 			}
 			const scroll = workspaceList.scrollTop;
-			workspaceList.replaceChildren(threadSearch, h("a", {
+			if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(threadSearch, h("a", {
 				class: "ui-button secondary",
 				href: discussHref({ workspaceId }),
 				"data-discussion-new": ""
-			}, t("pd_new")), ...(threadList?.threads || []).map((thread) => h("a", {
+			}, t("pd_new")), threadRows);
+			threadRows.replaceChildren(...(threadList?.threads || []).map((thread) => h("a", {
 				class: "pm-thread-link",
 				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
 				"aria-current": thread.thread_id === threadId ? "page" : null
 			}, h("strong", {}, thread.title), h("span", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, discussionLabel(t, "pm_mode_", thread.mode)), h("time", {}, time(thread.updated_at))), ...discussionContext(t, thread.context?.slice(0, 1)))));
+			if (!workspaceId) workspaceList.replaceChildren(...lastList.map((row) => h("a", { href: `#/pm/${row.workspace_id}` }, row.name)), h("button", {
+				type: "button",
+				class: "primary",
+				onclick: showCreate
+			}, t("ui_new_workspace")));
 			filterThreads();
 			workspaceList.scrollTop = scroll;
+			workspaceList.querySelector("[data-discussion-more]")?.remove();
 			if (threadList?.next_cursor) workspaceList.append(h("button", {
 				type: "button",
 				class: "secondary",
+				"data-discussion-more": "",
 				onclick: () => {
 					threadPages++;
 					load();
@@ -27371,11 +27525,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				else {
 					const name = input("pd_title", {
 						max: 160,
-						value: launch.title || t("pd_new")
+						value: threadId === "new" ? launch.title || t("pd_new") : ""
 					});
 					const text = input("pd_message", {
 						multiline: true,
-						max: 12e3
+						max: 12e3,
+						required: threadId === "new"
 					});
 					text.placeholder = t("pd_message");
 					text.dataset.discussionComposer = "";
@@ -27386,16 +27541,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 							title: name,
 							content: text
 						},
-						namespace: namespace + ".discussion." + JSON.stringify(launch),
+						namespace: threadId === "new" ? namespace + ".discussion." + JSON.stringify(launch) : namespace,
 						params: (values) => ({
 							title: values.title.trim(),
-							context: launch.refs
+							...launch.refs.length ? { context: launch.refs } : {}
 						}),
 						preconditions: () => ({ expected_version: workspace.version }),
 						permitted: () => permitted(false),
-						label: "pd_send",
+						label: threadId === "new" ? "pd_send" : "pm_create_thread",
 						onBeforeSaved: (result, values) => {
-							localStorage.setItem(handoffKey, JSON.stringify({
+							if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({
 								threadId: result.thread_id,
 								content: values.content
 							}));
@@ -27408,9 +27563,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 							alive();
 							location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
 						},
-						extra: text
+						extra: threadId === "new" ? text : h("div", {}, labelled("pd_title", name), text)
 					});
-					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, name, h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), backLink()), h("div", { class: "pd-context" }, ...discussionContext(t, launch.refs))), h("div", { class: "pd-transcript" }, h("p", { class: "muted pd-start" }, t("pd_empty"))), h("div", { class: "pd-composer" }, create.box))));
+					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, threadId === "new" ? name : h("h2", {}, t("pd_new")), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), backLink()), h("div", { class: "pd-context" }, ...discussionContext(t, launch.refs))), h("div", { class: "pd-transcript" }, h("p", { class: "muted pd-start" }, t("pd_empty"))), h("div", { class: "pd-composer" }, create.box))));
 				}
 			}
 			if (!workspaceList.isConnected) content.prepend(workspaceList);
@@ -27498,6 +27653,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				maintenanceRepairs?.withdraw();
 				maintenanceReview?.withdraw();
 				detailPanel?.close();
+				discussionTools?.close();
 				phasePill.hidden = true;
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
@@ -27517,10 +27673,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	await load();
 	initialReadComplete = true;
 	updateForms();
+	workspaceList.scrollTop = uiState.listScroll || 0;
+	const initialTranscript = content.querySelector(".pd-transcript");
+	if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
 	if (threadId === "new") setTimeout(() => {
 		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
 	}, 0);
-	if (sendHandoff?.threadId === threadId && noteForm) setTimeout(() => {
+	if (sendHandoff?.threadId === threadId && noteForm && !noteForm.locked()) setTimeout(() => {
 		if (!disposed) noteForm.submit();
 	}, 0);
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
@@ -27595,6 +27754,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	});
 	const dispose = () => {
+		uiState.listScroll = workspaceList.scrollTop;
+		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		if (threadId && mountedThread === threadId) {
 			const disclosures = new Map();
 			for (const selector of threadDisclosureSelectors) {
@@ -27616,6 +27777,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		traceability?.dispose();
 		resources?.dispose();
 		proposalReview?.dispose();
+		nativeAnalysis?.dispose();
 		ahp?.dispose();
 		for (const value of forms) value.dispose();
 	};
