@@ -320,10 +320,10 @@ test('partial linked projects are disclosed without pretending the set is comple
   await expect(page.locator('.workspace-tree').first()).toContainText('Documentation search');
   expect(f.pm.base.state.writes).toHaveLength(0);
 });
-test('unavailable PM view canonicalizes its URL on mount and subsequent navigation',async({page})=>{
-  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route+'/dependencies');
+for(const requested of ['dependencies','unrecognized']) test(`unavailable PM view ${requested} canonicalizes its URL on mount and subsequent navigation`,async({page})=>{
+  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route+'/'+requested);
   await expect(page).toHaveURL(new RegExp('/overview$'));await expect(page.locator('[data-pm-view=overview]')).toHaveAttribute('aria-current','page');
-  await openPmSection(page,'requirements');await page.evaluate(id=>{location.hash=`#/pm/${id}/dependencies`;},workspaceId);
+  await openPmSection(page,'requirements');await page.evaluate(({id,view})=>{location.hash=`#/pm/${id}/${view}`;},{id:workspaceId,view:requested});
   await expect(page).toHaveURL(new RegExp('/requirements$'));await expect(page.locator('[data-pm-view=requirements]')).toHaveAttribute('aria-current','page');
 });
 for(const status of [403,404])test(`withdrawn remembered workspace is not reopened after ${status}`,async({page})=>{

@@ -36,7 +36,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await page.getByText('Repositories (optional)',{exact:true}).click();
     await page.getByLabel('Repositories, separated by commas',{exact:true}).fill('example/library, example/docs');
     await page.getByRole('button',{name:'Create workspace',exact:true}).click();
-    await expect(page).toHaveURL(new RegExp('#/pm/ws_'+'5'.repeat(32)+'$'));
+    await expect(page).toHaveURL(new RegExp('#/pm/ws_'+'5'.repeat(32)+'/discussions$'));
     expect(f.state.writes[0].body).toEqual({action:'pm.workspace.create',target:{},params:{name:'Review space',repositories:['example/library','example/docs']},preconditions:{}});
     await page.goto(`/dashboard/#/pm/${workspaceId}/discussions`);
     await page.getByLabel('Discussion title',{exact:true}).fill('Try a focused first screen');

@@ -41361,7 +41361,7 @@ async function viewProjectWork(main, pid, kind, id) {
 }
 async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
 	const threadId = viewOrThread === "discussions" ? thread : viewOrThread?.startsWith("pmt_") ? viewOrThread : null;
-	const view = threadId ? "discussions" : projectViewIds.includes(viewOrThread) ? viewOrThread : lastProjectView(state.namespace, workspaceId);
+	const view = threadId ? "discussions" : viewOrThread || lastProjectView(state.namespace, workspaceId);
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,

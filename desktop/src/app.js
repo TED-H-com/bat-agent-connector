@@ -1,5 +1,5 @@
 import {dashboardShell} from './shell.js';
-import {lastWorkspace, lastProjectView, projectViewIds} from './pm-workbench.js';
+import {lastWorkspace, lastProjectView} from './pm-workbench.js';
 import {pageHeader} from './ui/components.js';
 import {h as dom} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
@@ -3563,7 +3563,7 @@ async function viewProjectWork(main, pid, kind, id) {
 
 async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
   const threadId = viewOrThread === 'discussions' ? thread : viewOrThread?.startsWith('pmt_') ? viewOrThread : null;
-  const view = threadId ? 'discussions' : projectViewIds.includes(viewOrThread) ? viewOrThread : lastProjectView(state.namespace, workspaceId);
+  const view = threadId ? 'discussions' : viewOrThread || lastProjectView(state.namespace, workspaceId);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
     guard: () => assertView(connection), namespace: connection.namespace,

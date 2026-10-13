@@ -36,7 +36,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     release();await expect.poll(()=>replied).toBe(true);
     await expect.poll(async()=>Boolean((await intents(page))[0]?.intent?.operation_id)).toBe(true);
     if(interruption==='read failure'){
-      expect(reads).toEqual([]);await expect(page).toHaveURL(new RegExp(`${workspaceId}$`));
+      expect(reads).toEqual([]);await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions$`));
       f.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     }
     await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions/${threadId}$`));
@@ -65,7 +65,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     release();await expect.poll(async()=>(await intents(page)).find(row=>row.key===original.key)?.intent?.operation_id).toBe([...f.state.ops.values()][0].operation_id);
     await page.waitForTimeout(400);
     await expect(form(page).getByLabel('Discussion title',{exact:true})).toHaveValue('');
-    await expect(page).toHaveURL(new RegExp(`${workspaceId}$`));expect(reads).toEqual([]);expect(f.state.writes).toHaveLength(1);
+    await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions$`));expect(reads).toEqual([]);expect(f.state.writes).toHaveLength(1);
     const stored=(await intents(page)).find(row=>row.key===original.key);
     expect(stored).toEqual({...original,intent:{...original.intent,operation_id:[...f.state.ops.values()][0].operation_id}});
   });
@@ -85,7 +85,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     await expect(form(page)).toHaveCount(0);await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);
     await expect(form(page).getByRole('button',{name:'Check original request',exact:true})).toBeVisible();deny=true;release();
     await expect.poll(()=>reads.length).toBe(1);await expect(form(page).locator('.error')).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`${workspaceId}$`));
+    await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions$`));
     await expect(form(page).getByLabel('Discussion title',{exact:true})).toHaveValue('Preserve the exact source');
     await expect(form(page).getByLabel('Discussion title',{exact:true})).toBeDisabled();
     expect((await intents(page))[0].intent.request).toEqual(original.intent.request);
@@ -113,7 +113,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     await form(page).getByRole('button',{name:'Start discussion',exact:true}).click();
     await expect(form(page)).toContainText('The receipt does not match');
     expect((await intents(page))[0].intent.operation_id).toBeUndefined();expect(f.state.writes).toHaveLength(1);
-    await expect(page).toHaveURL(new RegExp(`${workspaceId}$`));
+    await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions$`));
   });
   test('an input receipt across remount restores the Topic control after reading the original operation',async({page})=>{
     const f=pmFixture();let release=()=>{};f.state.defer=new Promise<void>(resolve=>release=resolve);
