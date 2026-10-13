@@ -2,83 +2,37 @@
 
 ## Next release (unreleased)
 
-- Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
-  lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
-  immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
-  current membership and source withdrawal; capture never executes repository code. Lockfile
-  versions count as verified only for components the lockfile covers (never by name alone),
-  unsupported fields make a capture partial, and freshness stays unknown until a repository head
-  is observed. Optional extras and tool-specific dev groups keep their roles; an oversized
-  manifest is stored as a deterministic partial capture with its omission count.
+- Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
+  reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
+  `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
+  and withdrawn sources lose rows and counts together.
+  See the [dependency contract](docs/design/pm-dependencies.md).
 
-- Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
-  with adopted-requirement progress, explicit blockers, decisions, schedule/quality
-  deviations that retain revoked acceptance until reacceptance, current review/proposal
-  state, rollback evidence and bounded source
-  coverage. Hidden lifecycle transitions and filtered pending operations remain
-  incomplete. Hidden or oversized sources stay partial with distinct unavailability
-  and size-limit reasons; source references respect
-  the whole document's limit without withdrawing complete source counts. Reads share a snapshot and request-local source cache.
-  Saved reports retain their fixed snapshot semantics.
-- Bind up to eight original context items when creating a PM discussion and rename
-  threads with durable version checks while preserving title-only proposal adoption.
-  Renaming waits for any in-flight adoption to finish, protecting its original children.
-  Proposal views publish the same adoptability rule used by admission; the shared
-  UI uses it after a rename. Version 3 profiles retain compatibility with version 2 plan documents. Bound
-  analysis references use each original revision's operation. Source withdrawal redacts chips and
-  protects analysis derived from their frozen context; English and Traditional
-  Chinese validation messages accompany the new context errors.
+- Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
+  decisions, deviations and recent deliveries, separate from fixed saved reports.
+  Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
+  See the [overview contract](docs/design/pm-overview-discussion-context.md).
+- Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
+  `pm_conversation_proposal_get` exposes adoptability that survives title-only renames.
+  Withdrawn context is redacted and access to analysis derived from it remains protected.
+  See the [discussion contract](docs/design/pm-overview-discussion-context.md).
 
-- Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
-  Each row keeps its source record's identity and canonical status. Totals, open-item age, the
-  last 12 weeks and blocking reasons are included only when every source that matches the active
-  type filter was read completely. One skipped 409 or 413 record stays out of that source and
-  marks it partial, so the totals and the summary are null; the other readable records stay
-  listed. A withdrawn source leaves the remaining rows and the counts together. Detail
-  timelines follow each stored foreign key one hop in both directions. A hidden target is
-  skipped. A target that returns 409 or 413 stays off the timeline and marks that source
-  partial. A lineage-hidden repair does not remove a visible finding's repair action.
-  A meeting read that starts after a follow-up sequence reports that cutoff in
-  `coverage.histories.follow_ups.after`. Adopted plan rows are ordered by the
-  immutable plan revision sequence.
-  A hidden row is
-  omitted from rows, counts and summary together and does not fail the page. Row ids are
-  path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
-  no write actions.
+- Add a read-only issues, actions and changes register via `pm_register_list` and
+  `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
+  Totals and summaries require complete relevant sources; hidden or withdrawn records
+  are omitted from rows and aggregates together, while other readable records remain.
+  See the [register contract](docs/design/pm-register.md).
 
-- Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
-  `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
-  Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
-  The read does not compute a forecast, a critical path, phase rows, or per-work token use.
-  A visible session link with no observation stays an unknown read-only attempt. A linked
-  operation or task with no record is omitted, marked partial, and does not publish the id.
-  The page is cut by encoded size and by a 64-root lineage budget. `next_cursor` is an
-  opaque base64url keyset, so the next page resumes without gaps. Requirement text is kept
-  verbatim. Withdrawn work items, runs, operations, sessions, and tasks leave together with
-  the dates derived from them, and their ids do not appear in rows or cursors.
-  A hidden run does not take a session's run slot or remove the visible `run_id`. The
-  per-session scan stops at a second visible run, or after 64 rows when that choice is
-  still open, and then omits `run_id`. A hidden issue mapping does not consume the
-  200-row issue cap or mark the page partial. A link to a hidden operation, task,
-  or session does not consume the attempt-link caps or withhold a visible attempt.
-  A task's `waiting.since` uses the latest transition into the current state,
-  including named task events. Every schedule cursor the server issues is accepted
-  back, including a row id that contains a control character. A plan or one issue
-  mapping that lineage refuses is hidden; it does not fail the schedule read.
-  A cancelled or failed operation ends at the matching status event, including a
-  failure that never recorded a failed step. An attempt whose own lineage does not
-  fit is omitted before its work's dates and status are derived.
-  See `docs/design/pm-schedule.md`.
+- Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
+  dates, including unscheduled work and execution attempts for a future schedule view.
+  Partial pages never claim totals; withdrawn sources lose rows and derived dates together,
+  and missing dates stay unknown. Manual sessions remain read-only.
+  See the [schedule contract](docs/design/pm-schedule.md).
 
-- Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
-  returns per-source local days only when `buckets=day` is set; `tz` is then an exact IANA
-  name and defaults to UTC. The window is still at most 366 days. Daily buckets additionally
-  cover at most 92 local dates. A day is complete only when the collector's read started at
-  or after that local day's end plus a settle margin (`max(15 minutes, 3 × interval)`), the
-  stored cursor had reached EOF, and the window contains the whole day. A later Claude
-  refinement can still land on its first-fragment day, so `complete` is settled coverage
-  rather than a frozen total. Missing counters and uncovered days stay null, and withdrawn
-  sources omit buckets together with their totals.
+- Add opt-in daily usage through `pm_resources_get` with `buckets=day` and an IANA `tz`,
+  covering up to 92 local dates for usage charts. Complete days are settled, not frozen.
+  Missing counters stay null; withdrawn sources lose buckets and totals together.
+  See the [resource contract](docs/design/agent-resource-observation.md).
 
 - Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
   startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
