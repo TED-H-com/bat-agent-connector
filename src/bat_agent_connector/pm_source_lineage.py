@@ -11,6 +11,7 @@ import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from . import pm_read_cache
 from .operations import OperationError, OperationService
 
 MAX_ROOTS = 64
@@ -45,6 +46,7 @@ def schema(journal):
         delivery_schema(journal)
 
 
+@pm_read_cache.memoized
 def installed(db):
     return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_source_lineage'").fetchone() is not None
 
@@ -54,6 +56,17 @@ def _table(db, name):
 
 
 def roots(db, kind, identity, *, _seen=None):
+    if _seen is not None:
+        return _roots_collect(db, kind, identity, _seen=_seen)
+    return _root_read(db, kind, identity)
+
+
+@pm_read_cache.memoized
+def _root_read(db, kind, identity):
+    return _roots_collect(db, kind, identity)
+
+
+def _roots_collect(db, kind, identity, *, _seen=None):
     if not installed(db) or not isinstance(identity, str):
         return set()
     seen = set() if _seen is None else _seen
@@ -111,7 +124,7 @@ def roots(db, kind, identity, *, _seen=None):
         if row and row[1]:
             refs.append(("session", row[0] + "/" + row[1]))
     for child_kind, child_id in refs:
-        found.update(roots(db, child_kind, child_id, _seen=seen))
+        found.update(_roots_collect(db, child_kind, child_id, _seen=seen))
     if len(found) > MAX_ROOTS:
         raise OperationError("PM_SOURCE_LINEAGE_LIMIT", "Too many original sources for one resource", 409)
     return found
@@ -217,6 +230,7 @@ def visible_roots(db, principal, original_ids):
     return True
 
 
+@pm_read_cache.memoized
 def visible(db, principal, kind, identity):
     return visible_roots(db, principal, roots(db, kind, identity))
 

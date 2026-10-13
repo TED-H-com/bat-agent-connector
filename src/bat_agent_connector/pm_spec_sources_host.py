@@ -125,7 +125,7 @@ def spec_objects(req):
     return {"tree_sha": tree, "files": sorted(found, key=lambda row: row["path"]), "ignored_paths": ignored}
 
 
-def spec_execute(req):
+def spec_execute(req, *, reader=spec_objects):
     root, clone = req["managed_root"], req["clone_path"]
     if (not re.fullmatch(r"op_[0-9a-f]{32}", req["operation_id"])
             or clone != root + "/batc-published-" + req["operation_id"][3:]
@@ -144,7 +144,7 @@ def spec_execute(req):
         identity(req)
         if not pinned(req):
             raise ValueError("PM_SPEC_COMMIT_UNAVAILABLE")
-        result = spec_objects(req)
+        result = reader(req)
         identity(req)
         if not pinned(req):
             raise ValueError("PM_SPEC_COMMIT_UNAVAILABLE")

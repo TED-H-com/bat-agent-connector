@@ -11,7 +11,7 @@ def test_profiles_are_versioned_context_first_and_only_local_idea_planning_are_a
     assert len(catalog["profiles"]) == 9
     assert catalog["executable_modes"] == ["idea", "planning"]
     for profile in catalog["profiles"]:
-        assert profile["version"] == 2 and profile["purpose"] and profile["context_selection"]
+        assert profile["version"] == 3 and profile["purpose"] and profile["context_selection"]
         assert profile["question_policy"]["context_first"]
         assert profile["question_policy"]["max_questions"] == 3
         assert profile["question_policy"]["min_questions"] == 0
@@ -21,6 +21,7 @@ def test_profiles_are_versioned_context_first_and_only_local_idea_planning_are_a
             assert not profile["executable"] and not profile["allowed_commands"]
     planning = pm_profiles.get("planning")
     assert {slot["domain"] for slot in planning["input_slots"]} == set(pm_profiles.DOMAINS)
+    assert "pm.thread.rename" in pm_profiles.get("idea")["allowed_commands"]
     assert "pm.thread.plan" in pm_profiles.get("idea")["allowed_commands"]
     assert "pm.thread.plan" not in planning["allowed_commands"]
     assert "pm.thread.plan.revise" in planning["allowed_commands"]
