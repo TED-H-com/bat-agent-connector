@@ -6,7 +6,7 @@ import re
 from . import pm_dependencies as dep
 from . import pm_maintenance_policy, pm_workspace
 from .operations import OperationError
-from .pm_dependency_parser import KINDS, stable
+from .pm_dependency_parser import KINDS, package_name, stable
 from .pm_release_baselines import _bounded, _snapshot_read
 
 MAX_REPOSITORIES = 32
@@ -105,7 +105,7 @@ def _links(documents):
     targets = {}
     for c in components:
         if c["published_name"] is not None:
-            targets.setdefault((c["ecosystem"], c["name"]), []).append(c)
+            targets.setdefault((c["ecosystem"], package_name(c["ecosystem"], c["published_name"])), []).append(c)
     links = []
     for doc in documents:
         lookup = {d["key"]: d for d in doc["dependencies"]}
@@ -113,7 +113,7 @@ def _links(documents):
         for edge in doc["edges"]:
             dependency = lookup[edge["dependency_key"]]
             source = sources[edge["component_id"]]
-            for target in targets.get((dependency["ecosystem"], dependency["name"]), []):
+            for target in targets.get((dependency["ecosystem"], package_name(dependency["ecosystem"], dependency["name"])), []):
                 if source["component_id"] == target["component_id"]:
                     continue
                 if len(links) >= MAX_LINKS:

@@ -58,7 +58,8 @@ Target 為 `{workspace_id}`。三者 preconditions 相同：
 
 Component 身分由 repository、manifest path、declared name 決定。`published_name` 表示 manifest
 宣告可作為套件身分的名稱；private npm／禁止發布的 Cargo 為 null，**不代表已實際發布**。
-Dependency key 為 ecosystem + exact name 的穩定 `pmdepkey_…`；不從相似名稱或共同語言推論。
+沒有 name 的 npm app 以 manifest path 顯示，published_name=null，name_reason=package_name_not_declared；檔案仍為 read。
+Dependency key 為 ecosystem + package name（Python 依 PEP 503 將大小寫與 `-_.` 統一；顯示保留原拼法） 的穩定 `pmdepkey_…`；不從相似名稱或共同語言推論。
 
 | relation | 來源 |
 | --- | --- |
@@ -67,15 +68,27 @@ Dependency key 為 ecosystem + exact name 的穩定 `pmdepkey_…`；不從相�
 | test | Cargo dev-dependencies（tests/examples/benchmarks 語意）、有可辨識測試 binary／script／CI 證據的 Python groups/extras、npm devDependencies |
 | contract/reference | owner 有來源宣告；不由掃描猜測 |
 
+Python extras 與 dependency groups 使用獨立 declaration_group（extra:name／group:name），同名不覆寫。
+Dynamic dependencies 一律帶 python_dynamic_dependencies，capture 為 partial；僅明確的 setuptools dynamic file 引用可建立 runtime edges。
+未指定來源時 runtime_dependencies_status=unknown；未讀到指定檔案時為 partial；不把同層 requirements 檔推定為 runtime 或 dev。
+npm peerDependencies／optionalDependencies 尚未投影為五種 relation；有內容時明列對應 parser reason，capture 為 partial。
+Cargo workspace version、rust-version 與 dependencies 僅從明確會員的 workspace root 繼承；來源缺少時保留 component／edge、null 與 workspace_inheritance_unavailable。
+
 未分類 dev 依賴保留 `relation=build,basis=dev_unclassified`。Npm binaries 來自 lockfile bin
 宣告或固定已知工具對照；只辨識實際 command 起始詞，不把 echo／註解中的工具名稱當呼叫。
 Workflow 為保守的逐行 reader，只處理 jobs、steps、literal run/uses、working-directory 及 defaults；
 不解析 YAML anchors、任意 expression／matrix 或執行 shell。無法確認 component 工作目錄時不建立關聯。
+Workflow/job defaults 僅接受 defaults.run.working-directory；step 的目錄只影響該 step。
+同一 command 的 build 與 test 都保留；辨識 npx、pnpm exec、uv run、poetry run 包裝。
+不因共用 CI job 就將 uses action 掛為 component dependency。
 CI hints 帶 workflow path、job id、原始 1-based line、command、commit 和 blob；不代表 CI 已成功。
 
 `version` 保存 manifest requirement；未宣告的 workflow tool 版本為 null，搭配 `version_reason`。
 `resolved` 未提供時附 `resolution_reason`，維護負責人未提供時附 `maintenance_owner_reason`。`resolved` 只在對應 lockfile 有不歧義的版本時填值，
 `evidence_level=verified` 表示該 commit 的 lockfile 解出版本，不表示相容性、測試或安全驗證。
+上層 lockfile 必須有該 component 的涵蓋證據：uv workspace members／editable 或 virtual source／manifest.members；
+Cargo workspace members 或 lock 中同名同版本的本機 package；npm lock packages[relative_directory]。
+無法證明涵蓋時 resolved=null、resolution_reason=lockfile_does_not_cover_component；同層 lockfile 為該 component 的根。
 多版本無法唯一對應時保留 null／declared。`go.sum` 是 checksum catalog，**不是 lockfile**，
 因此 Go requirement 不因出現在 go.sum 就升為 verified。Requirement include/hash directives、
 不支援的 manifest／toolchain 結構會明列 unparsable，不能執行補齊。
@@ -107,7 +120,7 @@ Latest 包含 `version/workspace_version/source/capture/stale/partial/reason`、
 原 bound source commit 移動時 `stale=true`，不替換 captured commit。
 
 Capture 同時固定最多 32 個、合計最多 1 MB 的可見其他 carrier revisions 作為跨 repo 比較集合。
-只有 exact ecosystem + published package name 對應才建立 `cross_repository_edges`，證據同時包含兩個
+只有 ecosystem + published package name（Python 使用 PEP 503 正規化）對應才建立 `cross_repository_edges`，證據同時包含兩個
 manifest、repository 和 commit；跨 component links 上限 2,000，始終標示有界；可見 peer components 放 `external_components`。
 `cross_repository={status:bounded,complete:false}` 永遠不代表全站 repo 總圖。
 後續 peer 擷取不會改寫既有 capture 的圖；需要新的 capture 才更新比較集合。
