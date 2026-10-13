@@ -135,12 +135,15 @@ function Build-ManagedViewProbe {
     } finally { $compiler.Dispose() }
 }
 function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [string]$Name) {
-    $observed = @{state = @{}; phases = @{}}
+    $observed = @{state = @{}}
+    $diagnostics = [ordered]@{attempt_count = 0; attempts = [Collections.Generic.List[object]]::new()}
     try {
         Wait-Until {
+            param($Deadline)
             if ($Process.HasExited) { throw 'Managed app exited before WebView readiness' }
-            $observed.phases = [ordered]@{spawned=$false; started=$false; owner_verified=$false; assemblies_loaded=$false;
-                window_resolved=$false; query_started=$false; query_completed=$false; completed=$false; failed=$false; timed_out=$false}
+            if ((Get-FixtureViewTimeout $Deadline) -eq 0) { return $false }
+            $attempt = New-FixtureViewAttempt $diagnostics
+            $observed.state = @{}
             # The already compiled MTA client avoids PowerShell/STA startup and
             # retains process isolation if an accessibility provider stops responding.
             $info = [Diagnostics.ProcessStartInfo]::new($managedViewProbe)
@@ -150,26 +153,20 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
             $info.RedirectStandardError = $true
             foreach ($arg in @($Window.ToInt64().ToString(), $Process.Id.ToString())) { $info.ArgumentList.Add($arg) }
             $probe = [Diagnostics.Process]::Start($info)
-            $observed.phases.spawned = $true
+            $attempt.phases.spawned = $true
             try {
                 $output = $probe.StandardOutput.ReadToEndAsync()
                 $errors = $probe.StandardError.ReadToEndAsync()
-                if (-not $probe.WaitForExit(8000)) {
-                    $observed.phases.timed_out = $true
+                if (-not $probe.WaitForExit((Get-FixtureViewTimeout $Deadline))) {
+                    $attempt.phases.timed_out = $true
                     $probe.Kill()
                     if (-not $probe.WaitForExit(5000)) { throw 'Owned UIA probe did not exit after its deadline' }
                 }
-                foreach ($phase in $errors.GetAwaiter().GetResult().Split([char]10)) {
-                    $phase = $phase.Trim()
-                    if (@('started', 'owner_verified', 'assemblies_loaded', 'window_resolved',
-                        'query_started', 'query_completed', 'completed', 'failed') -ccontains $phase) { $observed.phases[$phase] = $true }
-                }
-                if ($observed.phases.timed_out) { throw 'Native UI Automation probe exceeded its deadline' }
-                if ($probe.ExitCode -ne 0) { throw 'Native UI Automation readiness probe failed' }
-                $observed.state = $output.GetAwaiter().GetResult() | ConvertFrom-Json
-                @('webContent', 'authenticated', 'setup', 'configurationLoaded', 'saveEnabled', 'bounded').Where({
-                    $observed.state.$_ -ne $true
-                }).Count -eq 0
+                $attempt.exit_code = $probe.ExitCode
+                Set-FixtureViewDiagnostics $attempt ($errors.GetAwaiter().GetResult())
+                # Exit 3 is a failed read, not readiness evidence. The existing
+                # Wait-Until loop retries it with the very same 30 s deadline.
+                Test-FixtureViewResult $attempt ($output.GetAwaiter().GetResult()) $observed
             } finally { $probe.Dispose() }
         } 'Managed WebView did not render authenticated first-run configuration'
     } catch {
@@ -178,7 +175,7 @@ function Wait-ManagedView([Diagnostics.Process]$Process, [IntPtr]$Window, [strin
         throw
     } finally {
         $observed.state | ConvertTo-Json | Set-Content (Join-Path $Evidence "$Name-readiness.json") -Encoding utf8
-        $observed.phases | ConvertTo-Json | Set-Content (Join-Path $Evidence "$Name-probe-phases.json") -Encoding utf8
+        $diagnostics | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Evidence "$Name-probe-phases.json") -Encoding utf8
     }
 }
 $app = $null

@@ -2,7 +2,7 @@
 $ErrorActionPreference='Stop'
 # Match the facade's byte-oriented framing; Console.In is PowerShell-host controlled.
 # This marker contains only fixed fixture phases, never request/configuration data.
-$phasePath=Join-Path $PSScriptRoot 'phase.txt'
+$phasePath=[IO.Path]::Combine($PSScriptRoot,'phase.txt')
 [IO.File]::WriteAllText($phasePath,'started')
 $inputStream=[Console]::OpenStandardInput()
 $body=New-Object IO.MemoryStream
@@ -15,11 +15,14 @@ try {
   }
   [IO.File]::WriteAllText($phasePath,'input-closed')
   $request=(New-Object Text.UTF8Encoding($false,$true)).GetString($body.ToArray()) | ConvertFrom-Json
+  [IO.File]::WriteAllText($phasePath,'request-decoded')
 } finally { $body.Dispose() }
 if ($request.action -ne 'contract' -or $request.schema_version -ne 1) { exit 1 }
 $reply=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'contract.json') -Raw | ConvertFrom-Json
+[IO.File]::WriteAllText($phasePath,'reply-loaded')
 $reply.request_id=$request.request_id
 $bytes=[Text.Encoding]::UTF8.GetBytes(($reply | ConvertTo-Json -Depth 8 -Compress))
+[IO.File]::WriteAllText($phasePath,'reply-encoded')
 $stdout=[Console]::OpenStandardOutput()
 $stdout.Write($bytes,0,$bytes.Length)
 $stdout.Flush()

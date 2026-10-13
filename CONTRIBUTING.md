@@ -13,6 +13,21 @@ Thanks for helping! This is an unofficial companion to Better Agent Terminal; pl
   scan; please also run `gitleaks detect` locally.
 * Protocol behaviour should cite the BAT source file/version it was read from.
 
+Use `tests.operation_helpers.settle_operations` to wait for durable test outcomes.
+Its 60-second deadline covers scheduling, persisted status and worker completion;
+it is not a per-handler runtime measurement. On timeout it reports each worker's
+action, steps and suspended await chain without request bodies or frame locals.
+On failure or caller cancellation it cancels and joins this service's in-memory
+workers before the fixture can close their journal. This leaves original durable
+operation IDs, keys and uncertain step receipts available for normal reconciliation;
+it does not call the product's operation-cancel action or rerun a test.
+
+Keep test journals on disk with normal durability settings. Slow synchronous
+storage can exhaust the settling deadline and block the event loop itself; an
+async timeout cannot preempt an SQLite commit. Diagnose storage latency and worker
+stacks before changing a handler. Do not increase deadlines or disable durability
+to hide a failed settling assertion.
+
 Public documentation, screenshots, examples and issue/PR text must work without a
 maintainer's private Fleet inventory or deployment. Use synthetic host names, reserved
 example addresses and generic user paths. Keep private installation evidence, operator
