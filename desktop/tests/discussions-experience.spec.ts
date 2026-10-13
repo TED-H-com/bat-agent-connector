@@ -9,7 +9,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     test.setTimeout(60000);
     const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage(), errors: string[] = [];
-    const dir = `${process.env.TMPDIR || '/tmp'}/shots2`; await mkdir(dir, {recursive: true});
+    const dir = `${process.env.TMPDIR || '/tmp'}/shots3`; await mkdir(dir, {recursive: true});
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => {
       // The shared bearer-only fixture deliberately returns 404 for this optional
@@ -241,7 +241,7 @@ for (const locale of ['en', 'zh-TW']) test(`backend adoptability is authoritativ
   const adopt = page.locator('[data-pm-action="pm.conversation.adopt"]');
   const rationale = adopt.getByLabel(zh ? '採用這組更新的理由' : 'Reason for adopting this update'); await rationale.fill('Retain this reviewed decision');
   await expect(adopt.locator('button[type=submit]')).toBeEnabled();
-  const proposal = f.discussion.proposals[0]; proposal.adoptable = false; proposal.adoptable_reason = 'future_central_reason';
+  const proposal = f.discussion.proposals.find((row: any) => row.thread_id === f.ids.threadIdea); proposal.adoptable = false; proposal.adoptable_reason = 'future_central_reason';
   await page.getByRole('button', {name: zh ? '重新整理' : 'Refresh', exact: true}).click();
   await expect(page.locator('[data-proposal-reason]')).toHaveText(zh ? '已過期' : 'Out of date');
   await expect(page.getByRole('button', {name: zh ? '再次詢問 PM' : 'Ask PM again', exact: true})).toBeVisible();
@@ -314,4 +314,219 @@ test('a new multi-context draft opens Context after leaving the Plan tab', async
   await expect(page.locator('[data-discussion-tab=context]')).toBeVisible();
   await expect(page.locator('[data-discussion-tab=context] [data-discussion-context]')).toHaveCount(5);
   expect(f.discussion.writes).toHaveLength(0);
+});
+
+for (const outcome of ['failed', 'uncertain']) test(`first-message ${outcome} never redirects another launch or resends an edited draft`, async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  const f = demoFixture({discussions: true}); let original: any;
+  await mountConversation(page, false, async (input: any) => {
+    if (input.method === 'POST' && input.body?.action === 'pm.message.append' && !original) {
+      f.discussion.writes.push(structuredClone(input));
+      original = {...input.body, actor: f.ids.actor, idempotency_key: input.idempotency_key,
+        operation_id: 'op_' + 'e'.repeat(32), status: outcome, result: null, error: {code: 'APPEND_FAILED', message: 'First note not confirmed'}};
+      return {status: 200, data: {operation: original}};
+    }
+    if (original && input.path === '/operations/' + original.operation_id) return {status: 200, data: {operation: original}};
+    return f.dispatch(input);
+  });
+  await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, title: 'Topic A', from: 'overview'}));
+  const composer = page.locator('[data-discussion-composer]'); await composer.fill('Original first note');
+  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect.poll(() => f.discussion.writes.length).toBe(2);
+  await expect(page.locator('.pd-composer-status > [role=status]')).toBeVisible();
+  const thread = page.url().split('/').at(-1)!;
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.includes('discussion-send')))).toEqual([]);
+  const before = f.discussion.writes.length;
+  if (outcome === 'failed') {const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-failed-first-message.png`});}
+  await page.reload(); await expect(composer).toHaveValue('Original first note');
+  if (outcome === 'failed') {
+    await page.getByRole('button', {name: 'New request', exact: true}).click();
+    await composer.fill('Edited replacement, not ready to send');
+    await page.reload(); await expect(composer).toHaveValue('Edited replacement, not ready to send');
+    await page.locator(`.pm-thread-link[href$="${f.ids.threadIdea}"]`).click();
+    await page.locator(`.pm-thread-link[href$="${thread}"]`).click();
+    await expect(composer).toHaveValue('Edited replacement, not ready to send');
+  } else {
+    await expect(composer).toBeDisabled();
+    await page.getByRole('button', {name: 'Check original request', exact: true}).click();
+  }
+  expect(f.discussion.writes).toHaveLength(before);
+  const ref = {kind: 'requirement', id: 'req.login', revision_id: f.ids.planV3};
+  await page.evaluate(href => {location.hash = href;}, discussHref({workspaceId: f.ids.workspaceId, refs: [ref], title: 'Topic B', from: 'requirements'}));
+  await expect(page).toHaveURL(/\/discussions\/new\?/); await expect(page.locator('[data-discussion-title]')).toHaveText('Topic B');
+  expect(parseDiscussRefs(page.url().split('?')[1]).refs).toEqual([ref]);
+  await expect(page.locator('[data-discussion-back]')).toHaveText('Back to Requirements');
+  await expect(composer).toHaveValue(''); await page.locator('[data-discussion-new]').click();
+  await expect(page).toHaveURL(/\/discussions\/new$/); expect(f.discussion.writes).toHaveLength(before);
+});
+
+test('cancelled renames discard stale text and successful renames restore keyboard focus', async ({page}) => {
+  const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  const rename = page.getByRole('button', {name: 'Rename', exact: true}), title = page.getByLabel('Discussion title', {exact: true});
+  await rename.click(); await title.fill('Cancelled local title'); await title.press('Escape'); await expect(rename).toBeFocused();
+  const data = f.discussion.details.get(f.ids.threadIdea); data.thread.title = 'Renamed elsewhere'; data.thread.version++;
+  await page.reload(); await expect(page.locator('[data-discussion-title]')).toHaveText('Renamed elsewhere'); await expect(title).toBeHidden();
+  await rename.press('Enter'); await expect(title).toHaveValue('Renamed elsewhere'); await title.fill('Reviewed title'); await title.press('Enter');
+  await expect(page.locator('[data-discussion-title]')).toHaveText('Reviewed title'); await expect(rename).toBeFocused();
+  expect(f.discussion.writes).toHaveLength(1);
+});
+
+test('refresh reads one proposal list and only its selected document, with revision details deferred to Plan', async ({page}) => {
+  const f = demoFixture({discussions: true}), reads: string[] = []; let older = false;
+  await mountConversation(page, false, async (input: any) => {
+    if (input.method === 'GET') reads.push(input.path);
+    if (input.path.endsWith('/conversation-proposals/pmcp_' + '9'.repeat(32))) return {status: 409, data: {error: {code: 'PM_CONVERSATION_CHANGED', message: 'Old proposal unreadable'}}};
+    const result = await f.dispatch(input);
+    if (older && input.path.includes('/conversation-proposals?')) result.data.proposals.unshift({...result.data.proposals[0], proposal_id: 'pmcp_' + '9'.repeat(32), title: 'Older unreadable proposal'});
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await expect(page.locator('[data-discussion-ask]')).toBeEnabled();
+  const revisions = () => reads.filter(path => /\/plans\/pmrev_/.test(path)); expect(revisions()).toHaveLength(0);
+  reads.length = 0; await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-proposal-review]')).toBeEnabled();
+  await expect(page.locator('[data-discussion-ask]')).toBeEnabled();
+  expect(reads.filter(path => path.includes('/conversation-proposals?'))).toHaveLength(1);
+  expect(reads.filter(path => /\/conversation-proposals\/pmcp_/.test(path))).toHaveLength(1);
+  older = true; reads.length = 0; await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
+  expect(reads.filter(path => path.includes('/conversation-proposals?'))).toHaveLength(1);
+  expect(reads.filter(path => /\/conversation-proposals\/pmcp_/.test(path))).toHaveLength(1);
+  await expect(page.locator('[data-proposal-review]')).toBeVisible(); expect(revisions()).toHaveLength(0);
+  await page.getByRole('tab', {name: 'Plan', exact: true}).click(); await expect.poll(() => revisions().length).toBe(2);
+  await page.getByRole('tab', {name: 'Context', exact: true}).click(); await page.getByRole('tab', {name: 'Plan', exact: true}).click();
+  expect(revisions()).toHaveLength(2);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+  const f = demoFixture({locale, discussions: true}); await mountConversation(page, false, f.dispatch);
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadFollow}`); await page.reload();
+  const card = page.locator('[data-pm-plan-proposals]');
+  await expect(card.locator('[data-status=adopted]')).toHaveText(locale === 'en' ? 'Adopted' : '已採用');
+  await expect(card.locator('[data-proposal-again], [data-proposal-review]')).toHaveCount(0);
+  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-adopted-${locale}-1440.png`});
+  await card.locator('[data-proposal-adopted-revision]').click();
+  await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
+  await expect(page.locator(`[data-pm-revision="${f.ids.planV3}"] [data-pm-revision-open]`)).toBeFocused();
+  expect(f.discussion.writes).toHaveLength(0); await context.close();
+});
+
+for (const trigger of ['refresh', 'pm_run', 'pm_conversation_proposal']) test(`working clock stops with polling and ${trigger} checks the original operation`, async ({page}) => {
+  const f = demoFixture({discussions: true}); f.discussion.running = true;
+  const reads: string[] = [], events: any[] = [];
+  await mountConversation(page, false, async (input: any) => {
+    const url = new URL(input.path, 'http://fixture');
+    if (url.pathname === '/events') {const after = Number(url.searchParams.get('after') || 0), pending = events.filter(e => e.seq > after), cursor = Math.max(after, ...pending.map(e => e.seq));
+      return {status: 200, data: {events: pending, next_cursor: cursor, head_cursor: cursor, has_more: false, sync: {checkpoint: {cursor, token: 'demo-' + cursor}}}};}
+    if (input.method === 'GET' && input.path.startsWith('/operations/')) reads.push(input.path);
+    return f.dispatch(input);
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.locator('[data-discussion-ask]').click();
+  const working = page.locator('[data-discussion-working]'); await expect(working).toContainText('PM is working');
+  await expect(working.locator('[data-discussion-elapsed]')).toHaveAttribute('aria-hidden', 'true');
+  await page.evaluate(() => {const node = document.querySelector('[data-discussion-working] [role=status]')!;
+    (window as any).statusAnnouncements = 0; new MutationObserver(() => (window as any).statusAnnouncements++).observe(node, {childList: true, subtree: true, characterData: true});});
+  await expect(working).toHaveText('Status not checked', {timeout: 15000});
+  expect(reads).toHaveLength(6); await expect(working.locator('[data-discussion-elapsed]')).toHaveText('');
+  await page.waitForTimeout(1100); expect(await page.evaluate(() => (window as any).statusAnnouncements)).toBe(1);
+  const op: any = [...f.discussion.operations.values()][0]; op.status = 'succeeded';
+  if (trigger === 'refresh') await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+  else events.push({seq: 1, resource_type: trigger, resource_id: 'analysis', kind: trigger + '.updated'});
+  await expect(working).toHaveText('PM finished', {timeout: 10000}); await expect(page.locator('[data-discussion-ask]')).toHaveText('Ask PM');
+  expect(reads).toHaveLength(7); expect(new Set(reads)).toEqual(new Set(['/operations/' + op.operation_id]));
+  expect(f.discussion.writes).toHaveLength(1);
+});
+
+test('a list-opened mobile thread returns to its filtered discussion list', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844}); const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions`);
+  await page.getByRole('searchbox', {name: 'Search', exact: true}).fill('Delivery');
+  await page.locator(`.pm-thread-link[href$="${f.ids.threadFollow}"]`).click();
+  await expect(page.locator('[data-discussion-back]')).toHaveText('Back to Discussions');
+  await page.locator('[data-discussion-back]').click(); await expect(page).toHaveURL(/\/discussions$/);
+  await expect(page.getByRole('searchbox', {name: 'Search', exact: true})).toHaveValue('Delivery');
+  await expect(page.locator('.pm-thread-link:visible')).toHaveCount(1);
+  await page.locator(`.pm-thread-link[href$="${f.ids.threadFollow}"]`).click(); await page.reload(); await expect(page.locator('[data-discussion-back]')).toHaveText('Back to Discussions');
+  expect(f.discussion.writes).toHaveLength(0);
+});
+
+test('completed launch storage is pruned and origins use a bounded index', async ({page}) => {
+  const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  const launch = discussHref({workspaceId: f.ids.workspaceId, title: 'First launch', from: 'overview'});
+  await page.goto('/dashboard/' + launch); await page.locator('[data-discussion-composer]').fill('First note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect(page.locator('.pm-notes')).toContainText('First note');
+  await page.evaluate(() => {
+    const indexKey = Object.keys(localStorage).find(key => key.includes('discussion-origin') && key.endsWith('.index'))!;
+    const prefix = indexKey.slice(0, -5), ids = Array.from({length: 45}, (_, i) => 'pmt_' + (1000 + i).toString(16).padStart(32, '0'));
+    for (const id of ids) localStorage.setItem(prefix + id, JSON.stringify({from: 'overview'})); localStorage.setItem(indexKey, JSON.stringify(ids));
+  });
+  await page.evaluate(href => {location.hash = href;}, discussHref({workspaceId: f.ids.workspaceId, title: 'Second launch', from: 'requirements'}));
+  await page.locator('[data-discussion-composer]').fill('Second note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect(page.locator('.pm-notes')).toContainText('Second note');
+  const stored = await page.evaluate(() => ({origins: Object.keys(localStorage).filter(key => key.includes('discussion-origin')),
+    launches: Object.keys(localStorage).filter(key => key.includes('.discussion.') && key.includes('pm.thread.create'))}));
+  expect(stored.origins).toHaveLength(41); expect(stored.launches).toHaveLength(0);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`invalid proposal picker uses a concise review status ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale}), page = await context.newPage(), f = demoFixture({locale, discussions: true});
+  await mountConversation(page, false, f.dispatch); await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-proposal-review]')).toBeVisible();
+  Object.assign(f.discussion.proposals.at(-1), {validation: {status: 'needs_review', errors: []}, document: null, document_digest: null, adoptable: false, adoptable_reason: 'invalid_proposal'});
+  await page.getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true}).click();
+  await expect(page.locator('[data-proposal-history] option').last()).toHaveText(locale === 'en' ? 'Proposed update · Needs review' : '建議更新 · 待審閱');
+  await expect(page.locator('[data-proposal-review]')).toHaveCount(0); expect(f.discussion.writes).toHaveLength(1); await context.close();
+});
+
+test('central adoption keeps an uncertain original receipt recoverable without another review', async ({page}) => {
+  const f = demoFixture({discussions: true}), checks: string[] = []; let op: any;
+  await mountConversation(page, false, async (input: any) => {
+    if (input.method === 'GET' && input.path.startsWith('/operations/')) checks.push(input.path);
+    const result = await f.dispatch(input);
+    if (input.body?.action === 'pm.conversation.adopt') {op = [...f.discussion.operations.values()].find((row: any) => row.action === 'pm.conversation.adopt'); op.status = 'uncertain'; result.data.operation.status = 'uncertain';}
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.locator('[data-discussion-ask]').click(); await page.locator('[data-proposal-review]').click();
+  await page.getByLabel('Reason for adopting this update').fill('Reviewed central update'); await page.getByRole('button', {name: 'Adopt this update', exact: true}).click();
+  await expect.poll(() => f.discussion.writes.length).toBe(2);
+  await expect(page.locator('[data-pm-action="pm.conversation.adopt"] .pm-receipt')).toContainText('Uncertain');
+  await page.reload();
+  const card = page.locator('[data-pm-plan-proposals]'); await expect(card.locator('[data-status=adopted]')).toBeVisible();
+  await expect(card.locator('[data-proposal-review]')).toHaveCount(0); await expect(card.locator('[data-proposal-again]')).toHaveCount(0);
+  await card.locator('details > summary').click(); await card.getByRole('button', {name: 'Check original request', exact: true}).click();
+  expect(checks.every(path => path === '/operations/' + op.operation_id)).toBe(true); expect(f.discussion.writes).toHaveLength(2);
+});
+
+test('the desktop list header leaves room for Search and an accessible New discussion icon', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900}); const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  const header = page.locator('.pd-list-header'), search = header.getByRole('searchbox', {name: 'Search', exact: true});
+  await expect(search).toHaveAttribute('placeholder', 'Search'); expect((await search.boundingBox())!.width).toBeGreaterThan(180);
+  const create = header.getByRole('button', {name: 'New discussion', exact: true}); await expect(create).toHaveText(''); await expect(create).toHaveAttribute('title', 'New discussion');
+  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await header.screenshot({path: `${dir}/discussions-list-header-en-1440.png`});
+});
+
+test('reload during the first thread mount preserves the staged intent without auto-sending', async ({page}) => {
+  const f = demoFixture({discussions: true}); let hold = true, release: () => void;
+  const pending = new Promise<void>(resolve => {release = resolve;});
+  await mountConversation(page, false, async (input: any) => {
+    if (hold && input.path.includes('/conversation-proposals?')) await pending;
+    return f.dispatch(input);
+  });
+  await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, title: 'Interrupted first mount'}));
+  await page.locator('[data-discussion-composer]').fill('Keep my first note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect(page).toHaveURL(/\/discussions\/pmt_[a-f0-9]{32}$/);
+  await expect(page.locator('[data-discussion-composer]')).toHaveValue('Keep my first note');
+  const saved = await page.evaluate(() => {const key = Object.keys(localStorage).find(key => key.includes('.pm.message.append.'))!; return JSON.parse(localStorage.getItem(key)!);});
+  expect(saved.intent.request.params.content).toBe('Keep my first note');
+  expect(await page.evaluate(() => Object.keys(localStorage).some(key => key.includes('discussion-send')))).toBe(false);
+  hold = false; await page.reload(); release!();
+  await expect(page.getByRole('button', {name: 'Check original request', exact: true})).toBeEnabled();
+  expect(f.discussion.writes.map((row: any) => row.body.action)).toEqual(['pm.thread.create']);
+  await page.getByRole('button', {name: 'Check original request', exact: true}).click();
+  await expect(page.locator('.pm-notes')).toContainText('Keep my first note'); expect(f.discussion.writes).toHaveLength(2);
+  expect(f.discussion.writes[1].idempotency_key).toBe(saved.intent.key);
 });

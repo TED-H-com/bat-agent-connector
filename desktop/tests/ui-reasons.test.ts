@@ -24,6 +24,8 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const t = (key: string) => strings[key];
     const index = locale === 'en' ? 0 : 1;
     for (const [code, labels] of Object.entries({
+      invalid_proposal: ['Needs review', '待審閱'],
+      adopted: ['Update adopted', '已採用更新'],
       content_changed: ['Discussion changed', '討論內容已變更'],
       plan_head_changed: ['Plan changed', '計畫已變更'],
       superseded: ['Replaced by a newer update', '已有較新的更新'],

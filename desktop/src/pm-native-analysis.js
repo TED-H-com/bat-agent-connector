@@ -110,7 +110,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
     working = h('p', {class: 'muted', role: 'status', 'data-discussion-working': ''});
     composerNode = h('div', {class: 'pd-ask'}, ask, connection, working);
     clock = setInterval(() => {const request = requests.find(row => row.spec.key === selected)?.request;
-      if (composerNode.isConnected && ['running', 'accepted', 'queued', 'pending'].includes(request?.operation()?.status)) render();}, 1000);
+      if (composerNode.isConnected && request?.checking() && ['running', 'accepted', 'queued', 'pending'].includes(request?.operation()?.status)) render();}, 1000);
     render(); return composerNode;
   }, dispose() {clearInterval(clock);}};
 }

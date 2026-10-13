@@ -157,3 +157,34 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`manag
   if(directory){await mkdir(directory,{recursive:true});await page.screenshot({path:`${directory}/workspace-${locale}-${width}.png`,fullPage:true});}
   await context.close();
 });
+
+test('thread meetings and follow-up reads wait for their disclosure or their own event', async ({page}) => {
+  const f = fixture(), reads: string[] = [], prefix = `/pm/workspaces/${workspaceId}`;
+  await mountConversation(page, false, async (input: any) => {
+    const url = new URL(input.path, 'http://fixture'), path = url.pathname;
+    if (input.method === 'GET' && path !== '/events') reads.push(path);
+    if (path === prefix + '/follow-ups') return {status: 200, data: {version: 1, workspace_id: workspaceId, head_version: 0, intakes: [], next_cursor: null, coverage: {visibility_filtered: false}}};
+    if (path === prefix + '/follow-ups/latest') return {status: 200, data: {version: 1, workspace_id: workspaceId, head_version: 0, intake: null}};
+    if (path === prefix + '/plans/head') return {status: 200, data: {version: 1, head: {workspace_id: workspaceId, version: 0}}};
+    const result = await f.dispatch(input);
+    if (path === '/bootstrap' || path === '/capabilities') (path === '/bootstrap' ? result.data.capabilities : result.data).features.pm_workspaces.follow_up_prepare = true;
+    return result;
+  });
+  await page.goto(pmRoute); await expect(page.locator('[data-discussion-composer]')).toBeEnabled();
+  const related = () => reads.filter(path => /\/(meetings|follow-ups)(\/|$)/.test(path));
+  expect(related()).toHaveLength(0);
+  const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+  await refresh.click(); await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
+  const meetings = page.locator('[data-pm-section=ui_meetings] > details'), follow = page.locator('[data-pm-section=ui_follow_up] > details');
+  await meetings.locator(':scope > summary').click(); await expect.poll(() => related().filter(path => path.includes('/meetings')).length).toBe(2);
+  await meetings.locator(':scope > summary').click();
+  await follow.locator(':scope > summary').click(); await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length).toBe(2);
+  await follow.locator(':scope > summary').click(); reads.length = 0;
+  f.base.state.thread.title = 'Thread event read'; f.publish('pm_thread'); await expect(page.locator('[data-discussion-title]')).toHaveText('Thread event read', {timeout: 10000});
+  await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
+  f.publish('pm_meeting'); await expect.poll(() => related().filter(path => path.includes('/meetings')).length, {timeout: 10000}).toBe(2);
+  expect(related().filter(path => path.includes('/follow-ups'))).toHaveLength(0); reads.length = 0;
+  f.publish('pm_follow_up'); await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length, {timeout: 10000}).toBe(2);
+  expect(related().filter(path => path.includes('/meetings'))).toHaveLength(0);
+  expect(f.base.state.writes).toHaveLength(0); expect(f.meetings.state.writes).toHaveLength(0);
+});

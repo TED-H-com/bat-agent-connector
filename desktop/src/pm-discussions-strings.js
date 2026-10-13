@@ -1,7 +1,7 @@
 export const discussionStrings = {
   en: {
-    pd_save: 'Save', pd_cancel: 'Cancel', pd_finished: 'PM finished', pd_retry: 'Retry', pd_more_context: '{count} more context items',
-    pd_new: 'New discussion', pd_search: 'Search discussions', pd_message: 'Message the PM…', pd_send: 'Send', pd_ask: 'Ask PM',
+    pd_status_unchecked: 'Status not checked', pd_accepted_revision: 'Accepted revision', pd_save: 'Save', pd_cancel: 'Cancel', pd_finished: 'PM finished', pd_retry: 'Retry', pd_more_context: '{count} more context items',
+    pd_new: 'New discussion', pd_search: 'Search', pd_message: 'Message the PM…', pd_send: 'Send', pd_ask: 'Ask PM',
     pd_panel: 'Thread panel', pd_tab_context: 'Context', pd_tab_inputs: 'Inputs', pd_tab_plan: 'Plan', pd_back: 'Back to {view}',
     pd_title: 'Discussion title', pd_rename: 'Rename', pd_unavailable: 'Unavailable', pd_bound_label: 'Originally: {label}',
     pd_not_connected: 'PM agent not connected', pd_setup: 'Set up', pd_working: 'PM is working', pd_proposed: 'Proposed update',
@@ -16,8 +16,8 @@ export const discussionStrings = {
     pm_mode_follow_up: 'Follow-up',
   },
   'zh-TW': {
-    pd_save: '儲存', pd_cancel: '取消', pd_finished: 'PM 已完成', pd_retry: '重試', pd_more_context: '還有 {count} 個脈絡項目',
-    pd_new: '新增討論', pd_search: '搜尋討論', pd_message: '傳訊息給 PM…', pd_send: '傳送', pd_ask: '詢問 PM',
+    pd_status_unchecked: '尚未查詢狀態', pd_accepted_revision: '已採用版本', pd_save: '儲存', pd_cancel: '取消', pd_finished: 'PM 已完成', pd_retry: '重試', pd_more_context: '還有 {count} 個脈絡項目',
+    pd_new: '新增討論', pd_search: '搜尋', pd_message: '傳訊息給 PM…', pd_send: '傳送', pd_ask: '詢問 PM',
     pd_panel: '討論資料', pd_tab_context: '脈絡', pd_tab_inputs: '資訊', pd_tab_plan: '計畫', pd_back: '返回{view}',
     pd_title: '討論標題', pd_rename: '重新命名', pd_unavailable: '無法取得', pd_bound_label: '建立討論時：{label}',
     pd_not_connected: '尚未連接 PM Agent', pd_setup: '設定', pd_working: 'PM 處理中', pd_proposed: '建議更新',
@@ -27,7 +27,7 @@ export const discussionStrings = {
     pd_kind_snapshot: '報告', pd_kind_plan_revision: '計畫', pd_kind_requirement: '需求', pd_kind_milestone: '里程碑',
     pd_kind_work_item: '工作', pd_kind_governance: '決策', pd_kind_finding: '發現', pd_kind_repair: '修復',
     pd_kind_follow_up: '追蹤', pd_kind_proposal: '提案', pd_kind_issue_mapping: '議題', pd_kind_meeting: '會議', pd_kind_lifecycle_transition: '階段',
-    pd_op_waiting_checks: '等待檢查', pd_op_waiting_external: '等待外部結果', pd_op_succeeded: '已完成', pd_op_failed: '失敗', pd_op_cancelled: '已取消', pd_op_needs_attention: '待處理', pd_op_uncertain: '結果不明', pd_op_running: '執行中', pd_op_queued: '排隊中', pd_op_pending: '待處理', pd_op_accepted: '已受理',
+    pd_op_waiting_checks: '等待檢查', pd_op_waiting_external: '等待外部結果', pd_op_succeeded: '已完成', pd_op_failed: '失敗', pd_op_cancelled: '已取消', pd_op_needs_attention: '需要處理', pd_op_uncertain: '結果不明', pd_op_running: '執行中', pd_op_queued: '排隊中', pd_op_pending: '待處理', pd_op_accepted: '已受理',
     pm_mode_refinement: '需求釐清', pm_mode_sprint_planning: 'Sprint 規劃', pm_mode_sprint_review: 'Sprint 審查', pm_mode_retrospective: '回顧改進', pm_mode_maintenance_review: '維護審查', pm_mode_closure_reopen: '結案／重啟',
     pm_mode_follow_up: '追蹤討論',
   },

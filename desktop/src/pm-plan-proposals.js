@@ -1,7 +1,8 @@
 // One reviewed central intent; proposal text never becomes authority by itself.
 import {discussionFeedback} from './pm-discussions.js';
-import {iconButton} from './ui/components.js';
+import {iconButton, statusPill} from './ui/components.js';
 import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
+import {icon} from './ui/icons.js';
 import {structuredAnalysis} from './pm-structured-analysis.js';
 // Proposal freshness has its own safe fallback; generic evidence stays Not available.
 export const proposalReasonLabel = (t, reason) => Object.hasOwn(reasonLabels, reason) ? reasonLabel(t, reason) : t('pd_stale');
@@ -23,15 +24,16 @@ function validRequirements(values,included){
   const ids=new Set(values.map(row=>row.id));return ids.size===values.length&&values.every(row=>included.has(row.source_key)
     &&refs(row.acceptance_keys,included)&&['must','should','could','unresolved'].includes(row.priority)&&refs(row.depends_on,ids,0))&&!cyclic(values);
 }
-export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{}}) {
+export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{},onRevision=()=>{}}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,endpoint=base+'/conversation-proposals',target={workspace_id:workspaceId,thread_id:threadId};
-  let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,ready=false,prepare,adopt;
+  let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,ready=false,prepare,adopt,preferredId=null;
   let candidateFields=[],requirementFields=[],rendered='',visible=false,conflict=false,composerNode=null,ask=null,connection=null,working=null,clock=null,adoptedId=null,reviewShell=false,adapterInitialized=false;
   const enabled=()=>caps()?.features?.pm_workspaces?.conversation_proposals?.version===1;
   const writing=()=>visible&&enabled()&&permitted(false)&&thread()?.capabilities?.write===true&&caps()?.scopes?.includes('manage');
   const deciding=()=>writing()&&permitted(true)&&thread()?.capabilities?.decide===true&&caps()?.scopes?.includes('start')
     &&caps()?.actions?.some(row=>row.action===ADOPT&&row.allowed===true)&&capability?.plan_adoption_available!==false;
   const fresh=()=>!conflict&&active?.adoptable===true;
+  const adopted=()=>active?.adoptable_reason==='adopted';
   const original=()=>{try{return JSON.parse(adopt?.values().review||'null');}catch{return null;}};
   const note=key=>h('p',{class:'muted'},t(key));
   const acceptedDocument=p=>p.context.accepted_plan?.document||p.context.accepted_plan;
@@ -48,7 +50,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     preconditions:()=>({expected_version:thread().thread.version,expected_plan_version:head.version,expected_accepted_revision_id:head.accepted_revision_id}),
     permitted:()=>writing()&&head&&caps()?.scopes?.includes('start')&&runtime.eligible()&&(!adopt?.locked()||adopt?.replaceable?.()),
     recoverPermitted:()=>writing()&&caps()?.scopes?.includes('start'),label:'pcp_prepare',
-    onSaved:async result=>{const id=result?.outcome?.proposal_id||result?.proposal_id;if(id)picker.value=id;await refreshParent?.();await refresh(id);},
+    onSaved:async result=>{const id=result?.outcome?.proposal_id||result?.proposal_id;preferredId=id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh(id);}},
     onStateChange:()=>{if(ready){adopt?.update();updateControls();}},
     extra:h('div',{class:'pm-fields'},labelled('pcp_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pcp_model')),labelled('pcp_model',model)),note('pcp_prepare_help'))});
   const review=hidden(),rationale=input('pcp_rationale',{multiline:true,max:4000});
@@ -57,7 +59,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       return {proposal_id:saved.proposal_id,review:saved.review,rationale:values.rationale};},
     preconditions:()=>{const saved=original();if(!saved?.preconditions)throw fail();return saved.preconditions;},
     permitted:()=>active?.proposal_id!==adoptedId&&deciding()&&fresh()&&active?.validation.status==='format_valid'&&validReview(original()?.review)&&!prepare.locked(),
-    recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;await refreshParent?.();await refresh();if(conversation){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));}},
+    recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}if(conversation){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));}},
     onStateChange:()=>{if(ready)updateControls();},extra:h('div',{},review,content,labelled('pcp_rationale',rationale),note('pcp_review_help'))});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=conversation?iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()}):h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pcp_refresh'));
@@ -119,7 +121,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const reviewButton=adopt.box.querySelector('[data-proposal-review]');if(reviewButton)reviewButton.disabled=!fresh()&&!adopt.locked();
     if(active&&active.validation.status==='format_valid'){
       const rawReason=content.querySelector('[data-proposal-adoptable-reason]');if(rawReason)rawReason.textContent=active.adoptable_reason||'';
-      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?(conversation?'pd_stale':'pcp_stale'):reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';if(reason==='pd_stale'&&!conflict){const label=proposalReasonLabel(t,active.adoptable_reason);if(label!==t('pd_stale'))reasons.textContent+=' · '+label;}reasons.hidden=!reason;const retry=content.querySelector('[data-proposal-again]');if(retry){retry.hidden=fresh();retry.disabled=!prepare.canSubmit();}}
+      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?(conversation?'pd_stale':'pcp_stale'):reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';if(reason==='pd_stale'&&!conflict){const label=proposalReasonLabel(t,active.adoptable_reason);if(label!==t('pd_stale'))reasons.textContent+=' · '+label;}reasons.hidden=!reason;const retry=content.querySelector('[data-proposal-again]');if(retry){retry.hidden=fresh()||adopted();retry.disabled=!prepare.canSubmit();}}
     }
   }
   function saveEditor(title){
@@ -132,9 +134,23 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   function showRemoved(ids){const box=content.querySelector('[data-proposal-removed]');if(!box)return;box.hidden=!ids.length;
     box.replaceChildren(h('h4',{},t('pcp_removed')),note('pcp_removed_help'),h('ul',{},...ids.map(id=>h('li',{},h('strong',{},id),' · ',acceptedDocument(active).requirements.find(row=>row.id===id).text))));}
   function renderReview(){
-    const p=active;if(!p)return;const sig=p.proposal_id+':'+p.document_digest;
+    const p=active;if(!p)return;const sig=p.proposal_id+':'+p.document_digest+':'+(p.adoptable_reason==='adopted'?p.adopted_revision_id:'');
     if(rendered===sig){adopt.update();return;}rendered=sig;candidateFields=[];requirementFields=[];detail.replaceChildren();content.replaceChildren();
     detail.append(h('h4',{},p.document?.title||t('pcp_review')));
+    if(conversation&&adoptedId===p.proposal_id){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));return;}
+    if(conversation&&adopted()){
+      const confirmation=h('div',{'data-proposal-adopted':''},statusPill('adopted'));
+      if(typeof p.adopted_revision_id==='string'&&/^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id))confirmation.append(' · ',h('a',{'data-proposal-adopted-revision':'',href:`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(threadId)}?revision=${encodeURIComponent(p.adopted_revision_id)}`,onclick:event=>{event.preventDefault();onRevision(p.adopted_revision_id);}},t('pd_accepted_revision')));
+      detail.append(h('p',{},p.document?.summary||''),confirmation);
+      if(adopt.locked()){
+        // Central adoption does not erase an unresolved original operation.
+        // Keep only its existing recovery controls in Details, not a new review.
+        adopt.box.firstElementChild.hidden=true;
+        adopt.box.append(adopt.box.querySelector('.actions'));
+        detail.append(h('details',{},h('summary',{},t('pd_details')),adopt.box));
+      }
+      return;
+    }
     if(!conversation&&p.provenance?.adapter)detail.append(h('p',{class:'muted'},t('pm_native_origin'),' ',p.provenance.adapter));
     if(p.validation.status!=='format_valid'){detail.append(note('pcp_invalid'),h('ul',{},...(p.validation.errors||[]).map(error=>h('li',{},String(error)))),h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply)));return;}
     let saved=original();if(saved?.proposal_id!==p.proposal_id){
@@ -173,7 +189,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       for(const field of [include,text,status])field.addEventListener('input',()=>{wording.textContent=text.value;rebuildChoices();saveEditor(title);});
       if(conversation){
         let group=candidateGroups.get(candidate.kind);if(!group){group=h('section',{class:'pd-candidate-group'},h('h4',{},t('pcp_'+candidate.kind)));candidateGroups.set(candidate.kind,group);content.append(group);}
-        item.querySelector('label').remove();summary.replaceChildren(wording);
+        item.querySelector('label').remove();summary.replaceChildren(icon('chevron-right'),wording);
         group.append(h('div',{class:'pd-candidate'},h('label',{'aria-label':t('pcp_include')},include),item));
       }else content.append(item);
     }
@@ -200,7 +216,8 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     content.prepend(h('p',{class:'muted','data-proposal-reason':''}));
     const raw=h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply));
     if(conversation){technical.append(raw);content.append(technical);}else content.append(raw);
-    if(conversation&&adoptedId===p.proposal_id){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));return;}
+    adopt.box.firstElementChild.hidden=false;
+    if(reviewShell) adopt.box.querySelector('[data-proposal-owner-review]').append(adopt.box.querySelector('.actions'));
     detail.append(adopt.box);
     if(conversation&&!reviewShell){
       reviewShell=true;
@@ -220,26 +237,20 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   }
   function page(value,append=false){if(value?.workspace_id!==workspaceId||!Array.isArray(value.proposals)||value.proposals.some(row=>row.thread_id!==threadId||typeof row.proposal_id!=='string'))throw fail();
     const next=value.next_cursor;if(next!==null&&next!==undefined&&(!Number.isInteger(next)||next<1||append&&next<=cursor))throw fail();
-    rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title||t('pd_proposed'),t(row.adoptable===false?'pd_stale':row.validation?.status==='format_valid'?'pcp_proposal':'pcp_invalid')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
+    rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title??t('pd_proposed'),row.adoptable_reason==='adopted'?t('ui_status_adopted'):row.validation?.status!=='format_valid'?proposalReasonLabel(t,'invalid_proposal'):t(row.adoptable===false?'pd_stale':'pcp_proposal')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
     notice.replaceChildren(...(!rows.length?[note('pcp_empty')]:[]),...(cursor!==null?[note('pcp_partial')]:[]));
-  }
-  async function summaries(list){
-    if(list?.workspace_id!==workspaceId||!Array.isArray(list.proposals)||list.proposals.some(row=>row.thread_id!==threadId||typeof row.proposal_id!=='string'))throw fail();
-    const proposals=await Promise.all(list.proposals.map(async row=>{const p=checked(await api('GET',endpoint+'/'+encodeURIComponent(row.proposal_id)));if(p.proposal_id!==row.proposal_id)throw fail();return {...row,title:p.document?.title||t('pcp_invalid'),adoptable:p.adoptable,adoptable_reason:p.adoptable_reason};}));
-    return {...list,proposals};
   }
   async function refresh(preferred){if(!enabled()){withdraw();box.hidden=true;return;}if(loading)return;loading=true;const own=++ticket;updateControls();
     try{const [list,plans]=await Promise.all([api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`),api('GET',base+'/plans?limit=1')]);alive();if(own!==ticket)return;
       if(plans.workspace_id!==workspaceId||!record(plans.head))throw fail();head=plans.head;
-      const detailed=await summaries(list);alive();if(own!==ticket)return;
-      visible=true;box.hidden=false;page(detailed);
-      const id=preferred||original()?.proposal_id||active?.proposal_id||picker.value||(conversation?rows.at(-1)?.proposal_id:null);if(id&&!rows.some(row=>row.proposal_id===id))picker.append(h('option',{value:id},t('pd_proposed')));picker.value=id||'';
+      visible=true;box.hidden=false;page(list);
+      const id=preferred||preferredId||original()?.proposal_id||active?.proposal_id||picker.value||(conversation?rows.at(-1)?.proposal_id:null);if(id&&!rows.some(row=>row.proposal_id===id))picker.append(h('option',{value:id},t('pd_proposed')));picker.value=id||'';preferredId=null;
       // Re-read original sources even if the document digest is unchanged.
       if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();}
     }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));}}
     finally{if(own===ticket||!visible){loading=false;prepare.update();adopt.update();updateControls();}}
   }
-  async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;const detailed=await summaries(result);alive();if(own!==ticket)return;page(detailed,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));}}finally{loading=false;updateControls();}}
+  async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));}}finally{loading=false;updateControls();}}
   function withdraw(){ticket++;visible=false;active=head=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;prepare?.update();adopt?.update();}
   function composer(textarea){
     ask=h('button',{type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{
@@ -250,7 +261,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     connection=h('p',{class:'muted'},h('span',{},t('pd_not_connected')),' · ',h('a',{href:'#/settings'},t('pd_setup')));
     working=h('p',{'data-discussion-working':'',role:'status',class:'muted'});
     composerNode=h('div',{class:'pd-ask'},ask,connection,working);
-    clock=setInterval(()=>{if(composerNode.isConnected&&['running','accepted','queued','pending'].includes(prepare.operation()?.status))updateControls();},1000);
+    clock=setInterval(()=>{if(composerNode.isConnected&&prepare.checking()&&['running','accepted','queued','pending'].includes(prepare.operation()?.status))updateControls();},1000);
     updateControls();return composerNode;
   }
   ready=true;updateControls();

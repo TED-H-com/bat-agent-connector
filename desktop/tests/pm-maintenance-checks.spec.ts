@@ -78,7 +78,7 @@ for(const native of [false,true])test.describe(native?'Native maintenance checks
     f.parent.addPolicy(f.parent.state.policies[0].document.policy);await submit(page).click();await expect(section(page)).toContainText('Check versions changed');
     await expect(section(page).getByRole('button',{name:'Check original request',exact:true})).toBeDisabled();
     await section(page).getByRole('button',{name:'Refresh maintenance checks',exact:true}).click();
-    await section(page).getByRole('button',{name:'Edit a new request',exact:true}).click();await submit(page).click();await expect.poll(()=>f.state.writes.length).toBe(2);
+    await section(page).getByRole('button',{name:'New request',exact:true}).click();await submit(page).click();await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.writes[0].body.preconditions.expected_policy_version).toBe(1);expect(f.state.writes[1].body.preconditions.expected_policy_version).toBe(2);
     expect(f.state.writes[1].idempotency_key).not.toBe(f.state.writes[0].idempotency_key);expect(f.state.ops.size).toBe(1);
   });

@@ -29,8 +29,9 @@ export function planDocument(h, markdown) {
 }
 
 // Immutable central plan revisions, displayed beside the source discussion.
-export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox}) {
-  let head = null, capability = null, signature = '', busy = false;
+export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox, deferReads = false}) {
+  let head = null, capability = null, signature = '', busy = false, active = !deferReads;
+  const readers = new Map();
   const title = input('pm_revision_title', {max: 200, value: thread().thread.title});
   const markdown = input('pm_revision_markdown', {multiline: true, max: 128000, required: false});
   const structure = h('input', {type: 'hidden', value: '{}'}); structure.dataset.pmDefault = '{}';
@@ -136,12 +137,13 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
     }
     // List summaries omit adoption status. Read central evidence before labelling
     // an older revision Historical or Draft; never infer it from its sequence.
-    queueMicrotask(() => {if (item.isConnected) void read();});
+    readers.set(summary.revision_id, read);
+    if (active) queueMicrotask(() => {if (item.isConnected) void read();});
     return item;
   }
 
   function renderRows(page, append = false) {
-    if (!append) rows.replaceChildren();
+    if (!append) {rows.replaceChildren(); readers.clear();}
     rows.append(...(page.revisions || []).map(revisionRow));
     if (!rows.children.length) rows.append(h('p', {class: 'muted'}, t('pm_plan_no_revisions')));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
@@ -160,7 +162,9 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
     }
   }
 
-  return {box, update(page, accepted, capabilities) {
+  return {box, setActive(value) {active = value; if (active) for (const read of readers.values()) void read();},
+    open(id) {const row = [...rows.querySelectorAll('[data-pm-revision]')].find(node => node.dataset.pmRevision === id); if (row) {const control = row.querySelector('[data-pm-revision-open]'); if (control.getAttribute('aria-expanded') !== 'true') control.click(); control.focus();}},
+    update(page, accepted, capabilities) {
     if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t('pm_stale'));
     head = page.head; capability = capabilities; comparison.update(page);
