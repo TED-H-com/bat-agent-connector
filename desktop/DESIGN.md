@@ -203,6 +203,11 @@ browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle reso
 
 ## Overview
 
+Event pages coalesce reads that have not started. Session, task and command events
+do not refresh Overview; work, operation and delivery events refresh its projection
+without rebuilding workspace sections. ACK waits for a post-event read, and an older
+held read cannot block a newer withdrawal.
+
 Overview defaults to the central `pm_overview` live projection. The shared header
 shows the plan title, adoption date, live/report mode and visible lifecycle stage;
 the plan journal sequence is never displayed as a version. Four equal status
@@ -214,20 +219,38 @@ in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
 Attention retains the central severity/age ordering, with exact context identities
-passed to `discussHref`. Reading rows keep focus during refresh. Requirements and
+passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
+by identity within their own part. Cached ages advance with the projection timestamp.
+Overview records its scroll position before a view switch hides it and restores it after
+the destination header has finished laying out. Repeated selection
+of the active view does not scroll. Related inspectors return focus to the destination
+heading; requirement and work links reveal their selection on narrow screens. Requirements and
 work open the existing requirements selection; governance opens its existing Issues
-selection. Attention without a governance record opens its exact central context
+selection. Milestone links select the Schedule projection row only when its milestone and baseline
+revision match. Attention without a governance record opens its exact central context
 in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,
-with three bullets before expansion and an icon disclosure for each source list.
+with three bullets before expansion and a labeled Sources disclosure on each card.
+Report controls use the same report terminology and shared disclosure chevrons;
+the saved history arrows remain together. Narrow attention rows keep age and Discuss
+together in their metadata. Details lists localized source coverage, with raw JSON
+behind a separate Raw coverage disclosure.
 Full plan uses the shared inspector and restores focus on Escape. At 768px the
 charter has two columns; at 390px all regions stack in reading order.
+
+Print includes the status strip and full charter; the saved-charter fallback prints
+inside its Overview region as well. Interactive controls and live attention are omitted.
 
 Report tools retain the existing durable snapshot operation, original-key recovery,
 authorized comparison, history pagination, print and export. Report history loads on
 demand and rereads every loaded page after a refresh. Selecting a report
 replaces the status and charter with that report's fixed content; live attention,
 milestones, delivery rows and phase are absent. Historical snapshots do not contain
-central acceptance counts, so those metrics stay unknown. Back to live rereads the
+central acceptance counts, so those metrics stay unknown with the requirement
+denominator on its own line. Restricted, filtered or truncated reports show Partial
+in both the saved bar and strip; unfinished report history stays explicit. Choosing
+a report shows a loading state. Live decisions distinguish unknown counts from no
+items and link to unlisted decisions. Epoch timestamps use local calendar dates;
+date-only milestone values retain their calendar date. Back to live rereads the
 projection. Source withdrawal invalidates the affected facts and closes their reader;
 late responses cannot restore a prior generation. Preferences store only UI state,
 scoped to connection/principal and workspace. Older servers retain the saved-charter

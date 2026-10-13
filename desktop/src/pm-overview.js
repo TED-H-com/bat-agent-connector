@@ -1,8 +1,8 @@
 import {workspaceCharter, charterSections} from './pm-charter.js';
 import {planDocument} from './pm-plans.js';
 import {discussHref} from './pm-discuss-link.js';
-import {button, iconButton, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
-import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
+import {button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
+import {reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 
@@ -19,13 +19,15 @@ export function workspaceOverview(options) {
   let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
   const parts = new Map(), attentionNodes = new Map();
   let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
-  let mode = preference.mode === 'saved' ? 'saved' : 'live', signature = '', loading = false;
+  let mode = preference.mode === 'saved' ? 'saved' : 'live', signature = '', loading = false, reportLoading = false;
   const primary = h('a', {class: 'ui-button primary', 'data-overview-discuss': ''}, t('wb_discuss'));
   const meta = h('span', {'data-overview-meta': ''});
   const content = h('div'), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
   const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
-  const reportControls = flags => {for (const [key, disabled] of Object.entries(flags)) {
+  const historyHint = h('span', {class: 'ui-meta', hidden: true, 'data-overview-history-partial': ''}, t('ov_partial_history'));
+  const reportPartial = statusPill('partial'); reportPartial.hidden = true;
+  const reportControls = flags => {historyHint.hidden = !flags.historyPartial;for (const [key, disabled] of Object.entries(flags)) {
     const node = savedBar.querySelector(`[data-overview-report-control="${key}"]`); if (node) node.disabled = disabled;
   }};
   const reports = workspaceCharter({...options, onChange: reportChanged, onControls: reportControls});
@@ -38,15 +40,14 @@ export function workspaceOverview(options) {
   const reportLabel = h('span');
   reports.previous.setAttribute('aria-label', t('ov_report_previous'));
   reports.next.setAttribute('aria-label', t('ov_report_next'));
-  savedBar.append(reportLabel,
-    iconButton({icon: 'chevron-left', label: t('ov_report_previous'), 'data-overview-report-control': 'previous', onClick: () => reports.previous.click()}),
-    iconButton({icon: 'chevron-right', label: t('ov_report_next'), 'data-overview-report-control': 'next', onClick: () => reports.next.click()}),
+  reports.previous.dataset.overviewReportControl = 'previous'; reports.next.dataset.overviewReportControl = 'next';
+  savedBar.append(reportLabel, reportPartial, historyHint, h('span', {class: 'pm-overview-report-arrows'}, reports.previous, reports.next),
     button({variant: 'ghost', label: t('ui_compare'), 'data-overview-report-control': 'compare', onClick: () => options.onCompare?.()}), back);
   reportControls(reports.controls());
   const date = value => {
     const parsed = typeof value === 'number' && Number.isFinite(value) ? new Date(value * 1000)
       : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + 'T12:00:00Z') : null;
-    return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || 'zh-TW').toLowerCase().startsWith('zh') ? 'zh-TW' : 'en', {month: 'short', day: 'numeric', timeZone: 'UTC'}) : '—';
+    return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || 'zh-TW').toLowerCase().startsWith('zh') ? 'zh-TW' : 'en', {month: 'short', day: 'numeric', ...(typeof value === 'string' ? {timeZone: 'UTC'} : {})}) : '—';
   };
   const refs = () => {
     const revision = mode === 'saved' ? saved?.baseline?.document_revision : projection?.plan?.revision_id;
@@ -55,12 +56,14 @@ export function workspaceOverview(options) {
   function header() {
     const current = mode === 'saved' ? saved : projection;
     primary.href = discussHref({workspaceId, refs: refs(), title: mode === 'saved' ? saved?.title : projection?.plan?.title, from: 'overview', report: mode === 'saved' ? saved?.snapshot_id : undefined});
-    meta.textContent = mode === 'saved' ? saved ? `${t('ov_report', {n: saved.sequence})} · ${date(saved.as_of)}` : t('ov_not_saved')
+    meta.textContent = mode === 'saved' ? saved ? `${t('ov_report', {n: saved.sequence})} · ${date(saved.as_of)}` : t(reportLoading ? 'ov_loading_report' : 'ov_not_saved')
       : [projection?.plan?.title, projection?.plan?.adopted_at != null ? t('ov_adopted', {date: date(projection.plan.adopted_at)}) : null, t('ov_live')].filter(Boolean).join(' · ');
     const phase = mode === 'live' && current?.lifecycle?.stage;
     onHeader({meta, phase: phaseNames.includes(phase) ? t('ui_phase_' + phase) : null, active});
   }
   function reportChanged(value, event, error) {
+    if (event === 'loading' || event === 'selected') reportLoading = true;
+    if (['updated', 'withdrawn', 'error'].includes(event)) reportLoading = false;
     if (event === 'selected') {mode = preference.mode = 'saved'; saved = null; closeReader(); signature = '';}
     if (event === 'updated') saved = value;
     if (event === 'withdrawn') {saved = null; closeReader(); signature = '';}
@@ -68,24 +71,25 @@ export function workspaceOverview(options) {
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }
-  function discuss(row) {
-    return h('a', {class: 'ui-button ghost ui-sm', 'data-overview-row-discuss': row.key || row.milestone_id,
+  function discuss(row, part = 'attention') {
+    return h('a', {class: 'ui-button ghost ui-sm', 'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`,
       href: discussHref({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from: 'overview'})}, t('ov_discuss'));
   }
-  function open(row) {preference.attention = row.key; onOpen(row.ref, row);}
-  function itemLink(row) {return row ? h('button', {type: 'button', class: 'pm-overview-link', onclick: () => open(row)}, row.title) : null;}
-  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date ? ` → ${date(row.forecast_date)}` : '',
+  function open(row) {onOpen(row.ref, row);}
+  function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
+  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? ` → ${date(row.forecast_date)}` : '',
     row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null);}
   function statusStrip(data, fixed = false) {
     const p = data?.progress, complete = p && classes.every(key => Number.isSafeInteger(p[key]));
     const goalReason = (data?.unknown || []).find(row => row.field === 'plan.goal')?.reason;
     const goal = metric({label: t('ov_goal'), value: data?.plan?.goal ?? '—', context: h('div', {},
-      !data?.plan?.goal ? h('span', {class: 'ui-meta'}, reasonLabel(t, goalReason || 'unknown')) : null,
+      !data?.plan?.goal ? goalReason === 'goal_unconfirmed' ? statusPill('unconfirmed') : !goalReason || goalReason === 'unknown' ? statusPill('unknown') : h('span', {class: 'ui-meta'}, reasonLabel(t, goalReason)) : null,
       h('div', {}, data?.plan?.title || '—'), data?.plan?.adopted_at != null ? h('div', {}, t('ov_adopted', {date: date(data.plan.adopted_at)})) : null)});
     goal.dataset.overviewMetric = 'goal';
+    if (fixed && savedPartial()) goal.append(statusPill('partial'));
     const next = data?.next_milestone;
-    const progress = metric({label: t('ov_progress'), value: !p ? null : complete ? t('ov_accepted', {accepted: p.accepted, total: p.requirements}) : t('ov_requirements', {n: p.requirements}),
-      context: h('div', {}, p && !complete ? statusPill(fixed ? 'unknown' : 'partial') : null,
+    const progress = metric({label: t('ov_progress'), value: !p || fixed ? null : complete ? t('ov_accepted', {accepted: p.accepted, total: p.requirements}) : t('ov_requirements', {n: p.requirements}),
+      context: h('div', {}, fixed && p ? h('div', {}, t('ov_requirements', {n: p.requirements})) : p && !complete ? statusPill('partial') : null,
         !p && (data?.unknown || []).some(row => row.reason === 'no_adopted_plan') ? h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/discussions`}, reasonLabel(t, 'no_adopted_plan')) : null,
         next ? h('div', {class: 'pm-overview-next'}, next.title, h('div', {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: next.delta_days})) : null)) : null),
       bar: complete ? classes.map((key, i) => ({tone: tones[i], value: p[key]})) : null});
@@ -94,7 +98,7 @@ export function workspaceOverview(options) {
     const metrics = ['blocker', 'decision'].map(kind => {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
-        context: h('div', {}, itemLink(first), kind === 'decision' && first ? discuss(first) : null)});
+        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null)});
       node.dataset.overviewMetric = kind; return node;
     });
     return h('div', {class: 'pm-overview-status', 'data-overview-status': ''}, goal, progress, ...metrics);
@@ -130,11 +134,13 @@ export function workspaceOverview(options) {
       }
       const label = ['blocker', 'decision', 'deviation', 'risk'].includes(row.kind) ? t('ov_' + row.kind) : reasonLabel(t, 'unknown');
       const elapsed = age(row.since);
-      const link = h('button', {type: 'button', class: 'pm-overview-attention-main', 'data-overview-open': row.key, onclick: () => open(row)},
+      const link = h('button', {type: 'button', class: 'pm-overview-attention-main', 'data-overview-open': row.key, 'data-overview-link': `attention:${row.key}:open`, onclick: () => open(row)},
         h('span', {class: 'pm-overview-kind', title: label, 'aria-label': label}, icon(row.kind === 'decision' ? 'message-square' : 'circle-alert')),
-        h('span', {}, h('strong', {}, row.title), h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · '))));
+        h('span', {}, h('strong', {}, row.title)));
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
-        elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed), discuss(row));
+        h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · ')),
+          h('span', {class: 'pm-overview-attention-actions'}, elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
+            elapsed === null ? null : h('span', {'aria-hidden': 'true'}, '·'), discuss(row))));
       cached?.node.remove(); attentionNodes.set(row.key, {signature: rowSignature, node});
       rows.insertBefore(node, rows.children[position] || null); position++;
     }
@@ -145,18 +151,18 @@ export function workspaceOverview(options) {
   }
   function sidebar(data) {
     const milestones = sectionCard({title: t('ov_milestones'), body: h('div', {}, ...data.milestones.map(row => h('div', {class: 'pm-overview-milestone', 'data-overview-milestone': row.milestone_id},
-      h('div', {}, itemLink(row), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null,
+      h('div', {}, itemLink(row, 'milestones'), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null,
       data.milestones_truncated ? h('div', {class: 'ui-meta'}, t('ov_showing', {n: data.milestones.length})) : null)});
     const deliveries = sectionCard({title: t(data.recent_deliveries_complete ? 'ov_deliveries' : 'ov_deliveries_loaded'), body: h('div', {},
       ...data.recent_deliveries.map(row => h('div', {class: 'pm-overview-delivery', 'data-overview-delivery': row.work_item_id},
-        itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}), statusPill(row.state))),
+        itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}, 'deliveries'), statusPill(row.state))),
       !data.recent_deliveries.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null)});
     return h('div', {class: 'pm-overview-side'}, milestones, deliveries);
   }
   function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
-  function openRelated(row, host) {
+  function openRelated(row, host, returnFocus) {
     closeReader(); relatedSelection = row;
-    reader = inspector({title: row.title, onClose: () => {reader = null; relatedSelection = null;}});
+    reader = inspector({title: row.title, returnFocus, onClose: () => {reader = null; relatedSelection = null;}});
     reader.classList.add('pm-overview-related'); reader.dataset.overviewRelated = row.key;
     reader.body.append(h('section', {'data-overview-related-row': row.key, 'aria-current': 'true'},
       h('p', {}, t('ov_' + row.kind)), h('p', {}, contextText(row)),
@@ -179,14 +185,19 @@ export function workspaceOverview(options) {
       const rows = groups[key], expanded = preference.expanded?.includes(key);
       const list = h('ul', {class: 'pm-overview-bullets'}, ...rows.map((row, i) => h('li', {hidden: i >= 3 && !expanded}, row.text,
         ['agent_assumption', 'unresolved', 'conflicting'].includes(row.status) ? statusPill('unconfirmed') : null)));
-      const sources = disclosure({label: icon('list-checks'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
+      const sources = disclosure({label: t('ov_sources'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
         body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))});
       sources.classList.add('pm-overview-sources'); sources.querySelector('summary').setAttribute('aria-label', `${t('ov_sources')} · ${t('wb_' + key)}`);
-      sources.querySelector('summary').title = t('ov_sources');
-      const card = sectionCard({title: t('wb_' + key), body: h('div', {}, rows.length ? list : h('span', {class: 'ui-meta'}, t('ov_no_items')), sources)});
+      sources.querySelector('summary').title = t('ov_sources'); sources.querySelector('summary').dataset.overviewLink = `charter:${key}:sources`;
+      const decisions = key === 'decisions' && Object.hasOwn(source, 'decision_count');
+      const count = source?.decision_count;
+      const card = sectionCard({title: t('wb_' + key), body: h('div', {}, rows.length ? list : decisions && count !== 0 ? null : h('span', {class: 'ui-meta'}, t('ov_no_items')),
+        decisions && count === null ? statusPill('unknown') : null,
+        decisions && source.attention_truncated ? statusPill('partial') : null,
+        decisions && count > rows.length ? h('a', {class: 'ui-button ghost ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ov_more', {n: count - rows.length})) : null, sources)});
       card.dataset.charterSection = key;
       if (rows.length > 3) {
-        const more = button({variant: 'ghost', size: 'sm', label: t(expanded ? 'ov_less' : 'ov_more', {n: rows.length - 3}), 'aria-expanded': String(Boolean(expanded)), onClick: () => {
+        const more = button({variant: 'ghost', size: 'sm', label: t(expanded ? 'ov_less' : 'ov_more', {n: rows.length - 3}), 'aria-expanded': String(Boolean(expanded)), 'data-overview-link': `charter:${key}:expand`, onClick: () => {
           const expand = more.getAttribute('aria-expanded') !== 'true'; more.setAttribute('aria-expanded', String(expand));
           [...list.children].forEach((node, i) => {node.hidden = i >= 3 && !expand;}); more.textContent = t(expand ? 'ov_less' : 'ov_more', {n: rows.length - 3});
           const keys = new Set(preference.expanded || []); expand ? keys.add(key) : keys.delete(key); preference.expanded = [...keys];
@@ -195,24 +206,38 @@ export function workspaceOverview(options) {
       grid.append(card);
     }
     return h('section', {'data-pm-charter': '', class: 'pm-overview-charter'}, h('header', {class: 'pm-overview-charter-heading'}, h('h2', {}, t('ov_charter')),
-      button({variant: 'ghost', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', onClick: () => fullPlan(document)})), grid);
+      button({variant: 'ghost', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', 'data-overview-link': 'charter:plan', onClick: () => fullPlan(document)})), grid);
   }
   function details(data, fixed) {
-    const entries = new Map((data?.unknown || []).map(row => [row.reason, row]));
-    for (const source of Object.values(data?.coverage?.sources || {})) if (source.status) entries.set(source.status, {reason: source.status});
+    const knownSources = ['plan', 'plan_candidate', 'work', 'governance', 'quality', 'roadmap', 'forecast', 'proposals', 'findings', 'lifecycle_inflight', 'deliveries', 'projects', 'evidence'];
+    const sourceLabel = key => t('ov_source_' + (knownSources.includes(key.split('.')[0]) ? key.split('.')[0] : 'other'));
+    const reasons = data?.unknown || [], shown = new Set(), lines = [];
+    const reasonText = reason => {if (!reason || shown.has(reason)) return ''; shown.add(reason); return ` · ${reasonLabel(t, reason)}`;};
+    const sources = fixed ? Object.fromEntries(Object.entries(saved?.coverage || {}).filter(([key]) => key.endsWith('_truncated')).map(([key, value]) => [key.slice(0, -10), {complete: !value, status: value ? 'source_limit' : null}])) : data?.coverage?.sources || {};
+    for (const [key, source] of Object.entries(sources)) {
+      const sourceReasons = reasons.filter(row => row.field === key).map(row => row.reason);
+      if (source.status) sourceReasons.push(source.status);
+      lines.push(h('li', {}, sourceLabel(key), ' · ', t(source.complete === true ? 'ov_scan_complete' : 'ui_status_partial'), ...sourceReasons.map(reasonText)));
+    }
+    for (const row of reasons) if (!shown.has(row.reason)) {shown.add(row.reason); lines.push(h('li', {}, reasonLabel(t, row.reason)));}
     const omitted = data?.coverage?.sources?.lifecycle_inflight?.omitted;
+    if (omitted > 0) lines.push(h('li', {}, t('ov_hidden', {n: omitted})));
     return disclosure({label: t('ov_details'), key: `${namespace}:${workspaceId}:overview-details`, body: h('div', {},
-      h('p', {}, t(fixed ? 'ov_saved_limits' : 'ov_caveat')),
-      h('ul', {}, ...[...entries.values()].map(row => h('li', {}, reasonLabel(t, row.reason), Object.hasOwn(reasonLabels, row.reason) ? null : h('code', {}, ` (${row.reason})`))),
-        omitted > 0 ? h('li', {}, t('ov_hidden', {n: omitted})) : null),
-      h('pre', {class: 'pm-brief-proof'}, JSON.stringify(fixed ? {coverage: saved?.coverage, visibility: saved?.visibility, snapshot_id: saved?.snapshot_id} : {coverage: data?.coverage, as_of: data?.as_of}, null, 2)))});
+      h('p', {}, t(fixed ? 'ov_saved_limits' : 'ov_caveat')), h('ul', {'data-overview-coverage': ''}, ...lines),
+      disclosure({label: t('ov_raw_coverage'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(fixed ? {coverage: saved?.coverage, visibility: saved?.visibility, snapshot_id: saved?.snapshot_id, unknown: data?.unknown} : {coverage: data?.coverage, unknown: data?.unknown, as_of: data?.as_of}, null, 2))}))});
   }
+  function savedPartial() {return Boolean(saved?.visibility?.restricted || saved?.visibility?.filtered || Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith('_truncated') && value));}
   function savedData() {
     const document = saved?.baseline?.document;
     const goal = document?.selected_inputs?.find(row => ['value', 'goal', 'problem'].includes(row.slot) && ['user_confirmed', 'repo_evidence'].includes(row.status))?.value;
+    const unknown = [{field: 'progress', reason: 'not_assessed'}];
+    if (!goal) unknown.push({field: 'plan.goal', reason: document?.selected_inputs?.some(row => ['value', 'goal', 'problem'].includes(row.slot)) ? 'goal_unconfirmed' : 'no_explicit_goal'});
+    if (saved?.visibility?.restricted) unknown.push({field: 'visibility', reason: 'restricted'});
+    if (saved?.visibility?.filtered) unknown.push({field: 'visibility', reason: 'filtered'});
+    if (Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith('_truncated') && value)) unknown.push({field: 'coverage', reason: 'source_limit'});
     return {plan: document ? {title: document.title, goal: goal || null, adopted_at: saved.baseline.adoption?.created_at} : null,
       progress: document ? {requirements: new Set((document.requirements || []).map(row => row.id)).size} : null,
-      attention_counts: {blocker: null, decision: null}, attention: [], unknown: [{field: 'progress', reason: 'not_assessed'}]};
+      attention_counts: {blocker: null, decision: null}, attention: [], unknown};
   }
   function commitParts(entries) {
     if (!parts.size) content.replaceChildren();
@@ -222,7 +247,7 @@ export function workspaceOverview(options) {
       let part = parts.get(entry.key);
       const value = JSON.stringify(entry.value);
       if (!part || part.value !== value) {
-        const node = entry.render(); if (part && node !== part.node) part.node.replaceWith(node);
+        const node = entry.render(); node.dataset.overviewPart = entry.key; if (part && node !== part.node) part.node.replaceWith(node);
         part = {node, value}; parts.set(entry.key, part);
       }
       if (content.children[index] !== part.node) content.insertBefore(part.node, content.children[index] || null);
@@ -232,32 +257,42 @@ export function workspaceOverview(options) {
   function render() {
     header(); savedBar.hidden = mode !== 'saved'; box.dataset.overviewMode = mode;
     if (mode === 'saved') {
-      reportLabel.textContent = saved ? `${t('ov_viewing', {n: saved.sequence})} · ${date(saved.as_of)} · ${saved.title || ''}` : t('ov_not_saved');
-      if (!saved) {resetContent(loading ? skeleton(3) : h('p', {}, t('ov_not_saved'))); return;}
+      reportPartial.hidden = !savedPartial();
+      reportLabel.textContent = saved ? `${t('ov_viewing', {n: saved.sequence})} · ${date(saved.as_of)} · ${saved.title || ''}` : t(reportLoading ? 'ov_loading_report' : 'ov_not_saved');
+      if (!saved) {resetContent(reportLoading ? h('div', {}, h('p', {role: 'status'}, t('ov_loading_report')), skeleton(3)) : h('p', {}, t('ov_not_saved'))); return;}
       const next = JSON.stringify(saved);
       if (signature === `saved:${next}`) return;
       signature = `saved:${next}`; closeReader();
-      commitParts([{key: 'status', value: saved, render: () => statusStrip(savedData(), true)}, {key: 'charter', value: saved, render: () => charter(saved)}, {key: 'details', value: saved, render: () => details(null, true)}]); return;
+      commitParts([{key: 'status', value: saved, render: () => statusStrip(savedData(), true)}, {key: 'charter', value: saved, render: () => charter(saved)}, {key: 'details', value: saved, render: () => details(savedData(), true)}]); return;
     }
     if (!projection) {resetContent(loading ? skeleton(4) : statusStrip(null)); return;}
+    // Advance ages without replacing cached rows, changing order or moving focus.
+    for (const row of projection.attention) {
+      const node = attentionNodes.get(row.key)?.node.querySelector('[data-overview-age]'), value = age(row.since);
+      if (node && value !== null && node.textContent !== value) node.textContent = value;
+    }
     // as_of changes on every read. It must not replace reading nodes or their focus.
     const next = JSON.stringify([{...projection, as_of: null}, plan]);
     if (signature === `live:${next}`) return;
     signature = `live:${next}`;
-    const source = {baseline: {document: plan?.document}, brief: {}};
+    const source = {baseline: {document: plan?.document}, brief: {}, decision_count: projection.attention_counts.decision, attention_truncated: projection.attention_truncated};
     // Live decisions come from the projection, never from a previous snapshot.
     source.brief.decisions = {items: projection.attention.filter(row => row.kind === 'decision').map(row => ({text: row.title, source: row.ref}))};
-    const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute('data-overview-open') || document.activeElement?.getAttribute('data-overview-row-discuss') : null;
-    const discussFocused = document.activeElement?.hasAttribute('data-overview-row-discuss');
+    const focused = content.contains(document.activeElement) ? document.activeElement : null;
+    const focusId = focused?.getAttribute('data-overview-link'), focusPart = focused?.closest('[data-overview-part]')?.dataset.overviewPart;
     if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
     const main = attention(projection);
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown], render: () => statusStrip(projection)},
-      {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => h('div', {class: 'pm-overview-columns'}, main, sidebar(projection))},
+      {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => {
+        const columns = parts.get('columns')?.node;
+        if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}
+        return h('div', {class: 'pm-overview-columns'}, main, sidebar(projection));
+      }},
       {key: 'charter', value: source, render: () => charter(source)},
       {key: 'details', value: [projection.coverage, projection.unknown], render: () => details(projection, false)},
     ]);
-    if (focused) content.querySelector(`[${discussFocused ? 'data-overview-row-discuss' : 'data-overview-open'}="${CSS.escape(focused)}"]`)?.focus({preventScroll: true});
+    if (focused && !focused.isConnected && focusId && focusPart) parts.get(focusPart)?.node.querySelector(`[data-overview-link="${CSS.escape(focusId)}"]`)?.focus({preventScroll: true});
   }
   async function refreshLive() {
     const ticket = ++serial; loading = true;
@@ -284,9 +319,12 @@ export function workspaceOverview(options) {
     if (!reportRead) reportRead = reports.refresh().finally(() => {reportRead = null;});
     return reportRead;
   }
-  return {box, primary, meta, reportTools, refresh, withdraw, prepareReports, openRelated, closeRelated: () => {if (relatedSelection) closeReader();},
+  return {box, primary, meta, reportTools, refresh, refreshProjection: () => mode === 'live' ? refreshLive() : undefined, withdraw, prepareReports, openRelated, closeRelated: () => {if (relatedSelection) closeReader();},
     reportActions: {compare: () => {if (mode !== 'saved') {mode = preference.mode = 'saved'; saved = reports.current(); signature = ''; render();} return reports.comparePrevious();}, print: () => window.print()},
-    setActive(value) {if (active === value) {header(); return;} active = value; if (!value) {preference.scroll = window.scrollY; closeReader();} else if (preference.scroll) window.scrollTo(0, preference.scroll); header();},
-    dispose() {serial++; closeReader();},
+    setActive(value) {if (active === value) {header(); return;} active = value;
+      if (!value) {preference.scroll = window.scrollY; closeReader();}
+      else if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
+      header();},
+    dispose() {active = false; serial++; closeReader();},
   };
 }

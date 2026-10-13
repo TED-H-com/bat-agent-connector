@@ -22,7 +22,7 @@ export const lastProjectView = (namespace, workspaceId) => selections.get(JSON.s
 export function rememberWorkspace(namespace, workspaceId) {bounded(workspaces, namespace, workspaceId);}
 export const lastWorkspace = namespace => workspaces.get(namespace);
 export function forgetWorkspace(namespace, workspaceId) {if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);}
-export function projectViews({h, t, namespace, workspaceId, groups, view, onSelect = () => {}}) {
+export function projectViews({h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {}}) {
   const views = groups.map(group => ({...group, id: normalizeProjectView(group.id)})).filter(group => group.sections.length);
   views.sort((a, b) => projectViewIds.indexOf(a.id) - projectViewIds.indexOf(b.id));
   let selected = normalizeProjectView(view || lastProjectView(namespace, workspaceId));
@@ -42,6 +42,10 @@ export function projectViews({h, t, namespace, workspaceId, groups, view, onSele
   }
   function select(id) {
     id = normalizeProjectView(id); if (!buttons.has(id)) return;
+    // Reopen the region after withdrawal without re-running selection effects
+    // (including scrolling). Its source children remain independently withdrawn.
+    if (id === selected) {apply(); return;}
+    beforeSelect(id, selected);
     selected = id; rememberProjectView(namespace, workspaceId, id); apply(); onSelect(id);
   }
   return {element, apply, select, selected: () => selected, views: views.map(group => group.id)};

@@ -21,7 +21,7 @@ export const statusVocabulary = Object.freeze({
   historical: {en: 'Historical', 'zh-TW': '歷史', tone: 'neutral'},
 });
 export const uiStrings = {
-  en: {ui_reason_detail: '{label} ({code})', ui_search_work: 'Search work', ui_report_versions: 'Versions', ui_save_snapshot: 'Save snapshot', ui_compare: 'Compare', ui_print: 'Print', ui_export_brief: 'Export brief', ui_close: 'Close', ui_back: 'Back', ui_retry: 'Retry', ui_remove: 'Remove {text}', ui_loading: 'Loading',
+  en: {ui_reason_detail: '{label} ({code})', ui_search_work: 'Search work', ui_report_versions: 'Versions', ui_save_snapshot: 'Save report', ui_compare: 'Compare', ui_print: 'Print', ui_export_brief: 'Export brief', ui_close: 'Close', ui_back: 'Back', ui_retry: 'Retry', ui_remove: 'Remove {text}', ui_loading: 'Loading',
     ui_more: 'More actions', ui_expand: 'Expand {title}', ui_collapse: 'Collapse {title}',
     ui_overview: 'Overview', ui_discussions: 'Discussions', ui_requirements: 'Requirements', ui_schedule: 'Schedule',
     ui_dependencies: 'Dependencies', ui_issues: 'Issues & changes', ui_agents: 'Agents', ui_board: 'Board',
@@ -37,7 +37,7 @@ export const uiStrings = {
     ui_meetings: 'Meetings', ui_sprints: 'Sprints', ui_follow_up: 'Follow-ups', ui_repairs: 'Maintenance repairs',
     ui_maintenance_review: 'Maintenance review', ui_policy: 'Maintenance policy', ui_baselines: 'Release baselines',
     ui_batches: 'Work batches', ui_observations: 'AHP observations', ui_governance: 'Governance'},
-  'zh-TW': {ui_reason_detail: '{label}（{code}）', ui_search_work: '搜尋工作', ui_report_versions: '版本', ui_save_snapshot: '儲存快照', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出摘要', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
+  'zh-TW': {ui_reason_detail: '{label}（{code}）', ui_search_work: '搜尋工作', ui_report_versions: '版本', ui_save_snapshot: '儲存報告', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出摘要', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
     ui_more: '更多操作', ui_expand: '展開{title}', ui_collapse: '收合{title}',
     ui_overview: '專案總覽', ui_discussions: '討論', ui_requirements: '需求', ui_schedule: '時程',
     ui_dependencies: '技術相依', ui_issues: '問題與變更', ui_agents: 'Agent 資源', ui_board: '工作看板',
@@ -144,6 +144,7 @@ export const reasonLabels = Object.freeze({
   inconsistent_dates: ['End precedes start; end omitted', '結束早於開始，已省略結束日期'],
   mapping_page_truncated: ['Some issues were not loaded', '部分議題尚未載入'],
   issue_title_unavailable: ['Issue title unavailable', '無法取得議題標題'],
+  restricted: ['Restricted sources', '來源受限'], filtered: ['Some sources hidden', '部分來源已隱藏'],
   no_explicit_goal: ['Not set', '未設定'], goal_unconfirmed: ['Unconfirmed', '待確認'],
   no_adopted_plan: ['No adopted plan', '尚無已採用計畫'],
   source_limit: ['Partial', '部分'], partial_page: ['Partial', '部分'],

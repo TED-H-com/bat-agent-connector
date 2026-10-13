@@ -21,7 +21,7 @@ export function overview(project: DemoProject) {
   });
   const next = milestones.find((row: any) => row.milestone_id === 'recovery_review');
   return {version: 1, workspace_id: ids.workspaceId, as_of: unix(project.now), lifecycle: {stage: 'development', since: unix(project.now, -9)},
-    plan: {revision_id: plan.revision_id, number: plan.sequence, title: plan.document.title, goal: copy.goal, adopted_at: plan.adoption.created_at, adopted_by: ids.actor},
+    plan: {revision_id: plan.revision_id, number: plan.sequence, title: plan.document.title, goal: plan.document.selected_inputs.find(row => row.slot === 'goal' && row.status === 'user_confirmed')?.value ?? null, adopted_at: plan.adoption.created_at, adopted_by: ids.actor},
     progress: {basis: {revision_id: ids.planV3}, requirements: 8, accepted: 3, in_review: 1, in_progress: 2, blocked: 1, not_started: 1, complete: true, unknown_reason: null},
     next_milestone: next, milestones, milestones_truncated: false,
     attention: [row('blocker', copy.blocker, 1, 5, ids.requirements.audit), row('decision', copy.decisions.budget, 2, 4), row('decision', copy.decisions.lockout, 3, 3),

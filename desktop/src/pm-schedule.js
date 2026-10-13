@@ -3,7 +3,7 @@ import {t} from './i18n.js';
 import {button, segmented, statusPill, inspector, disclosure, emptyState, skeleton, inlineError} from './ui/components.js';
 import {viewState} from './ui/view-state.js';
 import {reasonLabel} from './ui/ui-strings.js';
-import {DAY, ZOOM, firstLine, dayNumber, spans, milestoneDelta, readSchedule, scheduleTree} from './pm-schedule-model.js';
+import {DAY, ZOOM, firstLine, dayNumber, spans, milestoneDelta, readSchedule, scheduleTree, scheduleRef} from './pm-schedule-model.js';
 import {render as renderInspector, rowStatus} from './pm-schedule-inspector.js';
 
 export function workspaceSchedule({api, alive, namespace, workspaceId, canRead}) {
@@ -227,7 +227,20 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       withdraw(); error.append(inlineError({error: t(failure.message === 'PM_SCHEDULE_CHANGED' ? 'sched_changed' : 'sched_error'), retry: refresh}));
     }
   }
-  return {element, refresh, withdraw, setActive(value) {
+  async function openRef(ref) {
+    if (!data) await refresh();
+    if (!active || !data) return;
+    const row = data.rows.find(row => {const identity = scheduleRef(row, data);
+      return identity?.kind === ref.kind && identity.id === ref.id && identity.revision_id === ref.revision_id;});
+    if (!row) return;
+    let parent = row.parent_id;
+    const visited = new Set();
+    while (parent && !visited.has(parent)) {visited.add(parent); collapsed.delete(parent); parent = data.rows.find(row => row.id === parent)?.parent_id;}
+    draw(); focusRow(row.id);
+    const opener = element.querySelector(`[data-schedule-select="${CSS.escape(row.id)}"]`);
+    opener?.scrollIntoView({block: 'nearest'}); select(row.id, opener);
+  }
+  return {element, refresh, withdraw, openRef, setActive(value) {
     active = value;
     if (!value) {saveScroll(); closePanel(false);} else if (data) {restoreScroll(); showPanel();}
   }, dispose() {saveScroll(); remember(); active = false; serial++; closePanel(false); data = null;}};

@@ -2,6 +2,7 @@ import {discussionContext, discussionLabel, discussionPanel, discussionDom, disc
 import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {viewState} from './ui/view-state.js';
+import {settleRefreshes} from './state/events.ts';
 import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
@@ -319,12 +320,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           if (register) openIssueTool('ui_governance');
           await governance?.openRef?.(ref);
         }
+        else if (ref.kind === 'milestone' && destination === 'schedule' && schedule) await schedule.openRef(ref);
         else if (ref.kind === 'milestone' && destination === 'schedule') {
           const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
-        } else brief?.openRelated?.(row, main);
+        } else {const returnFocus = heading.querySelector('h1'); returnFocus.tabIndex = -1; brief?.openRelated?.(row, main, returnFocus);}
       },
-      onDiscuss: () => {location.hash = discussHref({workspaceId, from: 'overview'});}})
+      ...(!liveOverview ? {onDiscuss: () => {location.hash = discussHref({workspaceId, from: 'overview'});}} : {})})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element||content);
   const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines
@@ -458,7 +460,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const node of brief.box.querySelectorAll(':scope > details, :scope > [data-pm-brief-export]')) reportTools.append(node);
     drawersHome.append(reportTools);
   }
-  const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down'}), items: [
+  const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down', iconPosition: 'end'}), items: [
     {key: 'versions', label: t('ui_report_versions'), onSelect: () => openPanel(t('ui_report'), reportTools)},
     {label: t('ui_save_snapshot'), onSelect: () => openPanel(t('ui_report'), reportTools)},
     ...(charter ? [{label: t('ui_compare'), onSelect: () => {if (brief?.reportActions) {openPanel(t('ui_compare'), reportTools); void brief.prepareReports().then(() => brief.reportActions.compare());} else reportTools.querySelector('button[data-report-compare]')?.click();}},
@@ -538,7 +540,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       groups.push({id, sections: [region]});
     }
     let shownView = null;
-    workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
+    workbench = projectViews({h, t, namespace, workspaceId, view, groups, beforeSelect: (_id, previous) => {if (previous === 'overview') brief?.setActive?.(false);}, onSelect: id => {
       if (shownView === 'issues' && id !== 'issues') register?.rememberScroll();
       if (id !== 'issues') brief?.closeRelated?.();
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents'); schedule?.setActive(id === 'schedule');
@@ -1004,25 +1006,31 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
   if (sendHandoff?.threadId === threadId && noteForm && !noteForm.locked()) setTimeout(() => {if (!disposed) void noteForm.submit();}, 0);
   if (openCreate || !workspaceId && !lastList.length) showCreate();
-  let eventReads = Promise.resolve();
+  // Coalesce only reads that have not started. Every event's ACK waits for a
+  // post-event read, while a held older read cannot block a newer withdrawal.
+  const pendingReads = new Map();
+  function eventRead(key, read) {
+    if (!pendingReads.has(key)) pendingReads.set(key, Promise.resolve().then(() => {
+      pendingReads.delete(key); alive(); return read();
+    }));
+    return pendingReads.get(key);
+  }
   const off = onEvents(event => {
     if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair','pm_ahp_observation','pm_dependencies'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
-      eventReads = eventReads.catch(() => {}).then(() => load());
-      return eventReads;
+      return eventRead(load, load);
     }
-    if(handoff&&['project','work_item'].includes(event.resource_type)) {
-      eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
+    const reads = [], kind = event.resource_type;
+    if (liveOverview && ['work_item', 'operation', 'deployment', 'integration'].includes(kind))
+      reads.push(eventRead(brief, () => brief?.refreshProjection?.()));
+    if (handoff && kind === 'project') reads.push(eventRead(load, load));
+    if (handoff && kind === 'work_item') reads.push(eventRead(handoff, () => handoff.refresh()));
+    const deliveryEvent = ['operation', 'deployment', 'integration'].includes(kind);
+    if (deliveryEvent || ['work_item', 'project', 'task', 'command', 'session'].includes(kind)) {
+      for (const section of [...(deliveryEvent ? [deliveries, workBatches] : []), qualityReviews, maintenanceRepairs, kanban, traceability, schedule])
+        if (section) reads.push(eventRead(section, () => section.refresh()));
     }
-    // Refresh live projections together without locking the workspace Refresh control.
-    // A held row read must still permit a newer read to withdraw its source.
-    if ((liveOverview||deliveries||workBatches||qualityReviews||maintenanceRepairs||schedule) && ['operation','deployment','integration'].includes(event.resource_type)) {
-      eventReads=eventReads.catch(()=>{}).then(async()=>{if (liveOverview) await brief?.refresh();await deliveries?.refresh();await workBatches?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});return eventReads;
-    }
-    if ((liveOverview||kanban||qualityReviews||maintenanceRepairs||schedule) && ['work_item', 'project', 'task', 'command', 'operation', 'session'].includes(event.resource_type)) {
-      eventReads = eventReads.catch(() => {}).then(async () => {if (liveOverview) await brief?.refresh();await qualityReviews?.refresh();await maintenanceRepairs?.refresh();await kanban?.refresh();await traceability?.refresh();await schedule?.refresh();});
-      return eventReads;
-    }
+    return settleRefreshes(reads);
   });
   const dispose = () => {
     uiState.listScroll = workspaceList.scrollTop;

@@ -56,6 +56,22 @@ var overviewStrings = {
 		ov_showing: "Showing {n}",
 		ov_view_all: "View all in Issues & changes",
 		ov_no_items: "None recorded",
+		ov_raw_coverage: "Raw coverage",
+		ov_scan_complete: "Complete",
+		ov_source_plan: "Plan",
+		ov_source_plan_candidate: "Plan proposal",
+		ov_source_work: "Work",
+		ov_source_governance: "Issues & changes",
+		ov_source_quality: "Acceptance",
+		ov_source_roadmap: "Milestones",
+		ov_source_forecast: "Forecast",
+		ov_source_proposals: "Decisions",
+		ov_source_findings: "Findings",
+		ov_source_lifecycle_inflight: "Pending operations",
+		ov_source_deliveries: "Deliveries",
+		ov_source_projects: "Projects",
+		ov_source_evidence: "Evidence",
+		ov_source_other: "Other sources",
 		ov_details: "Details",
 		ov_sources: "Sources",
 		ov_hidden: "{n} hidden",
@@ -81,11 +97,9 @@ var overviewStrings = {
 		ov_minute: "{n}m",
 		ov_delta: "+{n}d",
 		ov_partial_history: "More reports available",
-		ov_no_goal: "Not set",
-		ov_plan_unavailable: "Plan unavailable",
+		ov_loading_report: "Loading report…",
 		ov_report_previous: "Previous report",
-		ov_report_next: "Next report",
-		ov_plan_discussion: "Plan in Discussions"
+		ov_report_next: "Next report"
 	},
 	"zh-TW": {
 		ov_live: "即時",
@@ -106,6 +120,22 @@ var overviewStrings = {
 		ov_showing: "顯示 {n} 筆",
 		ov_view_all: "在問題與變更查看全部",
 		ov_no_items: "尚無紀錄",
+		ov_raw_coverage: "原始涵蓋資料",
+		ov_scan_complete: "完整",
+		ov_source_plan: "計畫",
+		ov_source_plan_candidate: "計畫提案",
+		ov_source_work: "工作",
+		ov_source_governance: "問題與變更",
+		ov_source_quality: "驗收",
+		ov_source_roadmap: "里程碑",
+		ov_source_forecast: "預測",
+		ov_source_proposals: "待決事項",
+		ov_source_findings: "檢查結果",
+		ov_source_lifecycle_inflight: "待核對操作",
+		ov_source_deliveries: "交付",
+		ov_source_projects: "專案",
+		ov_source_evidence: "證據",
+		ov_source_other: "其他來源",
 		ov_details: "詳細資訊",
 		ov_sources: "來源",
 		ov_hidden: "{n} 筆已隱藏",
@@ -131,11 +161,9 @@ var overviewStrings = {
 		ov_minute: "{n} 分鐘",
 		ov_delta: "+{n} 天",
 		ov_partial_history: "還有其他報告",
-		ov_no_goal: "未設定",
-		ov_plan_unavailable: "無法取得計畫",
+		ov_loading_report: "正在載入報告…",
 		ov_report_previous: "上一份報告",
-		ov_report_next: "下一份報告",
-		ov_plan_discussion: "在討論中查看計畫"
+		ov_report_next: "下一份報告"
 	}
 };
 //#endregion
@@ -334,7 +362,7 @@ var uiStrings = {
 		ui_reason_detail: "{label} ({code})",
 		ui_search_work: "Search work",
 		ui_report_versions: "Versions",
-		ui_save_snapshot: "Save snapshot",
+		ui_save_snapshot: "Save report",
 		ui_compare: "Compare",
 		ui_print: "Print",
 		ui_export_brief: "Export brief",
@@ -407,7 +435,7 @@ var uiStrings = {
 		ui_reason_detail: "{label}（{code}）",
 		ui_search_work: "搜尋工作",
 		ui_report_versions: "版本",
-		ui_save_snapshot: "儲存快照",
+		ui_save_snapshot: "儲存報告",
 		ui_compare: "比較",
 		ui_print: "列印",
 		ui_export_brief: "匯出摘要",
@@ -565,6 +593,8 @@ var reasonLabels = Object.freeze({
 	inconsistent_dates: ["End precedes start; end omitted", "結束早於開始，已省略結束日期"],
 	mapping_page_truncated: ["Some issues were not loaded", "部分議題尚未載入"],
 	issue_title_unavailable: ["Issue title unavailable", "無法取得議題標題"],
+	restricted: ["Restricted sources", "來源受限"],
+	filtered: ["Some sources hidden", "部分來源已隱藏"],
 	no_explicit_goal: ["Not set", "未設定"],
 	goal_unconfirmed: ["Unconfirmed", "待確認"],
 	no_adopted_plan: ["No adopted plan", "尚無已採用計畫"],
@@ -3075,17 +3105,17 @@ var workbenchStrings = {
 		wb_governance: "Issues, actions & changes",
 		wb_unknown: "To be confirmed",
 		wb_sources: "Sources and coverage",
-		wb_previous: "Previous summary",
-		wb_next: "Next summary",
-		wb_history: "Summary version",
-		wb_history_more: "Load more summary versions",
-		wb_snapshot: "Summary #{number}",
-		wb_historical: "Historical summary",
-		wb_saved: "Saved summary",
+		wb_previous: "Previous report",
+		wb_next: "Next report",
+		wb_history: "Report version",
+		wb_history_more: "Load more report versions",
+		wb_snapshot: "Report #{number}",
+		wb_historical: "Historical report",
+		wb_saved: "Saved report",
 		wb_plan: "Referenced plan",
 		wb_full_plan: "Full plan",
-		wb_compare: "Compare with previous summary",
-		wb_print: "Print summary",
+		wb_compare: "Compare with previous report",
+		wb_print: "Print report",
 		wb_discuss: "Discuss with PM",
 		wb_review: "Review plan updates",
 		wb_definition: "Purpose & success",
@@ -3094,15 +3124,15 @@ var workbenchStrings = {
 		wb_resources: "Resources & budget",
 		wb_risks: "Risks & dependencies",
 		wb_decisions: "Open decisions",
-		wb_no_snapshot: "Start a discussion with PM, then save a summary of the available information. Incomplete information is welcome.",
-		wb_no_plan: "No adopted plan in this summary",
+		wb_no_snapshot: "Start a discussion with PM, then save a report of the available information. Incomplete information is welcome.",
+		wb_no_plan: "No adopted plan in this report",
 		wb_quota: "Usage and remaining quota: not provided",
-		wb_no_decisions: "No open decisions recorded in this summary.",
+		wb_no_decisions: "No open decisions recorded in this report.",
 		wb_partial: "Some sources are missing, filtered or outside the loaded range.",
-		wb_comparison: "Summary changes",
-		wb_before: "Previous summary",
-		wb_after: "Selected summary",
-		wb_unchanged: "No changes in the six summary sections.",
+		wb_comparison: "Report changes",
+		wb_before: "Previous report",
+		wb_after: "Selected report",
+		wb_unchanged: "No changes in the six report sections.",
 		wb_loading: "Reading saved sources…",
 		wb_current: "Current records",
 		wb_requirements: "Requirement",
@@ -3144,13 +3174,13 @@ var workbenchStrings = {
 		wb_plan_changed: "The plan changed while reading. Refresh to read one consistent plan version.",
 		wb_catalogue: "{requirements} requirements · {work} distinct loaded work items",
 		wb_no_phase: "Phase associations are not recorded in these sources.",
-		wb_partial_history: "More summary versions are available. Load them to navigate beyond this range.",
+		wb_partial_history: "More report versions are available. Load them to navigate beyond this range.",
 		wb_approved_by: "Adopted by {actor}",
 		wb_detail_loading: "Reading the selected work and its delivery records…"
 	},
 	"zh-TW": {
 		wb_navigation: "專案視圖",
-		wb_charter: "專案總覽",
+		wb_charter: "專案報告",
 		wb_rtm: "需求與交付追溯",
 		wb_board: "工作看板",
 		wb_workspace: "工作空間",
@@ -3159,17 +3189,17 @@ var workbenchStrings = {
 		wb_governance: "問題、行動與變更",
 		wb_unknown: "待確認",
 		wb_sources: "來源與涵蓋範圍",
-		wb_previous: "上一份總覽",
-		wb_next: "下一份總覽",
-		wb_history: "總覽版本",
-		wb_history_more: "載入更多總覽版本",
-		wb_snapshot: "總覽 #{number}",
-		wb_historical: "歷史總覽",
-		wb_saved: "已保存總覽",
+		wb_previous: "上一份報告",
+		wb_next: "下一份報告",
+		wb_history: "報告版本",
+		wb_history_more: "載入更多報告版本",
+		wb_snapshot: "報告 #{number}",
+		wb_historical: "歷史報告",
+		wb_saved: "已保存報告",
 		wb_plan: "引用的計畫",
 		wb_full_plan: "完整計畫",
-		wb_compare: "與上一份總覽比較",
-		wb_print: "列印總覽",
+		wb_compare: "與上一份報告比較",
+		wb_print: "列印報告",
 		wb_discuss: "與 PM 討論",
 		wb_review: "審閱計畫更新",
 		wb_definition: "目的與成功條件",
@@ -3178,14 +3208,14 @@ var workbenchStrings = {
 		wb_resources: "資源與預算",
 		wb_risks: "風險與相依",
 		wb_decisions: "待決事項",
-		wb_no_snapshot: "先與 PM 討論，再保存目前資訊的總覽。資訊不完整也可以開始。",
-		wb_no_plan: "這份總覽尚無已採用計畫",
+		wb_no_snapshot: "先與 PM 討論，再保存目前資訊的報告。資訊不完整也可以開始。",
+		wb_no_plan: "這份報告尚無已採用計畫",
 		wb_quota: "用量與剩餘配額：來源未提供",
-		wb_no_decisions: "這份總覽尚未記錄待決事項。",
+		wb_no_decisions: "這份報告尚未記錄待決事項。",
 		wb_partial: "部分來源缺少、已過濾，或尚未載入。",
-		wb_comparison: "總覽變更",
-		wb_before: "上一份總覽",
-		wb_after: "選取的總覽",
+		wb_comparison: "報告變更",
+		wb_before: "上一份報告",
+		wb_after: "選取的報告",
 		wb_unchanged: "六個摘要區塊沒有變更。",
 		wb_loading: "正在讀取已保存來源…",
 		wb_current: "目前紀錄",
@@ -3228,7 +3258,7 @@ var workbenchStrings = {
 		wb_plan_changed: "讀取期間計畫已變更，請重新整理以核對同一版本。",
 		wb_catalogue: "{requirements} 條需求・{work} 筆已載入工作（依身分去重）",
 		wb_no_phase: "這些來源尚未記錄階段關聯。",
-		wb_partial_history: "還有其他總覽版本，載入後可繼續切換。",
+		wb_partial_history: "還有其他報告版本，載入後可繼續切換。",
 		wb_approved_by: "核准者：{actor}",
 		wb_detail_loading: "正在讀取選定工作與交付紀錄…"
 	}
@@ -4493,17 +4523,17 @@ var followUpAnalysisStrings = {
 var briefExportStrings = {
 	en: {
 		pm_export_title: "Download this Project Brief",
-		pm_export_help: "Use this selected snapshot for a report or visual. Its source time and unassessed areas remain visible.",
+		pm_export_help: "Export the selected report as a document or visual. Its source time and unassessed areas remain visible.",
 		pm_export_format: "File format",
 		pm_export_language: "Report language",
 		pm_export_save: "Save report…",
 		pm_export_download: "Download report",
 		pm_export_changed: "The report or its readable sources changed. Refresh the Brief before downloading.",
-		pm_export_reading: "Checking this snapshot and report…",
+		pm_export_reading: "Checking report sources…",
 		pm_export_native_unavailable: "This desktop version does not support saving Brief reports. Use the browser dashboard or an updated client.",
 		pm_export_cancelled: "Save cancelled.",
 		pm_export_saved: "Saved",
-		pm_export_requested: "Download requested for the selected snapshot.",
+		pm_export_requested: "Download requested for the selected report.",
 		pm_export_prior_saved: "The earlier report save finished. Check the destination selected for that report.",
 		pm_export_unavailable: "The report is no longer available to this connection. Refresh the Brief.",
 		pm_export_interrupted: "The save could not be confirmed. Check the selected destination before trying again.",
@@ -4512,17 +4542,17 @@ var briefExportStrings = {
 	},
 	"zh-TW": {
 		pm_export_title: "下載這份專案摘要",
-		pm_export_help: "將選定快照製成報告或圖表，保留來源時間與尚未評估的部分。",
+		pm_export_help: "將選定報告匯出為文件或圖表，保留來源時間與尚未評估的部分。",
 		pm_export_format: "檔案格式",
 		pm_export_language: "報告語言",
 		pm_export_save: "儲存報告…",
 		pm_export_download: "下載報告",
 		pm_export_changed: "報告或可讀來源已變更，請重新整理專案總覽再下載。",
-		pm_export_reading: "核對這份快照與報告…",
+		pm_export_reading: "正在核對報告來源…",
 		pm_export_native_unavailable: "這個桌面版本尚未支援儲存專案摘要，請使用網頁 Dashboard 或更新後的 client。",
 		pm_export_cancelled: "已取消儲存。",
 		pm_export_saved: "已儲存",
-		pm_export_requested: "已要求下載選定快照的報告。",
+		pm_export_requested: "已要求下載選定報告。",
 		pm_export_prior_saved: "先前報告的儲存已完成，請查看當時選定的目的地。",
 		pm_export_unavailable: "目前連線已無法取得這份報告，請重新整理專案總覽。",
 		pm_export_interrupted: "尚無法確認儲存結果，重試前請先檢查選定的目的地。",
@@ -5436,14 +5466,14 @@ var pmStrings = {
 		pm_roadmap_saved_choice: "Previously selected item",
 		pm_brief_title: "Project Brief",
 		pm_brief_intro: "Goals, delivery, blockers, deviations and decisions from the same saved sources.",
-		pm_brief_snapshot_title: "Snapshot title",
-		pm_brief_name_optional: "Name this snapshot (optional)",
-		pm_brief_create: "Save project snapshot",
-		pm_brief_history: "Earlier project snapshots",
-		pm_brief_more: "More snapshots",
-		pm_brief_empty: "No project snapshot has been saved yet.",
+		pm_brief_snapshot_title: "Report title",
+		pm_brief_name_optional: "Name this report (optional)",
+		pm_brief_create: "Save report",
+		pm_brief_history: "Earlier reports",
+		pm_brief_more: "More reports",
+		pm_brief_empty: "No report has been saved yet.",
 		pm_brief_as_of: "As of {time}",
-		pm_brief_fixed: "This view preserves its original plan and evidence. New activity appears in a new snapshot.",
+		pm_brief_fixed: "This view preserves its original plan and evidence. New activity appears in a new report.",
 		pm_brief_goals: "Goals",
 		pm_brief_delivery: "Delivery",
 		pm_brief_blockers: "Blockers",
@@ -5457,14 +5487,14 @@ var pmStrings = {
 		pm_brief_status_unassessed: "Not yet assessed",
 		pm_brief_status_recorded_sources: "Recorded decisions and open questions",
 		pm_brief_empty_goals: "No accepted goal source is available.",
-		pm_brief_empty_delivery: "No delivery evidence is recorded in this snapshot.",
+		pm_brief_empty_delivery: "No delivery evidence is recorded in this report.",
 		pm_brief_empty_blockers: "No blocker is established by the included sources. This does not prove the project is unblocked.",
 		pm_brief_empty_deviations: "The baseline and results have not been evaluated for drift.",
 		pm_brief_empty_decisions: "No adopted decision or unresolved plan input is included.",
 		pm_brief_plan_source: "Source in the fixed plan",
 		pm_brief_decision_source: "Recorded plan adoption",
-		pm_brief_coverage: "Source coverage and snapshot record",
-		pm_brief_filtered: "Source visibility is checked when this snapshot is read; restricted facts are omitted.",
+		pm_brief_coverage: "Source coverage and report record",
+		pm_brief_filtered: "Source visibility is checked when this report is read; restricted facts are omitted.",
 		pm_evidence_state_accepted: "Accepted for execution",
 		pm_evidence_state_queued: "Queued",
 		pm_evidence_state_dispatching: "Dispatching",
@@ -5784,14 +5814,14 @@ var pmStrings = {
 		pm_roadmap_saved_choice: "先前選定的項目",
 		pm_brief_title: "專案總覽",
 		pm_brief_intro: "以同一份已保存來源，整理目標、交付、阻塞、偏差與決策。",
-		pm_brief_snapshot_title: "快照名稱",
-		pm_brief_name_optional: "命名這份快照（選填）",
-		pm_brief_create: "儲存專案現況",
-		pm_brief_history: "先前的專案快照",
-		pm_brief_more: "更多快照",
-		pm_brief_empty: "尚未保存專案現況快照。",
+		pm_brief_snapshot_title: "報告名稱",
+		pm_brief_name_optional: "命名這份報告（選填）",
+		pm_brief_create: "儲存報告",
+		pm_brief_history: "先前的報告",
+		pm_brief_more: "更多報告",
+		pm_brief_empty: "尚未儲存報告。",
 		pm_brief_as_of: "截至 {time}",
-		pm_brief_fixed: "這份總覽保留當時的計畫與證據；後續變化會出現在新的快照。",
+		pm_brief_fixed: "這份報告保留當時的計畫與證據；後續變化會出現在新的報告。",
 		pm_brief_goals: "目標",
 		pm_brief_delivery: "交付",
 		pm_brief_blockers: "阻塞",
@@ -5805,13 +5835,13 @@ var pmStrings = {
 		pm_brief_status_unassessed: "尚未評估",
 		pm_brief_status_recorded_sources: "已記錄的決策與未決問題",
 		pm_brief_empty_goals: "目前沒有可用的已採用目標來源。",
-		pm_brief_empty_delivery: "此快照尚無交付證據。",
+		pm_brief_empty_delivery: "此報告尚無交付證據。",
 		pm_brief_empty_blockers: "納入的來源尚未證實存在阻塞；這不代表專案沒有阻塞。",
 		pm_brief_empty_deviations: "尚未對基準與成果進行偏差評估。",
-		pm_brief_empty_decisions: "此快照未納入採用決策或計畫未決事項。",
+		pm_brief_empty_decisions: "此報告未納入採用決策或計畫未決事項。",
 		pm_brief_plan_source: "固定計畫中的來源",
 		pm_brief_decision_source: "已記錄的計畫採用",
-		pm_brief_coverage: "來源涵蓋範圍與快照紀錄",
+		pm_brief_coverage: "來源涵蓋範圍與報告紀錄",
 		pm_brief_filtered: "查閱時會重新核對來源可見性；受限事實不會顯示。",
 		pm_evidence_state_accepted: "已受理執行",
 		pm_evidence_state_queued: "排隊中",
@@ -9490,13 +9520,13 @@ function icon(name, { label, size = 16 } = {}) {
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
 var nodeIcon = (icon$1) => typeof icon$1 === "string" ? icon(icon$1) : icon$1;
-function button({ variant = "secondary", size = "md", icon, label, onClick, ...attrs } = {}) {
+function button({ variant = "secondary", size = "md", icon, iconPosition = "start", label, onClick, ...attrs } = {}) {
 	return h$1("button", {
 		type: "button",
 		class: `ui-button ${variant} ui-${size}`,
 		onclick: onClick,
 		...attrs
-	}, nodeIcon(icon), label);
+	}, iconPosition === "end" ? null : nodeIcon(icon), label, iconPosition === "end" ? nodeIcon(icon) : null);
 }
 function iconButton({ icon, label, ...attrs }) {
 	return button({
@@ -9733,8 +9763,8 @@ function trapFocus(root, event) {
 		first.focus();
 	}
 }
-function inspector({ title, onClose = () => {} }) {
-	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
+function inspector({ title, onClose = () => {}, returnFocus = document.activeElement }) {
+	const media = matchMedia("(min-width: 1200px)"), titleId = uid();
 	const body = h$1("div", { class: "ui-inspector-body" });
 	const closeButton = iconButton({
 		icon: "x",
@@ -9796,7 +9826,7 @@ function inspector({ title, onClose = () => {} }) {
 		document.removeEventListener("keydown", keys);
 		media.removeEventListener("change", resize);
 		onClose();
-		if (opener?.isConnected) opener.focus();
+		if (returnFocus?.isConnected && returnFocus.getClientRects().length && !returnFocus.closest("[hidden], [inert]")) returnFocus.focus();
 	}
 	queueMicrotask(() => {
 		if (closed || !root.isConnected) return;
@@ -9939,7 +9969,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
+function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -9973,6 +10003,11 @@ function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect =
 	function select(id) {
 		id = normalizeProjectView(id);
 		if (!buttons.has(id)) return;
+		if (id === selected) {
+			apply();
+			return;
+		}
+		beforeSelect(id, selected);
 		selected = id;
 		rememberProjectView(namespace, workspaceId, id);
 		apply();
@@ -11089,6 +11124,57 @@ function parseDiscussRefs(query) {
 		})),
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
 	};
+}
+//#endregion
+//#region src/state/events.ts
+function consumePage(page, cursor, emit) {
+	if (page.reset_required || page.reset || page.head_cursor < cursor) {
+		emit({
+			seq: 0,
+			kind: "reset",
+			resource_type: "reset"
+		});
+		cursor = 0;
+	}
+	for (const event of page.events) {
+		if (event.seq <= cursor) continue;
+		emit(event);
+		cursor = event.seq;
+	}
+	if (Number.isSafeInteger(page.next_cursor) && page.next_cursor >= cursor && page.next_cursor <= page.head_cursor) cursor = page.next_cursor;
+	return cursor;
+}
+async function consumePageAsync(page, cursor, emit) {
+	if (page.reset_required || page.reset || page.head_cursor < cursor) {
+		await emit({
+			seq: 0,
+			kind: "reset",
+			resource_type: "reset"
+		});
+		cursor = 0;
+	}
+	const pending = [];
+	const next = consumePage({
+		...page,
+		reset: false,
+		reset_required: false
+	}, cursor, (event) => {
+		pending.push(Promise.resolve().then(() => emit(event)));
+	});
+	await settleRefreshes(pending);
+	return next;
+}
+async function settleRefreshes(pending) {
+	const results = await Promise.allSettled(pending);
+	for (const result of results) if (result.status === "rejected") throw result.reason;
+}
+function storageScope(endpoint, actor, server = "legacy", principal = actor) {
+	return [
+		endpoint,
+		server,
+		principal,
+		actor
+	].map(encodeURIComponent).join(":");
 }
 //#endregion
 //#region src/pm-resources.js
@@ -12332,7 +12418,11 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		class: "secondary",
 		onclick: () => void save()
 	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
-	const element = h("details", { "data-pm-brief-export": "" }, h("summary", {}, t("pm_export_title")), note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status);
+	const element = disclosure({
+		label: t("pm_export_title"),
+		body: h("div", {}, note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status)
+	});
+	element.dataset.pmBriefExport = "";
 	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
 	const identity = () => JSON.stringify([
 		snapshot()?.snapshot_id,
@@ -12505,20 +12595,21 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		recoverPermitted: () => permitted(false),
 		label: "pm_brief_create",
 		onSaved: (result) => refresh(result.snapshot_id),
-		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
+		extra: disclosure({
+			label: t("pm_brief_name_optional"),
+			body: labelled("pm_brief_snapshot_title", title)
+		})
 	});
-	const previous = h("button", {
-		type: "button",
-		class: "secondary",
-		"aria-label": t("wb_previous"),
-		onclick: () => move(-1)
-	}, "←");
-	const next = h("button", {
-		type: "button",
-		class: "secondary",
-		"aria-label": t("wb_next"),
-		onclick: () => move(1)
-	}, "→");
+	const previous = iconButton({
+		icon: "chevron-left",
+		label: t("wb_previous"),
+		onClick: () => move(-1)
+	});
+	const next = iconButton({
+		icon: "chevron-right",
+		label: t("wb_next"),
+		onClick: () => move(1)
+	});
 	const picker = h("select", {
 		"aria-label": t("wb_history"),
 		onchange: () => void select(picker.value)
@@ -12590,7 +12681,8 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		onControls({
 			previous: previous.disabled,
 			next: next.disabled,
-			compare: compare.disabled
+			compare: compare.disabled,
+			historyPartial: cursor !== null
 		});
 	}
 	function historyOptions() {
@@ -12601,12 +12693,17 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	}
 	function renderItems(rows, empty = "wb_unknown") {
 		if (!rows.length) return h("p", { class: "muted" }, t(empty));
+		const sources = disclosure({
+			label: t("wb_sources"),
+			body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))
+		});
+		sources.classList.add("pm-charter-source");
 		return h("div", {}, h("ul", { class: "pm-charter-items" }, ...rows.map((row) => h("li", {}, h("span", {}, labelSegment(row.text)), [
 			"agent_assumption",
 			"unresolved",
 			"conflicting",
 			"repo_evidence"
-		].includes(row.status) ? h("span", { class: "chip" }, t("pm_status_" + row.status)) : ""))), h("details", { class: "pm-charter-source" }, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))));
+		].includes(row.status) ? h("span", { class: "chip" }, t("pm_status_" + row.status)) : ""))), sources);
 	}
 	function render() {
 		onChange(snapshot, "updated");
@@ -12694,6 +12791,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		return pages;
 	}
 	async function refresh(id = null) {
+		onChange(null, "loading");
 		if (id) onChange(null, "selected");
 		const chosen = id || selectedId, ticket = ++serial;
 		busy = true;
@@ -12837,7 +12935,9 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		controls: () => ({
 			busy,
 			previous: previous.disabled,
-			next: next.disabled
+			next: next.disabled,
+			compare: compare.disabled,
+			historyPartial: cursor !== null
 		}),
 		comparePrevious,
 		history: () => history
@@ -12882,7 +12982,7 @@ function workspaceOverview(options) {
 	let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
 	const parts = new Map(), attentionNodes = new Map();
 	let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
-	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false;
+	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false, reportLoading = false;
 	const primary = h("a", {
 		class: "ui-button primary",
 		"data-overview-discuss": ""
@@ -12900,7 +13000,15 @@ function workspaceOverview(options) {
 		class: "pm-report-tools",
 		"data-pm-report-tools": ""
 	});
+	const historyHint = h("span", {
+		class: "ui-meta",
+		hidden: true,
+		"data-overview-history-partial": ""
+	}, t("ov_partial_history"));
+	const reportPartial = statusPill("partial");
+	reportPartial.hidden = true;
 	const reportControls = (flags) => {
+		historyHint.hidden = !flags.historyPartial;
 		for (const [key, disabled] of Object.entries(flags)) {
 			const node = savedBar.querySelector(`[data-overview-report-control="${key}"]`);
 			if (node) node.disabled = disabled;
@@ -12932,17 +13040,9 @@ function workspaceOverview(options) {
 	const reportLabel = h("span");
 	reports.previous.setAttribute("aria-label", t("ov_report_previous"));
 	reports.next.setAttribute("aria-label", t("ov_report_next"));
-	savedBar.append(reportLabel, iconButton({
-		icon: "chevron-left",
-		label: t("ov_report_previous"),
-		"data-overview-report-control": "previous",
-		onClick: () => reports.previous.click()
-	}), iconButton({
-		icon: "chevron-right",
-		label: t("ov_report_next"),
-		"data-overview-report-control": "next",
-		onClick: () => reports.next.click()
-	}), button({
+	reports.previous.dataset.overviewReportControl = "previous";
+	reports.next.dataset.overviewReportControl = "next";
+	savedBar.append(reportLabel, reportPartial, historyHint, h("span", { class: "pm-overview-report-arrows" }, reports.previous, reports.next), button({
 		variant: "ghost",
 		label: t("ui_compare"),
 		"data-overview-report-control": "compare",
@@ -12954,7 +13054,7 @@ function workspaceOverview(options) {
 		return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en", {
 			month: "short",
 			day: "numeric",
-			timeZone: "UTC"
+			...typeof value === "string" ? { timeZone: "UTC" } : {}
 		}) : "—";
 	};
 	const refs = () => {
@@ -12976,7 +13076,7 @@ function workspaceOverview(options) {
 			from: "overview",
 			report: mode === "saved" ? saved?.snapshot_id : void 0
 		});
-		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t("ov_not_saved") : [
+		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t(reportLoading ? "ov_loading_report" : "ov_not_saved") : [
 			projection?.plan?.title,
 			projection?.plan?.adopted_at != null ? t("ov_adopted", { date: date(projection.plan.adopted_at) }) : null,
 			t("ov_live")
@@ -12989,6 +13089,12 @@ function workspaceOverview(options) {
 		});
 	}
 	function reportChanged(value, event, error) {
+		if (event === "loading" || event === "selected") reportLoading = true;
+		if ([
+			"updated",
+			"withdrawn",
+			"error"
+		].includes(event)) reportLoading = false;
 		if (event === "selected") {
 			mode = preference.mode = "saved";
 			saved = null;
@@ -13004,10 +13110,11 @@ function workspaceOverview(options) {
 		if (event === "error") status.replaceChildren(options.errorBox(error));
 		if (mode === "saved") render();
 	}
-	function discuss(row) {
+	function discuss(row, part = "attention") {
 		return h("a", {
 			class: "ui-button ghost ui-sm",
 			"data-overview-row-discuss": row.key || row.milestone_id,
+			"data-overview-link": `${part}:${row.key || row.milestone_id}:discuss`,
 			href: discussHref({
 				workspaceId,
 				refs: row.ref ? [row.ref] : [],
@@ -13017,18 +13124,18 @@ function workspaceOverview(options) {
 		}, t("ov_discuss"));
 	}
 	function open(row) {
-		preference.attention = row.key;
 		onOpen(row.ref, row);
 	}
-	function itemLink(row) {
+	function itemLink(row, part) {
 		return row ? h("button", {
 			type: "button",
 			class: "pm-overview-link",
+			"data-overview-link": `${part}:${row.key || row.milestone_id || row.work_item_id}`,
 			onclick: () => open(row)
 		}, row.title) : null;
 	}
 	function milestoneDate(row) {
-		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date ? ` → ${date(row.forecast_date)}` : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
+		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? ` → ${date(row.forecast_date)}` : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
 	}
 	function statusStrip(data, fixed = false) {
 		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
@@ -13036,17 +13143,18 @@ function workspaceOverview(options) {
 		const goal = metric({
 			label: t("ov_goal"),
 			value: data?.plan?.goal ?? "—",
-			context: h("div", {}, !data?.plan?.goal ? h("span", { class: "ui-meta" }, reasonLabel(t, goalReason || "unknown")) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
+			context: h("div", {}, !data?.plan?.goal ? goalReason === "goal_unconfirmed" ? statusPill("unconfirmed") : !goalReason || goalReason === "unknown" ? statusPill("unknown") : h("span", { class: "ui-meta" }, reasonLabel(t, goalReason)) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
 		});
 		goal.dataset.overviewMetric = "goal";
+		if (fixed && savedPartial()) goal.append(statusPill("partial"));
 		const next = data?.next_milestone;
 		const progress = metric({
 			label: t("ov_progress"),
-			value: !p ? null : complete ? t("ov_accepted", {
+			value: !p || fixed ? null : complete ? t("ov_accepted", {
 				accepted: p.accepted,
 				total: p.requirements
 			}) : t("ov_requirements", { n: p.requirements }),
-			context: h("div", {}, p && !complete ? statusPill(fixed ? "unknown" : "partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
+			context: h("div", {}, fixed && p ? h("div", {}, t("ov_requirements", { n: p.requirements })) : p && !complete ? statusPill("partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
 			bar: complete ? classes.map((key, i) => ({
 				tone: tones[i],
 				value: p[key]
@@ -13063,7 +13171,7 @@ function workspaceOverview(options) {
 			const node = metric({
 				label: t(kind === "blocker" ? "ov_blockers" : "ov_decisions"),
 				value: data?.attention_counts?.[kind] ?? null,
-				context: h("div", {}, itemLink(first), kind === "decision" && first ? discuss(first) : null)
+				context: h("div", {}, itemLink(first, "status"), kind === "decision" && first ? discuss(first, "status") : null)
 			});
 			node.dataset.overviewMetric = kind;
 			return node;
@@ -13126,19 +13234,20 @@ function workspaceOverview(options) {
 				type: "button",
 				class: "pm-overview-attention-main",
 				"data-overview-open": row.key,
+				"data-overview-link": `attention:${row.key}:open`,
 				onclick: () => open(row)
 			}, h("span", {
 				class: "pm-overview-kind",
 				title: label,
 				"aria-label": label
-			}, icon(row.kind === "decision" ? "message-square" : "circle-alert")), h("span", {}, h("strong", {}, row.title), h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · "))));
+			}, icon(row.kind === "decision" ? "message-square" : "circle-alert")), h("span", {}, h("strong", {}, row.title)));
 			const node = h("div", {
 				class: "pm-overview-attention-row",
 				"data-overview-row": row.key
-			}, link, elapsed === null ? null : h("span", {
+			}, link, h("div", { class: "pm-overview-attention-meta" }, h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · ")), h("span", { class: "pm-overview-attention-actions" }, elapsed === null ? null : h("span", {
 				class: "ui-meta",
 				"data-overview-age": ""
-			}, elapsed), discuss(row));
+			}, elapsed), elapsed === null ? null : h("span", { "aria-hidden": "true" }, "·"), discuss(row))));
 			cached?.node.remove();
 			attentionNodes.set(row.key, {
 				signature: rowSignature,
@@ -13157,7 +13266,7 @@ function workspaceOverview(options) {
 			body: h("div", {}, ...data.milestones.map((row) => h("div", {
 				class: "pm-overview-milestone",
 				"data-overview-milestone": row.milestone_id
-			}, h("div", {}, itemLink(row), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
+			}, h("div", {}, itemLink(row, "milestones"), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
 		});
 		const deliveries = sectionCard({
 			title: t(data.recent_deliveries_complete ? "ov_deliveries" : "ov_deliveries_loaded"),
@@ -13170,7 +13279,7 @@ function workspaceOverview(options) {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
+			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
 	}
@@ -13180,11 +13289,12 @@ function workspaceOverview(options) {
 		readerDocument = null;
 		relatedSelection = null;
 	}
-	function openRelated(row, host) {
+	function openRelated(row, host, returnFocus) {
 		closeReader();
 		relatedSelection = row;
 		reader = inspector({
 			title: row.title,
+			returnFocus,
 			onClose: () => {
 				reader = null;
 				relatedSelection = null;
@@ -13229,16 +13339,22 @@ function workspaceOverview(options) {
 				"conflicting"
 			].includes(row.status) ? statusPill("unconfirmed") : null)));
 			const sources = disclosure({
-				label: icon("list-checks"),
+				label: t("ov_sources"),
 				key: `${namespace}:${workspaceId}:overview-source:${key}`,
 				body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))
 			});
 			sources.classList.add("pm-overview-sources");
 			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
 			sources.querySelector("summary").title = t("ov_sources");
+			sources.querySelector("summary").dataset.overviewLink = `charter:${key}:sources`;
+			const decisions = key === "decisions" && Object.hasOwn(source, "decision_count");
+			const count = source?.decision_count;
 			const card = sectionCard({
 				title: t("wb_" + key),
-				body: h("div", {}, rows.length ? list : h("span", { class: "ui-meta" }, t("ov_no_items")), sources)
+				body: h("div", {}, rows.length ? list : decisions && count !== 0 ? null : h("span", { class: "ui-meta" }, t("ov_no_items")), decisions && count === null ? statusPill("unknown") : null, decisions && source.attention_truncated ? statusPill("partial") : null, decisions && count > rows.length ? h("a", {
+					class: "ui-button ghost ui-sm",
+					href: `#/pm/${encodeURIComponent(workspaceId)}/issues`
+				}, t("ov_more", { n: count - rows.length })) : null, sources)
 			});
 			card.dataset.charterSection = key;
 			if (rows.length > 3) {
@@ -13247,6 +13363,7 @@ function workspaceOverview(options) {
 					size: "sm",
 					label: t(expanded ? "ov_less" : "ov_more", { n: rows.length - 3 }),
 					"aria-expanded": String(Boolean(expanded)),
+					"data-overview-link": `charter:${key}:expand`,
 					onClick: () => {
 						const expand = more.getAttribute("aria-expanded") !== "true";
 						more.setAttribute("aria-expanded", String(expand));
@@ -13271,25 +13388,68 @@ function workspaceOverview(options) {
 			label: t("ov_plan"),
 			disabled: !document,
 			"data-charter-plan": "",
+			"data-overview-link": "charter:plan",
 			onClick: () => fullPlan(document)
 		})), grid);
 	}
 	function details(data, fixed) {
-		const entries = new Map((data?.unknown || []).map((row) => [row.reason, row]));
-		for (const source of Object.values(data?.coverage?.sources || {})) if (source.status) entries.set(source.status, { reason: source.status });
+		const knownSources = [
+			"plan",
+			"plan_candidate",
+			"work",
+			"governance",
+			"quality",
+			"roadmap",
+			"forecast",
+			"proposals",
+			"findings",
+			"lifecycle_inflight",
+			"deliveries",
+			"projects",
+			"evidence"
+		];
+		const sourceLabel = (key) => t("ov_source_" + (knownSources.includes(key.split(".")[0]) ? key.split(".")[0] : "other"));
+		const reasons = data?.unknown || [], shown = new Set(), lines = [];
+		const reasonText = (reason) => {
+			if (!reason || shown.has(reason)) return "";
+			shown.add(reason);
+			return ` · ${reasonLabel(t, reason)}`;
+		};
+		const sources = fixed ? Object.fromEntries(Object.entries(saved?.coverage || {}).filter(([key]) => key.endsWith("_truncated")).map(([key, value]) => [key.slice(0, -10), {
+			complete: !value,
+			status: value ? "source_limit" : null
+		}])) : data?.coverage?.sources || {};
+		for (const [key, source] of Object.entries(sources)) {
+			const sourceReasons = reasons.filter((row) => row.field === key).map((row) => row.reason);
+			if (source.status) sourceReasons.push(source.status);
+			lines.push(h("li", {}, sourceLabel(key), " · ", t(source.complete === true ? "ov_scan_complete" : "ui_status_partial"), ...sourceReasons.map(reasonText)));
+		}
+		for (const row of reasons) if (!shown.has(row.reason)) {
+			shown.add(row.reason);
+			lines.push(h("li", {}, reasonLabel(t, row.reason)));
+		}
 		const omitted = data?.coverage?.sources?.lifecycle_inflight?.omitted;
+		if (omitted > 0) lines.push(h("li", {}, t("ov_hidden", { n: omitted })));
 		return disclosure({
 			label: t("ov_details"),
 			key: `${namespace}:${workspaceId}:overview-details`,
-			body: h("div", {}, h("p", {}, t(fixed ? "ov_saved_limits" : "ov_caveat")), h("ul", {}, ...[...entries.values()].map((row) => h("li", {}, reasonLabel(t, row.reason), Object.hasOwn(reasonLabels, row.reason) ? null : h("code", {}, ` (${row.reason})`))), omitted > 0 ? h("li", {}, t("ov_hidden", { n: omitted })) : null), h("pre", { class: "pm-brief-proof" }, JSON.stringify(fixed ? {
-				coverage: saved?.coverage,
-				visibility: saved?.visibility,
-				snapshot_id: saved?.snapshot_id
-			} : {
-				coverage: data?.coverage,
-				as_of: data?.as_of
-			}, null, 2)))
+			body: h("div", {}, h("p", {}, t(fixed ? "ov_saved_limits" : "ov_caveat")), h("ul", { "data-overview-coverage": "" }, ...lines), disclosure({
+				label: t("ov_raw_coverage"),
+				body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(fixed ? {
+					coverage: saved?.coverage,
+					visibility: saved?.visibility,
+					snapshot_id: saved?.snapshot_id,
+					unknown: data?.unknown
+				} : {
+					coverage: data?.coverage,
+					unknown: data?.unknown,
+					as_of: data?.as_of
+				}, null, 2))
+			}))
 		});
+	}
+	function savedPartial() {
+		return Boolean(saved?.visibility?.restricted || saved?.visibility?.filtered || Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith("_truncated") && value));
 	}
 	function savedData() {
 		const document = saved?.baseline?.document;
@@ -13298,6 +13458,30 @@ function workspaceOverview(options) {
 			"goal",
 			"problem"
 		].includes(row.slot) && ["user_confirmed", "repo_evidence"].includes(row.status))?.value;
+		const unknown = [{
+			field: "progress",
+			reason: "not_assessed"
+		}];
+		if (!goal) unknown.push({
+			field: "plan.goal",
+			reason: document?.selected_inputs?.some((row) => [
+				"value",
+				"goal",
+				"problem"
+			].includes(row.slot)) ? "goal_unconfirmed" : "no_explicit_goal"
+		});
+		if (saved?.visibility?.restricted) unknown.push({
+			field: "visibility",
+			reason: "restricted"
+		});
+		if (saved?.visibility?.filtered) unknown.push({
+			field: "visibility",
+			reason: "filtered"
+		});
+		if (Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith("_truncated") && value)) unknown.push({
+			field: "coverage",
+			reason: "source_limit"
+		});
 		return {
 			plan: document ? {
 				title: document.title,
@@ -13310,10 +13494,7 @@ function workspaceOverview(options) {
 				decision: null
 			},
 			attention: [],
-			unknown: [{
-				field: "progress",
-				reason: "not_assessed"
-			}]
+			unknown
 		};
 	}
 	function commitParts(entries) {
@@ -13328,6 +13509,7 @@ function workspaceOverview(options) {
 			const value = JSON.stringify(entry.value);
 			if (!part || part.value !== value) {
 				const node = entry.render();
+				node.dataset.overviewPart = entry.key;
 				if (part && node !== part.node) part.node.replaceWith(node);
 				part = {
 					node,
@@ -13347,9 +13529,10 @@ function workspaceOverview(options) {
 		savedBar.hidden = mode !== "saved";
 		box.dataset.overviewMode = mode;
 		if (mode === "saved") {
-			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t("ov_not_saved");
+			reportPartial.hidden = !savedPartial();
+			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t(reportLoading ? "ov_loading_report" : "ov_not_saved");
 			if (!saved) {
-				resetContent(loading ? skeleton(3) : h("p", {}, t("ov_not_saved")));
+				resetContent(reportLoading ? h("div", {}, h("p", { role: "status" }, t("ov_loading_report")), skeleton(3)) : h("p", {}, t("ov_not_saved")));
 				return;
 			}
 			const next = JSON.stringify(saved);
@@ -13370,7 +13553,7 @@ function workspaceOverview(options) {
 				{
 					key: "details",
 					value: saved,
-					render: () => details(null, true)
+					render: () => details(savedData(), true)
 				}
 			]);
 			return;
@@ -13378,6 +13561,10 @@ function workspaceOverview(options) {
 		if (!projection) {
 			resetContent(loading ? skeleton(4) : statusStrip(null));
 			return;
+		}
+		for (const row of projection.attention) {
+			const node = attentionNodes.get(row.key)?.node.querySelector("[data-overview-age]"), value = age(row.since);
+			if (node && value !== null && node.textContent !== value) node.textContent = value;
 		}
 		const next = JSON.stringify([{
 			...projection,
@@ -13387,14 +13574,16 @@ function workspaceOverview(options) {
 		signature = `live:${next}`;
 		const source = {
 			baseline: { document: plan?.document },
-			brief: {}
+			brief: {},
+			decision_count: projection.attention_counts.decision,
+			attention_truncated: projection.attention_truncated
 		};
 		source.brief.decisions = { items: projection.attention.filter((row) => row.kind === "decision").map((row) => ({
 			text: row.title,
 			source: row.ref
 		})) };
-		const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute("data-overview-open") || document.activeElement?.getAttribute("data-overview-row-discuss") : null;
-		const discussFocused = document.activeElement?.hasAttribute("data-overview-row-discuss");
+		const focused = content.contains(document.activeElement) ? document.activeElement : null;
+		const focusId = focused?.getAttribute("data-overview-link"), focusPart = focused?.closest("[data-overview-part]")?.dataset.overviewPart;
 		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
 		const main = attention(projection);
 		commitParts([
@@ -13418,7 +13607,14 @@ function workspaceOverview(options) {
 					projection.milestones_truncated,
 					projection.recent_deliveries_complete
 				],
-				render: () => h("div", { class: "pm-overview-columns" }, main, sidebar(projection))
+				render: () => {
+					const columns = parts.get("columns")?.node;
+					if (columns) {
+						columns.querySelector(".pm-overview-side").replaceWith(sidebar(projection));
+						return columns;
+					}
+					return h("div", { class: "pm-overview-columns" }, main, sidebar(projection));
+				}
 			},
 			{
 				key: "charter",
@@ -13431,7 +13627,7 @@ function workspaceOverview(options) {
 				render: () => details(projection, false)
 			}
 		]);
-		if (focused) content.querySelector(`[${discussFocused ? "data-overview-row-discuss" : "data-overview-open"}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+		if (focused && !focused.isConnected && focusId && focusPart) parts.get(focusPart)?.node.querySelector(`[data-overview-link="${CSS.escape(focusId)}"]`)?.focus({ preventScroll: true });
 	}
 	async function refreshLive() {
 		const ticket = ++serial;
@@ -13504,6 +13700,7 @@ function workspaceOverview(options) {
 		meta,
 		reportTools,
 		refresh,
+		refreshProjection: () => mode === "live" ? refreshLive() : void 0,
 		withdraw,
 		prepareReports,
 		openRelated,
@@ -13531,10 +13728,13 @@ function workspaceOverview(options) {
 			if (!value) {
 				preference.scroll = window.scrollY;
 				closeReader();
-			} else if (preference.scroll) window.scrollTo(0, preference.scroll);
+			} else if (preference.scroll) requestAnimationFrame(() => {
+				if (active) window.scrollTo(0, preference.scroll);
+			});
 			header();
 		},
 		dispose() {
+			active = false;
 			serial++;
 			closeReader();
 		}
@@ -15448,6 +15648,10 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			for (const card of cards.filter((row) => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
 			renderTable();
 			await select(ref.id, true);
+			if (!detail.hidden && matchMedia("(max-width: 1100px)").matches) {
+				detail.scrollIntoView({ block: "start" });
+				window.scrollBy(0, -Math.max(0, document.querySelector(".top")?.getBoundingClientRect().bottom || 0));
+			}
 			return;
 		}
 		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id) return;
@@ -15456,7 +15660,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		renderTable();
 		const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
 		if (row) {
-			row.setAttribute("aria-selected", "true");
+			row.setAttribute("aria-current", "true");
 			row.querySelector("button")?.focus();
 			row.scrollIntoView({ block: "nearest" });
 		}
@@ -25744,10 +25948,32 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			}));
 		}
 	}
+	async function openRef(ref) {
+		if (!data) await refresh();
+		if (!active || !data) return;
+		const row = data.rows.find((row) => {
+			const identity = scheduleRef(row, data);
+			return identity?.kind === ref.kind && identity.id === ref.id && identity.revision_id === ref.revision_id;
+		});
+		if (!row) return;
+		let parent = row.parent_id;
+		const visited = new Set();
+		while (parent && !visited.has(parent)) {
+			visited.add(parent);
+			collapsed.delete(parent);
+			parent = data.rows.find((row) => row.id === parent)?.parent_id;
+		}
+		draw();
+		focusRow(row.id);
+		const opener = element.querySelector(`[data-schedule-select="${CSS.escape(row.id)}"]`);
+		opener?.scrollIntoView({ block: "nearest" });
+		select(row.id, opener);
+	}
 	return {
 		element,
 		refresh,
 		withdraw,
+		openRef,
 		setActive(value) {
 			active = value;
 			if (!value) {
@@ -31608,21 +31834,26 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			else if (ref.kind === "governance") {
 				if (register) openIssueTool("ui_governance");
 				await governance?.openRef?.(ref);
-			} else if (ref.kind === "milestone" && destination === "schedule") {
+			} else if (ref.kind === "milestone" && destination === "schedule" && schedule) await schedule.openRef(ref);
+			else if (ref.kind === "milestone" && destination === "schedule") {
 				const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
 				if (node) {
 					node.tabIndex = -1;
 					node.focus();
 					node.scrollIntoView({ block: "nearest" });
 				}
-			} else brief?.openRelated?.(row, main);
+			} else {
+				const returnFocus = heading.querySelector("h1");
+				returnFocus.tabIndex = -1;
+				brief?.openRelated?.(row, main, returnFocus);
+			}
 		},
-		onDiscuss: () => {
+		...!liveOverview ? { onDiscuss: () => {
 			location.hash = discussHref({
 				workspaceId,
 				from: "overview"
 			});
-		}
+		} } : {}
 	}) : projectBrief({
 		h,
 		t,
@@ -32061,7 +32292,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		button: button({
 			label: t("ui_report"),
 			"data-pm-report-menu": "",
-			icon: "chevron-down"
+			icon: "chevron-down",
+			iconPosition: "end"
 		}),
 		items: [
 			{
@@ -32283,6 +32515,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			workspaceId,
 			view,
 			groups,
+			beforeSelect: (_id, previous) => {
+				if (previous === "overview") brief?.setActive?.(false);
+			},
 			onSelect: (id) => {
 				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
 				if (id !== "issues") brief?.closeRelated?.();
@@ -33256,7 +33491,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (!disposed) noteForm.submit();
 	}, 0);
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
-	let eventReads = Promise.resolve();
+	const pendingReads = new Map();
+	function eventRead(key, read) {
+		if (!pendingReads.has(key)) pendingReads.set(key, Promise.resolve().then(() => {
+			pendingReads.delete(key);
+			alive();
+			return read();
+		}));
+		return pendingReads.get(key);
+	}
 	const off = onEvents((event) => {
 		if ([
 			"pm_workspace",
@@ -33287,49 +33530,38 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			"pm_maintenance_repair",
 			"pm_ahp_observation",
 			"pm_dependencies"
-		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(() => load());
-			return eventReads;
-		}
-		if (handoff && ["project", "work_item"].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(() => load());
-			return eventReads;
-		}
-		if ((liveOverview || deliveries || workBatches || qualityReviews || maintenanceRepairs || schedule) && [
+		].includes(event.resource_type)) return eventRead(load, load);
+		const reads = [], kind = event.resource_type;
+		if (liveOverview && [
+			"work_item",
 			"operation",
 			"deployment",
 			"integration"
-		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(async () => {
-				if (liveOverview) await brief?.refresh();
-				await deliveries?.refresh();
-				await workBatches?.refresh();
-				await qualityReviews?.refresh();
-				await maintenanceRepairs?.refresh();
-				await kanban?.refresh();
-				await traceability?.refresh();
-				await schedule?.refresh();
-			});
-			return eventReads;
-		}
-		if ((liveOverview || kanban || qualityReviews || maintenanceRepairs || schedule) && [
+		].includes(kind)) reads.push(eventRead(brief, () => brief?.refreshProjection?.()));
+		if (handoff && kind === "project") reads.push(eventRead(load, load));
+		if (handoff && kind === "work_item") reads.push(eventRead(handoff, () => handoff.refresh()));
+		const deliveryEvent = [
+			"operation",
+			"deployment",
+			"integration"
+		].includes(kind);
+		if (deliveryEvent || [
 			"work_item",
 			"project",
 			"task",
 			"command",
-			"operation",
 			"session"
-		].includes(event.resource_type)) {
-			eventReads = eventReads.catch(() => {}).then(async () => {
-				if (liveOverview) await brief?.refresh();
-				await qualityReviews?.refresh();
-				await maintenanceRepairs?.refresh();
-				await kanban?.refresh();
-				await traceability?.refresh();
-				await schedule?.refresh();
-			});
-			return eventReads;
+		].includes(kind)) {
+			for (const section of [
+				...deliveryEvent ? [deliveries, workBatches] : [],
+				qualityReviews,
+				maintenanceRepairs,
+				kanban,
+				traceability,
+				schedule
+			]) if (section) reads.push(eventRead(section, () => section.refresh()));
 		}
+		return settleRefreshes(reads);
 	});
 	const dispose = () => {
 		uiState.listScroll = workspaceList.scrollTop;
@@ -42432,57 +42664,6 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		content.dispose();
 		off();
 	};
-}
-//#endregion
-//#region src/state/events.ts
-function consumePage(page, cursor, emit) {
-	if (page.reset_required || page.reset || page.head_cursor < cursor) {
-		emit({
-			seq: 0,
-			kind: "reset",
-			resource_type: "reset"
-		});
-		cursor = 0;
-	}
-	for (const event of page.events) {
-		if (event.seq <= cursor) continue;
-		emit(event);
-		cursor = event.seq;
-	}
-	if (Number.isSafeInteger(page.next_cursor) && page.next_cursor >= cursor && page.next_cursor <= page.head_cursor) cursor = page.next_cursor;
-	return cursor;
-}
-async function consumePageAsync(page, cursor, emit) {
-	if (page.reset_required || page.reset || page.head_cursor < cursor) {
-		await emit({
-			seq: 0,
-			kind: "reset",
-			resource_type: "reset"
-		});
-		cursor = 0;
-	}
-	const pending = [];
-	const next = consumePage({
-		...page,
-		reset: false,
-		reset_required: false
-	}, cursor, (event) => {
-		pending.push(Promise.resolve().then(() => emit(event)));
-	});
-	await settleRefreshes(pending);
-	return next;
-}
-async function settleRefreshes(pending) {
-	const results = await Promise.allSettled(pending);
-	for (const result of results) if (result.status === "rejected") throw result.reason;
-}
-function storageScope(endpoint, actor, server = "legacy", principal = actor) {
-	return [
-		endpoint,
-		server,
-		principal,
-		actor
-	].map(encodeURIComponent).join(":");
 }
 //#endregion
 //#region src/app.js

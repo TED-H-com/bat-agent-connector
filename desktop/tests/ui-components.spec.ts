@@ -99,3 +99,26 @@ test('shared disclosure can retain existing lazy content and listeners', async (
   await disclosure.locator(':scope > summary').press('Enter');
   await expect(disclosure.getByLabel('Retained draft')).toHaveValue('Keep this draft');
 });
+
+test('inspector accepts an explicit return target when its opener becomes hidden', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const ui = await import('/src/ui/components.js');
+    const heading = document.createElement('h2'); heading.textContent = 'Destination'; heading.tabIndex = -1; document.body.append(heading);
+    const opener = document.querySelector('button')!; opener.focus();
+    const panel = ui.inspector({title: 'Related', returnFocus: heading}); opener.hidden = true; document.body.append(panel);
+  });
+  await expect(page.locator('.ui-inspector')).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', {name: 'Destination'})).toBeFocused();
+});
+
+
+test('button supports a trailing icon without changing default icon order', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {button} = await import('/src/ui/components.js');
+    document.getElementById('fixture')!.append(button({label: 'Report', icon: 'chevron-down', iconPosition: 'end'}));
+  });
+  const button = page.getByRole('button', {name: 'Report', exact: true});
+  expect(await button.evaluate(node => node.firstChild?.nodeType === Node.TEXT_NODE && node.lastChild?.nodeName === 'svg')).toBe(true);
+});

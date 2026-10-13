@@ -175,7 +175,7 @@ test('initial central loading reports Reconnecting until the view is ready',asyn
 test('Overview rereads the selected fixed report after leaving for Settings',async({page})=>{
   const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
   await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
-  const picker=page.getByRole('combobox',{name:'Summary version',exact:true});
+  const picker=page.getByRole('combobox',{name:'Report version',exact:true});
   await picker.selectOption({index:0});const selected=await picker.inputValue();await expect(picker).toBeEnabled();
   await page.keyboard.press('Escape');await page.locator('.workspace-nav-footer a[href="#/settings"]').click();
   await page.locator('[data-pm-view=overview]').click();

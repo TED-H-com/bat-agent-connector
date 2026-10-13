@@ -180,3 +180,9 @@ ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key�
 或 thread version。已知原因使用共用短標籤；未知原因仍顯示「已過期」，原始
 代碼只放在詳細資料。純改名保留中央可採用狀態。VERSION_CONFLICT 顯示
 「已過期／再次詢問 PM」，不清除審閱文字，也不以另一個 key 重送原採用。
+
+
+Overview review corrections: event pages coalesce post-event projection reads without
+rebuilding workspace sections. Restricted, filtered and truncated saved reports remain
+explicitly Partial, including in print. Coverage uses localized source labels with raw
+records on demand; a missing decision list never implies a known zero.
