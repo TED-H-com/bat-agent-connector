@@ -52,7 +52,7 @@ export function sectionCard({title, actions = [], body} = {}) {
 export function metric({label, value, context, bar} = {}) {
   const unknown = value === null || value === undefined || typeof value === 'number' && !Number.isFinite(value);
   const track = bar && !unknown ? h('div', {class: 'ui-metric-bar', 'aria-hidden': 'true'}, ...bar.map(part => {
-    const span = h('span', {class: `tone-${['ok', 'review', 'info'].includes(part.tone) ? part.tone : 'neutral'}`});
+    const span = h('span', {class: `tone-${['ok', 'review', 'info', 'bad', 'warn'].includes(part.tone) ? part.tone : 'neutral'}`});
     span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0); return span;
   })) : null;
   return h('div', {class: 'ui-metric'}, h('div', {class: 'ui-meta'}, label),

@@ -35,6 +35,110 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
+//#region src/pm-overview-strings.js
+var overviewStrings = {
+	en: {
+		ov_live: "Live",
+		ov_goal: "Goal",
+		ov_progress: "Progress",
+		ov_blockers: "Blockers",
+		ov_decisions: "Decisions",
+		ov_accepted: "{accepted} of {total} accepted",
+		ov_requirements: "{n} requirements",
+		ov_adopted: "adopted {date}",
+		ov_attention: "Needs attention",
+		ov_milestones: "Milestones",
+		ov_deliveries: "Recent deliveries",
+		ov_deliveries_loaded: "Recent deliveries (loaded)",
+		ov_discuss: "Discuss",
+		ov_empty: "Nothing needs you right now.",
+		ov_incomplete: "Nothing loaded needs you · sources incomplete",
+		ov_showing: "Showing {n}",
+		ov_view_all: "View all in Issues & changes",
+		ov_no_items: "None recorded",
+		ov_details: "Details",
+		ov_sources: "Sources",
+		ov_hidden: "{n} hidden",
+		ov_more: "+{n} more",
+		ov_less: "Show less",
+		ov_report: "Report #{n}",
+		ov_viewing: "Viewing report #{n}",
+		ov_back_live: "Back to live",
+		ov_plan: "Full plan",
+		ov_charter: "Charter",
+		ov_not_saved: "Select a report in Versions.",
+		ov_saved_limits: "This report contains fixed sources. Acceptance and complete blocker counts were not assessed.",
+		ov_caveat: "Acceptance, merge and deployment are separate evidence. Complete coverage describes the scan, not project completion. Costs and quota are not supplied by the charter.",
+		ov_blocker: "Blocker",
+		ov_decision: "Decision",
+		ov_deviation: "Deviation",
+		ov_risk: "Risk",
+		ov_context_requirement: "{n} requirements",
+		ov_context_work: "Related work",
+		ov_context_milestone: "Milestone",
+		ov_day: "{n}d",
+		ov_hour: "{n}h",
+		ov_minute: "{n}m",
+		ov_delta: "+{n}d",
+		ov_partial_history: "More reports available",
+		ov_no_goal: "Not set",
+		ov_plan_unavailable: "Plan unavailable",
+		ov_report_previous: "Previous report",
+		ov_report_next: "Next report",
+		ov_plan_discussion: "Plan in Discussions"
+	},
+	"zh-TW": {
+		ov_live: "即時",
+		ov_goal: "目標",
+		ov_progress: "進度",
+		ov_blockers: "阻礙",
+		ov_decisions: "待決事項",
+		ov_accepted: "{total} 項中 {accepted} 項已驗收",
+		ov_requirements: "{n} 項需求",
+		ov_adopted: "{date} 採用",
+		ov_attention: "需要關注",
+		ov_milestones: "里程碑",
+		ov_deliveries: "近期交付",
+		ov_deliveries_loaded: "近期交付（已載入）",
+		ov_discuss: "討論",
+		ov_empty: "目前沒有需要你處理的事項。",
+		ov_incomplete: "已載入事項無待辦 · 來源不完整",
+		ov_showing: "顯示 {n} 筆",
+		ov_view_all: "在問題與變更查看全部",
+		ov_no_items: "尚無紀錄",
+		ov_details: "詳細資訊",
+		ov_sources: "來源",
+		ov_hidden: "{n} 筆已隱藏",
+		ov_more: "還有 {n} 項",
+		ov_less: "收合",
+		ov_report: "報告 #{n}",
+		ov_viewing: "正在檢視報告 #{n}",
+		ov_back_live: "返回即時總覽",
+		ov_plan: "完整計畫",
+		ov_charter: "專案章程",
+		ov_not_saved: "請從版本選取報告。",
+		ov_saved_limits: "本報告使用固定來源，未評估驗收進度與完整阻礙數量。",
+		ov_caveat: "驗收、合併與部署各有獨立證據。涵蓋完整表示掃描完整，不代表專案完成。章程不提供費用與剩餘配額。",
+		ov_blocker: "阻礙",
+		ov_decision: "待決",
+		ov_deviation: "偏差",
+		ov_risk: "風險",
+		ov_context_requirement: "{n} 項需求",
+		ov_context_work: "相關工作",
+		ov_context_milestone: "里程碑",
+		ov_day: "{n} 天",
+		ov_hour: "{n} 小時",
+		ov_minute: "{n} 分鐘",
+		ov_delta: "+{n} 天",
+		ov_partial_history: "還有其他報告",
+		ov_no_goal: "未設定",
+		ov_plan_unavailable: "無法取得計畫",
+		ov_report_previous: "上一份報告",
+		ov_report_next: "下一份報告",
+		ov_plan_discussion: "在討論中查看計畫"
+	}
+};
+//#endregion
 //#region src/ui/ui-strings.js
 var statusVocabulary = Object.freeze({
 	not_started: {
@@ -81,6 +185,16 @@ var statusVocabulary = Object.freeze({
 		en: "Deployed",
 		"zh-TW": "已部署",
 		tone: "ok"
+	},
+	rolled_back: {
+		en: "Rolled back",
+		"zh-TW": "已回復",
+		tone: "warn"
+	},
+	unconfirmed: {
+		en: "Unconfirmed",
+		"zh-TW": "待確認",
+		tone: "neutral"
 	},
 	unknown: {
 		en: "Unknown",
@@ -268,6 +382,39 @@ var uiStrings = {
 	}
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
+var reasonLabels = Object.freeze({
+	no_explicit_goal: ["Not set", "未設定"],
+	goal_unconfirmed: ["Unconfirmed", "待確認"],
+	no_adopted_plan: ["No adopted plan", "尚無已採用計畫"],
+	source_limit: ["Partial", "部分"],
+	partial_page: ["Partial", "部分"],
+	source_incomplete: ["Sources incomplete", "來源不完整"],
+	incomplete_sources: ["Sources incomplete", "來源不完整"],
+	source_unavailable: ["Source unavailable", "無法取得來源"],
+	unavailable: ["Not available", "無法取得"],
+	not_configured: ["Not configured", "尚未設定"],
+	not_applicable: ["Not applicable", "不適用"],
+	not_recorded: ["Not recorded", "尚無紀錄"],
+	no_roadmap_baseline: ["No milestone baseline", "尚無里程碑基準"],
+	quality_revoked: ["Acceptance revoked", "驗收已撤回"],
+	forecast_later_than_baseline: ["Later than baseline", "晚於基準日"],
+	lifecycle_inflight: ["Pending operations", "待核對操作"],
+	missing: ["Not recorded", "尚無紀錄"],
+	context_changed: ["Context changed", "來源已變動"],
+	stale: ["Stale", "過期"],
+	stopped: ["Stopped", "已停止"],
+	disabled: ["Disabled", "已停用"],
+	incomplete: ["Sources incomplete", "來源不完整"],
+	not_assessed: ["Not assessed", "未評估"],
+	unknown: ["Unknown", "未知"]
+});
+for (const [reason, labels] of Object.entries(reasonLabels)) {
+	uiStrings.en["ui_reason_" + reason] = labels[0];
+	uiStrings["zh-TW"]["ui_reason_" + reason] = labels[1];
+}
+function reasonLabel(t, reason) {
+	return t("ui_reason_" + (Object.hasOwn(reasonLabels, reason) ? reason : "unavailable"));
+}
 //#endregion
 //#region src/pm-ahp-observer-strings.js
 var ahpObserverStrings = {
@@ -5278,6 +5425,7 @@ var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
 		...uiStrings["zh-TW"],
+		...overviewStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
@@ -6743,6 +6891,7 @@ var STRINGS = {
 	en: {
 		...pmStrings.en,
 		...uiStrings.en,
+		...overviewStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
@@ -8488,11 +8637,46 @@ function iconButton({ icon, label, ...attrs }) {
 		class: "ui-button ghost ui-icon-button"
 	});
 }
+function statusPill(status) {
+	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
+	return h$1("span", {
+		class: `ui-pill tone-${statusVocabulary[key].tone}`,
+		"data-status": key
+	}, t("ui_status_" + key));
+}
 function pageHeader({ title, pill, meta, actions = [], overflow } = {}) {
 	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, h$1("h1", {}, title), pill), meta ? h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
 }
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
+}
+function metric({ label, value, context, bar } = {}) {
+	const unknown = value === null || value === void 0 || typeof value === "number" && !Number.isFinite(value);
+	const track = bar && !unknown ? h$1("div", {
+		class: "ui-metric-bar",
+		"aria-hidden": "true"
+	}, ...bar.map((part) => {
+		const span = h$1("span", { class: `tone-${[
+			"ok",
+			"review",
+			"info",
+			"bad",
+			"warn"
+		].includes(part.tone) ? part.tone : "neutral"}` });
+		span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0);
+		return span;
+	})) : null;
+	return h$1("div", { class: "ui-metric" }, h$1("div", { class: "ui-meta" }, label), h$1("div", { class: "ui-metric-value" }, unknown ? "—" : value, unknown ? statusPill("unknown") : null), context ? h$1("div", { class: "ui-metric-context" }, context) : null, track);
+}
+function emptyState({ icon, title, text, action }) {
+	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
+}
+function skeleton(rows = 3) {
+	return h$1("div", {
+		class: "ui-skeleton",
+		role: "status",
+		"aria-label": t("ui_loading")
+	}, ...Array.from({ length: Math.min(100, Math.max(0, rows)) }, () => h$1("div", { "aria-hidden": "true" })));
 }
 var disclosures = new Map();
 function disclosure({ label, body, open = false, key }) {
@@ -8737,7 +8921,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
+function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -10628,10 +10812,10 @@ function charterSections(snapshot) {
 		decisions: items("decisions").filter((row) => row.source?.kind !== "plan_adoption")
 	};
 }
-function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead }) {
+function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const preference = viewState(namespace, workspaceId, "overview");
-	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
+	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
 	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
@@ -10702,6 +10886,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		onUnavailable: (error) => {
 			withdraw();
 			status.replaceChildren(errorBox(error));
+			onChange(null, "error", error);
 		},
 		errorBox
 	}) : null;
@@ -10728,6 +10913,11 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		more.disabled = busy;
 		create.update();
 		exports?.update();
+		onControls({
+			previous: previous.disabled,
+			next: next.disabled,
+			compare: compare.disabled
+		});
 	}
 	function historyOptions() {
 		picker.replaceChildren(...history.map((row) => h("option", { value: row.snapshot_id }, `${t("wb_snapshot", { number: row.sequence })} · ${stamp(row.as_of)}`)));
@@ -10745,6 +10935,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		].includes(row.status) ? h("span", { class: "chip" }, t("pm_status_" + row.status)) : ""))), h("details", { class: "pm-charter-source" }, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))));
 	}
 	function render() {
+		onChange(snapshot, "updated");
 		report.replaceChildren();
 		comparison.replaceChildren();
 		if (!snapshot) {
@@ -10785,6 +10976,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		picker.replaceChildren();
 		status.replaceChildren();
 		controls();
+		onChange(null, "withdrawn");
 	}
 	function failed(error, ticket) {
 		try {
@@ -10795,6 +10987,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		}
 		withdraw();
 		status.replaceChildren(errorBox(error));
+		onChange(null, "error", error);
 	}
 	function acceptHistory(data, after, append = false) {
 		check(data);
@@ -10808,7 +11001,26 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		history = append ? [...history, ...data.snapshots] : data.snapshots;
 		cursor = data.next_cursor ?? null;
 	}
+	async function readHistory(ticket) {
+		const pages = [];
+		let after = 0;
+		for (let i = 0; i < historyPages; i++) {
+			const page = await api("GET", `${endpoint}/snapshots?${after ? `after=${after}&` : ""}limit=100`);
+			alive();
+			if (ticket !== serial) return null;
+			check(page);
+			if (page.next_cursor != null && (!Number.isSafeInteger(page.next_cursor) || page.next_cursor <= after)) throw Error(t("pm_scope_mismatch"));
+			pages.push({
+				page,
+				after
+			});
+			if (page.next_cursor == null) break;
+			after = page.next_cursor;
+		}
+		return pages;
+	}
 	async function refresh(id = null) {
+		if (id) onChange(null, "selected");
 		const chosen = id || selectedId, ticket = ++serial;
 		busy = true;
 		head = null;
@@ -10820,9 +11032,9 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		]);
 		comparison.replaceChildren();
 		try {
-			const [data, page, current] = await Promise.all([
+			const [data, pages, current] = await Promise.all([
 				api("GET", `${endpoint}/snapshots/${chosen || "latest"}`),
-				api("GET", `${endpoint}/snapshots?limit=100`),
+				readHistory(ticket),
 				api("GET", `${endpoint}/plans/head`)
 			]);
 			alive();
@@ -10830,7 +11042,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			if (current.head?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 			snapshot = checkedSnapshot(data, chosen);
 			head = current.head;
-			acceptHistory(page, 0);
+			pages.forEach(({ page, after }, index) => acceptHistory(page, after, index > 0));
 			selectedId = snapshot?.snapshot_id || null;
 			preference.snapshotId = selectedId;
 			if (!chosen) latestId = selectedId;
@@ -10842,7 +11054,10 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			])) {
 				status.replaceChildren();
 				render();
-			} else historyOptions();
+			} else {
+				historyOptions();
+				onChange(snapshot, "updated");
+			}
 		} catch (error) {
 			failed(error, ticket);
 		} finally {
@@ -10854,6 +11069,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	}
 	async function select(id) {
 		if (busy || !history.some((row) => row.snapshot_id === id)) return;
+		onChange(null, "selected");
 		const ticket = ++serial;
 		busy = true;
 		selectedId = id;
@@ -10892,6 +11108,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			alive();
 			if (ticket !== serial) return;
 			acceptHistory(page, after, true);
+			historyPages++;
 			if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
 			historyOptions();
 		} catch (error) {
@@ -10934,7 +11151,791 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	return {
 		box,
 		refresh,
-		withdraw
+		withdraw,
+		select,
+		comparison,
+		previous,
+		next,
+		compare,
+		picker,
+		print,
+		current: () => snapshot,
+		controls: () => ({
+			busy,
+			previous: previous.disabled,
+			next: next.disabled
+		}),
+		comparePrevious,
+		history: () => history
+	};
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews.has(from) ? from : "",
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+//#endregion
+//#region src/pm-overview.js
+var domains = [
+	"definition",
+	"scope",
+	"schedule",
+	"resources",
+	"risks",
+	"decisions"
+];
+var classes = [
+	"accepted",
+	"in_review",
+	"in_progress",
+	"blocked",
+	"not_started"
+];
+var tones = [
+	"ok",
+	"review",
+	"info",
+	"bad",
+	"neutral"
+];
+var phaseNames = [
+	"idea",
+	"planning",
+	"development",
+	"maintain",
+	"paused",
+	"closed"
+];
+function workspaceOverview(options) {
+	const { h, t, api, alive, namespace, workspaceId, onOpen = () => {}, onHeader = () => {} } = options;
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	const preference = viewState(namespace, workspaceId, "overview");
+	let serial = 0, projection = null, plan = null, saved = null, active = false, reader = null, reportsLoaded = false, reportRead = null;
+	const parts = new Map(), attentionNodes = new Map();
+	let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
+	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false;
+	const primary = h("a", {
+		class: "ui-button primary",
+		"data-overview-discuss": ""
+	}, t("wb_discuss"));
+	const meta = h("span", { "data-overview-meta": "" });
+	const content = h("div"), status = h("div", { role: "status" }), savedBar = h("div", {
+		class: "pm-overview-saved",
+		hidden: true
+	});
+	const box = h("section", {
+		class: "pm-overview",
+		"data-pm-overview": ""
+	}, savedBar, status, content);
+	const reportTools = h("div", {
+		class: "pm-report-tools",
+		"data-pm-report-tools": ""
+	});
+	const reportControls = (flags) => {
+		for (const [key, disabled] of Object.entries(flags)) {
+			const node = savedBar.querySelector(`[data-overview-report-control="${key}"]`);
+			if (node) node.disabled = disabled;
+		}
+	};
+	const reports = workspaceCharter({
+		...options,
+		onChange: reportChanged,
+		onControls: reportControls
+	});
+	for (const node of reports.box.querySelectorAll(":scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]")) reportTools.append(node);
+	reportTools.append(reports.comparison);
+	const back = button({
+		variant: "ghost",
+		label: t("ov_back_live"),
+		"data-overview-live": "",
+		onClick: () => {
+			mode = preference.mode = "live";
+			projection = null;
+			plan = null;
+			loading = true;
+			signature = "";
+			closeReader();
+			reports.comparison.replaceChildren();
+			render();
+			refreshLive();
+		}
+	});
+	const reportLabel = h("span");
+	reports.previous.setAttribute("aria-label", t("ov_report_previous"));
+	reports.next.setAttribute("aria-label", t("ov_report_next"));
+	savedBar.append(reportLabel, iconButton({
+		icon: "chevron-left",
+		label: t("ov_report_previous"),
+		"data-overview-report-control": "previous",
+		onClick: () => reports.previous.click()
+	}), iconButton({
+		icon: "chevron-right",
+		label: t("ov_report_next"),
+		"data-overview-report-control": "next",
+		onClick: () => reports.next.click()
+	}), button({
+		variant: "ghost",
+		label: t("ui_compare"),
+		"data-overview-report-control": "compare",
+		onClick: () => options.onCompare?.()
+	}), back);
+	reportControls(reports.controls());
+	const date = (value) => {
+		const parsed = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00Z") : null;
+		return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en", {
+			month: "short",
+			day: "numeric",
+			timeZone: "UTC"
+		}) : "—";
+	};
+	const refs = () => {
+		const revision = mode === "saved" ? saved?.baseline?.document_revision : projection?.plan?.revision_id;
+		return [...revision ? [{
+			kind: "plan_revision",
+			id: revision
+		}] : [], ...mode === "saved" && saved ? [{
+			kind: "snapshot",
+			id: saved.snapshot_id
+		}] : []];
+	};
+	function header() {
+		const current = mode === "saved" ? saved : projection;
+		primary.href = discussHref({
+			workspaceId,
+			refs: refs(),
+			title: mode === "saved" ? saved?.title : projection?.plan?.title,
+			from: "overview",
+			report: mode === "saved" ? saved?.snapshot_id : void 0
+		});
+		meta.textContent = mode === "saved" ? saved ? `${t("ov_report", { n: saved.sequence })} · ${date(saved.as_of)}` : t("ov_not_saved") : [
+			projection?.plan?.title,
+			projection?.plan?.adopted_at != null ? t("ov_adopted", { date: date(projection.plan.adopted_at) }) : null,
+			t("ov_live")
+		].filter(Boolean).join(" · ");
+		const phase = mode === "live" && current?.lifecycle?.stage;
+		onHeader({
+			meta,
+			phase: phaseNames.includes(phase) ? t("ui_phase_" + phase) : null,
+			active
+		});
+	}
+	function reportChanged(value, event, error) {
+		if (event === "selected") {
+			mode = preference.mode = "saved";
+			saved = null;
+			closeReader();
+			signature = "";
+		}
+		if (event === "updated") saved = value;
+		if (event === "withdrawn") {
+			saved = null;
+			closeReader();
+			signature = "";
+		}
+		if (event === "error") status.replaceChildren(options.errorBox(error));
+		if (mode === "saved") render();
+	}
+	function discuss(row) {
+		return h("a", {
+			class: "ui-button ghost ui-sm",
+			"data-overview-row-discuss": row.key || row.milestone_id,
+			href: discussHref({
+				workspaceId,
+				refs: row.ref ? [row.ref] : [],
+				title: row.title,
+				from: "overview"
+			})
+		}, t("ov_discuss"));
+	}
+	function open(row) {
+		preference.attention = row.key;
+		onOpen(row.ref, row);
+	}
+	function itemLink(row) {
+		return row ? h("button", {
+			type: "button",
+			class: "pm-overview-link",
+			onclick: () => open(row)
+		}, row.title) : null;
+	}
+	function milestoneDate(row) {
+		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date ? ` → ${date(row.forecast_date)}` : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
+	}
+	function statusStrip(data, fixed = false) {
+		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
+		const goalReason = (data?.unknown || []).find((row) => row.field === "plan.goal")?.reason;
+		const goal = metric({
+			label: t("ov_goal"),
+			value: data?.plan?.goal ?? "—",
+			context: h("div", {}, !data?.plan?.goal ? h("span", { class: "ui-meta" }, reasonLabel(t, goalReason || "unknown")) : null, h("div", {}, data?.plan?.title || "—"), data?.plan?.adopted_at != null ? h("div", {}, t("ov_adopted", { date: date(data.plan.adopted_at) })) : null)
+		});
+		goal.dataset.overviewMetric = "goal";
+		const next = data?.next_milestone;
+		const progress = metric({
+			label: t("ov_progress"),
+			value: !p ? null : complete ? t("ov_accepted", {
+				accepted: p.accepted,
+				total: p.requirements
+			}) : t("ov_requirements", { n: p.requirements }),
+			context: h("div", {}, p && !complete ? statusPill(fixed ? "unknown" : "partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
+			bar: complete ? classes.map((key, i) => ({
+				tone: tones[i],
+				value: p[key]
+			})) : null
+		});
+		progress.dataset.overviewMetric = "progress";
+		if (complete) progress.append(disclosure({
+			label: t("ov_details"),
+			key: `${namespace}:${workspaceId}:progress`,
+			body: h("ul", {}, ...classes.map((key) => h("li", {}, statusPill(key), ` ${p[key]}`)))
+		}));
+		const metrics = ["blocker", "decision"].map((kind) => {
+			const first = data?.attention?.find((row) => row.kind === kind);
+			const node = metric({
+				label: t(kind === "blocker" ? "ov_blockers" : "ov_decisions"),
+				value: data?.attention_counts?.[kind] ?? null,
+				context: h("div", {}, itemLink(first), kind === "decision" && first ? discuss(first) : null)
+			});
+			node.dataset.overviewMetric = kind;
+			return node;
+		});
+		return h("div", {
+			class: "pm-overview-status",
+			"data-overview-status": ""
+		}, goal, progress, ...metrics);
+	}
+	function age(since) {
+		if (!Number.isFinite(since) || !Number.isFinite(projection?.as_of)) return null;
+		const seconds = Math.max(0, projection.as_of - since);
+		const [key, unit] = seconds >= 86400 ? ["ov_day", 86400] : seconds >= 3600 ? ["ov_hour", 3600] : ["ov_minute", 60];
+		return t(key, { n: Math.floor(seconds / unit) });
+	}
+	function contextText(row) {
+		const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
+		return ids.map((id) => plan?.document?.requirements?.find((req) => req.id === id)?.text).filter(Boolean).join(" · ") || (ids.length ? t("ov_context_requirement", { n: ids.length }) : c.work_item_id ? t("ov_context_work") : c.milestone_id ? t("ov_context_milestone") : "");
+	}
+	function attention(data) {
+		if (!attentionList) {
+			attentionList = h("div", {
+				class: "pm-overview-attention",
+				"data-overview-attention": ""
+			});
+			attentionCard = sectionCard({
+				title: t("ov_attention"),
+				body: attentionList
+			});
+		}
+		const rows = attentionList, reading = rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover"));
+		const keys = new Set(data.attention.map((row) => row.key));
+		for (const [key, entry] of attentionNodes) if (!keys.has(key)) {
+			entry.node.remove();
+			attentionNodes.delete(key);
+		}
+		rows.querySelector(".pm-overview-footer")?.remove();
+		rows.querySelector(".ui-empty")?.remove();
+		const existingOrder = [...rows.children].map((node) => node.dataset.overviewRow);
+		const ordered = reading ? [...data.attention].sort((a, b) => {
+			const ai = existingOrder.indexOf(a.key), bi = existingOrder.indexOf(b.key);
+			return (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi);
+		}) : data.attention;
+		let position = 0;
+		for (const row of ordered) {
+			const rowSignature = JSON.stringify([row, contextText(row)]), cached = attentionNodes.get(row.key);
+			if (cached?.signature === rowSignature) {
+				if (rows.children[position] !== cached.node) rows.insertBefore(cached.node, rows.children[position] || null);
+				position++;
+				continue;
+			}
+			const label = [
+				"blocker",
+				"decision",
+				"deviation",
+				"risk"
+			].includes(row.kind) ? t("ov_" + row.kind) : reasonLabel(t, "unknown");
+			const elapsed = age(row.since);
+			const link = h("button", {
+				type: "button",
+				class: "pm-overview-attention-main",
+				"data-overview-open": row.key,
+				onclick: () => open(row)
+			}, h("span", {
+				class: "pm-overview-kind",
+				title: label,
+				"aria-label": label
+			}, icon(row.kind === "decision" ? "message-square" : "circle-alert")), h("span", {}, h("strong", {}, row.title), h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · "))));
+			const node = h("div", {
+				class: "pm-overview-attention-row",
+				"data-overview-row": row.key
+			}, link, elapsed === null ? null : h("span", {
+				class: "ui-meta",
+				"data-overview-age": ""
+			}, elapsed), discuss(row));
+			cached?.node.remove();
+			attentionNodes.set(row.key, {
+				signature: rowSignature,
+				node
+			});
+			rows.insertBefore(node, rows.children[position] || null);
+			position++;
+		}
+		if (!data.attention.length) rows.append(emptyState({ title: t(data.coverage?.complete ? "ov_empty" : "ov_incomplete") }));
+		if (data.attention_truncated) rows.append(h("div", { class: "pm-overview-footer" }, t("ov_showing", { n: data.attention.length }), " · ", h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/issues` }, t("ov_view_all"))));
+		return attentionCard;
+	}
+	function sidebar(data) {
+		const milestones = sectionCard({
+			title: t("ov_milestones"),
+			body: h("div", {}, ...data.milestones.map((row) => h("div", {
+				class: "pm-overview-milestone",
+				"data-overview-milestone": row.milestone_id
+			}, h("div", {}, itemLink(row), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
+		});
+		const deliveries = sectionCard({
+			title: t(data.recent_deliveries_complete ? "ov_deliveries" : "ov_deliveries_loaded"),
+			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
+				class: "pm-overview-delivery",
+				"data-overview-delivery": row.work_item_id
+			}, itemLink({
+				...row,
+				ref: {
+					kind: "work_item",
+					id: row.work_item_id
+				}
+			}), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
+		});
+		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
+	}
+	function closeReader() {
+		reader?.close();
+		reader = null;
+		readerDocument = null;
+		relatedSelection = null;
+	}
+	function openRelated(row, host) {
+		closeReader();
+		relatedSelection = row;
+		reader = inspector({
+			title: row.title,
+			onClose: () => {
+				reader = null;
+				relatedSelection = null;
+			}
+		});
+		reader.classList.add("pm-overview-related");
+		reader.dataset.overviewRelated = row.key;
+		reader.body.append(h("section", {
+			"data-overview-related-row": row.key,
+			"aria-current": "true"
+		}, h("p", {}, t("ov_" + row.kind)), h("p", {}, contextText(row)), row.delta_days > 0 ? h("p", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null, discuss(row), disclosure({
+			label: t("ov_details"),
+			body: h("div", {}, row.reason ? h("p", {}, reasonLabel(t, row.reason)) : null, h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+				ref: row.ref,
+				since: row.since,
+				context: row.context
+			}, null, 2)))
+		})));
+		host.append(reader);
+	}
+	function fullPlan(document) {
+		closeReader();
+		reader = inspector({
+			title: t("ov_plan"),
+			onClose: () => {
+				reader = null;
+			}
+		});
+		reader.dataset.overviewPlan = "";
+		readerDocument = JSON.stringify(document);
+		reader.body.append(planDocument(h, document.markdown), h("ul", {}, ...(document.requirements || []).map((row) => h("li", {}, row.text, h("ul", {}, ...(row.acceptance || []).map((item) => h("li", {}, item.text)))))));
+		box.append(reader);
+	}
+	function charter(source) {
+		const groups = charterSections(source), document = source?.baseline?.document;
+		const grid = h("div", { class: "pm-overview-charter-grid" });
+		for (const key of domains) {
+			const rows = groups[key], expanded = preference.expanded?.includes(key);
+			const list = h("ul", { class: "pm-overview-bullets" }, ...rows.map((row, i) => h("li", { hidden: i >= 3 && !expanded }, row.text, [
+				"agent_assumption",
+				"unresolved",
+				"conflicting"
+			].includes(row.status) ? statusPill("unconfirmed") : null)));
+			const sources = disclosure({
+				label: icon("list-checks"),
+				key: `${namespace}:${workspaceId}:overview-source:${key}`,
+				body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))
+			});
+			sources.classList.add("pm-overview-sources");
+			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
+			sources.querySelector("summary").title = t("ov_sources");
+			const card = sectionCard({
+				title: t("wb_" + key),
+				body: h("div", {}, rows.length ? list : h("span", { class: "ui-meta" }, t("ov_no_items")), sources)
+			});
+			card.dataset.charterSection = key;
+			if (rows.length > 3) {
+				const more = button({
+					variant: "ghost",
+					size: "sm",
+					label: t(expanded ? "ov_less" : "ov_more", { n: rows.length - 3 }),
+					"aria-expanded": String(Boolean(expanded)),
+					onClick: () => {
+						const expand = more.getAttribute("aria-expanded") !== "true";
+						more.setAttribute("aria-expanded", String(expand));
+						[...list.children].forEach((node, i) => {
+							node.hidden = i >= 3 && !expand;
+						});
+						more.textContent = t(expand ? "ov_less" : "ov_more", { n: rows.length - 3 });
+						const keys = new Set(preference.expanded || []);
+						expand ? keys.add(key) : keys.delete(key);
+						preference.expanded = [...keys];
+					}
+				});
+				card.append(more);
+			}
+			grid.append(card);
+		}
+		return h("section", {
+			"data-pm-charter": "",
+			class: "pm-overview-charter"
+		}, h("header", { class: "pm-overview-charter-heading" }, h("h2", {}, t("ov_charter")), button({
+			variant: "ghost",
+			label: t("ov_plan"),
+			disabled: !document,
+			"data-charter-plan": "",
+			onClick: () => fullPlan(document)
+		})), grid);
+	}
+	function details(data, fixed) {
+		const entries = new Map((data?.unknown || []).map((row) => [row.reason, row]));
+		for (const source of Object.values(data?.coverage?.sources || {})) if (source.status) entries.set(source.status, { reason: source.status });
+		const omitted = data?.coverage?.sources?.lifecycle_inflight?.omitted;
+		return disclosure({
+			label: t("ov_details"),
+			key: `${namespace}:${workspaceId}:overview-details`,
+			body: h("div", {}, h("p", {}, t(fixed ? "ov_saved_limits" : "ov_caveat")), h("ul", {}, ...[...entries.values()].map((row) => h("li", {}, reasonLabel(t, row.reason), Object.hasOwn(reasonLabels, row.reason) ? null : h("code", {}, ` (${row.reason})`))), omitted > 0 ? h("li", {}, t("ov_hidden", { n: omitted })) : null), h("pre", { class: "pm-brief-proof" }, JSON.stringify(fixed ? {
+				coverage: saved?.coverage,
+				visibility: saved?.visibility,
+				snapshot_id: saved?.snapshot_id
+			} : {
+				coverage: data?.coverage,
+				as_of: data?.as_of
+			}, null, 2)))
+		});
+	}
+	function savedData() {
+		const document = saved?.baseline?.document;
+		const goal = document?.selected_inputs?.find((row) => [
+			"value",
+			"goal",
+			"problem"
+		].includes(row.slot) && ["user_confirmed", "repo_evidence"].includes(row.status))?.value;
+		return {
+			plan: document ? {
+				title: document.title,
+				goal: goal || null,
+				adopted_at: saved.baseline.adoption?.created_at
+			} : null,
+			progress: document ? { requirements: new Set((document.requirements || []).map((row) => row.id)).size } : null,
+			attention_counts: {
+				blocker: null,
+				decision: null
+			},
+			attention: [],
+			unknown: [{
+				field: "progress",
+				reason: "not_assessed"
+			}]
+		};
+	}
+	function commitParts(entries) {
+		if (!parts.size) content.replaceChildren();
+		const keys = new Set(entries.map((row) => row.key));
+		for (const [key, part] of parts) if (!keys.has(key)) {
+			part.node.remove();
+			parts.delete(key);
+		}
+		entries.forEach((entry, index) => {
+			let part = parts.get(entry.key);
+			const value = JSON.stringify(entry.value);
+			if (!part || part.value !== value) {
+				const node = entry.render();
+				if (part && node !== part.node) part.node.replaceWith(node);
+				part = {
+					node,
+					value
+				};
+				parts.set(entry.key, part);
+			}
+			if (content.children[index] !== part.node) content.insertBefore(part.node, content.children[index] || null);
+		});
+	}
+	function resetContent(...nodes) {
+		parts.clear();
+		content.replaceChildren(...nodes);
+	}
+	function render() {
+		header();
+		savedBar.hidden = mode !== "saved";
+		box.dataset.overviewMode = mode;
+		if (mode === "saved") {
+			reportLabel.textContent = saved ? `${t("ov_viewing", { n: saved.sequence })} · ${date(saved.as_of)} · ${saved.title || ""}` : t("ov_not_saved");
+			if (!saved) {
+				resetContent(loading ? skeleton(3) : h("p", {}, t("ov_not_saved")));
+				return;
+			}
+			const next = JSON.stringify(saved);
+			if (signature === `saved:${next}`) return;
+			signature = `saved:${next}`;
+			closeReader();
+			commitParts([
+				{
+					key: "status",
+					value: saved,
+					render: () => statusStrip(savedData(), true)
+				},
+				{
+					key: "charter",
+					value: saved,
+					render: () => charter(saved)
+				},
+				{
+					key: "details",
+					value: saved,
+					render: () => details(null, true)
+				}
+			]);
+			return;
+		}
+		if (!projection) {
+			resetContent(loading ? skeleton(4) : statusStrip(null));
+			return;
+		}
+		const next = JSON.stringify([{
+			...projection,
+			as_of: null
+		}, plan]);
+		if (signature === `live:${next}`) return;
+		signature = `live:${next}`;
+		const source = {
+			baseline: { document: plan?.document },
+			brief: {}
+		};
+		source.brief.decisions = { items: projection.attention.filter((row) => row.kind === "decision").map((row) => ({
+			text: row.title,
+			source: row.ref
+		})) };
+		const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute("data-overview-open") || document.activeElement?.getAttribute("data-overview-row-discuss") : null;
+		const discussFocused = document.activeElement?.hasAttribute("data-overview-row-discuss");
+		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
+		const main = attention(projection);
+		commitParts([
+			{
+				key: "status",
+				value: [
+					projection.plan,
+					projection.progress,
+					projection.attention_counts,
+					projection.attention,
+					projection.next_milestone,
+					projection.unknown
+				],
+				render: () => statusStrip(projection)
+			},
+			{
+				key: "columns",
+				value: [
+					projection.milestones,
+					projection.recent_deliveries,
+					projection.milestones_truncated,
+					projection.recent_deliveries_complete
+				],
+				render: () => h("div", { class: "pm-overview-columns" }, main, sidebar(projection))
+			},
+			{
+				key: "charter",
+				value: source,
+				render: () => charter(source)
+			},
+			{
+				key: "details",
+				value: [projection.coverage, projection.unknown],
+				render: () => details(projection, false)
+			}
+		]);
+		if (focused) content.querySelector(`[${discussFocused ? "data-overview-row-discuss" : "data-overview-open"}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+	}
+	async function refreshLive() {
+		const ticket = ++serial;
+		loading = true;
+		if (!projection && mode === "live") render();
+		try {
+			const data = await api("GET", `${endpoint}/overview`);
+			alive();
+			if (ticket !== serial) return;
+			if (data?.workspace_id !== workspaceId || data.version !== 1 || !Array.isArray(data.attention) || !Array.isArray(data.milestones) || !Array.isArray(data.recent_deliveries)) throw Error(t("pm_scope_mismatch"));
+			let adopted = null;
+			if (data.plan) {
+				const value = await api("GET", `${endpoint}/plans/${encodeURIComponent(data.plan.revision_id)}`);
+				alive();
+				if (ticket !== serial) return;
+				if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== data.plan.revision_id) throw Error(t("pm_scope_mismatch"));
+				adopted = value.plan;
+			}
+			projection = data;
+			plan = adopted;
+			loading = false;
+			status.replaceChildren();
+			render();
+		} catch (error) {
+			try {
+				alive();
+				if (ticket !== serial) return;
+			} catch {
+				return;
+			}
+			projection = null;
+			plan = null;
+			loading = false;
+			signature = "";
+			closeReader();
+			render();
+			status.replaceChildren(options.errorBox(error));
+		}
+	}
+	async function refresh() {
+		if (mode === "live") await refreshLive();
+		if (reportsLoaded || mode === "saved") {
+			await reports.refresh();
+			if (mode === "saved") render();
+		}
+	}
+	function withdraw() {
+		serial++;
+		projection = null;
+		plan = null;
+		saved = null;
+		signature = "";
+		loading = false;
+		closeReader();
+		reports.withdraw();
+		resetContent();
+		status.replaceChildren();
+		header();
+	}
+	function prepareReports() {
+		reportsLoaded = true;
+		if (!reportRead) reportRead = reports.refresh().finally(() => {
+			reportRead = null;
+		});
+		return reportRead;
+	}
+	return {
+		box,
+		primary,
+		meta,
+		reportTools,
+		refresh,
+		withdraw,
+		prepareReports,
+		openRelated,
+		closeRelated: () => {
+			if (relatedSelection) closeReader();
+		},
+		reportActions: {
+			compare: () => {
+				if (mode !== "saved") {
+					mode = preference.mode = "saved";
+					saved = reports.current();
+					signature = "";
+					render();
+				}
+				return reports.comparePrevious();
+			},
+			print: () => window.print()
+		},
+		setActive(value) {
+			if (active === value) {
+				header();
+				return;
+			}
+			active = value;
+			if (!value) {
+				preference.scroll = window.scrollY;
+				closeReader();
+			} else if (preference.scroll) window.scrollTo(0, preference.scroll);
+			header();
+		},
+		dispose() {
+			serial++;
+			closeReader();
+		}
 	};
 }
 //#endregion
@@ -11455,11 +12456,34 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		deliveryPages++;
 		await select(selected);
 	}
+	async function openRef(ref) {
+		if (!active || !plan) {
+			active = true;
+			await refresh();
+		}
+		if (ref.kind === "work_item") {
+			for (const card of cards.filter((row) => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
+			renderTable();
+			await select(ref.id, true);
+			return;
+		}
+		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id) return;
+		expanded.add(ref.id);
+		filter.value = "";
+		renderTable();
+		const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
+		if (row) {
+			row.setAttribute("aria-selected", "true");
+			row.querySelector("button")?.focus();
+			row.scrollIntoView({ block: "nearest" });
+		}
+	}
 	controls();
 	return {
 		element,
 		refresh,
 		withdraw,
+		openRef,
 		dispose: () => {
 			Object.assign(preference, {
 				selected,
@@ -14068,7 +15092,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		}, h("div", { class: "pm-fact-heading" }, h("strong", { class: "pm-source" }, revision.document.title), h("span", { class: "muted" }, t("pm_gov_" + record.kind))), h("p", { class: "muted" }, t("pm_gov_" + revision.document.status), " · ", revision.document.owner_actor, revision.document.decision ? " · " + t("pm_gov_" + revision.document.decision.disposition) : ""), h("button", {
 			type: "button",
 			class: "secondary",
-			"aria-pressed": selectedId === record.record_id,
+			"aria-pressed": String(selectedId === record.record_id),
 			onclick: () => {
 				selectRecord(record.record_id);
 				refresh(true);
@@ -14490,7 +15514,15 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	}
 	return {
 		element,
-		refresh
+		refresh,
+		openRef: async (ref) => {
+			if (ref.kind !== "governance") return;
+			selectRecord(ref.id);
+			await refresh(true);
+			const row = list.querySelector(`[data-pm-governance-row="${CSS.escape(ref.id)}"]`);
+			row?.querySelector("button")?.focus();
+			row?.scrollIntoView({ block: "nearest" });
+		}
 	};
 }
 //#endregion
@@ -25595,8 +26627,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}) : null;
 	if (evidence) body.append(evidence.box);
 	let workbench = null;
+	const liveOverview = !threadId && caps()?.features?.pm_overview?.version === 1;
+	const overviewMeta = h("p", {
+		class: "ui-meta",
+		hidden: true
+	});
+	heading.querySelector(".ui-page-heading").append(overviewMeta);
 	const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
-	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? charter ? workspaceCharter({
+	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({
 		h,
 		t,
 		api,
@@ -25610,6 +26648,34 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox,
 		caps,
 		canRead: () => loaded && Boolean(workspace),
+		onCompare: () => {
+			openPanel(t("ui_compare"), brief.reportTools);
+			brief.prepareReports().then(() => brief.reportActions.compare());
+		},
+		onHeader: ({ meta, phase, active }) => {
+			overviewMeta.hidden = !active;
+			overviewMeta.replaceChildren(meta);
+			if (active) {
+				phasePill.hidden = !phase;
+				phasePill.textContent = phase || "";
+			}
+		},
+		onOpen: async (ref, row) => {
+			if (!ref) return;
+			const destination = ["requirement", "work_item"].includes(ref.kind) ? "requirements" : ref.kind === "milestone" && !row.kind ? "schedule" : "issues";
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`;
+			workbench?.select(destination);
+			if (destination === "requirements") await traceability?.openRef?.(ref);
+			else if (ref.kind === "governance") await governance?.openRef?.(ref);
+			else if (ref.kind === "milestone" && destination === "schedule") {
+				const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
+				if (node) {
+					node.tabIndex = -1;
+					node.focus();
+					node.scrollIntoView({ block: "nearest" });
+				}
+			} else brief?.openRelated?.(row, main);
+		},
 		onDiscuss: () => {
 			location.hash = `#/pm/${workspaceId}/discussions`;
 			workbench?.select("discussions");
@@ -25950,6 +27016,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let detailPanel = null;
 	function openPanel(label, node) {
 		if (!node || !loaded) return;
+		if (node === reportTools) brief?.prepareReports?.();
 		detailPanel?.close();
 		const home = node.parentNode, next = node.nextSibling;
 		detailPanel = inspector({
@@ -25965,12 +27032,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	if (lifecycle) drawersHome.append(lifecycle.element);
 	const headerActions = heading.querySelector(".ui-header-actions");
-	const primary = charter ? brief?.box.querySelector(":scope > header .primary") : null;
+	const primary = brief?.primary || (charter ? brief?.box.querySelector(":scope > header .primary") : null);
 	if (primary) {
 		headerActions.prepend(primary);
 		brief.box.querySelector(":scope > header")?.remove();
 	}
-	const reportTools = h("div", {
+	const reportTools = brief?.reportTools || h("div", {
 		class: "pm-report-tools",
 		"data-pm-report-tools": ""
 	});
@@ -26002,10 +27069,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			},
 			...charter ? [{
 				label: t("ui_compare"),
-				onSelect: () => reportTools.querySelector("button[data-report-compare]")?.click()
+				onSelect: () => {
+					if (brief?.reportActions) {
+						openPanel(t("ui_compare"), reportTools);
+						brief.prepareReports().then(() => brief.reportActions.compare());
+					} else reportTools.querySelector("button[data-report-compare]")?.click();
+				}
 			}, {
 				label: t("ui_print"),
-				onSelect: () => reportTools.querySelector("button[data-report-print]")?.click()
+				onSelect: () => brief?.reportActions ? brief.reportActions.print() : reportTools.querySelector("button[data-report-print]")?.click()
 			}] : [],
 			{
 				label: t("ui_export_brief"),
@@ -26116,7 +27188,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sections: [region]
 			});
 		}
-		workbench = projectViews({
+		workbench = projectViews$1({
 			h,
 			t,
 			namespace,
@@ -26124,17 +27196,21 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			view,
 			groups,
 			onSelect: (id) => {
+				if (id !== "issues") brief?.closeRelated?.();
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
-				window.scrollTo(0, 0);
+				brief?.setActive?.(id === "overview");
+				if (id !== "overview" || !liveOverview) window.scrollTo(0, 0);
 				if (id === "requirements") traceability?.activate();
 				detailPanel?.close();
 				if (primary) primary.hidden = id !== "overview";
 				if (reportMenu) reportMenu.hidden = id !== "overview";
 				publishContext();
+				brief?.setActive?.(id === "overview");
 			}
 		});
 		workbench.apply();
+		brief?.setActive?.(workbench.selected() === "overview");
 		if (view && view !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		if (primary) primary.hidden = workbench.selected() !== "overview";
 		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
@@ -26872,6 +27948,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"closed"
 			].includes(stage) ? t("ui_phase_" + stage) : "";
 			publishContext();
+			brief?.setActive?.(workbench?.selected() === "overview");
 			if (workbench?.selected() === "requirements") await traceability?.activate();
 			resources?.setActive(workbench?.selected() === "agents");
 			updateForms();
@@ -26953,6 +28030,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
 		}
+		if (liveOverview && [
+			"work_item",
+			"project",
+			"task",
+			"command",
+			"operation",
+			"session",
+			"deployment",
+			"integration"
+		].includes(event.resource_type)) {
+			eventReads = eventReads.catch(() => {}).then(() => load());
+			return eventReads;
+		}
 		if (handoff && ["project", "work_item"].includes(event.resource_type)) {
 			eventReads = eventReads.catch(() => {}).then(() => load());
 			return eventReads;
@@ -27007,6 +28097,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		detailPanel?.close();
 		reportMenu?.dispose();
 		overflow.dispose();
+		brief?.dispose?.();
 		traceability?.dispose();
 		resources?.dispose();
 		proposalReview?.dispose();

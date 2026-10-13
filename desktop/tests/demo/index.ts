@@ -1,3 +1,4 @@
+import {overview, overviewGovernance} from './overview.ts';
 // One dispatcher for the member sign-in demo. Shapes come from the current central reads.
 // Unknown routes throw. A known id that is not in this project is a 404. Nothing here writes.
 import {demoProject, type DemoProject} from './project.ts';
@@ -33,6 +34,10 @@ function segment(value: string) {
 
 function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   if (rest === '' || rest === '/') return ok({workspace: workspaceRecord(project)});
+  if (rest === '/overview') return ok(overview(project));
+  if (rest === '/governance') return ok({version: 1, workspace_id: project.ids.workspaceId, records: overviewGovernance(project), next_cursor: null});
+  const governance = rest.match(/^\/governance\/([^/]+)$/);
+  if (governance) {const row = overviewGovernance(project).find(row => row.record.record_id === governance[1]); return row ? ok({version: 1, workspace_id: project.ids.workspaceId, ...row}) : notFound();}
   if (rest === '/capabilities') return ok(workspaceCapabilities(project));
   if (rest === '/plans/head') return ok({version: 1, head: plans(project).head});
   if (rest === '/plans/accepted') {

@@ -128,3 +128,17 @@ PhaseProfile 為 version 3，原先記錄 profile_version 2 的 immutable plans 
 不是相關 operation IDs 排序後的第一個；維持原完整 context 字元上限，超出時拒絕，
 不默默丟棄來源。文件 bundle 維持原 UTF-8 上限，runtime／proposal／operation read
 重查已凍結來源的可見性。來源文字永遠是資料，不授權模式切換、採用或執行。
+
+## 共用前端總覽
+
+`desktop/src/pm-overview.js` 以本投影作為即時狀態的唯一來源，並讀取同一
+`plan.revision_id` 的固定文件來呈現章程。不以 snapshot 補即時數值，也不以
+journal sequence 顯示版本。未知值保留破折號；來源掃描不完整時，只顯示已知
+需求分母及「部分」。所有缺漏原因透過共用 reason map 本地化；未識別的代碼
+只在詳細資訊中顯示。Delivery 回傳的欄位名稱為 `state`，回復狀態單獨標示。
+
+選取報告時，狀態與章程只讀取該 snapshot；沒有保存的驗收數量不回推。
+報告模式隱藏即時關注清單、里程碑與交付列。回到即時總覽會重新讀取投影。
+討論連結沿用 `pm-discuss-link.js`，逐筆傳遞原 attention ref；報告模式綁定
+報告及其固定計畫版本。快照建立、比較雙方的權限重查、原 operation key
+回復與匯出流程仍由原本的 charter／brief export 模組負責。
