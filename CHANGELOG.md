@@ -37,12 +37,13 @@
   source inventory; require resolved-source verification, an optimized iterator
   regression, and a packaged release WebView smoke test in desktop CI.
 
-- Windows Fleet core tests give PowerShell fixtures their own bounded startup phase before the unchanged work
-  deadline, and start them one at a time.
 - Add published-version starts through explicit repository/host/workspace bindings. Preview the
   exact branch head, fetch its fixed SHA into a fresh managed carrier, and recover the original
   operation after lost replies. Shared browser/Tauri UI, CLI, MCP and canonical workflow `.9`
   preserve the same request; human checkouts and remote refs remain unchanged.
+
+- Windows Fleet core tests give PowerShell fixtures their own bounded startup phase before the unchanged work
+  deadline, and start them one at a time.
 
 - Add central durable `session.start`, exact workspace discovery and a shared start form. Save
   the original request before submission; reconcile unknown start/send outcomes and preserve retained
