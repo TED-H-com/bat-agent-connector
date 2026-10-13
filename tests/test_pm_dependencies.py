@@ -507,6 +507,25 @@ def test_peer_filters_and_byte_budget_run_before_the_accepted_peer_cap(monkeypat
     assert reasons == ['peer_byte_budget']
 
 
+def test_hidden_peer_scan_stops_before_more_than_128_source_checks(monkeypatch):
+    candidates = [{'workspace_id': f'ws_{i:032x}', 'revision_id': f'pmdep_{i:032x}'} for i in range(1024)]
+    checked = []
+
+    def current(ops, principal, wid):
+        if wid == 'own':
+            return {'target': {'repository': 'o/own'}}
+        checked.append(wid)
+        return None
+
+    monkeypatch.setattr(pm_dependency_reads, '_current', current)
+    monkeypatch.setattr(pm_dependency_reads, '_peer_candidates', lambda ops, principal, wid, cursor, limit:
+        [row for row in candidates if (row['workspace_id'], row['revision_id']) > cursor][:limit])
+    reasons = []
+    assert pm_dependency_reads.discover_peers(None, OWNER, 'own', reasons) == []
+    assert checked == [row['workspace_id'] for row in candidates[:128]]
+    assert reasons == ['peer_scan_limit']
+
+
 async def test_impact_before_capture_says_why_and_reads_have_their_own_403(pm):
     ops, wid, key = pm["d"].ops, pm["workspace_id"], dependency_key("python", "httpx")
     unavailable = pm_dependency_reads.impact(ops, OWNER, wid, dependency=key)

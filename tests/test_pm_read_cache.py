@@ -434,3 +434,62 @@ def test_spec_source_cycle_refusals_are_not_cached_request_wide(db, monkeypatch)
     with _snapshot(db), pm_read_cache.scope(db, OWNER):
         assert guard(db, OWNER, 'a', lambda: (b_visible(db, OWNER), True)[1]) is True
         assert b_visible(db, OWNER) is unscoped
+
+
+@pytest.mark.parametrize('domain', ['proposal', 'spec', 'repair'])
+def test_traversal_budget_refusals_do_not_survive_in_the_request_memo(db, monkeypatch, domain):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import pm_conversation_proposals as proposals
+    from bat_agent_connector import pm_maintenance_repair_delivery as delivery
+    from bat_agent_connector import pm_maintenance_repair_evidence as evidence
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+    from bat_agent_connector import pm_spec_materialization as spec
+
+    checks = {}
+    if domain == 'proposal':
+        depth = 64
+
+        def guard(identity, check):
+            return proposals._bounded_access(db, OWNER, 'proposal', identity, check)
+    elif domain == 'spec':
+        depth = 2
+        monkeypatch.setattr(pm_source_lineage, 'MAX_ROOTS', depth)
+        monkeypatch.setattr(spec, '_source_visible', lambda db, principal, op: checks[op['operation_id']]())
+
+        def guard(identity, check):
+            checks[identity] = check
+            return spec.source_visible(db, OWNER, {'operation_id': identity})
+    else:
+        depth = 64
+        monkeypatch.setattr(repairs, '_access', lambda ops, principal, op: checks[op['operation_id']]())
+        monkeypatch.setattr(evidence, 'require_evidence_sources', lambda *args: None)
+        monkeypatch.setattr(delivery, 'require_sources', lambda *args: None)
+
+        def guard(identity, check):
+            checks[identity] = check
+            try:
+                repairs._full_access(SimpleNamespace(db=db), OWNER, {'operation_id': identity})
+            except OperationError:
+                return False
+            return True
+
+    decisions = []
+
+    @pm_read_cache.memoized
+    def leaf(connection, principal):
+        result = guard('leaf', lambda: True)
+        decisions.append(result)
+        return result
+
+    def walk(remaining):
+        return guard(str(remaining), lambda: walk(remaining - 1) if remaining else leaf(db, OWNER))
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        walk(depth - 1)
+        assert decisions == [False]
+        # Refused at the budget inside the traversal, available when read as a new root.
+        assert not pm_read_cache._CURRENT.get().scope.values
+        assert leaf(db, OWNER) is True
+        assert leaf(db, OWNER) is True
+        assert decisions == [False, True]
