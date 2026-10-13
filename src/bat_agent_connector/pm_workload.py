@@ -135,8 +135,8 @@ class _Reader:
         return baselines._snapshot(self.db)
 
     def get(self, oid, *, steps=False, principal=None):
-        from . import pm_access
-        row = self.db.execute('SELECT * FROM operations WHERE operation_id=?', (oid,)).fetchone()
+        from . import pm_access, pm_read_cache
+        row = pm_read_cache.operation_row(self.db, oid)
         if not row:
             raise _bad('NOT_FOUND', 'Original workload source unavailable', 404)
         operation = OperationService._decode(row)

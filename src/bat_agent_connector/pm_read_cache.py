@@ -14,6 +14,7 @@ _CURRENT = ContextVar('pm_read_cache', default=None)
 # Depth of active traversal guards. A context copied into another thread or
 # task keeps the depth, which can only prevent storing, never add an entry.
 _GUARDS = ContextVar('pm_read_cache_guards', default=0)
+_REFUSALS = ContextVar('pm_read_cache_refusals', default=0)
 
 
 def _task():
@@ -108,11 +109,51 @@ def guarded():
         _GUARDS.reset(token)
 
 
-def remember(kind, key, load):
+def is_guarded():
+    """Whether new answers would depend on an active traversal guard."""
+    return _GUARDS.get() > 0
+
+
+def refusal_generation():
+    """Identify loads affected by a traversal-local cycle or budget refusal."""
+    return _REFUSALS.get()
+
+
+def refuse():
+    """Keep every enclosing load from storing a traversal-dependent answer."""
+    _REFUSALS.set(_REFUSALS.get() + 1)
+
+
+def _entry(entry):
+    available, value = entry
+    if not available:
+        from .operations import OperationError
+        raise OperationError(*value)
+    return deepcopy(value)
+
+
+def recall(kind, key):
+    """Return (found, value) without adding loader frames to a bounded walk."""
+    frame = _CURRENT.get()
+    if frame is None or not frame.scope.usable():
+        return False, None
+    try:
+        identity = (kind, frame.principal, _key(key))
+    except TypeError:
+        return False, None
+    entry = frame.scope.values.get(identity)
+    return (True, _entry(entry)) if entry is not None else (False, None)
+
+
+def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_independent=False):
     """Remember a namespaced value; include explicit visibility inputs in key.
 
     The selected scope principal is also part of every key. Unsupported key
     types bypass caching, preserving the underlying reader's validation.
+    Readers with traversal-local refusals can retain only completed positive
+    answers with cache_if=bool and leave exceptions uncached.
+    guard_independent is only for raw snapshot metadata, never visibility,
+    sanitized projections or answers depending on a traversal guard.
     """
     frame = _CURRENT.get()
     if frame is None or not frame.scope.usable():
@@ -123,28 +164,29 @@ def remember(kind, key, load):
     except TypeError:
         return load()
     if identity not in current.values:
-        if _GUARDS.get() > 0:
+        if _GUARDS.get() > 0 and not guard_independent:
             return load()
         from .operations import OperationError
+        generation = refusal_generation()
         try:
             value = load()
         except OperationError as exc:
-            if not current.usable():
+            if (not cache_errors or not current.usable()
+                    or not guard_independent and generation != refusal_generation()):
                 raise
             current.values[identity] = (False, (exc.code, exc.message, exc.status))
         else:
             # Loading can itself write. Do not repopulate an invalidated memo.
-            if not current.usable():
+            if (not current.usable() or cache_if is not None and not cache_if(value)
+                    or not guard_independent and generation != refusal_generation()):
                 return value
             current.values[identity] = (True, deepcopy(value))
-    available, value = current.values[identity]
-    if not available:
-        from .operations import OperationError
-        raise OperationError(*value)
-    return deepcopy(value)
+    return _entry(current.values[identity])
 
 
-def memoized(fn):
+def memoized(fn=None, *, guard_independent=False):
+    if fn is None:
+        return lambda reader: memoized(reader, guard_independent=guard_independent)
     first_name = next(iter(signature(fn).parameters))
 
     @wraps(fn)
@@ -156,5 +198,16 @@ def memoized(fn):
             return fn(*args, **kwargs)
         key = (args[1:], sorted(kwargs.items())) if args else (
             (), sorted((name, value) for name, value in kwargs.items() if name != first_name))
-        return remember(fn, key, lambda: fn(*args, **kwargs))
+        return remember(fn, key, lambda: fn(*args, **kwargs), guard_independent=guard_independent)
     return read
+
+
+@memoized(guard_independent=True)
+def operation_row(db, operation_id):
+    """Raw canonical columns only; callers still decode and authorize each read.
+
+    SQL strings are immutable and independent of visibility/backedge guards.
+    Copies protect the saved envelope, and any write disables their reuse.
+    """
+    row = db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
+    return dict(row) if row is not None else None

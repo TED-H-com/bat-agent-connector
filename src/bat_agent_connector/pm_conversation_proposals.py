@@ -13,7 +13,6 @@ from . import (
     pm_native_operations,
     pm_plans,
     pm_profiles,
-    pm_read_cache,
     pm_runs,
     pm_workspace,
 )
@@ -138,13 +137,9 @@ def _admit(ops, principal, target, params, pre):
 
 def _bounded_access(db, principal, kind, identity, check):
     from .pm_source_reads import check as check_source
-
-    def guarded_check():
-        # Cycle and budget refusals are traversal-local, never request-wide answers.
-        with pm_read_cache.guarded():
-            return check()
-
-    return check_source(db, principal, 'conversation.' + kind, identity, guarded_check)
+    # The shared reader marks actual cycle/budget refusals on every enclosing
+    # load. Completed conversation reads need no partial positive backedge.
+    return check_source(db, principal, 'conversation.' + kind, identity, check)
 
 
 def operation_visible(db, principal, operation):

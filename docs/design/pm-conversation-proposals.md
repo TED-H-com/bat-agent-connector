@@ -103,7 +103,23 @@ and all other original roots keep the shared memo and read-scope bounds.
 The repair's complete historical source reader supplies one such scope even
 when called directly by an execution guard. Current credentials, policy,
 lifecycle, deadline and effect eligibility remain outside that reader; subsequent
-frames and independent reads never reuse its completed permissions.
+frames and independent snapshots never reuse its completed permissions.
+Completed positive original-source and whole operation-visibility decisions also
+join the shared read memo within that snapshot, keyed by the full principal and
+arguments. Synchronous pre-step and final-frame validation open their own read
+memo and close it before any write or await; live credentials, policy, lifecycle
+and deadline checks still execute on every invocation. A write disables the memo,
+including after rollback. Traversal-local refusals, exceptions and partial repair
+backedges never populate it, and nested checks retain their existing depth bounds.
+Completed nested positives can be looked up without adding recursive loader
+frames. Actual cycle and budget refusals mark every enclosing load; a blanket
+conversation guard no longer prevents unrelated completed reads from being
+shared. Traversal-dependent local answers also mark subsequent enclosing loads,
+so ignoring a refusal cannot turn it into a request-wide grant or denial.
+Raw canonical operation columns, action/table metadata and complete immutable
+lineage roots may be reused even inside a traversal guard: none depends on a
+partial source grant. Callers still decode and authorize the original records;
+parsed source documents and live/effect decisions are not stored by these readers.
 The original execution-verifier visibility reader also reuses only a completed
 boolean for its canonical saved operation ID within that same scope. It has its
 own 64-node depth allowance so verifier wrappers do not shorten supported root

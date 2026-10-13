@@ -1,8 +1,9 @@
 """Bounded boolean reuse inside one synchronous original-source read.
 
-This extracts the conversation reader's existing recursion guard. It is not an
-authority cache: no state survives the read, and live/current/effect checks are
-outside this interface. Predicates must be synchronous, read-only functions.
+This extracts the conversation reader's existing recursion guard. Completed
+positives may join one immutable request/step snapshot; no state survives it or
+an await. Live/current/effect checks remain outside this interface. Predicates
+must be synchronous, read-only functions.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from . import pm_read_cache
 from .operations import OperationError
 
 MAX_DEPTH = 64
@@ -67,7 +69,8 @@ copied asynchronous context invalidates reuse rather than granting access.
     anchor = 'pm_source_read_' + uuid.uuid4().hex
     db.execute('SAVEPOINT ' + anchor)
     state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
-        'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {},
+        'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {},
+        'remembering': False, 'local_only': set(),
         'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
         'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
     token, handle = _READ.set(state), None
@@ -82,9 +85,10 @@ copied asynchronous context invalidates reuse rather than granting access.
             # Any event-loop turn invalidates an accidentally retained context,
             # including same-task await (task identity alone cannot detect it).
             handle = loop.call_soon(state.__setitem__, 'yielded', True)
-        yield state
-        if not _valid(state):
-            raise _changed()
+        with pm_read_cache.scope(db, principal):
+            yield state
+            if not _valid(state):
+                raise _changed()
         try:
             db.execute('RELEASE ' + anchor)
         except sqlite3.OperationalError:
@@ -108,6 +112,8 @@ copied asynchronous context invalidates reuse rather than granting access.
     finally:
         state['open'] = False
         state['memo'].clear()
+        state['visibility'].clear()
+        state['local_only'].clear()
         state['active'].clear()
         if handle is not None:
             handle.cancel()
@@ -119,7 +125,13 @@ def check(db, principal, kind, identity, predicate):
     with scope(db, principal) as state:
         key = kind, identity
         if key in state['memo']:
+            if key in state['local_only'] and not pm_read_cache.is_guarded():
+                pm_read_cache.refuse()
             return state['memo'][key]
+        found, result = pm_read_cache.recall(check, (principal, kind, identity))
+        if found and result:
+            state['memo'][key] = True
+            return True
         # Typed source wrappers must not reduce the previously supported
         # original-root or conversation depth. All share the same node budget.
         def group(value):
@@ -127,14 +139,39 @@ def check(db, principal, kind, identity, predicate):
                     if value in {'execution_verifier', 'quality_sources', 'workload_sources', 'repair_sources'} else 'original')
         depth = sum(group(active_kind) == group(kind) for active_kind, _ in state['active'])
         if key in state['active'] or depth >= MAX_DEPTH or state['budget']['nodes'] >= MAX_NODES:
+            pm_read_cache.refuse()
             return False
+        if not state['active'] and not state['remembering']:
+            def load():
+                state['remembering'] = True
+                try:
+                    return check(db, principal, kind, identity, predicate)
+                finally:
+                    state['remembering'] = False
+            result = pm_read_cache.remember(check, (principal, kind, identity), load,
+                                           cache_errors=False, cache_if=bool)
+            state['memo'][key] = result
+            return result
+        # Keep the nested traversal flat: an extra loader frame at every node
+        # would shorten the supported independent 64-node depth allowances.
         state['budget']['nodes'] += 1
         state['active'].add(key)
+        generation = pm_read_cache.refusal_generation()
+        guarded = pm_read_cache.is_guarded()
         try:
             result = bool(predicate())
             if not _valid(state):
                 raise _changed()
             state['memo'][key] = result
+            if guarded or generation != pm_read_cache.refusal_generation():
+                state['local_only'].add(key)
+            # Publish completed nested positives after their stack unwinds.
+            # A cycle/budget refusal taints every enclosing load. Active domain
+            # guards still exclude partial repair/conversation/spec answers.
+            if (result and not pm_read_cache.is_guarded()
+                    and generation == pm_read_cache.refusal_generation()):
+                pm_read_cache.remember(check, (principal, kind, identity), lambda: result,
+                                       cache_errors=False, cache_if=bool)
             return result
         finally:
             state['active'].remove(key)

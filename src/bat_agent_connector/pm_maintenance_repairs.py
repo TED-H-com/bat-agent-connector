@@ -97,7 +97,7 @@ def _bounded(value):
 
 
 def _operation(ops, oid):
-    row = ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (oid,)).fetchone()
+    row = pm_read_cache.operation_row(ops.db, oid)
     if not row:
         raise _bad('NOT_FOUND', 'Original repair operation unavailable', 404)
     return OperationService._decode(row)
@@ -188,6 +188,7 @@ def _full_access_sources(ops, principal, op):
     if key in checking:
         return
     if len(checking) >= 64:
+        pm_read_cache.refuse()
         raise _bad('NOT_FOUND', 'Repair source traversal is unavailable', 404)
     token = _READING.set(checking | {key})
     try:

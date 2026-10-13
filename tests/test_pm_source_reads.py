@@ -5,6 +5,7 @@ import sqlite3
 
 import pytest
 
+from bat_agent_connector import pm_read_cache
 from bat_agent_connector import pm_source_reads as reads
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import OperationError
@@ -39,6 +40,55 @@ def test_only_one_synchronous_snapshot_reuses_original_decision(db):
     assert not db.in_transaction
     assert decision(db, calls=calls)
     assert len(calls) == 2
+
+
+def test_step_snapshot_reuses_completed_source_across_independent_readers(db):
+    from bat_agent_connector.pm_release_baselines import _snapshot
+    calls = []
+    rotated = Principal(OWNER.actor, OWNER.scopes, credential_id='other-credential')
+    unscoped = Principal(OWNER.actor, frozenset(), credential_id=OWNER.credential_id)
+    with _snapshot(db), pm_read_cache.scope(db):
+        assert decision(db, calls=calls)
+        assert decision(db, calls=calls)
+        assert calls == [OWNER.credential_id]
+        assert not decision(db, rotated, calls)
+        assert not decision(db, unscoped, calls)
+        assert decision(db, calls=calls)
+        assert len(calls) == 3
+        db.execute('UPDATE original_source SET visible=0')
+        assert not decision(db, calls=calls)
+        assert not decision(db, calls=calls)
+        db.execute('UPDATE original_source SET visible=1')
+        assert decision(db, calls=calls)
+        assert decision(db, calls=calls)
+        assert len(calls) == 7  # No reuse after the first write, even on restoration.
+    assert not db.in_transaction
+    assert decision(db, calls=calls)
+    assert len(calls) == 8
+
+
+def test_request_memo_does_not_retain_source_budget_refusal(db, monkeypatch):
+    from bat_agent_connector.pm_release_baselines import _snapshot
+    with _snapshot(db), pm_read_cache.scope(db):
+        with monkeypatch.context() as bounded:
+            bounded.setattr(reads, 'MAX_NODES', 1)
+            assert not reads.check(db, OWNER, 'outer', 'parent', lambda: decision(db))
+        assert reads.check(db, OWNER, 'outer', 'parent', lambda: decision(db))
+
+
+@pytest.mark.parametrize('kind', ['original', 'conversation'])
+def test_step_snapshot_reuses_nested_source_across_different_roots(db, kind):
+    from bat_agent_connector import pm_conversation_proposals
+    from bat_agent_connector.pm_release_baselines import _snapshot
+    calls = []
+    with _snapshot(db), pm_read_cache.scope(db):
+        for parent in ('first-root', 'second-root', 'third-root'):
+            if kind == 'conversation':
+                assert pm_conversation_proposals._bounded_access(db, OWNER, 'proposal', parent,
+                    lambda: decision(db, calls=calls))
+            else:
+                assert reads.check(db, OWNER, 'outer', parent, lambda: decision(db, calls=calls))
+        assert calls == [OWNER.credential_id]
 
 
 def test_public_metadata_does_not_grant_anonymous_original_source_access(db):

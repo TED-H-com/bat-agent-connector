@@ -85,7 +85,8 @@ def _member(ops, principal, wid, *, write=False, decide=False):
 
 
 def _op(ops, oid):
-    row = ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (oid,)).fetchone()
+    from . import pm_read_cache
+    row = pm_read_cache.operation_row(ops.db, oid)
     if not row:
         raise sources.bad('Original quality operation is unavailable', 'NOT_FOUND', 404)
     return OperationService._decode(row)

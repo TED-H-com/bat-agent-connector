@@ -124,10 +124,12 @@ def source_visible(db, principal, operation):
     key = (id(db), principal.actor, tuple(sorted(principal.scopes)), principal.admin, operation.get("operation_id"))
     try:
         if key in active:
+            pm_read_cache.refuse()
             return False
         if key in results:
             return results[key]
         if len(results) + len(active) >= pm_source_lineage.MAX_ROOTS:
+            pm_read_cache.refuse()
             return False
         active.add(key)
         try:

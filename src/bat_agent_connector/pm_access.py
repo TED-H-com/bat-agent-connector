@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 
+from . import pm_read_cache
 from .operations import OperationError
 
 
@@ -55,9 +56,31 @@ def inherit_operation_sources(db, operation_id, source_operation_ids):
 
 
 def visible(db, principal, operation):
-    from .pm_source_reads import scope
-    with scope(db, principal):
-        return _visible(db, principal, operation)
+    from .pm_maintenance_repairs import source_read_active
+    from .pm_source_reads import MAX_NODES, scope
+    with scope(db, principal) as state:
+        # These are the visibility reader's entire inputs. Domain readers load
+        # their own canonical records by ID; caller results/contexts are not
+        # authority and need not be walked to construct an identical read key.
+        selection = {key: operation[key] for key in ('operation_id', 'action', 'target', 'actor') if key in operation}
+        if source_read_active(db, principal):
+            # Even a positive answer can assume the active repair's backedge.
+            return _visible(db, principal, selection)
+        try:
+            key = pm_read_cache._key(selection)
+        except TypeError:
+            return _visible(db, principal, selection)
+        if key in state['visibility']:
+            return True
+        generation = pm_read_cache.refusal_generation()
+        result = pm_read_cache.remember(_visible, (principal, selection),
+            lambda: _visible(db, principal, selection), cache_errors=False, cache_if=bool)
+        # Conversation/spec cycles refuse, never grant. Keep only completed
+        # positives, separately bounded without consuming source depth/nodes.
+        if (result and not pm_read_cache.is_guarded() and generation == pm_read_cache.refusal_generation()
+                and len(state['visibility']) < MAX_NODES):
+            state['visibility'][key] = True
+        return result
 
 
 def _visible(db, principal, operation):
