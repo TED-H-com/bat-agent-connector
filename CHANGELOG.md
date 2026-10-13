@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
+  `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
+  Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
+  The read does not compute a forecast, a critical path, phase rows, or per-work token use.
+  Withdrawn sources leave together with the dates derived from them. See `docs/design/pm-schedule.md`.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.

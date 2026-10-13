@@ -134,6 +134,10 @@ repo、語言／runtime、library、API／schema、build／test toolchain、外�
 阻塞／驗證等待用文字與狀態。依賴箭頭來自明確關係；未排期工作留在待排清單，
 缺結束證據的 session 不從最後一筆輸出自行推算結束。
 
+目前可讀的投影是 [專案時程](pm-schedule.md)。它只回傳已記錄的 baseline、forecast
+與明確執行證據，並把沒有日期的列留在未排期清單。這一版沒有階段列、推算預測、
+critical path、token 歸因或拖曳改期。
+
 支援日／週／月縮放、今日定位、關鍵依賴追蹤與同步工作詳情。日期拖動產生時程提案，
 不能無聲覆寫已採用 baseline。資料足夠才算 critical path／預測；不以 token/s 推算完成日期。
 
