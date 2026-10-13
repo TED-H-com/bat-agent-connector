@@ -14,6 +14,7 @@ from . import (
     pm_native_operations,
     pm_plans,
     pm_profiles,
+    pm_read_cache,
     pm_runs,
     pm_workspace,
 )
@@ -152,7 +153,9 @@ def _bounded_access(db, principal, kind, identity, check):
             return False
         state["active"].add(key)
         try:
-            result = bool(check())
+            # Cycle and budget refusals are local to this traversal, not request-wide answers.
+            with pm_read_cache.guarded():
+                result = bool(check())
             state["memo"][key] = result
             return result
         finally:
