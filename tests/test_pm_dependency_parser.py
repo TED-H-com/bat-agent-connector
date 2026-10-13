@@ -1,8 +1,12 @@
 """Conservative parsing: supported observations, never invented resolution or relationships."""
 import json
+import time
 
-from bat_agent_connector.pm_dependency_parser import Inventory, workflow
+import pytest
+
+from bat_agent_connector.pm_dependency_parser import Inventory, dependency_key, member_path, workflow
 from bat_agent_connector.pm_dependency_paths import allowed_path
+from bat_agent_connector.pm_release_baselines import _size
 
 
 def inventory(contents):
@@ -110,7 +114,7 @@ def test_policy_controller_is_not_an_inferred_maintenance_owner(monkeypatch):
 def test_ci_python_module_invocation_is_actual_test_evidence():
     result = inventory({"pyproject.toml": '[project]\nname="sample"\n[dependency-groups]\nchecks=["pytest>=8"]\n',
         ".github/workflows/test.yml": 'jobs:\n  checks:\n    steps:\n      - run: uv run python -m pytest -q\n'})
-    assert any(e["relation"] == "test" and e["basis"] == "python_group:checks" for e in result["edges"])
+    assert any(e["relation"] == "test" and e["basis"] == "python_group" and e["evidence_refs"][0]["declaration_group"] == "group:checks" for e in result["edges"])
 
 
 def test_repeated_build_evidence_is_one_relation_with_both_script_references():
@@ -156,8 +160,10 @@ def test_dynamic_python_dependencies_follow_only_explicit_setuptools_files():
     result = inventory({'pyproject.toml': '[project]\nname="app"\ndynamic=["dependencies"]\n'
         '[tool.setuptools.dynamic]\ndependencies={file=["requirements.txt"]}\n',
         'requirements.txt': 'requests==2.31.0\n', 'requirements-dev.txt': 'unrelated==1\n'})
-    assert 'python_dynamic_dependencies' in result['parser_reasons']
-    assert len(result['edges']) == 1 and result['edges'][0]['relation'] == 'runtime'
+    assert not result['parser_reasons']
+    assert 'python_dynamic_dependencies' in result['parser_notes']
+    assert len(result['edges']) == 2 and result['edges'][0]['relation'] == 'runtime'
+    assert result['edges'][1]['basis'] == 'dev_unclassified'
     assert {ref['path'] for ref in result['edges'][0]['evidence_refs']} == {'pyproject.toml', 'requirements.txt'}
 
 
@@ -224,7 +230,8 @@ jobs:
 ''')
     assert [s['working_directory'] for s in steps] == ['desktop', '.', 'alternate', 'web', '.']
     steps = workflow('defaults:\n  unrelated:\n    working-directory: wrong\njobs:\n  test:\n    steps:\n      - run: uv run pytest\n')
-    assert steps[0]['working_directory'] == '.'
+    assert steps[0]['working_directory'] is None
+    assert steps[0]['working_directory_reason'] == 'workflow_directory_unknown'
 
 
 def test_cargo_inherited_package_fields_and_dependencies_keep_the_crate():
@@ -278,10 +285,11 @@ def test_uv_ancestor_resolution_requires_recorded_workspace_coverage():
         {'pyproject.toml': '[tool.uv.workspace]\nmembers=["packages/*"]\n'},
         {'uv.lock': lock + '[[package]]\nname="app"\nsource={editable="packages/app"}\n'},
         {'uv.lock': lock + '[[package]]\nname="app"\nsource={virtual="packages/app"}\n'},
-        {'uv.lock': '[manifest]\nmembers=["app"]\n' + lock},
     ):
         result = inventory({'packages/app/pyproject.toml': manifest, 'uv.lock': lock, **proof})
         assert result['edges'][0]['resolved'] == '1.2.0'
+    name_only = inventory({'packages/app/pyproject.toml': manifest, 'uv.lock': '[manifest]\nmembers=["app"]\n' + lock})
+    assert name_only['edges'][0]['resolution_reason'] == 'lockfile_does_not_cover_component'
     excluded = inventory({'packages/app/pyproject.toml': manifest, 'uv.lock': lock,
         'pyproject.toml': '[tool.uv.workspace]\nmembers=["packages/*"]\nexclude=["packages/app"]\n'})
     assert excluded['edges'][0]['resolution_reason'] == 'lockfile_does_not_cover_component'
@@ -301,3 +309,272 @@ def test_mixed_ci_commands_classify_each_dev_binary_by_its_own_call():
         '.github/workflows/test.yml': 'jobs:\n  checks:\n    steps:\n      - run: vite build && npx vitest run\n'})
     names = {d['key']: d['name'] for d in result['dependencies']}
     assert {(names[e['dependency_key']], e['relation']) for e in result['edges'] if e['basis'] == 'npm_script_or_ci'} == {('vite', 'build'), ('vitest', 'test')}
+
+
+def comp(result, path):
+    return next(c for c in result["components"] if c["manifest_path"] == path)
+
+
+def edges(result, eco, name, path=None, relation=None):
+    key = dependency_key(eco, name)
+    cid = comp(result, path)["component_id"] if path else None
+    return [e for e in result["edges"] if e["dependency_key"] == key
+            and (cid is None or e["component_id"] == cid) and (relation is None or e["relation"] == relation)]
+
+
+def hints(result, path):
+    cid = comp(result, path)["component_id"]
+    return [h for h in result["verification_hints"] if h["component_id"] == cid]
+
+
+def test_regression_python_optional_extras_are_not_presented_as_build_toolchain():
+    # [project.optional-dependencies] are optional *runtime* extras, not dev tooling.
+    r = inventory({"pyproject.toml": '[project]\nname="app"\n[project.optional-dependencies]\npostgres=["psycopg>=3"]\n'})
+    e = r["edges"][0]
+    assert (e["relation"], e["kind"]) != ("build", "build_test_toolchain"), e
+
+
+def test_regression_tool_specific_dev_dependency_tables_are_not_silently_dropped():
+    for table in ('[tool.uv]\ndev-dependencies=["pytest>=8"]\n',
+                  '[tool.poetry.group.dev.dependencies]\npytest="^8"\n',
+                  '[tool.pdm.dev-dependencies]\ntest=["pytest>=8"]\n'):
+        r = inventory({"pyproject.toml": '[project]\nname="app"\n' + table})
+        assert r["edges"] or r["parser_reasons"], table
+
+
+def test_regression_dynamic_capture_drops_unreferenced_requirements_files():
+    base = {"pyproject.toml": '[project]\nname="app"\n', "requirements-dev.txt": "pytest==8\n"}
+    static = inventory(base)
+    assert edges(static, "python", "pytest")            # static: build/dev_unclassified edge
+    dynamic = inventory({**base, "pyproject.toml": '[project]\nname="app"\ndynamic=["dependencies"]\n'
+                         '[tool.setuptools.dynamic]\ndependencies={file=["requirements.txt"]}\n',
+                         "requirements.txt": "requests==2\n"})
+    # requirements-dev.txt is not the dynamic source; it should keep the same unclassified edge.
+    assert edges(dynamic, "python", "pytest")
+
+
+def test_regression_uv_manifest_members_name_only_verifies_a_namesake_non_member():
+    lock = ('version=1\n[manifest]\nmembers=["app"]\n'
+            '[[package]]\nname="app"\nversion="0.1.0"\nsource={editable="packages/app"}\n'
+            '[[package]]\nname="lib"\nversion="1.2.0"\n')
+    r = inventory({"pyproject.toml": '[tool.uv.workspace]\nmembers=["packages/*"]\n',
+                   "packages/app/pyproject.toml": '[project]\nname="app"\ndependencies=["lib>=1"]\n',
+                   "examples/app/pyproject.toml": '[project]\nname="app"\ndependencies=["lib>=1"]\n',
+                   "uv.lock": lock})
+    assert edges(r, "python", "lib", "packages/app/pyproject.toml")[0]["evidence_level"] == "verified"
+    example = edges(r, "python", "lib", "examples/app/pyproject.toml")[0]
+    assert example["evidence_level"] == "declared", example
+
+
+def test_regression_cargo_local_name_version_match_verifies_an_excluded_namesake():
+    lock = ('version=3\n[[package]]\nname="app"\nversion="0.1.0"\ndependencies=["serde"]\n'
+            '[[package]]\nname="serde"\nversion="1.0.200"\nsource="registry+https://github.com/rust-lang/crates.io-index"\n')
+    r = inventory({"Cargo.toml": '[workspace]\nmembers=["crates/*"]\nexclude=["examples/app"]\n',
+                   "crates/app/Cargo.toml": '[package]\nname="app"\nversion="0.1.0"\n[dependencies]\nserde="1"\n',
+                   "examples/app/Cargo.toml": '[package]\nname="app"\nversion="0.1.0"\n[dependencies]\nserde="1"\n',
+                   "Cargo.lock": lock})
+    example = edges(r, "cargo", "serde", "examples/app/Cargo.toml")[0]
+    assert example["evidence_level"] == "declared", example
+
+
+def test_regression_workflow_defaults_after_jobs_are_ignored():
+    # GitHub applies workflow-level defaults regardless of key order.
+    steps = workflow('jobs:\n  t:\n    steps:\n      - run: npm test\ndefaults:\n  run:\n    working-directory: web\n')
+    assert steps[0]["working_directory"] == "web", steps
+
+
+def test_regression_job_defaults_after_steps_are_ignored():
+    steps = workflow('jobs:\n  t:\n    steps:\n      - run: npm test\n    defaults:\n      run:\n        working-directory: web\n')
+    assert steps[0]["working_directory"] == "web", steps
+
+
+def test_regression_unparsed_defaults_forms_attribute_steps_to_repository_root():
+    for defaults in ('defaults:\n  run: {working-directory: web}\n',
+                     'defaults:  # shared\n  run:\n    working-directory: web\n',
+                     'defaults:\n  run:  # shared\n    working-directory: web\n'):
+        r = inventory({"package.json": '{"name":"root","devDependencies":{"vitest":"^3"}}',
+                       "web/package.json": '{"name":"web","devDependencies":{"vitest":"^3"}}',
+                       ".github/workflows/ci.yml": defaults + 'jobs:\n  t:\n    steps:\n      - run: npx vitest run\n'})
+        # The step runs in web/. Unknown directory must mean "no association", not the root package.
+        assert not hints(r, "package.json"), defaults
+
+
+def test_regression_mid_command_cd_is_attributed_to_the_step_directory():
+    r = inventory({"package.json": '{"name":"root"}', "web/package.json": '{"name":"web"}',
+                   ".github/workflows/ci.yml": 'jobs:\n  t:\n    steps:\n      - run: npm ci && cd web && npm test\n'})
+    assert not hints(r, "package.json")
+
+
+def test_regression_cargo_publish_workspace_inheritance_claims_publishable():
+    r = inventory({"Cargo.toml": '[workspace]\nmembers=["crates/*"]\n[workspace.package]\npublish=false\n',
+                   "crates/app/Cargo.toml": '[package]\nname="app"\nversion="1.0.0"\npublish.workspace=true\n'})
+    assert comp(r, "crates/app/Cargo.toml")["published_name"] is None
+
+
+def test_regression_other_evidence_strings_are_uncapped():
+    script = "test:" + "x" * 200_000
+    r = inventory({"package.json": json.dumps({"name": "app", "devDependencies": {"vitest": "^3"},
+                                               "scripts": {script: "vitest run"}})})
+    biggest = max(_size(ref) for e in r["edges"] for ref in e["evidence_refs"])
+    assert biggest <= 4096, biggest
+
+
+def test_regression_member_glob_backtracking_is_unbounded():
+    pattern = "/".join(["**"] * 15 + ["nomatch"])
+    start = time.perf_counter()
+    member_path("a/b/c/d/e/f/g/h/i", [pattern])
+    elapsed = time.perf_counter() - start
+    print("one member_path call", elapsed)
+    assert elapsed < 0.05, elapsed
+
+
+def test_regression_lone_surrogate_script_name_breaks_capture_sizing():
+    r = inventory({"package.json": '{"name":"app","devDependencies":{"vitest":"^3"},"scripts":{"test:\\ud800":"vitest run"}}'})
+    _size(r)
+
+
+@pytest.mark.parametrize('form', ['*settings', '{shell: bash, working-directory: ${{ matrix.dir }}}', '[web]'])
+def test_unknown_workflow_defaults_never_mean_repository_root(form):
+    result = inventory({'package.json': '{"name":"root"}', '.github/workflows/ci.yml':
+        'defaults:\n  run: ' + form + '\njobs:\n  t:\n    steps:\n      - run: npm test\n'})
+    assert not result['verification_hints']
+    assert 'workflow_directory_unknown' in result['parser_reasons']
+
+
+@pytest.mark.parametrize('target', ['$DIR', '-', '(web)', '$(pwd)'])
+def test_unknown_cd_never_attributes_subsequent_commands_to_root(target):
+    result = inventory({'package.json': '{"name":"root"}', '.github/workflows/ci.yml':
+        'jobs:\n  t:\n    steps:\n      - run: npm ci && cd ' + target + ' && npm test\n'})
+    assert not result['verification_hints']
+    assert 'workflow_directory_unknown' in result['parser_reasons']
+
+
+def test_cd_tracks_each_command_and_resets_for_next_step():
+    result = inventory({'package.json': '{"name":"root"}', 'web/package.json': '{"name":"web"}',
+        '.github/workflows/ci.yml': 'jobs:\n  t:\n    steps:\n      - run: npm ci && cd web && npm test\n      - run: npm run build\n'})
+    assert {h['relation'] for h in hints(result, 'web/package.json')} == {'test'}
+    assert {h['relation'] for h in hints(result, 'package.json')} == {'build'}
+
+
+def test_optional_extras_are_runtime_and_keep_group_identity():
+    result = inventory({'pyproject.toml': '[project]\nname="app"\n[project.optional-dependencies]\npostgres=["psycopg>=3"]\n'})
+    edge = result['edges'][0]
+    assert (edge['relation'], edge['kind'], edge['optional']) == ('runtime', 'runtime_library', True)
+    assert edge['extras'] == ['postgres']
+    assert edge['evidence_refs'][0]['declaration_group'] == 'extra:postgres'
+
+
+@pytest.mark.parametrize('table', ['[tool.uv]\ndev-dependencies=["pytest>=8"]',
+    '[tool.pdm.dev-dependencies]\ntest=["pytest>=8"]', '[tool.poetry.group.test.dependencies]\npytest="^8"',
+    '[tool.poetry.dev-dependencies]\npytest="^8"'])
+def test_tool_dev_groups_use_ci_evidence(table):
+    result = inventory({'pyproject.toml': '[project]\nname="app"\n' + table,
+        '.github/workflows/ci.yml': 'jobs:\n  t:\n    steps:\n      - run: uv run pytest\n'})
+    assert edges(result, 'python', 'pytest', relation='test')
+    assert not result['parser_reasons']
+
+
+@pytest.mark.parametrize('table,field', [('[tool.uv]\ndev-dependencies={pytest="8"}', 'tool.uv.dev-dependencies'),
+    ('[tool.pdm]\ndev-dependencies=["pytest"]', 'tool.pdm.dev-dependencies'),
+    ('[tool.poetry.group.test]\ndependencies=["pytest"]', 'tool.poetry.group.test.dependencies'),
+    ('[tool.poetry.dev-dependencies]\npytest=[{version="8"}]', 'tool.poetry.dev-dependencies')])
+def test_unsupported_tool_dev_fields_are_partial_and_named(table, field):
+    result = inventory({'pyproject.toml': '[project]\nname="app"\n' + table})
+    assert 'unsupported_field' in result['parser_reasons']
+    assert any(r['field'] == field for r in result['unsupported_fields'])
+    assert result['files'][0]['status'] == 'read'
+
+
+def test_member_globs_are_cached_for_two_thousand_dependencies():
+    count = 2000
+    pattern = '/'.join(['**'] * 15 + ['nomatch'])
+    contents = {'pyproject.toml': '[tool.uv.workspace]\nmembers=["' + pattern + '"]\n',
+        'a/b/c/d/e/f/g/h/pyproject.toml': '[project]\nname="app"\ndependencies=' + json.dumps([f'lib{i}>=1' for i in range(count)]),
+        'uv.lock': ''.join(f'[[package]]\nname="lib{i}"\nversion="1"\n' for i in range(count))}
+    start = time.perf_counter()
+    result = inventory(contents)
+    assert time.perf_counter() - start < 1
+    assert result['edges'] and all(e['evidence_level'] == 'declared' for e in result['edges'])
+
+
+@pytest.mark.parametrize('field', ['script', 'job_id', 'declaration_group'])
+def test_all_evidence_identifiers_are_bounded(field):
+    name = 'test:' + 'x' * 600
+    if field == 'script':
+        contents = {'package.json': json.dumps({'name': 'app', 'devDependencies': {'vitest': '3'}, 'scripts': {name: 'vitest run'}})}
+    elif field == 'job_id':
+        name = 'test_' + 'x' * 600
+        contents = {'package.json': '{"name":"app"}', '.github/workflows/ci.yml': f'jobs:\n  {name}:\n    steps:\n      - run: npm test\n'}
+    else:
+        contents = {'pyproject.toml': '[project]\nname="app"\n[dependency-groups]\n"' + name + '"=["pytest>=8"]'}
+    result = inventory(contents)
+    refs = [r for e in result['edges'] for r in e['evidence_refs'] if field in r]
+    assert refs and all(len(r[field].encode()) <= 512 and r[field + '_truncated'] for r in refs)
+
+
+@pytest.mark.parametrize('contents', [
+    {'Cargo.toml': '[workspace]\nmembers=["crate"]', 'crate/Cargo.toml': '[package]\nname="crate"'},
+    {'package.json': '{"private":true,"dependencies":{"lib":"1"}}'},
+    {'pyproject.toml': '[project]\nname="app"\ndynamic=["dependencies"]\n[tool.setuptools.dynamic]\ndependencies={file="requirements.txt"}',
+     'requirements.txt': 'requests==2'}])
+def test_complete_supported_manifests_do_not_claim_missing_coverage(contents):
+    result = inventory(contents)
+    assert not result['parser_reasons']
+    assert all(f['status'] == 'read' for f in result['files'])
+
+
+@pytest.mark.parametrize('field', ['name', 'version', 'script', 'dependency'])
+def test_lone_surrogates_never_escape_into_inventory_json(field):
+    manifest = {'name': 'app', 'version': '1', 'dependencies': {'lib': '1'},
+                'devDependencies': {'vitest': '3'}, 'scripts': {'test': 'vitest run'}}
+    if field in {'name', 'version'}:
+        manifest[field] = '\ud800'
+    elif field == 'script':
+        manifest['scripts'] = {'test:\ud800': 'vitest run'}
+    else:
+        manifest['dependencies'] = {'\ud800': '1'}
+    result = inventory({'package.json': json.dumps(manifest)})
+    assert result['files'][0]['status'] == 'unparsable'
+    assert result['components'] == result['edges'] == []
+    _size(result)
+
+
+def test_job_inline_shell_default_inherits_workflow_directory():
+    steps = workflow('defaults:\n  run:\n    working-directory: web\njobs:\n  test:\n'
+                     '    defaults:\n      run: {shell: bash}\n    steps:\n      - run: npm test\n')
+    assert steps[0]['working_directory'] == 'web'
+
+
+def test_unsupported_merged_defaults_have_unknown_directory():
+    result = inventory({'package.json': '{"name":"app"}', '.github/workflows/ci.yml':
+        'defaults:\n  run:\n    <<: *common\njobs:\n  test:\n    steps:\n      - run: npm test\n'})
+    assert not result['verification_hints']
+    assert 'workflow_directory_unknown' in result['parser_reasons']
+
+
+@pytest.mark.parametrize('excluded', [False, True])
+def test_cargo_namesake_outside_workspace_never_borrows_its_lock(excluded):
+    result = inventory({'Cargo.toml': '[workspace]\nmembers=["crates/*"]\n' + ('exclude=["examples/app"]\n' if excluded else ''),
+        'crates/app/Cargo.toml': '[package]\nname="app"\nversion="1"\n[dependencies]\nlib="1"',
+        'examples/app/Cargo.toml': '[package]\nname="app"\nversion="1"\n[dependencies]\nlib="1"',
+        'Cargo.lock': '[[package]]\nname="app"\nversion="1"\n[[package]]\nname="lib"\nversion="1"'})
+    assert edges(result, 'cargo', 'lib', 'crates/app/Cargo.toml')[0]['evidence_level'] == 'verified'
+    assert edges(result, 'cargo', 'lib', 'examples/app/Cargo.toml')[0]['resolution_reason'] == 'lockfile_does_not_cover_component'
+
+
+def test_cargo_path_lock_proof_requires_unique_manifest_and_lock_identity():
+    base = {'lib/Cargo.toml': '[package]\nname="app"\nversion="1"\n[dependencies]\nlib="1"',
+        'Cargo.lock': '[[package]]\nname="app"\nversion="1"\n[[package]]\nname="lib"\nversion="1"'}
+    assert edges(inventory(base), 'cargo', 'lib')[0]['evidence_level'] == 'verified'
+    duplicate = {**base, 'other/Cargo.toml': '[package]\nname="app"\nversion="1"'}
+    assert edges(inventory(duplicate), 'cargo', 'lib')[0]['evidence_level'] == 'declared'
+    duplicate_lock = {**base, 'Cargo.lock': base['Cargo.lock'] + '\n[[package]]\nname="app"\nversion="1"'}
+    assert edges(inventory(duplicate_lock), 'cargo', 'lib')[0]['evidence_level'] == 'declared'
+
+
+def test_unavailable_inherited_publish_is_unknown_and_not_publishable():
+    result = inventory({'lib/Cargo.toml': '[package]\nname="app"\npublish.workspace=true'})
+    component = result['components'][0]
+    assert component['published_name'] is None
+    assert component['published_name_reason'] == 'workspace_inheritance_unavailable'
+    assert 'cargo_workspace_inheritance_unavailable' in result['parser_reasons']
