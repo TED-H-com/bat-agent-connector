@@ -210,7 +210,7 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
       // No programmatic focus: a pointer user must see every answer control and Send at rest.
       const controls = name === 'ask_user' ? [page.getByRole('button', {name: 'Answer', exact: true})]
         : [page.getByRole('button', {name: 'Allow', exact: true}), page.getByRole('button', {name: 'Deny', exact: true})];
-      for (const control of [...controls, send]) await expect(control).toBeInViewport();
+      for (const control of [...controls, send]) await expect(control).toBeInViewport({ratio: 1});
       const geometry = await page.evaluate(() => {
         const scroller = document.querySelector('.conversation-scroll')!.getBoundingClientRect();
         const composer = document.querySelector('.workspace-composer')!.getBoundingClientRect();

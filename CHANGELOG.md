@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Keep Session approval and question actions visible without keyboard scrolling; cap
+  prompt content, preserve transcript space and use the shared Results drawer widths.
+  Simplify manual-session copy and distinguish unknown titles, agents and disclosures.
+
 - Keep Session transcript position and tool disclosures stable during live updates and
   resizing; restore focus on Back to latest and follow successful replies. Show received
   message counts, consistent agent marks, compact durations and Person on manual turns.

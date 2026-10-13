@@ -1301,7 +1301,7 @@ async function viewSession(main, host, sid, context = null) {
     older: () => loadMessages(nextMessageOffset, false),
     latest: () => loadMessages(0, true),
   } : null});
-  const pending = h("div", { "data-pending-controls": "" }), status = h("div", { class: "muted" });
+  const pending = h("div", { class: "session-asking-region", "data-pending-controls": "" }), status = h("div", { class: "muted" });
   const scope = `send.${host}.${sid}`, draftKey = `batc.draft.${connection.namespace}.${scope}`;
   const box = h("textarea", { placeholder: t("send_placeholder") });
   try { box.value = localStorage.getItem(draftKey) || ""; } catch { /* unavailable */ }
@@ -1346,7 +1346,7 @@ async function viewSession(main, host, sid, context = null) {
     else if (queued) line.textContent = t("session_send_queued");
     else if (failed) line.append(t("session_send_failed"), " · ", h("button", {type: "button", class: "session-retry", onclick: () => send.click()}, t("session_send_retry")));
     else line.textContent = t("op_" + op.status);
-    const record = id ? disclosure({label: t("session_details"), body: h("p", {}, h("a", {href: `#/op/${encodeURIComponent(id)}`}, id)),
+    const record = id ? disclosure({label: t("session_send_details"), body: h("p", {}, h("a", {href: `#/op/${encodeURIComponent(id)}`}, id)),
       key: `session-send:${connection.namespace}:${host}:${sid}`}) : null;
     if (record) record.classList.add("session-send-record");
     status.replaceChildren(line, record);
@@ -1356,10 +1356,10 @@ async function viewSession(main, host, sid, context = null) {
   const sendReason = h("p", {class: "muted session-send-reason", hidden: true});
   const composerRow = h("div", {class: "composer-row"}, h("label", {class: "composer-queue"}, queue, t("queue_behind")), send);
   const composer = h("div", {hidden: true, id: "workspace-message-input"}, box, composerRow);
-  const readonly = h("p", { class: "note" }, t("session_access_unknown"));
+  const readonly = h("p", { class: "muted session-readonly", "data-session-readonly": "", hidden: true });
   let capture, permissions, batHandoff, sourcesPanel;
   const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
-  const controls = h("div", { class: "panel workspace-composer" }, pending, readonly, sendReason, composer, status);
+  const controls = h("div", { class: "panel workspace-composer" }, pending, sendReason, composer, status);
   const labels = sessionLabelsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     target: {host, session_id: sid}, storageKey: `batc.labels.${connection.namespace}.${JSON.stringify([host, sid])}`, errorBox, opStatus});
   const cps = checkpointPanel(host, sid);
@@ -1369,7 +1369,7 @@ async function viewSession(main, host, sid, context = null) {
   instructions?.box.addEventListener("toggle", () => {if (instructions.box.open) instructions.refresh();});
   const deliveryPills = h("div", {class: "session-delivery-pills"});
   const sourcesBody = h("div", {"data-session-sources": ""}, h("p", {class: "muted session-quiet"}, t("session_sources_empty")));
-  const details = disclosure({label: t("session_details"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
+  const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
   const results = inspector({title: t("session_results"), dock: true, returnFocus: () => openResults});
@@ -1378,7 +1378,7 @@ async function viewSession(main, host, sid, context = null) {
   const syncWide = () => {openResults.hidden = wide.matches;};
   syncWide(); wide.addEventListener("change", syncWide);
   const sessionSection = (name, title, body) => h("section", {class: "session-section"},
-    h("h2", {class: "session-section-title"}, icon(name, {size: 16}), title), body);
+    h("h3", {class: "session-section-title"}, icon(name, {size: 16}), title), body);
   const changesSection = sessionSection("folder", t("session_changes"), h("div", {class: "session-changes"}, captureSlot, artifactSlot));
   const slotVisible = slot => [...slot.children].some(child => !child.hidden);
   const syncChanges = () => {changesSection.hidden = !slotVisible(captureSlot) && !slotVisible(artifactSlot);};
@@ -1399,7 +1399,7 @@ async function viewSession(main, host, sid, context = null) {
     sessionSection("check", t("session_delivery"), result),
     sessionSection("inbox", t("session_sources"), sourcesBody),
     batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
-  const lane = h("section", {class: "workspace-conversation", "aria-label": t("messages")}, conversation.box, controls);
+  const lane = h("section", {class: "workspace-conversation"}, conversation.box, readonly, controls);
   const mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection),
     infoRow: conversation.box.querySelector(".conversation-caption"), composerRow });
   if (context?.picker) main.append(context.picker);
@@ -1419,7 +1419,7 @@ async function viewSession(main, host, sid, context = null) {
     if (!workspaceId) {link.hidden = true; link.setAttribute("aria-disabled", "true"); return;}
     const refs = (items || []).map(item => ({kind: "work_item", id: item.work_item_id})).filter(isContextRef);
     link.hidden = false; link.removeAttribute("aria-disabled");
-    link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || sid, from: originView()}));
+    link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || "", from: originView()}));
   };
   let deliveryTicket = 0;
   const loadDelivery = async items => {
@@ -1474,12 +1474,15 @@ async function viewSession(main, host, sid, context = null) {
         if (op.status === "succeeded") await loadObservation();
       } catch (e) { status.replaceChildren(errorBox(e)); }
     };
-    const card = h("div", { class: "panel session-asking" }, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
+    const actions = h("div", { class: "actions session-asking-actions" });
+    const card = h("div", { class: "session-asking", role: "group", "aria-label": t("pending_" + pend.kind) },
+      h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
+    const content = h("div", {class: "session-asking-content"});
     if (pend.kind === "permission") {
-      card.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "msg" }, pend.input_preview || ""),
-        h("div", { class: "actions" },
-          h("button", { class: "primary", "data-answer-action": "", disabled: !pend.toolUseId || !allowed("session.answer"), onclick: () => answer({ permission: "allow" }) }, t("allow")),
-          h("button", { class: "danger", "data-answer-action": "", disabled: !pend.toolUseId || !allowed("session.answer"), onclick: () => answer({ permission: "deny" }) }, t("deny"))));
+      content.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "session-asking-preview" }, pend.input_preview || ""));
+      actions.append(
+        h("button", { class: "primary", "data-answer-action": "", disabled: !pend.toolUseId || !allowed("session.answer"), onclick: () => answer({ permission: "allow" }) }, t("allow")),
+        h("button", { class: "danger", "data-answer-action": "", disabled: !pend.toolUseId || !allowed("session.answer"), onclick: () => answer({ permission: "deny" }) }, t("deny")));
     } else if (pend.kind === "ask_user") {
       const fields = [];
       const save = () => { try { localStorage.setItem(key, JSON.stringify({identity: current, answers: fields.map(f => f.value)})); } catch { /* unavailable */ } };
@@ -1488,12 +1491,14 @@ async function viewSession(main, host, sid, context = null) {
           value: saved?.identity === current ? saved.answers?.[index] || "" : "", oninput: save });
         fields.push(input);
         const picks = (q.options || []).map(o => h("button", { class: "secondary", onclick: () => { input.value = o; save(); } }, o));
-        card.append(h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question),
-          picks.length ? h("div", { class: "actions" }, ...picks) : null, h("div", { class: "actions" }, input));
+        content.append(h("div", { class: "session-question" }, h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question),
+          picks.length ? h("div", { class: "actions" }, ...picks) : null, input));
       }
-      card.append(h("div", { class: "actions" }, h("button", { class: "primary", "data-answer-action": "", disabled: !pend.toolUseId || !allowed("session.answer"),
-        onclick: () => answer({ answers: fields.map(f => f.value) }) }, t("answer"))));
+      actions.append(h("button", { class: "primary", "data-answer-action": "", disabled: !pend.toolUseId || !allowed("session.answer"),
+        onclick: () => answer({ answers: fields.map(f => f.value) }) }, t("answer")));
     }
+    // The answer row stays pinned at the bottom of the prompt while its questions scroll.
+    card.append(content, actions);
     pending.append(card);
   };
   const updateControls = () => {
@@ -1520,8 +1525,8 @@ async function viewSession(main, host, sid, context = null) {
       ...(data.relations_summary || []).flatMap(relation => [`execution:${relation.execution_id}`, `task:${relation.execution_id}`]),
       ...(data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : [])]);
     if (first) queue.checked = Boolean(row.streaming);
-    titleNode.textContent = row.title || sid;
-    markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
+    titleNode.textContent = row.title || t("session_untitled");
+    markSlot.replaceChildren(agentMark(row.agent_kind));
     pillSlot.replaceChildren(statusPill(sessionStatus(row)));
     const metaBits = [];
     if (context?.project?.name) metaBits.push({kind: "link", href: `#/project/${encodeURIComponent(context.project.project_id)}`, text: context.project.name});
@@ -1584,8 +1589,8 @@ async function viewSession(main, host, sid, context = null) {
     }
     if (capture) capture.hidden = !manualSource;
     syncChanges();
-    composer.hidden = !managed; readonly.hidden = managed;
-    readonly.textContent = t(row.provenance === "manual" ? "read_only_note" : "session_access_unknown");
+    composer.hidden = !managed; controls.hidden = !managed; readonly.hidden = managed;
+    readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
     renderPending(); updateControls();
   };
   const loadObservation = async () => {

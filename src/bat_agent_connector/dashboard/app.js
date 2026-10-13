@@ -8140,13 +8140,19 @@ var STRINGS = {
 		only_managed: "只看受管理",
 		only_read_only: "只看唯讀",
 		load_more: "載入更多",
+		session_untitled: "未命名工作階段",
+		session_details_session: "工作階段詳細資料",
+		session_send_details: "傳送紀錄",
+		session_label_details: "標籤詳細資料",
+		session_readonly_manual: "這是有人在 BAT 開啟的工作階段，這裡只能檢視。",
+		session_readonly_unknown: "尚未確認控制權，這裡只能檢視。",
 		session_results: "成果",
 		session_changes: "變更",
 		session_delivery: "交付",
 		session_sources: "成果來源",
 		session_sources_empty: "尚無成果來源",
 		session_details: "詳細資料",
-		session_discuss: "與專案討論",
+		session_discuss: "與 PM 討論",
 		session_checkpoint_unavailable: "此主機無法建立檢查點",
 		session_sent_now: "已送出 · 剛剛",
 		session_send_queued: "已排隊",
@@ -9652,6 +9658,12 @@ var STRINGS = {
 		only_managed: "Connector-managed only",
 		only_read_only: "Read-only only",
 		load_more: "Load more",
+		session_untitled: "Untitled session",
+		session_details_session: "Session details",
+		session_send_details: "Send record",
+		session_label_details: "Label details",
+		session_readonly_manual: "Started in BAT by a person, so it's read-only here.",
+		session_readonly_unknown: "Control is unconfirmed, so it is read-only here.",
 		session_results: "Results",
 		session_changes: "Changes",
 		session_delivery: "Delivery",
@@ -38615,7 +38627,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		tags.hidden = !chips.length;
 		stateLine.hidden = Boolean(chips.length);
 		stateLine.textContent = t(readable ? "labels_empty" : "labels_unavailable");
-		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_details");
+		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_label_details");
 		const why = !readable ? t("labels_unreadable") : !permitted() ? t("labels_scope") : "";
 		reason.hidden = showEdit || !why;
 		reason.textContent = why;
@@ -48133,7 +48145,10 @@ async function viewSession(main, host, sid, context = null) {
 			latest: () => loadMessages(0, true)
 		} : null
 	});
-	const pending = h("div", { "data-pending-controls": "" }), status = h("div", { class: "muted" });
+	const pending = h("div", {
+		class: "session-asking-region",
+		"data-pending-controls": ""
+	}), status = h("div", { class: "muted" });
 	const scope = `send.${host}.${sid}`, draftKey = `batc.draft.${connection.namespace}.${scope}`;
 	const box = h("textarea", { placeholder: t("send_placeholder") });
 	try {
@@ -48231,7 +48246,7 @@ async function viewSession(main, host, sid, context = null) {
 		}, t("session_send_retry")));
 		else line.textContent = t("op_" + op.status);
 		const record = id ? disclosure({
-			label: t("session_details"),
+			label: t("session_send_details"),
 			body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(id)}` }, id)),
 			key: `session-send:${connection.namespace}:${host}:${sid}`
 		}) : null;
@@ -48255,10 +48270,14 @@ async function viewSession(main, host, sid, context = null) {
 		hidden: true,
 		id: "workspace-message-input"
 	}, box, composerRow);
-	const readonly = h("p", { class: "note" }, t("session_access_unknown"));
+	const readonly = h("p", {
+		class: "muted session-readonly",
+		"data-session-readonly": "",
+		hidden: true
+	});
 	let capture, permissions, batHandoff, sourcesPanel;
 	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
-	const controls = h("div", { class: "panel workspace-composer" }, pending, readonly, sendReason, composer, status);
+	const controls = h("div", { class: "panel workspace-composer" }, pending, sendReason, composer, status);
 	const labels = sessionLabelsPanel({
 		h,
 		t,
@@ -48291,7 +48310,7 @@ async function viewSession(main, host, sid, context = null) {
 	const deliveryPills = h("div", { class: "session-delivery-pills" });
 	const sourcesBody = h("div", { "data-session-sources": "" }, h("p", { class: "muted session-quiet" }, t("session_sources_empty")));
 	const details = disclosure({
-		label: t("session_details"),
+		label: t("session_details_session"),
 		body: metadata,
 		key: `session-details:${connection.namespace}:${host}:${sid}`
 	});
@@ -48313,7 +48332,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
-	const sessionSection = (name, title, body) => h("section", { class: "session-section" }, h("h2", { class: "session-section-title" }, icon(name, { size: 16 }), title), body);
+	const sessionSection = (name, title, body) => h("section", { class: "session-section" }, h("h3", { class: "session-section-title" }, icon(name, { size: 16 }), title), body);
 	const changesSection = sessionSection("folder", t("session_changes"), h("div", { class: "session-changes" }, captureSlot, artifactSlot));
 	const slotVisible = (slot) => [...slot.children].some((child) => !child.hidden);
 	const syncChanges = () => {
@@ -48383,10 +48402,7 @@ async function viewSession(main, host, sid, context = null) {
 		observations.box,
 		details
 	].filter(Boolean));
-	const lane = h("section", {
-		class: "workspace-conversation",
-		"aria-label": t("messages")
-	}, conversation.box, controls);
+	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls);
 	const mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
@@ -48432,7 +48448,7 @@ async function viewSession(main, host, sid, context = null) {
 		link.setAttribute("href", discussHref({
 			workspaceId,
 			refs,
-			title: row?.title || sid,
+			title: row?.title || "",
 			from: originView()
 		}));
 	};
@@ -48513,19 +48529,27 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(errorBox(e));
 			}
 		};
-		const card = h("div", { class: "panel session-asking" }, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
-		if (pend.kind === "permission") card.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "msg" }, pend.input_preview || ""), h("div", { class: "actions" }, h("button", {
-			class: "primary",
-			"data-answer-action": "",
-			disabled: !pend.toolUseId || !allowed("session.answer"),
-			onclick: () => answer({ permission: "allow" })
-		}, t("allow")), h("button", {
-			class: "danger",
-			"data-answer-action": "",
-			disabled: !pend.toolUseId || !allowed("session.answer"),
-			onclick: () => answer({ permission: "deny" })
-		}, t("deny"))));
-		else if (pend.kind === "ask_user") {
+		const actions = h("div", { class: "actions session-asking-actions" });
+		const card = h("div", {
+			class: "session-asking",
+			role: "group",
+			"aria-label": t("pending_" + pend.kind)
+		}, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
+		const content = h("div", { class: "session-asking-content" });
+		if (pend.kind === "permission") {
+			content.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "session-asking-preview" }, pend.input_preview || ""));
+			actions.append(h("button", {
+				class: "primary",
+				"data-answer-action": "",
+				disabled: !pend.toolUseId || !allowed("session.answer"),
+				onclick: () => answer({ permission: "allow" })
+			}, t("allow")), h("button", {
+				class: "danger",
+				"data-answer-action": "",
+				disabled: !pend.toolUseId || !allowed("session.answer"),
+				onclick: () => answer({ permission: "deny" })
+			}, t("deny")));
+		} else if (pend.kind === "ask_user") {
 			const fields = [];
 			const save = () => {
 				try {
@@ -48550,15 +48574,16 @@ async function viewSession(main, host, sid, context = null) {
 						save();
 					}
 				}, o));
-				card.append(h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question), picks.length ? h("div", { class: "actions" }, ...picks) : null, h("div", { class: "actions" }, input));
+				content.append(h("div", { class: "session-question" }, h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question), picks.length ? h("div", { class: "actions" }, ...picks) : null, input));
 			}
-			card.append(h("div", { class: "actions" }, h("button", {
+			actions.append(h("button", {
 				class: "primary",
 				"data-answer-action": "",
 				disabled: !pend.toolUseId || !allowed("session.answer"),
 				onclick: () => answer({ answers: fields.map((f) => f.value) })
-			}, t("answer"))));
+			}, t("answer")));
 		}
+		card.append(content, actions);
 		pending.append(card);
 	};
 	const updateControls = () => {
@@ -48593,8 +48618,8 @@ async function viewSession(main, host, sid, context = null) {
 			...data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : []
 		]);
 		if (first) queue.checked = Boolean(row.streaming);
-		titleNode.textContent = row.title || sid;
-		markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
+		titleNode.textContent = row.title || t("session_untitled");
+		markSlot.replaceChildren(agentMark(row.agent_kind));
 		pillSlot.replaceChildren(statusPill(sessionStatus(row)));
 		const metaBits = [];
 		if (context?.project?.name) metaBits.push({
@@ -48690,8 +48715,9 @@ async function viewSession(main, host, sid, context = null) {
 		if (capture) capture.hidden = !manualSource;
 		syncChanges();
 		composer.hidden = !managed;
+		controls.hidden = !managed;
 		readonly.hidden = managed;
-		readonly.textContent = t(row.provenance === "manual" ? "read_only_note" : "session_access_unknown");
+		readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
 		renderPending();
 		updateControls();
 	};

@@ -543,7 +543,8 @@ mark, one status pill, and one quiet meta line: project, host, and a compact obs
 time (relative within a day, otherwise a short local time with no seconds). Send stays
 the only primary action, on the composer's queue row. Interrupt is a danger button.
 Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
-menu. A manual or unconfirmed session shows Read-only and has no send, answer, or
+menu. An absent title says Untitled session, and an unreported agent uses Unknown.
+A manual or unconfirmed session shows Read-only and has no send, answer, or
 interrupt control.
 
 The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
@@ -557,7 +558,11 @@ while the reader is scrolled up show New messages and do not move the visible ro
 Scrolling up without new content shows Back to latest. Activating either restores
 transcript focus. A pinned reader follows layout changes and a successful own send.
 Tool disclosures preserve the reader's toggle until the tool changes state.
-Approval prompts sit above the composer and keep their original operation keys. The
+Approval prompts sit above the composer and keep their original operation keys.
+Their preview is a wrapping block, separate from transcript rows. The composer
+occupies at most half the viewport; questions scroll inside it while Answer and
+Send remain reachable. The transcript has a 160px minimum and the main Session
+region scrolls as a safety net. A manual session has one plain read-only line. The
 last send is one short line; the operation id stays in Details. On a narrow window
 the info and composer collapse icons sit on the caption row and the queue row.
 
@@ -572,3 +577,8 @@ receipts, and pull-request links use the normal link. Identifiers and raw timest
 stay in Details. From a project view, the shell breadcrumb is Workspace / Work /
 Session and the page offers Back to that view. Discuss uses the shared discussion
 link, binding only exact work item refs.
+
+Session inspector subsections use level-three headings under Results; there is
+one Messages landmark. Label details, Send record and Session details have distinct
+disclosure names. Session drawers inherit the shared 400px width, and mobile sheets
+fill the viewport.

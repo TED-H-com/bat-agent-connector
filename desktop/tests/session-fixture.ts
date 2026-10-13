@@ -64,7 +64,7 @@ export async function go(page: Page, hash: string) {
 
 export async function fromRequirements(page: Page, ids: any, which: 'implement' | 'review' | 'manual') {
   await page.goto(`/dashboard/#/pm/${ids.workspaceId}/requirements`);
-  await page.locator('[data-pm-view=requirements][aria-current=page]').waitFor();
+  await page.locator('[data-pm-view=requirements][aria-current=page]').waitFor({state: 'attached'});
   await go(page, `#/session/${ids.host}/${ids.sessions[which]}`);
   await page.locator('.workspace-session-heading h1').filter({hasText: /\S/}).waitFor();
 }
