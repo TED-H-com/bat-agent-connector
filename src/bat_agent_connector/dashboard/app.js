@@ -39234,6 +39234,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		indicator();
 	};
 	const clear = () => {
+		copyAttempt += 1;
 		rows = new Map();
 		initialized = false;
 		viewport.replaceChildren();
@@ -48454,7 +48455,7 @@ async function viewSession(main, host, sid, context = null) {
 			key: `session-send:${connection.namespace}:${host}:${sid}`
 		}) : null;
 		if (record) record.classList.add("session-send-record");
-		status.replaceChildren(line, record);
+		status.replaceChildren(...[line, record].filter(Boolean));
 	};
 	const shortcut = composerShortcut({
 		h,

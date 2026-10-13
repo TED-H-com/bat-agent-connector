@@ -263,6 +263,8 @@ test('checkpoints on a capable host: quiet at rest, honest notes, and a way into
     await form.locator('textarea').fill(zh ? '依照筆記完成重設密碼流程。' : 'Finish the reset flow from these notes.');
     await form.getByRole('button', {name: zh ? '開始代理工作' : 'Start agent work', exact: true}).click();
     await expect(form.getByRole('link', {name: zh ? '開啟新工作階段' : 'Open the new session'})).toHaveAttribute('href', `#/session/${s.ids.host}/continued-session`);
+    await expect(form.locator('.session-checkpoint-op [data-status=waiting]')).toHaveText(zh ? '等待中' : 'Waiting');
+    await expect(form.locator('.session-checkpoint-op [data-status=done]')).toHaveCount(0);
     expect(await form.innerText()).not.toMatch(/op_[0-9a-f]/);
     const continued = s.writes.filter(row => row.body?.action === 'checkpoint.continue');
     expect(continued.map(row => row.body.target)).toEqual([{checkpoint_id: 'cp_' + '7'.repeat(32)}]);
@@ -412,6 +414,30 @@ test('checkpoint disclosure choices stay with their central principal', async ({
   await expect(page.locator('#live')).toHaveText('Connected');
   await go(page, `#/session/${ids.host}/${ids.sessions.manual}`);
   await expect(notes()).not.toHaveAttribute('open');
+  expect(s.writes).toEqual([]);
+  await s.context.close();
+});
+
+test('a delayed clipboard failure cannot restore withdrawn text when the session returns', async ({browser}) => {
+  const s = await openSession(browser);
+  const {page} = s;
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {
+      writeText: () => new Promise((_, reject) => {(window as any).rejectSessionCopy = () => reject(new Error('Clipboard refused'));}),
+    }});
+  });
+  await fromRequirements(page, s.ids, 'implement');
+  await expect(page.locator('.conversation-scroll .msg').last()).toBeVisible();
+  await page.locator('.conversation-scroll .msg').last().getByRole('button', {name: 'Copy original', exact: true}).click();
+  const unavailable: Override = (_, url) => url.pathname === `/sessions/${s.ids.host}/${s.ids.sessions.implement}` ? notFound : undefined;
+  s.overrides.push(unavailable);
+  s.sessionEvent('implement');
+  await expect(page.locator('[data-session-withdrawn]')).toBeVisible();
+  await page.evaluate(() => (window as any).rejectSessionCopy());
+  s.overrides.splice(s.overrides.indexOf(unavailable), 1);
+  s.sessionEvent('implement');
+  await expect(page.locator('[data-session-view]')).toBeVisible();
+  await expect(page.locator('.conversation-copy textarea')).toHaveCount(0);
   expect(s.writes).toEqual([]);
   await s.context.close();
 });

@@ -1407,7 +1407,7 @@ async function viewSession(main, host, sid, context = null) {
     const record = id ? disclosure({label: t("session_send_details"), body: h("p", {}, h("a", {href: `#/op/${encodeURIComponent(id)}`}, id)),
       key: `session-send:${connection.namespace}:${host}:${sid}`}) : null;
     if (record) record.classList.add("session-send-record");
-    status.replaceChildren(line, record);
+    status.replaceChildren(...[line, record].filter(Boolean));
   };
   const shortcut = composerShortcut({h, t, input: box, button: send,
     storageKey: `batc.composer-shortcut.${connection.namespace}`, guard: () => assertView(connection)});

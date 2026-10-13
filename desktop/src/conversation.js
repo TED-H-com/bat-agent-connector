@@ -259,6 +259,7 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
   };
   // Withdrawal: drop every row and its text together.
   const clear = () => {
+    copyAttempt += 1; // an outstanding clipboard failure cannot restore withdrawn text
     rows = new Map(); initialized = false; viewport.replaceChildren(); caption.textContent = ""; notice.hidden = true;
     status.textContent = ""; fallback.replaceChildren(); last = null; unseen = 0; indicator();
   };
