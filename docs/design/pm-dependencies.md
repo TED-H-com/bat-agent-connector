@@ -120,6 +120,7 @@ HTTP 三個路由都需要 observe + current workspace membership；RPC/MCP 同�
 | `GET /dependencies/impact?dependency=pmdepkey_…` | `pm_dependencies_impact_get(workspace_id, dependency)` |
 
 Native bridge 只放行上述 GET、精確 query 和既有 `/operations` 寫入入口。
+Bridge 的 `limit` 僅接受 1–3 位數字並拒絕所有控制字元（含 C1），比 HTTP 更嚴格；schedule 的 `after` 與 HTTP 一樣最多 2,048 字元，dependency impact 必須提供 `dependency` key。
 Read 不連 host、不掃檔、不改 journal；response 上限 2 MB。
 新的 capture document 上限 750,000 bytes；parser 先保留 32,768 bytes 給來源 metadata，加入 files／peers 後再保留 8,192 bytes 給 capture envelope。有效 owner declarations 合計上限 250,000 bytes，保留 grouping、owner 和 peers 的顯示空間。
 大型合法 manifest 不因 byte 預算拒絕整次 capture：依 stable ID 順序保留完整記錄的前綴，先裁切重複的 CI hints，再裁切 edges／未使用 dependencies，必要時裁切 components；持久化 partial revision，parser_reasons 包含 capture_budget。
@@ -149,7 +150,7 @@ PM carrier binding 固定且目前沒有 repository head 的觀察證據，因�
 Capture 同時固定最多 32 個、合計最多 1 MB 的可見其他 carrier revisions 作為跨 repo 比較集合。
 候選依 `(workspace_id, revision_id)` 分頁掃描，不用 SQL `LIMIT 32`：先過可見性（目前 binding 與原 source
 權限）、排除與本 repository 相同者、同一 repository 只取第一筆、再檢查 1 MB 預算，通過的才佔名額，
-滿 32 個即停止。隱藏、同 repository 或重複的列不佔名額。每次 capture 最多檢查 1,024 個候選；
+滿 32 個即停止。隱藏、同 repository 或重複的列不佔名額。每次 capture 最多檢查 128 個候選，限制 event loop 上的同步讀取；
 掃描上限在仍有候選時停止，記 `peer_scan_limit`；可見 peer 因 1 MB 預算略過時記 `peer_byte_budget`。
 這些原因隨 capture 固定，GET／impact 放在 `cross_repository.selection_reasons`，並使 `partial=true`
 （`counts.partial` 仍只描述 captured catalog）。原因不含候選數，不洩漏隱藏來源的數量。
