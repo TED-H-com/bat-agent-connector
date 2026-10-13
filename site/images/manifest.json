@@ -3,7 +3,7 @@
   "frontend_source_commit": "944a854fc381f61c6281edb7fcbcf887321a0c68",
   "source_pin_kind": "candidate",
   "frontend_source_tree": "6325869974337890e1b5e1b6875d9458f1a8e516",
-  "captured_at": "2026-10-13T23:34:38.825Z",
+  "captured_at": "2026-10-13T23:46:57.631Z",
   "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -98,7 +98,7 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "eb95a7c0b6bc53aff4068052fc7f4326ab811bd7b4d7ff8b5349de8db9d42663"
+      "sha256": "b3e9e61b7a3c9c4b444bb56c04f99797917cc523ac86635533beffcb7faa9343"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
@@ -154,7 +154,7 @@
     },
     {
       "file": "discussions-en.png",
-      "sha256": "38b06e8d86979220c4af312bf74e18f3f369344aab52a07e059bf17ecdc4130b",
+      "sha256": "76a0f0556c99c5330f1f31f58d8f945c03b65d646eb54e572048ca60ad0f90df",
       "scenario": "discussions",
       "locale": "en-US",
       "viewport": {
@@ -256,7 +256,7 @@
     },
     {
       "file": "schedule-en.png",
-      "sha256": "074f9cf78f504b3f8ed137f181b7934d0d353465c99f6d1e0411e5078da000fe",
+      "sha256": "7a8a27f707b9490e014787304e8fa7edfe07e89eb03539ca0600d8d20cda4ffc",
       "scenario": "schedule",
       "locale": "en-US",
       "viewport": {
@@ -269,7 +269,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Recorded baseline, forecast and actual timeline; recovery review forecast is three days late. Undated session attempts remain unscheduled.",
+      "composition": "Recorded baseline, forecast and actual timeline; Design review collapsed through its normal control to show Recovery review forecast three days late. Undated session attempts remain unscheduled.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -358,7 +358,7 @@
     },
     {
       "file": "session-en.png",
-      "sha256": "0d1056471ba5b9bd9fc5ba9a8e0a53efa39ff2424f7c2664ce5de540c0997e12",
+      "sha256": "5d69fa2e1805fe675e4b8ab9e15060a8b7af8c938fa1e3710bc541378fd93cbd",
       "scenario": "session",
       "locale": "en-US",
       "viewport": {
@@ -426,7 +426,7 @@
     },
     {
       "file": "discussions-zh.png",
-      "sha256": "5d4e9f6577b6c3f881ced75c6a497fe8776df4661a347b29a2b403b7df5cb4c6",
+      "sha256": "ca0f17c470d2df31f0b798d2fe0873ed64f79b5d9d488376c9c4aa01f4d4c5d5",
       "scenario": "discussions",
       "locale": "zh-TW",
       "viewport": {
@@ -528,7 +528,7 @@
     },
     {
       "file": "schedule-zh.png",
-      "sha256": "73fbe2ad29879661a253d8e491959e5884e8fe80057400ada886519d04f47d32",
+      "sha256": "83981ec4c82b823441de44d60b65e0aae4ae7e26b26f57f973b8b3fb2721d237",
       "scenario": "schedule",
       "locale": "zh-TW",
       "viewport": {
@@ -541,7 +541,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Recorded baseline, forecast and actual timeline; recovery review forecast is three days late. Undated session attempts remain unscheduled.",
+      "composition": "Recorded baseline, forecast and actual timeline; Design review collapsed through its normal control to show Recovery review forecast three days late. Undated session attempts remain unscheduled.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -630,7 +630,7 @@
     },
     {
       "file": "session-zh.png",
-      "sha256": "471b0eab387bc7e6eb760a3efcb64fcc6904d73b20d020eb9d1b3eb6950ec08e",
+      "sha256": "35222c61510c27a9009c3a2f2f84d5dce1ae589b21f8c0f9a50266e531b6367a",
       "scenario": "session",
       "locale": "zh-TW",
       "viewport": {

@@ -13,7 +13,7 @@ The [progress report](../../docs/product/progress-2026-10-14.md) separates those
 | `discussions-en.png`, `discussions-zh.png` | Discussion opened from the Overview blocker through its Discuss link. Automatic title, original context chip and a reviewable proposal; the proposal is not adopted and does not authorize work. |
 | `requirements-en.png`, `requirements-zh.png` | RTM with email sign-in expanded and its bound work inspector open. Requirement acceptance, PR merge and deployment remain separate evidence. |
 | `issues-en.png`, `issues-zh.png` | Both register pages loaded, showing risks, issues, an action, a proposed change and a decision. Open records remain open. |
-| `schedule-en.png`, `schedule-zh.png` | Recorded baseline, forecast and actual dates. Recovery review is forecast three days late; undated session attempts remain unscheduled. |
+| `schedule-en.png`, `schedule-zh.png` | Recorded baseline, forecast and actual dates, with Design review collapsed through its normal control. Recovery review is forecast three days late; undated session attempts remain unscheduled. |
 | `dependencies-en.png`, `dependencies-zh.png` | Pinned inventory graph with its Partial label and evidence legend. The graph is bounded; missing versions, ownership and freshness remain unknown. |
 | `board-en.png`, `board-zh.png` | Twelve synthetic work items across five workflow lanes. Waiting and review states remain distinct from accepted content and delivery. |
 | `session-en.png`, `session-zh.png` | Manual BAT session on `demo-host`, with its read-only transcript. There are no send, answer or interrupt controls. |

@@ -96,6 +96,7 @@ for path in SITE.glob("*.html"):
 for path in [
     ROOT / "README.md",
     ROOT / "README.zh-TW.md",
+    ROOT / "CHANGELOG.md",
     ROOT / "docs/getting-started.md",
     ROOT / "docs/getting-started.zh-TW.md",
     ROOT / "docs/windows.md",
