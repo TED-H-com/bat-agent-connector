@@ -28393,18 +28393,18 @@ async function readSchedule(api, workspaceId, check) {
 			reasons.add("schedule_page_limit");
 		}
 	}
-	const rows = [...all.values()];
+	const rows = [...all.values()], { included } = treeIds(rows);
 	return {
 		...frame,
 		rows,
-		unscheduled: rows.filter((row) => !spans(row).length),
+		unscheduled: rows.filter((row) => !spans(row).length && !included.has(row.id)),
 		range: chartRange(rows),
 		unknown: [...notes.values()],
 		partial,
 		reasons: [...reasons]
 	};
 }
-function scheduleTree(rows, collapsed) {
+function treeIds(rows) {
 	const byId = new Map(rows.map((row) => [row.id, row])), included = new Set();
 	for (const row of rows.filter((row) => spans(row).length)) {
 		let next = row;
@@ -28415,6 +28415,13 @@ function scheduleTree(rows, collapsed) {
 			next = byId.get(next.parent_id);
 		}
 	}
+	return {
+		byId,
+		included
+	};
+}
+function scheduleTree(rows, collapsed) {
+	const { byId, included } = treeIds(rows);
 	const children = new Map();
 	for (const row of rows.filter((row) => included.has(row.id) && !sessionAttempt(row))) {
 		const parent = included.has(row.parent_id) ? row.parent_id : row.kind === "milestone" ? null : "unassigned";
@@ -28896,19 +28903,19 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			});
 			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
 			const delta = upcoming ? milestoneDelta(upcoming) : null;
-			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), ...data.partial ? [statusPill("partial")] : [], details);
 			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
 				variant: "ghost",
 				label: firstLine(row),
 				"data-schedule-select": row.id,
 				title: row.title,
 				onClick: (event) => select(row.id, event.currentTarget)
-			}), rowStatus(row, data))));
-			unscheduled.replaceChildren(disclosure({
+			}), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null)));
+			unscheduled.replaceChildren(...data.unscheduled.length ? [disclosure({
 				label: t("sched_unscheduled", { n: data.unscheduled.length }),
 				key: `${namespace}:${workspaceId}:schedule:unscheduled`,
 				body: list
-			}));
+			})] : []);
 			draw();
 		}
 		if (selected && !data.rows.some((row) => row.id === selected)) {

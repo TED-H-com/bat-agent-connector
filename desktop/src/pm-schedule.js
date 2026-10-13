@@ -206,10 +206,11 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
         .sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
       const delta = upcoming ? milestoneDelta(upcoming) : null;
       meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, firstLine(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
-        h('span', {}, t('sched_loaded', {n: data.rows.length})), data.partial ? statusPill('partial') : h('span'), details);
+        h('span', {}, t('sched_loaded', {n: data.rows.length})), ...(data.partial ? [statusPill('partial')] : []), details);
       const list = h('ul', {}, ...data.unscheduled.map(row => h('li', {},
-        button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}), rowStatus(row, data))));
-      unscheduled.replaceChildren(disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list}));
+        button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}),
+        row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null)));
+      unscheduled.replaceChildren(...(data.unscheduled.length ? [disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list})] : []));
       draw();
     }
     if (selected && !data.rows.some(row => row.id === selected)) {closePanel(); selected = null; remember();}

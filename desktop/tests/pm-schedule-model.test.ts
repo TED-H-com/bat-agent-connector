@@ -34,12 +34,15 @@ test('session inventory dates never become bars; inconsistent ends are omitted',
   assert.deepEqual(spans({actual: {start: '2026-10-08', end: '2026-10-02', open: true}})[0], {kind: 'actual', start: dayNumber('2026-10-08'), end: null, open: true});
   assert.deepEqual(spans({actual: {start: '2026-10-08T10:00:00Z', end: null, open: false}})[0], {kind: 'actual', start: dayNumber('2026-10-08T10:00:00Z'), end: null, open: false});
 });
-test('tree uses explicit parents, preserves undated ancestors and never invents phase rows', () => {
+test('tree uses explicit parents, preserves undated ancestors and never invents phase rows', async () => {
   const rows = [{id: 'm', kind: 'milestone', parent_id: null}, {id: 'r', kind: 'requirement', parent_id: 'm'},
-    {id: 'w', kind: 'work', parent_id: 'r', actual: {start: '2026-10-01', end: null}},
-    {id: 'o', kind: 'work', parent_id: null, actual: {start: '2026-10-01', end: null}}];
+    {id: 'w', kind: 'work', parent_id: 'r', actual: {start: '2026-10-01', end: null, open: true}},
+    {id: 'o', kind: 'work', parent_id: null, actual: {start: '2026-10-01', end: null, open: true}},
+    {id: 'r_unsched', kind: 'requirement', parent_id: 'm'}];
   assert.deepEqual(scheduleTree(rows, new Set()).map(value => [value.row.id, value.depth]), [['m',1],['r',2],['w',3],['unassigned',1],['o',2]]);
   assert.deepEqual(scheduleTree(rows, new Set(['r'])).map(value => value.row.id), ['m','r','unassigned','o']);
+  const data = await readSchedule(async () => frame([rows[2], rows[3]], {unscheduled: [rows[0], rows[1], rows[4]]}), 'w', () => {});
+  assert.deepEqual(data.unscheduled.map(row => row.id), ['r_unsched']);
 });
 test('discussion references contain exact backend identities only', () => {
   assert.deepEqual(scheduleRef({kind: 'milestone', refs: {milestone_id: 'review', plan_revision_id: 'ignored'}}, {baseline: {revision_id: 'baseline'}}), {kind: 'milestone', id: 'review', revision_id: 'baseline'});

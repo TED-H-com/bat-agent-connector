@@ -65,17 +65,21 @@ export async function readSchedule(api, workspaceId, check) {
     after = next.next_cursor;
     if (page === 9) {partial = true; reasons.add('schedule_page_limit');}
   }
-  const rows = [...all.values()];
-  return {...frame, rows, unscheduled: rows.filter(row => !spans(row).length), range: chartRange(rows),
+  const rows = [...all.values()], {included} = treeIds(rows);
+  return {...frame, rows, unscheduled: rows.filter(row => !spans(row).length && !included.has(row.id)), range: chartRange(rows),
     unknown: [...notes.values()], partial, reasons: [...reasons]};
 }
-// Keep ancestors even when they have no dates. Session attempts never become bars.
-export function scheduleTree(rows, collapsed) {
+function treeIds(rows) {
   const byId = new Map(rows.map(row => [row.id, row])), included = new Set();
   for (const row of rows.filter(row => spans(row).length)) {
     let next = row; const path = new Set();
     while (next && !path.has(next.id)) {included.add(next.id); path.add(next.id); next = byId.get(next.parent_id);}
   }
+  return {byId, included};
+}
+// Keep ancestors even when they have no dates. Session attempts never become bars.
+export function scheduleTree(rows, collapsed) {
+  const {byId, included} = treeIds(rows);
   const children = new Map();
   for (const row of rows.filter(row => included.has(row.id) && !sessionAttempt(row))) {
     const parent = included.has(row.parent_id) ? row.parent_id : row.kind === 'milestone' ? null : 'unassigned';

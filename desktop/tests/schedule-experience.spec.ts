@@ -276,3 +276,28 @@ test('terminal span without end time reads End time not recorded and mobile date
   await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual 2026-10-05 → Open');
 });
 
+test('Unscheduled excludes rows already in the tree, omits requirement status pills, and hides when zero', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await start(page, 'en');
+  const region = page.locator('[data-pm-schedule]');
+  await expect(region.locator('.schedule-unscheduled summary')).toHaveText('Unscheduled (6)');
+  await region.locator('.schedule-unscheduled summary').click();
+  const overlap = await region.evaluate(root => {
+    const treeIds = new Set([...root.querySelectorAll('.schedule-chart [data-schedule-select]')].map(el => (el as HTMLElement).dataset.scheduleSelect));
+    const unschedIds = [...root.querySelectorAll('.schedule-unscheduled [data-schedule-select]')].map(el => (el as HTMLElement).dataset.scheduleSelect);
+    const reqPills = [...root.querySelectorAll('.schedule-unscheduled li')].filter(li => li.querySelector('[data-schedule-select^="requirement:"]')).flatMap(li => [...li.querySelectorAll('[data-status]')]);
+    const emptyMetaSpans = [...root.querySelectorAll('.schedule-meta > span')].filter(s => !s.textContent?.trim());
+    return {duplicates: unschedIds.filter(id => treeIds.has(id)), reqPillsCount: reqPills.length, emptyMetaSpansCount: emptyMetaSpans.length};
+  });
+  expect(overlap).toEqual({duplicates: [], reqPillsCount: 0, emptyMetaSpansCount: 0});
+});
+
+test('empty Unscheduled renders no disclosure and meta has no empty span', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await start(page, 'en', {mutate: data => { data.unscheduled = []; }});
+  const region = page.locator('[data-pm-schedule]');
+  await expect(region.locator('.schedule-unscheduled details')).toHaveCount(0);
+  expect(await region.locator('.schedule-meta > span').evaluateAll(nodes => nodes.filter(n => !n.textContent?.trim()).length)).toBe(0);
+});
+
+
