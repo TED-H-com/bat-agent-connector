@@ -1105,13 +1105,13 @@ def _collect(ops, principal, workspace_id):
     rows, notes = [], _Scan()
     repair_rows = []
     repair_truncated, repair_bad = _take("repair", lambda: _collect_repairs(ops, principal, workspace_id), repair_rows, notes)
+    # A lineage-hidden repair is not an existing repair. Admit it before it can reserve a finding.
+    repair_rows = _admit(ops, principal, repair_rows, notes)
+    if "repair" in notes.source_incomplete:
+        repair_bad = True
     reserved = None
     if not repair_truncated and not repair_bad:
-        reserved = set()
-        for row in repair_rows:
-            finding_id = next((ident for kind, ident in row["_refs"] if kind == "finding"), None)
-            if finding_id:
-                reserved.add(finding_id)
+        reserved = {ident for row in repair_rows for kind, ident in row["_refs"] if kind == "finding"}
     rules = None
     try:
         rules = _policy_rules(ops, principal, workspace_id)
@@ -1548,7 +1548,14 @@ def _load_shallow(ops, principal, workspace_id, row_id):
 def _finding_by_id(ops, principal, workspace_id, finding_id):
     rules = _policy_rules(ops, principal, workspace_id)
     repairs, truncated, bad = _collect_repairs(ops, principal, workspace_id)
-    reserved = None if truncated or bad else {ident for row in repairs for kind, ident in row["_refs"] if kind == "finding"}
+    notes = _Scan()
+    if bad:
+        notes.mark("repair", bad=True)
+    repairs = _admit(ops, principal, repairs, notes)
+    if truncated or bad or "repair" in notes.source_incomplete:
+        reserved = None
+    else:
+        reserved = {ident for row in repairs for kind, ident in row["_refs"] if kind == "finding"}
     if not _table(ops.db, "pm_maintenance_policies"):
         return None
     from .pm_maintenance_findings import current_findings

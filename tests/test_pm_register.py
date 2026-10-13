@@ -708,6 +708,47 @@ async def test_hidden_repairs_do_not_change_coverage_counts_or_actions(ops, monk
     assert after["coverage"]["complete"] is True
 
 
+async def test_lineage_hidden_repair_does_not_remove_the_finding_action(ops, monkeypatch):
+    """A repair dropped by lineage must not reserve its finding or mark the source partial."""
+    data = await prepared(ops)
+    finding_id = "pmfn_" + "1" * 32
+    work_item = "wi_" + "e" * 20
+    repair = {"repair_id": "pmrp_" + "7" * 32, "operation_status": "running", "sequence": 5,
+              "created_at": 1_760_000_000.0, "finished_at": None, "deadline_at": None,
+              "finding_id": finding_id, "work_item_id": work_item}
+    ops.actions["pm.maintenance.repair"] = object()
+    _force_table(monkeypatch, "pm_maintenance_policies", "pm_maintenance_repairs")
+    monkeypatch.setattr(pm_maintenance_policy, "head", lambda db, wid: {"policy_id": "pmmp_" + "a" * 32, "revision": 1})
+    monkeypatch.setattr(pm_maintenance_policy, "active_record", lambda *args, **kwargs: {
+        "policy_id": "pmmp_" + "a" * 32, "policy": {"repair_rules": [{"key": "ci-bug", "labels_all": ["bug"]}]}})
+    monkeypatch.setattr(pm_maintenance_findings, "current_findings", lambda *args, **kwargs: {
+        "visibility_filtered": False,
+        "observation_ref": {"observation_id": "pmobs_" + "a" * 27, "document_digest": "d" * 64},
+        "sources": {"issues": {"status": "complete", "findings": [{
+            "finding_id": finding_id, "state": "observed_open", "native": {"kind": "issues"},
+            "facts": {"labels": ["bug", "ci"]}}]}}})
+    monkeypatch.setattr(pm_maintenance_repairs, "list_repairs",
+                        lambda *args, after=0, limit=20, **kwargs: {"repairs": [repair] if repair["sequence"] > after else [], "next_after": None})
+
+    def offered(view):
+        row = next(item for item in view["rows"] if item["source"] == {"kind": "finding", "id": finding_id})
+        return [action["action"] for action in row["available_actions"]]
+
+    visible = pm_register.list_register(ops, OWNER, data["wid"])
+    assert repair["repair_id"] in {row["source"]["id"] for row in visible["rows"]}
+    assert offered(visible) == []
+    _ensure_lineage(ops)
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)",
+                   ("work_item", work_item, "op_" + uuid.uuid4().hex, "op_" + "f" * 32))
+    hidden = pm_register.list_register(ops, OWNER, data["wid"])
+    assert repair["repair_id"] not in {row["source"]["id"] for row in hidden["rows"]}
+    assert offered(hidden) == ["pm.maintenance.repair"]
+    assert hidden["coverage"]["complete"] is True and "repair" not in hidden["coverage"]["sources"]
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "finding." + finding_id)
+    assert [action["action"] for action in detail["row"]["available_actions"]] == ["pm.maintenance.repair"]
+    assert detail["timeline_coverage"]["complete"] is True
+
+
 async def test_revision_between_pages_keeps_the_row_and_shows_the_new_title(ops):
     data = await prepared(ops)
     made = [

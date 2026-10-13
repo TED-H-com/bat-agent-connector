@@ -125,7 +125,8 @@ Finding 只讀目前這一筆觀察。觀察不存在，或存在但這位讀者
 
 格式不合法的 `row_id` 在 HTTP、RPC 與 MCP 都是 422。格式合法但缺少或隱藏的列都是 404，
 即使其他來源不完整也一樣。治理與 repair 依 id 直接讀取，不重掃整份清單。
-Finding 的直接讀取仍會掃描 repair，以便知道哪些 finding 已被佔用。
+Finding 的直接讀取仍會掃描 repair，以便知道哪些 finding 已被可見的 repair 佔用。
+血緣上隱藏的 repair 不佔用，也不把來源標成不完整；repair 來源若被截斷或 409／413，動作維持未知。
 維護 repair 的 proof 文件沒有 evidence id，所以不做成證據步驟。
 
 `limit` 預設 50、最大 100。排序是首次寫入的序號降序、`row_id` 升序，不用 `updated_at`。
@@ -144,7 +145,7 @@ repository 全名，不放進 `related.prs`。不把 GitHub issue 的 number 當
 
 - 治理：`pm.governance.revise`。`change` 且尚未決定時加 `pm.governance.decide`。已採方向、有提案版本、
   尚未連結採用時加 `pm.governance.adoption.link`。
-- finding：只有 `issues`、沒有既有 PR／工作／repair，且某個已採用 `repair_rules.labels_all` 是標籤子集時，
+- finding：只有 `issues`、沒有既有 PR／工作／可見的 repair，且某個已採用 `repair_rules.labels_all` 是標籤子集時，
   才給 `pm.maintenance.repair`，並帶上該 `rule_key` 與 `finding_ref`。對不上就不給，不發明規則。
 - repair 尚未終態：`pm.maintenance.repair.evidence.record`。
 - issue mapping：`tracking` 給 `pm.issue.cancel`；未 `cancelled` 給 `pm.issue.publish`。

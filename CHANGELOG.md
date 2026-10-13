@@ -10,7 +10,8 @@
   listed. A withdrawn source leaves the remaining rows and the counts together. Detail
   timelines follow each stored foreign key one hop in both directions. A hidden target is
   skipped. A target that returns 409 or 413 stays off the timeline and marks that source
-  partial. A hidden row is
+  partial. A lineage-hidden repair does not remove a visible finding's repair action.
+  A hidden row is
   omitted from rows, counts and summary together and does not fail the page. Row ids are
   path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
   no write actions.
