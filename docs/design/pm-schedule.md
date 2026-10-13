@@ -56,7 +56,7 @@ Session 目前沒有明確開始時間。Session attempt 因此沒有 actual，�
 
 工作的 actual end 只來自兩種證據，取較早者：工作驗收（`approved` 的 `approved_at`），或已驗證的 merge receipt。後者要同時滿足 action 為 `github.pr.merge` 或 `delivery.merge_and_deploy`、operation 成功、成功的 `merge.verify`（或 `merge.verify.retry.*`）、`verified` 是 JSON true、`merged_sha` 為 40 或 64 個小寫 hex。Attempt 結束、session 結束與部署驗證都不會結束工作條。部署驗證只把工作狀態設為 `deployed`。預覽 PR 連結不是 merge。
 
-Operation attempt 的結束時刻：成功用狀態為 `succeeded` 的步驟 `finished_at`；失敗或取消用該狀態自己的步驟時間，不用更早的成功步驟。`uncertain` 不算結束。終態卻沒有該狀態的 `finished_at` 時，end 是 null，並記 `actual.end` / `terminal_time_unrecorded`。
+Operation attempt 的結束時刻：`succeeded`、`failed`、`cancelled` 都用最新一筆 `api_events` kind `operation.{status}`，而且 body 的 `to` 等於該狀態。不用步驟的 `finished_at`，也不用更早另一個終態的事件。`uncertain` 不算結束。終態卻沒有對得上的事件時，end 是 null，並記 `actual.end` / `terminal_time_unrecorded`。
 
 若算出的工作 end 早於 start，保留 start，把 end 改為 null，`open` 為 true，並記 `work.actual` / `inconsistent_dates`。
 

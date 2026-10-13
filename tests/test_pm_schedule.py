@@ -1394,9 +1394,49 @@ async def test_failed_operation_ends_at_its_terminal_step(ops):
     ops.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,response,started_at,finished_at)
         VALUES(?,1,'work','succeeded','{}','{}',?,?),(?,2,'give-up','failed','{}',NULL,?,?)""",
         (operation["operation_id"], EARLY_AT, 2000, operation["operation_id"], 2000, LATE_AT))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.failed',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "running", "to": "failed"}), OWNER.actor, LATE_AT))
     row = by_id(schedule(ops, wid))[f"attempt:operation:{work_id}:{operation['operation_id']}"]
     assert row["actual"]["end"] == instant(LATE_AT)
     assert row["actual"]["start"] == instant(EARLY_AT)
+
+
+async def test_cancelled_operation_ends_at_the_status_event(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    operation = await source_operation(ops, action="fixture.cancel")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='cancelled', created_at=? WHERE operation_id=?",
+                   (EARLY_AT, operation["operation_id"]))
+    ops.db.execute("DELETE FROM operation_steps WHERE operation_id=?", (operation["operation_id"],))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.cancelled',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "running", "to": "cancelled"}), OWNER.actor, LATE_AT))
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:operation:{work_id}:{operation['operation_id']}"]
+    assert row["actual"]["end"] == instant(LATE_AT)
+    assert ("actual.end", "terminal_time_unrecorded") not in reasons(body)
+
+
+async def test_failed_operation_without_a_failed_step_ends_at_the_status_event(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    operation = await source_operation(ops, action="fixture.fail-outside")
+    await link(ops, work, "operation", operation["operation_id"])
+    ops.db.execute("UPDATE operations SET status='failed', created_at=? WHERE operation_id=?",
+                   (EARLY_AT, operation["operation_id"]))
+    ops.db.execute("DELETE FROM operation_steps WHERE operation_id=?", (operation["operation_id"],))
+    ops.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,response,started_at,finished_at)
+        VALUES(?,1,'work','succeeded','{}','{}',?,?)""", (operation["operation_id"], EARLY_AT, 2000))
+    ops.db.execute("""INSERT INTO api_events(resource_type,resource_id,kind,body,actor,created_at)
+        VALUES('operation',?,'operation.failed',?,?,?)""",
+        (operation["operation_id"], json.dumps({"from": "accepted", "to": "failed"}), OWNER.actor, LATE_AT))
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:operation:{work_id}:{operation['operation_id']}"]
+    assert row["actual"]["start"] == instant(EARLY_AT)
+    assert row["actual"]["end"] == instant(LATE_AT)
+    assert ("actual.end", "terminal_time_unrecorded") not in reasons(body)
 
 
 async def test_work_end_before_start_is_cleared(ops):

@@ -494,23 +494,30 @@ def _operations(ops, principal, workspace_id, ids, notes, coverage):
 
 
 def _operation_ends(db, operations):
-    """Terminal end is that status's own step time, not an earlier succeeded step."""
+    """Terminal end is the latest operation.{status} event whose `to` matches that status."""
     terminal = {oid: op.get("status") for oid, op in operations.items() if op.get("status") in OPERATION_TERMINAL}
     if not terminal:
         return {}
     ids = list(terminal)
+    kinds = tuple(f"operation.{status}" for status in sorted(OPERATION_TERMINAL))
     rows = db.execute(
-        f"""SELECT operation_id, status, MAX(finished_at) AS finished_at FROM operation_steps
-            WHERE finished_at IS NOT NULL AND status IN ('succeeded','failed','cancelled')
-            AND operation_id IN ({_marks(ids)}) GROUP BY operation_id, status""", tuple(ids)).fetchall()  # noqa: S608
-    by_status = {}
-    for row in rows:
-        by_status.setdefault(row["operation_id"], {})[row["status"]] = row["finished_at"]
+        f"""SELECT resource_id, kind, body, created_at FROM api_events
+            WHERE resource_type='operation' AND resource_id IN ({_marks(ids)}) AND kind IN ({_marks(kinds)})
+            ORDER BY seq DESC""", (*ids, *kinds)).fetchall()  # noqa: S608
     ends = {}
-    for operation_id, status in terminal.items():
-        stamp = by_status.get(operation_id, {}).get(status)
-        if stamp is not None:
-            ends[operation_id] = _instant(stamp)
+    for row in rows:
+        operation_id = row["resource_id"]
+        if operation_id in ends:
+            continue
+        status = terminal[operation_id]
+        if row["kind"] != f"operation.{status}":
+            continue
+        try:
+            body = json.loads(row["body"])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(body, dict) and body.get("to") == status:
+            ends[operation_id] = _instant(row["created_at"])
     return ends
 
 

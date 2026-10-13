@@ -21,6 +21,8 @@
   including named task events. Every schedule cursor the server issues is accepted
   back, including a row id that contains a control character. A plan or one issue
   mapping that lineage refuses is hidden; it does not fail the schedule read.
+  A cancelled or failed operation ends at the matching status event, including a
+  failure that never recorded a failed step.
   See `docs/design/pm-schedule.md`.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
