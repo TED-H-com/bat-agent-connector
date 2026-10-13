@@ -1088,6 +1088,27 @@ async def test_run_scan_bound_omits_run_id_before_a_decision(ops, monkeypatch):
     assert ("attempt.run_id", "run_lookup_truncated") in reasons(body)
 
 
+async def test_run_visibility_receives_the_workspace_id(ops, monkeypatch):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    seen = []
+
+    def visible(db, principal, run):
+        seen.append(run)
+        return True
+
+    monkeypatch.setattr(pm_runs, "source_visible", visible)
+    _run_row(ops, wid, thread, 1, "pmr_" + "1" * 32, "op_" + "1" * 32,
+             {"host": "mock-host", "session_id": "run-session"}, 1.0)
+    body = check(schedule(ops, wid), wid)
+    assert seen and all(row["workspace_id"] == wid and isinstance(row["context"], dict) for row in seen)
+    assert by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]["refs"]["run_id"] == "pmr_" + "1" * 32
+
+
 async def test_hidden_operation_links_do_not_consume_the_per_work_cap(ops, monkeypatch):
     target, _plan, work, *_ = await mapped(ops)
     wid, work_id = target["workspace_id"], work["work_item_id"]

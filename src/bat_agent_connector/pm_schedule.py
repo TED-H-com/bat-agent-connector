@@ -641,7 +641,8 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
             if not isinstance(body, dict):
                 body = {}
             try:
-                allowed = pm_runs.source_visible(db, principal, {"operation_id": match["operation_id"], "context": body})
+                allowed = pm_runs.source_visible(db, principal, {
+                    "operation_id": match["operation_id"], "context": body, "workspace_id": workspace_id})
             except OperationError:
                 allowed = False
             if allowed:
