@@ -883,6 +883,11 @@
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
 
+- Engineering handoff prerequisite selectors now stay disabled throughout source
+  review, including newly loaded choices. Slow reads can no longer silently drop
+  a selected original assessment from a handoff or batch; batch preflight retains
+  the exact reference and refuses unavailable sources without sending an operation.
+
 ## 0.2.4 (unreleased)
 
 - Turn markers: `session_send` and `session_relay` return `turn_marker` / `after_ms` (the host-side id and

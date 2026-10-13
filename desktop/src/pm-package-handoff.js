@@ -139,6 +139,8 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
       node.addEventListener('change',()=>{if(editor.locked()||!write()||reading)return;const values=JSON.parse(editor.fields.quality_selection.value||'{}');if(node.value)values[rid]=JSON.parse(node.value);else delete values[rid];editor.set('quality_selection',JSON.stringify(values));prepared=null;facts.replaceChildren();update();});
       box.append(h('label',{},`${t('ph_quality_requirement')} ${rid}`,node));
     }
+    // Newly created choices must share the editor's read/lock/authority gates before the next await.
+    editor.update();
   }
   function selectedQuality(row){
     const refs=boundedQualityMap(JSON.parse(editor.fields.quality_selection.value||'{}')),needed=prerequisites(row);
