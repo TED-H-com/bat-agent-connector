@@ -482,6 +482,6 @@ def read(ops, principal, workspace_id):
     if not principal.allows('observe'):
         raise OperationError('FORBIDDEN', 'Overview requires observe scope / 專案總覽需要檢視權限', 403)
     from .pm_release_baselines import _snapshot
-    with _snapshot(ops.db), pm_read_cache.scope(ops.db):
+    with _snapshot(ops.db), pm_read_cache.scope(ops.db, principal):
         pm_workspace.require_member(ops.db, principal, workspace_id)
         return Projection(ops, principal, workspace_id).read()

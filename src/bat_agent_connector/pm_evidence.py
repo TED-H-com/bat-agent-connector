@@ -12,7 +12,7 @@ import re
 import time
 import uuid
 
-from . import controller_authority, deployment_store, pm_plans, pm_workspace, work_items
+from . import controller_authority, deployment_store, pm_plans, pm_read_cache, pm_workspace, work_items
 from .errors import ResourceReadOnly
 from .operations import ActionDef, OperationError
 
@@ -657,17 +657,15 @@ def list_evidence(ops, principal, workspace_id, *, work_item_id=None, after=0, l
             "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
 
 
+@pm_read_cache.memoized
 def get_evidence(ops, principal, workspace_id, evidence_id):
-    def load():
-        _member(ops, principal, workspace_id)
-        if not isinstance(evidence_id, str) or not _EVIDENCE.fullmatch(evidence_id):
-            raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
-        row = ops.db.execute("SELECT * FROM pm_evidence WHERE workspace_id=? AND evidence_id=?", (workspace_id, evidence_id)).fetchone()
-        if not row or not _visible(ops, principal, row):
-            raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
-        return {"version": 1, "evidence": _evidence(row, detail=True)}
-    from .pm_release_baselines import _remember
-    return _remember("evidence", evidence_id, load)
+    _member(ops, principal, workspace_id)
+    if not isinstance(evidence_id, str) or not _EVIDENCE.fullmatch(evidence_id):
+        raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
+    row = ops.db.execute("SELECT * FROM pm_evidence WHERE workspace_id=? AND evidence_id=?", (workspace_id, evidence_id)).fetchone()
+    if not row or not _visible(ops, principal, row):
+        raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
+    return {"version": 1, "evidence": _evidence(row, detail=True)}
 
 
 def _capture_out(ops, principal, row):

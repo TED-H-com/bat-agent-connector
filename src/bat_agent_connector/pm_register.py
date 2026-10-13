@@ -1458,9 +1458,10 @@ def _direct(ops, principal, workspace_id, row_id, rows):
     return row, row is None
 
 
-def _read(ops):
-    from .pm_release_baselines import _memoized_reads, _snapshot
-    return _snapshot(ops.db), _memoized_reads()
+def _read(ops, principal):
+    from .pm_read_cache import scope
+    from .pm_release_baselines import _snapshot
+    return _snapshot(ops.db), scope(ops.db, principal)
 
 
 def _view(workspace_id, as_of, page, nxt, selected, names, complete, bad):
@@ -1473,7 +1474,7 @@ def _view(workspace_id, as_of, page, nxt, selected, names, complete, bad):
 def list_register(ops, principal, workspace_id, row_type=None, status=None, owner=None, q=None, after=None, limit=50):
     cursor = _params(row_type, status, owner, q, after, limit)
     as_of = datetime.now(timezone.utc)
-    snapshot, memo = _read(ops)
+    snapshot, memo = _read(ops, principal)
     with snapshot, memo:
         _check(workspace_id, principal, ops)
         rows, notes = _collect(ops, principal, workspace_id)
@@ -1489,7 +1490,7 @@ def get_register(ops, principal, workspace_id, row_id):
     if not isinstance(row_id, str) or not _ROW_ID.fullmatch(row_id):
         _bad("row_id must name a register source")
     as_of = datetime.now(timezone.utc)
-    snapshot, memo = _read(ops)
+    snapshot, memo = _read(ops, principal)
     with snapshot, memo:
         _check(workspace_id, principal, ops)
         notes = _Scan()

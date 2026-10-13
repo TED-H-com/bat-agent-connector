@@ -1123,3 +1123,5 @@ async def test_schedule_read_uses_a_deferred_snapshot(ops):
         ops.db.set_trace_callback(None)
     assert not any(line.startswith("BEGIN IMMEDIATE") for line in statements)
     assert any(line == "BEGIN" or line.startswith("BEGIN DEFERRED") for line in statements)
+    assert len(statements) <= 45
+    print("Schedule page SQL:", len(statements))

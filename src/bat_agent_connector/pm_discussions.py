@@ -12,7 +12,6 @@ import time
 
 from . import pm_profiles, pm_read_cache, pm_workspace
 from .operations import ActionDef, OperationError
-from .pm_release_baselines import _snapshot_read
 
 THREAD_ID = re.compile(r"pmt_[0-9a-f]{32}")
 INPUT_ID = re.compile(r"pmi_[0-9a-f]{32}")
@@ -391,9 +390,9 @@ def _capabilities(ops, workspace, principal):
             "adopt": False, "dispatch": False}
 
 
-@_snapshot_read
 def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
-    with pm_read_cache.scope(ops.db):
+    from .pm_release_baselines import _snapshot
+    with _snapshot(ops.db), pm_read_cache.scope(ops.db, principal):
         return _list_threads(ops, principal, workspace_id, limit=limit, after=after)
 
 
