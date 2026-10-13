@@ -914,6 +914,9 @@
 - Added a bilingual Schedule timeline with recorded baseline, forecast and actual evidence, accessible
   inspection, bounded paging, and preserved roadmap and sprint actions.
 
+- Dependencies view: technology matrix, layered graph and impact for a captured inventory, with durable
+  capture, declare and retract, and honest partial, stale and omitted states in English and zh-TW.
+
 ## 0.2.4 (unreleased)
 
 - Turn markers: `session_send` and `session_relay` return `turn_marker` / `after_ms` (the host-side id and

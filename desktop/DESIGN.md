@@ -197,16 +197,6 @@ warn 4.93 / 6.30, bad 4.83 / 5.55, info 5.23 / 5.61, review 5.34 / 5.91,
 neutral 5.19 / 5.44. All meet 4.5:1. The icon legal comment must remain in both
 browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle resource.
 
-Agent resources uses the same compact navigation, table and inspector. Separate
-source-reported models from requested model context, and observed tokens from current
-quota windows. Missing counters stay unknown. Source failures withdraw numbers and
-model details together. Filters and a selected inspector keep their place during
-background reads; the toolbar can pause view updates without stopping collection.
-When the resources projection includes `buckets`, the usage trend is one stacked bar
-per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
-The resources read includes `buckets` only when the request sets `buckets=day`.
-Omit the chart when the projection has no buckets.
-
 ## Overview
 
 Overview defaults to the central `pm_overview` live projection. The shared header
@@ -264,3 +254,47 @@ Roadmap and Sprints keep their original durable forms in the header overflow dra
 Zoom, selection, expansion and scroll preferences are bounded and connection/workspace
 keyed. Below 800px, rows become a list with date ranges and independently scrolling
 mini timelines; the document never scrolls horizontally.
+
+## Dependencies
+
+The question on this view is which checks have to be run again if one dependency changes.
+It reads the current dependency projection, its revisions, and one impact query. Capture,
+declare, and retract stay the durable dependency actions, using the projection version,
+the workspace version, and the source binding digest. Capture again is the only primary
+action in the page header. Maintenance policy, release baselines, maintenance checks, and
+workload observations stay in the secondary cards.
+
+The header names the capture commit and its UTC date. A Stale pill is shown only when
+the projection says `stale` is true. Unknown freshness stays out of the header and is
+stated once under Details. A Partial pill and the omitted total describe the returned
+capture, not a repository-wide total. Relation counts do the same, and they are omitted
+when the projection has no count object.
+
+The matrix groups dependency columns by kind. A cell shows relation letters: verified
+is solid, declared is an outline, and inferred is dashed. The version is the accessible
+name and the tooltip. More than six columns start as the focused component's direct
+dependencies, with Show all. At 800px and below the same rows become a list. The graph
+is a left-to-right drawing of the loaded capture. It is labelled Loaded and is not a
+fleet-wide graph. Selecting a node keeps its upstream and downstream visible.
+
+The inspector shows a pinned version only when this capture resolved one, plus the
+allowed range, the evidence location, and the maintenance owner or the recorded reason.
+Tests to re-run come from the capture's verification hints. Affected components come
+from the impact read. A bounded prefix says how many components were loaded. An impact
+miss says why the dependency is outside this projection, which is not the same as no
+impact. Check impact opens a discussion with no context ref; the dependency name and
+the impact summary are in the title. Declare and retract stay owner actions in a
+disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
+the shared wording, and the raw code appears only there.
+
+## Agents
+
+Agent resources uses the same compact navigation, table and inspector. Separate
+source-reported models from requested model context, and observed tokens from current
+quota windows. Missing counters stay unknown. Source failures withdraw numbers and
+model details together. Filters and a selected inspector keep their place during
+background reads; the toolbar can pause view updates without stopping collection.
+When the resources projection includes `buckets`, the usage trend is one stacked bar
+per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
+The resources read includes `buckets` only when the request sets `buckets=day`.
+Omit the chart when the projection has no buckets.

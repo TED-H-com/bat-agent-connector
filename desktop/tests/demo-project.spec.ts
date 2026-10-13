@@ -34,8 +34,8 @@ async function expectNoJunk(page: Page) {
 }
 
 const viewTitle = {
-  en: {overview: 'Overview', discussions: 'Discussions', requirements: 'Requirements', schedule: 'Schedule', agents: 'Agents', board: 'Board'},
-  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', agents: 'Agent 資源', board: '工作看板'},
+  en: {overview: 'Overview', discussions: 'Discussions', requirements: 'Requirements', schedule: 'Schedule', dependencies: 'Dependencies', agents: 'Agents', board: 'Board'},
+  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', dependencies: '技術相依', agents: 'Agent 資源', board: '工作看板'},
 } as const;
 
 type DemoLocale = keyof typeof viewTitle;
@@ -61,6 +61,15 @@ async function expectProjectName(page: Page, width: number, name: string) {
 async function expectView(page: Page, locale: DemoLocale, width: number, view: ProjectView, name: string) {
   await expect(page.getByRole('heading', {level: 1})).toHaveText(viewTitle[locale][view]);
   await expectProjectName(page, width, name);
+  for (const [selector, visible] of [
+    ['[data-overview-discuss]', view === 'overview'], ['[data-pm-report-menu]', view === 'overview'],
+    ['[data-schedule-tools]', view === 'schedule'], ['[data-dep-capture]', view === 'dependencies'],
+    ['[data-dependencies-meta]', view === 'dependencies'],
+  ] as const) {
+    if (visible) await expect(page.locator(selector)).toBeVisible();
+    else await expect(page.locator(selector)).toBeHidden();
+  }
+  if (view !== 'overview') await expect(page.locator('[data-pm-overflow]')).toBeHidden();
   await expect(page.locator(`[data-pm-view="${view}"]`)).toHaveAttribute('aria-current', 'page');
 }
 
@@ -205,6 +214,27 @@ for (const {locale, width} of cases) {
     await expectNoJunk(page);
     await shot(page, `roadmap-${locale}-${width}`);
     await page.keyboard.press('Escape');
+
+    await openView(page, 'dependencies');
+    await expectView(page, locale, width, 'dependencies', copy.name);
+    const dependencies = page.locator('[data-dep-view]');
+    await expect(dependencies.locator('[data-dep-relation=test]')).toContainText('2');
+    await expect(page.locator('[data-dep-capture]')).toBeDisabled();
+    await expect(page.locator('.ui-page-header [data-status=partial]')).toBeVisible();
+    const inventory = dependencies.locator(width === 390 ? '[data-dep-list]' : '[data-dep-matrix]');
+    await expect(inventory).toContainText('pytest');
+    await expect(inventory).toContainText('membership-api');
+    await expectNoJunk(page);
+    await shot(page, `dependencies-${locale}-${width}`);
+    await dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '圖' : 'Graph', exact: true}).click();
+    await expect(dependencies.locator('[data-dep-graph] svg')).toBeVisible();
+    await openView(page, 'overview');
+    await expectView(page, locale, width, 'overview', copy.name);
+    await expect(page.locator('[data-pm-overview]')).toHaveAttribute('data-overview-mode', 'saved');
+    await expect(page.locator('.pm-overview-saved')).toContainText(copy.snapshotV3);
+    await openView(page, 'dependencies');
+    await expectView(page, locale, width, 'dependencies', copy.name);
+    await expect(dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '圖' : 'Graph', exact: true})).toHaveAttribute('aria-checked', 'true');
 
     await showThreads(page);
     await expectView(page, locale, width, 'discussions', copy.name);

@@ -2,6 +2,7 @@ import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
 import {workspaceOverview} from './pm-overview.js';
+import {workspaceDependencies} from './pm-dependencies.js';
 import {workspaceCharter} from './pm-charter.js';
 import {workspaceTraceability} from './pm-traceability.js';
 import {workspaceAhpObserver} from './pm-ahp-observer.js';
@@ -234,6 +235,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), onClick: () => void load()});
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const heading = pageHeader({title, pill: phasePill, actions: [refresh]});
+  const headerMeta = h('p', {class: 'ui-meta', 'data-dependencies-meta': '', hidden: true});
+  const headerPills = h('span', {class: 'dep-header-pills', hidden: true});
+  heading.querySelector('.ui-title-row')?.append(headerPills);
+  heading.querySelector('.ui-page-heading')?.append(headerMeta);
   const content = h('div', {class: 'pm-content'}), body = h('section', {class: 'pm-main'}, heading, status, content);
   const creationHome = h('div', {hidden: true}, workspaceForm.box);
   main.append(h('div', {class: 'pm-shell'}, body, creationHome));
@@ -375,6 +380,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
   }
   if (lifecycle) drawersHome.append(lifecycle.element);
+  const dependencies = workspaceId && !threadId && caps()?.features?.pm_dependencies?.version === 1
+    ? workspaceDependencies({h, t, api, alive, namespace, workspaceId, permitted, form, errorBox, main, header: {meta: headerMeta, pills: headerPills}}) : null;
   const headerActions = heading.querySelector('.ui-header-actions');
   const primary = brief?.primary || (charter ? brief?.box.querySelector(':scope > header .primary') : null);
   if (primary) {headerActions.prepend(primary); brief.box.querySelector(':scope > header')?.remove();}
@@ -399,6 +406,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     {label: t('ui_export_brief'), onSelect: () => openPanel(t('ui_report'), reportTools)},
   ]}) : null;
   if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
+  if (dependencies?.captureButton) headerActions.insertBefore(dependencies.captureButton, refresh);
   const overflow = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-overflow': ''}), items: [
     ...(lifecycle ? [{key: 'phase', label: t('ui_change_phase'), onSelect: () => openPanel(t('ui_change_phase'), lifecycle.element)}] : []),
     ...(evidence ? [{key: 'settings', label: t('ui_workspace_settings'), onSelect: () => openPanel(t('ui_workspace_settings'), evidence.box)}] : []),
@@ -424,7 +432,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         ['ui_specs', specifications?.element], ['ui_materialization', materialization?.element],
         ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]]],
       ['schedule', schedule?.element || roadmap?.box, schedule ? [] : [['ui_sprints', sprints?.box]]],
-      ['dependencies', null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
+      ['dependencies', dependencies?.element || null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
       ['issues', governance?.element, [['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
       ['agents', resources?.element, [['ui_observations', ahp?.element]]],
       ['board', kanban?.element, [['ui_batches', workBatches?.element]]],
@@ -442,6 +450,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
       if (id !== 'issues') brief?.closeRelated?.();
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents'); schedule?.setActive(id === 'schedule');
+      void dependencies?.setActive(id === 'dependencies');
       brief?.setActive?.(id === 'overview');
       if (scheduleTools) scheduleTools.hidden = id !== 'schedule';
       overflow.hidden = id !== 'overview';
@@ -459,7 +468,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (primary) primary.hidden = workbench.selected() !== 'overview';
     if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
   }
-  const sourceSections = () => [...groups.flatMap(group => group.sections), content, schedule?.element, resources?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  const sourceSections = () => [...groups.flatMap(group => group.sections), content, schedule?.element, resources?.element, dependencies?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -823,12 +832,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (workbench?.selected() === 'requirements') await traceability?.activate();
       resources?.setActive(workbench?.selected() === 'agents');
       schedule?.setActive(workbench?.selected() === 'schedule');
+      if (dependencies) await dependencies.setActive(workbench?.selected() === 'dependencies');
       updateForms();
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
-        brief?.withdraw();traceability?.withdraw();resources?.withdraw();schedule?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
+        brief?.withdraw();traceability?.withdraw();resources?.withdraw();schedule?.withdraw();dependencies?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         detailPanel?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
@@ -844,7 +854,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   if (openCreate || !workspaceId && !lastList.length) showCreate();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {
-    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair','pm_ahp_observation'].includes(event.resource_type)) {
+    if (['pm_workspace', 'pm_thread', 'pm_run', 'pm_plan', 'pm_evidence', 'pm_snapshot', 'pm_roadmap', 'pm_sprint', 'pm_meeting', 'pm_governance', 'pm_follow_up', 'pm_follow_up_assessment', 'pm_conversation_proposal', 'pm_work_package', 'pm_work_batch', 'pm_lifecycle','pm_issue_mapping','pm_release_baseline','pm_maintenance_policy','pm_workload','pm_github_observation','pm_maintenance_check','pm_maintenance_review','pm_quality_review','pm_execution_verification','pm_maintenance_repair','pm_ahp_observation','pm_dependencies'].includes(event.resource_type)) {
       // A newer event must not be ACKed merely because an older manual read is in flight.
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
@@ -873,7 +883,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
-    brief?.dispose?.();traceability?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();
+    brief?.dispose?.();traceability?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();
     proposalReview?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };
