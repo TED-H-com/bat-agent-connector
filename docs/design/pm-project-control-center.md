@@ -162,6 +162,7 @@ flowchart LR
 摘要圖只回答管理問題：新增／解決趨勢、未決事項年齡、阻塞原因、變更影響或處理流量。
 圓餅／環形圖僅用於同一分母、互斥類別的組成；允許多標籤的記錄使用條形圖，不硬算比例。
 圖表能點回對應列，篩選、計量期間與涵蓋範圍共用，不設一排沒有行動價值的裝飾 KPI。
+登記的讀取投影與紀錄對照見 [pm-register.md](pm-register.md)。篩選表、時間線畫面與圖表仍待實作。
 
 ## 8. 派工與 PM 的責任
 
@@ -199,7 +200,7 @@ unknown 時使用對應狀態，不用流動線條假裝正在產出。使用者
 | 工序 | 既有基礎 | 仍需完成 | 對應工作 |
 | --- | --- | --- | --- |
 | 1. 總覽與專案內導覽 | PlanRevision、採用、DocumentSnapshot、Brief、自然對話提案 | 一頁 Charter、整合計畫、快照版本箭頭、PM 持續補齊、單頁列印 | W08、W10–12、W33、W39–40 |
-| 2. RTM 與處理鏈 | Requirement、品質紀錄、Issue mapping、delivery lineage、治理 | 明確多對多外部同步、跨版本完整追溯、可展開表格和處理鏈 | W05–06、W17–21 |
+| 2. RTM 與處理鏈 | Requirement、品質紀錄、Issue mapping、delivery lineage、治理、登記讀取 API | 明確多對多外部同步、跨版本完整追溯、可展開表格畫面（契約見 pm-register.md） | W05–06、W17–21 |
 | 3. 資源與效能 | 前次人工本機診斷方法；中央 execution/verification 來源 | 多 CLI collector、增量 cursor、去重、配額 adapter、效能歸因、估計 | W09、W23–24、W28、W30 |
 | 4. 技術相依與時程 | 固定 repo/spec 來源、Roadmap baseline/forecast、maintenance policy | 技術關係 inventory、影響矩陣、分層甘特圖與時程提案 | W13、W35–37、W42–49 |
 | 5. 政策內自動安排 | 有界工作包／批次及維護派工 | 資源 reservation、PM 安排政策、exception 回討論及完整循環 | W19、W30、W44–46、W50–52 |
