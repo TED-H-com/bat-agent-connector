@@ -10784,7 +10784,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
+function projectViews$2({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -11656,6 +11656,42 @@ function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSel
 		reapply
 	};
 }
+//#endregion
+//#region src/session-navigation.js
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function sessionHref({ host, sessionId, from = "" }) {
+	const query = projectViews$1.has(from) ? "?" + new URLSearchParams({ from }) : "";
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$1.has(from)) return "";
+		return sessionHref({
+			host,
+			sessionId,
+			from
+		});
+	} catch {
+		return "";
+	}
+}
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
 	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
@@ -11717,7 +11753,7 @@ function normalizeRefs(refs) {
 function normalizeDetails(title, from, report) {
 	return {
 		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews.has(from) ? from : "",
+		from: projectViews.has(from) ? from : sessionOrigin(from),
 		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
 	};
 }
@@ -11992,7 +12028,11 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
 			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
-			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
+			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref({
+				host: session.host,
+				sessionId: session.session_id,
+				from
+			}) }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
 			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
 			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
 			if (card.quality?.selected_assessment) result.append(qualityFact({
@@ -28553,7 +28593,11 @@ function render(row, { workspaceId, data }) {
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
 		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
-		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref({
+			host: session.host,
+			sessionId: session.session_id,
+			from: "schedule"
+		}) }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
 	}
 	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", {}, attempt.title), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
 	if (attempts.length) status.append(disclosure({
@@ -34754,9 +34798,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			report: launch.report || savedOrigin.report || ""
 		}));
 		const origin = source.from || "discussions";
+		const session = sessionOrigin(origin);
 		return h("a", {
 			class: "pd-back",
-			href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
+			href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
 			"data-discussion-back": "",
 			onclick: () => {
 				if (origin === "overview" && source.report) Object.assign(viewState(namespace, workspaceId, "overview"), {
@@ -34764,7 +34809,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					mode: "saved"
 				});
 			}
-		}, icon("chevron-left"), t("pd_back", { view: t("ui_" + origin) }));
+		}, icon("chevron-left"), t("pd_back", { view: t(session ? "ui_session" : "ui_" + origin) }));
 	};
 	if (threadId) h = discussionDom(h, JSON.stringify([
 		namespace,
@@ -35765,7 +35810,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 		}
 		let shownView = null;
-		workbench = projectViews$1({
+		workbench = projectViews$2({
 			h,
 			t,
 			namespace,
@@ -48185,13 +48230,8 @@ function sessionPullHref(target) {
 	}
 }
 async function viewSession(main, host, sid, context = null) {
-	const queryAt = String(sid).indexOf("?");
-	let fromQuery = "";
-	if (queryAt >= 0) {
-		fromQuery = new URLSearchParams(String(sid).slice(queryAt + 1)).get("from") || "";
-		sid = String(sid).slice(0, queryAt);
-	}
-	if (!fromQuery && location.hash.startsWith("#/session/")) fromQuery = new URLSearchParams(location.hash.split("?")[1] || "").get("from") || "";
+	const params = new URLSearchParams(location.hash.split("?")[1] || "");
+	let fromQuery = params.get("from") || "";
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -48208,14 +48248,27 @@ async function viewSession(main, host, sid, context = null) {
 		"agents",
 		"board"
 	]);
-	const savedOrigin = history.state && typeof history.state === "object" ? history.state.batcSessionFrom : "";
-	if (projectViews.has(sessionFromMemory) && savedOrigin !== sessionFromMemory) try {
+	const storedOrigin = history.state?.batcSessionOrigin;
+	const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
+	if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
+		fromQuery = sessionFromMemory;
+		params.set("from", fromQuery);
+		try {
+			history.replaceState(history.state, "", location.hash.split("?")[0] + "?" + params);
+		} catch {}
+	}
+	if (sessionWorkspace) try {
 		history.replaceState({
-			...history.state && typeof history.state === "object" ? history.state : {},
-			batcSessionFrom: sessionFromMemory
+			...history.state,
+			batcSessionOrigin: {
+				namespace: connection.namespace,
+				host,
+				sessionId: sid,
+				workspaceId: sessionWorkspace
+			}
 		}, "");
 	} catch {}
-	const originView = () => projectViews.has(fromQuery) ? fromQuery : projectViews.has(sessionFromMemory) ? sessionFromMemory : projectViews.has(savedOrigin) ? savedOrigin : "";
+	const originView = () => projectViews.has(fromQuery) ? fromQuery : "";
 	const head = h("div", { class: "workspace-session-heading" });
 	const titleNode = h("span");
 	const markSlot = h("span", { class: "session-mark" });
@@ -48246,7 +48299,7 @@ async function viewSession(main, host, sid, context = null) {
 		t,
 		when: sessionWhen,
 		guard: () => assertView(connection),
-		memory: viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`),
+		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
 		readingActions: readingSupported ? {
 			mark: (messages) => saveReading("session.read", { messages }),
 			remember: (position, version) => saveReading("session.position", position, { expected_version: version }),
@@ -48577,7 +48630,7 @@ async function viewSession(main, host, sid, context = null) {
 	const withdrawnSlot = h("div", { class: "session-withdrawn" });
 	main.append(head, workspaceNode);
 	const originHref = () => {
-		const view = originView(), workspaceId = lastWorkspace(connection.namespace);
+		const view = originView(), workspaceId = sessionWorkspace;
 		return view && workspaceId ? {
 			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
 			view
@@ -48598,7 +48651,7 @@ async function viewSession(main, host, sid, context = null) {
 	};
 	const paintDiscuss = (items) => {
 		const link = overflow.querySelector("[data-menu-key=discuss]");
-		const workspaceId = lastWorkspace(connection.namespace);
+		const workspaceId = sessionWorkspace;
 		if (!link) return;
 		if (!workspaceId) {
 			link.hidden = true;
@@ -48615,7 +48668,11 @@ async function viewSession(main, host, sid, context = null) {
 			workspaceId,
 			refs,
 			title: row?.title || "",
-			from: originView()
+			from: sessionHref({
+				host,
+				sessionId: sid,
+				from: originView()
+			})
 		}));
 	};
 	let deliveryTicket = 0, deliveryItems = [], sourceItemId = "";
@@ -48623,7 +48680,7 @@ async function viewSession(main, host, sid, context = null) {
 	const loadDelivery = async (items) => {
 		const ticket = ++deliveryTicket;
 		deliveryItems = items || [];
-		const workspaceId = lastWorkspace(connection.namespace);
+		const workspaceId = sessionWorkspace;
 		const linked = [...new Map(deliveryItems.filter((item) => isContextRef({
 			kind: "work_item",
 			id: item.work_item_id
@@ -49377,10 +49434,10 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					session_id: sid
 				}, params, {}, `checkpoint.${host}.${sid}`);
 				if (op.status === "succeeded") note.value = "";
-				status.replaceChildren(opStatus(op), op.error_code || op.status_reason ? disclosure({
+				status.replaceChildren(...[opStatus(op), op.error_code || op.status_reason ? disclosure({
 					label: t("checkpoint_op_details"),
 					body: h("p", {}, h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))
-				}) : null);
+				}) : null].filter(Boolean));
 				await load();
 			} catch (e) {
 				status.replaceChildren(sessionErrorBox(e, {
@@ -49407,7 +49464,14 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		}
 	}) : null;
 	const notes = h("div", {});
-	const paintNotes = () => notes.replaceChildren(h("p", { class: "muted" }, t("checkpoint_help")), manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null, can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")), can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")), mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key"))));
+	const paintNotes = () => notes.replaceChildren(...[
+		h("p", { class: "muted" }, t("checkpoint_help")),
+		manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null,
+		can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")),
+		can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))),
+		mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")),
+		mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key")))
+	].filter(Boolean));
 	paintNotes();
 	const checkpointWhy = disclosure({
 		label: t("checkpoint_notes"),

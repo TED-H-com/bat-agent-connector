@@ -1,6 +1,7 @@
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
 import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
+import {sessionOrigin} from './session-navigation.js';
 import {viewState} from './ui/view-state.js';
 import {settleRefreshes} from './state/events.ts';
 import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState} from './ui/components.js';
@@ -256,10 +257,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     try {savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};} catch {}
     const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
     const origin = source.from || 'discussions';
-    return h('a', {class: 'pd-back', href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
+    const session = sessionOrigin(origin);
+    return h('a', {class: 'pd-back', href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
       // Restore the originating fixed report even after a discussion-draft reload.
       if (origin === 'overview' && source.report) Object.assign(viewState(namespace, workspaceId, 'overview'), {snapshotId: source.report, mode: 'saved'});
-    }}, icon('chevron-left'), t('pd_back', {view: t('ui_' + origin)}));
+    }}, icon('chevron-left'), t('pd_back', {view: t(session ? 'ui_session' : 'ui_' + origin)}));
   };
   if (threadId) h = discussionDom(h, JSON.stringify([namespace, workspaceId, threadId]));
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};

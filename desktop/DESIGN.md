@@ -605,3 +605,10 @@ Checkpoint notes report missing host capability only when absent, and exact conf
 keys remain in Details. Continue shows the central operation state and, when the
 result identifies a new session, Open the new session. The operation ID is in
 Operation details. Checkpoint disclosure state includes the central namespace.
+
+Session return navigation is cosmetic and includes a validated from query. The
+history entry retains the workspace ID only within the exact central namespace
+and session identity, so a reload can return without treating a name or path as a
+binding. Discuss accepts a bounded Session hash as a return origin and returns to
+that session; Requirements/Board and Schedule session links carry their origin.
+The session-local navigation helper performs no writes or authority inference.

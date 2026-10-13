@@ -6,6 +6,7 @@ import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, 
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
+import {sessionHref} from './session-navigation.js';
 import {checkDelivery, prGroups, prPills} from './pm-work-inspector.js';
 import {viewState} from './ui/view-state.js';
 import {h as dom} from './ui/dom.js';
@@ -1303,22 +1304,22 @@ function sessionPullHref(target) {
 }
 
 async function viewSession(main, host, sid, context = null) {
-  const queryAt = String(sid).indexOf("?");
-  let fromQuery = "";
-  if (queryAt >= 0) {
-    fromQuery = new URLSearchParams(String(sid).slice(queryAt + 1)).get("from") || "";
-    sid = String(sid).slice(0, queryAt);
-  }
-  if (!fromQuery && location.hash.startsWith("#/session/")) fromQuery = new URLSearchParams(location.hash.split("?")[1] || "").get("from") || "";
+  const params = new URLSearchParams(location.hash.split("?")[1] || "");
+  let fromQuery = params.get("from") || "";
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
   const projectViews = new Set(["overview", "discussions", "requirements", "schedule", "dependencies", "issues", "agents", "board"]);
-  // The project view that opened this session rides on its history entry, so a reload keeps the way back.
-  const savedOrigin = history.state && typeof history.state === "object" ? history.state.batcSessionFrom : "";
-  if (projectViews.has(sessionFromMemory) && savedOrigin !== sessionFromMemory)
-    try { history.replaceState({...(history.state && typeof history.state === "object" ? history.state : {}), batcSessionFrom: sessionFromMemory}, ""); } catch { /* unavailable */ }
-  const originView = () => projectViews.has(fromQuery) ? fromQuery : projectViews.has(sessionFromMemory) ? sessionFromMemory
-    : projectViews.has(savedOrigin) ? savedOrigin : "";
+  const storedOrigin = history.state?.batcSessionOrigin;
+  const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace
+    && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
+  if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
+    fromQuery = sessionFromMemory; params.set("from", fromQuery);
+    // A visible, validated return query survives reload and opening a session link in a new tab.
+    try {history.replaceState(history.state, "", location.hash.split("?")[0] + "?" + params);} catch { /* unavailable */ }
+  }
+  if (sessionWorkspace) try {history.replaceState({...history.state, batcSessionOrigin: {
+    namespace: connection.namespace, host, sessionId: sid, workspaceId: sessionWorkspace}}, "");} catch { /* unavailable */ }
+  const originView = () => projectViews.has(fromQuery) ? fromQuery : "";
   const head = h("div", { class: "workspace-session-heading" });
   const titleNode = h("span");
   const markSlot = h("span", {class: "session-mark"});
@@ -1335,7 +1336,7 @@ async function viewSession(main, host, sid, context = null) {
     await loadMessages();
     if (op.status !== "succeeded") throw new Error(op.status_reason || t("conversation_pending"));
   };
-  const scrollMemory = viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`);
+  const scrollMemory = viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`);
   const conversation = conversationPanel({h, t, when: sessionWhen, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
     mark: messages => saveReading("session.read", {messages}),
     remember: (position, version) => saveReading("session.position", position, {expected_version: version}),
@@ -1466,7 +1467,7 @@ async function viewSession(main, host, sid, context = null) {
   const withdrawnSlot = h("div", {class: "session-withdrawn"});
   main.append(head, workspaceNode);
   const originHref = () => {
-    const view = originView(), workspaceId = lastWorkspace(connection.namespace);
+    const view = originView(), workspaceId = sessionWorkspace;
     return view && workspaceId ? {href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`, view} : null;
   };
   const paintOrigin = () => {
@@ -1478,20 +1479,20 @@ async function viewSession(main, host, sid, context = null) {
   };
   const paintDiscuss = items => {
     const link = overflow.querySelector("[data-menu-key=discuss]");
-    const workspaceId = lastWorkspace(connection.namespace);
+    const workspaceId = sessionWorkspace;
     if (!link) return;
     if (!workspaceId) {link.hidden = true; link.setAttribute("aria-disabled", "true"); return;}
     const refs = (items || []).map(item => ({kind: "work_item", id: item.work_item_id})).filter(isContextRef);
     link.hidden = false; link.removeAttribute("aria-disabled");
     // An unknown title stays empty; the session ID is not a title.
-    link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || "", from: originView()}));
+    link.setAttribute("href", discussHref({workspaceId, refs, title: row?.title || "", from: sessionHref({host, sessionId: sid, from: originView()})}));
   };
   let deliveryTicket = 0, deliveryItems = [], sourceItemId = "";
   const deliveryKnown = new Map();
   const loadDelivery = async items => {
     const ticket = ++deliveryTicket;
     deliveryItems = items || [];
-    const workspaceId = lastWorkspace(connection.namespace);
+    const workspaceId = sessionWorkspace;
     const linked = [...new Map(deliveryItems.filter(item => isContextRef({kind: "work_item", id: item.work_item_id}))
       .map(item => [item.work_item_id, item])).values()];
     const current = () => {assertView(connection); return !disposed && ticket === deliveryTicket;};
@@ -1967,9 +1968,9 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
       const params = { last_n: 20, ...(preview ? { commit: pick.value } : {}), ...(note.value.trim() ? { note: note.value.trim() } : {}) };
       const op = await submit("checkpoint.create", { host, session_id: sid }, params, {}, `checkpoint.${host}.${sid}`);
       if (op.status === "succeeded") note.value = "";
-      status.replaceChildren(opStatus(op),
+      status.replaceChildren(...[opStatus(op),
         op.error_code || op.status_reason ? disclosure({label: t("checkpoint_op_details"), body: h("p", {},
-          h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))}) : null);
+          h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))}) : null].filter(Boolean));
       await load();
     } catch (e) { status.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})})); }
     create.disabled = !can || previewFailed;
@@ -1981,13 +1982,13 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
     if (!recordForm.hidden) pick.focus();
   }}) : null;
   const notes = h("div", {});
-  const paintNotes = () => notes.replaceChildren(
+  const paintNotes = () => notes.replaceChildren(...[
     h("p", {class: "muted"}, t("checkpoint_help")),
     manual() ? h("p", {class: "muted"}, t("checkpoint_manual_hint")) : null,
     can ? null : h("p", {class: "muted"}, t("checkpoint_unavailable")),
     can ? null : h("p", {class: "muted"}, h("code", {}, t("checkpoint_unavailable_keys"))),
     mayStart ? null : h("p", {class: "muted"}, t("needs_start_scope")),
-    mayStart ? null : h("p", {class: "muted"}, h("code", {}, t("needs_start_scope_key"))));
+    mayStart ? null : h("p", {class: "muted"}, h("code", {}, t("needs_start_scope_key")))].filter(Boolean));
   paintNotes();
   const checkpointWhy = disclosure({label: t("checkpoint_notes"), key: `session-checkpoint:${namespace}:${host}:${sid}`, body: notes});
   checkpointWhy.addEventListener("toggle", () => {if (checkpointWhy.open) paintNotes();});

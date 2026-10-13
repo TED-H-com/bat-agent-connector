@@ -70,3 +70,34 @@ export async function fromRequirements(page: Page, ids: any, which: 'implement' 
 }
 
 export const consoleNoise = (line: string) => line.includes('browser-session') || line.startsWith('Failed to load resource:');
+
+const SHA = 'c0ffee1234567890abcdef1234567890abcdef12';
+export function checkpointHost(s: Awaited<ReturnType<typeof openSession>>, sessionId: string): Override {
+  const {ids, fixture} = s;
+  const cp = {checkpoint_id: 'cp_' + '7'.repeat(32), host: ids.host, session_id: ids.sessions.manual, commit_sha: SHA, branch: 'main',
+    captured_at: '2026-10-13T08:30:00Z', actor: 'demo-reader', excerpt_messages: 12, dirty: 0, artifacts: []};
+  const caps = async () => {
+    const base = (await fixture.dispatch({method: 'GET', path: '/capabilities'})).data;
+    return {...base, scopes: [...base.scopes, 'start'], features: {...base.features, checkpoints: [ids.host]},
+      actions: [...base.actions, {action: 'checkpoint.create', allowed: true}, {action: 'checkpoint.continue', allowed: true}]};
+  };
+  let seq = 0;
+  return async (input, url) => {
+    const method = input.method || 'GET';
+    if (method === 'GET' && url.pathname === '/capabilities') return {status: 200, data: await caps()};
+    if (method === 'GET' && url.pathname === '/bootstrap') return {status: 200, data: {...(await fixture.dispatch({method: 'GET', path: '/bootstrap'})).data, capabilities: await caps()}};
+    if (method === 'GET' && url.pathname === '/checkpoints') return {status: 200, data: {checkpoints: url.searchParams.get('session_id') === sessionId ? [cp] : []}};
+    if (method === 'GET' && url.pathname.endsWith('/checkpoint-preview'))
+      return {status: 200, data: {preview: {head: SHA, dirty: 0, commits: [{hash: SHA, message: 'Reset flow notes'}, {hash: 'b'.repeat(40), message: 'Earlier commit'}]}}};
+    if (method === 'GET' && url.pathname === `/checkpoints/${cp.checkpoint_id}`) return {status: 200, data: {checkpoint: cp, source: {head: SHA}}};
+    if (method === 'POST' && url.pathname === '/operations' && String((input.body as any)?.action).startsWith('checkpoint.')) {
+      seq += 1;
+      const body = input.body as any;
+      return {status: 200, data: {operation: {operation_id: 'op_' + (0xabc000 + seq).toString(16).padStart(32, '0'), action: body.action, status: 'accepted',
+        target: body.target, params: body.params, ...(body.action === 'checkpoint.continue' ? {result: {host: ids.host, session_id: 'continued-session'}} : {})}}};
+    }
+    if (method === 'GET' && url.pathname.startsWith('/operations/op_')) return {status: 200, data: {operation: {operation_id: url.pathname.split('/').pop(), status: 'accepted'}}};
+    return undefined;
+  };
+}
+

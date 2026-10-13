@@ -3,6 +3,7 @@ import {inspector, statusPill, disclosure, agentMark, contextChip, menu, iconBut
 import {reasonLabel} from './ui/ui-strings.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {discussHref} from './pm-discuss-link.js';
+import {sessionHref} from './session-navigation.js';
 import {qualityFact} from './pm-quality-projections.js';
 
 export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
@@ -108,7 +109,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         ...workAgents(source).map(agentMark)), paragraph(t('wv_owner'), ' · ', labelSegment(card.assignment?.actor) ||
           (card.assignment?.reason === 'creator_is_not_assignee' ? t('wv_not_recorded') : reasonLabel(t, card.assignment?.reason))));
       for (const session of source.sessions || []) state.append(paragraph(h('a', {
-        href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`,
+        href: sessionHref({host: session.host, sessionId: session.session_id, from}),
       }, firstLabel(session.title, t('wv_session'))), ' ', session.api_access === 'managed' && session.provenance === 'connector_managed' ? null : statusPill('read_only')));
       if (!workAgents(source).length) state.append(paragraph(t('wv_agent'), ' · ', unknown()));
       state.append(h('a', {href: `#/work/${encodeURIComponent(card.work_item_id)}`}, t('wv_work_details')));

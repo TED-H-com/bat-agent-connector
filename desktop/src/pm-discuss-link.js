@@ -1,3 +1,4 @@
+import {sessionOrigin} from './session-navigation.js';
 export const MAX_DISCUSS_REFS = 8;
 export const MAX_DISCUSS_TITLE = 160;
 
@@ -55,7 +56,7 @@ function normalizeDetails(title, from, report) {
   return {
     // Python len(str) counts code points, not UTF-16 code units.
     title: typeof title === 'string' ? Array.from(title.trim()).slice(0, MAX_DISCUSS_TITLE).join('') : '',
-    from: projectViews.has(from) ? from : '',
+    from: projectViews.has(from) ? from : sessionOrigin(from),
     report: fullMatch(report, contextFields.snapshot.id) ? report : '',
   };
 }

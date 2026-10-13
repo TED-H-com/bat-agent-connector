@@ -78,7 +78,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const parsed = parseDiscussRefs(String(href).slice(String(href).indexOf('?') + 1));
     expect(parsed.refs).toEqual([{kind: 'work_item', id: ids.work.email}]);
     expect(parsed.title).toBe(copy.sessionImplement);
-    expect(parsed.from).toBe('requirements');
+    expect(parsed.from).toBe(`#/session/${ids.host}/${ids.sessions.implement}?from=requirements`);
     await page.keyboard.press('Escape');
     const scroller = page.locator('.conversation-scroll');
     await expect(scroller.locator('.msg').first()).toBeVisible();
@@ -353,12 +353,12 @@ test('headings, landmarks and disclosure names are distinct', async ({browser}) 
   await fromRequirements(s.page, s.ids, 'implement');
   const {page} = s;
   await expect(page.locator('.conversation-scroll .msg').first()).toBeVisible();
-  await expect(page.locator('.ui-inspector-body .session-section-title').first()).toBeVisible();
+  await expect(page.locator('.ui-inspector-body .session-section-title:visible').first()).toBeVisible();
   expect(await page.locator('.ui-inspector-body h2').count()).toBe(0);
   expect(await page.locator('.ui-inspector-body h3.session-section-title').count()).toBeGreaterThanOrEqual(3);
   await expect(page.getByRole('region', {name: 'Messages', exact: true})).toHaveCount(1);
   const names = await page.locator('.ui-inspector-body summary').evaluateAll(nodes => nodes
-    .filter(node => (node as HTMLElement).getClientRects().length).map(node => (node as HTMLElement).innerText.trim()));
+    .filter(node => (node as HTMLElement).checkVisibility()).map(node => (node as HTMLElement).innerText.trim()));
   expect(names).not.toContain('Details');
   expect(new Set(names).size).toBe(names.length);
   expect(names).toEqual(expect.arrayContaining(['Checkpoint notes', 'Session details']));
@@ -392,5 +392,28 @@ test('the way back survives a reload', async ({browser}) => {
   await page.reload();
   await expect(page.locator('.workspace-session-heading h1')).toContainText(s.copy.sessionImplement);
   await expect(page.locator('[data-session-back=requirements]')).toHaveText('Back to Requirements');
+  await s.context.close();
+});
+
+test('Requirements links keep their return query; Discuss returns to the exact Session after reload', async ({browser}) => {
+  const s = await openSession(browser);
+  const {page, ids} = s;
+  await page.goto(`/dashboard/#/pm/${ids.workspaceId}/requirements`);
+  await page.locator('[data-rtm-toggle]').first().click();
+  await page.locator(`[data-rtm-select="${ids.work.email}"]`).first().click();
+  const href = `#/session/${ids.host}/${ids.sessions.implement}?from=requirements`;
+  const session = page.locator('[data-work-inspector]').getByRole('link').filter({hasText: s.copy.sessionImplement});
+  await expect(session).toHaveAttribute('href', href);
+  await session.click();
+  await expect(page.locator('.workspace-session-heading h1')).toContainText(s.copy.sessionImplement);
+  await page.getByRole('button', {name: 'More actions', exact: true}).click();
+  await page.getByRole('menuitem', {name: 'Discuss with PM', exact: true}).click();
+  const back = page.locator('[data-discussion-back]');
+  await expect(back).toHaveAttribute('href', href);
+  await expect(back).toHaveText('Back to Session');
+  await page.reload();
+  await expect(back).toHaveAttribute('href', href);
+  await back.click();
+  await expect(page.locator('[data-session-back=requirements]')).toBeVisible();
   await s.context.close();
 });

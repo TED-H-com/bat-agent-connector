@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Preserve Session return locations through reload and discussion drafts. Project
+  inspector links carry their view, and Discuss returns to the exact session.
+
 - Make Session checkpoints quiet at rest, distinguish capable hosts and preserve
   disclosure choices per connection. Continue forms expand below their actions and
   link to the new session only when the central result identifies it.

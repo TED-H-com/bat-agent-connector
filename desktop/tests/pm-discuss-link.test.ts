@@ -203,3 +203,14 @@ test('non-string details and non-array refs are omitted without coercion', () =>
     assert.equal(href, '#/pm/ws_fixture/discussions/new');
   }
 });
+
+test('discussion return origins accept exact session routes and reject external or malformed paths', () => {
+  const from = '#/session/demo%20host/complete%2Fsession%3Fid?from=requirements';
+  assert.equal(parseDiscussRefs(queryOf(discussHref({workspaceId: 'ws_fixture', from}))).from, from);
+  for (const from of ['https://example.test', '//example.test', '#/session//id', '#/session/host/',
+    '#/session/host/id/extra', '#/session/host/%', '#/session/host/id?from=settings',
+    '#/session/host/id?from=overview&from=board', '#/session/host/id?to=https://example.test', '#/session/host/%00id']) {
+    assert.equal(parseDiscussRefs(new URLSearchParams({from})).from, '');
+    assert.equal(new URLSearchParams(queryOf(discussHref({workspaceId: 'ws_fixture', from}))).has('from'), false);
+  }
+});
