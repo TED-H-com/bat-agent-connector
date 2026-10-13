@@ -1,6 +1,7 @@
 import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
+import {workspaceOverview} from './pm-overview.js';
 import {workspaceCharter} from './pm-charter.js';
 import {workspaceTraceability} from './pm-traceability.js';
 import {workspaceAhpObserver} from './pm-ahp-observer.js';
@@ -265,9 +266,26 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox, qualitySelection}) : null;
   if (evidence) body.append(evidence.box);
   let workbench = null;
+  const liveOverview = !threadId && caps()?.features?.pm_overview?.version === 1;
+  const overviewMeta = h('p', {class: 'ui-meta', hidden: true});
+  heading.querySelector('.ui-page-heading').append(overviewMeta);
   const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
-    ? charter ? workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+    ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+      onCompare: () => {openPanel(t('ui_compare'), brief.reportTools); void brief.prepareReports().then(() => brief.reportActions.compare());},
+      onHeader: ({meta, phase, active}) => {overviewMeta.hidden = !active; overviewMeta.replaceChildren(meta);
+        if (active) {phasePill.hidden = !phase; phasePill.textContent = phase || ''; }},
+      onOpen: async (ref, row) => {
+        if (!ref) return;
+        const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' ? 'schedule' : 'issues';
+        location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
+        if (destination === 'requirements') await traceability?.openRef?.(ref);
+        else if (ref.kind === 'governance') await governance?.openRef?.(ref);
+        else if (ref.kind === 'milestone') {
+          const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
+          if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
+        }
+      },
       onDiscuss: () => {location.hash = `#/pm/${workspaceId}/discussions`; workbench?.select('discussions'); content.querySelector('input')?.focus();}})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element||content);
@@ -345,6 +363,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let detailPanel = null;
   function openPanel(label, node) {
     if (!node || !loaded) return;
+    if (node === reportTools) void brief?.prepareReports?.();
     detailPanel?.close();
     const home = node.parentNode, next = node.nextSibling;
     detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null;}});
@@ -352,9 +371,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   if (lifecycle) drawersHome.append(lifecycle.element);
   const headerActions = heading.querySelector('.ui-header-actions');
-  const primary = charter ? brief?.box.querySelector(':scope > header .primary') : null;
+  const primary = brief?.primary || (charter ? brief?.box.querySelector(':scope > header .primary') : null);
   if (primary) {headerActions.prepend(primary); brief.box.querySelector(':scope > header')?.remove();}
-  const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
+  const reportTools = brief?.reportTools || h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
   if (charter && brief) {
     for (const node of brief.box.querySelectorAll(':scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]')) reportTools.append(node);
     drawersHome.append(reportTools);
@@ -370,8 +389,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down'}), items: [
     {key: 'versions', label: t('ui_report_versions'), onSelect: () => openPanel(t('ui_report'), reportTools)},
     {label: t('ui_save_snapshot'), onSelect: () => openPanel(t('ui_report'), reportTools)},
-    ...(charter ? [{label: t('ui_compare'), onSelect: () => reportTools.querySelector('button[data-report-compare]')?.click()},
-      {label: t('ui_print'), onSelect: () => reportTools.querySelector('button[data-report-print]')?.click()}] : []),
+    ...(charter ? [{label: t('ui_compare'), onSelect: () => {if (brief?.reportActions) {openPanel(t('ui_compare'), reportTools); void brief.prepareReports().then(() => brief.reportActions.compare());} else reportTools.querySelector('button[data-report-compare]')?.click();}},
+      {label: t('ui_print'), onSelect: () => brief?.reportActions ? brief.reportActions.print() : reportTools.querySelector('button[data-report-print]')?.click()}] : []),
     {label: t('ui_export_brief'), onSelect: () => openPanel(t('ui_report'), reportTools)},
   ]}) : null;
   if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
@@ -411,13 +430,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents');
-      window.scrollTo(0, 0);
+      brief?.setActive?.(id === 'overview');
+      if (id !== 'overview' || !liveOverview) window.scrollTo(0, 0);
       if (id === 'requirements') void traceability?.activate();
       detailPanel?.close(); if (primary) primary.hidden = id !== 'overview';
       if (reportMenu) reportMenu.hidden = id !== 'overview';
       publishContext();
+      brief?.setActive?.(id === 'overview');
     }});
-    workbench.apply();
+    workbench.apply(); brief?.setActive?.(workbench.selected() === 'overview');
     if (view && view !== workbench.selected()) history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
     if (primary) primary.hidden = workbench.selected() !== 'overview';
     if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
@@ -782,7 +803,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       workbench?.apply();
       const stage = lifecycle?.phase?.(); phasePill.hidden = !stage;
       phasePill.textContent = stage && ['idea','planning','development','maintain','paused','closed'].includes(stage) ? t('ui_phase_' + stage) : '';
-      publishContext();
+      publishContext(); brief?.setActive?.(workbench?.selected() === 'overview');
       if (workbench?.selected() === 'requirements') await traceability?.activate();
       resources?.setActive(workbench?.selected() === 'agents');
       updateForms();
@@ -811,6 +832,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       eventReads = eventReads.catch(() => {}).then(() => load());
       return eventReads;
     }
+    if (liveOverview && ['work_item', 'project', 'task', 'command', 'operation', 'session', 'deployment', 'integration'].includes(event.resource_type)) {
+      eventReads = eventReads.catch(() => {}).then(() => load()); return eventReads;
+    }
     if(handoff&&['project','work_item'].includes(event.resource_type)) {
       eventReads=eventReads.catch(()=>{}).then(()=>load());return eventReads;
     }
@@ -833,7 +857,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
     disposed = true; sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
-    traceability?.dispose();resources?.dispose();
+    brief?.dispose?.();traceability?.dispose();resources?.dispose();
     proposalReview?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };

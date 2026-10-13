@@ -9,6 +9,8 @@ export const statusVocabulary = Object.freeze({
   done: {en: 'Done', 'zh-TW': '完成', tone: 'neutral'},
   merged: {en: 'Merged', 'zh-TW': '已合併', tone: 'ok'},
   deployed: {en: 'Deployed', 'zh-TW': '已部署', tone: 'ok'},
+  rolled_back: {en: 'Rolled back', 'zh-TW': '已回復', tone: 'warn'},
+  unconfirmed: {en: 'Unconfirmed', 'zh-TW': '待確認', tone: 'neutral'},
   unknown: {en: 'Unknown', 'zh-TW': '未知', tone: 'neutral'},
   not_assessed: {en: 'Not assessed', 'zh-TW': '未評估', tone: 'neutral'},
   partial: {en: 'Partial', 'zh-TW': '部分', tone: 'neutral'},
@@ -53,3 +55,22 @@ export const uiStrings = {
     ui_batches: '工作批次', ui_observations: 'AHP 觀察'},
 };
 for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]['ui_status_' + key] = row[lang];
+
+// Shared projection reasons. New server codes stay readable without leaking into body copy.
+export const reasonLabels = Object.freeze({
+  no_explicit_goal: ['Not set', '未設定'], goal_unconfirmed: ['Unconfirmed', '待確認'],
+  no_adopted_plan: ['No adopted plan', '尚無已採用計畫'],
+  source_limit: ['Partial', '部分'], partial_page: ['Partial', '部分'],
+  source_incomplete: ['Sources incomplete', '來源不完整'], incomplete_sources: ['Sources incomplete', '來源不完整'],
+  source_unavailable: ['Source unavailable', '無法取得來源'], unavailable: ['Not available', '無法取得'],
+  not_configured: ['Not configured', '尚未設定'], not_applicable: ['Not applicable', '不適用'],
+  not_recorded: ['Not recorded', '尚無紀錄'], no_roadmap_baseline: ['No milestone baseline', '尚無里程碑基準'],
+  not_assessed: ['Not assessed', '未評估'], unknown: ['Unknown', '未知'],
+});
+for (const [reason, labels] of Object.entries(reasonLabels)) {
+  uiStrings.en['ui_reason_' + reason] = labels[0];
+  uiStrings['zh-TW']['ui_reason_' + reason] = labels[1];
+}
+export function reasonLabel(t, reason) {
+  return t('ui_reason_' + (Object.hasOwn(reasonLabels, reason) ? reason : 'unavailable'));
+}

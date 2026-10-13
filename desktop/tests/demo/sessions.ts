@@ -5,7 +5,7 @@ export function capabilities(project: DemoProject) {
   return {
     actor: project.ids.actor, scopes: ['observe'], api_version: 1, contract_version: '2026-10-08',
     hosts: [{host: project.ids.host, writes: false, observe: true}], actions: [],
-    features: {pm_workspaces: {version: 1, plan_drafting: true, plan_adoption: true, brief_snapshots: true, kanban: true,
+    features: {pm_overview: {version: 1, read_only: true}, pm_workspaces: {version: 1, plan_drafting: true, plan_adoption: true, brief_snapshots: true, kanban: true, governance: true,
       issue_mapping: true, engineering_delivery: {contract: 'pm-engineering-delivery/v1'}, roadmap: true,
       conversation_proposals: {version: 1}}, pm_resources: {version: 1}},
   };

@@ -201,3 +201,33 @@ When the resources projection includes `buckets`, the usage trend is one stacked
 per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
 The resources read includes `buckets` only when the request sets `buckets=day`.
 Omit the chart when the projection has no buckets.
+
+## Overview
+
+Overview defaults to the central `pm_overview` live projection. The shared header
+shows the plan title, adoption date, live/report mode and visible lifecycle stage;
+the plan journal sequence is never displayed as a version. Four equal status
+columns answer goal, accepted requirements, blockers and decisions. Null remains a
+dash, incomplete classification keeps only its known denominator with Partial, and
+complete coverage describes the scan rather than project completion. Unknown
+reasons share the localized reason map; omitted lifecycle operations appear only
+in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
+states separate.
+
+Attention retains the central severity/age ordering, with exact context identities
+passed to `discussHref`. Reading rows keep focus during refresh. Requirements and
+work open the existing requirements selection; governance opens its existing Issues
+selection. The charter follows the live adopted document in six compact cards,
+with three bullets before expansion and an icon disclosure for each source list.
+Full plan uses the shared inspector and restores focus on Escape. At 768px the
+charter has two columns; at 390px all regions stack in reading order.
+
+Report tools retain the existing durable snapshot operation, original-key recovery,
+authorized comparison, history pagination, print and export. Selecting a report
+replaces the status and charter with that report's fixed content; live attention,
+milestones, delivery rows and phase are absent. Historical snapshots do not contain
+central acceptance counts, so those metrics stay unknown. Back to live rereads the
+projection. Source withdrawal invalidates the affected facts and closes their reader;
+late responses cannot restore a prior generation. Preferences store only UI state,
+scoped to connection/principal and workspace. Older servers retain the saved-charter
+view when `pm_overview` is absent.

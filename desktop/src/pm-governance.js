@@ -165,7 +165,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       h('div', {class: 'pm-fact-heading'}, h('strong', {class: 'pm-source'}, revision.document.title), h('span', {class: 'muted'}, t('pm_gov_' + record.kind))),
       h('p', {class: 'muted'}, t('pm_gov_' + revision.document.status), ' · ', revision.document.owner_actor,
         revision.document.decision ? ' · ' + t('pm_gov_' + revision.document.decision.disposition) : ''),
-      h('button', {type: 'button', class: 'secondary', 'aria-pressed': selectedId === record.record_id, onclick: () => {selectRecord(record.record_id); void refresh(true);}},
+      h('button', {type: 'button', class: 'secondary', 'aria-pressed': String(selectedId === record.record_id), onclick: () => {selectRecord(record.record_id); void refresh(true);}},
         t(selectedId === record.record_id ? 'pm_gov_selected' : 'pm_gov_inspect')))) : [note('pm_gov_empty')]));
     if (model.nextCursor != null) list.append(note('pm_gov_partial'), h('button', {type: 'button', class: 'secondary', onclick: () => {pageCount++; void refresh();}}, t('pm_gov_more')));
     detail.replaceChildren();
@@ -373,5 +373,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {focused.focus({preventScroll: true}); if (selection) focused.setSelectionRange(...selection);}
     } catch (error) {if (ticket === serial) unavailable(error);}
   }
-  return {element, refresh};
+  return {element, refresh, openRef: async ref => {
+    if (ref.kind !== 'governance') return;
+    selectRecord(ref.id); await refresh(true);
+    const row = list.querySelector(`[data-pm-governance-row="${CSS.escape(ref.id)}"]`);
+    row?.querySelector('button')?.focus(); row?.scrollIntoView({block: 'nearest'});
+  }};
 }

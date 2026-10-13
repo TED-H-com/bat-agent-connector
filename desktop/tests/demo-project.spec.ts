@@ -1,3 +1,4 @@
+import {openPmPanel} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -130,6 +131,10 @@ for (const {locale, width} of cases) {
     await page.goto(demoRoute());
     await expectView(page, locale, width, 'overview', copy.name);
     const charter = page.locator('[data-pm-charter]');
+    await expect(page.locator('[data-overview-status]')).toContainText(locale === 'zh-TW' ? '8 項中 3 項已驗收' : '3 of 8 accepted');
+    await openPmPanel(page, 'ui_report');
+    await page.locator('[data-pm-report-tools] select').selectOption(ids.snap2);
+    await page.keyboard.press('Escape');
     await expect(charter).toContainText(copy.goal);
     await expect(charter).toContainText(copy.schedule);
     await expect(charter).toContainText(copy.decisions.budget);
@@ -137,9 +142,10 @@ for (const {locale, width} of cases) {
     await expect(charter).toContainText(copy.smtp);
     await expect(charter).toContainText(copy.blocker);
     await expect(charter).toContainText(copy.finance);
-    await expect(charter).toContainText(copy.snapshotV3);
-    await charter.locator('[data-charter-plan] > summary').click();
-    for (const requirement of copy.requirements) await expect(charter).toContainText(requirement.text);
+    await expect(page.locator('.pm-overview-saved')).toContainText(copy.snapshotV3);
+    await charter.locator('[data-charter-plan]').click();
+    for (const requirement of copy.requirements) await expect(page.locator('[data-overview-plan]')).toContainText(requirement.text);
+    await page.keyboard.press('Escape');
     await expectNoJunk(page);
     await shot(page, `charter-${locale}-${width}`);
 
