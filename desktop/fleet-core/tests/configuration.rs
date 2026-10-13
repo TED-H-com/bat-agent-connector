@@ -1,3 +1,6 @@
+#[cfg(windows)]
+#[path = "support/powershell.rs"]
+mod powershell_fixture;
 use bat_fleet_core::{
     configuration::{data_directory, Configuration, Paths},
     digest,
@@ -171,18 +174,8 @@ fn missing_required_files_refuse_and_normalized_default_path_needs_no_alternate_
 #[test]
 fn actual_system_powershell_binding_matches_normalized_native_paths() {
     use base64::{engine::general_purpose::STANDARD, Engine};
-    use std::{
-        io::Read,
-        process::{Child, Command, Stdio},
-        time::{Duration, Instant},
-    };
-    struct OwnedChild(Child);
-    impl Drop for OwnedChild {
-        fn drop(&mut self) {
-            let _ = self.0.kill();
-            let _ = self.0.wait();
-        }
-    }
+    use powershell_fixture::Fixture as PowerShellFixture;
+    use std::time::Duration;
     let fixture = Fixture::new();
     let short_root = {
         use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -198,12 +191,13 @@ fn actual_system_powershell_binding_matches_normalized_native_paths() {
     let script = fixture.0.join("configuration-binding.ps1");
     std::fs::write(
         &script,
-        include_bytes!("fixtures/configuration-binding.ps1"),
+        format!(
+            "{}{}",
+            powershell_fixture::READY_SCRIPT,
+            include_str!("fixtures/configuration-binding.ps1")
+        ),
     )
     .unwrap();
-    let powershell = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    assert!(powershell.is_absolute());
     for present in [false, true] {
         if present {
             let path = fixture.0.join("使用者🦀/.ssh/config");
@@ -221,47 +215,13 @@ fn actual_system_powershell_binding_matches_normalized_native_paths() {
         )
         .unwrap();
         assert_eq!(configuration.binding(), fixture.load().binding());
-        let mut child = OwnedChild(
-            Command::new(&powershell)
-                .args([
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                ])
-                .arg(&script)
-                .env("BAT_FLEET_BINDING_FIXTURE", &short_root)
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .spawn()
-                .unwrap(),
-        );
-        let deadline = Instant::now() + Duration::from_secs(30);
-        loop {
-            if let Some(status) = child.0.try_wait().unwrap() {
-                assert!(
-                    status.success(),
-                    "read-only PowerShell binding oracle failed"
-                );
-                break;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "PowerShell oracle exceeded its deadline"
-            );
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        let mut output = Vec::new();
-        child
-            .0
-            .stdout
-            .take()
-            .unwrap()
-            .take(32_769)
-            .read_to_end(&mut output)
-            .unwrap();
+        let process = PowerShellFixture::new();
+        let mut command = powershell_fixture::command();
+        command
+            .args(["-ExecutionPolicy", "Bypass", "-File"])
+            .arg(&script)
+            .env("BAT_FLEET_BINDING_FIXTURE", &short_root);
+        let output = process.run(&mut command, Duration::from_secs(30));
         assert!(output.len() <= 32_768);
         let response: serde_json::Value = serde_json::from_slice(&output).unwrap();
         let preimage = STANDARD

@@ -82,6 +82,61 @@ in the supervisor/migration layer; this module exposes argv without inferring it
 
 ## Validation limits
 
+### PowerShell fixture startup
+
+All four fleet-core PowerShell fixture launch sites share the test-only runner in
+`tests/support/powershell.rs`: the process/CIM and DPAPI unit helpers, configuration
+binding oracle, and WScript shortcut oracle. Each script first writes and flushes
+`BATC_POWERSHELL_FIXTURE_READY_V1` plus LF. The runner consumes exactly that marker
+within 60 seconds, then starts the original work deadline (15 seconds for unit
+helpers; the integration oracles retain their existing 30 seconds). Startup expiry
+reports `PowerShell fixture did not start within 60 s`; a work timeout is distinct.
+Output remains bounded, exit success is required, and every path kills and reaps
+only the retained fixture child, then joins its stdout reader. A process-wide mutex
+serializes fixture launches across unit modules; each integration test executable
+uses the same helper. No separate warm-up launch or retry is involved.
+
+The CIM test acquires that mutex before creating the child it observes. That child
+has a bounded 90-second lifetime to cover 60-second startup plus 15-second work;
+the existing child guard still kills/reaps it immediately when the test ends.
+
+In PR #127's failing Windows endpoint-oracle run, unit execution began at
+07:59:24.036 UTC. CIM failed at 07:59:39.789 and DPAPI at 07:59:39.816 (15.753 and
+15.780 seconds later, 27 ms apart); the binary ended with 34 passed, 2 failed and
+3 ignored in 22.04 seconds. The later binding oracle passed in a 1.88-second binary,
+and the shortcut oracle's binary passed in 7.10 seconds. Combined with #124's
+same-process contract-startup diagnosis, this is consistent with parallel cold
+PowerShell launches consuming the fixtures' work budgets, rather than a stable
+CIM/DPAPI format failure. The log has no pre-script timing trace and does not
+measure the contribution of each startup component.
+
+Windows PowerShell 5.1 runs on .NET Framework and reads a
+[module analysis cache during command discovery](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_windows_powershell_5.1?view=powershell-5.1#module-analysis-cache).
+Cold assembly loading and JIT can add first-use costs; the PowerShell team documents
+[assembly precompilation's startup effect](https://devblogs.microsoft.com/powershell/speeding-up-powershell-startup/).
+PowerShell 5.1 also submits script blocks to
+[AMSI/Defender scanning](https://learn.microsoft.com/en-us/powershell/scripting/security/security-features?view=powershell-7.5#amsi-support).
+First scans and concurrent cold loads are plausible contributors, not individually
+proven causes in this run. `-NoProfile` does not remove these costs. The readiness
+boundary separates interpreter startup from actual fixture work; lazy imports
+after the marker still count against the work deadline. The 60-second cap is not
+a measured startup guarantee or an increase to the actual work allowance.
+
+### Product PowerShell audit
+
+`discovery.rs::powershell()` is only the Serde default returning
+`Backend::Powershell`. Discovery and `windows.rs::powershell_pids()` use native
+process evidence; neither starts a shell or has a PowerShell startup deadline.
+The sole product PowerShell spawn inside fleet-core is
+`windows_migration/native.rs::launch_powershell`; its outstanding cold-start
+limitation and required legacy handshake are documented in
+[the migration contract](fleet-migration.md#legacy-powershell-cold-start-limitation).
+Other product spawns execute fixed SSH, Tailscale, BAT or Dashboard binaries.
+Outside fleet-core, #124 already gives the Tauri read-only contract a 60-second
+same-process bootstrap followed by its unchanged 10-second request budget;
+effectful facade calls retain their total 35-second deadline and unknown-result
+semantics.
+
 The Windows tunnel adapter proves local endpoint absence with a positive TCP
 `ConnectionRefused` followed by a successful bind. Its connection deadline is three
 seconds; timeouts, other errors and an accepted connection still refuse launch.
