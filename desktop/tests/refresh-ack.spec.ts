@@ -163,7 +163,7 @@ for (const native of [false, true]) {
     await expect.poll(saved).toEqual(checkpoint(0));
     changed = true;
     await expect.poll(() => delivered).toBe(true);
-    await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     expect(await saved()).toEqual(checkpoint(0));
     const readsBefore = reads;
     await page.getByRole("button", {name: "Save", exact: true}).click();

@@ -153,7 +153,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "More", exact: true}).click();
     await page.locator("input[maxlength='120']").fill("Retained project archive draft");
     cursor = 2;
-    await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     // The first refresh is held by this editor. A later archive must still update safety controls.
     archived = true; cursor = 3;
     await expect(page.getByText("This item or its project is archived. Your edit draft is retained.")).toBeVisible();

@@ -170,3 +170,16 @@ the browser assets from source; Web and Tauri must use the same implementation.
 `tests/ui-components.spec.ts` exercises the DOM primitives in a CSP-constrained
 source harness. `tests/shell.spec.ts` covers workspace context, navigation history,
 withdrawal, namespace isolation, responsive focus behavior and theme overrides.
+
+Withdrawal assertions must select each affected view and open its disclosure, then
+check the source element's own `hidden` property and the visible main content.
+An ancestor-hidden assertion alone is insufficient. The management fixture covers
+Board, Meetings and Sprints before and after late reads; the shell fixture withdraws
+bindings through both `pm_evidence` and `project` events without a reload. Temporary
+mutations that suppress section hiding or omit PM navigation event triggers must fail.
+
+Computed contrast acceptance (normal enabled controls; light / dark): primary
+5.90 / 7.32, danger outline 5.15 / 7.38; pill text by tone: ok 4.77 / 6.11,
+warn 4.93 / 6.30, bad 4.83 / 5.55, info 5.23 / 5.61, review 5.34 / 5.91,
+neutral 5.19 / 5.44. All meet 4.5:1. The icon legal comment must remain in both
+browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle resource.
