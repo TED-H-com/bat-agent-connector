@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Add the shared Discuss with PM link builder and parser for exact context identities,
+  ordered deduplication and bounded Unicode titles across project views.
+
 - Keep each shell destination in one place per breakpoint; put All projects in the
   Work header, truncate tree names accessibly and disclose partial project bindings.
 - Keep healthy connections Connected during view/source refreshes, canonicalize
