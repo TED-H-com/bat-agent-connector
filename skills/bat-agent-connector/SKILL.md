@@ -1581,7 +1581,9 @@ stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id
 exists. A hidden issue mapping does not consume the issue cap or mark the page partial.
-A link to a hidden operation, task, or session does not consume the attempt-link caps. `refs.run_id` appears only when one visible run is bound to that observed session.
+A link to a hidden operation, task, or session does not consume the attempt-link caps.
+A task's `waiting.since` is the latest transition into the current state, including named
+task events, not only events of kind `state`. `refs.run_id` appears only when one visible run is bound to that observed session.
 Hidden runs do not take that slot or remove the visible run. If the per-session scan reaches
 its bound before that decision, omit `run_id`.
 Withdrawn work items, runs, operations, sessions, and tasks disappear from rows and derived

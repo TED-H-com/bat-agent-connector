@@ -70,7 +70,7 @@ Operation attempt 的結束時刻：成功用狀態為 `succeeded` 的步驟 `fi
 
 每一列的 `blocked` 都是 null。unknown 固定有 `blocked` / `no_explicit_blocked_record`，因為目前沒有可直接採用的 blocked 紀錄。CI 等待不掃遠端，只記 `ci_wait` / `no_explicit_check_binding`。
 
-`waiting.since` 來自最新一筆對得上目前狀態的狀態事件，不是篩掉其他狀態後留下的舊事件。工作是最新的 `work_item.state`。Task 是最新的 `events` kind `state`。等待中的 operation 是最新的 `api_events` kind `operation.{status}`。只有 body 的 `to` 等於目前狀態時才用該事件的 `created_at`。對不上則 `since` 是 null，並記 `waiting.since` / `state_time_unrecorded`。不用 `updated_at`。Task 的 `verifying` 是 `in_review`，沒有 `waiting` 物件；`verifying_started_at` 不是等待起點。
+`waiting.since` 來自最新一筆對得上目前狀態的狀態事件，不是篩掉其他狀態後留下的舊事件。工作是最新的 `work_item.state`。Task 不限 `events.kind`：body 的 `from` 與 `to` 都是 task 狀態的事件都算轉換，取 `event_id` 最新且 `to` 等於目前狀態的那一筆。同一種事件也用來決定 done／failed 的結束時刻。等待中的 operation 是最新的 `api_events` kind `operation.{status}`。只有 body 的 `to` 等於目前狀態時才用該事件的 `created_at`。對不上則 `since` 是 null，並記 `waiting.since` / `state_time_unrecorded`。不用 `updated_at`。Task 的 `verifying` 是 `in_review`，沒有 `waiting` 物件；`verifying_started_at` 不是等待起點。
 
 手動 session 的 `refs.session.read_only` 是 true。只有 `api_access` 為 `managed` 且 provenance 不是 `manual` 才是 false。不回傳 cwd 或私有路徑。Task 的 session 參照只在該 session 也有明確連結且看得到時出現，並沿用那一列的 `read_only`。`refs.run_id` 只在這個已觀察 session 恰好對上一個可見的 run 時出現。掃描依建立順序，只數可見的 run：看到第二筆可見 run 就停，不挑選，並記 `attempt.run_id` / `multiple_explicit_runs`。隱藏的 run 不占名額、不拿掉可見的那一筆，也不記這筆 unknown。每個 session 最多檢查 64 筆（含隱藏的）；若這個上限停下時還沒決定是一筆還是多筆，不回 `run_id`，並記 `attempt.run_id` / `run_lookup_truncated`。不靠 workspace 全域上限。
 

@@ -17,6 +17,7 @@ from . import pm_evidence, pm_roadmap, pm_source_lineage, work_items
 from .operations import STATES as OPERATION_STATES
 from .operations import TERMINAL as OPERATION_TERMINAL
 from .operations import OperationError
+from .task_journal import STATES as TASK_STATES
 
 MAX_WORK = 200
 MAX_LINKS_PER_WORK = 50
@@ -561,37 +562,36 @@ def _tasks(ops, principal, workspace_id, ids, notes, coverage):
             coverage["visibility_filtered"] = True
             continue
         found[task_id] = present[task_id]
-    ends = {}
-    if found:
-        for row in ops.db.execute(
-                f"""SELECT task_id, MAX(created_at) AS created_at FROM events WHERE kind='state'
-                    AND json_extract(body,'$.to') IN ('done','failed') AND task_id IN ({_marks(list(found))})
-                    GROUP BY task_id""", tuple(found)):  # noqa: S608
-            ends[row["task_id"]] = row["created_at"]
-    since = _task_since(ops.db, found)
+    terminal = {task_id: row["state"] for task_id, row in found.items() if row["state"] in {"done", "failed"}}
+    ends = _task_transitions(ops.db, terminal)
+    since = {task_id: _instant(stamp) for task_id, stamp in _task_transitions(ops.db, {
+        task_id: row["state"] for task_id, row in found.items() if row["state"] in _TASK_WAIT}).items()}
     return ({task_id: {"row": row, "terminal_at": ends.get(task_id), "since": since.get(task_id)}
              for task_id, row in found.items()}, missing)
 
 
-def _task_since(db, rows):
-    waiting = {task_id: row["state"] for task_id, row in rows.items() if row["state"] in _TASK_WAIT}
-    if not waiting:
+def _task_transitions(db, wanted):
+    """Latest event_id whose body has task-state `from` and `to`, and whose `to` is the current state."""
+    if not wanted:
         return {}
-    ids = list(waiting)
+    states = tuple(sorted(TASK_STATES))
+    ids = list(wanted)
     fetched = db.execute(
-        f"""SELECT task_id, body, created_at FROM (
-                SELECT task_id, body, created_at,
-                    ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY event_id DESC) AS n
-                FROM events WHERE kind='state' AND task_id IN ({_marks(ids)})) WHERE n=1""",  # noqa: S608
-        tuple(ids)).fetchall()
+        f"""SELECT task_id, body, created_at FROM events WHERE task_id IN ({_marks(ids)})
+            AND json_extract(body,'$.from') IN ({_marks(states)})
+            AND json_extract(body,'$.to') IN ({_marks(states)})
+            ORDER BY event_id DESC""", (*ids, *states, *states)).fetchall()  # noqa: S608
     found = {}
     for row in fetched:
+        task_id = row["task_id"]
+        if task_id in found:
+            continue
         try:
             body = json.loads(row["body"])
         except (TypeError, ValueError):
             continue
-        if isinstance(body, dict) and body.get("to") == waiting[row["task_id"]]:
-            found[row["task_id"]] = _instant(row["created_at"])
+        if isinstance(body, dict) and body.get("from") in TASK_STATES and body.get("to") == wanted[task_id]:
+            found[task_id] = row["created_at"]
     return found
 
 

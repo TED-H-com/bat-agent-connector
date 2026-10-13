@@ -1250,6 +1250,48 @@ async def test_waiting_since_uses_the_latest_state_event(ops):
     assert ("waiting.since", "state_time_unrecorded") in reasons(stale)
 
 
+async def test_named_task_events_set_waiting_since(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    tid = source["task_id"]
+    await link(ops, work, "task", tid)
+    journal = ops.journal
+    journal.change(tid, "dispatching")
+    journal.change(tid, "running")
+    journal.change(tid, "waiting_permission")
+    journal.change(tid, "uncertain", event="permissions_uncertain")
+    journal.change(tid, "waiting_permission", event="permissions_receipts_recovered")
+    events = ops.db.execute("SELECT event_id FROM events WHERE task_id=? ORDER BY event_id", (tid,)).fetchall()
+    for index, row in enumerate(events):
+        ops.db.execute("UPDATE events SET created_at=? WHERE event_id=?", (1_700_000_000 + 1000 * index, row["event_id"]))
+    latest = 1_700_000_000 + 1000 * (len(events) - 1)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:task:{work_id}:{tid}"]
+    assert row["status"] == "waiting"
+    assert row["waiting"]["since"] == instant(latest)
+    assert ("waiting.since", "state_time_unrecorded") not in reasons(body)
+
+
+async def test_verification_failure_records_waiting_since(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid, work_id = target["workspace_id"], work["work_item_id"]
+    source = task(ops)
+    tid = source["task_id"]
+    await link(ops, work, "task", tid)
+    journal = ops.journal
+    journal.change(tid, "dispatching")
+    journal.change(tid, "running")
+    journal.change(tid, "verifying")
+    journal.change(tid, "needs_ted", event="verification_failed")
+    stamp = ops.db.execute(
+        "SELECT created_at FROM events WHERE task_id=? AND kind='verification_failed'", (tid,)).fetchone()[0]
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:task:{work_id}:{tid}"]
+    assert row["waiting"] == {"reason": "human", "since": instant(stamp)}
+    assert ("waiting.since", "state_time_unrecorded") not in reasons(body)
+
+
 async def test_finished_attempt_note_requires_a_terminal_end(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid, work_id = target["workspace_id"], work["work_item_id"]
