@@ -72,15 +72,21 @@ Session 目前沒有明確開始時間。Session attempt 因此沒有 actual，�
 
 ## 分頁與未知
 
-`limit` 作用在分成 `rows` / `unscheduled` 之前。`next_cursor` 是這一頁最後一列的 id。來源上限把資料截掉、但已載入的列都放得下時，`partial` 與 `truncated` 為 true，`next_cursor` 為 null；客戶端不能把沒載入的部分再要回來。只有頁面或 attempt／work binding／issue 載入被切斷時，這兩個旗標才為 true。phase、blocked、CI 未知本身不會讓頁面變成 partial。
+`limit` 作用在分成 `rows` / `unscheduled` 之前。`next_cursor` 是這一頁最後一列的 id，排序與整頁相同（kind，再 id），不是 `rows` 或 `unscheduled` 陣列的最後一筆。來源上限把資料截掉、但已載入的列都放得下時，`partial` 與 `truncated` 為 true，`next_cursor` 為 null；客戶端不能把沒載入的部分再要回來。頁面被切斷、attempt／work binding／issue 載入被切斷，或 `attempts_unavailable` 為 true 時，這兩個旗標才為 true。phase、blocked、CI 未知本身不會讓頁面變成 partial。
 
-沒有 `total`。`coverage` 只用布林：`visibility_filtered`、`attempts_truncated`、`work_bindings_truncated`、`issues_truncated`，加上 `network_checked: false`。看不到的筆數不回傳。
+沒有 `total`。`coverage` 只用布林：`visibility_filtered`、`attempts_truncated`、`attempts_unavailable`、`work_bindings_truncated`、`issues_truncated`，加上 `network_checked: false`。看不到的筆數不回傳，缺列的筆數也不回傳。
 
-`unknown` 是 `{field, reason}`，依欄位與原因排序。固定包含 phase、blocked、`ci_wait`、`token_usage` / `no_explicit_attribution`。沒有 baseline 時另有 `baseline` / `no_adopted_schedule_baseline`。同一需求文字只出現一次。單列超過 2,000,000 個 UTF-8 bytes 時是 413 `PM_SCHEDULE_TOO_LARGE`。
+位元上限是 2,000,000 個 UTF-8 bytes。每一列的公開 JSON 只編碼一次。信封用最壞情況估算：`more` 為 true、這一頁最長的 `next_cursor`、全部 `unknown`、以及最大的 `range` 物件。列的編碼長度（含陣列裡的逗號與空白）累加，超過上限就停在前一列。因此被位元組截斷時 `more` 為 true，`next_cursor` 是這一頁依排序的最後一列 id；下一頁用 `after` 接上，不重複、不漏列。單列加上信封仍超過上限是 413 `PM_SCHEDULE_TOO_LARGE`。回傳本文再編碼後也不超過該上限。
+
+`unknown` 是 `{field, reason}`，依欄位與原因排序。固定包含 phase、blocked、`ci_wait`、`token_usage` / `no_explicit_attribution`。沒有 baseline 時另有 `baseline` / `no_adopted_schedule_baseline`。同一需求文字只出現一次。
 
 ## 可見性
 
-操作、session、task 沿用 evidence 的可見性；issue 沿用 mapping 的來源檢查。看不到的紀錄不影響列、日期、順序或標籤。來源撤回後，該列和由它算出的起訖一起消失，下一次讀取也不會再出現。連結還在、但目標列根本不存在時，不發明 attempt，也不多記一筆 unknown。目標列存在但不可見時，只把 `coverage.visibility_filtered` 設為 true。
+操作、session、task 沿用 evidence 的可見性；issue 沿用 mapping 的來源檢查。看不到的紀錄不影響列、日期、順序或標籤。來源撤回後，該列和由它算出的起訖一起消失，下一次讀取也不會再出現。
+
+Session 連結還在、`sessions_observed` 沒有該列、而且 `pm_evidence._session_visible` 為真時，仍列出 attempt。狀態是 `unknown`，標題是 session id，`refs.session` 是 `{host, session_id, read_only: true}`，沒有 baseline、forecast 或 actual，並記 `attempt.session` / `session_not_observed`。沒有觀察列就沒有 provenance，所以不能標成 managed。不可見的 session 不列，只把 `visibility_filtered` 設為 true；先查可見性，不靠觀察列是否存在。
+
+Operation 或 task 的連結還在、但那一列不存在時，不回傳該 id。`coverage.attempts_unavailable` 為 true，因此這一頁是 `partial`，並記 `attempt.operation` / `operation_record_missing` 或 `attempt.task` / `task_record_missing`。沒有那一列就不能證明可見性，所以這不是 `visibility_filtered`。列存在但不可見時，只設 `visibility_filtered`。
 
 ## 這一版不做
 

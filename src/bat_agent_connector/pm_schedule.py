@@ -21,6 +21,7 @@ MAX_LINKS_TOTAL = 200
 MAX_ISSUES = 200
 MAX_RUNS = 200
 MAX_BYTES = 2_000_000
+_RANGE_BOUND = {"start": "0000-00-00", "end": "0000-00-00"}
 _PAGE_DEFAULT = 100
 _RANK = {"milestone": 0, "requirement": 1, "issue": 2, "work": 3, "attempt": 4}
 _CURSOR = re.compile(r"^(milestone|requirement|issue|work|attempt):[A-Za-z0-9_.:/+-]{1,360}$")
@@ -30,7 +31,7 @@ _MERGE_ACTIONS = frozenset({"github.pr.merge", "delivery.merge_and_deploy"})
 _RUNNING = frozenset({"running", "streaming", "starting", "active"})
 _TASK_WAIT = {"waiting_permission": "permission", "quota_limited": "quota", "human_owned": "human", "needs_ted": "human"}
 _OPERATION_WAIT = {"waiting_checks": "checks", "waiting_external": "external"}
-_SOURCE_FLAGS = ("attempts_truncated", "work_bindings_truncated", "issues_truncated")
+_SOURCE_FLAGS = ("attempts_truncated", "attempts_unavailable", "work_bindings_truncated", "issues_truncated")
 
 
 def capabilities():
@@ -104,7 +105,8 @@ def _load(ops, principal, workspace_id):
     forecast = pm_roadmap._revision(db, workspace_id, head["forecast_revision_id"]) if head["forecast_revision_id"] else None
     notes = set()
     coverage = {"basis": "explicit_roadmap_scope_and_links", "visibility_filtered": False, "attempts_truncated": False,
-                "work_bindings_truncated": False, "issues_truncated": False, "network_checked": False,
+                "attempts_unavailable": False, "work_bindings_truncated": False, "issues_truncated": False,
+                "network_checked": False,
                 "forecast": "recorded_revision_only", "critical_path": False, "token_attribution": False}
     for field, reason in (("phase", "no_explicit_phase_records"), ("blocked", "no_explicit_blocked_record"),
                           ("ci_wait", "no_explicit_check_binding"), ("token_usage", "no_explicit_attribution")):
@@ -294,10 +296,11 @@ def _evidence(ops, principal, workspace_id, links, notes, coverage):
                 operations.append(row["ref"])
             elif row["kind"] == "task":
                 tasks.append(row["ref"])
-    loaded_sessions = _sessions(ops, principal, workspace_id, sessions, coverage)
-    loaded_operations, ends = _operations(ops, principal, workspace_id, operations, coverage)
-    loaded_tasks = _tasks(ops, principal, workspace_id, tasks, coverage)
-    return {"db": ops.db, "sessions": loaded_sessions, "operations": loaded_operations, "ends": ends,
+    loaded_sessions, unobserved = _sessions(ops, principal, workspace_id, sessions, coverage)
+    loaded_operations, ends = _operations(ops, principal, workspace_id, operations, notes, coverage)
+    loaded_tasks = _tasks(ops, principal, workspace_id, tasks, notes, coverage)
+    return {"db": ops.db, "sessions": loaded_sessions, "unobserved_sessions": unobserved,
+            "operations": loaded_operations, "ends": ends,
             "tasks": loaded_tasks, "runs": _runs(ops, principal, workspace_id, list(loaded_sessions), notes, coverage),
             "merges": _merges(ops.db, list(loaded_operations)),
             "deployments": _deployments(ops.db, list(loaded_operations))}
@@ -310,24 +313,26 @@ def _sessions(ops, principal, workspace_id, refs, coverage):
         if sep and host and sid:
             pairs.append((host, sid, ref))
     if not pairs:
-        return {}
+        return {}, set()
     rows = ops.db.execute(
         f"SELECT * FROM sessions_observed WHERE (host, session_id) IN ({','.join('(?,?)' for _ in pairs)})",  # noqa: S608
         tuple(part for host, sid, _ref in pairs for part in (host, sid))).fetchall()
     by_ref = {f"{row['host']}/{row['session_id']}": row for row in rows}
-    found = {}
+    found, unobserved = {}, set()
     for _host, _sid, ref in pairs:
-        row = by_ref.get(ref)
-        if row is None:
-            continue
+        # Visibility does not need the observation row. A hidden link must not become an attempt.
         if not pm_evidence._session_visible(ops, principal, workspace_id, ref):
             coverage["visibility_filtered"] = True
             continue
+        row = by_ref.get(ref)
+        if row is None:
+            unobserved.add(ref)
+            continue
         found[ref] = row
-    return found
+    return found, unobserved
 
 
-def _operations(ops, principal, workspace_id, ids, coverage):
+def _operations(ops, principal, workspace_id, ids, notes, coverage):
     ids = list(dict.fromkeys(ids))
     found, terminal = {}, []
     if ids:
@@ -340,6 +345,10 @@ def _operations(ops, principal, workspace_id, ids, coverage):
         if op is None:
             if operation_id in existing:
                 coverage["visibility_filtered"] = True
+            else:
+                # No row, so visibility cannot be proved. Omit the id and mark the page partial.
+                coverage["attempts_unavailable"] = True
+                _note(notes, "attempt.operation", "operation_record_missing")
             continue
         found[operation_id] = op
         if op.get("status") in OPERATION_TERMINAL:
@@ -354,7 +363,7 @@ def _operations(ops, principal, workspace_id, ids, coverage):
     return found, ends
 
 
-def _tasks(ops, principal, workspace_id, ids, coverage):
+def _tasks(ops, principal, workspace_id, ids, notes, coverage):
     ids = list(dict.fromkeys(ids))
     if not ids:
         return {}
@@ -365,6 +374,8 @@ def _tasks(ops, principal, workspace_id, ids, coverage):
     found = {}
     for task_id in ids:
         if task_id not in present:
+            coverage["attempts_unavailable"] = True
+            _note(notes, "attempt.task", "task_record_missing")
             continue
         if not pm_evidence._task_visible(ops, principal, workspace_id, task_id):
             coverage["visibility_filtered"] = True
@@ -455,7 +466,7 @@ def _deployments(db, ids):
 
 def _attempt(work_id, link, evidence, notes):
     if link["kind"] == "session":
-        return _session_attempt(work_id, link["ref"], evidence)
+        return _session_attempt(work_id, link["ref"], evidence, notes)
     if link["kind"] == "operation":
         return _operation_attempt(work_id, link["ref"], evidence, notes)
     if link["kind"] == "task":
@@ -463,12 +474,18 @@ def _attempt(work_id, link, evidence, notes):
     return None
 
 
-def _session_attempt(work_id, ref, evidence):
+def _session_attempt(work_id, ref, evidence, notes):
+    host, _, sid = ref.partition("/")
     row = evidence["sessions"].get(ref)
     if row is None:
-        return None
+        if ref not in evidence["unobserved_sessions"]:
+            return None
+        # No observation means no provenance, so the attempt cannot be managed.
+        _note(notes, "attempt.session", "session_not_observed")
+        refs = {"session": {"host": host, "session_id": sid, "read_only": True}}
+        return _node(f"attempt:session:{work_id}:{ref}", f"work:{work_id}", "attempt", sid, "unknown",
+                     None, None, None, [], refs)
     body = pm_evidence._body(row["body"])
-    host, _, sid = ref.partition("/")
     runtime = body.get("runtime_status") if isinstance(body.get("runtime_status"), str) else None
     status = "in_progress" if body.get("streaming") is True or runtime in _RUNNING else "unknown"
     read_only = not (row["api_access"] == "managed" and row["provenance"] != "manual")
@@ -728,18 +745,32 @@ def _slice(nodes, cursor, limit):
     return ordered[:limit], len(ordered) > limit
 
 
+def _dumps(payload):
+    return json.dumps(payload, ensure_ascii=False).encode()
+
+
 def _project(loaded, page, more):
-    selected = list(page)
-    while selected and _too_big(_body(loaded, selected, True)):
-        if len(selected) == 1:
-            raise OperationError("PM_SCHEDULE_TOO_LARGE", "One schedule row exceeds the read limit", 413)
-        selected = selected[:-1]
+    """Cut by encoded size. Each public row is encoded once; the envelope is the worst case."""
+    if not page:
+        return _body(loaded, [], more)
+    encoded = [(node, _dumps(_public(node)), _scheduled(node)) for node in page]
+    longest = max(page, key=lambda node: len(node["id"].encode()))["id"]
+    envelope = len(_dumps(_frame(loaded, [], [], partial=True, cursor=longest, range_value=_RANGE_BOUND)))
+    kept, counts, used, cut = [], [0, 0], 0, False
+    for node, raw, scheduled in encoded:
+        slot = 0 if scheduled else 1
+        extra = len(raw) + (2 if counts[slot] else 0)
+        if envelope + used + extra > MAX_BYTES:
+            if not kept:
+                raise OperationError("PM_SCHEDULE_TOO_LARGE", "One schedule row exceeds the read limit", 413)
+            cut = True
+            break
+        kept.append(node)
+        counts[slot] += 1
+        used += extra
+    if cut:
         more = True
-    return _body(loaded, selected, more)
-
-
-def _too_big(payload):
-    return len(json.dumps(payload, ensure_ascii=False).encode()) > MAX_BYTES
+    return _body(loaded, kept, more)
 
 
 def _body(loaded, selected, more):
@@ -749,13 +780,17 @@ def _body(loaded, selected, more):
         (rows if _scheduled(node) else unscheduled).append(public)
     source_partial = any(loaded["coverage"][key] for key in _SOURCE_FLAGS)
     partial = bool(more or source_partial)
+    cursor = selected[-1]["id"] if more and selected else None
+    return _frame(loaded, rows, unscheduled, partial=partial, cursor=cursor, range_value=_range(rows))
+
+
+def _frame(loaded, rows, unscheduled, *, partial, cursor, range_value):
     return {"version": 1, "workspace_id": loaded["workspace_id"], "as_of": _instant(datetime.now(timezone.utc).timestamp()),
             "baseline": _head(loaded["baseline"], by=True), "forecast": _head(loaded["forecast"], by=False),
-            "range": _range(rows), "range_scope": "returned_page" if partial else "complete",
+            "range": range_value, "range_scope": "returned_page" if partial else "complete",
             "rows": rows, "unscheduled": unscheduled,
             "unknown": [{"field": field, "reason": reason} for field, reason in sorted(loaded["notes"])],
-            "truncated": partial, "partial": partial,
-            "next_cursor": selected[-1]["id"] if more and selected else None,
+            "truncated": partial, "partial": partial, "next_cursor": cursor,
             "capabilities": capabilities(), "coverage": dict(loaded["coverage"])}
 
 
