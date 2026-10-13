@@ -1571,7 +1571,11 @@ These read the immutable Git capture and current visibility; they never refresh 
 Unknown counts stay null and partial counts cover only the captured catalog. Freshness is
 `stale: null` with `stale_reason: repository_head_not_observed`; never label the pinned commit as current
 repository HEAD. Honor `parser_reasons`, `unreadable_paths` and any `projection_omitted_collections`;
-an omitted collection is not evidence that no dependencies exist.
+an omitted collection is not evidence that no dependencies exist. Large captures retain a deterministic
+partial inventory with `capture_budget` and `omitted_edges`/`omitted_hints`/`omitted_components`;
+these counts describe observed omissions, not repository totals. Informational `parser_notes` alone
+are not missing coverage. Python extras are optional runtime edges, with extra identities preserved.
+Impact reason `dependency_omitted` or `capture_budget` must not be read as dependency absence.
 
 To capture, submit `pm.dependencies.capture` with target `{workspace_id}`, params
 `{repository, commit_sha}` from `source`, and preconditions `{expected_version: version,

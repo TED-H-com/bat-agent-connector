@@ -52,6 +52,10 @@ def dependency_tree(repo, object_id, prefix, unreadable, reasons):
         try:
             path = name.decode("utf-8")
         except UnicodeDecodeError:
+            # Every allowed dependency filename is ASCII. A non-UTF-8 blob name
+            # cannot hide one; an unreadable directory can hide entire subtrees.
+            if kind != "tree":
+                continue
             issue("path_encoding_unsupported", kind="entry", path=None, parent_path=prefix.rstrip("/") or ".",
                   object_sha=sha, name_bytes_sha256=hashlib.sha256(name).hexdigest())
             continue

@@ -612,7 +612,7 @@ async def test_unreadable_git_entries_and_trees_preserve_readable_inventory(pm):
     result = read(pm)
     assert result['capture']['status'] == 'partial'
     assert result['components'][0]['name'] == 'readable'
-    assert {row['reason'] for row in result['unreadable_paths']} == {'path_encoding_unsupported', 'tree_too_large'}
+    assert {row['reason'] for row in result['unreadable_paths']} == {'tree_too_large'}
 
 
 async def test_peer_expansion_never_makes_a_stored_capture_unreadable(pm, monkeypatch):
@@ -662,3 +662,104 @@ async def test_capture_budget_error_is_dependency_specific_and_bilingual(pm, mon
     assert op['status'] == 'failed' and op['error_code'] == 'PM_DEPENDENCIES_READ_TOO_LARGE'
     assert '相依' in op['status_reason'] and 'baseline' not in op['status_reason']
     assert read(pm)['capture']['revision_id'] is None
+
+
+async def test_large_locked_capture_is_stored_partial_deterministically_and_readable(pm):
+    from bat_agent_connector import pm_dependencies
+    from bat_agent_connector.pm_dependency_budget import MAX_CAPTURE_BYTES, MAX_READ_BYTES
+    from bat_agent_connector.pm_release_baselines import _size
+    count = 2000
+    await prepare(pm, {'pyproject.toml': '[project]\nname="app"\ndependencies=' + json.dumps([f'package-{i:04d}>=1' for i in range(count)]),
+        'uv.lock': ''.join(f'[[package]]\nname="package-{i:04d}"\nversion="1"\n' for i in range(count))})
+    assert (await run(pm))['status'] == 'succeeded'
+    first = read(pm)
+    assert first['capture']['status'] == 'partial' and 'capture_budget' in first['parser_reasons']
+    assert 0 < len(first['edges']) < count
+    assert first['omitted_edges'] + len(first['edges']) == count
+    assert all(e['evidence_level'] == 'verified' for e in first['edges'])
+    assert _size(first) <= MAX_READ_BYTES
+    stored = pm_dependencies.record(pm['d'].ops.db, pm['workspace_id'], first['capture']['revision_id'])['document']
+    assert _size(stored) <= MAX_CAPTURE_BYTES
+    assert (await run(pm))['status'] == 'succeeded'
+    second = read(pm)
+    assert second['edges'] == first['edges'] and second['omitted_edges'] == first['omitted_edges']
+    assert second['counts']['partial'] and second['counts']['edges'] == len(second['edges'])
+
+
+async def test_cpu_parser_runs_off_loop_and_final_guard_stays_on_loop(pm, monkeypatch):
+    import threading
+
+    from bat_agent_connector import pm_spec_sources
+    from bat_agent_connector.pm_dependency_parser import Inventory
+    await prepare(pm)
+    loop_thread, parser_threads, guard_threads = threading.get_ident(), [], []
+    original_parse, original_guard = Inventory.parse, pm_spec_sources._guard
+    def parse(self):
+        parser_threads.append(threading.get_ident())
+        return original_parse(self)
+    async def guard(*args, **kwargs):
+        guard_threads.append(threading.get_ident())
+        return await original_guard(*args, **kwargs)
+    monkeypatch.setattr(Inventory, 'parse', parse)
+    monkeypatch.setattr(pm_spec_sources, '_guard', guard)
+    assert (await run(pm))['status'] == 'succeeded'
+    assert parser_threads and all(t != loop_thread for t in parser_threads)
+    assert len(guard_threads) >= 3 and all(t == loop_thread for t in guard_threads)
+
+
+async def test_history_never_selects_large_row_tail_columns(pm):
+    import sqlite3
+    await prepare(pm)
+    assert (await run(pm))['status'] == 'succeeded'
+    db = pm['d'].ops.db
+    def authorize(action, table, column, *_):
+        if action == sqlite3.SQLITE_READ and table == 'pm_dependency_revisions' and column in {'document', 'created_at'}:
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+    db.set_authorizer(authorize)
+    try:
+        result = pm_dependency_reads.revisions(pm['d'].ops, OWNER, pm['workspace_id'])
+        assert result['revisions'][0]['captured_at'] is not None
+    finally:
+        db.set_authorizer(None)
+
+
+async def test_impact_distinguishes_legacy_projection_omission_from_absence(pm):
+    import copy
+
+    from bat_agent_connector import pm_dependencies, pm_spec_sources
+    from bat_agent_connector.pm_release_baselines import _json, _size
+    await prepare(pm)
+    assert (await run(pm))['status'] == 'succeeded'
+    ops, wid = pm['d'].ops, pm['workspace_id']
+    saved = pm_dependencies.record(ops.db, wid, read(pm)['capture']['revision_id'])
+    doc = copy.deepcopy(saved['document'])
+    # Legacy documents can expand past the response cap when dependencies have multiple kinds.
+    for dependency in doc['dependencies'][:3]:
+        dependency.update(name='x' * 200_000, kinds=list(pm_dependencies.KINDS))
+    revision = 'pmdep_' + 'a' * 32
+    doc['capture']['revision_id'] = revision
+    assert _size(doc) < 2_000_000
+    ops.db.execute('INSERT INTO pm_dependency_revisions(revision_id,workspace_id,source_key,document,document_digest,source_binding,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?)',
+        (revision, wid, saved['source_key'], _json(doc), pm_spec_sources._digest(doc), _json(saved['source_binding']), saved['created_at'], 'op_' + 'a' * 32))
+    ops.db.execute('UPDATE pm_dependency_heads SET revision_id=? WHERE workspace_id=?', (revision, wid))
+    assert 'dependencies' in read(pm)['projection_omitted_collections']
+    result = pm_dependency_reads.impact(ops, OWNER, wid, dependency=doc['dependencies'][0]['key'])
+    assert result['reason'] == 'dependency_omitted' and result['partial'] and result['counts'] is None
+
+
+@pytest.mark.parametrize('directory', [False, True])
+async def test_non_utf8_paths_only_make_missing_dependency_coverage_partial(pm, directory):
+    import os
+    raw = os.fsencode(pm['human']) + b'/unrelated-\xff'
+    if directory:
+        os.mkdir(raw)
+        raw += b'/package.json'
+    with open(raw, 'wb') as stream:
+        stream.write(b'{"name":"hidden"}')
+    await prepare(pm, {'pyproject.toml': '[project]\nname="app"', 'uv.lock': 'version=1'})
+    assert (await run(pm))['status'] == 'succeeded'
+    result = read(pm)
+    assert result['partial'] is directory
+    assert ('path_encoding_unsupported' in result['catalog_reasons']) is directory
+    assert bool(result['unreadable_paths']) is directory

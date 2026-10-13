@@ -4,7 +4,10 @@
 
 - Correct dependency inventory coverage, lockfile membership, Python package-name matching,
   Cargo inheritance and CI attribution. Report freshness as unknown, preserve partial Git
-  reads, bound expanded projections and serve history from immutable summaries.
+  reads, bound expanded projections and serve history from immutable summaries. Preserve optional
+  runtime extras and tool-specific dev groups, resolve ordered CI directories, reject name-only
+  lock proofs, and store deterministic partial captures with omission counts when budgets are reached.
+  Cache workspace globs and parse off the event loop; informative notes no longer imply missing coverage.
 
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
