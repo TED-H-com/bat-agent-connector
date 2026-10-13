@@ -661,3 +661,6 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-ahp-history-row { display: grid; gap: var(--space-1); margin-block: var(--space-2); }
 .pm-ahp-history-row button { text-align: start; white-space: normal; }
 .pm-ahp-facts p { margin-block: 6px; }
+
+[data-pm-source-pending] { visibility: hidden; position: relative; }
+[data-pm-source-pending] > [data-pm-source-loading] { visibility: visible; position: absolute; inset: 0; }

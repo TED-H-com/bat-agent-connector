@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Coalesce central reads for visible views and open tools; defer hidden sections without flashing withdrawn data, and stop sidebar catalog refreshes on ordinary work events.
+- Keep legacy Board chips within one line and translate action labels in work and capture links.
+
 - Resolve discussion source names centrally in every context kind, retain identity-only request params, and use 決策 consistently for decision records.
 - Keep headers and Requirements titles readable in narrow columns; retain inspector search focus and row expansion keys.
 - Age Session send receipts from central completion times and preserve the shared inspector width and heading hierarchy.

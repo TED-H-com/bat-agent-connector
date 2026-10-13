@@ -464,6 +464,7 @@ test('Requirements links keep their return query; Discuss returns to the exact S
   const back = page.locator('[data-discussion-back]');
   await expect(back).toHaveAttribute('href', href);
   await expect(back).toHaveText('Back to Session');
+  await expect(page.locator('[data-discussion-context=work_item]')).toHaveText('Work · Email sign-in');
   await page.reload();
   await expect(back).toHaveAttribute('href', href);
   await back.click();

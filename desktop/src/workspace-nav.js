@@ -1,7 +1,7 @@
 // Persistent navigation over central IDs. Workspace labels never assign a project.
 import {groupedSessions, sessionActivity} from './state/sessions.js';
 import {joinLabel} from './label-text.js';
-import {railPresentation} from './global-labels.js';
+import {actionLabel, railPresentation} from './global-labels.js';
 import {icon} from './ui/icons.js';
 import {searchField, iconButton} from './ui/components.js';
 
@@ -61,7 +61,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     return sessionActivity(item.session || {});
   };
   const workLink = (pid, item) => link(`#/work/${[pid, item.kind, item.id].map(encodeURIComponent).join('/')}`,
-    item.title || item.branch || item.action || item.id, workActivity(item), item.reading);
+    item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
   const render = () => {
     if (disposed) return;
     const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
@@ -112,14 +112,16 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
       group.hidden = [...group.querySelectorAll('a')].every(row => row.hidden);
     }
   };
-  const refresh = () => {
+  let catalogRows = null;
+  const refresh = ({catalog = true} = {}) => {
     const version = contextVersion;
     const run = serial.catch(() => {}).then(async () => {
       const current = () => {alive(); if (version !== contextVersion) throw new Error('Navigation context changed');};
       current();
       try {
-        const data = await api('GET', '/projects'); current();
-        let nextRoots = data.projects || [], nextBindingKnown = false, nextBindingPartial = false;
+        if (catalog || catalogRows === null) {const data = await api('GET', '/projects'); current(); catalogRows = data.projects || [];}
+        const clearCounts = rows => rows.map(row => ({...row, counts: null, children: clearCounts(row.children || [])}));
+        let nextRoots = catalog ? catalogRows : clearCounts(catalogRows), nextBindingKnown = false, nextBindingPartial = false;
         if (pmWorkspace && !globalTree) {
           const ids = new Set();
           if (bindingSource) {
@@ -219,18 +221,19 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     }
   };
   document.addEventListener('keydown', escape);
-  let pendingEventRead = null;
+  let pendingEventRead = null, catalogEvent = false;
   const off = onEvents(event => {
     if (!['project', 'work_item', 'session', 'execution', 'task', 'operation', 'integration', 'pm_workspace', 'pm_evidence'].includes(event.resource_type)) return;
+    catalogEvent ||= ['project', 'pm_workspace', 'pm_evidence'].includes(event.resource_type);
     // Coalesce events delivered together, but release the slot before starting.
     // A later page always queues its own post-event read and retains ACK ordering.
-    if (!pendingEventRead) pendingEventRead = Promise.resolve().then(() => {pendingEventRead = null; return refresh();});
+    if (!pendingEventRead) pendingEventRead = Promise.resolve().then(() => {pendingEventRead = null; const catalog = catalogEvent; catalogEvent = false; return refresh({catalog});});
     return pendingEventRead;
   });
   refresh().catch(() => {});
   return {box, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
-    pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++;
+    pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++; catalogRows = null;
     roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
     sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});

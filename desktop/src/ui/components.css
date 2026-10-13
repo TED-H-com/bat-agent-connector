@@ -37,9 +37,7 @@
 .ui-page-header > .ui-header-actions { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; flex-wrap: nowrap; min-width: 0; }
 .ui-page-header > .ui-header-actions > * { flex-shrink: 0; }
 .ui-page-header > .ui-header-actions > .ui-button { white-space: nowrap; }
-.ui-page-heading > .ui-meta:nth-of-type(1) { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
-.ui-page-heading > .ui-meta:nth-of-type(2) { grid-column: 1 / -1; grid-row: 3; min-width: 0; }
-.ui-page-heading > .ui-meta:nth-of-type(3) { grid-column: 1 / -1; grid-row: 4; min-width: 0; }
+.ui-page-heading > .ui-meta { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
 .ui-page-header h1 { margin: 0; font-size: var(--fs-title); font-weight: 600; line-height: 1.3; letter-spacing: -.01em; overflow-wrap: break-word; text-wrap: pretty; min-width: 0; }
 .ui-meta { font-size: var(--fs-small); color: var(--text-3); margin: var(--space-1) 0 0; }
 .ui-section-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--space-4); margin-block: var(--space-3); min-width: 0; }
@@ -114,8 +112,8 @@
   .ui-inspector > header > .ui-icon-button { display: none; }
   .ui-button, .ui-button.ui-md, .ui-button.ui-sm, .ui-button.ui-icon-button, .ui-menu-panel [role=menuitem], .ui-tabs button, .ui-segmented button, .ui-disclosure > summary { min-height: 44px; }
   .ui-button.ui-icon-button { min-width: 44px; }
-  .ui-page-header { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-3); }
-  .ui-page-header > .ui-header-actions { grid-column: 1; grid-row: 2; justify-self: start; max-width: 100%; flex-wrap: wrap; }
+  .ui-page-header { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-1); }
+  .ui-page-header > .ui-header-actions { grid-column: 1; grid-row: 3; justify-self: start; max-width: 100%; flex-wrap: wrap; margin-top: var(--space-2); }
   .ui-page-header h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 }
 
@@ -141,7 +139,7 @@
 :root body :is(.ui-context-chip, .chip, .reg-chip, .message-chip) {
   max-width: 100%; min-width: 0; white-space: nowrap; text-overflow: ellipsis;
 }
-:root body .ui-context-chip { display: inline-flex; height: 24px; min-height: 24px; overflow: visible; }
+:root body .ui-context-chip { flex: 0 1 auto; display: inline-flex; height: 24px; min-height: 24px; overflow: visible; }
 .ui-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root body :is(.chip, .message-chip) { overflow: hidden; }
 :root body .ui-context-chip .ui-icon-button { height: 24px; min-height: 24px; min-width: 24px; width: 24px; position: relative; }
@@ -177,3 +175,9 @@
 .global-op-compact > .ui-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 :root body .dep-chip { height: 24px; min-height: 24px; max-width: 100%; white-space: nowrap; overflow: visible; }
+
+:root body .ui-context-chip:not(:has(.ui-chip-label)) { display: block; overflow: hidden; }
+
+@media (max-width: 799px) {
+  .ui-page-heading > .ui-meta { margin-top: 0; }
+}

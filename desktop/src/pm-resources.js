@@ -636,7 +636,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
       mountMeta();
       if (data) updateMeta();
       if (paused) return;
-      if (!busy) void refresh({user: true, trend: wantsTrend()});
+      if (!busy) return refresh({user: true, trend: wantsTrend()});
     } else {serial++; busy = false; meta.remove();}
   }, dispose() {savePreference(); active = false; clearTimeout(timer); listMedia.removeEventListener('change', onListChange); meta.remove(); dropChart(); withdraw();}};
 }

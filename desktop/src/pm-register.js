@@ -570,7 +570,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (active === next) {if (active) publishMeta(); else onMeta(null); return;}
     active = next;
     if (!active) {serial++; detailSerial++; busy = false; onMeta(null); closeSheet(true); return;}
-    void refresh().then(() => {
+    return refresh().then(() => {
       if (!active || sheet || matchMedia('(min-width: 1200px)').matches) return;
       const current = document.activeElement;
       // A related-item inspector or its destination heading may own focus while

@@ -282,7 +282,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
     if (!value) {stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
-    else {if (stale || !page) void refresh(); else if (selected && rows.has(selected)) void select(selected, true); list.scrollLeft = preference.laneScroll || 0; requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));}
+    else {const read = stale || !page ? refresh() : null; if (!read && selected && rows.has(selected)) void select(selected, true); list.scrollLeft = preference.laneScroll || 0; requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0)); return read;}
   }
   return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {resize.disconnect(); withdraw({forgetRoute: false});}};
 }

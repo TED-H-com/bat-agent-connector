@@ -186,7 +186,7 @@ for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
     for (const [focus, name] of [[`col:${ids.keys.pytest}`, 'pytest'], [`row:${ids.api}`, 'membership-api']]) {
       await page.locator(`[data-dep-matrix] [data-dep-focus="${focus}"]`).click();
       const link = page.locator('[data-dep-discuss]');
-      await expect(link).toHaveText(locale === 'en' ? 'Discuss with PM' : '與 PM 討論');
+      await expect(link).toHaveText(locale === 'en' ? 'Discuss' : '討論');
       const params = new URLSearchParams((await link.getAttribute('href'))!.split('?')[1]);
       expect(params.getAll('ref')).toEqual([]);
       expect(params.get('title')).toContain(name);

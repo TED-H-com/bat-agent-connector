@@ -3439,7 +3439,7 @@ function linkTarget(l) {
       x.gone ? chip(t("stale_reason_gone"), "stale") : null);
   }
   if (l.kind === "operation") {
-    return h("span", {}, h("a", { href: `#/op/${l.ref}` }, x.action), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)),
+    return h("span", {}, h("a", { href: `#/op/${l.ref}` }, actionLabel(x.action)), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)),
       x.session ? [" · ", h("a", { href: `#/session/${encodeURIComponent(x.session.host)}/${encodeURIComponent(x.session.session_id)}` }, t("open_new_session"))] : null);
   }
   if (l.kind === "checkpoint") {

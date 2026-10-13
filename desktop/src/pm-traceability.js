@@ -315,7 +315,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (visible === value) {if (value && signature) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
     if (!value) {active = false; stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
-    else {const generation = ++scrollGeneration; void activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);});}
+    else {const generation = ++scrollGeneration; const read = activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);}); return read;}
   }
   async function activate() {if (!active) {active = true; await refresh();}}
   async function openRef(ref) {

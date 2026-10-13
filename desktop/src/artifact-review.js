@@ -1,3 +1,4 @@
+import {actionLabel} from './global-labels.js';
 import {disclosure, pageHeader} from './ui/components.js';
 import {artifactContent} from "./artifact-content.js";
 // Managed capture and exact-revision review are separate central operations.
@@ -296,7 +297,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
       for (const op of result.data.operations || []) {
         const bound = sourceFromOperation(op);
         if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
-          const selector = {execution_operation_id: op.operation_id}; candidates.set(stable(selector), {selector, label: `${op.action} · ${op.operation_id}`});
+          const selector = {execution_operation_id: op.operation_id}; candidates.set(stable(selector), {selector, label: `${actionLabel(op.action)} · ${op.operation_id}`});
         }
       }
     }

@@ -38,7 +38,7 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
   });
   const view = options.initialView || 'schedule';
   await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/${view}`);
-  if (view === 'schedule') await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText(locale === 'en' ? /items|loaded/ : /共 .* 筆|已載入/);
+  if (view === 'schedule') await expect(page.locator('.ui-page-header .schedule-meta')).toContainText(locale === 'en' ? /items|loaded/ : /共 .* 筆|已載入/);
   await expect(page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
   return {...fixture, state, calls, writes};
 }
@@ -156,7 +156,7 @@ test('late schedule response cannot revive data after workspace withdrawal', asy
   const overviewReads = f.state.overviewReads;
   f.state.defer = true; f.state.cursor++;
   await expect.poll(() => Boolean(f.state.pending)).toBe(true);
-  expect(f.state.overviewReads).toBeGreaterThan(overviewReads);
+  expect(f.state.overviewReads, 'Hidden Overview does not refresh during a Schedule event').toBe(overviewReads);
   await expect(page.locator('.pm-main > header').getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
   f.state.workspaceDeny = true;
   await page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/}).click();
@@ -174,7 +174,7 @@ test('a late success cannot restore an endpoint withdrawn by a newer read', asyn
   const overviewReads = f.state.overviewReads;
   f.state.defer = true; f.state.cursor++;
   await expect.poll(() => Boolean(f.state.pending)).toBe(true);
-  expect(f.state.overviewReads).toBeGreaterThan(overviewReads);
+  expect(f.state.overviewReads, 'Hidden Overview does not refresh during a Schedule event').toBe(overviewReads);
   await expect(page.locator('.pm-main > header').getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
   f.state.deny = true; await page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/}).click();
   await expect(page.locator('[data-pm-schedule] [role=alert]')).toContainText('Schedule unavailable');
@@ -278,12 +278,12 @@ test('terminal span without end time reads End time not recorded and mobile date
   await expect(inspector.locator('[data-schedule-section="details"]')).toContainText('End time not recorded');
   await expect(inspector.locator('[data-schedule-section="details"]')).not.toContainText('→ Open');
   await page.setViewportSize({width: 390, height: 844});
-  await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual 2026-10-08 → End time not recorded');
+  await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual Oct 8 → End time not recorded');
   const forecastBar = page.locator('[data-schedule-track="work:forecast_start_only"] .schedule-bar');
   await expect(forecastBar).toHaveAttribute('title', 'Forecast · 2026-10-21');
   await expect(forecastBar).not.toContainText('End time not recorded');
-  await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual 2026-10-06');
-  await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual 2026-10-05 → Open');
+  await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual Oct 6');
+  await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual Oct 5 → Open');
 });
 
 test('Unscheduled excludes rows already in the tree, omits requirement status pills, and hides when zero', async ({page}) => {
@@ -319,7 +319,7 @@ test('tree keeps a single tab stop, aria-selected only on treeitems, accessible 
 
   const workItem = item(page, `work:${f.ids.work.resetEmail}`);
   await expect(workItem).toHaveAccessibleName(f.copy.work.resetEmail);
-  await expect(workItem).toHaveAccessibleDescription(/In progress.*Actual 2026-10-05 → Open/);
+  await expect(workItem).toHaveAccessibleDescription(/In progress.*Actual Oct 5 → Open/);
   await workItem.click();
   expect(await countZeroTabindex()).toBe(1);
   await expect(workItem).toHaveAttribute('tabindex', '0');
@@ -408,8 +408,8 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
   await item(page, 'milestone:recovery_review').click();
   const inspector = page.locator('[data-schedule-inspector]');
   const statusSection = inspector.locator('[data-schedule-section="status"]');
-  await expect(statusSection).toContainText('Baseline: 2026-10-16');
-  await expect(statusSection).toContainText('Forecast: 2026-10-19');
+  await expect(statusSection).toContainText('Baseline: Oct 16');
+  await expect(statusSection).toContainText('Forecast: Oct 19');
   await expect(statusSection).toContainText('+3d');
   await expect(statusSection).not.toContainText('2026-10-16 → 2026-10-16');
 
@@ -521,7 +521,7 @@ test('hidden Schedule does not fetch until active, live updates keep focus in Un
   expect(f.calls).toHaveLength(0);
 
   await page.evaluate(id => {location.hash = `#/pm/${id}/schedule`;}, f.ids.workspaceId);
-  await expect(page.locator('[data-pm-schedule] .schedule-meta')).toContainText('27 loaded');
+  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText('27 items');
   expect(f.calls).toHaveLength(1);
 
   const region = page.locator('[data-pm-schedule]');
@@ -534,7 +534,7 @@ test('hidden Schedule does not fetch until active, live updates keep focus in Un
   await expect.poll(() => f.calls.length).toBe(2);
   await expect(unscheduledBtn).toBeFocused();
 
-  const metaSummary = region.locator('.schedule-meta summary');
+  const metaSummary = page.locator('.ui-page-header .schedule-meta summary');
   await metaSummary.focus();
   await expect(metaSummary).toBeFocused();
   version++;

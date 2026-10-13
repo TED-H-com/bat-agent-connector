@@ -278,7 +278,7 @@ test('checkpoints on a capable host: quiet at rest, honest notes, and a way into
     expect(await visibleText(page)).not.toMatch(/\b(?:null|undefined)\b/);
     if (zh) {
       await page.getByRole('button', {name: '更多操作', exact: true}).click();
-      await expect(page.getByRole('menuitem', {name: '與 PM 討論', exact: true})).toBeVisible();
+      await expect(page.getByRole('menuitem', {name: '討論', exact: true})).toBeVisible();
     }
     await s.context.close();
   }

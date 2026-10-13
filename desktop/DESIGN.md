@@ -16,9 +16,10 @@ Never substitute zero for missing data or count a loaded page as a complete inve
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
-Work, session and delivery events refresh the live projections together without
-locking the workspace Refresh control; a held projection read can still be superseded
-by a newer withdrawal read. PM record events retain the complete workspace refresh.
+Events coalesce reads for the visible view and tools mounted in its drawer. Hidden
+sections become stale and stay masked until a fresh read settles when shown. A held
+projection read can still be superseded by a newer withdrawal read. PM record events
+follow the same visibility rule; workspace authority has its own scoped read.
 
 ## Tokens and type
 
@@ -741,3 +742,5 @@ Inspector Escape ignores editable fields outside the inspector. Table expanders 
 Requirements uses its own table width: below 1100px it hides Milestone and Next blocker; below 720px it uses the same compact row interaction as mobile. The title track has a 14rem minimum whenever columns are visible.
 
 A successful Session send uses the central operation updated_at in the shared time ticker. A receipt without that timestamp says Sent without fabricating an instant.
+
+The rail refreshes the project catalog only for project, workspace and binding events. Other resource events refresh expanded work and invalidate cached activity counts without refetching the catalog. `visible-view-events.spec.ts` covers both 10- and 20-event PM/live pages: Overview 4, Discussions 4, Requirements 24, Board 22, Schedule 3, Dependencies 4, Issues 4 and Agents 8 GETs, including the rail. A later event page must start another read. Hidden withdrawal is tested with a held forbidden response, before any old card can be painted.
