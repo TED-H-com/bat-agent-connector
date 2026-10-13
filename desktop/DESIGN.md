@@ -30,11 +30,16 @@ on the root explicitly override it. Legacy `--panel`, `--muted`, `--chip`,
 | `--bg`, `--surface`, `--surface-2`, `--surface-3` | Canvas, cards, subtle rows, pressed neutral |
 | `--line`, `--line-strong` | Hairlines and input borders |
 | `--text`, `--text-2`, `--text-3` | Primary, supporting, meta text |
-| `--accent`, `--accent-hover`, `--accent-soft`, `--accent-text` | Action, hover, selection, action ink |
+| `--accent`, `--accent-hover`, `--accent-soft`, `--accent-text` / `--on-accent` | Action, hover, selection, action ink |
 | `--ok`, `--warn`, `--bad`, `--info`, `--review`, `--neutral` | Evidence states; each has a `-soft` background |
 | `--space-1/2/3/4/5/6/8/10/12` | 4, 8, 12, 16, 20, 24, 32, 40, 48 px |
 | `--r-xs/sm/md/lg/pill` | 4, 6, 8, 10, 999 px |
 | `--shadow-overlay` | Menus, drawers and dialogs only |
+
+Light `--text-3` is `#646d80` (revised from `#6b7487`): at least 4.67:1
+on canvas, surface and surface-2. Dark `#8a93a4` remains at least 5.22:1
+on those surfaces. Action ink uses `--on-accent` (alias of `--accent-text`);
+the dark ink is `#0b0e14`, not white. Computed contrast is covered by shell tests.
 
 Use the system UI / Segoe UI / Noto Sans TC stack. Body is 14px/1.5. Caption is
 12px/500; small text 13px; reading text 15px/1.6; section title 15px/600;
@@ -83,11 +88,20 @@ Draft, Adopted, Historical. Done describes content only; it does not mean delive
 
 ## Shell and information architecture
 
-The topbar is 48px: product mark, workspace switcher and breadcrumb; Pending,
-connection state and Settings on the right. Connection details live in the tooltip;
-the control opens Connection. Pending counts reuse loaded attention data, with a
-partial marker, and remain absent when unknown. Mobile shows navigation, workspace
-and a named connection dot.
+The topbar is 48px. At ≥1000px it shows the product mark/name, a plain workspace
+link to Overview and one current-view breadcrumb; only the connection pill is on
+the right. The workspace switcher exists once, in the sidebar. At smaller widths,
+the topbar shows the drawer control, workspace/view name (also opens the drawer),
+a named Pending inbox icon with count, and a connection dot. The drawer retains its
+footer; opening it hides the duplicate topbar Pending control. Desktop Pending and
+Settings live only in the sidebar footer. Loaded Pending counts carry a partial
+marker and stay hidden at zero or unknown.
+
+Connection details live in the tooltip; the pill opens Connection. A successful
+poll stays Connected while listeners or a view mount are pending. Retrying a failed
+poll or waiting for the first poll is Reconnecting; a disconnected client is Offline.
+Source refresh failures still pause mutations and event acknowledgment independently
+of transport health, with the pause explained in the tooltip.
 
 One persistent sidebar is 248px (232px at 1000–1199px), with its own scroll and an
 optional saved resize preference. Below 1000px it is a drawer with scrim, focus trap
@@ -97,17 +111,25 @@ are omitted. With no selected PM workspace, the existing global tree remains.
 
 Work uses central workspace/project bindings, never matching names, paths or repos.
 A bound session opens the existing work/session view without changing the selected
-PM workspace. All projects opens the global tree. Manual sessions remain read-only.
+PM workspace. All projects is a quiet right-aligned link in the Work label row and
+opens the global tree. Manual sessions remain read-only. Tree names occupy one line
+with ellipsis; the complete name and state stay in the tooltip and accessible name.
+A fixed status column shows a dot and short label, or just the dot in a narrow rail.
+Rows are 36px on desktop and 44px on touch; children begin at the parent text column.
+The global Projects block starts at the same top padding as the workspace block;
+New workspace remains available through Tools when no workspace is selected.
 The rail uses a shared icon/text grid. Missing capability and empty binding lists
 add no permanent message. Failed reads show a compact error with Retry and expandable
 details; scope withdrawal clears rows. A search distinguishes unavailable data from
-no matches. Only a successfully read empty binding list means no links.
+no matches. Only a successfully read empty binding list means no links. A partial
+binding resolution explicitly says some linked projects are unavailable; a cleared
+403/404 tree never claims its old rows were retained.
 
 | View | Existing content and secondary tools |
 | --- | --- |
 | Overview | Charter; Report menu for fixed snapshots, comparison, print and export; phase and workspace settings in header overflow |
 | Discussions | Thread list, messages, inputs, planning, proposals, bundles, runs and analysis; meetings |
-| Requirements | RTM; quality reviews and execution verification, evidence, deliveries, specs, work packages, handoff and issue publication |
+| Requirements | RTM; quality reviews and execution verification, evidence, specs, work packages (including deliveries), handoff and issue publication |
 | Schedule | Roadmap baseline/forecast/observation; sprints |
 | Dependencies | Maintenance policy, checks, workload and release baselines |
 | Issues & changes | Governance and findings; repairs, review and follow-ups |
@@ -123,6 +145,8 @@ view (Overview where available). Old direct thread routes are replaced in histor
 Workspace/view preferences are bounded and keyed by connection namespace, including
 principal. View switches retain mounted controls, filters, expansions and selection;
 no fetched records are stored in preference maps. Back/forward follows view URLs.
+Unavailable views replace the URL with the view actually shown. A 403/404 forgets
+the remembered workspace so the PM entry does not reopen withdrawn authority.
 Opening a thread immediately remembers Discussions. Returning from Settings rereads
 selected report, requirement and resource records before presenting their facts.
 

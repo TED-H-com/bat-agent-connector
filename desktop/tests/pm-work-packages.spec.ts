@@ -130,7 +130,7 @@ for(const native of [false,true])test.describe(native?'native saved engineering 
       return response;
     };
     await mountConversation(page,native,dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await review(page);
-    await openPmSection(page,'requirements','ui_deliveries');
+    await openPmSection(page,'requirements','ui_packages');
     const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator('summary').click();
     await expect(box).toContainText('This page is incomplete.');await box.getByRole('button',{name:'More delivery records',exact:true}).click();
     await expect(box).toContainText('Merge observed: Yes');await expect(box).toContainText('Merge verification: No');

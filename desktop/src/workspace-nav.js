@@ -8,9 +8,10 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   let saved = [], hasPreference = false;
   try {const raw = sessionStorage.getItem(key); saved = JSON.parse(raw || '[]'); hasPreference = raw !== null;} catch { /* local preference only */ }
   const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
-  let pmWorkspace = null, bindingSource = false, bindingKnown = false, globalTree = false, contextVersion = 0;
+  let pmWorkspace = null, bindingSource = false, bindingKnown = false, bindingPartial = false, globalTree = false, contextVersion = 0;
   let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
   const status = h('div', {class: 'workspace-tree-status', role: 'status'});
+  const bindingNote = h('p', {class: 'workspace-binding-note', hidden: true, 'data-bound-partial': ''}, t('ui_bound_partial'));
   const tree = h('div', {class: 'workspace-tree'});
   let sessionPages = 1, sessionsLoaded = false;
   const sessionRows = h('div', {class: 'workspace-tree'});
@@ -21,19 +22,21 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const box = h('aside', {class: 'workspace-nav', 'aria-label': t('workspace_navigation')},
     h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')),
       h('a', {href: '#/projects', title: t('workspace_manage'), 'aria-label': t('workspace_manage')}, '+')),
-    h('div', {class: 'workspace-search'}, icon('search', {size: 16}), search), status, h('div', {class: 'workspace-tree-scroll'}, tree, sessionTree),
+    h('div', {class: 'workspace-search'}, icon('search', {size: 16}), search), status, bindingNote, h('div', {class: 'workspace-tree-scroll'}, tree, sessionTree),
     h('div', {class: 'workspace-nav-footer'},
       h('a', {href: '#/sessions'}, t('workspace_all_sessions')),
       h('a', {href: '#/projects'}, t('workspace_manage'))));
   const alive = () => {guard(); if (disposed) throw new Error('Navigation disposed');};
   const persist = () => {try {sessionStorage.setItem(key, JSON.stringify([...expanded]));} catch { /* optional */ }};
-  const link = (href, label, state = null, reading = null) => h('a', {href, class: 'workspace-tree-link', 'data-tree-key': href,
-    'aria-current': selected === href ? 'page' : null},
-    h('span', {class: `workspace-dot ${state?.tone || ''}`, 'aria-hidden': 'true'}),
-    h('span', {class: 'workspace-tree-label'}, label),
-    state ? h('span', {class: 'workspace-tree-state'}, t(state.key)) : null,
-    reading?.unread_count > 0 ? h('span', {class: 'workspace-tree-state', title: t('conversation_count_note')},
-      t('conversation_badge', {count: reading.unread_count}) + (reading.complete ? '' : '+')) : null);
+  const link = (href, label, state = null, reading = null) => {
+    const statusText = [state ? t(state.key) : '', reading?.unread_count > 0
+      ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete ? '' : '+') : ''].filter(Boolean).join(' · ');
+    const full = [label, statusText].filter(Boolean).join(' · ');
+    return h('a', {href, class: 'workspace-tree-link', 'data-tree-key': href, title: full, 'aria-label': full,
+      'aria-current': selected === href ? 'page' : null}, h('span', {class: 'workspace-tree-label', title: label}, label),
+      statusText ? h('span', {class: 'workspace-tree-state', 'aria-hidden': 'true'},
+        h('span', {class: `workspace-dot ${state?.tone || ''}`}), h('span', {class: 'workspace-tree-state-label'}, statusText)) : null);
+  };
   const workLink = (pid, item) => link(`#/work/${[pid, item.kind, item.id].map(encodeURIComponent).join('/')}`,
     item.title || item.branch || item.action || item.id, sessionActivity(item.session || {}), item.reading);
   const render = () => {
@@ -61,8 +64,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
           persist(); render(); if (expanded.has(id)) refresh().catch(() => {});
         }}, open ? '▾' : '▸');
       return [h('li', {}, h('div', {class: 'workspace-project-row'}, toggle,
-        link(`#/project/${encodeURIComponent(id)}`, project.name),
-        project.counts?.pending ? h('span', {class: 'workspace-tree-state'}, t('workspace_needs_you')) : null),
+        link(`#/project/${encodeURIComponent(id)}`, project.name, project.counts?.pending ? {key: 'workspace_needs_you', tone: 'stale'} : null)),
         h('ul', {hidden: !open}, ...children, ...items, ...work.map(item => h('li', {}, workLink(id, item))),
           !data ? h('li', {class: 'muted workspace-tree-empty'}, t('workspace_expand_load'))
             : !children.length && !items.length && !work.length ? h('li', {class: 'muted workspace-tree-empty'}, t('workspace_no_work')) : null))];
@@ -70,6 +72,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     const nodes = projectNodes(roots);
     tree.replaceChildren(h('ul', {}, ...nodes));
     const bound = pmWorkspace && !globalTree;
+    bindingNote.hidden = !bound || !bindingPartial;
     tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? 'available' : 'empty' : 'unknown' : 'global';
     // No permanent empty/unavailable sentence in the rail. A search still explains
     // whether its missing results are known empty or cannot currently be read.
@@ -93,7 +96,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
       current();
       try {
         const data = await api('GET', '/projects'); current();
-        let nextRoots = data.projects || [], nextBindingKnown = false;
+        let nextRoots = data.projects || [], nextBindingKnown = false, nextBindingPartial = false;
         if (pmWorkspace && !globalTree) {
           const ids = new Set();
           if (bindingSource) {
@@ -116,8 +119,9 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
           // Bindings can remain readable after the project catalog is withdrawn.
           // An inaccessible linked project is not an empty binding inventory.
           nextBindingKnown = bindingSource && (ids.size === 0 || nextRoots.length > 0);
+          nextBindingPartial = nextRoots.length < ids.size;
         }
-        current(); roots = nextRoots; bindingKnown = nextBindingKnown;
+        current(); roots = nextRoots; bindingKnown = nextBindingKnown; bindingPartial = nextBindingPartial;
         if (!roots.length) projects.clear();
         if (!hasPreference && !expanded.size && roots.length) {expanded.add(roots[0].project_id); hasPreference = true; persist();}
         const ids = new Set();
@@ -161,7 +165,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         status.replaceChildren(); render();
       } catch (error) {
         if (version !== contextVersion || disposed) return;
-        alive(); if ([403, 404].includes(error.status)) {roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
+        alive(); if ([403, 404].includes(error.status)) {roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
         // Keep the exact error available on demand, including refresh-cycle reporting.
         const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? 'ui_work_links_unavailable' : 'ui_work_unavailable');
         status.replaceChildren(h('div', {class: 'workspace-read-error', 'data-work-read-error': ''},
@@ -198,7 +202,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   return {box, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
     pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++;
-    roots = []; bindingKnown = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
+    roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
     sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});
   }, select(hash) {

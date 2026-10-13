@@ -20,6 +20,7 @@ export function rememberProjectView(namespace, workspaceId, id) {bounded(selecti
 export const lastProjectView = (namespace, workspaceId) => selections.get(JSON.stringify([namespace, workspaceId])) || 'overview';
 export function rememberWorkspace(namespace, workspaceId) {bounded(workspaces, namespace, workspaceId);}
 export const lastWorkspace = namespace => workspaces.get(namespace);
+export function forgetWorkspace(namespace, workspaceId) {if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);}
 export function projectViews({h, t, namespace, workspaceId, groups, view, onSelect = () => {}}) {
   const views = groups.map(group => ({...group, id: normalizeProjectView(group.id)})).filter(group => group.sections.length);
   views.sort((a, b) => projectViewIds.indexOf(a.id) - projectViewIds.indexOf(b.id));

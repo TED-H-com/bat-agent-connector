@@ -22,6 +22,7 @@
     "targets": ["nsis", "deb"],
     "shortDescription": "Desktop client for the existing BAT Agent Connector",
     "resources": {
+      "../../THIRD_PARTY_NOTICES.md": "third-party/THIRD_PARTY_NOTICES.md",
       "../managed-runtime/": "managed-runtime/",
       "../vendor/glib-0.18.5/LICENSE": "third-party/glib/LICENSE",
       "../vendor/glib-0.18.5/COPYRIGHT": "third-party/glib/COPYRIGHT"

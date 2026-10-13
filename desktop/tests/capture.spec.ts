@@ -164,7 +164,7 @@ for (const native of [false, true]) {
     await box.getByRole('button', {name: 'Save reviewed file', exact: true}).click();
     await expect(box.getByRole('link', {name: op, exact: true})).toBeVisible();
     state.failRead = true; state.events = [{seq: 1, kind: 'operation.updated', resource_type: 'operation', resource_id: op}];
-    await expect(page.locator('.live')).toHaveAttribute('data-connection','offline');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);
+    await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);
     expect(state.after).toBe(0);
     state.failRead = false; state.status = 'succeeded';
     await expect(box).toContainText(aid);

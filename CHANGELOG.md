@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- Keep each shell destination in one place per breakpoint; put All projects in the
+  Work header, truncate tree names accessibly and disclose partial project bindings.
+- Keep healthy connections Connected during view/source refreshes, canonicalize
+  unavailable PM view links and forget workspace preferences after access withdrawal.
+- Strengthen PM withdrawal tests across visible views; preserve icon license notices
+  in generated clients and desktop bundle resources, and improve muted text contrast.
+
 - Align sidebar rows on one icon/text grid; show Work read failures with compact
   details and Retry, while unsupported or empty Work sources stay quiet.
 

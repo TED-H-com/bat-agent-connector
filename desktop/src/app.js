@@ -45,12 +45,12 @@ import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 
 const TOKEN_KEY = "batc.dashboard.token";
-const state = { token: null, caps: null, lastEvent: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
+const state = { token: null, caps: null, lastEvent: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
 async function activate(caps, endpoint = location.origin, reset = false) {
   state.epoch++;
   state.observations = new Map();
   state.connectionError = null;
-  state.online = false; state.viewReady = false;
+  state.online = false; state.pollHealth = 'initial'; state.viewReady = false;
   state.caps = caps; state.endpoint = endpoint; state.sync = null;
   let bootstrap;
   try { bootstrap = await api("GET", "/bootstrap"); }
@@ -610,24 +610,33 @@ function updateOnline(value) {
   if (!value) shell?.pending({});
   for (const fn of onlineListeners) fn();
 }
+// Transport health is independent of view readiness and mutation gates.
+function paintConnection(waiting = false, paused = false) {
+  const live = document.getElementById('live');
+  const status = !state.token ? 'offline' : state.pollHealth === 'connected' ? 'connected' : 'reconnecting';
+  live.dataset.connection = status;
+  live.className = 'live ' + ({connected: 'ok', offline: 'down', reconnecting: 'reconnecting'}[status]);
+  live.textContent = t('ui_' + status);
+  live.title = t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
+}
 async function streamEvents() {
-  const live = document.getElementById("live");
   for (;;) {
     if (state.nativeBusy || !state.token || !state.viewReady) {
-      live.className = "live " + (state.token ? 'reconnecting' : 'down'); live.textContent = t(state.token ? 'ui_reconnecting' : 'ui_offline'); live.title = t('sync_waiting'); live.dataset.connection = state.token ? 'reconnecting' : 'offline';
+      paintConnection(true);
       await sleep(1000); continue;
     }
     const epoch = state.epoch, view = generation;
-    let cycle;
+    let cycle, pollSucceeded = false;
     try {
       const before = state.lastEvent;
       const checkpoint = state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : "";
       const page = await api("GET", `/events?after=${before}&limit=100${checkpoint}`);
-      if (epoch !== state.epoch || view !== generation || !state.viewReady) continue;
+      if (epoch !== state.epoch) continue;
+      pollSucceeded = true; state.pollHealth = 'connected'; paintConnection(true);
+      if (view !== generation || !state.viewReady) continue;
       cycle = {error: null}; state.refreshCycle = cycle;
       // A deferred render is not a connection failure: keep version-checked form saves usable.
       // Actual event/read failures below pause mutations until a successful replay.
-      live.className = 'live reconnecting'; live.textContent = t('ui_reconnecting'); live.title = t('sync_waiting'); live.dataset.connection = 'reconnecting';
       const cursor = await consumePageAsync(page, before, ev => {
         return settleRefreshes([...state.listeners].map(fn => Promise.resolve().then(() => fn(ev))));
       });
@@ -642,13 +651,15 @@ async function streamEvents() {
       saveCursor();
       state.refreshCycle = null;
       updateOnline(true);
-      live.className = "live ok"; live.textContent = t('ui_connected'); live.title = t('desktop_polling'); live.dataset.connection = 'connected';
+      paintConnection();
       if (!page.has_more || cursor <= before) await sleep(1000);
     } catch (error) {
-      if (epoch !== state.epoch || view !== generation) continue;
+      if (epoch !== state.epoch) continue;
+      if (!pollSucceeded) {state.pollHealth = 'reconnecting'; paintConnection();}
+      if (view !== generation) continue;
       if (state.refreshCycle === cycle) state.refreshCycle = null;
       updateOnline(false);
-      live.className = "live down"; live.textContent = t('ui_offline'); live.title = t('offline_actions_paused'); live.dataset.connection = 'offline';
+      paintConnection(false, pollSucceeded);
       if (error.code === "EVENT_CURSOR_RESET") {
         const previous = { namespace: state.namespace, sync: state.sync };
         const accessChanged = error.reason === "access_changed";
@@ -3604,10 +3615,7 @@ async function route() {
   mountWorkspace(name);
   // The event loop starts after the initial view read. Name that waiting state
   // immediately instead of leaving the connection control blank during startup.
-  const live = document.getElementById('live');
-  live.dataset.connection = state.token ? 'reconnecting' : 'offline';
-  live.className = 'live ' + (state.token ? 'reconnecting' : 'down');
-  live.textContent = t(state.token ? 'ui_reconnecting' : 'ui_offline'); live.title = t('sync_waiting');
+  paintConnection(true);
   const main = document.getElementById("main");
   main.replaceChildren();
   if (!state.token && name !== "settings") {

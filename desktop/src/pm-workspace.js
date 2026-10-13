@@ -1,5 +1,5 @@
 import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
-import {projectViews, rememberProjectView, availableProjectViews} from './pm-workbench.js';
+import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
 import {workspaceCharter} from './pm-charter.js';
 import {workspaceTraceability} from './pm-traceability.js';
@@ -391,7 +391,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       ['overview', brief?.box || (lifecycle ? h('div') : null), []],
       ['discussions', content, [['ui_meetings', meetings?.element]]],
       ['requirements', traceability?.element, [['ui_quality', qualityReviews?.element], ['ui_evidence', evidence?.box],
-        ['ui_deliveries', deliveries?.element], ['ui_specs', specifications?.element], ['ui_materialization', materialization?.element],
+        ['ui_specs', specifications?.element], ['ui_materialization', materialization?.element],
         ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]]],
       ['schedule', roadmap?.box, [['ui_sprints', sprints?.box]]],
       ['dependencies', null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
@@ -418,6 +418,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       publishContext();
     }});
     workbench.apply();
+    if (view && view !== workbench.selected()) history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
     if (primary) primary.hidden = workbench.selected() !== 'overview';
     if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
   }
@@ -788,6 +789,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
+        if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();resources?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
         detailPanel?.close(); phasePill.hidden = true;
@@ -837,7 +839,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   dispose.navigate = (nextWorkspace, nextThread, nextView) => {
     if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
-    workbench.select(nextView); return true;
+    workbench.select(nextView);
+    if (nextView !== workbench.selected()) history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
+    return true;
   };
   return dispose;
 }

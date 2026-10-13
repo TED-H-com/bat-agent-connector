@@ -148,6 +148,9 @@ var uiStrings = {
 		ui_agents: "Agents",
 		ui_board: "Board",
 		ui_project: "Project",
+		sync_actions_paused: "Source refresh failed; actions paused until fresh records arrive.",
+		ui_work_item: "Work item",
+		ui_bound_partial: "Some linked projects are unavailable",
 		ui_work: "Work",
 		ui_all_projects: "All projects",
 		ui_settings: "Settings",
@@ -190,8 +193,7 @@ var uiStrings = {
 		ui_policy: "Maintenance policy",
 		ui_baselines: "Release baselines",
 		ui_batches: "Work batches",
-		ui_observations: "AHP observations",
-		ui_deliveries: "Work deliveries"
+		ui_observations: "AHP observations"
 	},
 	"zh-TW": {
 		ui_search_work: "搜尋工作",
@@ -217,6 +219,9 @@ var uiStrings = {
 		ui_agents: "Agent 資源",
 		ui_board: "工作看板",
 		ui_project: "專案",
+		sync_actions_paused: "資料更新失敗；取得最新紀錄前暫停操作。",
+		ui_work_item: "工作項目",
+		ui_bound_partial: "部分連結專案無法取得",
 		ui_work: "工作",
 		ui_all_projects: "所有專案",
 		ui_settings: "設定",
@@ -259,8 +264,7 @@ var uiStrings = {
 		ui_policy: "維護政策",
 		ui_baselines: "發布基準",
 		ui_batches: "工作批次",
-		ui_observations: "AHP 觀察",
-		ui_deliveries: "工作交付"
+		ui_observations: "AHP 觀察"
 	}
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
@@ -8209,6 +8213,53 @@ function t(key, vars = {}) {
 }
 //#endregion
 //#region src/ui/icons.js
+/*!
+ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+---
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
+*/
 var paths = {
 	"layout-dashboard": [
 		["rect", {
@@ -8683,6 +8734,9 @@ function rememberWorkspace(namespace, workspaceId) {
 	bounded(workspaces, namespace, workspaceId);
 }
 var lastWorkspace = (namespace) => workspaces.get(namespace);
+function forgetWorkspace(namespace, workspaceId) {
+	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
+}
 function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
@@ -8736,11 +8790,15 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	const aside = navigation.box, main = document.getElementById("main"), top = document.querySelector(".top");
 	const toggle = document.getElementById("workspace-menu"), crumb = document.getElementById("nav");
 	const workspaceBlock = h$1("div", { class: "shell-workspace-block" }), projectNav = h$1("div", { class: "shell-project-nav" });
-	const workTitle = h$1("h2", { class: "shell-nav-label" }, t("ui_work"));
+	const workTitle = h$1("div", { class: "shell-work-header" }, h$1("h2", { class: "shell-nav-label" }, t("ui_work")), h$1("a", {
+		class: "shell-all-projects",
+		href: "#/projects"
+	}, t("ui_all_projects")));
 	aside.prepend(workspaceBlock, projectNav, workTitle);
 	let workspace = null, workspaces = [], views = [], currentView = "", currentRoute = "", disposed = false, serial = 0;
 	let renderSignature = null;
 	let menus = [], creator = null, phase = null;
+	let drawerOpener = toggle;
 	const media = matchMedia("(min-width: 1000px)");
 	const scrim = h$1("div", {
 		class: "shell-scrim",
@@ -8757,17 +8815,20 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		document.body.classList.remove("workspace-nav-open");
 		scrim.hidden = true;
 		toggle.setAttribute("aria-expanded", "false");
+		crumb.querySelector(".shell-mobile-name")?.setAttribute("aria-expanded", "false");
 		main.inert = false;
 		document.body.classList.remove("shell-drawer-open");
 		aside.removeAttribute("aria-modal");
 		aside.removeAttribute("role");
-		if (restore) toggle.focus();
+		if (restore) drawerOpener?.focus();
 	}
 	function openDrawer() {
 		if (media.matches) return;
+		drawerOpener = document.activeElement?.closest("#workspace-menu, .shell-mobile-name") || toggle;
 		document.body.classList.add("workspace-nav-open", "shell-drawer-open");
 		scrim.hidden = false;
 		toggle.setAttribute("aria-expanded", "true");
+		crumb.querySelector(".shell-mobile-name")?.setAttribute("aria-expanded", "true");
 		aside.setAttribute("role", "dialog");
 		aside.setAttribute("aria-modal", "true");
 		main.inert = true;
@@ -8792,22 +8853,18 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			main.focus({ preventScroll: true });
 		}
 	});
-	const pendingCount = h$1("span", {
+	const countBadge = () => h$1("span", {
 		class: "shell-count",
 		hidden: true,
 		"data-pending-count": ""
 	});
-	const pending = h$1("a", {
+	const pendingCounts = [countBadge(), countBadge()];
+	const right = h$1("div", { class: "shell-top-actions" }, h$1("a", {
 		href: "#/home",
-		class: "ui-button ghost shell-pending"
-	}, icon("inbox"), h$1("span", {}, t("ui_pending")), pendingCount);
-	const settings = h$1("a", {
-		href: "#/settings",
-		class: "ui-button ghost ui-icon-button",
-		"aria-label": t("ui_settings"),
-		title: t("ui_settings")
-	}, icon("settings"));
-	const right = h$1("div", { class: "shell-top-actions" }, pending, document.getElementById("live"), settings);
+		class: "ui-button ghost shell-pending",
+		"aria-label": t("ui_pending"),
+		title: t("ui_pending")
+	}, icon("inbox"), pendingCounts[0]), document.getElementById("live"));
 	top.append(right);
 	const tools = menu({
 		button: button({
@@ -8824,9 +8881,17 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		].map(([id, key]) => ({
 			label: t(key),
 			href: "#/" + id
-		}))
+		})).concat(caps()?.features?.pm_workspaces ? [{
+			key: "create-workspace",
+			label: t("ui_new_workspace"),
+			href: "#/pm/new"
+		}] : [])
 	});
-	aside.querySelector(".workspace-nav-footer").replaceChildren(h$1("a", { href: "#/home" }, icon("inbox"), t("ui_pending")), tools, h$1("a", { href: "#/settings" }, icon("settings"), t("ui_settings")));
+	aside.querySelector(".workspace-nav-footer").replaceChildren(h$1("a", {
+		href: "#/home",
+		"data-shell-pending": "",
+		"aria-label": t("ui_pending")
+	}, icon("inbox"), h$1("span", {}, t("ui_pending")), pendingCounts[1]), tools, h$1("a", { href: "#/settings" }, icon("settings"), h$1("span", {}, t("ui_settings"))));
 	function switcher(label, className) {
 		const control = menu({
 			button: button({
@@ -8876,6 +8941,11 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		crumb.replaceChildren();
 		aside.classList.toggle("has-pm-context", Boolean(workspace));
 		workTitle.hidden = !workspace;
+		const createEntry = tools.querySelector("[data-menu-key=create-workspace]");
+		if (createEntry) {
+			createEntry.hidden = Boolean(workspace);
+			createEntry.setAttribute("aria-disabled", String(Boolean(workspace)));
+		}
 		if (workspace) {
 			workspaceBlock.dataset.workspaceId = workspace.workspace_id;
 			workspaceBlock.append(switcher(workspace.name, "shell-workspace-switch"));
@@ -8904,39 +8974,53 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 					n: threadCount,
 					more: threadMore ? "+" : ""
 				})
-			}, String(threadCount) + (threadMore ? "+" : "")) : null))), h$1("a", {
-				class: "shell-all-projects",
-				href: "#/projects"
-			}, h$1("span", {}, t("ui_all_projects"))));
-			crumb.append(switcher(workspace.name, "shell-crumb-workspace"));
-			const routeTitle = currentRoute === "pm" ? t("ui_" + currentView) : [
-				"session",
-				"work",
-				"item",
-				"project"
-			].includes(currentRoute) ? t("ui_work") : t({
-				home: "ui_pending",
-				settings: "ui_settings",
-				operations: "nav_operations",
-				delivery: "nav_delivery",
-				cleanup: "nav_cleanup",
-				"artifact-review": "ar_nav",
-				projects: "ui_all_projects"
-			}[currentRoute] || "nav_sessions");
-			crumb.append(h$1("span", {
-				class: "shell-breadcrumb-divider",
-				"aria-hidden": "true"
-			}, "/"), h$1("span", { class: "shell-crumb-view" }, routeTitle));
-			if ([
-				"session",
-				"work",
-				"item"
-			].includes(currentRoute)) crumb.append(h$1("span", { class: "shell-crumb-view" }, "/", t("nav_sessions")));
-		} else {
-			delete workspaceBlock.dataset.workspaceId;
-			crumb.append(h$1("a", { href: "#/home" }, t("ui_pending")), ...caps()?.features?.pm_workspaces ? [h$1("a", { href: "#/pm" }, t("pm_nav"))] : [], h$1("a", { href: "#/settings" }, t("ui_settings")));
-			if (caps()?.features?.pm_workspaces) workspaceBlock.append(h$1("a", { href: "#/pm/new" }, t("ui_new_workspace")));
-		}
+			}, String(threadCount) + (threadMore ? "+" : "")) : null))));
+			crumb.append(h$1("a", {
+				class: "shell-crumb-workspace",
+				href: `#/pm/${encodeURIComponent(workspace.workspace_id)}/overview`,
+				title: workspace.name
+			}, h$1("span", { class: "shell-workspace-name" }, workspace.name)));
+		} else delete workspaceBlock.dataset.workspaceId;
+		const routeKey = {
+			pm: "ui_" + (currentView || "discussions"),
+			home: "ui_pending",
+			settings: "ui_settings",
+			operations: "nav_operations",
+			delivery: "nav_delivery",
+			cleanup: "nav_cleanup",
+			"artifact-review": "ar_nav",
+			projects: "ui_all_projects",
+			project: "ui_project",
+			sessions: "nav_sessions",
+			session: "nav_sessions",
+			item: "ui_work_item",
+			work: "workspace_work_details",
+			approvals: "bulk_title",
+			start: "start_title_page",
+			published: "pub_title",
+			orchestrate: "orch_title",
+			op: "link_operation",
+			host: "host",
+			task: "task_title",
+			worktree: "obs_worktree",
+			dispatch: "dispatch_title"
+		}[currentRoute];
+		const routeTitle = routeKey ? t(routeKey) : "";
+		if (routeTitle) crumb.append(h$1("span", {
+			class: "shell-breadcrumb-divider",
+			"aria-hidden": "true"
+		}, "/"), h$1("span", { class: "shell-crumb-view" }, routeTitle));
+		crumb.append(h$1("button", {
+			type: "button",
+			class: "shell-mobile-name",
+			title: workspace?.name || routeTitle,
+			"aria-label": workspace?.name || routeTitle || t("ui_menu"),
+			"aria-controls": "workspace-sidebar",
+			"aria-expanded": "false",
+			onclick: openDrawer
+		}, workspace?.name || routeTitle));
+		workspaceBlock.hidden = !workspaceBlock.children.length;
+		projectNav.hidden = !projectNav.children.length;
 	}
 	let threadCount = null, threadMore = false;
 	function update(context) {
@@ -8964,6 +9048,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			if (disposed || serial !== ticket) return;
 			const id = workspace?.workspace_id || lastWorkspace(namespace);
 			if (!list.workspaces?.find((row) => row.workspace_id === id)) {
+				forgetWorkspace(namespace, id);
 				update({
 					workspace: null,
 					workspaces: list.workspaces || [],
@@ -8983,6 +9068,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			});
 		} catch (error) {
 			if (disposed || serial !== ticket) return;
+			if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspace?.workspace_id || lastWorkspace(namespace));
 			update({
 				workspace: null,
 				workspaces: [],
@@ -8997,9 +9083,9 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			"work_item",
 			"operation",
 			"host"
-		].includes(event.resource_type)) {
-			pendingCount.hidden = true;
-			pendingCount.textContent = "";
+		].includes(event.resource_type)) for (const badge of pendingCounts) {
+			badge.hidden = true;
+			badge.textContent = "";
 		}
 		return ["pm_workspace", "pm_lifecycle"].includes(event.resource_type) ? refresh() : void 0;
 	});
@@ -9015,12 +9101,15 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			render();
 		},
 		pending({ count, partial } = {}) {
-			pendingCount.hidden = !Number.isSafeInteger(count);
-			pendingCount.textContent = count === void 0 ? "" : String(count) + (partial ? "+" : "");
-			pendingCount.title = count === void 0 ? "" : t("ui_pending_loaded", {
-				n: count,
-				more: partial ? "+" : ""
-			});
+			for (const badge of pendingCounts) {
+				const known = Number.isSafeInteger(count) && count > 0;
+				badge.hidden = !known;
+				badge.textContent = known ? String(count) + (partial ? "+" : "") : "";
+				badge.title = known ? t("ui_pending_loaded", {
+					n: count,
+					more: partial ? "+" : ""
+				}) : "";
+			}
 		},
 		withdraw() {
 			serial++;
@@ -25976,7 +26065,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				[
 					["ui_quality", qualityReviews?.element],
 					["ui_evidence", evidence?.box],
-					["ui_deliveries", deliveries?.element],
 					["ui_specs", specifications?.element],
 					["ui_materialization", materialization?.element],
 					["ui_packages", engineering?.element],
@@ -26047,6 +26135,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		});
 		workbench.apply();
+		if (view && view !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		if (primary) primary.hidden = workbench.selected() !== "overview";
 		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
 	}
@@ -26791,6 +26880,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				loaded = false;
 				workspace = null;
 				threadData = null;
+				if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
 				brief?.withdraw();
 				traceability?.withdraw();
 				resources?.withdraw();
@@ -26926,6 +27016,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	dispose.navigate = (nextWorkspace, nextThread, nextView) => {
 		if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
 		workbench.select(nextView);
+		if (nextView !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		return true;
 	};
 	return dispose;
@@ -27016,12 +27107,17 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		hasPreference = raw !== null;
 	} catch {}
 	const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
-	let pmWorkspace = null, bindingSource = false, bindingKnown = false, globalTree = false, contextVersion = 0;
+	let pmWorkspace = null, bindingSource = false, bindingKnown = false, bindingPartial = false, globalTree = false, contextVersion = 0;
 	let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
 	const status = h("div", {
 		class: "workspace-tree-status",
 		role: "status"
 	});
+	const bindingNote = h("p", {
+		class: "workspace-binding-note",
+		hidden: true,
+		"data-bound-partial": ""
+	}, t("ui_bound_partial"));
 	const tree = h("div", { class: "workspace-tree" });
 	let sessionPages = 1, sessionsLoaded = false;
 	const sessionRows = h("div", { class: "workspace-tree" });
@@ -27046,7 +27142,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		href: "#/projects",
 		title: t("workspace_manage"),
 		"aria-label": t("workspace_manage")
-	}, "+")), h("div", { class: "workspace-search" }, icon("search", { size: 16 }), search), status, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
+	}, "+")), h("div", { class: "workspace-search" }, icon("search", { size: 16 }), search), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
 	const alive = () => {
 		guard();
 		if (disposed) throw new Error("Navigation disposed");
@@ -27056,18 +27152,24 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			sessionStorage.setItem(key, JSON.stringify([...expanded]));
 		} catch {}
 	};
-	const link = (href, label, state = null, reading = null) => h("a", {
-		href,
-		class: "workspace-tree-link",
-		"data-tree-key": href,
-		"aria-current": selected === href ? "page" : null
-	}, h("span", {
-		class: `workspace-dot ${state?.tone || ""}`,
-		"aria-hidden": "true"
-	}), h("span", { class: "workspace-tree-label" }, label), state ? h("span", { class: "workspace-tree-state" }, t(state.key)) : null, reading?.unread_count > 0 ? h("span", {
-		class: "workspace-tree-state",
-		title: t("conversation_count_note")
-	}, t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+")) : null);
+	const link = (href, label, state = null, reading = null) => {
+		const statusText = [state ? t(state.key) : "", reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""].filter(Boolean).join(" · ");
+		const full = [label, statusText].filter(Boolean).join(" · ");
+		return h("a", {
+			href,
+			class: "workspace-tree-link",
+			"data-tree-key": href,
+			title: full,
+			"aria-label": full,
+			"aria-current": selected === href ? "page" : null
+		}, h("span", {
+			class: "workspace-tree-label",
+			title: label
+		}, label), statusText ? h("span", {
+			class: "workspace-tree-state",
+			"aria-hidden": "true"
+		}, h("span", { class: `workspace-dot ${state?.tone || ""}` }), h("span", { class: "workspace-tree-state-label" }, statusText)) : null);
+	};
 	const workLink = (pid, item) => link(`#/work/${[
 		pid,
 		item.kind,
@@ -27104,11 +27206,15 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 					render();
 					if (expanded.has(id)) refresh().catch(() => {});
 				}
-			}, open ? "▾" : "▸"), link(`#/project/${encodeURIComponent(id)}`, project.name), project.counts?.pending ? h("span", { class: "workspace-tree-state" }, t("workspace_needs_you")) : null), h("ul", { hidden: !open }, ...children, ...items, ...work.map((item) => h("li", {}, workLink(id, item))), !data ? h("li", { class: "muted workspace-tree-empty" }, t("workspace_expand_load")) : !children.length && !items.length && !work.length ? h("li", { class: "muted workspace-tree-empty" }, t("workspace_no_work")) : null))];
+			}, open ? "▾" : "▸"), link(`#/project/${encodeURIComponent(id)}`, project.name, project.counts?.pending ? {
+				key: "workspace_needs_you",
+				tone: "stale"
+			} : null)), h("ul", { hidden: !open }, ...children, ...items, ...work.map((item) => h("li", {}, workLink(id, item))), !data ? h("li", { class: "muted workspace-tree-empty" }, t("workspace_expand_load")) : !children.length && !items.length && !work.length ? h("li", { class: "muted workspace-tree-empty" }, t("workspace_no_work")) : null))];
 		});
 		const nodes = projectNodes(roots);
 		tree.replaceChildren(h("ul", {}, ...nodes));
 		const bound = pmWorkspace && !globalTree;
+		bindingNote.hidden = !bound || !bindingPartial;
 		tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? "available" : "empty" : "unknown" : "global";
 		if (!nodes.length && (query || !bound)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : query ? "workspace_no_match" : "no_projects")));
 		if (focus) [...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus)?.focus({ preventScroll: true });
@@ -27132,7 +27238,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			try {
 				const data = await api("GET", "/projects");
 				current();
-				let nextRoots = data.projects || [], nextBindingKnown = false;
+				let nextRoots = data.projects || [], nextBindingKnown = false, nextBindingPartial = false;
 				if (pmWorkspace && !globalTree) {
 					const ids = new Set();
 					if (bindingSource) {
@@ -27156,10 +27262,12 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 						children: []
 					}));
 					nextBindingKnown = bindingSource && (ids.size === 0 || nextRoots.length > 0);
+					nextBindingPartial = nextRoots.length < ids.size;
 				}
 				current();
 				roots = nextRoots;
 				bindingKnown = nextBindingKnown;
+				bindingPartial = nextBindingPartial;
 				if (!roots.length) projects.clear();
 				if (!hasPreference && !expanded.size && roots.length) {
 					expanded.add(roots[0].project_id);
@@ -27218,6 +27326,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				if ([403, 404].includes(error.status)) {
 					roots = [];
 					bindingKnown = false;
+					bindingPartial = false;
 					projects.clear();
 					sessionRows.replaceChildren();
 					more.hidden = true;
@@ -27281,6 +27390,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			contextVersion++;
 			roots = [];
 			bindingKnown = false;
+			bindingPartial = false;
 			projects.clear();
 			sessionRows.replaceChildren();
 			sessionsLoaded = false;
@@ -35779,6 +35889,7 @@ var state = {
 	namespace: "",
 	epoch: 0,
 	online: false,
+	pollHealth: "initial",
 	viewReady: false,
 	sync: null,
 	endpoint: "",
@@ -35793,6 +35904,7 @@ async function activate(caps, endpoint = location.origin, reset = false) {
 	state.observations = new Map();
 	state.connectionError = null;
 	state.online = false;
+	state.pollHealth = "initial";
 	state.viewReady = false;
 	state.caps = caps;
 	state.endpoint = endpoint;
@@ -36629,29 +36741,37 @@ function updateOnline(value) {
 	if (!value) shell?.pending({});
 	for (const fn of onlineListeners) fn();
 }
-async function streamEvents() {
+function paintConnection(waiting = false, paused = false) {
 	const live = document.getElementById("live");
+	const status = !state.token ? "offline" : state.pollHealth === "connected" ? "connected" : "reconnecting";
+	live.dataset.connection = status;
+	live.className = "live " + {
+		connected: "ok",
+		offline: "down",
+		reconnecting: "reconnecting"
+	}[status];
+	live.textContent = t("ui_" + status);
+	live.title = t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
+}
+async function streamEvents() {
 	for (;;) {
 		if (state.nativeBusy || !state.token || !state.viewReady) {
-			live.className = "live " + (state.token ? "reconnecting" : "down");
-			live.textContent = t(state.token ? "ui_reconnecting" : "ui_offline");
-			live.title = t("sync_waiting");
-			live.dataset.connection = state.token ? "reconnecting" : "offline";
+			paintConnection(true);
 			await sleep(1e3);
 			continue;
 		}
 		const epoch = state.epoch, view = generation;
-		let cycle;
+		let cycle, pollSucceeded = false;
 		try {
 			const before = state.lastEvent;
 			const page = await api("GET", `/events?after=${before}&limit=100${state.sync ? `&checkpoint=${encodeURIComponent(state.sync.token)}` : ""}`);
-			if (epoch !== state.epoch || view !== generation || !state.viewReady) continue;
+			if (epoch !== state.epoch) continue;
+			pollSucceeded = true;
+			state.pollHealth = "connected";
+			paintConnection(true);
+			if (view !== generation || !state.viewReady) continue;
 			cycle = { error: null };
 			state.refreshCycle = cycle;
-			live.className = "live reconnecting";
-			live.textContent = t("ui_reconnecting");
-			live.title = t("sync_waiting");
-			live.dataset.connection = "reconnecting";
 			const cursor = await consumePageAsync(page, before, (ev) => {
 				return settleRefreshes([...state.listeners].map((fn) => Promise.resolve().then(() => fn(ev))));
 			});
@@ -36665,19 +36785,18 @@ async function streamEvents() {
 			saveCursor();
 			state.refreshCycle = null;
 			updateOnline(true);
-			live.className = "live ok";
-			live.textContent = t("ui_connected");
-			live.title = t("desktop_polling");
-			live.dataset.connection = "connected";
+			paintConnection();
 			if (!page.has_more || cursor <= before) await sleep(1e3);
 		} catch (error) {
-			if (epoch !== state.epoch || view !== generation) continue;
+			if (epoch !== state.epoch) continue;
+			if (!pollSucceeded) {
+				state.pollHealth = "reconnecting";
+				paintConnection();
+			}
+			if (view !== generation) continue;
 			if (state.refreshCycle === cycle) state.refreshCycle = null;
 			updateOnline(false);
-			live.className = "live down";
-			live.textContent = t("ui_offline");
-			live.title = t("offline_actions_paused");
-			live.dataset.connection = "offline";
+			paintConnection(false, pollSucceeded);
 			if (error.code === "EVENT_CURSOR_RESET") {
 				const previous = {
 					namespace: state.namespace,
@@ -41349,11 +41468,7 @@ async function route() {
 	let [name, ...rest] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (name === "home" && state.token && state.caps?.managed_installation && !state.caps.hosts?.length) name = "settings";
 	mountWorkspace(name);
-	const live = document.getElementById("live");
-	live.dataset.connection = state.token ? "reconnecting" : "offline";
-	live.className = "live " + (state.token ? "reconnecting" : "down");
-	live.textContent = t(state.token ? "ui_reconnecting" : "ui_offline");
-	live.title = t("sync_waiting");
+	paintConnection(true);
 	const main = document.getElementById("main");
 	main.replaceChildren();
 	if (!state.token && name !== "settings") {

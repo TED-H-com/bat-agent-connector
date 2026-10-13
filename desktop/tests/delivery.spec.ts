@@ -148,13 +148,13 @@ for (const native of [false, true]) {
     await expect.poll(() => historyReads).toBe(2);
     changed = true;
     await expect.poll(() => delivered).toBe(true);
-    await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     // Both the failed environment read and its still-running history sibling belong to the barrier.
     expect(environmentReads).toBe(2);
     expect(await saved()).toEqual(checkpoints(0));
     release();
     await expect(card).toContainText("UNAVAILABLE Environment refresh failed");
-    await expect(page.locator('#live')).toHaveAttribute('data-connection','offline');await expect(page.locator('#live')).toHaveAttribute('title',/Central offline/);
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/actions paused/);
     expect(await saved()).toEqual(checkpoints(0));
     failing = false;
     await expect.poll(saved, {timeout: 10000}).toEqual(checkpoints(1));

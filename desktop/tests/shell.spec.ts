@@ -6,7 +6,8 @@ import {threadId} from './pm-fixture.ts';
 import {openPmSection} from './pm-navigation.ts';
 function fixture() {
   const pm = workbenchFixture(), work = workspaceFixture();
-  const state = {denyBindings: false, offline: false};
+  const state = {denyBindings: false, offline: false, bindingReads: 0, eventType: 'pm_thread'};
+  const publish = (type: string) => {state.eventType = type; pm.base.state.cursor++;};
   const dispatch = async (input: any) => {
     const path = input.path.split('?')[0];
     if (path === '/events' && state.offline) return {status: 503, data: {error: {code: 'OFFLINE', message: 'Fixture offline'}}};
@@ -16,15 +17,17 @@ function fixture() {
       caps.features.pm_resources = {version: 1};
       return result;
     }
-    if (path === `/pm/workspaces/${workspaceId}/projects`) return state.denyBindings
+    if (path === `/pm/workspaces/${workspaceId}/projects`) {state.bindingReads++; return state.denyBindings
       ? {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Binding access removed'}}}
-      : {status: 200, data: {workspace_id: workspaceId, bindings: [{workspace_id: workspaceId, project_id: workspaceProject}], next_cursor: null}};
+      : {status: 200, data: {workspace_id: workspaceId, bindings: [{workspace_id: workspaceId, project_id: workspaceProject}], next_cursor: null}};}
     if (path === `/pm/workspaces/${workspaceId}/work`) return {status: 200, data: {workspace_id: workspaceId, bindings: [], next_cursor: null}};
     if (path === `/pm/workspaces/${workspaceId}/resources`) return {status: 200, data: {workspace_id: workspaceId, rows: [], quota_pools: [], interval_s: 60, as_of: new Date().toISOString()}};
     if (/^\/(projects|work-items|sessions|worktrees|checkpoints)(\/|$)/.test(path)) return work.dispatch(input);
-    return pm.dispatch(input);
+    const result = await pm.dispatch(input);
+    if (path === '/events') for (const event of result.data.events) event.resource_type = state.eventType;
+    return result;
   };
-  return {pm, work, state, dispatch};
+  return {pm, work, state, dispatch, publish};
 }
 test('workspace remains selected through views and bound work; history and legacy thread routes', async ({page}) => {
   const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(route);
@@ -44,7 +47,7 @@ test('workspace remains selected through views and bound work; history and legac
   await expect(page).toHaveURL(new RegExp(`/discussions/${threadId}$`)); await expect(page.locator('.pm-notes')).toBeVisible();
   await page.evaluate(id => {location.hash = `#/pm/${id}`;}, workspaceId);
   await expect(page.locator('[data-pm-region=discussions]')).toBeVisible();
-  await openPmSection(page, 'requirements'); await page.locator('.shell-top-actions a.ui-icon-button[href="#/settings"]').click();
+  await openPmSection(page, 'requirements'); await page.locator('.workspace-nav-footer a[href="#/settings"]').click();
   await page.locator('[data-pm-view=requirements]').click(); await expect(context).toHaveAttribute('data-workspace-id', workspaceId);
 });
 test('filters, expanded rows and selection survive other views and Settings without caching facts', async ({page}) => {
@@ -53,19 +56,21 @@ test('filters, expanded rows and selection survive other views and Settings with
   await page.locator('[data-rtm-toggle]').first().click(); await page.locator(`[data-rtm-select="${workId(1)}"]`).first().click();
   await openPmSection(page,'overview'); await openPmSection(page,'requirements');
   await expect(filter).toHaveValue('login'); await expect(page.locator('[data-rtm-detail]')).toContainText('PR #10');
-  await page.locator('.shell-top-actions a.ui-icon-button[href="#/settings"]').click(); await page.locator('[data-pm-view=requirements]').click();
+  await page.locator('.workspace-nav-footer a[href="#/settings"]').click(); await page.locator('[data-pm-view=requirements]').click();
   await expect(filter).toHaveValue('login'); await expect(page.locator('[data-rtm-detail]')).toContainText('PR #10');
   f.pm.state.denyIssues = true; await page.locator('[data-pm-rtm]').getByRole('button',{name:'Refresh records',exact:true}).click();
   await expect(page.locator('[data-rtm-detail]')).toBeHidden(); await expect(page.locator('[data-pm-rtm]')).not.toContainText('PR #10');
 });
-test('binding withdrawal removes Work rows; workspace names never imply bindings', async ({page}) => {
+for (const kind of ['pm_evidence', 'project']) test(`binding withdrawal removes Work rows live on ${kind}; workspace names never imply bindings`, async ({page}) => {
   const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(route);
   await expect(page.locator('.workspace-tree').first()).toContainText('Documentation search');
-  f.state.denyBindings = true; f.pm.base.state.cursor++;
-  // PM evidence events and project events both revalidate the explicit association.
-  await page.locator('[data-pm-view=discussions]').click(); await page.locator('[data-pm-view=overview]').click();
-  await page.reload(); await expect(page.locator('.workspace-tree').first()).not.toContainText('Documentation search');
+  await expect(page.locator('.workspace-nav')).toHaveClass(/has-pm-context/);
+  await expect(page.locator('.workspace-tree').first()).toHaveAttribute('data-binding-state','available');
+  expect(f.state.bindingReads).toBeGreaterThan(0);
+  f.state.denyBindings = true; f.publish(kind);
+  await expect(page.locator('.workspace-tree').first()).not.toContainText('Documentation search');
   await expect(page.locator('.workspace-tree-status')).toContainText('scope');
+  await expect(page.locator('.workspace-tree-status')).not.toContainText('Last observed work is retained');
   const failure = page.locator('[data-work-read-error]');
   await expect(failure.locator('summary')).toHaveText('Work links unavailable');
   await expect(failure.locator('details')).not.toHaveAttribute('open', '');
@@ -89,9 +94,12 @@ test('mobile drawer traps focus, closes on Escape and returns to its opener', as
 test('topbar uses connection states and opens Connection', async ({page}) => {
   const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
   await expect(page.locator('#live')).toHaveAttribute('data-connection','connected'); await expect(page.locator('#live')).toHaveText('Connected');
-  f.state.offline=true; await expect(page.locator('#live')).toHaveAttribute('data-connection','offline');
+  f.state.offline=true; await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');
   f.state.offline=false; await expect(page.locator('#live')).toHaveAttribute('data-connection','connected',{timeout:10000});
   await page.locator('#live').click(); await expect(page).toHaveURL(/#\/settings$/);
+  await page.getByRole('button',{name:'Disconnect',exact:true}).click();
+  await expect(page.locator('#live')).toHaveAttribute('data-connection','offline');
+  await expect(page.locator('#live')).toHaveText('Offline');
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`shell layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900},colorScheme:'light'}),page=await context.newPage(),f=fixture(),errors:string[]=[];
@@ -169,7 +177,7 @@ test('Overview rereads the selected fixed report after leaving for Settings',asy
   await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
   const picker=page.getByRole('combobox',{name:'Summary version',exact:true});
   await picker.selectOption({index:0});const selected=await picker.inputValue();await expect(picker).toBeEnabled();
-  await page.keyboard.press('Escape');await page.locator('.shell-top-actions a.ui-icon-button[href="#/settings"]').click();
+  await page.keyboard.press('Escape');await page.locator('.workspace-nav-footer a[href="#/settings"]').click();
   await page.locator('[data-pm-view=overview]').click();
   await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
   await expect(picker).toHaveValue(selected);expect(f.pm.base.state.writes).toHaveLength(0);
@@ -182,8 +190,8 @@ for (const name of ['A workspace with a long descriptive project name that still
     for(const row of result.data?.workspaces||[]) if(row.workspace_id===workspaceId) row.name=name;
     return result;
   });
-  await page.goto(route);const crumb=page.locator('.shell-crumb-workspace');await expect(crumb).toHaveAttribute('title',name);
-  await expect(crumb).toHaveAccessibleName('Switch workspace: '+name);
+  await page.goto(route);const crumb=page.locator('.shell-mobile-name');await expect(crumb).toHaveAttribute('title',name);
+  await expect(crumb).toHaveAccessibleName(name);
   const top=await page.locator('.top').boundingBox(), bounds=await crumb.boundingBox();
   expect(top!.height).toBe(48);expect(bounds!.y).toBeGreaterThanOrEqual(top!.y);expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(top!.y+48);
   await page.locator('#workspace-menu').click();await expect(page.locator('.shell-workspace-block')).toContainText(name);
@@ -225,7 +233,9 @@ for (const width of [390, 768, 1440]) test(`sidebar rows share icon and text col
   };
   const start = await textStart('[data-pm-view=overview] > span');
   if (width < 1000) expect((await page.locator('[data-pm-view=overview]').boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  expect(await textStart('.shell-all-projects > span')).toBe(start);
+  await expect(page.locator('.shell-work-header .shell-all-projects')).toBeVisible();
+  await expect(page.locator('.shell-project-nav .shell-all-projects')).toHaveCount(0);
+  expect((await page.locator('.shell-all-projects').boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await page.locator('.shell-all-projects').click();
   if (width < 1000) await page.locator('#workspace-menu').click();
   expect(await textStart('.workspace-session-tree > summary > span')).toBe(start);
@@ -233,4 +243,139 @@ for (const width of [390, 768, 1440]) test(`sidebar rows share icon and text col
   expect(await textStart('.workspace-project-row .workspace-tree-label')).toBe(start);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(f.pm.base.state.writes).toHaveLength(0);
+});
+
+test('successful poll stays Connected while a PM child read is held', async ({page}) => {
+  const f=fixture(); let hold=false, held=false, release=()=>{};
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  await mountConversation(page,false,async input=>{
+    if(hold && input.path.split('?')[0]===`/pm/workspaces/${workspaceId}/threads`) {held=true;await gate;}
+    return f.dispatch(input);
+  });
+  await page.goto(route); await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
+  hold=true;f.publish('pm_workspace');await expect.poll(()=>held).toBe(true);
+  await expect(page.locator('#live')).toHaveText('Connected');
+  await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
+  release();await expect(page.locator('#live')).toHaveAttribute('title',/updates every second/);
+  expect(f.pm.base.state.writes).toHaveLength(0);
+});
+for(const locale of ['en','zh-TW']) for(const width of [390,768,1440]) test(`destinations appear once and Work owns All projects ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();
+  await mountConversation(page,false,f.dispatch);await page.goto(route);
+  const pending=locale==='en'?'Pending':'待處理',settings=locale==='en'?'Settings':'設定';
+  await expect(page.locator('.shell-workspace-block')).toHaveAttribute('data-workspace-id',workspaceId);
+  await expect(page.getByRole('link',{name:pending,exact:true})).toHaveCount(1);
+  if(width>=1000) {
+    await expect(page.locator('.shell-top-actions a[href="#/home"]:visible,.shell-top-actions a.ui-icon-button[href="#/settings"]:visible')).toHaveCount(0);
+    await expect(page.getByRole('link',{name:settings,exact:true})).toHaveCount(1);
+    await expect(page.locator('.shell-crumb-workspace')).toHaveAttribute('href',`#/pm/${workspaceId}/overview`);
+    await expect(page.locator('.shell-crumb-workspace')).not.toHaveAttribute('aria-haspopup');
+  } else {
+    await expect(page.locator('.shell-pending')).toHaveAccessibleName(pending);await expect(page.locator('.shell-pending')).toHaveAttribute('title',pending);
+    await page.locator('.shell-mobile-name').click();await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal','true');
+    await expect(page.getByRole('link',{name:pending,exact:true})).toHaveCount(1);await expect(page.getByRole('link',{name:settings,exact:true})).toHaveCount(1);
+  }
+  await expect(page.locator('.shell-workspace-switch')).toHaveCount(1);
+  await expect(page.locator('.shell-work-header > .shell-all-projects')).toBeVisible();
+  await expect(page.locator('.shell-project-nav a[href="#/projects"]')).toHaveCount(0);
+  if(width<1000){await page.keyboard.press('Escape');await expect(page.locator('.shell-mobile-name')).toBeFocused();}
+  // A fresh global page has one view segment rather than a second navigation row.
+  await page.goto('/dashboard/#/home');await page.reload();
+  await expect(page.locator('.shell-workspace-block')).not.toHaveAttribute('data-workspace-id');
+  await expect(page.locator('.shell-crumb-view')).toHaveText(pending);
+  await expect(page.getByRole('link',{name:pending,exact:true})).toHaveCount(1);
+  if(width<1000)await page.locator('.shell-mobile-name').click();
+  await expect(page.getByRole('link',{name:settings,exact:true})).toHaveCount(1);
+  await expect(page.getByRole('link',{name:pending,exact:true})).toHaveCount(1);
+  await context.close();
+});
+for(const width of [390,768,1100,1440]) test(`long tree names are single-line with accessible full names at ${width}`,async({page})=>{
+  await page.setViewportSize({width,height:900});const f=fixture();
+  const project='Documentation search with a deliberately long project name',session='持續改善文件搜尋結果與空白狀態的完整工作階段名稱';
+  f.work.data.roots[0].name=project;f.work.data.session.title=session;f.work.data.work.title=session;
+  await mountConversation(page,false,f.dispatch);await page.goto(route);
+  if(width<1000)await page.locator('#workspace-menu').click();
+  const toggle=page.getByRole('button',{name:'Expand '+project,exact:true});if(await toggle.count())await toggle.click();
+  for(const [selector,name] of [[`.workspace-project-row .workspace-tree-link`,project],[`.workspace-tree a[href="${workspaceRoute}"]`,session]]) {
+    const row=page.locator(selector).first(),label=row.locator('.workspace-tree-label');
+    await expect(row).toHaveAttribute('title',new RegExp(name));await expect(row).toHaveAccessibleName(new RegExp(name));
+    await expect(label).toHaveCSS('white-space','nowrap');await expect(label).toHaveCSS('text-overflow','ellipsis');
+    const size=await label.evaluate(node=>({scroll:node.scrollWidth,width:node.clientWidth,height:node.getBoundingClientRect().height,line:parseFloat(getComputedStyle(node).lineHeight)}));
+    expect(size.scroll).toBeGreaterThan(size.width);expect(size.height).toBeLessThanOrEqual(size.line+1);
+    expect((await row.boundingBox())!.height).toBe(width<1000?44:36);
+    await expect(row.locator('.workspace-dot')).toBeVisible();
+    if(width===1100)await expect(row.locator('.workspace-tree-state-label')).toBeHidden();
+  }
+  expect(f.pm.base.state.writes).toHaveLength(0);
+});
+test('partial linked projects are disclosed without pretending the set is complete',async({page})=>{
+  const f=fixture();await mountConversation(page,false,async input=>{
+    const result=await f.dispatch(input);
+    if(input.path.split('?')[0]===`/pm/workspaces/${workspaceId}/projects`)result.data.bindings.push({workspace_id:workspaceId,project_id:'prj_'+'f'.repeat(20)});
+    return result;
+  });await page.goto(route);
+  await expect(page.locator('.workspace-nav')).toHaveClass(/has-pm-context/);
+  await expect(page.locator('[data-bound-partial]')).toHaveText('Some linked projects are unavailable');
+  await expect(page.locator('[data-bound-partial]')).toBeVisible();
+  await expect(page.locator('.workspace-tree').first()).toContainText('Documentation search');
+  expect(f.pm.base.state.writes).toHaveLength(0);
+});
+test('unavailable PM view canonicalizes its URL on mount and subsequent navigation',async({page})=>{
+  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route+'/dependencies');
+  await expect(page).toHaveURL(new RegExp('/overview$'));await expect(page.locator('[data-pm-view=overview]')).toHaveAttribute('aria-current','page');
+  await openPmSection(page,'requirements');await page.evaluate(id=>{location.hash=`#/pm/${id}/dependencies`;},workspaceId);
+  await expect(page).toHaveURL(new RegExp('/requirements$'));await expect(page.locator('[data-pm-view=requirements]')).toHaveAttribute('aria-current','page');
+});
+for(const status of [403,404])test(`withdrawn remembered workspace is not reopened after ${status}`,async({page})=>{
+  const f=fixture();let denied=false;await mountConversation(page,false,async input=>denied&&input.path===`/pm/workspaces/${workspaceId}`
+    ?{status,data:{error:{code:status===403?'FORBIDDEN':'NOT_FOUND',message:'Workspace removed'}}}:f.dispatch(input));
+  await page.goto(route);await expect(page.locator('.shell-workspace-block')).toHaveAttribute('data-workspace-id',workspaceId);
+  denied=true;f.publish('pm_workspace');await expect(page.locator('.workspace-nav')).not.toHaveClass(/has-pm-context/);
+  await page.evaluate(()=>{location.hash='#/pm';});await expect(page).toHaveURL(/#\/pm$/);
+  await expect(page.locator('.workspace-nav')).not.toHaveClass(/has-pm-context/);expect(f.pm.base.state.writes).toHaveLength(0);
+});
+test('global breadcrumb has exactly the current view and no fallback Sessions label',async({page})=>{
+  const f=fixture();await mountConversation(page,false,async input=>input.path.startsWith('/work-items/example')?{status:404,data:{error:{code:'NOT_FOUND',message:'Fixture missing'}}}:f.dispatch(input));await page.goto('/dashboard/#/home');
+  await expect(page.locator('#nav .shell-crumb-view')).toHaveText('Pending');
+  await expect(page.locator('#nav').getByRole('link')).toHaveCount(0);
+  for(const [path,label] of [['approvals','Batch approvals'],['start','Start a new session'],['published','Start from a published version'],['orchestrate','Orchestrate work'],['op/example','Operation'],['host/demo','Host'],['task/demo/example','Execution'],['worktree/demo/example','Worktree'],['dispatch','Quick project dispatch'],['item/example','Work item'],['work/example','Work and results']]){
+    await page.evaluate(path=>{location.hash='#/'+path;},path);
+    await expect(page.locator('#nav .shell-crumb-view')).toHaveCount(1);
+    await expect(page.locator('#nav .shell-crumb-view')).toHaveText(label);
+    expect(await page.locator('#nav .shell-crumb-view').innerText()).not.toMatch(/^(ui_|obs_|nav_|task_|dispatch_)/);
+  }
+  await page.evaluate(()=>{location.hash='#/unknown';});await expect(page.locator('#nav .shell-crumb-view')).toHaveCount(0);
+});
+
+for(const theme of ['light','dark'])test(`computed button, pill and muted text contrast meets 4.5 ${theme}`,async({page},info)=>{
+  await page.emulateMedia({colorScheme:theme as 'light'|'dark'});await page.goto('/ui-components.html');
+  const ratios=await page.evaluate(async()=>{
+    const {button,statusPill}=await import('/src/ui/components.js');
+    const root=document.getElementById('fixture')!;
+    root.append(button({variant:'primary',label:'Send'}),button({variant:'danger',label:'Remove'}));
+    for(const key of ['accepted','done','waiting','blocked','in_progress','in_review','unknown'])root.append(statusPill(key));
+    const probe=document.createElement('span');probe.textContent='Muted';probe.style.color='var(--text-3)';root.append(probe);
+    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d')!;
+    const rgb=(color:string)=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3);};
+    const lum=(channels:number[])=>channels.map(x=>{const v=x/255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+    const ratio=(a:string,b:string)=>{const x=lum(rgb(a)),y=lum(rgb(b));return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+    const result:Record<string,number>={};
+    for(const node of root.children){const style=getComputedStyle(node);let parent:Element|null=node,bg='rgba(0, 0, 0, 0)';while(parent&&bg==='rgba(0, 0, 0, 0)'){bg=getComputedStyle(parent).backgroundColor;parent=parent.parentElement;}result[node.textContent!]=ratio(style.color,bg);}
+    for(const surface of ['--bg','--surface','--surface-2']){probe.style.background=`var(${surface})`;const style=getComputedStyle(probe);result['Muted '+surface]=ratio(style.color,style.backgroundColor);}
+    return result;
+  });
+  await info.attach('computed-contrast',{body:JSON.stringify(ratios,null,2),contentType:'application/json'});
+  console.log(theme+' contrast '+JSON.stringify(ratios));for(const [label,ratio]of Object.entries(ratios))expect(ratio,label).toBeGreaterThanOrEqual(4.5);
+  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto('/dashboard/'+workspaceRoute);
+  const send=page.getByRole('button',{name:'Send',exact:true});await expect(send).toBeVisible();
+  await expect(send).toHaveCSS('color',theme==='dark'?'rgb(11, 14, 20)':'rgb(255, 255, 255)');
+});
+
+test('global Projects starts at the rail padding and New workspace remains discoverable',async({page})=>{
+  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto('/dashboard/#/home');
+  const rail=page.locator('.workspace-nav'),heading=rail.locator('.workspace-nav-heading');await expect(heading).toBeVisible();
+  const bounds=await rail.boundingBox(),first=await heading.boundingBox();
+  expect(first!.y-bounds!.y).toBe(16);
+  await rail.getByRole('button',{name:'Tools',exact:true}).click();
+  await expect(rail.getByRole('menuitem',{name:'New workspace',exact:true})).toBeVisible();
 });

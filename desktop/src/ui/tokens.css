@@ -2,7 +2,7 @@
 :root {
   color-scheme: light;
   --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --surface-3: #e8ebf0;
-  --line: #e2e6ec; --line-strong: #cdd4de; --text: #161b26; --text-2: #4a5468; --text-3: #6b7487;
+  --line: #e2e6ec; --line-strong: #cdd4de; --text: #161b26; --text-2: #4a5468; --text-3: #646d80;
   --accent: #2f5bd3; --accent-hover: #264bb4; --accent-soft: #edf1fd; --accent-text: #ffffff;
   --ok: #167a4a; --ok-soft: #e7f5ee; --warn: #9a5b00; --warn-soft: #fdf3e1;
   --bad: #c0362c; --bad-soft: #fdecea; --info: #2f5bd3; --info-soft: #edf1fd;
@@ -16,6 +16,7 @@
   --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 10px; --r-pill: 999px;
   --shadow-overlay: 0 8px 24px rgba(16,24,40,.12), 0 1px 2px rgba(16,24,40,.06);
   --scrim: rgba(16,24,40,.36); --motion: 140ms ease-out;
+  --on-accent: var(--accent-text);
   --panel: var(--surface); --muted: var(--text-2); --chip: var(--surface-2); --readonly: var(--review);
   --type-label: var(--fs-caption); --type-small: var(--fs-small); --type-body: var(--fs-body); --type-title: var(--fs-title);
   --radius-small: var(--r-sm); --radius-panel: var(--r-md); --form-width: 640px; --reading-width: 760px;

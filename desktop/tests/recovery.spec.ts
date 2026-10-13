@@ -60,7 +60,7 @@ test("offline observation blocks operations and preserves the draft for reconnec
   await page.goto("/dashboard/#/session/demo/session-1");
   const draft = page.locator("textarea").first();
   await draft.fill("Retry after the central returns");
-  await expect(page.locator('#live')).toHaveAttribute('data-connection','offline');await expect(page.locator('#live')).toHaveAttribute('title',/actions paused/);
+  await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');await expect(page.locator('#live')).toHaveAttribute('title',/actions paused/);
   await page.getByRole("button", {name: "Send", exact: true}).click();
   expect(writes).toBe(0);
   await expect(draft).toHaveValue("Retry after the central returns");

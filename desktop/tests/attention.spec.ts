@@ -48,7 +48,7 @@ for (const native of [false, true]) {
     expect(fixture.data.writes[0].idempotency_key).not.toBe(fixture.data.writes[1].idempotency_key);
     await expect(page.getByRole('button', {name: 'Accept as done'})).toBeDisabled(); // observe is not approve
     expect(fixture.data.items[0].completion.pending).toBe(true);
-    await page.locator('.shell-pending').click();
+    await page.locator('[data-shell-pending]').click();
     await expect(page.getByRole('region', {name: 'Completion review'})).toContainText('Review delivery');
     await expect(page.getByRole('region', {name: 'Replies and permissions'})).toContainText('Question from agent');
   });
@@ -121,7 +121,7 @@ test('a delayed reading response cannot repaint another view', async ({page}) =>
   await page.goto('/dashboard/#/item/' + fixture.data.items[0].work_item_id);
   await page.getByRole('button', {name: 'Mark this version read'}).click();
   await expect.poll(() => requested).toBe(true);
-  await page.locator('.shell-pending').click();
+  await page.locator('[data-shell-pending]').click();
   await expect(page.getByRole('heading', {name: 'Completion review'})).toBeVisible();
   release();
   await expect.poll(() => fixture.data.writes.length).toBe(1);
@@ -160,9 +160,21 @@ test('pending badge reflects only loaded attention evidence and withdraws with a
     if(input.path.startsWith('/work-items?pending')) result.data.next_cursor='more';
     return result;
   });
-  await page.goto('/dashboard/');const count=page.locator('[data-pending-count]');
+  await page.goto('/dashboard/');const count=page.locator('[data-shell-pending] [data-pending-count]');
   await expect(count).toHaveText('5+'); await expect(count).toHaveAttribute('title','5 pending loaded+');
   denied=true;fixture.data.cursor++;
   await expect(page.getByRole('region',{name:'Completion review'})).not.toContainText('Review delivery');
   await expect(count).toBeHidden(); expect(fixture.data.writes).toEqual([]);
+});
+
+for(const width of [390,768,1440])test(`Pending badge follows its breakpoint and hides known zero ${width}`,async({page})=>{
+  await page.setViewportSize({width,height:900});const f=attentionFixture();let empty=false;
+  await mountAttention(page,false,f,async input=>empty&&['/hosts','/work-items','/sessions','/operations'].includes(input.path.split('?')[0])
+    ?{status:200,data:{hosts:[],work_items:[],sessions:[],operations:[],next_cursor:null,next_before:null}}:f.dispatch(input));
+  await page.goto('/dashboard/#/home');
+  const badge=page.locator(width<1000?'.shell-pending [data-pending-count]':'[data-shell-pending] [data-pending-count]');
+  await expect(badge).toBeVisible();await expect(badge).toHaveText('5');
+  empty=true;f.data.cursor++;
+  await expect(page.locator('#main')).not.toContainText('Review delivery');
+  await expect(badge).toBeHidden();await expect(badge).toHaveText('');expect(f.data.writes).toEqual([]);
 });
