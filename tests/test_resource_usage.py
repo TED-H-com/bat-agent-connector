@@ -24,7 +24,10 @@ POOL = "pool_" + "a" * 32
 
 
 def clock():
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    # Default reads have a millisecond, exclusive upper bound. These fixtures
+    # represent already-observed usage even when collection and read finish in
+    # the same millisecond; exact interval boundaries are checked separately.
+    return (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(timespec="milliseconds")
 
 
 def codex_usage(n=1, **extra):
@@ -256,6 +259,10 @@ async def test_window_optional_fields_stale_and_schema_idempotence(ready):
     result = read(d, wid, since="2026-10-02T00:00:00Z", until="2026-10-03T00:00:00Z")["rows"][0]
     assert result["metrics"]["total"]["value"] == 120 and result["observations"] == 1
     assert result["metrics"]["cache_write"]["covered"] == 0
+    before_second = read(d, wid, since=first["timestamp"], until=second["timestamp"])["rows"][0]
+    assert before_second["metrics"]["total"]["value"] == 120 and before_second["observations"] == 1
+    at_second = read(d, wid, since=second["timestamp"], until="2026-10-02T10:00:00.001Z")["rows"][0]
+    assert at_second["metrics"]["total"]["value"] == 120 and at_second["observations"] == 1
     assert read(d, wid, since="2026-10-03T00:00:00Z", until="2026-10-04T00:00:00Z")["rows"][0]["metrics"]["total"]["value"] is None
     d.journal.db.execute("UPDATE resource_usage_sources SET successful_at='2020-01-01T00:00:00+00:00'")
     assert read(d, wid)["rows"][0]["status"] == "stale"
