@@ -411,8 +411,10 @@ workload observations stay in the secondary cards.
 The header names the capture commit and its UTC date. A Stale pill is shown only when
 the projection says `stale` is true. Unknown freshness stays out of the header and is
 stated once under Details. A Partial pill and the omitted total describe the returned
-capture, not a repository-wide total. Relation counts do the same, and they are omitted
-when the projection has no count object.
+capture, not a repository-wide total. Relation/evidence counts include captured edges and separate owner declarations;
+they are omitted without a capture or a count object. An uncaptured workspace has
+no Partial pill or freshness claim. Details includes parser/catalog reasons, omitted
+collections, cross-repository selection gaps and unreadable parent paths.
 
 The matrix lists every captured component. More than twelve rows start with the first
 twelve and Show all (M). Columns group dependencies by kind. A capture of twelve
@@ -428,11 +430,16 @@ downstream visible.
 
 The inspector shows a pinned version only when this capture resolved one, plus the
 allowed range, the evidence location, and the maintenance owner or the recorded reason.
-Tests to re-run come from the capture's verification hints. Affected components come
-from the impact read. A bounded prefix says how many components were loaded. An impact
+Component selections show component facts and a Dependencies list whose rows name
+the dependency, relation, version, evidence and joined source references. Tests to
+re-run come from the capture's verification hints. Affected components come
+from the impact read; owner declarations are listed separately from captured paths. Bounded/partial impact has a Partial pill and its reason, cross-repository reason
+and selection reasons. Positive counts describe returned components only; an empty
+bounded prefix never says “0 loaded”. Declared-only reads list the declarations. An impact
 miss says why the dependency is outside this projection, which is not the same as no
-impact. Check impact opens a discussion with no context ref; the dependency name and
-the impact summary are in the title. Declare and retract stay owner actions in a
+impact. Discuss with PM opens a discussion for dependency and component selections without
+a context ref (the backend has no dependency context kind). Its title names the item
+and captured commit. Declare and retract stay owner actions in a
 disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
 the shared wording, and the raw code appears only there.
 

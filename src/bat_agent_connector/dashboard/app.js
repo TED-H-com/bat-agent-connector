@@ -3009,6 +3009,7 @@ var dependencyStrings = {
 		dep_tests: "Tests to re-run",
 		dep_affected: "Affected components",
 		dep_releases: "Affected releases",
+		dep_discuss: "Discuss with PM",
 		dep_check_impact: "Check impact",
 		dep_declare: "Declare relation",
 		dep_retract: "Retract",
@@ -3049,6 +3050,24 @@ var dependencyStrings = {
 		dep_revisions: "Captures",
 		dep_revisions_more: "More captures were not loaded",
 		dep_distance: "Distance {n}",
+		dep_source: "Sources",
+		dep_manifest: "Manifest path",
+		dep_declaration: "Declaration",
+		dep_edges_omitted: "More relations were omitted from this capture",
+		dep_no_components_returned: "No components returned",
+		dep_collection_files: "Files",
+		dep_collection_edges: "Relations",
+		dep_collection_components: "Components",
+		dep_collection_dependencies: "Dependencies",
+		dep_collection_verification_hints: "Test hints",
+		dep_collection_unreadable_paths: "Unreadable paths",
+		dep_omitted_collections: "Omitted collections: {names}",
+		dep_reason_tree_limit: "Tree limit reached",
+		dep_reason_file_limit: "File limit reached",
+		dep_reason_component_limit: "Component limit reached",
+		dep_reason_unsupported_tree_entry: "Unsupported tree entry",
+		dep_reason_selection_budget: "Peer selection stopped early",
+		dep_reason_unreadable_manifest: "Manifest unreadable",
 		dep_choose: "Choose",
 		dep_dash: "—"
 	},
@@ -3057,7 +3076,7 @@ var dependencyStrings = {
 		dep_meta: "擷取於 {commit} · {date}",
 		dep_meta_commit: "擷取於 {commit}",
 		dep_matrix: "矩陣",
-		dep_graph: "圖",
+		dep_graph: "關係圖",
 		dep_search: "搜尋相依",
 		dep_runtime: "執行期",
 		dep_build: "建置",
@@ -3088,6 +3107,7 @@ var dependencyStrings = {
 		dep_tests: "要重跑的測試",
 		dep_affected: "受影響元件",
 		dep_releases: "受影響的發布",
+		dep_discuss: "與 PM 討論",
 		dep_check_impact: "檢查影響",
 		dep_declare: "宣告關係",
 		dep_retract: "撤回",
@@ -3128,6 +3148,24 @@ var dependencyStrings = {
 		dep_revisions: "擷取紀錄",
 		dep_revisions_more: "還有未載入的擷取",
 		dep_distance: "距離 {n}",
+		dep_source: "來源",
+		dep_manifest: "清單檔路徑",
+		dep_declaration: "已宣告關係",
+		dep_edges_omitted: "這次擷取還有未列入的關係",
+		dep_no_components_returned: "未回傳受影響元件",
+		dep_collection_files: "檔案清單",
+		dep_collection_edges: "關係",
+		dep_collection_components: "元件",
+		dep_collection_dependencies: "技術相依",
+		dep_collection_verification_hints: "測試提示",
+		dep_collection_unreadable_paths: "無法讀取的路徑",
+		dep_omitted_collections: "未列入的資料：{names}",
+		dep_reason_tree_limit: "已達目錄上限",
+		dep_reason_file_limit: "已達檔案上限",
+		dep_reason_component_limit: "已達元件上限",
+		dep_reason_unsupported_tree_entry: "不支援的目錄項目",
+		dep_reason_selection_budget: "跨儲存庫選取提前結束",
+		dep_reason_unreadable_manifest: "無法讀取清單檔",
 		dep_choose: "請選擇",
 		dep_dash: "—"
 	}
@@ -16123,9 +16161,17 @@ var NODE_H = 36;
 var GAP_X = 72;
 var GAP_Y = 18;
 var PAD = 20;
-var knownReason = (code) => Object.hasOwn(reasonLabels, code);
+var LOCAL_REASONS = new Set([
+	"tree_limit",
+	"file_limit",
+	"component_limit",
+	"unsupported_tree_entry",
+	"selection_budget",
+	"unreadable_manifest"
+]);
+var knownReason = (code) => LOCAL_REASONS.has(code) || Object.hasOwn(reasonLabels, code);
 var reasonText = (t, code, detail = false) => {
-	const label = reasonLabel(t, code);
+	const label = LOCAL_REASONS.has(code) ? t("dep_reason_" + code) : reasonLabel(t, code);
 	return detail && code && !knownReason(code) ? t("ui_reason_detail", {
 		label,
 		code
@@ -16737,7 +16783,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		captureButton.hidden = !active;
 		syncCapture();
 		if (!active || !data) return;
-		const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
+		const commit = shortSha(data.capture?.commit_sha);
 		const date = capturedDate(data.capture?.captured_at);
 		const line = commit && date ? t("dep_meta", {
 			commit,
@@ -16749,7 +16795,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		const marks = [];
 		if (data.stale === true) marks.push(statusPill("stale"));
-		if (data.partial === true) marks.push(statusPill("partial"));
+		if (data.capture?.revision_id && data.partial === true) marks.push(statusPill("partial"));
 		if (header?.pills) {
 			header.pills.replaceChildren(...marks);
 			header.pills.hidden = !marks.length;
@@ -16842,7 +16888,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const name = dependencyName(selectedKey());
 		if (!impact || impact.dependency !== selectedKey() || impact.error) return name || t("ui_dependencies");
 		if (MISS.has(impact.reason)) return joinLabel([name, reasonText(t, impact.reason)]);
-		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
+		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components) && (impact.counts.components > 0 || !partialImpact())) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
 		return name || t("ui_dependencies");
 	}
 	function openInspector() {
@@ -16865,6 +16911,17 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function closeInspector() {
 		panel?.close();
 	}
+	function partialImpact() {
+		return impact?.partial === true || impact?.counts?.partial === true || impact?.reason === "bounded_captured_graph" || ["bounded", "partial"].includes(impact?.cross_repository?.status) || impact?.cross_repository?.complete === false;
+	}
+	function dependencyRow(edge) {
+		const refs = (edge.evidence_refs || (edge.source_ref ? [edge.source_ref] : [])).map(evidenceLine).filter(Boolean);
+		return h("section", { "data-dep-dependency-row": edge.dependency_key }, h("h4", {}, dependencyName(edge.dependency_key)), h("p", {}, joinLabel([
+			t("dep_" + edge.relation),
+			versionLabel(edge) || t("dep_dash"),
+			levelText(edge.evidence_level)
+		])), refs.length ? h("dl", { class: "dep-facts" }, h("dt", {}, t("dep_source")), h("dd", {}, refs.join(" · "))) : "");
+	}
 	function renderInspector() {
 		if (!panel || !selection || !data) return;
 		const activeEl = document.activeElement;
@@ -16877,36 +16934,38 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (title) title.textContent = inspectorTitle();
 		const edges = selectionEdges();
 		const dep = dependencyByKey().get(selectedKey());
-		const owner = ownerFact((data.components || []).find((row) => row.component_id === (selection.componentId || edges[0]?.component_id)) || data);
+		const component = [...data.components || [], ...data.external_components || []].find((row) => row.component_id === (selection.componentId || edges[0]?.component_id));
+		const owner = ownerFact(component || data);
 		const facts = h("dl", { class: "dep-facts" });
 		const add = (label, value, note) => {
 			facts.append(h("dt", {}, label), h("dd", {}, value));
 			if (note) facts.append(h("dd", { class: "dep-note" }, note));
 		};
 		if (dep || selection.type !== "component") add(t("dep_name"), dep?.name || dependencyName(selectedKey()) || t("dep_dash"));
-		if (selection.type === "component") add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
-		for (const edge of edges) {
-			const pinned = typeof edge.resolved === "string" && edge.resolved ? edge.resolved : t("dep_dash");
-			const range = typeof edge.version === "string" && edge.version ? edge.version : t("dep_dash");
-			add(t("dep_pinned"), pinned, edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
-			add(t("dep_range"), range, !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
+		if (selection.type === "component") {
+			facts.dataset.depComponentFacts = "";
+			add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
+			add(t("dep_ecosystem"), component?.ecosystem || t("dep_dash"));
+			add(t("dep_manifest"), component?.manifest_path || t("dep_dash"));
+			add(t("dep_version"), component?.version || t("dep_dash"));
+		} else for (const edge of edges) {
+			add(t("dep_component"), componentName(edge.component_id) || t("dep_dash"));
+			add(t("dep_pinned"), edge.resolved || t("dep_dash"), edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
+			add(t("dep_range"), edge.version || t("dep_dash"), !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
 			add(t("dep_level"), levelText(edge.evidence_level));
 			if (edge.basis) add(t("dep_why"), reasonText(t, edge.basis));
-			for (const ref of edge.evidence_refs || []) {
-				const line = evidenceLine(ref);
-				if (line) add(t("dep_level"), line);
-			}
+			const refs = (edge.evidence_refs || []).map(evidenceLine).filter(Boolean);
+			if (refs.length) add(t("dep_source"), refs.join(" · "));
 		}
 		add(t("dep_owner"), owner.actor || t("dep_dash"), owner.reason ? reasonText(t, owner.reason) : "");
 		const tests = h("div", { "data-dep-tests": "" }, h("h3", {}, t("dep_tests")));
 		const jobs = hintRows();
 		if (jobs.length) for (const hint of jobs) tests.append(h("p", {}, joinLabel([hint.job_id, hint.command])));
 		else tests.append(h("p", {}, Number(data.omitted_hints) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
-		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t("dep_affected")));
+		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t(selectedKey() ? "dep_affected" : "ui_dependencies")));
 		if (!selectedKey()) {
-			const names = [...new Set(edges.map((edge) => dependencyName(edge.dependency_key)).filter(Boolean))];
-			if (names.length) for (const name of names) affected.append(h("p", {}, name));
-			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
+			if (edges.length) affected.append(...edges.map(dependencyRow));
+			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_edges_omitted") : t("dep_none_recorded")));
 		} else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
 		else if (impact.error) affected.append(inlineError({
 			error: impact.error,
@@ -16915,11 +16974,29 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				syncImpact();
 			}
 		}));
-		else if (MISS.has(impact.reason)) affected.append(h("p", {}, reasonText(t, impact.reason)));
 		else {
+			if (partialImpact()) affected.append(statusPill("partial"));
+			const reasons = new Set([
+				impact.reason,
+				impact.cross_repository?.reason,
+				...impact.selection_reasons || [],
+				...impact.cross_repository?.selection_reasons || []
+			].filter(Boolean));
+			for (const code of reasons) affected.append(h("p", {
+				class: "dep-note",
+				"data-dep-impact-reason": code
+			}, reasonText(t, code)));
 			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
-			if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: impact.counts.components })));
-			if (!(impact.components || []).length && !(impact.counts && Number.isFinite(impact.counts.components))) affected.append(h("p", {}, t("dep_none_recorded")));
+			for (const row of impact.declared || []) affected.append(h("section", { "data-dep-impact-declaration": row.declaration_id }, h("p", {}, joinLabel([
+				componentName(row.component_id),
+				row.dependency?.name,
+				t("dep_" + row.relation),
+				versionLabel(row) || t("dep_dash"),
+				levelText(row.evidence_level)
+			])), h("p", { class: "dep-note" }, (row.evidence_refs || (row.source_ref ? [row.source_ref] : [])).map(evidenceLine).filter(Boolean).join(" · "))));
+			const count = impact.counts?.components;
+			if (impact.counts?.basis === "returned_components" && Number.isFinite(count) && (count > 0 || !partialImpact())) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: count })));
+			if (!(impact.components || []).length && !(impact.declared || []).length && !MISS.has(impact.reason)) affected.append(h("p", {}, t("dep_no_components_returned")));
 		}
 		const releases = impact && Object.hasOwn(impact, "affected_releases") ? impact.affected_releases : Object.hasOwn(data, "affected_releases") ? data.affected_releases : null;
 		const releaseBlock = Array.isArray(releases) ? h("div", { "data-dep-releases": "" }, h("h3", {}, t("dep_releases")), ...releases.length ? releases.map((row) => h("p", {}, typeof row === "string" ? row : joinLabel([
@@ -16928,16 +17005,17 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			row?.revision_id,
 			row?.id
 		]) || t("dep_dash"))) : [h("p", {}, t("dep_dash"))]) : "";
-		const discuss = selectedKey() ? h("a", {
+		const discussionTitle = joinLabel([selectedKey() ? dependencyName(selectedKey()) : componentName(selection.componentId), shortSha(data.capture?.commit_sha) ? t("dep_meta_commit", { commit: shortSha(data.capture.commit_sha) }) : ""]);
+		const discuss = selection ? h("a", {
 			class: "ui-button secondary ui-md",
 			"data-dep-discuss": "",
 			href: discussHref({
 				workspaceId,
 				refs: [],
-				title: inspectorTitle(),
+				title: discussionTitle,
 				from: "dependencies"
 			})
-		}, t("dep_check_impact")) : "";
+		}, t("dep_discuss")) : "";
 		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss), record);
 	}
 	function drawGraph(edges) {
@@ -17073,16 +17151,17 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		element.dataset.depMode = mode;
 		matrixHost.hidden = mode !== "matrix";
 		graphHost.hidden = mode !== "graph";
-		const counted = typeof data?.counts?.edges === "number";
+		const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);
+		const countedEdges = allEdges();
 		for (const chip of relationChips) {
-			const count = counted ? (data.edges || []).filter((edge) => edge.relation === chip.value).length : null;
+			const count = counted ? countedEdges.filter((edge) => edge.relation === chip.value).length : null;
 			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
 			chip.label.textContent = text;
 			chip.node.setAttribute("aria-label", text);
 			chip.node.setAttribute("aria-pressed", String(relationFilter.includes(chip.value)));
 		}
 		for (const chip of evidenceChips) {
-			const count = counted ? (data.edges || []).filter((edge) => edge.evidence_level === chip.value).length : null;
+			const count = counted ? countedEdges.filter((edge) => edge.evidence_level === chip.value).length : null;
 			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
 			chip.label.textContent = text;
 			chip.node.setAttribute("aria-label", text);
@@ -17234,14 +17313,23 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		detailBody.replaceChildren();
 		if (data) {
-			if (data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
+			if (data.capture?.revision_id && data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
 			const omitted = [
 				"omitted_edges",
 				"omitted_hints",
 				"omitted_components"
 			].reduce((sum, key) => Number.isFinite(data[key]) && data[key] > 0 ? sum + data[key] : sum, 0);
 			if (omitted > 0) detailBody.append(h("p", { "data-dep-omitted": "" }, t("dep_omitted", { n: omitted })));
-			for (const code of data.parser_reasons || []) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			for (const code of new Set([
+				...data.parser_reasons || [],
+				...data.catalog_reasons || [],
+				data.cross_repository?.reason,
+				...data.cross_repository?.selection_reasons || []
+			].filter(Boolean))) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			if (data.projection_omitted_collections?.length) {
+				const names = data.projection_omitted_collections.map((code) => t("dep_collection_" + code) === "dep_collection_" + code ? t("ui_reason_generic") : t("dep_collection_" + code));
+				detailBody.append(h("p", {}, t("dep_omitted_collections", { names: names.join(" · ") })));
+			}
 			const files = h("div", { class: "dep-files" });
 			for (const file of data.files || []) {
 				const status = FILE_STATUS[file.status] ? t(FILE_STATUS[file.status]) : reasonText(t, file.status, true);
@@ -17252,11 +17340,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				}, h("span", {}, file.path || t("dep_dash")), h("span", {}, joinLabel([status, note]))));
 			}
 			for (const row of data.unreadable_paths || []) {
-				const path = typeof row === "string" ? row : row?.path;
+				const path = typeof row === "string" ? row : row?.path || row?.parent_path;
 				files.append(h("div", {
 					class: "dep-file",
 					"data-dep-file": path || ""
-				}, h("span", {}, path || t("dep_dash")), h("span", {}, t("dep_file_unreadable"))));
+				}, h("span", {}, path || t("dep_dash")), h("span", {}, joinLabel([t("dep_file_unreadable"), row?.reason ? reasonText(t, row.reason, true) : ""]))));
 			}
 			if (files.childNodes.length) detailBody.append(files);
 			if ((revisions?.revisions || []).length || revisions?.next_cursor) {

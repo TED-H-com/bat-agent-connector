@@ -88,7 +88,6 @@ export function dependencyDocument(project: DemoProject) {
     edge({n: 2, componentId: ids.api, key: ids.keys.httpx, relation: 'runtime', kind: 'runtime_library', version: '>=0.27', resolved: null, level: 'declared', basis: 'python_group', reason: 'lockfile_does_not_cover_component', refs: [ref(project, 'api/pyproject.toml', {line: 22})]}),
     edge({n: 3, componentId: ids.api, key: ids.keys.contract, relation: 'contract', kind: 'api_schema', version: '1', resolved: null, level: 'declared', basis: 'exact_published_package', reason: 'not_lockfile_dependency', refs: [ref(project, 'api/pyproject.toml', {line: 30})]}),
     edge({n: 4, componentId: ids.api, key: ids.keys.smtp, relation: 'runtime', kind: 'external_service', version: null, resolved: null, level: 'inferred', basis: 'same_ci_job', reason: 'not_lockfile_dependency', refs: [ref(project, '.github/workflows/api.yml', {line: 40, job_id: 'python'})]}),
-    edge({n: 5, componentId: ids.api, key: ids.keys.legacy, relation: 'reference', kind: 'runtime_library', version: null, resolved: null, level: 'declared', basis: 'owner_declaration', reason: 'owner_declaration', refs: [ref(project, 'api/pyproject.toml', {line: 4})]}),
     edge({n: 6, componentId: ids.web, key: ids.keys.vitest, relation: 'test', kind: 'build_test_toolchain', version: '^2.1.0', resolved: '2.1.4', level: 'verified', basis: 'workflow_step', refs: [ref(project, 'web/package.json', {line: 12}), ref(project, 'web/package-lock.json', {package: 'vitest'})]}),
     edge({n: 7, componentId: ids.web, key: ids.keys.vite, relation: 'build', kind: 'build_test_toolchain', version: '^5.4.0', resolved: '5.4.8', level: 'verified', basis: 'workflow_step', refs: [ref(project, 'web/package-lock.json', {package: 'vite'})]}),
     edge({n: 8, componentId: ids.web, key: ids.keys.react, relation: 'runtime', kind: 'runtime_library', version: '^18.3.0', resolved: '18.3.1', level: 'verified', basis: 'workflow_step', refs: [ref(project, 'web/package-lock.json', {package: 'react'})]}),
@@ -107,7 +106,7 @@ export function dependencyDocument(project: DemoProject) {
     capture: {revision_id: ids.revision, commit_sha: DEPENDENCY_COMMIT, captured_at: capturedAt, status: 'partial'},
     ...FRESHNESS, partial: true, reason: null, components: [api, web],
     dependencies: {
-      runtime_library: [deps.httpx, deps.legacy, deps.react],
+      runtime_library: [deps.httpx, deps.react],
       api_schema: [deps.contract],
       build_test_toolchain: [deps.pytest, deps.vitest, deps.vite],
       external_service: [deps.smtp],
@@ -126,7 +125,7 @@ export function dependencyDocument(project: DemoProject) {
     verification_hints: [pytestHint, vitestHint],
     parser_reasons: ['capture_budget', 'future_parser_code'], parser_notes: [],
     omitted_edges: 4, omitted_hints: 2, omitted_components: 1,
-    counts: {components: 2, dependencies: 8, edges: 8, declared: 1, basis: 'captured_revision', partial: true},
+    counts: {components: 2, dependencies: 7, edges: 7, declared: 1, basis: 'captured_revision', partial: true},
     maintenance_owner: null, maintenance_owner_reason: 'not_named_in_visible_policy',
     cross_repository: {status: 'bounded', complete: false},
     cross_repository_edges: [{
@@ -159,11 +158,14 @@ export function dependencyImpact(project: DemoProject, key: string) {
   const document = dependencyDocument(project);
   const base = {
     workspace_id: project.ids.workspaceId, dependency: key, capture: document.capture, ...FRESHNESS,
-    partial: true, coverage: 'captured_edges_only', declared: [], cross_repository: {status: 'bounded', complete: false},
+    partial: true, coverage: 'captured_edges_only', declared: document.declared.filter(row => row.dependency_key === key),
+    cross_repository: key === dependencyFixtureIds.keys.contract
+      ? {status: 'partial', complete: false, reason: 'selection_budget', selection_reasons: ['selection_budget', 'unreadable_manifest']}
+      : {status: 'bounded', complete: false},
   };
   const owner = document.edges.find(row => row.dependency_key === key);
-  if (!owner || key === dependencyFixtureIds.keys.legacy) {
-    return {...base, reason: 'dependency_not_observed', components: [], counts: {components: 0, basis: 'returned_components', partial: true}};
+  if (!owner) {
+    return {...base, reason: base.declared.length ? 'bounded_captured_graph' : 'dependency_not_observed', components: [], counts: {components: 0, basis: 'returned_components', partial: true}};
   }
   const component = document.components.find(row => row.component_id === owner.component_id);
   return {

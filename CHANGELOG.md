@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Count owner declarations throughout Dependencies and disclose bounded impact,
+  catalog gaps and declared-only results. Component inspectors name their dependencies;
+  Discuss with PM titles include the selected item and captured commit.
+
 - Preserve Dependencies keyboard focus across activation, live reads and inspector
   close in the matrix, graph and narrow list; expose valid selection semantics.
 

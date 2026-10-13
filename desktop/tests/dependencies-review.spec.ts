@@ -1,13 +1,13 @@
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
-import {dependencyDocument, dependencyFixtureIds} from './demo/dependencies.ts';
+import {dependencyDocument, dependencyFixtureIds, dependencyImpact} from './demo/dependencies.ts';
 import {demoProject} from './demo/project.ts';
 
 const ids = dependencyFixtureIds;
 type Document = ReturnType<typeof dependencyDocument>;
 
-async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boolean, projection?: (doc: Document) => unknown} = {}) {
+async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boolean, projection?: (doc: Document) => unknown, impact?: (doc: ReturnType<typeof dependencyImpact>) => unknown} = {}) {
   const locale = options.locale || 'en';
   const fixture = demoFixture({locale});
   let cursor = 0, ack = 0, failure = 0, impactReads = 0;
@@ -26,7 +26,10 @@ async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boo
       const doc = dependencyDocument(demoProject(locale));
       return {status: 200, data: options.projection ? options.projection(doc) : doc};
     }
-    if (url.pathname.endsWith('/dependencies/impact')) impactReads++;
+    if (url.pathname.endsWith('/dependencies/impact')) {
+      impactReads++;
+      if (options.impact) return {status: 200, data: options.impact(dependencyImpact(demoProject(locale), url.searchParams.get('dependency') || ''))};
+    }
     const result = await fixture.dispatch(input);
     if (options.manage && ['/capabilities', '/bootstrap'].includes(url.pathname)) {
       const caps = url.pathname === '/bootstrap' ? result.data.capabilities : result.data;
@@ -43,8 +46,10 @@ async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boo
   const entry = page.locator('[data-pm-view="dependencies"]');
   await expect(entry).toBeAttached();
   if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+  const read = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/dependencies'));
   await entry.click();
-  await expect(page.locator('[data-dependencies-meta]')).toBeVisible();
+  await (await read).finished();
+  await expect(page.locator('[data-dep-view] > [role=status]')).toBeEmpty();
   return {
     posts, fail: (status: number) => {failure = status;}, impacts: () => impactReads,
     event: async () => {cursor++; await expect.poll(() => ack, {timeout: 15_000}).toBe(cursor);},
@@ -104,4 +109,86 @@ test('SF-6 and M1: valid selection semantics and graph keyboard follows visual o
   await expect(nodes.first()).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(nodes.first()).toHaveAttribute('aria-pressed', 'true');
+});
+
+for (const locale of ['en', 'zh-TW'] as const) test.describe(locale, () => {
+  test.use({locale: locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
+  test(`BLOCKER-4: component facts and named dependency evidence ${locale}`, async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    await mount(page, {locale});
+    await page.locator(`[data-dep-focus="row:${ids.api}"]`).click();
+    const panel = page.locator('[data-dep-inspector]');
+    await expect(panel.getByRole('heading', {name: locale === 'en' ? 'Dependencies' : '技術相依', exact: true})).toBeVisible();
+    await expect(panel).not.toContainText(locale === 'en' ? 'Affected components' : '受影響元件');
+    await expect(panel.locator('[data-dep-component-facts]')).toContainText('api/pyproject.toml');
+    const pytest = panel.locator(`[data-dep-dependency-row="${ids.keys.pytest}"]`);
+    await expect(pytest).toContainText('pytest');
+    await expect(pytest).toContainText('8.3.2');
+    await expect(pytest).toContainText(locale === 'en' ? 'Test' : '測試');
+    await expect(pytest).toContainText(locale === 'en' ? 'Verified' : '已核對');
+    await expect(pytest.locator('dt')).toHaveCount(1);
+    await expect(pytest).toContainText('api/uv.lock @ c0ffee1');
+  });
+
+  test(`BLOCKER-5: declarations count and bounded impact explains coverage ${locale}`, async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const harness = await mount(page, {
+      locale,
+      projection: doc => ({...doc, edges: doc.edges.filter(edge => edge.basis !== 'owner_declaration')}),
+      impact: doc => ({...doc, reason: 'bounded_captured_graph', partial: true,
+        declared: doc.dependency === ids.keys.legacy ? dependencyDocument(demoProject(locale)).declared : [],
+        cross_repository: {status: 'partial', complete: false, reason: 'selection_budget', selection_reasons: ['selection_budget', 'unreadable_manifest']}}),
+    });
+    await expect(page.locator('[data-dep-relation=reference]')).toHaveText(locale === 'en' ? 'Reference 1' : '參考 1');
+    await expect(page.locator('[data-dep-evidence=declared]')).toHaveText(locale === 'en' ? 'Declared 3' : '已宣告 3');
+    await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.legacy}"]`).click();
+    const affected = page.locator('[data-dep-affected]');
+    await expect(affected.locator('[data-status=partial]')).toBeVisible();
+    await expect(affected).toContainText('legacy-mailer');
+    await expect(affected).toContainText('membership-api');
+    await expect(page.locator('[data-dep-inspector]')).not.toContainText(locale === 'en' ? '0 loaded' : '已載入 0');
+    await expect(affected).toContainText(locale === 'en' ? 'Loaded graph only' : '僅已載入的圖');
+    await expect(affected).toContainText(locale === 'en' ? 'Peer selection stopped early' : '跨儲存庫選取提前結束');
+    await expect(affected).toContainText(locale === 'en' ? 'Manifest unreadable' : '無法讀取清單檔');
+    await expect(affected).not.toContainText(/selection_budget|unreadable_manifest/);
+    expect(harness.posts).toEqual([]);
+  });
+
+  test(`SF-4: capture details explain catalog gaps and unreadable parent path ${locale}`, async ({page}) => {
+    await mount(page, {locale, projection: doc => ({...doc, catalog_reasons: ['tree_limit', 'file_limit', 'component_limit'],
+      projection_omitted_collections: ['files'], cross_repository: {status: 'partial', complete: false, reason: 'selection_budget'},
+      unreadable_paths: [{kind: 'entry', path: null, parent_path: 'services/secret-submodule', reason: 'unsupported_tree_entry'}]})});
+    await page.locator('[data-dep-details] > summary').click();
+    const details = page.locator('[data-dep-details]');
+    await expect(details).toContainText(locale === 'en' ? 'Tree limit reached' : '已達目錄上限');
+    await expect(details).toContainText(locale === 'en' ? 'File limit reached' : '已達檔案上限');
+    await expect(details).toContainText(locale === 'en' ? 'Component limit reached' : '已達元件上限');
+    await expect(details).toContainText(locale === 'en' ? 'Omitted collections: Files' : '未列入的資料：檔案清單');
+    await expect(details).toContainText(locale === 'en' ? 'Peer selection stopped early' : '跨儲存庫選取提前結束');
+    await expect(details.locator('[data-dep-file="services/secret-submodule"]')).toContainText(locale === 'en' ? 'Unsupported tree entry' : '不支援的目錄項目');
+  });
+
+  test(`SF-8: discussion names dependency or component and captured commit ${locale}`, async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    await mount(page, {locale});
+    for (const [focus, name] of [[`col:${ids.keys.pytest}`, 'pytest'], [`row:${ids.api}`, 'membership-api']]) {
+      await page.locator(`[data-dep-matrix] [data-dep-focus="${focus}"]`).click();
+      const link = page.locator('[data-dep-discuss]');
+      await expect(link).toHaveText(locale === 'en' ? 'Discuss with PM' : '與 PM 討論');
+      const params = new URLSearchParams((await link.getAttribute('href'))!.split('?')[1]);
+      expect(params.getAll('ref')).toEqual([]);
+      expect(params.get('title')).toContain(name);
+      expect(params.get('title')).toContain('c0ffee1');
+    }
+  });
+});
+
+test('SF-1: uncaptured inventory has no partial badge, zero chips or freshness claim', async ({page}) => {
+  await mount(page, {projection: doc => ({...doc, capture: {revision_id: null, status: 'unknown'}, reason: 'not_captured',
+    components: [], dependencies: {}, edges: [], declared: [], counts: null})});
+  await expect(page.locator('.ui-page-header [data-status=partial]')).toHaveCount(0);
+  await expect(page.locator('[data-dep-relation=test]')).toHaveText('Test');
+  await page.locator('[data-dep-details] > summary').click();
+  await expect(page.locator('[data-dep-freshness]')).toHaveCount(0);
+  await expect(page.locator('[data-dep-view]')).toContainText('Not captured yet');
 });
