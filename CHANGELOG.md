@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
+  lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
+  immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
+  current membership and source withdrawal; capture never executes repository code. Lockfile
+  versions count as verified only for components the lockfile covers, unsupported fields make a
+  capture partial, and freshness stays unknown until a repository head is observed.
+
 - Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
   with adopted-requirement progress, explicit blockers, decisions, schedule/quality
   deviations, visible delivery evidence and bounded source coverage. Saved reports

@@ -7,6 +7,9 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_dependencies_get": ("workspace_id",),
+    "pm_dependencies_revisions_list": ("workspace_id", "after", "limit"),
+    "pm_dependencies_impact_get": ("workspace_id", "dependency"),
     "pm_overview_get": ("workspace_id",),
     "pm_resources_get": ("workspace_id", "since", "until", "tz"),
     "pm_schedule_get": ("workspace_id", "after", "limit"),
@@ -120,6 +123,13 @@ def read(ops, principal, method, params):
     if method == "pm_overview_get":
         from .pm_overview import read as overview
         return overview(ops, principal, workspace_id)
+    if method in {"pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get"}:
+        from . import pm_dependency_reads as dependencies
+        if method == "pm_dependencies_get":
+            return dependencies.get(ops, principal, workspace_id)
+        if method == "pm_dependencies_impact_get":
+            return dependencies.impact(ops, principal, workspace_id, dependency=params.get("dependency"))
+        return dependencies.revisions(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
     if method == "pm_resources_get":
         from .pm_resources import read as resources
         return resources(ops, principal, workspace_id, since=params.get("since"), until=params.get("until"),
