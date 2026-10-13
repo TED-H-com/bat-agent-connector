@@ -1,5 +1,6 @@
 // All five Brief sections render one immutable snapshot, filtered for current source access.
 import {briefExport} from './pm-brief-export.js';
+import {labelSegment} from './label-text.js';
 import {qualityFact} from './pm-quality-projections.js';
 export function projectBrief({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, canRead=()=>true}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -22,7 +23,12 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error));}
   const stamp = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
-  const readable = (prefix, value) => {const key = prefix + value, text = t(key); return text === key ? String(value) : text;};
+  const readable = (prefix, value) => {
+    const present = labelSegment(value);
+    if (!present) return t('pm_label_unknown');
+    const key = prefix + present, text = t(key);
+    return text === key ? present : text;
+  };
   function render(data) {
     snapshot = check(data).snapshot;
     view.replaceChildren();status.replaceChildren();

@@ -1,4 +1,5 @@
 // Publication uses the existing central operation; only explicitly entered text is public.
+import {firstLabel, joinLabel} from './label-text.js';
 export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/issue-mappings`;
   const id=/^pmim_[0-9a-f]{32}$/,revision=/^pmir_[0-9a-f]{32}$/,digest=/^[0-9a-f]{64}$/;
@@ -10,6 +11,11 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
     h('div',{class:'actions'},h('h3',{},t('pmi_title')),refreshButton),h('p',{class:'muted'},t('pmi_intro')),status,catalog,more,selected,publication,detail);
   const valid=ticket=>{alive();return element.isConnected&&ticket===serial;};
   const hidden=()=>h('input',{type:'hidden'}),fold=(label,...children)=>h('details',{},h('summary',{},t(label)),...children);
+  // relation.repository is the stored owner/name. A published issue copies the same name onto issue.repository.
+  const repositoryName=doc=>firstLabel(doc?.relation?.repository,doc?.issue?.repository);
+  const issueNumber=doc=>Number.isSafeInteger(doc?.issue?.number)?`#${doc.issue.number}`:'';
+  const stateLabel=state=>{const key='pmi_'+state,text=t(key);return text===key?'':text;};
+  const trackedIssue=(doc,state)=>joinLabel([repositoryName(doc),issueNumber(doc),state]);
   const checkScope=value=>{if(value?.version!==1||value.workspace_id!==workspaceId)throw Error(t('pmi_invalid'));return value;};
   const checkRow=row=>{
     if(!id.test(row?.mapping_id)||!revision.test(row.revision_id)||!digest.test(row.document_digest)||row.workspace_id!==workspaceId
@@ -109,7 +115,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
   }
   function renderDetail(record){
     const row=record.current,doc=row.document;
-    detail.replaceChildren(h('h4',{},`${doc.relation.repository} · #${doc.issue.number}`),h('p',{},t('pmi_'+doc.state)),
+    detail.replaceChildren(h('h4',{},trackedIssue(doc)),h('p',{},stateLabel(doc.state)||t('pm_label_unknown')),
       h('p',{class:'muted'},t('pmi_not_done')),
       fold('pmi_history',...record.revisions.map(item=>{
         const d=item.document,selected=d.selected;
@@ -132,7 +138,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
     renderDetail(data);
   }
   function renderCatalog(){catalog.replaceChildren(...rows.map(row=>h('button',{type:'button',class:'secondary','aria-pressed':row.mapping_id===selectedId,
-    onclick:()=>void selectMapping(row.mapping_id)},`${row.document.relation.repository} · #${row.document.issue.number} · ${t('pmi_'+row.document.state)}`)));
+    onclick:()=>void selectMapping(row.mapping_id)},trackedIssue(row.document,stateLabel(row.document.state)))));
     if(!rows.length)catalog.append(h('p',{class:'muted'},t('pmi_empty')));
     if(filtered)catalog.append(h('p',{class:'muted'},t('pmi_filtered')));
   }
