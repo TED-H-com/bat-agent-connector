@@ -561,8 +561,11 @@ Tool disclosures preserve the reader's toggle until the tool changes state.
 Approval prompts sit above the composer and keep their original operation keys.
 Their preview is a wrapping block, separate from transcript rows. The composer
 occupies at most half the viewport; questions scroll inside it while Answer and
-Send remain reachable. The transcript has a 160px minimum and the main Session
-region scrolls as a safety net. A manual session has one plain read-only line. The
+Send remain reachable. On mobile, a pending prompt uses a compact reply field so
+the question scroller can show a whole answer input. Without a pending prompt, the
+reply composer keeps its natural height so Send stays visible before input focus.
+The transcript has a 160px minimum and the main Session region scrolls as a safety
+net. A manual session has one plain read-only line. The
 last send is one short line; the operation id stays in Details. On a narrow window
 the info and composer collapse icons sit on the caption row and the queue row.
 

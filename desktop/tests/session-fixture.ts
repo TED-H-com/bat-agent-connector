@@ -100,4 +100,3 @@ export function checkpointHost(s: Awaited<ReturnType<typeof openSession>>, sessi
     return undefined;
   };
 }
-

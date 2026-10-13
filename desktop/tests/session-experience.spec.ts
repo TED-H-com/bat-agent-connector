@@ -227,6 +227,12 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
         expect(geometry.preview?.display).toBe('block');
         expect(geometry.preview!.width).toBeGreaterThan(200);
         await expect(page.locator('.session-asking-preview')).toHaveText(permission.input_preview);
+      } else {
+        // A pointer can scroll to the last question and use the whole answer field.
+        await page.locator('.session-asking-content').hover();
+        await page.mouse.wheel(0, 1200);
+        await expect(page.locator('.session-question input').last()).toBeInViewport({ratio: 1});
+        await expect(send).toBeInViewport({ratio: 1});
       }
       await s.context.close();
     }
@@ -258,6 +264,7 @@ test('the reader stays pinned after their own send and after resizing', async ({
   const distance = () => scroller.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight);
   await expect(scroller.locator('.msg').first()).toBeVisible();
   await expect.poll(distance).toBeLessThanOrEqual(1);
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeInViewport({ratio: 1});
   await page.locator('#workspace-message-input textarea').fill('Please also cover the lockout copy.');
   await page.getByRole('button', {name: 'Send', exact: true}).click();
   await expect(scroller).toContainText('Please also cover the lockout copy.');
@@ -267,6 +274,7 @@ test('the reader stays pinned after their own send and after resizing', async ({
   for (const [width, height] of [[768, 900], [390, 844]]) {
     await page.setViewportSize({width, height});
     await expect.poll(distance).toBeLessThanOrEqual(1);
+    await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeInViewport({ratio: 1});
   }
   await s.context.close();
 });

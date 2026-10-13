@@ -58,6 +58,7 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-workspace .conversation-toolbar { min-height: 0; margin: 0; }
 .session-workspace .conversation-toolbar:not(:has([role="status"]:not(:empty))) { height: 0; }
 .session-workspace .workspace-composer { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; max-height: 50dvh; overflow: auto; background: var(--bg); margin-top: var(--space-2); }
+.session-workspace .workspace-composer:not(:has(.session-asking)) { flex: none; }
 .session-workspace #workspace-message-input { flex: none; }
 .session-workspace .session-asking-region { display: flex; flex: 1 1 auto; min-height: 0; }
 .session-asking-content { min-height: 0; overflow: auto; }
@@ -123,6 +124,7 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
   .session-workspace .msg:focus-within .message-copy { opacity: 1; }
 }
 @media (max-width: 800px) {
+  .session-workspace .workspace-composer:has(.session-asking) textarea { min-height: 44px; height: 44px; }
   .session-workspace .message-tool > summary,
   .session-workspace .workspace-composer .ui-button,
   .session-workspace .message-copy { min-height: 44px; }

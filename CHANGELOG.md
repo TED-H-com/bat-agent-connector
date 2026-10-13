@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Keep Session reply controls visible before focusing the input and after resizing.
+  Complete the Traditional Chinese execution-limit explanations.
+
 - Preserve Session return locations through reload and discussion drafts. Project
   inspector links carry their view, and Discuss returns to the exact session.
 
