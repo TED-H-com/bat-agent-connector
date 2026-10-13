@@ -143,6 +143,59 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
       expect(f.state.writes[0].body.params.title).toBe('Original private plan draft');
     }
   });
+  test('planning refresh keeps an opened information disclosure and does not expand one the reader closed', async({page}) => {
+    const f = planning();
+    let reads = 0;
+    await mountConversation(page, native, async input => {
+      if (new URL(input.path, 'http://fixture').pathname === `/pm/workspaces/${workspaceId}/threads/${threadId}`) reads += 1;
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute);
+    await openThreadTab(page, 'inputs');
+    const information = page.locator('[data-pm-information]');
+    const addInput = page.locator('[data-pm-add-input]');
+    const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+    const refreshThread = async () => {
+      const before = reads;
+      await refresh.click();
+      await expect.poll(() => reads).toBeGreaterThan(before);
+      await expect(refresh).toBeEnabled();
+    };
+    await expect(information).toHaveAttribute('open', '');
+    await addInput.locator(':scope > summary').click();
+    await expect(addInput.getByLabel('Statement or question', {exact: true})).toBeVisible();
+    await refreshThread();
+    await expect(information).toHaveAttribute('open', '');
+    await expect(addInput).toHaveAttribute('open', '');
+    await expect(addInput.getByLabel('Statement or question', {exact: true})).toBeVisible();
+    await addInput.locator(':scope > summary').click();
+    await expect(addInput).not.toHaveAttribute('open', '');
+    await refreshThread();
+    await expect(information).toHaveAttribute('open', '');
+    await expect(addInput).not.toHaveAttribute('open', '');
+    const revise = action(page, 'pm.thread.plan.revise');
+    await openThreadTab(page, 'plan');
+    await page.locator('[data-pm-planning-revision] > summary').click();
+    await revise.getByLabel('Why update this direction?', {exact: true}).fill('Keep this pending request without reopening a closed section.');
+    f.state.lost = true;
+    await revise.getByRole('button', {name: 'Save updated Planning draft', exact: true}).click();
+    await expect(revise).toContainText('Reply unavailable');
+    await openThreadTab(page, 'inputs');
+    await information.locator(':scope > summary').click();
+    await expect(information).not.toHaveAttribute('open', '');
+    await refreshThread();
+    await expect(information).not.toHaveAttribute('open', '');
+    await information.locator(':scope > summary').click();
+    await openThreadTab(page, 'plan');
+    await expect(revise.getByRole('button', {name: 'Check original request', exact: true})).toBeVisible();
+    await page.reload();
+    await expect(page.locator('[data-discussion-tab=inputs]')).toBeVisible();
+    await expect(information).toHaveAttribute('open', '');
+    await information.locator(':scope > summary').click();
+    await refreshThread();
+    await expect(information).not.toHaveAttribute('open', '');
+    expect(f.state.writes).toHaveLength(1);
+  });
   test('unfinished plan edits survive refresh and readers cannot create or adopt revisions', async({page}) => {
     const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan');
     await page.locator('[data-pm-revision-editor] > summary').click();

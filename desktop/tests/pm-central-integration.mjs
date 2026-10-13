@@ -8,6 +8,13 @@ import {homedir} from 'node:os';
 import assert from 'node:assert/strict';
 import {chromium, expect as baseExpect} from '@playwright/test';
 const expect = baseExpect.configure({timeout: 30000});
+// Open a disclosure idempotently; saved preferences can already have it open.
+async function openDisclosure(summary) {
+  const details = summary.locator('xpath=ancestor-or-self::details[1]');
+  await expect(summary).toBeVisible();
+  if (!await details.evaluate(node => node.open)) await summary.click();
+  await expect(details).toHaveJSProperty('open', true);
+}
 const source = resolve('..'), backend = resolve(process.env.BATC_PM_BACKEND || source);
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
@@ -84,7 +91,7 @@ try {
   assert.equal(typeof message.created_at, 'number');
   await expect(page.locator('.pm-note time')).toHaveAttribute('datetime', new Date(message.created_at * 1000).toISOString());
   await openThreadTab(page,'inputs');
-  await page.locator('[data-pm-add-input] summary').click();
+  await openDisclosure(page.locator('[data-pm-add-input] > summary'));
   const input = page.locator('[data-pm-action="pm.input.record"]');
   for (const [slot, value] of [['problem', 'Make the first action visible'], ['alternatives', 'Offer a guided tour later']]) {
     await input.getByLabel('Topic', {exact:true}).selectOption(slot);
@@ -95,7 +102,7 @@ try {
   }
   const original = (await read()).inputs.find(item => item.slot === 'problem');
   await page.locator(`[data-input-id="${original.input_id}"] input[type=checkbox]`).check();
-  await page.locator(`[data-input-id="${original.input_id}"] summary`).click();
+  await openDisclosure(page.locator(`[data-input-id="${original.input_id}"] summary`));
   const confirm = page.locator(`[data-input-id="${original.input_id}"] [data-pm-action="pm.input.confirm"]`);
   await confirm.getByLabel('Why this statement is confirmed', {exact:true}).fill('The owner selected this outcome');
   await confirm.getByRole('button', {name:'Confirm statement', exact:true}).click();
@@ -113,7 +120,7 @@ try {
   const data = await read(); assert.equal(data.thread.mode, 'planning'); assert.equal(data.draft.execution_authorized, false);
   assert.equal(data.draft.adopted, false); assert.deepEqual(data.draft.selected_input_ids, [confirmed.input_id]);
   assert.equal(data.draft.candidate_inputs.length, 1); assert.equal(data.messages.length, 1);
-  await page.locator('[data-pm-revision-editor] > summary').click();
+  await openDisclosure(page.locator('[data-pm-revision-editor] > summary'));
   await page.getByLabel('Plan title', {exact:true}).fill('First useful action');
   await page.getByRole('button', {name:'Save plan revision', exact:true}).click();
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
@@ -129,7 +136,8 @@ try {
   assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
   // Inputs retain their own tab while the plan and immutable revisions remain selected.
   await openThreadTab(page,'inputs');
-  if (!await page.locator('[data-pm-add-input]').evaluate(node => node.open)) await page.locator('[data-pm-add-input] > summary').click();
+  await openDisclosure(page.locator('[data-pm-information] > summary'));
+  await openDisclosure(page.locator('[data-pm-add-input] > summary'));
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
   await input.getByRole('button', {name:'Save input', exact:true}).click();
@@ -137,7 +145,7 @@ try {
   const later = (await read()).inputs.find(item=>item.slot==='finance');
   await page.locator(`[data-input-id="${later.input_id}"] input[type=checkbox]`).check();
   await openThreadTab(page,'plan');
-  await page.locator('[data-pm-planning-revision] > summary').click();
+  await openDisclosure(page.locator('[data-pm-planning-revision] > summary'));
   const revise = page.locator('[data-pm-action="pm.thread.plan.revise"]');
   await revise.getByLabel('Why update this direction?', {exact:true}).fill('Include the new financial question without treating it as settled.');
   await revise.getByRole('button', {name:'Save updated Planning draft', exact:true}).click();

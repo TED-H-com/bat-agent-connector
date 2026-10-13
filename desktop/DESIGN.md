@@ -269,6 +269,10 @@ context packages, meetings, follow-ups and Brief remain in the thread panel.
 Proposal titles replace raw IDs in the picker; plan name, revision and status replace
 commit digests in the reading surface. Identifiers and copyable digests are in Details.
 All thread tools use shared chevron disclosures, including retained lazy controls.
+Thread disclosures have connection/principal/workspace/thread keys and keep the
+reader’s choices across live reads and Refresh. A pending original request opens
+Inputs once when the thread is first shown, including after reload, and later
+reads never re-expand a reader-closed disclosure.
 The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
 pills and a Compare action; explanatory planning copy is inside Details.
 

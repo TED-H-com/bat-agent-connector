@@ -236,12 +236,16 @@ async def test_lost_git_ack_and_lost_parent_receipt_recover_original_adoption(pr
     assert git(w["plan"]["worktree_path"], "rev-list", "--count", w["sha"] + "..HEAD") == "1"
 
 
-async def test_http_rpc_mcp_share_exact_read_contract_and_bounded_queries(proposal_world, monkeypatch):
+@pytest.mark.parametrize('adopted', [False, True])
+async def test_http_rpc_mcp_share_exact_read_contract_and_bounded_queries(proposal_world, monkeypatch, adopted):
     from bat_agent_connector import mcp_server
     from tests.test_api_v1 import http, token
     from tests.test_pm_run_api import unpack
     w, d = proposal_world, proposal_world["d"]
     proposal = await proposed(w)
+    if adopted:
+        done = await complete(w, d.ops.create(OWNER, **adoption_request(w, proposal))[0])
+        assert done['status'] == 'succeeded', done
     auth = token(d, OWNER.actor, "observe")
     monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{w['port']}/rpc")
     monkeypatch.setenv("BATC_API_TOKEN", auth)
@@ -282,14 +286,162 @@ def test_removed_commitments_require_explicit_original_ids_and_cycles_are_reject
     assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "needs_review"
 
 
-def assert_adoptability(w, proposal, expected, reason):
+def assert_adoptability(w, proposal, expected, reason, revision_id=None, *, principal=OWNER):
     ops = w['d'].ops
-    view = proposals.get_proposal(ops, OWNER, w['workspace_id'], proposal['proposal_id'])['proposal']
-    listed = proposals.list_proposals(ops, OWNER, w['workspace_id'])['proposals']
+    view = proposals.get_proposal(ops, principal, w['workspace_id'], proposal['proposal_id'])['proposal']
+    listed = proposals.list_proposals(ops, principal, w['workspace_id'])['proposals']
     row = next(item for item in listed if item['proposal_id'] == proposal['proposal_id'])
     for item in (view, row):
         assert item['adoptable'] is expected
         assert item['adoptable_reason'] == reason
+        assert item['adopted_revision_id'] == revision_id
+    assert row['title'] == (view['document']['title'] if view['document'] is not None else None)
+    assert not {'document', 'raw_reply', 'context', 'provenance'} & row.keys()
+
+
+async def test_proposal_list_batches_adoption_evidence(proposal_world, monkeypatch):
+    w, ops = proposal_world, proposal_world['d'].ops
+    candidates = [await proposed(w) for _ in range(20)]
+    done = await complete(w, ops.create(OWNER, **adoption_request(w, candidates[0]))[0])
+    assert done['status'] == 'succeeded', done
+
+    def full_read(*args, **kwargs):
+        pytest.fail('A proposal list must not reconstruct full proposal views')
+    monkeypatch.setattr(proposals, 'get_proposal', full_read)
+    monkeypatch.setattr(proposals, '_view', full_read)
+    statements = []
+    ops.db.set_trace_callback(statements.append)
+    try:
+        page = proposals.list_proposals(ops, OWNER, w['workspace_id'], limit=20)
+    finally:
+        ops.db.set_trace_callback(None)
+    print(f'20-row proposal list (one adopted): {len(statements)} SQL statements')
+    assert len(page['proposals']) == 20 and page['next_cursor'] is None
+    assert statements[0] == 'BEGIN' and 'BEGIN IMMEDIATE' not in statements
+    # Previously 406 without adoption evidence; one page lookup plus visibility
+    # for the successful parent stays below 500, not one receipt query per row.
+    assert len(statements) < 500
+    lookups = [sql for sql in statements if 'FROM operations o LEFT JOIN pm_plan_adoptions' in sql]
+    assert len(lookups) == 1
+    query_plan = ops.db.execute('EXPLAIN QUERY PLAN ' + lookups[0]).fetchall()
+    assert any('USING INDEX pm_conversation_adopted_proposal' in row[3] for row in query_plan)
+    for index, row in enumerate(page['proposals']):
+        assert row['title'] == candidates[index]['document']['title']
+        assert row['adoptable'] is False
+        assert row['adoptable_reason'] == ('adopted' if index == 0 else 'plan_head_changed')
+        assert row['adopted_revision_id'] == (done['result']['revision_id'] if index == 0 else None)
+
+
+@pytest.mark.parametrize('receipt_source', ['parent_result', 'final_child'])
+async def test_adopted_proposal_keeps_its_receipt_after_rename_and_new_plan(proposal_world, receipt_source):
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    request = adoption_request(w, proposal)
+    done = await complete(w, ops.create(OWNER, **request)[0])
+    assert done['status'] == 'succeeded', done
+    revision_id = done['result']['revision_id']
+    assert pm_plans.accepted_plan(ops, OWNER, w['workspace_id'])['plan']['revision_id'] == revision_id
+    if receipt_source == 'final_child':
+        # A recovered/older parent may lack the result; the original final plan
+        # child's immutable receipt still records the accepted revision.
+        ops.db.execute('UPDATE operations SET result=NULL WHERE operation_id=?', (done['operation_id'],))
+    assert_adoptability(w, proposal, False, 'adopted', revision_id)
+    await plans.act(w, 'pm.thread.rename', {'title': 'Adopted direction / 已採用的方向'})
+    assert_adoptability(w, proposal, False, 'adopted', revision_id)
+    with pytest.raises(OperationError, match='VERSION_CONFLICT'):
+        ops.create(OWNER, **{**request, 'idempotency_key': uuid.uuid4().hex})
+    newer = await proposed(w)
+    next_done = await complete(w, ops.create(OWNER, **adoption_request(w, newer))[0])
+    assert next_done['status'] == 'succeeded', next_done
+    assert next_done['result']['revision_id'] != revision_id
+    assert pm_plans.head(ops.db, w['workspace_id'])['accepted_revision_id'] == next_done['result']['revision_id']
+    assert_adoptability(w, proposal, False, 'adopted', revision_id)
+
+
+@pytest.mark.parametrize('status', ['failed', 'cancelled'])
+async def test_unsuccessful_adoption_does_not_mark_proposal_adopted(proposal_world, status):
+    from dataclasses import replace
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+
+    async def fail(ctx):
+        raise OperationError('FIXTURE_FAILED', 'Fixture failed before any child effect', 422)
+    ops.actions[proposals.ADOPT] = replace(ops.actions[proposals.ADOPT], run=fail)
+    parent = ops.create(OWNER, **adoption_request(w, proposal))[0]
+    if status == 'cancelled':
+        ops.cancel(OWNER, parent['operation_id'])
+    done = await complete(w, parent)
+    assert done['status'] == status, done
+    assert_adoptability(w, proposal, True, None)
+
+
+async def test_running_adoption_even_with_final_child_receipt_is_not_adopted(proposal_world):
+    from dataclasses import replace
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    original = ops.actions[proposals.ADOPT]
+    observed = set()
+
+    async def inspect(ctx):
+        assert ops.get(ctx.operation_id)['status'] == 'running'
+        accepted = pm_plans.head(ops.db, w['workspace_id'])['accepted_revision_id']
+        if accepted:
+            observed.add('final_child')
+            assert_adoptability(w, proposal, False, 'plan_head_changed')
+        elif ctx.op['attempts'] == 1:
+            observed.add('before_children')
+            assert_adoptability(w, proposal, True, None)
+        return await original.run(ctx)
+    ops.actions[proposals.ADOPT] = replace(original, run=inspect)
+    done = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
+    assert done['status'] == 'succeeded', done
+    assert observed == {'before_children', 'final_child'}
+    assert_adoptability(w, proposal, False, 'adopted', done['result']['revision_id'])
+
+
+@pytest.mark.parametrize('withdrawal', ['hidden', 409, 413])
+async def test_hidden_adoption_is_withdrawn_for_second_principal(proposal_world, monkeypatch, withdrawal):
+    from bat_agent_connector import pm_access, pm_workspace
+    from bat_agent_connector.api_auth import Principal
+    from tests.test_pm_workspace import member
+    w, ops = proposal_world, proposal_world['d'].ops
+    reader = Principal('proposal-reader', frozenset({'observe'}))
+    workspace = pm_workspace.get_workspace(ops.db, OWNER, w['workspace_id'])
+    await member(ops, workspace, reader.actor, 'reader', who=OWNER)
+    proposal = await proposed(w)
+    done = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
+    assert done['status'] == 'succeeded', done
+    revision_id = done['result']['revision_id']
+    assert_adoptability(w, proposal, False, 'adopted', revision_id, principal=reader)
+    visible = pm_access.visible
+    def withdrawn(db, principal, op):
+        if principal.actor == reader.actor and op['operation_id'] == done['operation_id']:
+            if withdrawal == 'hidden':
+                return False
+            raise OperationError('SOURCE_LIMIT', 'Fixture source limit', withdrawal)
+        return visible(db, principal, op)
+    monkeypatch.setattr(pm_access, 'visible', withdrawn)
+    assert_adoptability(w, proposal, False, 'plan_head_changed', principal=reader)
+    assert_adoptability(w, proposal, False, 'adopted', revision_id)
+
+
+async def test_invalid_proposal_keeps_reason_and_null_list_title_after_plan_changes(proposal_world):
+    w, ops = proposal_world, proposal_world['d'].ops
+    original_reply = w['settings']['raw_reply']
+    w['settings']['raw_reply'] = json.dumps({'title': 'Unvalidated title must not appear'})
+    invalid = await proposed(w)
+    assert_adoptability(w, invalid, False, 'invalid_proposal')
+    w['settings']['raw_reply'] = original_reply
+    valid = await proposed(w)
+    assert_adoptability(w, valid, True, None)
+    done = await complete(w, ops.create(OWNER, **adoption_request(w, valid))[0])
+    assert done['status'] == 'succeeded', done
+    assert_adoptability(w, invalid, False, 'invalid_proposal')
+    # Invalid-document precedence also wins if an inconsistent adoption receipt
+    # were supplied; no unvalidated reply becomes a plan through a read.
+    assert proposals.adoptability(ops.db, invalid, invalid['context'],
+        adoption={'revision_id': done['result']['revision_id']}) == {
+            'adoptable': False, 'adoptable_reason': 'invalid_proposal', 'adopted_revision_id': None}
 
 
 @pytest.mark.parametrize('renames', [1, 105])

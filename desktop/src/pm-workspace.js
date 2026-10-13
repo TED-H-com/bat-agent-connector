@@ -46,10 +46,6 @@ const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].i
 // A remounted form can recover an acknowledged ID without resending an unknown
 // POST. Notifications contain no result; the active form reads with current access.
 const receiptSubscribers = new Map();
-// Only disclosure preferences survive a same-principal remount. Facts are always
-// removed and reread after an access reset; drafts retain their existing namespace.
-const threadDisclosures = new Map();
-const threadDisclosureSelectors = ['[data-pm-information]', '[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]', '[data-pm-revision-editor]'];
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
@@ -215,7 +211,6 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 }
 
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false}) {
-  if (threadId) h = discussionDom(h);
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
@@ -227,7 +222,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let sendHandoff = null;
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   if (threadId === 'new' && /^pmt_[0-9a-f]{32}$/.test(sendHandoff?.threadId)) {threadId = sendHandoff.threadId; history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);}
-  let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null, titleView = null;
+  let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
   const threadRows = h('div', {class: 'pd-thread-rows'});
   const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
   const backLink = () => {
@@ -240,7 +235,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (origin === 'overview' && source.report) Object.assign(viewState(namespace, workspaceId, 'overview'), {snapshotId: source.report, mode: 'saved'});
     }}, icon('chevron-left'), t('pd_back', {view: t('ui_' + origin)}));
   };
-  const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
+  if (threadId) h = discussionDom(h, JSON.stringify([namespace, workspaceId, threadId]));
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
   const permitted = decide => loaded && Boolean(workspace) && (caps()?.scopes?.includes('admin')
     || (decide ? workspace.membership?.role === 'owner' : ['owner', 'contributor'].includes(workspace.membership?.role)));
@@ -702,7 +697,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const information = h('details', {'data-pm-information': '', open: true}, h('summary', {}, t('pm_information')), permissions, facts,
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
       );
-      informationPanel = information;
       const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext, threadDetails);
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
@@ -721,19 +715,18 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         analysis: proposalReview?.composer(text) || nativeAnalysis?.composer(text)});
       column.append(composer);
       content.append(h('div', {class: 'pm-thread-layout'}, column, discussionTools.home));
-      const disclosures = threadDisclosures.get(disclosureKey);
-      for (const selector of threadDisclosureSelectors) {
-        const element = content.querySelector(selector);
-        if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
+      // Open recovery once per thread mount/reload. Later reads preserve the
+      // reader's tab and keyed disclosure choices, even while the intent is pending.
+      if (!threadState.inputsInitialized && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) {
+        information.open = true; discussionTools.select('inputs');
       }
+      threadState.inputsInitialized = true;
     }
     if (!renameForm.locked() && document.activeElement !== threadTitle && !threadTitle.value) threadTitle.value = thread.title;
     titleView.update(thread.title);
     mode.textContent = discussionLabel(t, 'pm_mode_', thread.mode);
     boundContext.replaceChildren(...discussionContext(t, thread.context, {limit: 3, onMore: () => discussionTools.open('context')}));
     panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [h('p', {class: 'muted'}, t('pd_no_context'))]));
-    // A pending original request stays discoverable after a reload or mode change.
-    if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) informationPanel.open = true;
     discussionHint.textContent = '';
     const transcript = notes.closest('.pd-transcript');
     const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -1034,15 +1027,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const dispose = () => {
     uiState.listScroll = workspaceList.scrollTop;
     threadState.scroll = content.querySelector('.pd-transcript')?.scrollTop || 0;
-    if (threadId && mountedThread === threadId) {
-      const disclosures = new Map();
-      for (const selector of threadDisclosureSelectors) {
-        const element = content.querySelector(selector);
-        if (element) disclosures.set(selector, element.open);
-      }
-      threadDisclosures.delete(disclosureKey); threadDisclosures.set(disclosureKey, disclosures);
-      if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
-    }
     disposed = true; discussionTools?.dispose(); sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     brief?.dispose?.();traceability?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
     proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();

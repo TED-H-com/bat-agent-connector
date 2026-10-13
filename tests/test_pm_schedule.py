@@ -1575,6 +1575,8 @@ async def test_schedule_read_uses_a_deferred_snapshot(ops):
         ops.db.set_trace_callback(None)
     assert not any(line.startswith("BEGIN IMMEDIATE") for line in statements)
     assert any(line == "BEGIN" or line.startswith("BEGIN DEFERRED") for line in statements)
+    assert len(statements) <= 45
+    print("Schedule page SQL:", len(statements))
 
 
 async def test_schedule_page_walk_stays_under_the_statement_bound(ops, monkeypatch):
@@ -1613,5 +1615,6 @@ async def test_schedule_page_walk_stays_under_the_statement_bound(ops, monkeypat
     else:
         raise AssertionError("schedule walk did not finish")
     assert len(rows) == 24 and len(rows) == len(set(rows))
+    print("Schedule walk SQL:", counts, "total:", sum(counts))
     assert len(counts) == 5 and sum(counts) < 1600
     assert all(count < 400 for count in counts)

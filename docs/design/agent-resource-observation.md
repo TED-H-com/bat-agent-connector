@@ -175,8 +175,8 @@ that day's end plus the settle margin stays complete. `catching_up` is not proof
 written before `coverage_at` existed is never complete until the next successful collect;
 the read does not fall back to `successful_at`.
 
-`complete` means the read started at or after the day ended and then waited out the settle
-margin. It is not a guarantee that the counters are frozen. Claude monotone refinements
+`complete` means the read started at or after the day's end plus the settle margin,
+reached EOF and covered the whole requested day. It does not freeze counters. Claude monotone refinements
 keep the first fragment's timestamp, so a fragment that arrives later than the settle
 margin still lands on that first day and can replace a day already reported complete. A
 line appended between the EOF check and the commit can also be missed when the read had

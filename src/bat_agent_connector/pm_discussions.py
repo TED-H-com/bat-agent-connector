@@ -401,7 +401,7 @@ def _capabilities(ops, workspace, principal):
 
 def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
     from .pm_release_baselines import _snapshot
-    with _snapshot(ops.db), pm_read_cache.scope(ops.db):
+    with _snapshot(ops.db), pm_read_cache.scope(ops.db, principal):
         return _list_threads(ops, principal, workspace_id, limit=limit, after=after)
 
 

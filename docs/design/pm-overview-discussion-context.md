@@ -85,6 +85,7 @@ revision 與 source walk 只在該次請求內快取；下一次讀取重新驗�
 `pm.thread.create` 的 params 新增可選 `context`：有順序、不可重複、最多八筆。
 `title` 仍必填、非空、最多 160 字元；target 與 workspace `expected_version` 保持不變。
 所有來源必須在同一 workspace 且當下可見；任一失敗整個 create 拒絕。
+新增的討論來源驗證錯誤提供英文與繁體中文（臺灣）訊息。
 
 | kind | id／額外必要欄位 |
 | --- | --- |
@@ -128,9 +129,18 @@ Adoption 接受 proposal 原 version 或目前 thread version，並重查內容�
 該 thread 存在尚未終結的 `pm.conversation.adopt` 時，rename 的 admission 與執行前檢查皆以
 `PM_CONVERSATION_ADOPTION_IN_PROGRESS`（409）拒絕；完成後重讀 version 即可重試改名。
 這保護已建立但尚未執行的 child CAS，不中止採用或重建任何 child。
-Proposal get／list 每筆提供 `adoptable` 布林與 `adoptable_reason`（可採用時 null；
-`content_changed`、`plan_head_changed` 或 `invalid_proposal`）。同一 read snapshot 中，以採用 admission
-共用的內容檢查與完整 plan head 比較計算；來源不可見仍整筆撤回，不輸出隱藏來源資訊。
+Proposal get／list 每筆提供 `adoptable` 布林與 `adoptable_reason`（可採用時為 null）。
+依序檢查：沒有有效 proposal document digest 為 `invalid_proposal`、同一 proposal 有讀者可見且
+成功的 `pm.conversation.adopt` 為 `adopted`、完整 plan head 改變為 `plan_head_changed`、
+討論內容改變為 `content_changed`；只回傳第一個符合的原因。
+`adopted_revision_id` 只在 `adopted` 時取該 operation 的已記錄結果或最後原 plan child 的採用回執，
+其他原因皆為 null；不從目前 plan head 推測。失敗、取消、執行中或不可見的採用不算已採用，
+改名不清除既有採用證據。再次採用仍以 `VERSION_CONFLICT` 拒絕，沒有新增寫入路徑。
+List 每列另含 `title`：與 get 的已驗證 document title 相同；無有效 proposal 時為 null，
+不附其他 document 內容。整頁以一次索引查詢取得採用回執，再套用既有 operation 可見性檢查，
+不逐列讀取完整 proposal。新增索引為 idempotent DDL，無 user_version 或 data step。
+同一 read snapshot 中使用採用 admission 共用的內容檢查與完整 plan head 比較；
+Proposal 原始來源不可見仍整筆撤回，不輸出隱藏來源資訊。
 這是內容／基線是否仍可採用，不取代 owner、scope、審閱與最後執行條件。UI 使用中央欄位，
 不可自行以 thread version 相等推測；缺欄位時不開放新採用，原 operation 查回不受影響。
 PhaseProfile 為 version 3，原先記錄 profile_version 2 的 immutable plans 仍可讀取、驗證及採用。

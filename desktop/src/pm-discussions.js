@@ -24,9 +24,12 @@ export function discussionContext(t, refs = [], {limit = refs.length, onMore} = 
 }
 
 // Reuse shared disclosures for the retained, lazily constructed PM tools too.
-export const discussionDom = create => (tag, attrs, ...children) => {
+export const discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
   const node = create(tag, attrs, ...children);
-  return tag === 'details' ? disclosure({element: node}) : node;
+  const identity = Object.entries(attrs || {}).find(([name]) => ['data-pm-information', 'data-pm-add-input',
+    'data-pm-planning-revision', 'data-pm-note-only', 'data-pm-prepare-context', 'data-pm-revision-editor'].includes(name));
+  const key = keyPrefix && identity ? JSON.stringify([keyPrefix, ...identity]) : undefined;
+  return tag === 'details' ? disclosure({element: node, key}) : node;
 };
 
 export function discussionTitle({t, field, form, value, local = false}) {

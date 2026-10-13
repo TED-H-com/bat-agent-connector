@@ -460,20 +460,6 @@ class Journal:
                 self.db.execute("RELEASE task_effect")
             raise
 
-    @contextmanager
-    def read_tx(self):
-        """One deferred snapshot. Join a transaction the caller already holds."""
-        if self.db.in_transaction:
-            yield
-            return
-        self.db.execute("BEGIN DEFERRED")
-        try:
-            yield
-            self.db.execute("COMMIT")
-        except BaseException:
-            self.db.execute("ROLLBACK")
-            raise
-
     def close(self):
         self.db.close()
         if getattr(self, "_storage_directory", None):

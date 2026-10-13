@@ -10799,9 +10799,21 @@ function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
 	}));
 	return chips;
 }
-var discussionDom = (create) => (tag, attrs, ...children) => {
+var discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
 	const node = create(tag, attrs, ...children);
-	return tag === "details" ? disclosure({ element: node }) : node;
+	const identity = Object.entries(attrs || {}).find(([name]) => [
+		"data-pm-information",
+		"data-pm-add-input",
+		"data-pm-planning-revision",
+		"data-pm-note-only",
+		"data-pm-prepare-context",
+		"data-pm-revision-editor"
+	].includes(name));
+	const key = keyPrefix && identity ? JSON.stringify([keyPrefix, ...identity]) : void 0;
+	return tag === "details" ? disclosure({
+		element: node,
+		key
+	}) : node;
 };
 function discussionTitle({ t, field, form, value, local = false }) {
 	let current = value;
@@ -31070,15 +31082,6 @@ var retired = (error) => [
 	"PM_DISPOSED"
 ].includes(error.code);
 var receiptSubscribers = new Map();
-var threadDisclosures = new Map();
-var threadDisclosureSelectors = [
-	"[data-pm-information]",
-	"[data-pm-add-input]",
-	"[data-pm-planning-revision]",
-	"[data-pm-note-only]",
-	"[data-pm-prepare-context]",
-	"[data-pm-revision-editor]"
-];
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
 function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value) }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
@@ -31338,7 +31341,6 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	};
 }
 async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false }) {
-	if (threadId) h = discussionDom(h);
 	if (!pmAvailable(caps())) {
 		main.append(h("p", {}, t("pm_unavailable")));
 		return;
@@ -31357,7 +31359,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		threadId = sendHandoff.threadId;
 		history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);
 	}
-	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null, titleView = null;
+	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
 	const threadRows = h("div", { class: "pd-thread-rows" });
 	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
 	const backLink = () => {
@@ -31382,11 +31384,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		}, icon("chevron-left"), t("pd_back", { view: t("ui_" + origin) }));
 	};
-	const disclosureKey = JSON.stringify([
+	if (threadId) h = discussionDom(h, JSON.stringify([
 		namespace,
 		workspaceId,
 		threadId
-	]);
+	]));
 	const forms = [], alive = () => {
 		guard();
 		if (disposed) throw Object.assign(Error(), { code: "PM_DISPOSED" });
@@ -32705,7 +32707,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"data-pm-information": "",
 				open: true
 			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box));
-			informationPanel = information;
 			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext, threadDetails);
 			for (const node of [...column.querySelectorAll(":scope > .pm-package-preparation, :scope > .pm-packages")]) contextPane.append(node);
 			if (nativeAnalysis) contextPane.append(h("details", {}, h("summary", {}, t("pd_analysis")), nativeAnalysis.box));
@@ -32733,11 +32734,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 			column.append(composer);
 			content.append(h("div", { class: "pm-thread-layout" }, column, discussionTools.home));
-			const disclosures = threadDisclosures.get(disclosureKey);
-			for (const selector of threadDisclosureSelectors) {
-				const element = content.querySelector(selector);
-				if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
+			if (!threadState.inputsInitialized && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) {
+				information.open = true;
+				discussionTools.select("inputs");
 			}
+			threadState.inputsInitialized = true;
 		}
 		if (!renameForm.locked() && document.activeElement !== threadTitle && !threadTitle.value) threadTitle.value = thread.title;
 		titleView.update(thread.title);
@@ -32747,7 +32748,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			onMore: () => discussionTools.open("context")
 		}));
 		panelContext.replaceChildren(...discussionContext(t, thread.context), ...thread.context?.length ? [] : [h("p", { class: "muted" }, t("pd_no_context"))]);
-		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) informationPanel.open = true;
 		discussionHint.textContent = "";
 		const transcript = notes.closest(".pd-transcript");
 		const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -33334,16 +33334,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const dispose = () => {
 		uiState.listScroll = workspaceList.scrollTop;
 		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
-		if (threadId && mountedThread === threadId) {
-			const disclosures = new Map();
-			for (const selector of threadDisclosureSelectors) {
-				const element = content.querySelector(selector);
-				if (element) disclosures.set(selector, element.open);
-			}
-			threadDisclosures.delete(disclosureKey);
-			threadDisclosures.set(disclosureKey, disclosures);
-			if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
-		}
 		disposed = true;
 		discussionTools?.dispose();
 		sequence++;

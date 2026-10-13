@@ -44,6 +44,9 @@ def schema(journal):
             raw_reply_digest TEXT NOT NULL, document TEXT, document_digest TEXT,
             validation TEXT NOT NULL, provenance TEXT NOT NULL, created_by TEXT NOT NULL, created_at REAL NOT NULL)""")
         journal.db.execute("CREATE INDEX IF NOT EXISTS pm_conversation_workspace ON pm_conversation_proposals(workspace_id,sequence)")
+        journal.db.execute("CREATE INDEX IF NOT EXISTS pm_conversation_adopted_proposal ON operations "
+            "(json_extract(target,'$.workspace_id'), json_extract(params,'$.proposal_id')) "
+            "WHERE action='pm.conversation.adopt' AND status='succeeded'")
         for verb in ("UPDATE", "DELETE"):
             journal.db.execute(f"CREATE TRIGGER IF NOT EXISTS pm_conversation_proposals_{verb.lower()}_immutable "
                 f"BEFORE {verb} ON pm_conversation_proposals BEGIN SELECT RAISE(ABORT,'PM proposal is immutable'); END")
@@ -272,7 +275,37 @@ def _row(db, workspace_id, proposal_id):
     return row
 
 
-def adoptability(db, row, context):
+def _adoptions(db, principal, workspace_id, proposal_ids):
+    """One indexed page lookup; only visible, successful parents prove adoption.
+
+    The final original child's receipt supports older/recovered parent results.
+    Neither a current plan head nor an unfinished parent's child proves success.
+    """
+    from . import pm_access
+    if not proposal_ids:
+        return {}
+    rows = db.execute("""SELECT o.*, COALESCE(json_extract(o.result,'$.revision_id'), a.revision_id) AS adopted_revision_id
+        FROM operations o LEFT JOIN pm_plan_adoptions a ON a.operation_id=(
+            SELECT c.operation_id FROM pm_conversation_children c
+            WHERE c.parent_id=o.operation_id ORDER BY c.ordinal DESC LIMIT 1)
+            AND a.workspace_id=json_extract(o.target,'$.workspace_id')
+        WHERE o.action='pm.conversation.adopt' AND o.status='succeeded'
+            AND json_extract(o.target,'$.workspace_id')=?
+            AND json_extract(o.params,'$.proposal_id') IN (SELECT value FROM json_each(?))
+        ORDER BY o.created_at, o.operation_id""", (workspace_id, json.dumps(proposal_ids))).fetchall()
+    found = {}
+    for row in rows:
+        op = OperationService._decode(row)
+        try:
+            if pm_access.visible(db, principal, op):
+                found.setdefault(op['params']['proposal_id'], {'revision_id': row['adopted_revision_id']})
+        except OperationError as exc:
+            if exc.status not in {403, 404, 409, 413}:
+                raise
+    return found
+
+
+def adoptability(db, row, context, *, adoption=None):
     """Current content and plan baseline, shared by reads and adoption admission.
 
     Call only after original-source visibility and context integrity checks.
@@ -282,23 +315,33 @@ def adoptability(db, row, context):
     reason = None
     if row['document_digest'] is None:
         reason = 'invalid_proposal'
+    elif adoption is not None:
+        reason = 'adopted'
     elif pm_plans.head(db, row['workspace_id']) != context['plan_head']:
         reason = 'plan_head_changed'
     elif not pm_discussions.content_unchanged(db, thread, context['thread_version']):
         reason = 'content_changed'
-    return {'adoptable': reason is None, 'adoptable_reason': reason}
+    return {'adoptable': reason is None, 'adoptable_reason': reason,
+        'adopted_revision_id': adoption['revision_id'] if reason == 'adopted' else None}
 
 
-def _view(db, row):
+def _document(row):
+    document = json.loads(row['document']) if row['document'] is not None else None
+    if (hashlib.sha256(row['raw_reply'].encode()).hexdigest() != row['raw_reply_digest']
+            or (pm_runs._digest(document) if document is not None else None) != row['document_digest']):
+        raise error("Original proposal cannot be verified", "PM_CONVERSATION_CHANGED", 409)
+    return document
+
+
+def _view(db, row, *, adoption=None):
     value = dict(row)
-    for key in ("document", "validation", "provenance"):
+    value['document'] = _document(row)
+    for key in ("validation", "provenance"):
         value[key] = json.loads(value[key]) if value[key] is not None else None
     run = pm_runs.get(db, value["run_id"])
-    if (hashlib.sha256(value["raw_reply"].encode()).hexdigest() != value["raw_reply_digest"]
-            or (pm_runs._digest(value["document"]) if value["document"] is not None else None) != value["document_digest"]
-            or pm_runs._digest(run["context"]) != value["context_digest"]):
+    if pm_runs._digest(run["context"]) != value["context_digest"]:
         raise error("Original proposal cannot be verified", "PM_CONVERSATION_CHANGED", 409)
-    return {**value, **adoptability(db, row, run["context"]), "context": run["context"], "accepted_plan_changed": False, "execution_authorized": False,
+    return {**value, **adoptability(db, row, run["context"], adoption=adoption), "context": run["context"], "accepted_plan_changed": False, "execution_authorized": False,
         "assessment_basis": "unadopted_agent_proposal", "conclusions_verified": False}
 
 
@@ -309,7 +352,8 @@ def get_proposal(ops, principal, workspace_id, proposal_id):
         pm_discussions._read(ops, principal, workspace_id)
         row = _row(ops.db, workspace_id, proposal_id)
         require_visible(ops.db, principal, row)
-        return _checked({"version": 1, "workspace_id": workspace_id, "proposal": _view(ops.db, row)})
+        adoption = _adoptions(ops.db, principal, workspace_id, [proposal_id]).get(proposal_id)
+        return _checked({"version": 1, "workspace_id": workspace_id, "proposal": _view(ops.db, row, adoption=adoption)})
 
 
 def list_proposals(ops, principal, workspace_id, *, thread_id=None, after=0, limit=50):
@@ -326,13 +370,17 @@ def list_proposals(ops, principal, workspace_id, *, thread_id=None, after=0, lim
             AND (? IS NULL OR p.thread_id=?) ORDER BY p.sequence LIMIT ?""", (workspace_id, after, thread_id, thread_id, limit + 1)).fetchall()
         result = {"version": 1, "workspace_id": workspace_id, "proposals": [], "next_cursor": None,
             "coverage": {"visibility_filtered": False, "scanned": min(len(rows), limit)}}
+        adoptions = _adoptions(ops.db, principal, workspace_id, [row['proposal_id'] for row in rows[:limit]])
         for row in rows[:limit]:
             if operation_visible(ops.db, principal, row):
                 context = json.loads(row['context'])
                 if pm_runs._digest(context) != row['context_digest']:
                     raise error("Original proposal context changed", "PM_CONVERSATION_CHANGED", 409)
+                document = _document(row)
                 result["proposals"].append({**{key: row[key] for key in ("sequence", "proposal_id", "thread_id", "operation_id",
-                    "run_id", "document_digest", "created_by", "created_at")}, "validation": json.loads(row["validation"]), **adoptability(ops.db, row, context)})
+                    "run_id", "document_digest", "created_by", "created_at")}, "validation": json.loads(row["validation"]),
+                    "title": document['title'] if document is not None else None,
+                    **adoptability(ops.db, row, context, adoption=adoptions.get(row['proposal_id']))})
             else:
                 result["coverage"]["visibility_filtered"] = True
         if len(rows) > limit:
