@@ -5,7 +5,9 @@ See docs/design/agent-resource-observation.md for the versioned input contracts.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import timezone
+
+from .iso_time import parse_datetime
 
 MAX_COUNT = 10**15
 METRICS = ("input", "cache_read", "cache_write", "output", "reasoning", "total")
@@ -23,7 +25,7 @@ def timestamp(value):
     if not isinstance(value, str) or len(value) > 40:
         raise UsageInvalid("invalid_timestamp")
     try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = parse_datetime(value)
         if dt.tzinfo is None:
             raise ValueError
         return dt.astimezone(timezone.utc).isoformat(timespec="milliseconds")

@@ -121,6 +121,26 @@ The migration/launch-journal integration fixture proves unpublished-child refusa
 both original slots unchanged. Windows cross-compilation validates the native adapter API;
 it does not execute a real migration, PS monitor, installed Startup entry or live tunnel.
 
+### Legacy PowerShell cold-start limitation
+
+`launch_powershell` currently starts the five-second `wait_for_owner` budget after
+spawn and retained-child identity validation, with no evidence that the interpreter
+has entered `bat-connect.ps1`. A first migration call after boot/login can therefore
+exhaust readback during cold PowerShell startup. Its durable `LaunchRequested`
+remains unknown; the child is not killed, and subsequent recovery observes the
+original effect rather than launching again.
+
+The reviewed legacy `bat-connect.ps1` is an external installation input, absent
+from this repository. It has no readiness handshake in the current contract.
+Adding the same bounded startup phase safely requires cooperation from that
+script (a fixed flushed marker before monitor work), followed by the existing
+five-second owner readback. An encoded/command wrapper would change the exact
+`-File` identity that discovery requires; accepting it without a coordinated
+ownership contract would weaken proof. Waiting longer for the final owner or
+starting a separate warm-up process would not establish script readiness in the
+original child. This path remains unchanged pending the reviewed legacy source
+and coordinated handshake; the fixture startup fix does not claim to fix it.
+
 Windows fixture bodies include COM round trips and an actual system PowerShell/WScript.Shell
 creation oracle, all targeting temporary synthetic files. Local Linux tests and Windows
 cross-compilation are separate from execution of those Windows fixtures and installed

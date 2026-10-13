@@ -11,6 +11,9 @@ pub mod migration;
 mod migration_io;
 pub mod monitor_launch;
 pub mod ownership;
+#[cfg(test)]
+#[path = "../tests/support/powershell.rs"]
+mod powershell_fixture;
 pub mod probe;
 mod probe_wire;
 pub mod process_adapter;
