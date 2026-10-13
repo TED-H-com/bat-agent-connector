@@ -31,8 +31,9 @@ test('scope mismatch, revision changes and retirement cannot produce a chart', a
 test('session inventory dates never become bars; inconsistent ends are omitted', () => {
   const session = {id: 'attempt:session:w:h/s', kind: 'attempt', actual: {start: '2026-10-01', end: '2026-10-02'}};
   assert.deepEqual(spans(session), []); assert.equal(chartRange([session]), null);
-  assert.deepEqual(spans({actual: {start: '2026-10-08', end: '2026-10-02', open: true}})[0], {kind: 'actual', start: dayNumber('2026-10-08'), end: null, open: true});
-  assert.deepEqual(spans({actual: {start: '2026-10-08T10:00:00Z', end: null, open: false}})[0], {kind: 'actual', start: dayNumber('2026-10-08T10:00:00Z'), end: null, open: false});
+  assert.deepEqual(spans({actual: {start: '2026-10-08', end: '2026-10-02'}})[0], {kind: 'actual', start: dayNumber('2026-10-08'), end: null, open: true, unknownEnd: false});
+  assert.deepEqual(spans({actual: {start: '2026-10-08T10:00:00Z', end: null, open: false}})[0], {kind: 'actual', start: dayNumber('2026-10-08T10:00:00Z'), end: null, open: false, unknownEnd: true});
+  assert.deepEqual(spans({forecast: {start: '2026-10-21', end: null}})[0], {kind: 'forecast', start: dayNumber('2026-10-21'), end: null, open: false, unknownEnd: false});
 });
 test('tree uses explicit parents, preserves undated ancestors and never invents phase rows', async () => {
   const rows = [{id: 'm', kind: 'milestone', parent_id: null}, {id: 'r', kind: 'requirement', parent_id: 'm'},

@@ -28324,12 +28324,14 @@ function spans(row) {
 		if (!span) return [];
 		const start = dayNumber(span.start), end = dayNumber(span.end);
 		if (start === null && end === null) return [];
-		const cleanEnd = start !== null && end !== null && end < start ? null : end;
+		const invalidEnd = start !== null && end !== null && end < start;
+		const cleanEnd = invalidEnd ? null : end;
 		return [{
 			kind,
 			start,
 			end: cleanEnd,
-			open: kind === "actual" && span.open === true && cleanEnd === null
+			open: kind === "actual" && cleanEnd === null && (span.open === true || span.open == null && invalidEnd),
+			unknownEnd: kind === "actual" && span.open === false && cleanEnd === null
 		}];
 	});
 }
@@ -28471,9 +28473,13 @@ function dateRange(span) {
 		timeStyle: "short",
 		timeZone: "UTC"
 	}).format(new Date(value)) + " UTC" : value;
-	const validEnd = span.end && (!span.start || dayNumber(span.end) >= dayNumber(span.start)) ? span.end : null;
+	const endBeforeStart = Boolean(span.start && span.end && span.end < span.start);
+	const validEnd = span.end && !endBeforeStart ? span.end : null;
 	if (validEnd && validEnd === span.start) return format(span.start) || "—";
-	return [format(span.start) || "—", validEnd ? format(validEnd) : span.open === true ? t("sched_open") : reasonLabel(t, "terminal_time_unrecorded")].join(" → ");
+	if (validEnd) return [format(span.start) || "—", format(validEnd)].join(" → ");
+	if (span.open === true || span.open == null && endBeforeStart) return [format(span.start) || "—", t("sched_open")].join(" → ");
+	if (span.open === false) return [format(span.start) || "—", reasonLabel(t, "terminal_time_unrecorded")].join(" → ");
+	return format(span.start) || "—";
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
@@ -28801,8 +28807,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			for (const span of rowSpans) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
-				const endText = span.open ? t("sched_open") : span.end === null ? reasonLabel(t, "terminal_time_unrecorded") : row[span.kind].end || "—";
-				const rangeText = !span.open && span.end !== null && row[span.kind].end && row[span.kind].end === row[span.kind].start ? row[span.kind].start : `${row[span.kind].start || "—"} → ${endText}`;
+				const endText = span.open ? t("sched_open") : span.unknownEnd ? reasonLabel(t, "terminal_time_unrecorded") : span.end !== null ? row[span.kind].end : null;
+				const rangeText = endText && row[span.kind].end !== row[span.kind].start ? `${row[span.kind].start || "—"} → ${endText}` : row[span.kind].start || endText || "—";
 				const barTitle = `${t("sched_" + span.kind)} · ${rangeText}`;
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
@@ -28817,7 +28823,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				const labels = [];
 				if (["waiting", "blocked"].includes(row.status)) labels.push(t("ui_status_" + row.status));
 				if (span.open) labels.push(t("sched_open"));
-				else if (span.end === null) labels.push(reasonLabel(t, "terminal_time_unrecorded"));
+				else if (span.unknownEnd) labels.push(reasonLabel(t, "terminal_time_unrecorded"));
 				if (labels.length) bar.append(h$1("span", { class: "schedule-bar-label" }, labels.join(" · ")));
 				node.append(bar);
 			}
@@ -28876,7 +28882,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const dates = spans(row).map((span) => {
 				const s = row[span.kind].start?.slice(0, 10) || "—";
 				const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
-				const suffix = span.open ? " → " + t("sched_open") : span.end === null ? " → " + reasonLabel(t, "terminal_time_unrecorded") : e && e !== s ? " → " + e : "";
+				const suffix = span.open ? " → " + t("sched_open") : span.unknownEnd ? " → " + reasonLabel(t, "terminal_time_unrecorded") : e && e !== s ? " → " + e : "";
 				return `${t("sched_" + span.kind)} ${s}${suffix}`;
 			});
 			const pill = row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null;

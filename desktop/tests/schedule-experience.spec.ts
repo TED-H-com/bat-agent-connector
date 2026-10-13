@@ -261,6 +261,11 @@ test('terminal span without end time reads End time not recorded and mobile date
       baseline: null, forecast: null, actual: {start: '2026-10-08T10:00:00Z', end: null, open: false},
     });
     data.unknown.push({field: `${rowId}.actual.end`, reason: 'terminal_time_unrecorded'});
+    data.rows.push({
+      id: 'work:forecast_start_only', parent_id: null, kind: 'work', title: 'Forecast start only',
+      status: 'not_started', blocked: null, waiting: null, depends_on: [], refs: {work_item_id: 'forecast_start_only'},
+      baseline: null, forecast: {start: '2026-10-21', end: null}, actual: null,
+    });
   }});
   const bar = page.locator(`[data-schedule-track="${rowId}"] .schedule-bar`);
   await expect(bar).not.toHaveClass(/\bopen\b/);
@@ -274,6 +279,9 @@ test('terminal span without end time reads End time not recorded and mobile date
   await expect(inspector.locator('[data-schedule-section="details"]')).not.toContainText('→ Open');
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual 2026-10-08 → End time not recorded');
+  const forecastBar = page.locator('[data-schedule-track="work:forecast_start_only"] .schedule-bar');
+  await expect(forecastBar).toHaveAttribute('title', 'Forecast · 2026-10-21');
+  await expect(forecastBar).not.toContainText('End time not recorded');
   await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual 2026-10-06');
   await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual 2026-10-05 → Open');
 });

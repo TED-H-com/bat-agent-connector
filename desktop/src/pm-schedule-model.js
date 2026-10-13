@@ -24,8 +24,14 @@ export function spans(row) {
     const span = row[kind]; if (!span) return [];
     const start = dayNumber(span.start), end = dayNumber(span.end);
     if (start === null && end === null) return [];
-    const cleanEnd = start !== null && end !== null && end < start ? null : end;
-    return [{kind, start, end: cleanEnd, open: kind === 'actual' && span.open === true && cleanEnd === null}];
+    const invalidEnd = start !== null && end !== null && end < start;
+    const cleanEnd = invalidEnd ? null : end;
+    // Only an explicit open flag reads as Open. An omitted flag still opens an
+    // inconsistent end, which the projection marks open after dropping that end.
+    // A terminal span (open: false) with no end is unknownEnd, never Open.
+    const open = kind === 'actual' && cleanEnd === null && (span.open === true || (span.open == null && invalidEnd));
+    const unknownEnd = kind === 'actual' && span.open === false && cleanEnd === null;
+    return [{kind, start, end: cleanEnd, open, unknownEnd}];
   });
 }
 export function chartRange(rows) {

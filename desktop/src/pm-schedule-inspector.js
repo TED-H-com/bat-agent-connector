@@ -4,7 +4,7 @@ import {t} from './i18n.js';
 import {agentMark, disclosure, statusPill} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
-import {dayNumber, firstLine, milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
+import {firstLine, milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
 
 export function rowStatus(row, data) {
   return notObserved(row, data) ? h('span', {class: 'ui-pill tone-neutral'}, t('sched_not_observed')) : statusPill(row.status);
@@ -12,9 +12,13 @@ export function rowStatus(row, data) {
 export function dateRange(span) {
   if (!span) return t('sched_no_dates');
   const format = value => value?.includes('T') ? new Intl.DateTimeFormat(navigator.language, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}).format(new Date(value)) + ' UTC' : value;
-  const validEnd = span.end && (!span.start || dayNumber(span.end) >= dayNumber(span.start)) ? span.end : null;
+  const endBeforeStart = Boolean(span.start && span.end && span.end < span.start);
+  const validEnd = span.end && !endBeforeStart ? span.end : null;
   if (validEnd && validEnd === span.start) return format(span.start) || '—';
-  return [format(span.start) || '—', validEnd ? format(validEnd) : span.open === true ? t('sched_open') : reasonLabel(t, 'terminal_time_unrecorded')].join(' → ');
+  if (validEnd) return [format(span.start) || '—', format(validEnd)].join(' → ');
+  if (span.open === true || (span.open == null && endBeforeStart)) return [format(span.start) || '—', t('sched_open')].join(' → ');
+  if (span.open === false) return [format(span.start) || '—', reasonLabel(t, 'terminal_time_unrecorded')].join(' → ');
+  return format(span.start) || '—';
 }
 const unknown = () => h('span', {class: 'ui-meta'}, t('sched_unavailable'));
 const section = (key, ...body) => h('section', {'data-schedule-section': key}, h('h3', {}, t('sched_' + key)), ...body);
