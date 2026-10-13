@@ -1226,13 +1226,27 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .dep-graph { flex: none; }
 .dep-graph text { fill: var(--text); font-size: 12px; font-family: var(--font-ui); }
 .dep-node-shape { fill: var(--surface); stroke: var(--line-strong); }
+.dep-node-repo { fill: var(--text-2); }
 .dep-edge { fill: none; stroke: var(--tone, var(--neutral)); stroke-width: 1.5; }
 .dep-edge.evidence-inferred { stroke-dasharray: 4 3; }
-.dep-graph [data-dep-mark=dim] { opacity: .35; }
+.dep-graph [data-dep-mark=dim] > .dep-node-shape,
+.dep-edge[data-dep-mark=dim] { opacity: .35; }
+.dep-graph [data-dep-mark=dim] > .dep-node-name,
+.dep-graph [data-dep-mark=dim] > .dep-node-repo { fill: var(--text-2); }
+.dep-graph .dep-node-external > .dep-node-shape { fill: var(--review-soft); stroke: var(--review); stroke-dasharray: 4 3; }
 .dep-graph [data-dep-mark=selected] > .dep-node-shape,
 .dep-graph [data-dep-mark=upstream] > .dep-node-shape,
 .dep-graph [data-dep-mark=downstream] > .dep-node-shape { stroke: var(--accent); stroke-width: 2; }
-.dep-graph [data-dep-node]:focus > .dep-node-shape { stroke: var(--accent); stroke-width: 2; }
+.dep-graph .dep-node-external[data-dep-mark=selected] > .dep-node-shape,
+.dep-graph .dep-node-external[data-dep-mark=upstream] > .dep-node-shape,
+.dep-graph .dep-node-external[data-dep-mark=downstream] > .dep-node-shape,
+.dep-graph .dep-node-external[data-dep-mark=dim] > .dep-node-shape { stroke-dasharray: 4 3; }
+.dep-graph [data-dep-node]:focus > .dep-node-shape { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+.dep-legend-external { width: 14px; height: 10px; border: 1px dashed var(--review); border-radius: 2px; background: var(--review-soft); }
+.dep-peer { display: block; max-width: 9.5rem; color: var(--text-2); font-size: var(--fs-caption); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.dep-pick-main { display: grid; gap: 2px; min-width: 0; }
+.dep-pick-main .dep-peer { max-width: none; }
+.dep-impact-summary { margin: var(--space-1) 0; color: var(--text); font-size: var(--fs-small); line-height: 1.45; }
 .dep-facts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-2) var(--space-3); margin: 0; }
 .dep-facts dd.dep-note { grid-column: 2; }
 .dep-facts dt { font-size: var(--fs-caption); color: var(--text-3); }
