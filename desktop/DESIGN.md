@@ -408,7 +408,7 @@ Only a `blocked` status produces hatching. Milestone delta compares recorded dat
 Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
 range uses all loaded rows; any partial/truncated page keeps a Partial pill and a
 reason in Details. Unknown reasons use the shared reason vocabulary with a neutral
-fallback. Counts describe loaded items only. Source withdrawal clears the chart,
+fallback. Complete reads show exact counts; partial reads show loaded counts only. Source withdrawal clears the chart,
 counts and inspector together and invalidates pending reads.
 
 The inspector keeps the Requirements section order and a narrow
