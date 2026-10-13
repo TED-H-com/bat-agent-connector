@@ -62,7 +62,9 @@ try {
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}$/);
   await page.getByRole('button', {name:'Discuss with PM', exact:true}).click();
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
+  await page.getByRole('button', {name:'Rename',exact:true}).click();
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
+  await page.getByRole('button', {name:'Save',exact:true}).click();
   await page.locator('[data-discussion-composer]').fill('Keep the first action visible; retain a guided tour as an alternative.');
   await page.getByRole('button', {name:'Send', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/pmt_[a-f0-9]{32}$/);
@@ -73,9 +75,10 @@ try {
   };
   const note = page.locator('[data-pm-action="pm.message.append"]');
   await expect(page.locator('.pm-notes')).toContainText('Keep the first action visible');
+  await page.getByRole('button',{name:'Rename',exact:true}).click();
   const rename=page.locator('[data-pm-action="pm.thread.rename"]');
   await rename.getByLabel('Discussion title',{exact:true}).fill('Choose the first useful improvement');
-  await rename.getByRole('button',{name:'Rename',exact:true}).click();
+  await rename.getByRole('button',{name:'Save',exact:true}).click();
   await expect.poll(async()=>(await read()).thread.title).toBe('Choose the first useful improvement');
   const message = (await read()).messages[0];
   assert.equal(typeof message.created_at, 'number');
@@ -114,7 +117,7 @@ try {
   await page.getByLabel('Plan title', {exact:true}).fill('First useful action');
   await page.getByRole('button', {name:'Save plan revision', exact:true}).click();
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
-  await page.locator('[data-pm-revision] > summary').click();
+  await page.locator('[data-pm-revision-open]').click();
   await expect(page.locator('.pm-plan-document')).toContainText('First useful action');
   await expect(page.locator('[data-pm-action="pm.plan.adopt"] button[type="submit"]')).toBeDisabled();
   const plansResponse = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/plans`, {headers:{Authorization:'Bearer '+fixture.token}});

@@ -1,5 +1,7 @@
 // One reviewed central intent; proposal text never becomes authority by itself.
-import {discussionOperation} from './pm-discussions.js';
+import {discussionFeedback} from './pm-discussions.js';
+import {iconButton} from './ui/components.js';
+import {reasonLabel} from './ui/ui-strings.js';
 import {structuredAnalysis} from './pm-structured-analysis.js';
 const PROPOSE='pm.conversation.propose',ADOPT='pm.conversation.adopt';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),copy=value=>structuredClone(value);
@@ -27,26 +29,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const writing=()=>visible&&enabled()&&permitted(false)&&thread()?.capabilities?.write===true&&caps()?.scopes?.includes('manage');
   const deciding=()=>writing()&&permitted(true)&&thread()?.capabilities?.decide===true&&caps()?.scopes?.includes('start')
     &&caps()?.actions?.some(row=>row.action===ADOPT&&row.allowed===true)&&capability?.plan_adoption_available!==false;
-  const unchanged=()=>{
-    if(!active)return false;
-    const current=thread(),context=active.context;
-    if(current.thread.version===context.thread_version)return true;
-    // The central read does not publish a content-version counter. Compare complete
-    // source identities when available; central CAS still validates every adoption.
-    if(!Array.isArray(context.messages)||!Array.isArray(context.inputs))return false;
-    const messages=current.messages||[],fixed=context.messages;
-    const sameMessages=same(messages.map(row=>row.message_id).sort(),fixed.map(row=>row.message_id).sort());
-    // Messages are append-only. A bounded latest page can still prove no new
-    // message exists when its newest sequence and every visible ID match.
-    const sameLatestPage=current.coverage?.messages_truncated===true&&messages.length>0
-      &&messages.every(row=>fixed.some(source=>source.message_id===row.message_id&&source.sequence===row.sequence))
-      &&Math.max(...messages.map(row=>row.sequence))===Math.max(...fixed.map(row=>row.sequence));
-    return current.thread.draft_id===context.draft_id
-      &&(sameMessages||sameLatestPage)
-      &&same([...new Set([...(current.inputs||[]),...(current.draft?.selected_inputs||[])].map(row=>row.input_id))].sort(),context.inputs.map(row=>row.input_id).sort());
-  };
-  const fresh=()=>!conflict&&active&&head&&unchanged()
-    &&head.version===active.context.plan_head.version&&head.accepted_revision_id===active.context.plan_head.accepted_revision_id;
+  const fresh=()=>!conflict&&active?.adoptable===true;
   const original=()=>{try{return JSON.parse(adopt?.values().review||'null');}catch{return null;}};
   const note=key=>h('p',{class:'muted'},t(key));
   const acceptedDocument=p=>p.context.accepted_plan?.document||p.context.accepted_plan;
@@ -75,7 +58,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;await refreshParent?.();await refresh();if(conversation){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));}},
     onStateChange:()=>{if(ready)updateControls();},extra:h('div',{},review,content,labelled('pcp_rationale',rationale),note('pcp_review_help'))});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
-  const reload=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pcp_refresh'));
+  const reload=conversation?iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()}):h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pcp_refresh'));
   const prepareBox=h('details',{open:true,'data-proposal-prepare':''},h('summary',{},t('pcp_prepare')),prepare.box);
   const box=h('section',{class:'pm-plans','data-pm-plan-proposals':''},h('h3',{},t(conversation?'pd_proposed':'pcp_title')),conversation?'':note('pcp_help'),prepareBox,
     h('div',{class:'pm-fields'},labelled('pcp_saved',picker),h('div',{class:'actions'},reload,more)),notice,detail);
@@ -84,7 +67,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     prepareBox.open=false;
     picker.closest('.pm-fields').remove();
     const history=h('details',{'data-proposal-history':''},h('summary',{},t('pd_history')),picker.parentElement);
-    tools.append(prepareBox,history,reload,more);
+    tools.append(h('header',{class:'pd-section-header'},h('h3',{},t('pcp_title')),reload),prepareBox,history,more);
   }
   picker.addEventListener('change',()=>{if(adopt.locked()){picker.value=active?.proposal_id||'';return;}void choose(picker.value);});
   function checked(value){
@@ -128,11 +111,13 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       ask.disabled=!prepare.canSubmit();
       ask.textContent=t(prepare.locked()?'pm_check_original':'pd_ask');
       connection.hidden=runtime.eligible();ask.hidden=!runtime.eligible()&&!prepare.locked();
-      working.textContent=discussionOperation(t,prepare.operation?.());
+      discussionFeedback({t,request:prepare,node:working,eligible:runtime.eligible()});
     }
     for(const element of content.querySelectorAll('input,textarea,select,button'))element.disabled=locked;
+    const reviewButton=adopt.box.querySelector('[data-proposal-review]');if(reviewButton)reviewButton.disabled=!fresh()&&!adopt.locked();
     if(active&&active.validation.status==='format_valid'){
-      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?(conversation?'pd_stale':'pcp_stale'):reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';reasons.hidden=!reason;const retry=content.querySelector('[data-proposal-again]');if(retry){retry.hidden=fresh();retry.disabled=!prepare.canSubmit();}}
+      const rawReason=content.querySelector('[data-proposal-adoptable-reason]');if(rawReason)rawReason.textContent=active.adoptable_reason||'';
+      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?(conversation?'pd_stale':'pcp_stale'):reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';if(reason==='pd_stale'&&!conflict){const label=reasonLabel(t,active.adoptable_reason,'pd_stale');if(label!==t('pd_stale'))reasons.textContent+=' · '+label;}reasons.hidden=!reason;const retry=content.querySelector('[data-proposal-again]');if(retry){retry.hidden=fresh();retry.disabled=!prepare.canSubmit();}}
     }
   }
   function saveEditor(title){
@@ -161,9 +146,12 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     if(!prepare.locked())prepareBox.open=false;
     const edited=saved.review,title=input('pcp_name',{max:160,value:edited.title});
     const accepted=acceptedDocument(p);
-    content.append(h('p',{class:'pm-note-text'},p.document.summary),h('details',{},h('summary',{},t('pcp_before')),
-      accepted?h('div',{},h('strong',{},accepted.title||''),h('p',{class:'pm-note-text'},accepted.markdown||''),h('ul',{},...(accepted.requirements||[]).map(row=>h('li',{},row.id,' · ',row.text))),h('small',{class:'pm-source'},t('pcp_baseline'),' · ',p.context.plan_head.accepted_revision_id)):note('pcp_first')),
-      conversation?h('details',{},h('summary',{},t('pd_details')),labelled('pcp_name',title),h('code',{},p.proposal_id)):labelled('pcp_name',title),h('h4',{},t('pcp_candidates')));
+    if(conversation)detail.append(h('p',{class:'pm-note-text'},p.document.summary));
+    const before=h('details',{},h('summary',{},t('pcp_before')),
+      accepted?h('div',{},h('strong',{},accepted.title||''),h('p',{class:'pm-note-text'},accepted.markdown||''),h('ul',{},...(accepted.requirements||[]).map(row=>h('li',{},row.id,' · ',row.text))),h('small',{class:'pm-source'},t('pcp_baseline'),' · ',p.context.plan_head.accepted_revision_id)):note('pcp_first'));
+    const technical=h('details',{'data-proposal-details':''},h('summary',{},t('pd_details')),labelled('pcp_name',title),h('code',{},p.proposal_id),h('code',{'data-proposal-adoptable-reason':''},p.adoptable_reason||''),before);
+    if(!conversation)content.append(h('p',{class:'pm-note-text'},p.document.summary),before,labelled('pcp_name',title));
+    content.append(h('h4',{},t('pcp_candidates')));
     title.addEventListener('input',()=>saveEditor(title));
     const requirementBox=h('div'),add=h('button',{type:'button',class:'secondary',onclick:()=>{
       if(adopt.locked()||requirementFields.length>=20)return;let index=1;while(requirementFields.some(row=>row.id.value==='requirement_'+index))index++;
@@ -206,8 +194,10 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
         questions.append(h('label',{},question.question,answer));});
       questions.append(h('button',{type:'button',class:'secondary',onclick:()=>{const values=original()?.answers||{};onAnswer(p.document.questions.map((row,index)=>values[index]?row.question+'\n'+values[index]:null).filter(Boolean).join('\n\n'));}},t('pd_answer_send')));content.append(questions);
     }
-    content.append(h('button',{type:'button',class:'secondary','data-proposal-again':'',hidden:true,onclick:()=>{ask?.click();}},t('pd_again')));
-    content.append(h('p',{class:'muted','data-proposal-reason':''}),h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply)));
+    content.prepend(h('button',{type:'button',class:'secondary','data-proposal-again':'',hidden:true,onclick:()=>{ask?.click();}},t('pd_again')));
+    content.prepend(h('p',{class:'muted','data-proposal-reason':''}));
+    const raw=h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply));
+    if(conversation){technical.append(raw);content.append(technical);}else content.append(raw);
     if(conversation&&adoptedId===p.proposal_id){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));return;}
     detail.append(adopt.box);
     if(conversation&&!reviewShell){
@@ -228,12 +218,12 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   }
   function page(value,append=false){if(value?.workspace_id!==workspaceId||!Array.isArray(value.proposals)||value.proposals.some(row=>row.thread_id!==threadId||typeof row.proposal_id!=='string'))throw fail();
     const next=value.next_cursor;if(next!==null&&next!==undefined&&(!Number.isInteger(next)||next<1||append&&next<=cursor))throw fail();
-    rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title||t('pd_proposed'),t(row.validation?.status==='format_valid'?'pcp_proposal':'pcp_invalid')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
+    rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title||t('pd_proposed'),t(row.adoptable===false?'pd_stale':row.validation?.status==='format_valid'?'pcp_proposal':'pcp_invalid')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
     notice.replaceChildren(...(!rows.length?[note('pcp_empty')]:[]),...(cursor!==null?[note('pcp_partial')]:[]));
   }
   async function summaries(list){
     if(list?.workspace_id!==workspaceId||!Array.isArray(list.proposals)||list.proposals.some(row=>row.thread_id!==threadId||typeof row.proposal_id!=='string'))throw fail();
-    const proposals=await Promise.all(list.proposals.map(async row=>{const p=checked(await api('GET',endpoint+'/'+encodeURIComponent(row.proposal_id)));if(p.proposal_id!==row.proposal_id)throw fail();return {...row,title:p.document?.title||t('pcp_invalid')};}));
+    const proposals=await Promise.all(list.proposals.map(async row=>{const p=checked(await api('GET',endpoint+'/'+encodeURIComponent(row.proposal_id)));if(p.proposal_id!==row.proposal_id)throw fail();return {...row,title:p.document?.title||t('pcp_invalid'),adoptable:p.adoptable,adoptable_reason:p.adoptable_reason};}));
     return {...list,proposals};
   }
   async function refresh(preferred){if(!enabled()){withdraw();box.hidden=true;return;}if(loading)return;loading=true;const own=++ticket;updateControls();

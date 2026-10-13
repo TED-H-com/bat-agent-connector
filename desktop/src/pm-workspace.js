@@ -1,4 +1,5 @@
-import {discussionContext, discussionLabel, discussionPanel} from './pm-discussions.js';
+import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
+import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {viewState} from './ui/view-state.js';
 import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
@@ -143,6 +144,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         saved.values = capture();
         const request = {action, target, params: params(saved.values), preconditions: preconditions()};
         saved.intent = {key: crypto.randomUUID(), request}; persist(); firstAttempt = true;
+        operation = null; receipt.replaceChildren();
       }
       update();
       const intent = saved.intent, actor = caps()?.actor; persist();
@@ -209,6 +211,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
 }
 
 export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false}) {
+  if (threadId) h = discussionDom(h);
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
@@ -220,7 +223,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let sendHandoff = null;
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   if (threadId === 'new' && /^pmt_[0-9a-f]{32}$/.test(sendHandoff?.threadId)) {threadId = sendHandoff.threadId; history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);}
-  let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null;
+  let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, informationPanel = null, threadSearch = null, titleView = null;
   const threadRows = h('div', {class: 'pd-thread-rows'});
   const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
   const backLink = () => {
@@ -231,7 +234,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     return h('a', {class: 'pd-back', href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
       // Restore the originating fixed report even after a discussion-draft reload.
       if (origin === 'overview' && source.report) viewState(namespace, workspaceId, 'overview').snapshotId = source.report;
-    }}, t('pd_back', {view: t('ui_' + origin)}));
+    }}, icon('chevron-left'), t('pd_back', {view: t('ui_' + origin)}));
   };
   const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
@@ -495,12 +498,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
       if (sendHandoff?.threadId === threadId && !noteForm.locked()) noteForm.set('content', sendHandoff.content);
       renameForm = form({action: 'pm.thread.rename', target, fields: {title: threadTitle}, params: values => ({title: values.title.trim()}),
-        preconditions, permitted: write, label: 'pd_rename', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;}, onSaved: () => load(), extra: threadTitle});
-      renameForm.box.append(h('details', {class: 'pd-rename-receipt'}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('[role=status]'), renameForm.box.querySelector('.pm-receipt')));
+        preconditions, permitted: write, label: 'pd_save', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;},
+        onSaved: () => {titleView.finish(); return load();}, onStateChange: () => titleView?.update(threadData.thread.title), extra: threadTitle});
+      const threadDetails = h('details', {'data-discussion-details': ''}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('.pm-receipt'));
+      titleView = discussionTitle({t, field: threadTitle, form: renameForm, value: thread.title});
       boundContext = h('div', {class: 'pd-context'}); panelContext = h('div', {class: 'pd-context-details'});
       discussionHint = h('p', {class: 'muted'});
       const column = h('section', {class: 'pm-discussion'},
-        h('header', {class: 'pd-thread-header'}, renameForm.box, h('div', {class: 'pd-thread-meta'}, mode, backLink()), boundContext), discussionHint, h('div', {class: 'pd-transcript'}, earlier, notes, coverage));
+        h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleView.box)), h('div', {class: 'pd-thread-meta'}, mode, boundContext)), discussionHint, h('div', {class: 'pd-transcript'}, earlier, notes, coverage));
       if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
         nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, guard: alive,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
@@ -561,7 +566,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const section = planForm?.box.closest('[data-pm-plan]');
           if (section) section.hidden = (threadData?.thread.mode !== 'idea' && !planForm.locked()) || !threadData?.capabilities?.decide;
           updateSourceControls();},
-        extra: h('div', {}, selected, labelled('pm_plan_rationale', rationale), h('p', {class: 'muted'}, t('pm_plan_help')))});
+        extra: h('div', {}, selected, labelled('pm_plan_rationale', rationale), disclosure({label: t('pd_details'), body: h('p', {class: 'muted'}, t('pm_plan_help'))}))});
       if (caps()?.actions?.some(action => action.action === 'pm.thread.plan.revise')) {
         const selected = h('input', {type: 'hidden'}); selected.value = JSON.stringify(data.draft?.selected_inputs?.map(item => item.input_id) || []);
         selected.dataset.pmDefault = '[]';
@@ -572,13 +577,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           preconditions: () => ({expected_version: threadData.thread.version, expected_draft_id: planningRevisionForm.values().draftId}),
           permitted: () => decide() && threadData.thread.mode === 'planning', recoverPermitted: decide,
           label: 'pm_planning_revision_save', onSaved: () => load(), onStateChange: updateSourceControls,
-          extra: h('div', {}, selected, draftId, labelled('pm_planning_revision_rationale', rationale), h('p', {class: 'muted'}, t('pm_planning_revision_help')))});
+          extra: h('div', {}, selected, draftId, labelled('pm_planning_revision_rationale', rationale), disclosure({label: t('pd_details'), body: h('p', {class: 'muted'}, t('pm_planning_revision_help'))}))});
       }
       const information = h('details', {'data-pm-information': '', open: true}, h('summary', {}, t('pm_information')), permissions, facts,
         h('details', {'data-pm-add-input': ''}, h('summary', {}, t('pm_add_input')), factForm.box),
       );
       informationPanel = information;
-      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext);
+      const contextPane = h('section', {'data-discussion-tab': 'context'}, panelContext, threadDetails);
       for (const node of [...column.querySelectorAll(':scope > .pm-package-preparation, :scope > .pm-packages')]) contextPane.append(node);
       if (nativeAnalysis) contextPane.append(h('details', {}, h('summary', {}, t('pd_analysis')), nativeAnalysis.box));
       if (meetings) contextPane.append(secondary('ui_meetings', meetings.element));
@@ -591,11 +596,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         proposalReview?.tools || '', revisions?.box || '', brief ? secondary('pm_brief_title', brief.box) : '');
       discussionTools = discussionPanel({t, namespace, workspaceId, panes: {context: contextPane,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane}});
-      column.querySelector('.pd-thread-meta').append(discussionTools.trigger);
-      const composer = h('div', {class: 'pd-composer'}, noteForm.box);
-      if (proposalReview) composer.append(proposalReview.composer(text));
-      else if (nativeAnalysis) composer.append(nativeAnalysis.composer(text));
-      else composer.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' · ', h('a', {href: '#/settings'}, t('pd_setup'))));
+      column.querySelector('.pd-header-main').append(discussionTools.trigger);
+      const composer = discussionComposer({t, form: noteForm, details: threadDetails,
+        analysis: proposalReview?.composer(text) || nativeAnalysis?.composer(text)});
       column.append(composer);
       content.append(h('div', {class: 'pm-thread-layout'}, column, discussionTools.home));
       const disclosures = threadDisclosures.get(disclosureKey);
@@ -605,8 +608,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
     }
     if (!renameForm.locked() && document.activeElement !== threadTitle && !threadTitle.value) threadTitle.value = thread.title;
+    titleView.update(thread.title);
     mode.textContent = discussionLabel(t, 'pm_mode_', thread.mode);
-    boundContext.replaceChildren(...discussionContext(t, thread.context));
+    boundContext.replaceChildren(...discussionContext(t, thread.context, {limit: 3, onMore: () => discussionTools.open('context')}));
     panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [h('p', {class: 'muted'}, t('pd_no_context'))]));
     // A pending original request stays discoverable after a reload or mode change.
     if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) informationPanel.open = true;
@@ -796,11 +800,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         threadSearch.addEventListener('input', () => {uiState.search = threadSearch.value; filterThreads();});
       }
       const scroll = workspaceList.scrollTop;
-      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(threadSearch, h('a', {class: 'ui-button secondary', href: discussHref({workspaceId}), 'data-discussion-new': ''}, t('pd_new')), threadRows);
+      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h('div', {class: 'pd-list-header'}, threadSearch, h('a', {class: 'ui-button primary ui-sm', href: discussHref({workspaceId}), 'data-discussion-new': '', title: t('pd_new'), 'aria-label': t('pd_new')}, icon('plus'), t('pd_new'))), threadRows);
       threadRows.replaceChildren(...(threadList?.threads || []).map(thread => h('a', {class: 'pm-thread-link',
           href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
-          'aria-current': thread.thread_id === threadId ? 'page' : null}, h('strong', {}, thread.title),
-          h('span', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, discussionLabel(t, 'pm_mode_', thread.mode)), h('time', {}, time(thread.updated_at))),
+          'aria-current': thread.thread_id === threadId ? 'page' : null}, h('strong', {title: thread.title}, thread.title),
+          h('span', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, discussionLabel(t, 'pm_mode_', thread.mode)), ' · ', h('time', {}, time(thread.updated_at))),
           ...discussionContext(t, thread.context?.slice(0, 1)))));
       if (!workspaceId) workspaceList.replaceChildren(...lastList.map(row => h('a', {href: `#/pm/${row.workspace_id}`}, row.name)), h('button', {type: 'button', class: 'primary', onclick: showCreate}, t('ui_new_workspace')));
       filterThreads(); workspaceList.scrollTop = scroll;
@@ -822,11 +826,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             },
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
-          // The title remains an editable part of the same durable draft, without a title-first form.
+          const titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
+          const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, launch.refs));
+          const draftPanel = discussionPanel({t, namespace, workspaceId, panes: {context: contextDraft}});
+          if (threadId === 'new') discussionTools = draftPanel;
           content.append(h('div', {class: 'pm-thread-layout pd-new-layout'}, h('section', {class: 'pm-discussion'},
-            h('header', {class: 'pd-thread-header'}, threadId === 'new' ? name : h('h2', {}, t('pd_new')), h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')), backLink()),
-              h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs))),
-            h('div', {class: 'pd-transcript'}, h('p', {class: 'muted pd-start'}, t('pd_empty'))), h('div', {class: 'pd-composer'}, create.box))));
+            h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new')))),
+              h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
+                h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs, {limit: 3, onMore: () => draftPanel.open('context')})))),
+            h('div', {class: 'pd-transcript'}, h('p', {class: 'muted pd-start'}, t('pd_empty'))), discussionComposer({t, form: create, draft: true})),
+            launch.refs.length > 3 ? draftPanel.home : ''));
+
 
         }
       }

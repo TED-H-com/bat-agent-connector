@@ -19,7 +19,8 @@ export const statusVocabulary = Object.freeze({
   historical: {en: 'Historical', 'zh-TW': '歷史', tone: 'neutral'},
 });
 export const uiStrings = {
-  en: {ui_search_work: 'Search work', ui_report_versions: 'Versions', ui_save_snapshot: 'Save snapshot', ui_compare: 'Compare', ui_print: 'Print', ui_export_brief: 'Export brief', ui_close: 'Close', ui_back: 'Back', ui_retry: 'Retry', ui_remove: 'Remove {text}', ui_loading: 'Loading',
+  en: {ui_reason_content_changed: 'Discussion changed', ui_reason_plan_head_changed: 'Plan changed', ui_reason_superseded: 'Replaced by a newer update', ui_reason_withdrawn: 'Source unavailable', ui_reason_unavailable: 'Not available',
+    ui_search_work: 'Search work', ui_report_versions: 'Versions', ui_save_snapshot: 'Save snapshot', ui_compare: 'Compare', ui_print: 'Print', ui_export_brief: 'Export brief', ui_close: 'Close', ui_back: 'Back', ui_retry: 'Retry', ui_remove: 'Remove {text}', ui_loading: 'Loading',
     ui_more: 'More actions', ui_expand: 'Expand {title}', ui_collapse: 'Collapse {title}',
     ui_overview: 'Overview', ui_discussions: 'Discussions', ui_requirements: 'Requirements', ui_schedule: 'Schedule',
     ui_dependencies: 'Dependencies', ui_issues: 'Issues & changes', ui_agents: 'Agents', ui_board: 'Board',
@@ -35,7 +36,8 @@ export const uiStrings = {
     ui_meetings: 'Meetings', ui_sprints: 'Sprints', ui_follow_up: 'Follow-ups', ui_repairs: 'Maintenance repairs',
     ui_maintenance_review: 'Maintenance review', ui_policy: 'Maintenance policy', ui_baselines: 'Release baselines',
     ui_batches: 'Work batches', ui_observations: 'AHP observations'},
-  'zh-TW': {ui_search_work: '搜尋工作', ui_report_versions: '版本', ui_save_snapshot: '儲存快照', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出摘要', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
+  'zh-TW': {ui_reason_content_changed: '討論內容已變更', ui_reason_plan_head_changed: '計畫已變更', ui_reason_superseded: '已有較新的更新', ui_reason_withdrawn: '來源無法取得', ui_reason_unavailable: '無法取得',
+    ui_search_work: '搜尋工作', ui_report_versions: '版本', ui_save_snapshot: '儲存快照', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出摘要', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
     ui_more: '更多操作', ui_expand: '展開{title}', ui_collapse: '收合{title}',
     ui_overview: '專案總覽', ui_discussions: '討論', ui_requirements: '需求', ui_schedule: '時程',
     ui_dependencies: '技術相依', ui_issues: '問題與變更', ui_agents: 'Agent 資源', ui_board: '工作看板',
@@ -53,3 +55,10 @@ export const uiStrings = {
     ui_batches: '工作批次', ui_observations: 'AHP 觀察'},
 };
 for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]['ui_status_' + key] = row[lang];
+
+// Central reason codes share one mapping; raw future codes belong only in Details.
+export const reasonLabels = Object.freeze({
+  content_changed: 'ui_reason_content_changed', plan_head_changed: 'ui_reason_plan_head_changed',
+  superseded: 'ui_reason_superseded', withdrawn: 'ui_reason_withdrawn',
+});
+export const reasonLabel = (t, code, fallback = 'ui_reason_unavailable') => t(Object.hasOwn(reasonLabels, code) ? reasonLabels[code] : fallback);

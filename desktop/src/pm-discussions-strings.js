@@ -1,5 +1,6 @@
 export const discussionStrings = {
   en: {
+    pd_save: 'Save', pd_cancel: 'Cancel', pd_finished: 'PM finished', pd_retry: 'Retry', pd_more_context: '{count} more context items',
     pd_new: 'New discussion', pd_search: 'Search discussions', pd_message: 'Message the PM…', pd_send: 'Send', pd_ask: 'Ask PM',
     pd_panel: 'Thread panel', pd_tab_context: 'Context', pd_tab_inputs: 'Inputs', pd_tab_plan: 'Plan', pd_back: 'Back to {view}',
     pd_title: 'Discussion title', pd_rename: 'Rename', pd_unavailable: 'Unavailable', pd_bound_label: 'Originally: {label}',
@@ -15,6 +16,7 @@ export const discussionStrings = {
     pm_mode_follow_up: 'Follow-up',
   },
   'zh-TW': {
+    pd_save: '儲存', pd_cancel: '取消', pd_finished: 'PM 已完成', pd_retry: '重試', pd_more_context: '還有 {count} 個脈絡項目',
     pd_new: '新增討論', pd_search: '搜尋討論', pd_message: '傳訊息給 PM…', pd_send: '傳送', pd_ask: '詢問 PM',
     pd_panel: '討論資料', pd_tab_context: '脈絡', pd_tab_inputs: '資訊', pd_tab_plan: '計畫', pd_back: '返回{view}',
     pd_title: '討論標題', pd_rename: '重新命名', pd_unavailable: '無法取得', pd_bound_label: '建立討論時：{label}',

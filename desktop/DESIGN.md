@@ -207,9 +207,14 @@ Omit the chart when the projection has no buckets.
 Discussions uses a 280px searchable thread list, a conversation with its composer
 pinned below the scrolling transcript, and a Context / Inputs / Plan panel. Below
 1200px the panel opens in the shared drawer; below 800px it becomes a sheet with
-Escape and focus return. The title is editable through the central rename action.
+Escape and focus return. A quiet origin link sits above the text title; its pencil
+opens inline Save / Cancel controls (Enter saves, Escape cancels) using the central
+rename action. Recovery remains attached to the original rename intent.
 Context chips use current labels and put differing admission labels in tooltips;
 withdrawn refs show only their kind and Unavailable, including in the thread list.
+Chips stay on one line with full accessible labels: up to three in the header, then
++N opens Context; one per list row. The selected row has the table accent inset.
+The composer has one status/actions row with Send and Ask PM kept together.
 
 The shared `/discussions/new` link opens an editable draft and focuses the composer.
 Its first Send creates the bound thread and then appends the note. Both operations
@@ -221,10 +226,16 @@ views retain their own preference state.
 Structured analysis stays on the existing capability-checked native/BAT proposal
 path. A Proposed update card groups candidates with include toggles, at most three
 inline answers, and one owner adoption review. Notes and answers remain central
-messages. Renaming alone does not invalidate a proposal; content changes and central
-VERSION_CONFLICT show Out of date and Ask PM again while retaining review drafts.
+messages. Only central `adoptable` / `adoptable_reason` determine proposal freshness; the
+client does not compare source IDs or thread versions. Renaming alone leaves an
+adoptable proposal intact. Known reasons use shared short labels; future reasons
+and central VERSION_CONFLICT show Out of date and Ask PM again while retaining
+review drafts. Raw reason codes stay in Details.
 The operation's real state drives the static working/elapsed line and original-key
 recovery. Saved proposals, runtime options, planning inputs, immutable revisions,
 context packages, meetings, follow-ups and Brief remain in the thread panel.
 Proposal titles replace raw IDs in the picker; plan name, revision and status replace
 commit digests in the reading surface. Identifiers and copyable digests are in Details.
+All thread tools use shared chevron disclosures, including retained lazy controls.
+The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
+pills and a Compare action; explanatory planning copy is inside Details.

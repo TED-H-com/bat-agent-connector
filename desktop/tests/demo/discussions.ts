@@ -20,7 +20,7 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
       let operation = state.operations.get(input.idempotency_key);
       if (!operation) {
         const id = body.target.thread_id, data = state.details.get(id);
-        if (body.action === 'pm.conversation.adopt' && (state.conflict || data.thread.version !== state.proposals.at(-1).context.thread_version && data.thread.version !== state.proposals.at(-1).context.thread_version + state.renames))
+        if (body.action === 'pm.conversation.adopt' && (state.conflict || state.proposals.at(-1)?.adoptable !== true))
           return {status: 409, data: {error: {code: 'VERSION_CONFLICT', message: 'Discussion changed', admission_refused: true}}};
         let result: any = {};
         if (body.action === 'pm.thread.create') {
@@ -31,7 +31,9 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
         } else if (body.action === 'pm.message.append') {
           data.messages.push({message_id: hexId('pmm_', 800 + data.messages.length, 32), sequence: data.messages.length + 1, role: 'user', actor: project.ids.actor,
             content: body.params.content, created_at: project.now / 1000, operation_id: hexId('op_', 900 + state.operations.size, 32)});
-          data.thread.version++; result = {thread_id: id, version: data.thread.version};
+          data.thread.version++;
+          for (const proposal of state.proposals.filter((p: any) => p.thread_id === id)) {proposal.adoptable = false; proposal.adoptable_reason = 'content_changed';}
+          result = {thread_id: id, version: data.thread.version};
         } else if (body.action === 'pm.thread.rename') {
           data.thread.title = body.params.title; data.thread.version++; state.renames = (state.renames || 0) + 1;
           result = {thread_id: id, version: data.thread.version};
@@ -60,7 +62,7 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
     }
     if (path === root + '/capabilities') return ok({...workspaceCapabilities(project), plan_adoption_available: true,
       native_analysis: {authorized: true, eligible_for_preflight: true}});
-    if (path === root + '/conversation-proposals') return ok({workspace_id: project.ids.workspaceId, proposals: state.proposals.filter((p: any) => p.thread_id === url.searchParams.get('thread_id')).map((p: any) => ({sequence: p.sequence, proposal_id: p.proposal_id, thread_id: p.thread_id, operation_id: p.operation_id, run_id: p.run_id, document_digest: p.document_digest, created_by: p.created_by, created_at: p.created_at, validation: p.validation})), next_cursor: null});
+    if (path === root + '/conversation-proposals') return ok({workspace_id: project.ids.workspaceId, proposals: state.proposals.filter((p: any) => p.thread_id === url.searchParams.get('thread_id')).map((p: any) => ({sequence: p.sequence, proposal_id: p.proposal_id, thread_id: p.thread_id, operation_id: p.operation_id, run_id: p.run_id, document_digest: p.document_digest, created_by: p.created_by, created_at: p.created_at, validation: p.validation, adoptable: p.adoptable, adoptable_reason: p.adoptable_reason})), next_cursor: null});
     if (path.startsWith(root + '/conversation-proposals/')) return ok({workspace_id: project.ids.workspaceId, proposal: state.proposals.find((p: any) => path.endsWith(p.proposal_id))});
     const result = await fallback(input);
     if (path === '/bootstrap') result.data.capabilities = caps(result.data.capabilities);

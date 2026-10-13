@@ -1,4 +1,4 @@
-import {discussionOperation} from './pm-discussions.js';
+import {discussionFeedback} from './pm-discussions.js';
 import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
@@ -79,7 +79,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
       const request = requests.find(row => row.spec === active)?.request;
       ask.textContent = t(request?.locked() ? 'pm_check_original' : 'pd_ask');
       ask.hidden = !eligible && !request?.locked(); ask.disabled = !request?.canSubmit();
-      connection.hidden = eligible; working.textContent = discussionOperation(t, request?.operation());
+      connection.hidden = eligible; discussionFeedback({t, request, node: working, eligible});
     }
     const source = thread() && selected === 'bat_analysis' && advertised(active) ? descriptor?.selected_binding : null;
     if (!thread()) current.replaceChildren();
@@ -110,7 +110,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
     working = h('p', {class: 'muted', role: 'status', 'data-discussion-working': ''});
     composerNode = h('div', {class: 'pd-ask'}, ask, connection, working);
     clock = setInterval(() => {const request = requests.find(row => row.spec.key === selected)?.request;
-      if (composerNode.isConnected) working.textContent = discussionOperation(t, request?.operation());}, 1000);
+      if (composerNode.isConnected && ['running', 'accepted', 'queued', 'pending'].includes(request?.operation()?.status)) render();}, 1000);
     render(); return composerNode;
   }, dispose() {clearInterval(clock);}};
 }
