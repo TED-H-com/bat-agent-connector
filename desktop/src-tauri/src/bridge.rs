@@ -1401,14 +1401,20 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
                 "after" if schedule => value.split_once(':').is_some_and(|(kind, rest)| {
-                    matches!(kind, "milestone" | "requirement" | "issue" | "work" | "attempt")
-                        && (1..=360).contains(&rest.len())
+                    matches!(
+                        kind,
+                        "milestone" | "requirement" | "issue" | "work" | "attempt"
+                    ) && (1..=360).contains(&rest.len())
                         && rest.chars().all(|ch| {
-                            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | ':' | '/' | '+' | '-')
+                            ch.is_ascii_alphanumeric()
+                                || matches!(ch, '_' | '.' | ':' | '/' | '+' | '-')
                         })
                 }),
                 "type" if register_list => {
-                    matches!(value.as_ref(), "risk" | "issue" | "action" | "change" | "decision")
+                    matches!(
+                        value.as_ref(),
+                        "risk" | "issue" | "action" | "change" | "decision"
+                    )
                 }
                 "status" if register_list => {
                     !value.is_empty()
@@ -1999,7 +2005,10 @@ mod tests {
         .is_ok());
         assert!(validate_request(&get(&format!("{root}?tz=UTC"))).is_ok());
         assert!(validate_request(&get(&format!("{root}?tz=Etc%2FGMT%2B8"))).is_ok());
-        assert!(validate_request(&get(&format!("{root}?tz=America%2FArgentina%2FBuenos_Aires"))).is_ok());
+        assert!(validate_request(&get(&format!(
+            "{root}?tz=America%2FArgentina%2FBuenos_Aires"
+        )))
+        .is_ok());
         assert!(validate_request(&get(
             "/pm/workspaces/ws_11111111111111111111111111111111/plans?tz=UTC"
         ))
@@ -2034,10 +2043,9 @@ mod tests {
     fn project_schedule_is_a_scoped_read_without_collection_commands() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/schedule";
         assert!(validate_request(&get(root)).is_ok());
-        assert!(validate_request(&get(&format!(
-            "{root}?limit=50&after=milestone:release"
-        )))
-        .is_ok());
+        assert!(
+            validate_request(&get(&format!("{root}?limit=50&after=milestone:release"))).is_ok()
+        );
         assert!(validate_request(&get(&format!(
             "{root}?limit=1&after=attempt:session:wi_11111111111111111111:mock-host/mock-session"
         )))
@@ -2076,11 +2084,23 @@ mod tests {
         assert!(validate_request(&get(&format!("{root}?q=%E7%99%BB%E5%85%A5"))).is_ok());
         let detail = format!("{root}/governance:pmgov_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         assert!(validate_request(&get(&detail)).is_ok());
-        let meeting = format!("{root}/meeting:pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa~follow_up~verify_login");
+        let meeting = format!(
+            "{root}/meeting:pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa~follow_up~verify_login"
+        );
         assert!(validate_request(&get(&meeting)).is_ok());
         assert!(validate_request(&get(&format!("{detail}?type=risk"))).is_err());
-        for query in ["type=story", "status=Open", "limit=0", "limit=101", "after=nocursor", "path=/tmp"] {
-            assert!(validate_request(&get(&format!("{root}?{query}"))).is_err(), "{query}");
+        for query in [
+            "type=story",
+            "status=Open",
+            "limit=0",
+            "limit=101",
+            "after=nocursor",
+            "path=/tmp",
+        ] {
+            assert!(
+                validate_request(&get(&format!("{root}?{query}"))).is_err(),
+                "{query}"
+            );
         }
         let mut write = get(root);
         write.method = "POST".into();
